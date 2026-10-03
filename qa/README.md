@@ -550,6 +550,14 @@ A new surface joins this list the moment it ships.
   expired whether or not the clamp works, while twelve hours tells the two
   apart. Three of that block's ten checks were satisfied by a boundary
   coincidence like this one.
+- **Read a number from the label that shows it, never as a digit somewhere
+  on the screen.** qa6 checked Statistics by looking for "4" in any of the
+  panel's texts, and on 4 October found it in "Using Note Organizer since
+  04.10.2026": red on the fourth, the fourteenth and the twenty-fourth of
+  every month, in local time on a developer's machine and in UTC on CI.
+  The "2" it waited for was always there too, in the year. Statistics'
+  numbers are read through `stats_pairs()`, as the number under its
+  caption.
 - **Never read a verdict out of output that can be truncated without
   saying so.** `tools/run_tests.py` prints the first eight failing checks.
   Two live mutants read as survivors because the checks they broke were the
