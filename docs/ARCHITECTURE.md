@@ -22,7 +22,7 @@ lives in two places: the `noteorganizer/` package — a `core/` layer of data an
 pieces hang off.
 
 Both layers are fully extracted: fourteen `core/` modules and six `ui/` mixins. The annotated,
-module-by-module inventory is [README's project tree](../README.md#project-structure), and
+module-by-module inventory is [the code tour's project tree](CODE_TOUR.md#the-shape-of-the-project), and
 [CODE_TOUR.md](CODE_TOUR.md) walks through the modules for someone learning the codebase. Three
 of the core modules — `richtext`, `clipboard` and `tables` — landed with the rich-text and
 tables work; the core layer is complete.
@@ -161,7 +161,7 @@ Two shapes reach the point where the editor never finishes drawing while using
 a fifth of that cap: every span crowded onto one line, and every span stretched
 to the end of the note so they all pile onto the last one. `MAX_SPANS_PER_LINE`
 and `MAX_LINE_RANGES` bound those two, and the numbers behind all three are in
-[`qa/COVERAGE_LEDGER.md`](../qa/COVERAGE_LEDGER.md) rather than guessed.
+[the coverage ledger](archive/COVERAGE_LEDGER.md), now archived, rather than guessed.
 
 An anti-bomb ceiling is not a performance promise, and the two should not be
 confused: what makes a heavily styled note open quickly is

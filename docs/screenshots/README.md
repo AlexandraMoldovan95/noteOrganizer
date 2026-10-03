@@ -51,12 +51,15 @@ Rules that keep the set reading as one app:
 - **One theme throughout** — a partial refresh in another theme silently
   produces a mixed set.
 
-**Current set:** retaken 2026-09-15 in the default dark (purple) theme, all
-twenty-two by `tools/doc_screenshots.py`, on app version 0.73.167; update
-this line whenever the set is recaptured.
+**Current set:** retaken 2026-10-03 in the default dark (purple) theme, all
+twenty-two and the demo GIF by `tools/doc_screenshots.py`, on app version
+0.84.340 — dates
+shown day first, the search box showing its hint, and no scrollbar under
+the window; update this line whenever the set is recaptured.
 
 | Filename | What to capture |
 |---|---|
+| `demo.gif` | The README's moving picture, made by the `demo` scene: a note written, given a table and saved; the month on the calendar; the same note on a light theme |
 | `main-window.png` | The main window, Notes tab: sidebar, a note open with a table, and the full formatting toolbar including the ☀/🌙 theme button at its right end |
 | `note-editor.png` | A note open in the editor with some content, the toolbar, and the Checklist + Calculator bars below |
 | `formatting-toolbar.png` | The formatting toolbar close-up, with bold/italic/coloured/highlighted text in the body — and the ☀/🌙 theme button visible at the right end |

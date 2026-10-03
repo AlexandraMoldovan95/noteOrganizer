@@ -8828,7 +8828,7 @@ if _fc_plain is not None:
 # ---- A REMOVED CHECKLIST ITEM CAN COME BACK ----
 # It was the one thing that could be taken off a note with no way back at
 # all: Ctrl+Z reaches the Text widgets through edit_undo, and a checklist
-# is a list of dicts beside them (finding C-2 in docs/PRODUCT_FINDINGS.md).
+# is a list of dicts beside them (finding C-2, docs/archive/PRODUCT_FINDINGS.md).
 # A toast rather than a confirmation, because a question in front of every
 # tick-list tidy-up would be worse than the risk it guards.
 #
@@ -9941,7 +9941,7 @@ app.new_note(); app.update()
 # It was the one action in that bar that rewrote stored data with neither
 # a question nor an undo, while the button beside it had both -- and the
 # categories it overwrote were gone from the file the moment it ran
-# (finding C-1 in docs/PRODUCT_FINDINGS.md). These checks hold both
+# (finding C-1, docs/archive/PRODUCT_FINDINGS.md). These checks hold both
 # halves of the promise, and every seam the interaction pass marked
 # risky: a MIXED selection, the editor holding one of the notes, a
 # table-ending note, a series with a day of its own, a filtered list,

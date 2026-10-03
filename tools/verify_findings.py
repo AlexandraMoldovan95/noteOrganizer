@@ -62,6 +62,9 @@ CLAUDE_MD = read("CLAUDE.md")
 ARCHITECTURE = read("docs", "ARCHITECTURE.md")
 USER_GUIDE = read("docs", "USER_GUIDE.md")
 
+# The promise C-25 took back, in any of the forms it was written in.
+NO_NATIVE = re.compile(r"[Nn]o native (OS )?dialogs")
+
 # Every UI source a glyph could hide in, for the checks that ask whether a
 # character appears anywhere rather than in one named place.
 ALL_UI = HUB + SETTINGS_UI + CALENDAR_UI + CALC_UI + DIALOGS_UI
@@ -114,7 +117,11 @@ TIER_CHECKS = [
     # "filedialog not in HUB" -- the fix that was rejected -- so the row
     # could never close however true the documents became. A heading is
     # what makes the claim; ARCHITECTURE now quotes the old one in prose.
-    ("T2-8", lambda: README.count("choosing a file or folder") >= 2
+    # The README has since stopped describing dialogs at all, so it is
+    # asked to promise nothing false; the true sentence lives in
+    # ARCHITECTURE and CLAUDE.md.
+    ("T2-8", lambda: not NO_NATIVE.search(README)
+     and "system's own dialog in two places" in ARCHITECTURE
      and not re.search(r"^#+ .*[Nn]o native dialogs", ARCHITECTURE, re.M)
      and "clickable chip" not in USER_GUIDE,
      "the documents no longer promise no native dialogs or clickable "
@@ -217,9 +224,10 @@ SURVEY_CHECKS = [
      "one attachments sentence, used by both share areas"),
     # The four claims C-25 corrected. `_add_row` was deleted rather than
     # marked unused, so its absence is the witness; and the native-dialogs
-    # sentence was corrected in three places, two of them in README.
+    # sentence was corrected in three places, two of them in a README that
+    # no longer describes dialogs at all -- it is asked to promise nothing.
     ("C-25", lambda: "def _add_row" not in SETTINGS_UI
-     and README.count("choosing a file or folder") >= 2
+     and not NO_NATIVE.search(README)
      and "recent places" in CLAUDE_MD,
      "the dead helper is gone and the dialogs sentence is true"),
 ]

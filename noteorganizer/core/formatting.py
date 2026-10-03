@@ -92,7 +92,7 @@ FONT_SIZES = (9, 10, 11, 12, 14, 16, 20, 24)
 # unpleasant, alive), because a Word-paste of a long styled document
 # produces THOUSANDS of legitimate spans and truncating those would be
 # visible data corruption. What the ceiling deliberately does not fix,
-# recorded in qa/COVERAGE_LEDGER.md rather than papered over: the editor
+# recorded in docs/archive/COVERAGE_LEDGER.md, not papered over: the editor
 # reads formatting back 5-6 times per note-open, each read costs
 # O(ranges x body length), and a single-line body with a few thousand
 # spans hangs Tk's layout below ANY sane cap.

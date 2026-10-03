@@ -196,6 +196,9 @@ def capture(name, widgets=None, pad=8):
     app.lift()
     app.attributes('-topmost', True)
     app.focus_force()
+    # The keyboard on the window's own canvas, which shows nothing for it:
+    # landing in the search box, it would clear the box's hint (<FocusIn>).
+    app.main_canvas.focus_set()
     # ...and then our own popups back above it. Raising the main window
     # raises it above its OWN children too, so the emoji picker was being
     # photographed from underneath: present, mapped, inside the frame, and
@@ -273,7 +276,11 @@ def clean():
         if panel is not None and toggle is not None and panel.winfo_ismapped():
             toggle()
 
-    app.search_var.set('')
+    # The box as the app opens it: its hint written in, in the hint's colour.
+    # Merely emptied, it waits for a <FocusOut> to put the hint back, and
+    # every sidebar was photographed with an empty, unlabelled box.
+    app.search_var.set(app.SEARCH_PLACEHOLDER)
+    app.search_entry.config(fg=app.colors['subtext'])
     app.sort_var.set(app.SORT_OPTIONS[0])
     app.category_filter_var.set('All') if hasattr(app, 'category_filter_var') else None
     if app.group_by_category.get():
@@ -758,6 +765,89 @@ def import_backup():
     capture('import-backup')
     app.hide_settings_page()
     pump()
+
+
+@scene('demo')
+def demo():
+    """The README's moving picture: a note written, given a table and
+    saved; the calendar; a light theme. One frame after each step, made
+    into demo.gif -- the same window, and the same guards, as every shot.
+    """
+    from PIL import Image
+    from noteorganizer.core import tables as core_tables
+
+    frames = []
+    width = 960
+    # Saved once, on purpose: an autosave caught mid-word would show a
+    # half-typed title on the card for a frame or two.
+    autosave = app._schedule_autosave
+    app._schedule_autosave = lambda *a, **k: None
+
+    def frame(ms):
+        pump(6, 0.02)
+        box = (app.winfo_rootx(), app.winfo_rooty(),
+               app.winfo_rootx() + app.winfo_width(),
+               app.winfo_rooty() + app.winfo_height())
+        if _foreign_window_over(box):
+            raise RuntimeError('another window is covering the app')
+        img = ImageGrab.grab(bbox=tuple(int(round(v * SCALE)) for v in box))
+        frames.append((img.resize((width, int(img.size[1] * width / img.size[0])),
+                                  Image.LANCZOS), ms))
+
+    def type_into(insert, text, every=3):
+        for count, char in enumerate(text, 1):
+            insert(char)
+            if count % every == 0 or count == len(text):
+                frame(90)
+
+    try:
+        app.lift()
+        app.main_canvas.focus_set()
+        made = _demo_notebook()
+        # A weekly note too, so the month has more on it than one day.
+        app.notes.append(_note(
+            title='Team stand-up', body='What we shipped, what is next.',
+            category='Work', date='2026-09-07',
+            recurrence={'freq': 'weekly', 'interval': 1, 'weekdays': [0]}))
+        app.save_notes()
+        app.refresh_note_list()
+        app.load_note(made[0])
+        frame(1600)
+        app.new_note()
+        frame(500)
+        app.title_entry.focus_set()
+        type_into(lambda ch: app.title_entry.insert('end', ch), 'Weekend trip')
+        app.body_text.focus_set()
+        type_into(lambda ch: app.body_text.insert('insert', ch),
+                  'Pack the tent and the stove.\n')
+        app.body_text.insert('end', core_tables.align(
+            '| Day | Plan | Done |\n'
+            '| ---------- | ------------------ | ------ |\n'
+            '| Saturday | Drive to the lake | [x] |\n'
+            '| Sunday | Hike the ridge | [ ] |')[0])
+        app._render_table_grids()
+        frame(1600)
+        app.save_current_note()
+        frame(1300)
+        app.notebook.select(app.TAB_CALENDAR)
+        app.cal_year, app.cal_month = 2026, 9
+        app.render_calendar()
+        frame(1800)
+        app.set_theme('light')
+        app.notebook.select(app.TAB_NOTES)
+        app.refresh_note_list()
+        frame(2000)
+    finally:
+        app._schedule_autosave = autosave
+        app.set_theme('dark')
+        pump()
+    images = [im.convert('P', palette=Image.ADAPTIVE, colors=128)
+              for im, _ms in frames]
+    path = os.path.join(OUT, 'demo.gif')
+    images[0].save(path, save_all=True, append_images=images[1:],
+                   duration=[ms for _im, ms in frames], loop=0, optimize=True)
+    print('  %-22s %d frames, %d KB' % ('demo', len(frames),
+                                        os.path.getsize(path) // 1024))
 
 
 def _all_widgets(w, out=None):

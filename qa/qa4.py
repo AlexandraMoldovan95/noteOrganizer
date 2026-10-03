@@ -353,7 +353,7 @@ app.toggle_theme(); app.update()
 # it into its own label, and passed unconditionally. It was the only
 # guard over the note list's rebuild cost -- the thing the product review
 # calls "every pause in typing freezes the app" -- and it could not fail.
-# Recorded as T1-4 in docs/PRODUCT_FINDINGS.md.
+# Recorded as T1-4 in docs/archive/PRODUCT_FINDINGS.md.
 #
 # It asserts two things now, and neither is a timing opinion.
 #
