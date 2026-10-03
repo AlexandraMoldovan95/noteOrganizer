@@ -63,8 +63,10 @@ drives the real app — clicking, typing, closing it and opening it again —
 and checks what a person would notice: a note that must survive a restart,
 a share code or a backup; formatting and tables that must come back exactly;
 a question that must not lose what was typed. A fix lands with a check that
-fails when the fix is taken away, and the mutation runner keeps proving it.
-The suite executes 89% of the app's code
+fails when the fix is taken away, and the mutation runner proves it again
+on demand. The suite runs 89% of the app's lines on Windows, and CI holds
+a floor of 80% on Linux; a line run is not a line checked, which is what
+the mutants are for
 ([how we test, in one page](qa/README.md#how-we-test-in-one-page)).
 
 ## Speed

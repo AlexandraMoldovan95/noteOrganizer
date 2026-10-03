@@ -26,7 +26,7 @@ HOW IT RUNS
 ``py qa/story_note_travels.py`` from anywhere. The driver copies the app,
 the package and this file into a scratch directory far outside the
 project (the same rule the whole suite follows: real notes have been lost
-to a wrong working directory four times) and then runs each chapter as
+to a wrong working directory three times) and then runs each chapter as
 its OWN PROCESS in that directory. Separate processes are the point: that
 is what makes "close the app and open it again" real rather than
 simulated.

@@ -10,7 +10,8 @@ day-to-day tracking.
 
 ## Start here: five stories
 
-New to this log? Between them, these five show most of what the rest of it teaches.
+New to this log? Between them, these five show most of what the rest of it teaches; each
+is in the table below as well.
 
 1. [The cleanup that deleted the real notebook](#the-cleanup-that-deleted-the-real-notebook) —
    two harmless steps that together deleted the very notes they were moving, and why the safety

@@ -1097,10 +1097,11 @@ module.
 One part of that growth was different. In 0.82.230 the note list stopped being a column of
 widgets and became one drawing (see
 [Large lists](#large-lists-draw-what-can-be-seen-the-rest-on-demand)), and a drawing brings its
-own geometry, input handling and painting code. Measured again on 3 October 2026, with the same
-script and the same question, the group around it — 117 methods, ~2,500 lines: drawing the cards
-and headers, filtering, searching, sorting, the keyboard ring, dragging into Custom order,
-Select mode — sent **90%** of its calls to itself. That is well past the bar the dialogs (62%)
+own geometry, input handling and painting code. Measured again on 3 October 2026 with the same
+question — by `tools/call_graph.py`, committed so the number can be checked; the first plan's
+script was not kept — the group around it — 117 methods, ~2,500 lines: drawing the cards and
+headers, filtering, searching, sorting, the keyboard ring, dragging into Custom order, Select
+mode — sent **90%** of its calls to itself. That is well past the bar the dialogs (62%)
 and the calendar (59%) cleared, so it moved, as they did, to `ui/note_list.py`, and the hub went
 from ~22,400 lines to ~19,700.
 
@@ -1115,10 +1116,14 @@ not to aim for a number of files.
 
 ### One blind spot in the measurement
 
-The call graph is built from `note_organizer.py` alone, so it cannot see calls made from the
-mixins already extracted. That made it pull `_rounded_rect` and `_show_color_palette` into the
+The first measurements read `note_organizer.py` alone, so they could not see calls made from the
+mixins already extracted. That made them pull `_rounded_rect` and `_show_color_palette` into the
 calendar group — both are used by `settings_page.py`, so their only *visible* callers were
 calendar ones. Neither belongs there.
+
+`tools/call_graph.py` reads the whole class — the entry file and every mixin — unless asked for
+`--hub-only`, the old view. The two agree on the note list: 90% read the old way, at the commit
+before it moved, and 89% with the mixins' four extra calls counted.
 
 Read the methods before moving them; the graph shortlists, it does not decide. The rule this
 taught — scope is decided by what an area *owns*, not by keyword — is recorded under

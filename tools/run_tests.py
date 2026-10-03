@@ -6,7 +6,7 @@ The tests cannot be run where the code lives. Every ``qa*.py`` script starts
 by deleting ``*.json`` and ``attachments/`` in its working directory, and
 ``test_data_safety.py`` calls ``initialise()`` in the current folder. Run
 either from the project root and it wipes the real notebook -- which has
-happened twice, and neither time showed up in ``git status`` because those
+happened three times, and never showed up in ``git status`` because those
 files are git-ignored.
 
 CLAUDE.md's answer is "copy everything to a scratch folder outside the

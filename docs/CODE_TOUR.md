@@ -104,12 +104,13 @@ docs/                     these documents
 qa/                       headless GUI tests, the stories and the test plan
 test_*.py                 seven unit suites; six need no window
 tools/                    what CI runs, and the tools behind the docs' numbers
-├── check_*.py            eight static gates, run on every pull request
+├── check_*.py            eight static gates: seven on every pull request, links before a push
 ├── pre_push_check.py     all eight, locally, in seconds
 ├── run_tests.py          the whole suite, safely, from a scratch copy
 ├── run_coverage.py       the whole suite again, measuring what it executes
 ├── mutate.py             takes each fix away and checks a check fails
 ├── bench.py              start-up, save and memory at 1,000+ notes
+├── call_graph.py         which methods call which: the measure behind the split
 ├── doc_screenshots.py    retakes the documentation's screenshots
 ├── make_icon.py          draws the app icon, rather than storing one
 └── linux-ci/             one Docker command reproduces the Ubuntu CI leg
