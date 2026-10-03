@@ -294,6 +294,26 @@ check('one figure for the day or the month is enough',
       _rd('1.2.2026') == date(2026, 2, 1) and _rd('01.02.2026') == date(2026, 2, 1))
 check('figures are read day first: 10/12/2026 is the tenth of December',
       _rd('10/12/2026') == date(2026, 12, 10))
+# The month first only where the day first cannot be: no 17th month, so
+# 10/17/2026 is October 17th, written the American way.
+for _form in ('10/17/2026', '10-17-2026', '10.17.2026', 'Oct. 17, 2026',
+              'October 17th, 2026', 'Oct 17th 2026', '17th October 2026',
+              '17th of October 2026', 'the 17th of October 2026',
+              'Saturday, October 17, 2026', 'Sat, Oct 17, 2026',
+              'Saturday 17 October 2026', 'Sat 17.10.2026',
+              'SATURDAY, OCTOBER 17TH, 2026'):
+    check('the date is read from %r' % _form, _rd(_form) == _RD)
+check('a day named that is not the day still reads the date the figures give',
+      _rd('Monday, October 17, 2026') == _RD)
+check('the month first only when the day first cannot be (12/13 and 13/12 '
+      'alike), and the day first whenever it can',
+      _rd('12/13/2026') == date(2026, 12, 13)
+      and _rd('13/12/2026') == date(2026, 12, 13)
+      and _rd('1/2/2026') == date(2026, 2, 1))
+for _form in ('10/17/26', '10/17', 'Oct 17th', 'Saturday, October 17',
+              '17th October'):
+    check('%r waits until the field is left, then reads as 17.10.2026' % _form,
+          _rd(_form) is None and _rd(_form, settled=True) == _RD)
 for _form, _want in (('17 mai 2026', 5), ('17 may 2026', 5),
                      ('3 martie 2026', 3), ('3 mar 2026', 3),
                      ('5 iun 2026', 6), ('5 iul 2026', 7),
@@ -316,8 +336,11 @@ check('...and once the field is left, two figures mean this century',
 for _form in ('31.09.2026', '00.10.2026', '17.13.2026', '17.10.20262',
               '2026-10', 'abc', '17 ma 2026', '17 xyz 2026', '117.10.2026',
               '17.100.2026', 'oct 2026', '17 oct 2026 18', '17.10.0999',
-              'Saturday 17 October 2026', 'DD.MM.YYYY', '17.10.2026!', '',
-              '   ', '١٧.10.2026', '17·10·2026', None, 17):
+              'DD.MM.YYYY', '17.10.2026!', '', '   ', '١٧.10.2026',
+              '17·10·2026', None, 17, '13/13/2026', '02/30/2026',
+              'Saturday', 'Sat Sun 17 oct 2026', '17 th oct 2026',
+              '2026th oct 17', '17thx oct 2026', 'October November 17 2026',
+              'the of', 'Moonday 17 oct 2026'):
     # ascii(), not %r: a plain Windows console cannot print the digits of
     # another script, and the line would crash the suite instead of naming it.
     check('%s is not read as a date' % ascii(_form), _rd(_form) is None
@@ -335,6 +358,11 @@ finally:
     del _rd_rec._MONTH_NAMES['marzipan']
 check("a word starting two months' names is no month",
       _rd_ambiguous is None and _rd('17 mar 2026') == date(2026, 3, 17))
+# The reader takes a word for a day's name before it asks whether it is a
+# month's, which is only safe while no three letters start both.
+check('no three letters start both a day name and a month name',
+      not [(d, m) for d in _rd_rec._WEEKDAY_NAMES for m in _rd_rec._MONTH_NAMES
+           if d[:3] == m[:3]])
 # One pass over the text, never a backtracking search: thirty figures and a
 # stray symbol took a single repeated-group pattern hours, in the field's
 # own keystroke. The unbacked version answers in microseconds.

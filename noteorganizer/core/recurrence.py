@@ -165,8 +165,10 @@ def format_date(d):
 # the year first; the month as a word, in English or in Romanian. read_date
 # understands those, and show_date is the one form a date is shown in. What
 # reaches a note goes through format_date, so the store never learns there
-# was a choice. The day always comes first in figures: 10/12/2026 is the
-# tenth of December, never the twelfth of October.
+# was a choice. In figures the day comes first, as the field's own form
+# asks, and the month first only where the day first cannot be: 10/17/2026
+# is October 17th, the American way, while 10/12/2026 is the tenth of
+# December, never the twelfth of October.
 
 #: What the empty date field shows: the order a typed date is read in.
 DATE_FORM = "DD.MM.YYYY"
@@ -195,6 +197,15 @@ _LONG_MONTHS = ("January", "February", "March", "April", "May", "June",
 _LONG_DAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
               "Saturday", "Sunday")
 
+# The English day names a written-out date may carry ("Saturday, October
+# 17, 2026", "Sat, Oct 17"): read, and set aside -- the figures say which
+# day it is. A word names a weekday as a word names a month: a whole name or
+# the start of one, three letters at least.
+_WEEKDAY_NAMES = tuple(day.casefold() for day in _LONG_DAYS)
+# Words English sets around a date that say nothing about which day it is:
+# "the 17th of October".
+_DATE_FILLERS = ("the", "of")
+
 # A typed date: figures and words, with spaces, dots, slashes, dashes or
 # commas between them -- and nothing else. Figures are 0-9 only: digits of
 # another script are not a date, and int() would read them as one. Checked
@@ -203,19 +214,34 @@ _LONG_DAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
 # repeated group of repeated runs, and that is the form which backtracks
 # without end on thirty figures and a stray symbol -- in the field's own
 # keystroke, on the app's one thread.
-_DATE_PART = re.compile(r"[0-9]+|[^\W\d_]+")
+# A day may carry its ordinal ending, "17th", "1st": one part, the figures
+# kept. The ending is taken only straight after one or two figures.
+_DATE_PART = re.compile(r"[0-9]{1,2}(?:st|nd|rd|th)|[0-9]+|[^\W\d_]+",
+                        re.IGNORECASE)
 _DATE_RUNS = re.compile(r"[0-9]+|[^\W\d_]+|[\s./,\-]+")
+_DATE_FIGURES = re.compile(r"[0-9]+")
 # Far longer than any date anyone writes ("17 septembrie 2026" is 18).
 _DATE_MAX_CHARS = 40
 
 
+def _fold(word):
+    """*word* without case or diacritics, for comparing with a name."""
+    return "".join(c for c in unicodedata.normalize("NFKD", word)
+                   if not unicodedata.combining(c)).casefold()
+
+
+def _names_started_by(word, names):
+    """The *names* that *word* is, or starts -- three letters at least."""
+    folded = _fold(word)
+    if len(folded) < 3:
+        return []
+    return [name for name in names if name.startswith(folded)]
+
+
 def _month_from_word(word):
     """The month *word* names, or None (see _MONTH_NAMES)."""
-    folded = "".join(c for c in unicodedata.normalize("NFKD", word)
-                     if not unicodedata.combining(c)).casefold()
-    if len(folded) < 3:
-        return None
-    months = {n for name, n in _MONTH_NAMES.items() if name.startswith(folded)}
+    months = {_MONTH_NAMES[name]
+              for name in _names_started_by(word, _MONTH_NAMES)}
     return months.pop() if len(months) == 1 else None
 
 
@@ -223,9 +249,13 @@ def read_date(text, settled=False, today=None):
     """A date as a person writes it -> date object, or None.
 
     Read: 17.10.2026, 17/10/2026, 17-10-2026 (the day first, one or two
-    figures for the day and the month); 2026-10-17 (four figures first mean
-    the year comes first); and the month as a word -- 17 oct 2026, 17
-    octombrie 2026, October 17, 2026.
+    figures for the day and the month -- and the month first only where the
+    day first cannot be, so 10/17/2026 is October 17th while 10/12/2026 is
+    the tenth of December); 2026-10-17 (four figures first mean the year
+    comes first); and the month as a word, before or after the day -- 17
+    oct 2026, 17 octombrie 2026, October 17, 2026. English trimmings are
+    read and set aside: a day name ("Saturday, October 17, 2026"), an
+    ordinal ending ("October 17th"), "the" and "of" ("the 17th of October").
 
     *settled*: the person has finished with the field (left it, saved,
     left the note). Only then is a short year read as this century's
@@ -239,9 +269,22 @@ def read_date(text, settled=False, today=None):
     if (not text or len(text) > _DATE_MAX_CHARS
             or _DATE_RUNS.sub("", text)):
         return None
-    parts = _DATE_PART.findall(text)
-    numbers = [p for p in parts if p.isdigit()]
-    words = [p for p in parts if not p.isdigit()]
+    numbers = []
+    words = []
+    weekdays = 0
+    for part in _DATE_PART.findall(text):
+        if part[0].isdigit():
+            numbers.append(_DATE_FIGURES.match(part).group())
+        elif _fold(part) in _DATE_FILLERS:
+            continue
+        # No three letters start both a day's name and a month's, in either
+        # language, so a word is one or the other, never both.
+        elif len(set(_names_started_by(part, _WEEKDAY_NAMES))) == 1:
+            weekdays += 1
+        else:
+            words.append(part)
+    if weekdays > 1:
+        return None
 
     def year_of(figures):
         if len(figures) == 4 and figures[0] != "0":
@@ -256,10 +299,18 @@ def read_date(text, settled=False, today=None):
     if not words:
         if len(numbers) == 3 and len(numbers[0]) == 4:
             year, month, day = year_of(numbers[0]), numbers[1], numbers[2]
-        elif len(numbers) == 3:
-            day, month, year = numbers[0], numbers[1], year_of(numbers[2])
-        elif len(numbers) == 2:
-            day, month, year = numbers[0], numbers[1], this_year()
+        elif len(numbers) in (2, 3):
+            first, second = numbers[0], numbers[1]
+            year = year_of(numbers[2]) if len(numbers) == 3 else this_year()
+            # The day first, as the field's form asks; the month first only
+            # where the day first cannot be -- a second figure past 12 is no
+            # month, so 10/17/2026 is October 17th, written the American
+            # way. 10/12/2026 stays the tenth of December.
+            if (len(first) <= 2 and len(second) <= 2
+                    and int(second) > 12 >= int(first)):
+                day, month = second, first
+            else:
+                day, month = first, second
         else:
             return None
         if len(day) > 2 or len(month) > 2:
