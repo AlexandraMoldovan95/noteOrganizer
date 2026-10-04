@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.84.341](#084341--2026-10-04) | 2026-10-04 | The hint shown with no template to pick sends you to the section of Settings that really holds them. |
 | [0.84.340](#084340--2026-10-03) | 2026-10-03 | The light themes' secondary text reads against every surface, with every theme's text now measured against WCAG — and the window's bottom scrollbar shows only when the window is too narrow. |
 | [0.84.338](#084338--2026-10-03) | 2026-10-03 | Dates typed the way people write them — 17.10.2026, 2026-10-17, "17 Oct 2026" — and shown day first everywhere, while the notes file keeps the one form it always had. |
 | [0.83.338](#083338--2026-10-03) | 2026-10-03 | What comes in from outside is taken for what it is: a damaged data file no longer stops the app from starting, an attachment is only its two names, and a paste too long to keep whole says what it left out. |
@@ -86,6 +87,25 @@ How the numbers themselves are counted is the
 | [0.3.0](#030--tags-removed-categories-as-the-sole-organization-system) | — | Tags come out entirely, leaving categories as the app's one organization system. |
 | [0.2.0](#020--inline-ui-overhaul--data-resilience) | — | Every OS-native popup becomes an in-app themed one, and the calendar grows richer. |
 | [0.1.0](#010--core-application) | — | The founding feature set — notes, recurrence, calendar, templates, sharing, themes. |
+
+---
+
+## [0.84.341] — 2026-10-04
+
+*Highlights: the hint shown when there is no template to pick sends you to the section of
+Settings that really holds them.*
+
+### Fixed
+
+- **The no-templates hint names a section that exists.** Pressing 📎 Use template with no
+  templates said to create one in "Settings → Manage templates" — a name the section lost when
+  Settings became a list of sections. It is "Templates", and the hint now says so.
+
+### Testing
+
+- qa6 reads that hint, and checks every "Settings → X" in the app's code against the sections
+  Settings really has, so the next rename cannot leave one behind. Mutant M01 takes the fix back
+  out, and both checks go red.
 
 ---
 
