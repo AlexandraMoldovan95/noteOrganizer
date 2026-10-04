@@ -261,6 +261,43 @@ check('clicking "Back to Notes" directly clears the field\'s focus',
 app.show_settings_page()
 app.update()
 
+# ---- A MESSAGE THAT POINTS INTO SETTINGS NAMES A SECTION IT HAS ----
+# "Manage templates" became "Templates" when Settings became a list of
+# sections, but the hint shown when there is no template to pick kept the
+# old name and sent people to a section that was not there. Asked of that
+# hint, then of every "Settings → X" in the app's code, so the next rename
+# cannot leave one behind.
+import ast, glob, re
+_hint = []
+_tpl_kept = app.templates
+app.templates = []
+app.show_info = lambda title, message='', *a, **k: _hint.append(message) or True
+app.show_template_picker(); app.update()
+app.show_info = lambda *a, **k: True
+app.templates = _tpl_kept
+
+
+def _names_a_section(text):
+    return all(any(text[m.end():].startswith(label)
+                   for label in _section_labels.values())
+               for m in re.finditer('Settings → ', text))
+
+
+check(f'with no templates, the hint names the section that holds them ({_hint})',
+      len(_hint) == 1 and 'Settings → ' in _hint[0] and _names_a_section(_hint[0]))
+_src = os.path.dirname(os.path.abspath(NO.__file__))
+_stale = []
+for _path in [os.path.join(_src, 'note_organizer.py')] + glob.glob(
+        os.path.join(_src, 'noteorganizer', '**', '*.py'), recursive=True):
+    with open(_path, encoding='utf-8') as _fh:
+        _tree = ast.parse(_fh.read())
+    _stale += [(os.path.basename(_path), n.lineno, n.value[:70])
+               for n in ast.walk(_tree)
+               if isinstance(n, ast.Constant) and isinstance(n.value, str)
+               and 'Settings → ' in n.value and not _names_a_section(n.value)]
+check(f'every "Settings → X" the app can show names a real section ({_stale})',
+      not _stale)
+
 # ---- SETTINGS: scrolling over a theme preview card scrolls the page (regression) ----
 # The theme picker's preview cards are small Canvas widgets, which have a
 # built-in default mouse-wheel behavior of their own — swallowing the wheel

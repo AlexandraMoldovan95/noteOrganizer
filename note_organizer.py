@@ -17501,7 +17501,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.show_info(
                 "No templates yet",
                 "You don't have any templates. Write a note and use "
-                "“🧩 Save as template”, or create one in Settings → Manage templates.")
+                "“🧩 Save as template”, or create one in Settings → Templates.")
             return
 
         self._dismiss_mini_popup()
