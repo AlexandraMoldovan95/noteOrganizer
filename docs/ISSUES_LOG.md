@@ -134,6 +134,9 @@ day-to-day tracking.
 | [The list that moved under the pointer](#the-list-that-moved-under-the-pointer) | An action that moves the layout must keep the user's target under the pointer — or remember what they pointed at. | 0.83.335 |
 | [The character only the drawn tables had](#the-character-only-the-drawn-tables-had) | An offset belongs to the space it was counted in: convert at every crossing, and compare in the space both sides share. | 0.83.335 |
 
+Smaller lessons, each once a long comment in the code, are collected
+[at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
+
 
 ## Data safety & integrity
 
@@ -4409,3 +4412,166 @@ refuses a read). No other program can take part, and nothing the person copied i
 race; taking the shared thing out of the test ends it — the same lesson as
 [The tests that borrowed the notebook](#the-tests-that-borrowed-the-notebook), for the
 clipboard.
+
+## Smaller lessons, moved out of the code
+
+*Each of these was once a long comment beside the code it explains. The code now says why in a
+line or three and points here, by name, for what happened.*
+
+### From the entry file (`note_organizer.py`)
+
+- **The export menu's comment** — It said "Markdown is portable but drops what Markdown cannot
+  say", describing a third format the menu has never built. A docstring making the same claim had
+  been corrected a release earlier; the sweep missed this one because it greps as a comment about
+  Markdown rather than as a claim about the formats on offer.
+- **`_sync_editor_snapshot`** — This was `refresh_tab_strip`, which drew a row of tabs above the
+  editor — a row that could never appear. Every path that touches the list of open notes resets
+  it to a single entry and nothing appends to it, so the strip's "hidden at 0–1 notes" branch was
+  the only one ever taken. Recorded as finding C12 in the coverage ledger and closed by removing
+  the strip rather than by building tabs for several notes. What was never dead is the snapshot
+  it refreshed on the way: the dirty comparison and the restore after a bulk delete both read it,
+  so it is kept under the name of what it actually does.
+
+### From `core/model.py`
+
+- **`shared_update_changes`** — Both sides are compared in the shape a load gives them. The note
+  in memory can still hold what the editor wrote raw — a day's edit carried an empty colour that
+  `normalize_note` drops — while the incoming copy has been through `normalize_note`. Compared as
+  they were, a backup holding this very note read as "edited elsewhere" until the next restart,
+  and Update spent the rescue copy on it.
+- **`clean_override`** — Written raw, a day's edit kept an empty colour the load then dropped,
+  and the two copies of one note compared as different until the next launch. An override
+  carries a colour as the note does, and it ends in a Tk `configure()` when the day is drawn:
+  checking only that it was text let "#nope" through, so one per-day colour from a share code, a
+  backup or a hand-edited file could raise during the startup calendar render — the
+  make-the-app-unopenable class the note's own colour had been closed for, through the one door
+  that fix did not cover. And a day's text had to take the base body's canonical form as well:
+  the editor draws a line under a trailing table, so a stored day's text was one newline short
+  of the screen, and an edit ending in a table read as unsaved forever — a save question at every
+  note switch and at close, for an edit nobody made.
+- **The checklist ceiling** (`normalize_note`) — Every checklist item becomes a frame, a check
+  box, a label and a variable when the note is drawn, and nothing upstream limited how many could
+  arrive: a hand-made share code carrying 20,000 items is only 60 KB of pasteable text, passes
+  every guard the decoder has, and killed the process on render — permanently, because the note
+  is saved first and drawn again on the next launch. The cap (1,000) is far above any real list
+  and lives in `normalize_note`, the one choke point every route passes.
+- **`repair_note_ids`** — The id is how the whole app finds a note — `find_note` returns the
+  first match, and a delete filters by it — yet nothing kept it unique after the one-time cleanup.
+  Two notebooks merged by hand both number from 1: editing the second note of a pair saved into
+  the first, silently replacing its text, and deleting either took both to the Trash. And
+  `normalize_note` turns an unusable id into 0, which the editor reads as "no note selected".
+- **`rename_category_everywhere`** — The rescue copy an update leaves holds the category and the
+  per-day edits it replaced. Left out of a rename, a later "↩ Restore previous" filed the note
+  under General and its day under the old name, which the next launch brought back as a category
+  of its own.
+
+### From `core/storage.py`
+
+- **`load_notes`** — The note the user had open is remembered by its id, and the one-time
+  cleanup renumbers every id from 1, so the remembered number has to be re-pointed at the same
+  note, or it silently comes to mean whichever note inherits it. Measured before the fix: with
+  one empty note in front of it, the note being read moved from id 2 to id 1, the setting still
+  said 2, and the next launch opened the note after it. It is matched by identity, not content —
+  `clean_notes` returns the very dicts it was handed — and a note the cleanup removed (empty, or
+  an exact duplicate merged into its twin) leaves nothing to re-point at: the app then opens no
+  note at all, the honest outcome, and far better than opening someone else's.
+- **`restore_many_from_trash`** — A note whose category was deleted while it sat in the Trash
+  comes back under General, but that is `normalize_note`'s doing. The method this replaced
+  checked the category itself and fell back to the same value, which had no effect; the check was
+  dropped rather than carried over, and the guarantee is tested where it lives.
+
+### From `ui/note_list.py`
+
+- **`_list_scrolled_by_hand`** — Only a scroll that leaves the ring's row out of sight counts,
+  read once the view has moved. Every wheel notch used to count, even one that kept the card in
+  view or moved nothing at the end of the list: the next save that took the card away then put the
+  ring on another note, and Enter opened that one.
+- **`_filter_options`** — The filter's choices had been written out inline at the dropdown and
+  then half-remembered by the guard that keeps the selection valid, which asked
+  `not in CATEGORY_COLORS` — true of both type filters, neither of which is a category. So
+  filtering the list to Repeating and then adding a category in Settings silently threw the
+  filter away and showed everything. Measured on the real app before the change, with a control:
+  a real category survived the same call, and a deleted one was correctly reset.
+- **`refresh_note_list`** — A rebuild's scroll restore is in force from the moment the rows are
+  drawn, not from when the app is next idle. Every deliberate scroll — the wheel, the scrollbar,
+  the ring's scroll into view, a click keeping its card under the pointer — cancels a restore by
+  clearing `_list_restore_px`. A restore queued as a bare callback could not be cancelled, and
+  scrolled the view back after them; a press measured in one view and a jitter read in the other
+  then passed for a drag.
+- **`_list_extent`** — How far the list reaches is worked out from its rows, never asked of Tk.
+  The frame the cards once lived in started at y=0, so `bbox("all")` did too, and every scroll
+  guard counts on that. A drawing's bbox starts at its first item, at the first card's margin,
+  and the top of the list read as "scrolled four pixels": every rebuild kept its old depth, and a
+  snap to the top landed at 4. An empty rectangle from 0 papered over it on Windows and failed on
+  the Linux image — Tk 8.6.15 counts a pixel round a rectangle with no outline into its bbox and
+  8.6.16 does not, so the same rectangle read (0, 0, …) on one and (1, 1, …) on the other. The
+  app knows where its rows end.
+- **`_reflow_list`** — Rows that move by the same amount move together, in one tagged move of the
+  band they stand in. A canvas finds a tag by walking every item it holds, so moving each row by
+  its own tag cost rows times items: 2.6 s to close the gap one delete left in a list drawn to the
+  end of 5,000 notes, and a first autosave of a note far down paid the same. A band is tagged by
+  what lies wholly inside it, before any band moves, and trusted only if it holds exactly its
+  rows' items; otherwise those rows move one by one. Tk's search for what lies inside skips hidden
+  items, and in Select mode every unticked card's tick mark is one: every band came up a mark
+  short per card and moved row by row — 4.7 s for a delete at 5,000 notes. The marks join their
+  band by id, a lookup rather than a walk of the canvas, so they travel with their cards.
+- **The Custom order offer** (`_move_note`, `_on_sort_chosen`, `_custom_order_knows`) — A move
+  made while the list is sorted some other way starts Custom order again from the order shown,
+  which replaces any arrangement made by hand earlier. It used to go without a word: one Alt+Down
+  while looking at the list by title, and the arrangement was gone from the notes file. The toast
+  then said so and offered it back for eight seconds — and the next toast with an Undo, a
+  delete's say, took the offer's place, so the arrangement had no way back at all. It is kept for
+  the session now, and choosing Custom order asks whether to bring it back. Which arrangement is
+  kept took three rounds. A second move in a sorted view "replaced" the first replacement, and its
+  marks took the place of the hand-made order's, which then had no way back; so the one made by
+  hand is kept. But an arrangement made by hand *on* that replacement is then the newest one made
+  by hand, and offered the older one, the newer was lost; so "made by hand" means the order
+  differs from the one the last such move left — not that a card was moved, since Alt+Down then
+  Alt+Up arranges nothing, and counted as an arrangement it gave the older one's place to the
+  replacement itself. And counting only the note a move by hand moved missed an arrangement made
+  by moving a known card past a new one: the known notes' order was unchanged, and the newest
+  arrangement was replaced by the older. Counting every note a move passed would count a card
+  moved past a new note and back; so new notes are placed in the record where they stand, and the
+  move is compared like any other.
+- **Dragging at the list's edge** (`_scroll_list_drag_near_edge`, `_list_drag_scroll_step`) — The
+  card cut by the list's edge is the one a hand most often clicks, and a click whose hand slips
+  five pixels starts a drag: it scrolled the list under the held card from the first beat, and
+  the release dropped the card one to three places away — the list switched to Custom order, or
+  a hand-made one changed without a word. So a drag that began at an edge waits, and every
+  arrival at an edge starts slowly. The speed itself grows with how far the pointer is pushed
+  past the edge, because at a tenth of the view a beat, taking a card from the bottom of 300 notes
+  to the top took over a minute; and the first beats ramp up, because at the full step from the
+  first beat, an edge reached a moment before the release had already carried the list a card or
+  two along.
+- **`_list_focus_in`** — When the keyboard comes back to the list, the ring must be where the
+  person can see it: a ring left 900 pixels above the view had Enter open a note nobody could see,
+  and the menu key post its menu off the screen. What took the ring's row out of sight decides
+  how. If the person scrolled the list away, the ring goes to the first row the view shows, and
+  the view stays where they put it. If the list moved the row while the keyboard was elsewhere —
+  a save took the card to the top, a search keystroke filtered out the notes above it — the ring
+  stays on its row and the row is brought into view; given to the first row in view instead, it
+  sat on another note, and Enter opened that one.
+- **`_restore_card_focus`** — Since the cards became a drawing, a rebuild never moves the
+  keyboard: the canvas that holds it survives, and only the drawing is replaced. That ended a
+  whole class of trouble the widget cards had — a keyboard left on a destroyed card, and a guard
+  that had to decide from `focus_get()`, which answers None whenever another program holds the
+  desktop's foreground, whether to pull the keyboard back.
+- **The surgical updates** (`_remove_note_cards`, `_bulk_select_all`, `_toggle_note_selected`) —
+  A family of updates that change a few cards instead of rebuilding the list, each written
+  because a full rebuild "visibly flickered the whole list" for a change that touched a few cards:
+  the theme recolour, Select mode, the open note's outline, then deleting — the one frequent
+  action still paying the full price when the cards were widgets, 120 of them destroyed and remade
+  in 115 ms to take one card away (field-reported as "the picture breaks a little and rebuilds
+  itself") — then Select all, where a rebuild to move the ticks cost 140 widgets and about 170 ms,
+  the flicker the button was reported for, and every single tick, which flickered on each click.
+  The save's one-card redraw is the sixth
+  ([The list that was drawn whole, for every pause in typing](#the-list-that-was-drawn-whole-for-every-pause-in-typing)).
+  The two that move rows return False when they cannot be sure, and the caller rebuilds: a list
+  that quietly disagrees with the notes is far worse than one that flickers.
+- **`_query_matches_note`** — The list and "Select all visible" each carried a hand-rolled copy of
+  the search rule, and the copies drifted: the list stripped a table's plumbing from bodies (so
+  searching "---" stopped matching every table note) while Select all matched the raw body — so
+  Select all quietly ticked notes the filter had hidden, and bulk actions hit them. And an empty
+  query is answered without reading a note: every rebuild, every autosave's one-card redraw and
+  every tick in Select mode used to lowercase every body and parse every table in the notebook to
+  find that nothing typed is in all of them.

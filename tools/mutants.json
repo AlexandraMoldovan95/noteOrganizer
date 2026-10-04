@@ -1,0 +1,263 @@
+[
+  {
+    "id": "S01",
+    "about": "the runner's own check: a mutant that must be killed",
+    "edits": [
+      {
+        "file": "noteorganizer/core/recurrence.py",
+        "find": "def read_date(text, settled=False, today=None):\n",
+        "replace": "def read_date(text, settled=False, today=None):\n    return None\n"
+      }
+    ],
+    "must_fail": [
+      "the date is read from '10/17/2026'"
+    ],
+    "suites": [
+      "test_recurrence"
+    ],
+    "expect": "killed",
+    "note": "Every date reads as nothing; any date check must go red."
+  },
+  {
+    "id": "S02",
+    "about": "the runner's own check: an equivalent mutant that must survive",
+    "edits": [
+      {
+        "file": "noteorganizer/core/recurrence.py",
+        "find": "    if weekdays > 1:\n",
+        "replace": "    if weekdays >= 2:\n"
+      }
+    ],
+    "must_fail": [],
+    "suites": [
+      "test_recurrence"
+    ],
+    "expect": "survives",
+    "note": "For a whole number, > 1 and >= 2 are the same test."
+  },
+  {
+    "id": "D01",
+    "about": "a two-figure year is read while it is still being typed",
+    "edits": [
+      {
+        "file": "noteorganizer/core/recurrence.py",
+        "find": "        if len(figures) == 2 and settled:\n",
+        "replace": "        if len(figures) == 2:\n"
+      }
+    ],
+    "must_fail": [
+      "a two-figure year being typed is never read as a year of its own"
+    ],
+    "suites": [
+      "test_recurrence"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "D02",
+    "about": "a missing year is filled in while the date is still being typed",
+    "edits": [
+      {
+        "file": "noteorganizer/core/recurrence.py",
+        "find": "        return (today or date_cls.today()).year if settled else None\n",
+        "replace": "        return (today or date_cls.today()).year\n"
+      }
+    ],
+    "must_fail": [
+      "'17.10' waits until the field is left"
+    ],
+    "suites": [
+      "test_recurrence"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "D03",
+    "about": "figures are read month first",
+    "edits": [
+      {
+        "file": "noteorganizer/core/recurrence.py",
+        "find": "                day, month = first, second\n",
+        "replace": "                day, month = second, first\n"
+      }
+    ],
+    "must_fail": [
+      "figures are read day first: 10/12/2026 is the tenth of December"
+    ],
+    "suites": [
+      "test_recurrence"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "D05",
+    "about": "the date reader has no length cap",
+    "edits": [
+      {
+        "file": "noteorganizer/core/recurrence.py",
+        "find": "    if (not text or len(text) > _DATE_MAX_CHARS\n",
+        "replace": "    if (not text or False\n"
+      }
+    ],
+    "must_fail": [
+      "a date stretched past forty characters is not read"
+    ],
+    "suites": [
+      "test_recurrence"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "E01",
+    "about": "the month is never read first, even where the day first cannot be",
+    "edits": [
+      {
+        "file": "noteorganizer/core/recurrence.py",
+        "find": "                    and int(second) > 12 >= int(first)):\n",
+        "replace": "                    and False):\n"
+      }
+    ],
+    "must_fail": [
+      "the date is read from '10/17/2026'"
+    ],
+    "suites": [
+      "test_recurrence"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "E03",
+    "about": "an English day name is not set aside",
+    "edits": [
+      {
+        "file": "noteorganizer/core/recurrence.py",
+        "find": "            weekdays += 1\n",
+        "replace": "            words.append(part)\n"
+      }
+    ],
+    "must_fail": [
+      "the date is read from 'Saturday, October 17, 2026'"
+    ],
+    "suites": [
+      "test_recurrence"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "R01",
+    "about": "month-end days that clamp onto one date count twice",
+    "edits": [
+      {
+        "file": "noteorganizer/core/recurrence.py",
+        "find": "            landed = sorted({\n",
+        "replace": "            landed = sorted([\n"
+      },
+      {
+        "file": "noteorganizer/core/recurrence.py",
+        "find": "                if d is not None})\n",
+        "replace": "                if d is not None])\n"
+      }
+    ],
+    "must_fail": [
+      "month-end days that clamp onto one date occur on it ONCE",
+      "\"8 times\" means 8 different days, not 8 landings"
+    ],
+    "suites": [
+      "test_recurrence"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "J12",
+    "about": "the one definition of an unreadable file forgets deep nesting",
+    "edits": [
+      {
+        "file": "noteorganizer/core/paths.py",
+        "find": "JSON_UNREADABLE = (json.JSONDecodeError, UnicodeDecodeError, RecursionError)\n",
+        "replace": "JSON_UNREADABLE = (json.JSONDecodeError, UnicodeDecodeError)\n"
+      }
+    ],
+    "must_fail": [
+      "a nested-too-deep notes file loads as damaged",
+      "a share code nested too deep to read is refused as damaged"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "J13",
+    "about": "the one definition of an unreadable file forgets bytes that are not UTF-8",
+    "edits": [
+      {
+        "file": "noteorganizer/core/paths.py",
+        "find": "JSON_UNREADABLE = (json.JSONDecodeError, UnicodeDecodeError, RecursionError)\n",
+        "replace": "JSON_UNREADABLE = (json.JSONDecodeError, RecursionError)\n"
+      }
+    ],
+    "must_fail": [
+      "a not-UTF-8 notes file loads as damaged",
+      "a not-UTF-8 trash.json loads as damaged"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "N01",
+    "about": "loading no longer repairs two notes that share an id",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "    ids_repaired = repair_note_ids(notes)\n",
+        "replace": "    ids_repaired = False\n"
+      }
+    ],
+    "must_fail": [
+      "the load repairs a collision even after the one-time cleanup has run",
+      "...and writes the repair down, so the next launch agrees"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "C01",
+    "about": "a category name longer than the app keeps is accepted",
+    "edits": [
+      {
+        "file": "noteorganizer/core/categories.py",
+        "find": "    if len(name) > MAX_CATEGORY_NAME:\n        return (f\"A category name",
+        "replace": "    if False:\n        return (f\"A category name"
+      }
+    ],
+    "must_fail": [
+      "an 81-character one is refused, and the refusal says why"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "U40",
+    "about": "a click beside the date field does not finish it",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self.bind_all(\"<ButtonPress-1>\",\n                          self._settle_dates_on_click_elsewhere, add=\"+\")\n",
+        "replace": "            pass\n"
+      }
+    ],
+    "must_fail": [
+      "a click beside the field, on no box at all, finishes with it"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  }
+]

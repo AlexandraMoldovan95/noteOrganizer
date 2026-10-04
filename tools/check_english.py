@@ -46,37 +46,22 @@ sys.stdout.reconfigure(encoding="utf-8")
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 
-# Words that are Romanian and are not also English. Short ones like "a",
-# "la" or "un" are left out on purpose: they appear inside English prose
-# and in code as identifiers, and a gate that cries wolf gets switched
-# off. These are enough -- they carry ordinary Romanian sentences.
+# Words that are Romanian and not also English. Short ones like "a", "la"
+# or "un" are left out: they appear in English prose and as identifiers, and
+# a gate that cries wolf gets switched off.
 WORDS = [
     "acest", "aceasta", "acum", "adauga", "arata", "cand", "cauta",
     "daca", "deci", "dupa", "este", "fara", "fiindca", "fisier",
     "fisierul", "fisiere", "inainte", "inapoi", "notita", "notite",
     "pentru", "poate", "ramane", "sterge", "sters", "stearsa", "sunt",
     "toate", "trebuie", "verifica", "vreau",
-    # Added 2026-09-15, after the gate read a seeded notebook full of
-    # Romanian nouns -- "Reteta de paine", "lapte", "oua" -- and called
-    # the repository clean. The list had only function words, and nouns
-    # carry just as much language. Widening it turned up twenty-six more
-    # lines of test data nobody had looked at since writing them.
+    # Nouns as well (2026-09-15): a seeded notebook of Romanian recipes
+    # passed a list of function words.
     "reteta", "cumparat", "lapte", "paine", "faina", "framantat",
     "caiet", "caietul", "aliment", "fructe", "nume", "cant", "zile",
-    # Added 2026-09-29, after the gate called the repository clean while
-    # six check names in story_note_travels printed Romanian into every
-    # CI log -- the exact thing the docstring above says this was written
-    # to stop -- plus two messages in doc_screenshots and some eighty
-    # lines of seeded test data. None of them used a word on the list.
-    #
-    # That is the lesson, and it is why this block is long: a hand-picked
-    # sample answers "none of MY words are here", which is not the same
-    # question as "is this English". The words below were not guessed --
-    # they are every word the 2026-09-29 sweep actually found, plus the
-    # ordinary connectives that carry a Romanian sentence around them.
-    # A word goes in only if it is not also English: "face", "nota",
-    # "plan", "corp" and "lista" were all tried and rejected here,
-    # because a gate that cries wolf gets switched off.
+    # Every word the 2026-09-29 sweep found, plus the connectives around
+    # them; a word that is also English ("face", "nota", "plan") stays out.
+    # ISSUES_LOG: "The same net, woven again".
     "aici", "acolo", "altfel", "apasa", "apoi", "asta", "atentie",
     "atunci", "butonul", "butoane", "cateva", "ceva", "comentariu",
     "culoare", "culori", "deschide", "deschis", "doar", "eroare",
@@ -89,29 +74,13 @@ WORDS = [
     "sedinta", "simplu", "sterge", "titlul", "titluri", "vechi",
     "vorbe", "acelasi", "aiurea", "editata", "inexistenta", "notitei",
     "sablon", "scurta", "versiunea",
-    # A third pass, same day: translating the list above turned up seven
-    # more lines whose words were not on it either -- "coada", "facut
-    # deja", "Ramasa", "necunoscut". Three rounds of widening on one day
-    # is the honest measure of how far a wordlist gets you, and it is
-    # why anything new written here is read before it is committed
-    # rather than trusted to this gate.
+    # A third pass the same day: seven more lines the list had missed.
     "coada", "facut", "deja", "necunoscut", "ramasa", "dinainte",
     "laterala", "panou", "bara", "continut", "acelasi", "baza",
     "scurt", "originala", "versiune",
-    # A fourth pass, 2026-10-03, after "discutat bugetul" turned up in
-    # qa7 and test_recurrence: written on 9 September, before this gate
-    # existed, and missed by every sweep since. This one did not sample.
-    # It read the repository three ways at once -- by the endings
-    # Romanian gives its words, by every word in a string or comment that
-    # the docs' English prose never uses, and by the short words a
-    # three-letter floor skips -- and a person read every candidate.
-    # About three hundred lines in nineteen files. Two of the ways they
-    # hid are fixed below rather than listed: words glued to other words
-    # or to digits, and words no list will think of in advance. What the
-    # gate still cannot see, said plainly: two-letter words and words
-    # English shares -- "da", "nu", "doi", "cap", "sub" -- thirty-five
-    # of the lines this pass translated. For those, reading before
-    # committing remains the only defence.
+    # The fourth pass (2026-10-03) read the whole repository, not a sample.
+    # Still invisible: two-letter words and words English shares ("da",
+    # "nu", "doi", "sub") -- for those, reading before committing.
     "acasa", "acte", "adaugata", "albastru", "alta", "antrenament",
     "ascuns", "bifa", "cablu", "capat", "categorie", "celula", "citit",
     "coloana", "colorat", "colorata", "corectat", "cumparaturi",
@@ -130,25 +99,17 @@ WORDS = [
 ]
 ROMANIAN = re.compile(r"\b(%s)\b" % "|".join(WORDS), re.I)
 
-# Endings Romanian gives its words and English all but never does: the
-# definite article ("planul", "bugetul", "primul"), the genitive plurals,
-# the "-eaza" verbs, the "-iune" nouns and the teens ("unsprezece"). A
-# list only knows the words somebody thought of; an ending also knows the
-# ones nobody has written yet. The few English words that share an ending
-# are named below, so the rule itself can stay strict. A word is a
-# capital at most and then lower case: that is how a word is written, and
-# it is what keeps the rule off base64 ("...SJAAAADUlEQVR4...").
+# Endings Romanian gives its words and English almost never does (the
+# article in "planul", "-ilor", "-eaza", "-iune", the teens), so the rule
+# knows words nobody listed. A capital then lower case keeps it off base64.
 SHAPES = re.compile(r"\b[A-Za-z][a-z]{2,}(?:(?<![fao])ul|ului|ilor|elor|"
                     r"urilor|eaza|easca|iune|iunea|iuni|sprezece)\b")
 ENGLISH_SHAPED = {"annul", "consul", "mogul", "kabul", "istanbul",
                   "sailor", "tailor", "jailor", "bachelor"}
 
-# Glue hides a word from \b. "NotaTabelQ" and "CuvantUnicInCelula" are one
-# word to a regex, and so are "vechi1" and the "trei" in "unu\ntrei" --
-# all four sat in the suite past every earlier pass. Each line is pried
-# apart at those seams before it is searched: a copy of the line, so the
-# file is never touched and nothing the reader sees changes. A name that
-# merely LOOKS glued is kept whole first: the DejaVu fonts are not "deja".
+# Glue hides a word from \b ("NotaTabelQ", "vechi1", the "trei" in
+# "unu\ntrei"), so a copy of each line is pried apart at those seams first;
+# a name that only LOOKS glued (DejaVu, not "deja") is kept whole.
 SEAMS = re.compile(r"\\[ntr](?=[A-Za-z])|(?<=[a-z])(?=[A-Z])"
                    r"|(?<=[A-Za-z])(?=[0-9])|(?<=[0-9])(?=[A-Za-z])")
 WHOLE_NAMES = ("DejaVu",)
@@ -172,10 +133,8 @@ def romanian_in(line):
     return None
 
 
-# Words checked only against FILENAMES. They are too short, or too close
-# to something a program legitimately says, to search for inside code --
-# `cos` is the cosine the icon is drawn with -- but in a filename there
-# is nothing else they could be.
+# Checked only against FILENAMES: too short or too code-like to search for
+# in code (`cos` is the icon's cosine), but in a filename nothing else.
 FILENAME_ONLY = ["lista", "setari", "categorii", "cos", "cosul", "tema",
                  "deschisa", "poza", "poze", "ecran", "ecrane"]
 IN_FILENAME = re.compile(r"\b(%s)\b" % "|".join(WORDS + FILENAME_ONLY), re.I)

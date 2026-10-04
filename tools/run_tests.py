@@ -57,7 +57,7 @@ QA = [f"qa{i}.py" for i in range(1, 10)]
 # suite dies at import. Kept out of QA itself so it is never *run* as a test.
 QA_SUPPORT = ["_qa_support.py"]
 
-# The two checks CI runs before any of the above. They were missing here, so a
+# The static checks CI runs before any of the above. They were missing here, so a
 # green run of this script did not mean a green run on GitHub -- a signature
 # change once passed everything locally and failed CI on the next push.
 #
@@ -96,6 +96,15 @@ STATIC = [
     # printed into a log anybody can open.
     ("English throughout",
      [sys.executable, os.path.join("tools", "check_english.py")]),
+    # The fifth: every script that wipes its working folder has a deny rule
+    # for the agent in every spelling that could start it from the project
+    # root -- and, here on a machine with the live lists, they hold them all.
+    ("deny rules cover the wipers",
+     [sys.executable, os.path.join("tools", "check_agent_rules.py")]),
+    # The sixth: no release named in the app's comments, every pointer into
+    # the issues log leads somewhere, and condensed modules stay condensed.
+    ("comments say why, briefly",
+     [sys.executable, os.path.join("tools", "check_comments.py")]),
 ]
 
 

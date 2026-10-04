@@ -10,13 +10,13 @@ here; go there when you want the summary.
 
 > **Scope:** the data and rules layer is fully extracted — all fourteen
 > `core/` modules below are covered here in depth. The user interface has
-> since been split too: five areas now live in `noteorganizer/ui/` as mixins
-> (calculator panel, Settings page, dialogs/popups, calendar, attachments),
-> while `note_organizer.py` stays the entry point and the shared UI hub the
-> rest hangs off. This tour walks the `core/` modules; the `ui/` mixins are
-> plain cut-and-paste moves of methods that already lived on the class, so
-> they read the same as they did in the single file — see
-> [ARCHITECTURE.md](ARCHITECTURE.md) for how the five were chosen.
+> since been split too: six areas now live in `noteorganizer/ui/` as mixins
+> (calculator panel, Settings page, dialogs/popups, calendar, attachments,
+> the note list), while `note_organizer.py` stays the entry point and the
+> shared UI hub the rest hangs off. This tour walks the `core/` modules; the
+> `ui/` mixins are plain cut-and-paste moves of methods that already lived
+> on the class, so they read the same as they did in the single file — see
+> [ARCHITECTURE.md](ARCHITECTURE.md) for how the six were chosen.
 
 ## Contents
 
@@ -55,7 +55,7 @@ py note_organizer.py
 
 `note_organizer.py` is still the front door. The pure logic has moved into
 the `noteorganizer/` package next to it and is imported back in; the entry
-file itself stays large (~22,300 lines) because it is the UI hub the pieces
+file itself stays large (~19,700 lines) because it is the UI hub the pieces
 hang off, not a junk drawer of stray logic.
 
 To run every test — units + qa1–qa9 — safely in a scratch copy:
@@ -97,6 +97,7 @@ noteorganizer/
     ├── settings_page.py     the Settings page and its sections
     ├── dialogs.py           the hand-built dialogs and popups
     ├── calendar_view.py     the Calendar tab
+    ├── note_list.py         the note list: cards drawn on one canvas
     └── attachments.py       the attachments section
 docs/                     these documents
 qa/                       headless GUI tests
@@ -136,6 +137,15 @@ If you're working through this for the first time:
    feature built on the idea that plain text can be the single source of
    truth.
 5. The UI mixins in `noteorganizer/ui/` (see [ARCHITECTURE.md](ARCHITECTURE.md)).
+
+**How to read a comment.** A comment says *why* in a line or three. When a
+story sits behind it — a bug, what it cost, how it was found — the comment
+points to [the issues log](ISSUES_LOG.md), either by a story's title
+(`ISSUES_LOG: "…"`) or by name among its
+[smaller lessons](ISSUES_LOG.md#smaller-lessons-moved-out-of-the-code).
+`tools/check_comments.py` checks that every such pointer leads somewhere,
+and keeps the modules already condensed — `core/model.py`,
+`core/storage.py` and `ui/note_list.py` so far — that way.
 
 ---
 

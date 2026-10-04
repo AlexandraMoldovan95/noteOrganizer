@@ -61,31 +61,16 @@ from .recurrence import (
 # kill the app with a pasted share code (see normalize_note).
 MAX_CHECKLIST_ITEMS = 1000
 
-# Same class, sibling field: attachments render a row of widgets each and
-# arrive through every one of the same untrusted routes (share code,
-# imported backup, hand-edited file). Far above any real notebook — the
-# point is a ceiling, not a budget. Measured: 200 records paint in ~0.6 s
-# on a fast machine (a few seconds on a weak one), and real use tops out
-# around tens of files, so 200 protects the app without ever truncating
-# a genuine notebook.
+# The same ceiling for attachments, which render a row of widgets each and
+# arrive by the same untrusted routes. 200 paint in about 0.6 s on a fast
+# machine; real notebooks hold tens of files, so none is ever cut short.
 MAX_ATTACHMENTS = 200
 
 
 NOTE_DEFAULTS = {
-    # A note's identity, as opposed to "id", which is only its place in
-    # THIS file. Two devices both hand a new note id = max + 1, so two
-    # different notes arrive called 87 and nothing downstream can tell
-    # them apart; "uid" is invented independently and cannot collide.
-    #
-    # It exists so a note that LEAVES the app can be recognised when it
-    # comes back: a share code carries it, and an import can then say
-    # "this is the note you already have" instead of guessing from the
-    # text — a guess that is wrong precisely when the note was edited,
-    # which is the only interesting case.
-    #
-    # Empty here, filled by normalize_note on the way through, so every
-    # existing notebook gains identities on its next load with no
-    # migration pass of its own.
+    # Identity, which "id" is not: two devices both number a new note
+    # max + 1. A note coming back by share code is recognised by it, not
+    # guessed from its text. Set by normalize_note, so no migration is needed.
     "uid": "",
     "title": "",
     "body": "",
@@ -131,20 +116,12 @@ _HEX_COLOR = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 
 
 def sanitize_color(value, default=""):
-    """*value* if it is a colour Tk can draw, else *default*.
+    """*value* if it is a colour Tk can draw, else *default*; #rgb comes
+    back as #rrggbb, the form every reader that works with a colour expects.
 
-    Colour strings arrive from every untrusted door the app has — a share
-    code, an imported backup's settings.json, a hand-edited file — and
-    end their journey inside a Tk ``configure(bg=...)``, which raises
-    TclError on garbage. Because a note is SAVED before it is first
-    drawn, one bad colour used to mean a crash on every launch after:
-    the T0-7 brick, on a different field. Only #rgb/#rrggbb pass; the
-    app itself never writes anything else.
-
-    And #rgb comes back as #rrggbb, the same colour: every reader that
-    works a colour out by hand -- a painted day's text contrast, the
-    blends, a chip's darker hover -- reads six digits, and a #abc day
-    colour from a hand-edited file stopped its whole month drawing."""
+    Colours arrive from share codes, backups and hand edits, and a note is
+    saved before it is drawn, so garbage here crashed every launch after.
+    ISSUES_LOG: "The colour the door let in and the drawing could not read"."""
     if isinstance(value, str) and _HEX_COLOR.match(value.strip()):
         value = value.strip()
         if len(value) == 4:
@@ -186,27 +163,17 @@ def _note_str(note, key, default=""):
 
 
 def new_note_uid():
-    """A fresh note identity.
-
-    uuid4 is random rather than derived from anything about this machine
-    or this moment: two devices editing the same notebook must be able to
-    invent identities at the same second without consulting each other,
-    which is the whole reason this field exists. Stored as plain text,
-    like everything else in the file.
-    """
+    """A fresh note identity: a random uuid4, so two devices can each mint
+    one in the same second without consulting the other. Plain text."""
     return str(uuid.uuid4())
 
 
 def find_by_uid(notes, uid):
-    """The note that IS this one, or None.
+    """The note that IS this one, by identity, or None.
 
-    Identity, not resemblance. :func:`~noteorganizer.core.duplicates._dup_key`
-    answers a different question -- "does this look like something I
-    already have" -- and answers it from the text, so it says no exactly
-    when a note has been edited, which is the only time anyone re-sends
-    one. Both are useful; they are not interchangeable, and identity is
-    asked first.
-    """
+    Not :func:`~noteorganizer.core.duplicates._dup_key`, which asks from the
+    text whether a note LOOKS like one we have, and so says no exactly when
+    it was edited -- the only time anyone re-sends one. Asked first."""
     if not isinstance(uid, str) or not uid.strip():
         return None
     wanted = uid.strip()
@@ -216,23 +183,17 @@ def find_by_uid(notes, uid):
     return None
 
 
-# The fields an incoming copy of a note replaces. Everything else belongs
-# to THIS device's copy: its id and its place in the file, its attachment
-# files (which a share code never carries), and the per-occurrence
-# exceptions and overrides, which are about a timeline the sender's copy
-# may not share.
+# The fields an incoming copy replaces. The rest is this device's: its id and
+# place, its attachment files (a share code carries none), and the per-day
+# exceptions and overrides, a timeline the sender's copy may not share.
 UPDATABLE_FROM_SHARED = [
     "title", "body", "formatting", "paragraphs",
     "comments", "category", "date", "color", "recurrence", "checklist",
 ]
 
-# A restored backup is the user's OWN notebook -- from another device, or
-# from an earlier day -- so its copy of a note owns its timeline and its
-# pin as well. Treated like a share code, the per-day edits, the skipped
-# days and the pin a backup carried were dropped without a word, on the
-# route people use to move a notebook to a new PC. (Its attachments are
-# added too, by the caller: they are files, and files are not this
-# module's business.)
+# A backup is the user's OWN notebook, so its copy also owns its timeline and
+# pin (its attachment files are the caller's to add). ISSUES_LOG: "Eleven
+# decisions about your notes, made from half the evidence".
 UPDATABLE_FROM_BACKUP = UPDATABLE_FROM_SHARED + [
     "exceptions", "overrides", "pinned",
 ]
@@ -244,28 +205,12 @@ PREV_TEXT_FIELDS = ("title", "body", "formatting", "paragraphs", "comments")
 
 
 def apply_shared_update(note, incoming, fields=UPDATABLE_FROM_SHARED):
-    """Overwrite *note*'s content from *incoming*, keeping a way back.
-
-    The rescue copy goes into ``_prev`` -- the same one a drastic shrink
-    leaves behind, read by the editor's "↩ Restore previous". Reusing it
-    means an update that replaced the wrong thing is one button away from
-    being undone, with no new mechanism to build or explain.
-
-    It holds EVERY field the update replaces. It used to hold the text
-    alone while the update also replaced the checklist, the date, the
-    repeat rule, the colour and the category -- and the dialog asking for
-    the update promised each one "can be undone". Restore brought the
-    words back, and a ticked list, a date and a yearly reminder were gone
-    for good.
-
-    *incoming* is whatever a share code or a backup decoded to, so it is
-    normalised before anything is copied out of it. *fields* is what it
-    may replace: UPDATABLE_FROM_SHARED for a share code,
-    UPDATABLE_FROM_BACKUP for a backup.
-
-    An update that would change nothing leaves the note alone -- see
-    shared_update_changes for why that is not a nicety.
-    """
+    """Overwrite *note*'s *fields* from *incoming* (normalised first),
+    keeping every replaced field in ``_prev``, the rescue copy "↩ Restore
+    previous" puts back. An update that changes nothing leaves the note
+    alone (see shared_update_changes). *fields*: UPDATABLE_FROM_SHARED or
+    UPDATABLE_FROM_BACKUP. ISSUES_LOG: "Eleven decisions about your notes,
+    made from half the evidence"."""
     fresh = normalize_note(dict(incoming))
     if not shared_update_changes(note, fresh, fields):
         return note
@@ -287,40 +232,24 @@ def apply_shared_update(note, incoming, fields=UPDATABLE_FROM_SHARED):
 
 
 def shared_update_changes(note, incoming, fields=UPDATABLE_FROM_SHARED):
-    """Whether updating *note* from *incoming* would change any of *fields*.
+    """Whether updating *note* from *incoming* would change any of *fields*,
+    both compared as a load shapes them.
 
-    An update that changes nothing is not harmless. It rewrites the rescue
-    copy ("↩ Restore previous") with a duplicate of what is already there,
-    so the note's one earlier version is gone. Importing the same backup
-    twice did exactly that: the first import kept this device's newer text
-    as the rescue copy, the second replaced it with the backup's own, and
-    the newer text was in no file at all -- after messages ("Added 0
-    notes") that invited the second import.
-
-    Both sides are compared in the shape a load gives them. The note here
-    is the copy in memory, which can still hold what the editor wrote
-    raw -- a day's edit carried an empty colour that normalize_note drops
-    -- while *incoming* has been through normalize_note. Compared as they
-    were, a backup holding this very note read as "edited elsewhere"
-    until the next restart, and Update spent the rescue copy on it.
-    """
+    A no-change update would replace the rescue copy with a duplicate and
+    lose the one earlier version. ISSUES_LOG: "Importing the same backup
+    twice, the second time"; smaller lessons: shared_update_changes."""
     fresh = normalize_note(dict(incoming))
     mine = normalize_note(dict(note))
     return any(mine[field] != fresh[field] for field in fields)
 
 
 def split_by_identity(notes, incoming):
-    """Sort an incoming batch into notes we already have and notes we don't.
+    """Sort an incoming batch into ``(known, fresh)``: *known* holds
+    ``(mine, theirs)`` pairs, *fresh* the notes nothing here matches.
 
-    Returns ``(known, fresh)``: *known* is a list of ``(mine, theirs)``
-    pairs, *fresh* the incoming notes nothing here matches.
-
-    Both bulk import routes -- a share code carrying several notes, and a
-    restored backup -- ask this one function rather than each walking the
-    list itself. Two hand-rolled copies of the same judgement is how this
-    project's search rules drifted apart once already, and the fix was
-    exactly this: one definition, every caller.
-    """
+    Both bulk imports -- a share code with several notes, a restored backup
+    -- ask this one function: two hand-rolled copies of one judgement is how
+    the search rules once drifted apart."""
     known, fresh = [], []
     for note in incoming:
         if not isinstance(note, dict):
@@ -336,21 +265,10 @@ def split_by_identity(notes, incoming):
 def clean_override(patch):
     """One day's edit of a repeating note, in the shape a load gives it.
 
-    normalize_note runs every stored override through this, and the save
-    that writes a day's edit runs it too, so the edit held in memory is
-    the edit a restart reads back. Written raw, it kept an empty colour
-    the load then dropped, and the two copies of one note compared as
-    different until the next launch.
-
-    An override carries "color" like the base note does -- and like the
-    base note's, it ends inside a Tk configure() when the day is drawn.
-    isinstance(v, str) let "#nope" through, so a single per-day colour
-    from a share code, a backup or a hand-edited file could raise during
-    the startup calendar render: the same make-the-app-unopenable class
-    the note's own colour was closed for, through the one door that fix
-    did not cover. Dropping the bad value (rather than the whole
-    override) keeps the day's text edit intact.
-    """
+    Applied by normalize_note and by the save that writes the edit, so memory
+    and a restart agree. A bad colour is dropped, not the whole edit: it
+    would raise in Tk while the calendar is drawn at startup. ISSUES_LOG,
+    smaller lessons: clean_override."""
     out = {}
     for k, v in patch.items():
         if k not in OVERRIDABLE_FIELDS or not isinstance(v, str):
@@ -360,23 +278,14 @@ def clean_override(patch):
             if not v:
                 continue
         if k == "category" and v not in CATEGORY_COLORS:
-            # The rule the note's own category follows in normalize_note:
-            # a name the categories no longer hold is filed under General.
-            # Kept as it was, one day of a series restored from the Trash
-            # carried a deleted category back in, and the next launch
-            # re-created it as having "gone missing from the settings".
-            # (At load the names the notes use are adopted first, on the
-            # raw file, so this never re-files a category that is merely
-            # missing from settings.json.)
+            # A day filed under a deleted category comes back under General,
+            # as the note does (a load adopts the notes' own names first).
+            # ISSUES_LOG: "The category renamed in one place of six".
             v = "General"
         if k == "body":
-            # The same canonicalisation the base body gets. An override is
-            # shown in the same editor, so the renderer adds the same line
-            # under a trailing table -- and without this the day's stored
-            # text is one newline short of what is on screen, which made a
-            # per-day edit ending in a table read as unsaved FOREVER: a
-            # save-scope question on every note switch and at close, for
-            # an edit nobody made.
+            # The base body's canonical form too: the editor draws a line under
+            # a trailing table, so without it a day's edit ending in a table
+            # always read as unsaved.
             v = with_caret_line(v)
         out[k] = v
     return out
@@ -385,12 +294,9 @@ def clean_override(patch):
 def _bare_file_name(name):
     """*name* as the app stores an attachment: one bare file name.
 
-    basename flattens a smuggled path ("../../x", "C:\\...", a UNC root);
-    the rstrip removes trailing dots and spaces, which Windows itself strips
-    when opening a file -- so "invoice.lnk. " names invoice.lnk on disk while
-    reading as extension-less to the warn-before-opening gate. Normalised
-    here, the name the gate inspects and the file the OS opens can never
-    disagree."""
+    basename flattens a smuggled path ("../../x", a UNC root); the rstrip
+    drops the trailing dots and spaces Windows ignores when opening, so
+    "invoice.lnk. " cannot pass the warn-before-opening gate as harmless."""
     return os.path.basename(name.replace("\\", "/")).rstrip(". ")
 
 
@@ -399,10 +305,8 @@ def normalize_note(note):
     were saved before 'comments', 'date', 'color' and 'attachments' existed,
     and code that reads note['title'] directly crashes on those."""
     clean = {}
-    # The id is the one field that was never coerced: a string, list or
-    # None id survived load intact and then broke every
-    # max([n["id"] ...]) + 1 in the app — new note, duplicate, import,
-    # restore from trash — with a TypeError.
+    # Coerced like the rest: a string, list or None id survived load and broke
+    # every max(ids) + 1 in the app (new note, duplicate, import, restore).
     raw_id = note.get("id", 0)
     if isinstance(raw_id, bool) or not isinstance(raw_id, int):
         try:
@@ -410,11 +314,9 @@ def normalize_note(note):
         except (TypeError, ValueError):
             raw_id = 0
     clean["id"] = raw_id
-    # The rescue copy a drastic shrink leaves behind ("↩ Restore
-    # previous"). It is not in NOTE_DEFAULTS because it is not part of a
-    # note's own shape — but dropping it here meant the button promised
-    # something the next launch had already thrown away, even though the
-    # text really was on disk. Carried through, shallowly validated.
+    # The rescue copy ("↩ Restore previous") is not part of a note's shape,
+    # but dropped here the button promised what the next launch had already
+    # thrown away. Carried through, shallowly validated.
     prev = note.get("_prev")
     if isinstance(prev, dict):
         clean["_prev"] = {
@@ -431,12 +333,9 @@ def normalize_note(note):
             "paragraphs": normalize_paragraphs(
                 prev.get("paragraphs") if isinstance(prev.get("paragraphs"), list) else []),
         }
-        # What an update replaced beyond the text (see apply_shared_update)
-        # rides along too. It is shaped by the very rules the note's own
-        # fields pass -- a restore puts it straight back INTO the note, so
-        # it has to be exactly as trustworthy -- and a key the copy never
-        # had stays absent, which is how restore tells an update's rescue
-        # copy from a drastic shrink's.
+        # What an update replaced beyond the text rides along, shaped by the
+        # note's own rules (a restore puts it back INTO the note). An absent
+        # key stays absent: that tells an update's copy from a shrink's.
         extra = {key: prev[key] for key in UPDATABLE_FROM_BACKUP
                  if key not in PREV_TEXT_FIELDS and key in prev}
         if extra:
@@ -452,15 +351,9 @@ def normalize_note(note):
         if isinstance(default, dict) and not isinstance(value, dict):
             value = {}
         clean[key] = value
-    # Minted here, AFTER the defaults loop, not before it: the loop
-    # rewrites every key from NOTE_DEFAULTS, so an identity assigned
-    # earlier was overwritten with "" and every note came out without
-    # one. This is where "fill it in if it is missing" already lives.
-    #
-    # A uid that is already there is trusted rather than checked against
-    # a format — it may have been minted by another program, and the only
-    # property needed from it is that it is text nobody else invented.
-    # The loop above has already turned a non-string into "".
+    # After the defaults loop, which rewrites every key and once wiped an
+    # identity minted earlier. A uid already there is trusted as text: another
+    # program may have minted it, and uniqueness is all that is needed.
     clean["uid"] = clean["uid"].strip() or new_note_uid()
     if not clean["updated"]:
         # Includes seconds (not just minutes) so two notes saved in the same
@@ -471,12 +364,9 @@ def normalize_note(note):
     if not clean["created"]:
         clean["created"] = clean["updated"]
     clean["pinned"] = bool(clean.get("pinned"))
-    # The note's place in Custom order: written only when a person moves a
-    # note (a drag, Alt+Up/Down), and absent until then -- a note nobody
-    # has placed stands at the top. Not in NOTE_DEFAULTS, because "not
-    # placed yet" is its own answer and no number can say it. A number
-    # from a hand-edited file or an older build is kept only if it is one;
-    # True, "3" or NaN would reach the sort comparator.
+    # The place in Custom order, absent until a person moves the note: "not
+    # placed yet" is its own answer, so it is not in NOTE_DEFAULTS. Kept only
+    # if a finite number -- True, "3" or NaN would reach the sort comparator.
     order = note.get("order")
     if (isinstance(order, (int, float)) and not isinstance(order, bool)
             and math.isfinite(order)):
@@ -486,10 +376,9 @@ def normalize_note(note):
 
     clean["recurrence"] = normalize_recurrence(clean["recurrence"])
 
-    # A date written another way the app reads -- day first, as an older
-    # share code or a hand edit can carry it -- is stored in the one form
-    # the calendar places a note by. A date that cannot be read is kept as
-    # it came, as before (see _date_and_repeat_to_store).
+    # A date written another readable way (day first, from an older share code
+    # or a hand edit) is stored in the one form the calendar places notes by;
+    # an unreadable one is kept as it came (see _date_and_repeat_to_store).
     if clean["date"] and not parse_date(clean["date"]):
         day = read_date(clean["date"])
         if day is not None:
@@ -526,15 +415,9 @@ def normalize_note(note):
     # around indefinitely once re-saved.
     clean.pop("tags", None)
 
-    # Checklist: coerce each item to {"text": str, "done": bool}, dropping
-    # junk — and cap the count. Every item becomes a Frame, a Checkbutton,
-    # a Label and an IntVar when the note is drawn, and nothing upstream
-    # limited how many could arrive: a hand-crafted share code carrying
-    # 20,000 items is only 60 KB of pasteable text, passes every guard the
-    # decoder has, and kills the process on render — permanently, because
-    # the note is saved first and re-rendered on the next launch. The cap
-    # is far above any real list, and lives here because this is the one
-    # choke point every route passes through.
+    # Each item coerced to {"text": str, "done": bool}, and the count capped
+    # here, where every route passes: each item is widgets when drawn.
+    # ISSUES_LOG, smaller lessons: the checklist ceiling.
     checklist = []
     for item in clean.get("checklist", []):
         if isinstance(item, dict):
@@ -546,21 +429,16 @@ def normalize_note(note):
             break
     clean["checklist"] = checklist
 
-    # Attachments: keep each item's stored_as to a bare filename. The app
-    # only ever writes bare timestamped names (see add_attachment), so
-    # this is a no-op for genuine data — but it flattens any path a
-    # crafted share code or hand-edited/imported file tried to smuggle
-    # ("../../x", "C:\\...", a UNC root), closing path traversal at the
-    # data choke point for EVERY channel, on top of the guards at the
-    # delete and open sinks. See ISSUES_LOG.
+    # stored_as kept to a bare file name, closing path traversal for every
+    # route at once (the app itself writes nothing else). ISSUES_LOG: "The
+    # share code that could delete your files".
     attachments = []
     for att in clean.get("attachments", []):
         if not isinstance(att, dict):
             continue
-        # The two names are all a record is -- the app writes nothing else,
-        # and nothing reads anything else. Copied whole, a crafted record
-        # carried whatever else it held into every save, and a value nested
-        # a few hundred deep made Duplicate fail on the note.
+        # The two names are all a record is: copied whole, a crafted record
+        # carried anything else it held into every save, and a value nested
+        # a few hundred deep made Duplicate fail.
         item = {key: att[key] for key in ("filename", "stored_as") if key in att}
         stored = item.get("stored_as")
         if isinstance(stored, str) and stored:
@@ -568,11 +446,9 @@ def normalize_note(note):
             item["stored_as"] = stored
         else:
             stored = ""
-        # A record without usable names aborted load_note halfway (a
-        # KeyError mid-render), leaving the editor holding the PREVIOUS
-        # note's checklist — which the next save then wrote onto this
-        # one. Guarantee both names are strings here, at the choke point,
-        # and drop a record that names no file at all.
+        # Both names made strings: a record without them aborted the note's
+        # load halfway, and the next save wrote the PREVIOUS note's checklist
+        # onto this one. A record naming no file at all is dropped.
         display = item.get("filename")
         if not isinstance(display, str) or not display:
             display = stored
@@ -580,10 +456,8 @@ def normalize_note(note):
             continue
         item["filename"] = display
         if not isinstance(item.get("stored_as"), str) or not item["stored_as"]:
-            # The display name stands in for the stored one -- flattened the
-            # same way: taken as it was, a crafted record with no stored_as
-            # and a filename of "../../x" kept the path the rule above exists
-            # to remove (the guards at the open and delete sinks still held).
+            # The display name stands in, flattened the same way: taken as it
+            # was, a filename of "../../x" kept the path the rule above removes.
             item["stored_as"] = _bare_file_name(display)
             if not item["stored_as"]:
                 continue
@@ -595,10 +469,8 @@ def normalize_note(note):
             break
     clean["attachments"] = attachments
 
-    # Two ceilings, both anti-bomb: normalize_formatting caps the note's
-    # total, and the clamp caps what may land on any ONE LINE -- the
-    # shape that actually stops Tk from finishing the draw. See
-    # core.formatting.MAX_SPANS_PER_LINE.
+    # Two anti-bomb ceilings: the note's total spans, and those on any ONE
+    # line, the shape that stops Tk finishing the draw (MAX_SPANS_PER_LINE).
     clean["formatting"] = clamp_spans_per_line(
         clean["body"], normalize_formatting(clean.get("formatting")))
 
@@ -611,16 +483,9 @@ def normalize_note(note):
 
 
 def reading_time(word_count, wpm=200):
-    """Roughly how long this many words takes to read, as a phrase.
-
-    200 words a minute is the slow end of the usual adult silent-reading
-    range, and that is the end worth picking: a reader who finishes sooner
-    than promised has lost nothing, while one who runs over was told the
-    note was shorter than it is.
-
-    Returns "" for an empty note, so the caller can show nothing at all
-    rather than "0 minutes".
-    """
+    """Roughly how long this many words takes to read, as a phrase; "" for
+    none. 200 words a minute is the slow end of adult reading: a reader who
+    finishes early has lost nothing, and one who runs over was misled."""
     if not isinstance(word_count, int) or isinstance(word_count, bool):
         return ""
     if word_count <= 0:
@@ -647,17 +512,12 @@ def note_richness(note):
 
 
 def note_is_empty(note):
-    """A note with no content at all is a stray '+ New Note' click.
+    """A note with no content at all: a stray '+ New Note' click.
 
-    "Content" must mean exactly what the editor means by it, or the
-    one-time cleanup deletes notes the app itself let you create: a
-    checklist counts (``save_current_note`` and ``_autosave_now`` both
-    treat a checklist as real content and will happily save a note that
-    is nothing else), and so does a recurrence rule — a repeating
-    reminder whose whole point is its schedule has no body to speak of.
-    Leaving the checklist out of this test cost a real user their
-    untitled shopping list; the product review found it.
-    """
+    "Content" means what the editor means by it, or the cleanup deletes
+    notes the app let you make: a checklist, a repeat rule and a date all
+    count. ISSUES_LOG: "The note the editor let you make and the launcher
+    deleted"."""
     def _s(v):
         return v.strip() if isinstance(v, str) else ""
     recurrence = note.get("recurrence")
@@ -675,12 +535,9 @@ def note_is_empty(note):
 
 
 def _stable(value):
-    """Any JSON-ish value as something hashable and comparable.
-
-    Defensive about shapes throughout, because the stale-copy purge feeds
-    content_signature raw dicts parsed straight off disk, before any
-    normalization has run: an exception raised while building a signature
-    would abort a startup."""
+    """Any JSON-ish value as something hashable and comparable. Defensive:
+    the stale-copy purge signs raw dicts read straight off disk, and an
+    exception here would abort a startup."""
     if isinstance(value, dict):
         return tuple(sorted((str(k), _stable(v)) for k, v in value.items()))
     if isinstance(value, (list, tuple)):
@@ -712,15 +569,10 @@ def _attachment_signature(attachments):
 
 
 def _recurrence_signature(recurrence):
-    """A repeat rule as a hashable tuple — SEMANTICS, not representation.
-
-    The raw form and the normalized form of the same rule must sign
-    identically: a no-repeat note stores ``{}`` when hand-written and a
-    fully-defaulted dict after normalize_recurrence, and signing those
-    differently made every consumer see two different notes — the purge
-    stopped recognising covered folders, and the duplicate scan stopped
-    recognising true duplicates, the moment one side of the comparison
-    had been normalized and the other had not."""
+    """A repeat rule as a hashable tuple: its meaning, not its spelling. A
+    no-repeat rule is ``{}`` by hand and a defaulted dict once normalised;
+    signed differently, the purge and the duplicate scan stopped matching a
+    note whenever one side had been normalised and the other had not."""
     if not isinstance(recurrence, dict):
         return ()
     normalized = normalize_recurrence(recurrence)
@@ -732,35 +584,12 @@ def _recurrence_signature(recurrence):
 
 
 def content_signature(note):
-    """THE identity of a note's content — one definition, every consumer.
+    """THE identity of a note's content: one definition, every consumer.
 
-    Three places remove notes on their own, with no Trash and nobody
-    asked: clean_notes below collapses duplicates at startup,
-    core/paths.py's stale-copy purge deletes a whole leftover notebook
-    folder from disk, and a restored backup's Trash skips entries this
-    device already holds. Each used to carry its own idea of "the same
-    note", and they drifted: when the checklist joined this one, the
-    purge's copy still judged notes by (title, body, comments, category,
-    date) alone, so a legacy folder whose notes differed from the local
-    ones ONLY by their checklists still read as "fully covered" and was
-    deleted — no Trash, no undo. A field list that exists twice WILL fall
-    out of step; this function is the fix at the root of that class.
-
-    Everything a person did to a note is part of the answer: styling,
-    layout, per-day edits, skipped dates, the pin and the colour. There
-    used to be a looser default that left those out -- "a stray bold word
-    does not make a duplicate into a different note" -- and the startup
-    collapse used it. Two copies of a weekly routine, one edited on a
-    single day and pinned, then read as one note: the edited copy was
-    removed, and the startup message called it an exact duplicate. An
-    answer that decides what gets deleted has to be the strict one, so
-    the strict one is the only one. (The Settings "Duplicates" panel asks
-    a different, deliberately fuzzier question -- duplicates._dup_key --
-    and there a person looks before anything is removed.)
-
-    'id', 'uid' and 'updated' are deliberately excluded — those differ on
-    copies. Defensive about shapes throughout, because the purge feeds it
-    raw dicts parsed straight from disk, before any normalization."""
+    Three routes remove notes with nobody asked (the startup collapse, the
+    stale-copy purge, a backup's Trash skip), so it is strict: all but 'id',
+    'uid' and 'updated' counts. ISSUES_LOG: "The note the editor let you make
+    and the launcher deleted", then "Eleven decisions about your notes"."""
     def _text(value):
         return value.strip() if isinstance(value, str) else ""
     return (
@@ -814,22 +643,11 @@ def clean_notes(notes):
 
 
 def repair_note_ids(notes):
-    """Make every note's id a positive number no other note shares.
-
-    Returns True when anything had to change.
-
-    The id is how the whole app finds a note -- find_note returns the
-    FIRST match, and delete filters by it -- yet nothing kept it unique
-    after the one-time cleanup had run. Two notebooks merged by hand both
-    number from 1: editing the second note of a pair saved into the
-    first, silently replacing its text, and deleting either one took both
-    to the Trash. normalize_note also turns an unusable id into 0, which
-    the editor reads as "no note selected".
-
-    Run on every load, not only in the cleanup. The first note holding a
-    number keeps it, so a remembered open note still means the same one;
-    each later holder gets the next free number.
-    """
+    """Make every note's id a positive number no other note shares; True
+    when anything changed. Run on every load: the first holder of a number
+    keeps it, so a remembered open note is still the same one, and later
+    holders get the next free number. ISSUES_LOG, smaller lessons:
+    repair_note_ids."""
     next_id = max((n["id"] for n in notes if n["id"] > 0), default=0) + 1
     seen = set()
     changed = False
@@ -845,15 +663,8 @@ def repair_note_ids(notes):
 
 
 # ---- Looking notes up, and moving them between categories ----
-#
-# These were methods on the app class. None of them drew anything; they read
-# and rewrite the notes list, which is what this module is for. Each takes
-# the list as its first argument rather than reaching for ``self.notes``.
-#
-# All three account for per-occurrence overrides. A repeating note can carry
-# a patch for one date that sets a different category from the series, so a
-# rename that only rewrote ``note["category"]`` would leave those patches
-# pointing at a name that no longer exists.
+# Reads and rewrites of the notes list, taken as the first argument. Each also
+# handles per-day edits, which can name a category of their own.
 
 def find_note(notes, note_id):
     """The note with this id, or None."""
@@ -882,20 +693,11 @@ def count_notes_in_category(notes, name):
 
 
 def rename_category_everywhere(notes, old_name, new_name):
-    """Rewrite every reference to a category, in base notes and overrides --
-    and in each note's rescue copy, which "↩ Restore previous" puts back.
-
-    Used both for a real rename and for moving notes out of a category that
-    is being deleted -- the operation is the same either way.
-
-    The rescue copy an update leaves (see apply_shared_update) holds the
-    category and the per-day edits it replaced. Left out, a restore after
-    a rename filed the note under General and its day under the old name,
-    which the next launch then brought back as a category of its own.
-
-    Returns how many notes held the name, so a caller knows whether there
-    is anything to write.
-    """
+    """Rewrite every reference to a category: base notes, per-day edits and
+    each rescue copy ("↩ Restore previous"). Used for a rename and for moving
+    notes out of a deleted category; returns how many notes held the name.
+    ISSUES_LOG: "The category renamed in one place of six"; smaller lessons:
+    rename_category_everywhere."""
     held = 0
     for n in notes:
         found = False

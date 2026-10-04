@@ -37,6 +37,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SUITES = [
     "test_recurrence", "test_calculator", "test_data_safety",
     "test_entry_module_identity", "test_richtext", "test_tables",
+    "test_note_identity",
     "qa1", "qa2", "qa3", "qa4", "qa5", "qa6", "qa7", "qa8", "qa9",
 ]
 
@@ -81,6 +82,11 @@ def main(argv):
         print("The 'coverage' package is missing:  py -m pip install coverage")
         return 2
 
+    fail_under = None
+    if "--fail-under" in argv:
+        at = argv.index("--fail-under")
+        fail_under = float(argv[at + 1])
+        argv = argv[:at] + argv[at + 2:]
     wanted = [a for a in argv if not a.startswith("-")] or SUITES
     unknown = [w for w in wanted if w not in SUITES]
     if unknown:
@@ -90,8 +96,13 @@ def main(argv):
     cov_dir = tempfile.mkdtemp(prefix="noteorg-coverage-")
     print("scratch  :", cov_dir)
     run_dirs = []
+    # The scratch marker is what lets the qa scripts and test_data_safety
+    # run at all: without it they refuse, before measuring anything. This
+    # tool once ran without it for weeks and reported a number that was
+    # mostly the scripts refusing.
     env_base = dict(os.environ,
                     PYTHONUTF8="1", PYTHONIOENCODING="utf-8",
+                    NOTEORG_SCRATCH="1",
                     COVERAGE_FILE=os.path.join(cov_dir, ".coverage"))
     for name in wanted:
         d = os.path.join(cov_dir, "run_" + name)
@@ -99,22 +110,33 @@ def main(argv):
         run_dirs.append(d)
         shutil.copy2(os.path.join(ROOT, "note_organizer.py"), d)
         shutil.copytree(os.path.join(ROOT, "noteorganizer"),
-                        os.path.join(d, "noteorganizer"))
+                        os.path.join(d, "noteorganizer"),
+                        ignore=shutil.ignore_patterns("__pycache__"))
         src = os.path.join(ROOT, name + ".py")
         if not os.path.exists(src):
             src = os.path.join(ROOT, "qa", name + ".py")
         shutil.copy2(src, d)
+        # Every qa script imports its seeding and its event helpers from
+        # here, and so does a later block of test_data_safety; without it
+        # the script dies at that import. run_tests.py copies it for all.
+        shutil.copy2(os.path.join(ROOT, "qa", "_qa_support.py"), d)
     rc = _write_rc(cov_dir, run_dirs)
 
+    unfinished = []
     for name, d in zip(wanted, run_dirs):
         print("running  :", name, flush=True)
         r = subprocess.run(
             [sys.executable, "-m", "coverage", "run", "--parallel-mode",
              "--rcfile=" + rc, name + ".py"],
-            cwd=d, env=env_base, capture_output=True, text=True)
-        if r.returncode != 0:
-            print("  NOTE: nonzero exit (%d) — coverage still recorded"
-                  % r.returncode)
+            cwd=d, env=env_base, capture_output=True, text=True,
+            encoding="utf-8", errors="replace")
+        # A suite that did not reach its own footer measured a fraction of
+        # itself; a number built on it is not a measurement.
+        if "FAILURES" not in r.stdout and "check(s)" not in r.stdout:
+            unfinished.append(name)
+            print("  DID NOT FINISH (exit %d):" % r.returncode)
+            for line in (r.stdout + r.stderr).strip().splitlines()[-6:]:
+                print("    " + line)
 
     subprocess.run([sys.executable, "-m", "coverage", "combine",
                     "--rcfile=" + rc], cwd=cov_dir, env=env_base,
@@ -156,6 +178,16 @@ def main(argv):
         print("%4d lines  %-34s %6d-%-6d in %s" % (size, path, a, b, fn))
 
     shutil.rmtree(cov_dir, ignore_errors=True)
+    total = data["totals"]["percent_covered"]
+    print("\nTOTAL: %.1f%% of the app's lines executed by the suite" % total)
+    if unfinished:
+        print("NOT A MEASUREMENT: %s did not finish." % ", ".join(unfinished))
+        return 1
+    if fail_under is not None and total < fail_under:
+        print("BELOW THE FLOOR: %.1f%% < %.1f%%. A floor, not a target -- it "
+              "exists to notice a suite that stopped running, not to be "
+              "chased." % (total, fail_under))
+        return 1
     return 0
 
 

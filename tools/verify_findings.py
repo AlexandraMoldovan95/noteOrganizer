@@ -44,7 +44,9 @@ def read(*parts):
         return fh.read()
 
 
-HUB = read("note_organizer.py")
+# The note list left the hub for its own module (ui/note_list.py) on
+# 2026-10-03; a check that asks the hub about the list reads both.
+HUB = read("note_organizer.py") + read("noteorganizer", "ui", "note_list.py")
 MODEL = read("noteorganizer", "core", "model.py")
 STORAGE = read("noteorganizer", "core", "storage.py")
 SHARING = read("noteorganizer", "core", "sharing.py")

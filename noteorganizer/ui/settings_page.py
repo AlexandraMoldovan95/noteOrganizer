@@ -3478,8 +3478,8 @@ class SettingsPageMixin:
     # keys only act while that tab is showing (see _calendar_key's guard).
     #
     # The other direction is the one that failed: every real binding has
-    # to BE here. The note list's keys shipped in 0.81.199 and were not
-    # added, so this page went on saying it holds everything the keyboard
+    # to BE here. The note list's keys once shipped without their rows,
+    # so this page went on saying it holds everything the keyboard
     # can do while the newest way to use the keyboard was missing from
     # it -- and the user guide repeated the claim, because it had no
     # reason to doubt it. Anything bound from here on gets its row in the
