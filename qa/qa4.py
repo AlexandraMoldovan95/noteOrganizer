@@ -571,14 +571,16 @@ try:
     _ls_end = time.time() + 5
     while app._cal_last_font_size != 11 and time.time() < _ls_end:
         app.update(); time.sleep(0.02)
-    _ls_wide = app._cal_last_font_size
+    _ls_wide, _ls_wide_px = app._cal_last_font_size, app.winfo_width()
     app.geometry('1100x850')
     _ls_end = time.time() + 5
     while app._cal_last_font_size != 9 and time.time() < _ls_end:
         app.update(); time.sleep(0.02)
+    # The window's own width is in the message: when the screen cuts a
+    # requested size, the reading says so instead of blaming the calendar.
     check(f'...and the calendar still takes its width step from the '
-          f'window\'s resize (wide {_ls_wide}, narrow '
-          f'{app._cal_last_font_size})',
+          f'window\'s resize (wide {_ls_wide} at {_ls_wide_px}px, narrow '
+          f'{app._cal_last_font_size} at {app.winfo_width()}px)',
           _ls_wide == 11 and app._cal_last_font_size == 9)
     # ...including a resize made while the calendar was NOT showing: the
     # step is taken when it comes back. The window's own <Configure> never
@@ -591,7 +593,8 @@ try:
     while app._cal_last_font_size != 11 and time.time() < _ls_end:
         app.update(); time.sleep(0.02)
     check(f'...and takes it on coming back to a calendar the window was '
-          f'resized away from ({app._cal_last_font_size})',
+          f'resized away from ({app._cal_last_font_size} at '
+          f'{app.winfo_width()}px)',
           app._cal_last_font_size == 11)
     app.notebook.select(app.TAB_NOTES); _ls_settle()
     app.geometry('1100x850'); _ls_settle()

@@ -2155,8 +2155,49 @@ app.save_notes(); NO.save_trash(app.trash)
 # command for each one: one more per Restore, Delete, page or toast Undo
 # while the panel was open, for good. The Categories list did the same
 # on every rename, recolour and delete.
+import collections, re
+
+
 def _lk_cmds():
-    return len(app.tk.splitlist(app.tk.call('info', 'commands')))
+    """Every Tcl command, less those a timer is still waiting to run: a
+    timer's command lives from the moment it is scheduled to the moment it
+    runs, so how many wait says how fast the machine is, not what leaked."""
+    timers = set()
+    for job in app.tk.splitlist(app.tk.call('after', 'info')):
+        try:
+            timers.add(str(app.tk.splitlist(app.tk.call('after', 'info', job))[0]))
+        except tk.TclError:
+            pass
+    return {str(c) for c in app.tk.splitlist(app.tk.call('info', 'commands'))} - timers
+
+
+def _lk_kind(name):
+    """A callback's command is an id and its function's name; a widget's,
+    its path. What kind of thing a command is, without the numbers."""
+    if name.startswith('.'):
+        return re.sub(r'-?\d+$', '', name.rsplit('.', 1)[-1])
+    return re.sub(r'^\d+', '', name)
+
+
+def _lk_growth(redraw):
+    """What thirty more redraws leave behind, after thirty that absorb
+    anything a redraw does only once. A redraw that leaks leaves something
+    every time -- thirty or more here. On a CI runner one batch of thirty
+    read nine more, which no per-redraw leak can do; this tells the two
+    apart, and when it fails it names the kinds that grew."""
+    for _ in range(30):
+        redraw()
+    app.update()
+    first = _lk_cmds()
+    for _ in range(30):
+        redraw()
+    app.update()
+    second = _lk_cmds()
+    grew = collections.Counter(map(_lk_kind, second)) - collections.Counter(
+        map(_lk_kind, first))
+    said = '; grew: ' + ', '.join('%s +%d' % kv for kv in grew.most_common(6)) \
+        if grew else ''
+    return len(second) - len(first), '%d -> %d%s' % (len(first), len(second), said)
 
 
 app.trash = [{'id': 6100 + i, 'title': 'Leak %d' % i, 'body': 'x',
@@ -2166,14 +2207,9 @@ NO.save_trash(app.trash)
 app.show_settings_page(); app.update()
 app.toggle_settings_panel('trash'); app.update()
 _lk_redraw = app._trash_panel_redraw
-_lk_redraw(); app.update()
-_lk_before = _lk_cmds()
-for _lk_i in range(30):
-    _lk_redraw()
-app.update()
-_lk_after = _lk_cmds()
-check(f'redrawing Recently deleted 30 times leaves no Tcl command behind '
-      f'({_lk_before} -> {_lk_after})', _lk_after - _lk_before < 5)
+_lk_left, _lk_said = _lk_growth(_lk_redraw)
+check(f'redrawing Recently deleted 30 more times leaves no Tcl command behind '
+      f'({_lk_said})', _lk_left < 5)
 _lk_canvas = app._active_panel_canvas
 _lk_items = _lk_canvas.find_all()
 _lk_rows = (_lk_canvas.nametowidget(_lk_canvas.itemcget(_lk_items[0], 'window'))
@@ -2230,16 +2266,10 @@ app._build_category_row = lambda parent, name, redraw: (
     _lk_cat_redraws.append(redraw), _lk_real_cat_row(parent, name, redraw))[1]
 app.toggle_settings_panel('categories'); app.update()
 del app._build_category_row
-if _lk_cat_redraws:
-    _lk_cat_redraws[-1](); app.update()
-    _lk_before = _lk_cmds()
-    for _lk_i in range(30):
-        _lk_cat_redraws[-1]()
-    app.update()
-    _lk_after = _lk_cmds()
-check(f'redrawing the Categories list 30 times leaves no Tcl command behind '
-      f'({_lk_before} -> {_lk_after})',
-      bool(_lk_cat_redraws) and _lk_after - _lk_before < 5)
+_lk_left, _lk_said = (_lk_growth(_lk_cat_redraws[-1]) if _lk_cat_redraws
+                      else (None, 'no redraw was handed to a row'))
+check(f'redrawing the Categories list 30 more times leaves no Tcl command '
+      f'behind ({_lk_said})', _lk_left is not None and _lk_left < 5)
 # The Templates list, the same shape: redrawn at every save, delete and
 # rename of a template.
 _lk_tpl_saved = list(app.templates)
@@ -2247,16 +2277,10 @@ app.templates = [NO.normalize_template({'name': 'Leak tpl %d' % i, 'body': 'x'})
                  for i in range(3)]
 app.toggle_settings_panel('templates'); app.update()
 _lk_tpl_redraw = getattr(app, '_refresh_templates_panel', None)
-if _lk_tpl_redraw is not None:
-    _lk_tpl_redraw(); app.update()
-    _lk_before = _lk_cmds()
-    for _lk_i in range(30):
-        _lk_tpl_redraw()
-    app.update()
-    _lk_after = _lk_cmds()
-check(f'redrawing the Templates list 30 times leaves no Tcl command behind '
-      f'({_lk_before} -> {_lk_after})',
-      _lk_tpl_redraw is not None and _lk_after - _lk_before < 5)
+_lk_left, _lk_said = (_lk_growth(_lk_tpl_redraw) if _lk_tpl_redraw is not None
+                      else (None, 'the panel has no redraw'))
+check(f'redrawing the Templates list 30 more times leaves no Tcl command '
+      f'behind ({_lk_said})', _lk_left is not None and _lk_left < 5)
 app.templates = _lk_tpl_saved
 app.hide_settings_page(); app.update()
 
@@ -2665,31 +2689,24 @@ app.refresh_note_list()
 app.update()
 
 
-def _stats_says(text):
-    found = []
-
-    def walk(w):
-        try:
-            if text in str(w.cget('text')):
-                found.append(w)
-        except tk.TclError:
-            pass
-        for kid in w.winfo_children():
-            walk(kid)
-    if hasattr(app, 'stats_frame'):
-        walk(app.stats_frame)
-    return bool(found)
+def _stats_total():
+    """The "Total notes" tile, read as the number it shows. Searching every
+    text in the panel for a digit also found it in the date of "Using Note
+    Organizer since 04.10.2026": red on the fourth of the month, and the
+    "2" it waited for was always there, in the year."""
+    return stats_pairs().get('Total notes')
 
 
 app.show_settings_page()
 app.toggle_settings_panel('statistics')
 app.update()
-check('arriving at Statistics shows the count as it is now',
-      _stats_says('5'))
+check(f'arriving at Statistics shows the count as it is now '
+      f'({_stats_total()})', _stats_total() == 5)
 # Deleted from under an open Settings page: the panel must follow.
 app._delete_note(app.find_note(620), None)
 app.update()
-check('a delete while Statistics is open updates it', _stats_says('4'))
+check(f'a delete while Statistics is open updates it ({_stats_total()})',
+      _stats_total() == 4)
 app.hide_settings_page()
 app.update()
 
@@ -2701,8 +2718,8 @@ app.update()
 app.show_settings_page()
 app.toggle_settings_panel('statistics')
 app.update()
-check('Statistics is current on the next visit, not left behind',
-      _stats_says('2') and not _stats_says('4'))
+check(f'Statistics is current on the next visit, not left behind '
+      f'({_stats_total()})', _stats_total() == 2)
 app.hide_settings_page()
 app.update()
 

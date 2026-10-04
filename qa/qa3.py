@@ -663,9 +663,18 @@ zip_path = os.path.join(tempfile.gettempdir(), 'qa3_export.zip')
 if os.path.exists(zip_path):
     os.remove(zip_path)
 fd.asksaveasfilename = lambda **k: zip_path
+# Whether the app SHOWED the panel, recorded at the call: export_data()
+# polls once on its way out, and a worker done by then hides the panel
+# again before any reading after it -- the race that broke the import
+# below on a fast runner, which the 3 MB above only made unlikely here.
+_ep_shown = []
+_ep_place = app.export_progress_frame.place
+app.export_progress_frame.place = lambda *a, **k: (_ep_shown.append(True),
+                                                   _ep_place(*a, **k))[1]
 app.export_data()
+del app.export_progress_frame.place
 app.update()
-panel_visible_at_start = app.export_progress_frame.winfo_ismapped()
+panel_visible_at_start = bool(_ep_shown)
 t0=time.time()
 interactions=0
 while app._export_state is not None and time.time()-t0 < 5:
@@ -2321,6 +2330,11 @@ with zipfile.ZipFile(_ri_zip, 'w') as _zf:
               'attachments/' + _ri_name)
 _ri_shutil.rmtree(_ri_dir, ignore_errors=True)
 fd.askopenfilename = lambda **k: _ri_zip
+# import_data() polls once on its way out, and a worker that is already done
+# by then is merged on the spot: a CI runner finished this tiny backup that
+# fast, and there was no unmerged import left to close on. The poll that
+# would merge it is held off, so the close below meets what it is about.
+app._poll_import_progress = lambda: None
 app.import_data()
 _ri_state = app._import_state
 t0 = time.time()
@@ -2339,6 +2353,7 @@ check('...closing before its merge leaves no file behind that no note owns',
       not os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _ri_name)))
 check('...and no unpacked backup in the temp folder',
       not (_ri_temp and os.path.exists(_ri_temp)))
+del app._poll_import_progress
 os.remove(_ri_zip)
 app._import_state = None
 app.notes = []; app.save_notes()

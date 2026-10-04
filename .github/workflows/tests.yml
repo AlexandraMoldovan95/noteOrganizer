@@ -119,10 +119,19 @@ jobs:
         # screen, the only difference is nobody's looking at it. The
         # Windows runner needs none of this: Windows Tk draws through the
         # normal win32 windowing that is always there.
+        #
+        # And the fonts of the local mirror (tools/linux-ci), not the
+        # runner's: the runner image carries a colour emoji font the mirror
+        # does not, and Tk 8.6 measures its glyphs hundreds of pixels wide.
+        # The calendar's day markers, drawn in "Segoe UI Emoji", which Linux
+        # resolves to that font, overflowed every day, and qa7 went red here
+        # and nowhere else. The last line says what is left.
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y python3-tk xvfb
+          sudo apt-get remove -y fonts-noto-color-emoji
+          fc-list : family | grep -i emoji || echo "no emoji font left"
 
       - name: Decide how a GUI test runs here
         # Every step below says "$GUI script.py" and stays identical on
@@ -266,9 +275,14 @@ jobs:
           python-version: "3.13"
 
       - name: Install Tkinter and a virtual display
+        # With the local mirror's fonts, as in the qa job above, and for the
+        # same reason: the runner's colour emoji font breaks the calendar's
+        # day markers under Tk 8.6.
         run: |
           sudo apt-get update
           sudo apt-get install -y python3-tk xvfb
+          sudo apt-get remove -y fonts-noto-color-emoji
+          fc-list : family | grep -i emoji || echo "no emoji font left"
 
       - name: Install Python dependencies, and coverage (a measuring tool, not an app dependency)
         run: pip install -r requirements.txt coverage==7.16.0
