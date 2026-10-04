@@ -47,7 +47,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.84.340"
+APP_VERSION = "0.84.341"
 
 
 def parse_version(v):
@@ -17501,7 +17501,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.show_info(
                 "No templates yet",
                 "You don't have any templates. Write a note and use "
-                "“🧩 Save as template”, or create one in Settings → Manage templates.")
+                "“🧩 Save as template”, or create one in Settings → Templates.")
             return
 
         self._dismiss_mini_popup()

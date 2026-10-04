@@ -296,5 +296,24 @@
       "qa9"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "M01",
+    "about": "the hint shown with no templates sends people to a Settings section that is not there",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "or create one in Settings → Templates.\")",
+        "replace": "or create one in Settings → Manage templates.\")"
+      }
+    ],
+    "must_fail": [
+      "with no templates, the hint names the section that holds them",
+      "every \"Settings → X\" the app can show names a real section"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
   }
 ]
