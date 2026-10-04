@@ -29,9 +29,14 @@ jobs:
           python-version: "3.13"
 
       - name: Install Tkinter and a virtual display
+        # With the local mirror's fonts, as in tests.yml's qa job, and for
+        # the same reason: the runner's colour emoji font breaks the
+        # calendar's day markers under Tk 8.6.
         run: |
           sudo apt-get update
           sudo apt-get install -y python3-tk xvfb
+          sudo apt-get remove -y fonts-noto-color-emoji
+          fc-list : family | grep -i emoji || echo "no emoji font left"
 
       - name: Install Python dependencies
         run: pip install -r requirements.txt
