@@ -15,6 +15,7 @@ import note_organizer as NO, tkinter as tk, json, os, re
 # Windows foreground -- which a test process never owns. See
 # qa/_qa_support.py; _qa_click refuses to click into the void.
 from _qa_support import (click as _qa_click, fire as _qa_fire,
+                         leaves_nothing_behind as _qa_leaves_nothing_behind,
                          pin_popup_visibility as _qa_pin,
                          waiting_timers as _qa_waiting)
 _qa_pin(NO)
@@ -8828,7 +8829,7 @@ if _fc_plain is not None:
 # ---- A REMOVED CHECKLIST ITEM CAN COME BACK ----
 # It was the one thing that could be taken off a note with no way back at
 # all: Ctrl+Z reaches the Text widgets through edit_undo, and a checklist
-# is a list of dicts beside them (finding C-2 in docs/PRODUCT_FINDINGS.md).
+# is a list of dicts beside them (finding C-2, docs/archive/PRODUCT_FINDINGS.md).
 # A toast rather than a confirmation, because a question in front of every
 # tick-list tidy-up would be worse than the risk it guards.
 #
@@ -9941,7 +9942,7 @@ app.new_note(); app.update()
 # It was the one action in that bar that rewrote stored data with neither
 # a question nor an undo, while the button beside it had both -- and the
 # categories it overwrote were gone from the file the moment it ran
-# (finding C-1 in docs/PRODUCT_FINDINGS.md). These checks hold both
+# (finding C-1, docs/archive/PRODUCT_FINDINGS.md). These checks hold both
 # halves of the promise, and every seam the interaction pass marked
 # risky: a MIXED selection, the editor holding one of the notes, a
 # table-ending note, a series with a day of its own, a filtered list,
@@ -12732,16 +12733,12 @@ check(f'table undo: Ctrl+Z twice past a row inserted in a narrow table, then '
 set_body(_rd_body)
 app._render_table_grids()
 app.update()
-_lk_base = (len(app.tk.call('info', 'commands')), len(app.body_text.children))
-for _lk_i in range(30):
-    app._render_table_grids()
-app.update()
-_lk_grew = (len(app.tk.call('info', 'commands')) - _lk_base[0],
-            len(app.body_text.children) - _lk_base[1])
-check(f'a table drawn again 30 times leaves no Tcl command or frame behind '
-      f'(commands, frames grown: {_lk_grew})',
-      _lk_grew[0] <= 2 and _lk_grew[1] <= 0
-      and app._grid_at_line(2) is not None)
+_lk_frames = len(app.body_text.children)
+_lk_clean, _lk_said = _qa_leaves_nothing_behind(app, app._render_table_grids, 30)
+_lk_frames = len(app.body_text.children) - _lk_frames
+check(f'a table drawn again and again leaves no Tcl command or frame behind '
+      f'({_lk_said}; frames grown: {_lk_frames})',
+      _lk_clean and _lk_frames <= 0 and app._grid_at_line(2) is not None)
 set_body('')
 
 # ---- CTRL+Z AFTER A TABLE OPERATION BRINGS THE TABLE'S STYLES BACK ----

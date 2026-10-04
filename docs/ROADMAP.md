@@ -11,8 +11,8 @@ list for a project developed in spare time by a small team of two.
 - [Known limitations](#known-limitations)
 
 The outside view of the app — what a hostile product review found and what is
-being done about it — lives in its own register:
-[`docs/PRODUCT_FINDINGS.md`](PRODUCT_FINDINGS.md).
+being done about it — lives in its own register, now archived:
+[`docs/archive/PRODUCT_FINDINGS.md`](archive/PRODUCT_FINDINGS.md).
 
 ## Under consideration
 
@@ -135,7 +135,7 @@ hostile wave putting each to three refute-by-default verifiers, and a harshness
 audit on top asking whether the surviving list was still too soft (it was; the
 worst findings came from that pass). The full register, including what held up
 under attack and what verification refuted, is
-[`docs/PRODUCT_FINDINGS.md`](PRODUCT_FINDINGS.md). The headline: the app's
+[`docs/archive/PRODUCT_FINDINGS.md`](archive/PRODUCT_FINDINGS.md). The headline: the app's
 correctness held, but several routes edit or delete the user's data with no
 message, no Trash and no undo, and the note-list rebuild makes every pause in
 typing freeze the window.

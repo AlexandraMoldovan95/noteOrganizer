@@ -52,9 +52,9 @@ under `%APPDATA%\NoteOrganizer` (worth knowing if you ever go looking for your n
 
 The window can be made as small as 640 by 600 pixels. While you drag its edge, the page inside
 keeps its size — cut off at the edge, or with an empty strip beside it — and settles to fit the
-moment you pause or let go. Laying the whole page out at every step of the drag is what made
-the edge lag behind the mouse. The Calendar's month is the exception: it is quick enough to
-redraw that it follows the edge as you drag.
+moment you pause or let go, so the edge keeps up with the mouse
+([why](ARCHITECTURE.md#a-drag-of-the-windows-edge-waits-for-the-hand)). The Calendar's month is
+the exception: it is quick enough to redraw that it follows the edge as you drag.
 
 When the app asks you something — "Move to trash?", "Save changes?" — the question appears over
 the window, and the app waits for your answer. **Enter** presses the highlighted button — on a

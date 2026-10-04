@@ -9,11 +9,48 @@ easier to eyeball than to automate.
 
 What all of it actually executes is measured: `py tools/run_coverage.py`
 prints the line-coverage total, the per-file table and the largest
-never-executed regions. The current baseline (81.5%), the per-layer
-targets, and the ledger where every agent report's "NOT COVERED"
-confession receives an explicit verdict live in
-[`COVERAGE_LEDGER.md`](COVERAGE_LEDGER.md) — a confession may land
-there, never scroll past.
+never-executed regions — 89% of the app's lines today, measured on
+Windows. CI measures on Linux, which runs fewer Windows-only branches,
+and fails a run below 80%. A line executed is not a line checked: whether
+a check bites is what the mutants answer.
+
+The ledger where agents' "NOT COVERED" confessions received their
+verdicts until October 2026 is
+[archived](../docs/archive/COVERAGE_LEDGER.md) with its last ones; the
+floor in CI is the guard that runs every time.
+
+## How we test, in one page
+
+Every pull request runs the static gates, the unit suites and the qa
+suite on Windows and on Linux, and measures coverage on Linux;
+`py tools/run_tests.py` runs the same on a developer's machine, from a
+scratch copy outside the project. The rest runs on demand, as the table
+says.
+
+| Layer | What it is | When it runs | What it catches |
+|---|---|---|---|
+| Static gates | Eight `tools/check_*.py` scripts, seconds in all | Seven on every pull request; the link check before a push | A name used but never defined; a method lost from the app class; a judgement about a note written out twice; a dead documentation link; Romanian in anything public; a script that wipes its folder with no deny rule; a long story told in a comment; text below WCAG contrast |
+| Unit suites | Seven `test_*.py`, no window for six of them | Every pull request | Dates, repeats, the calculator, tables, rich text, data safety, a note's identity |
+| The qa suite | Nine scripts, ~2,700 checks, driving the real app headlessly | Every pull request | What a person would notice: a note that must survive a restart, a share code or a backup; formatting and tables that must come back exactly; a question that must not lose what was typed |
+| Stories | Three scripts that press the buttons a person presses, restart the app and photograph it | On demand: by hand, or from the Actions tab | A screen that changed shape; a route nobody asked a check about |
+| Mutants | `tools/mutate.py` and its catalogue: the 14 worth re-running, and 2 that test the runner | On demand, the same way. Most mutants were one-off runs while a fix was made, named in its commit | A check that stays green with its fix taken away |
+| Coverage | `tools/run_coverage.py` | Every pull request, with a floor of 80% | Code no test reaches |
+| The test plan | `NoteOrganizer_TestPlan.xlsx`, ~570 cases | By a person, on the built `.exe` | What needs a person: how a screen reads, the built `.exe`, real hardware — each row says whether a script already walks it |
+
+A fix lands with a check that fails when the fix is taken away, and a
+flaky check is treated as a bug in the check, never re-run until green
+(see [the house rules](#house-rules-for-new-checks)). The flakes this
+suite has had, and what each one really was:
+
+| What was seen | What it really was | What ended it |
+|---|---|---|
+| qa1 crashed about one run in twenty-six; a green check failed one morning | The app's first-run migration adopted the developer's real notebook into every run | A hermetic seed above the import in every script, refusing a real notebook ([story](../docs/ISSUES_LOG.md#the-tests-that-borrowed-the-notebook)) |
+| A qa2 popup check failing three runs of three on one machine, passing on another | Tk drops a generated click, in silence, aimed at a widget with no native window yet — and a test never owns the desktop's foreground, so its popups were hidden | Every generated click asks for the widget's window first, through one helper; popup visibility pinned ([story](../docs/ISSUES_LOG.md#the-click-that-was-never-delivered)) |
+| A qa1 undo check red on Linux only, green on a re-run | A relay of autosave timers nothing tracked; one save landed between two presses of a held key | The app cancels a waiting timer instead of forgetting it; checks ask Tcl which timers wait ([story](../docs/ISSUES_LOG.md#the-save-that-forgot-the-next-one)) |
+| A qa1 paste check red on a developer machine, three times | Windows' clipboard history held the shared clipboard for an instant | A stand-in clipboard inside the process, for every app the suite builds ([story](../docs/ISSUES_LOG.md#the-clipboard-the-tests-shared-with-whoever-was-at-the-machine)) |
+| A suite stood still for its whole ten-minute timeout | A question a check left on screen, with nothing to answer it | The shared support answers a question still waiting after 20 seconds with its safe button, and fails the run ([0.84.338](../CHANGELOG.md#084338--2026-10-03)) |
+| A layout photographed half laid out | A mouse button held in another program: the window waits for a drag to end before laying out | The suite answers "no button held" for every app it builds ([story](../docs/ISSUES_LOG.md#the-month-that-was-two-hundred-windows)) |
+| Focus checks failing when two suites ran together | Two app windows on one desktop, taking the keyboard from each other | One GUI suite at a time; `run_tests.py` runs them in turn |
 
 ## What each script owns
 
@@ -29,11 +66,12 @@ there, never scroll past.
 | `qa8` | search debounce, background-timer robustness |
 | `qa9` | the nested-dropdown-inside-popup fix |
 
-Beside the GUI suite run six standalone **unit suites**, each runnable on
+Beside the GUI suite run seven standalone **unit suites**, each runnable on
 its own (`py test_<name>.py`, from a scratch copy like everything else):
 `test_recurrence`, `test_calculator`, `test_data_safety`, `test_richtext`,
-`test_tables` need no GUI; `test_entry_module_identity` builds a window —
-it guards against a second copy of the entry module.
+`test_tables` and `test_note_identity` need no GUI;
+`test_entry_module_identity` builds a window — it guards against a second
+copy of the entry module.
 
 Each script's banner carries the finer print. "Primary" matters: checks
 about one surface deliberately live in several files — which is the
@@ -148,10 +186,18 @@ a Windows check.
 ## Photographs: did a screen change shape while nobody was looking?
 
 `py qa/story_look.py` opens the app on a fixed little notebook,
-photographs six screens — the list, the editor, the calendar, two
-Settings sections and a light theme — and compares each against the copy
-in `qa/screens/`. Those copies are committed, so a change of appearance
-shows up in a diff like any other change.
+photographs eighteen screens — the list, the editor, the calendar,
+Settings sections, a light theme, and the popups and panels that releases
+changed — and compares each against the copy in `qa/screens/`. Those
+copies are committed, so a change of appearance shows up in a diff like
+any other change.
+
+A reference is a claim about what is right, so a release that changes how
+something looks retakes them in the same branch, and someone looks at
+them. Two releases once did not: the references kept the old date format
+and a scrollbar that had gone, and reviewers read them as the app. The
+same retake found that a theme name the app no longer knew had left
+twelve scenes in the light theme, without anyone choosing it.
 
 It does not say "this is wrong"; it cannot know that. It says **this
 changed, and nobody said it would**, which is the honest half a script
@@ -337,16 +383,30 @@ A new surface joins this list the moment it ships.
   assert it is clear**: without that the check passes on a job left over
   from something earlier in the same script, which is exactly how one of
   these survived the mutant that deleted the binding it guards.
-- **A leak is what a second batch adds, not what the first one did.** qa6
-  counted Tcl commands across thirty redraws of Recently deleted and
-  allowed four more; a CI runner read nine more, which a leak that
-  happens at every redraw cannot do. It was not reproducible here, so it
-  was not guessed at: the three panels' checks now run thirty redraws to
-  absorb anything done only once, measure the next thirty with waiting
-  timers left out, and name the kinds of command that grew. Nine lasting
-  commands registered once still fail the old form and pass the new; a
-  handler bound on the rows' frame at every redraw fails the new one as
-  "<lambda> +30".
+- **A leak is what every batch adds — and a pointer at rest is an
+  input.** qa6 counted Tcl commands across thirty redraws of Recently
+  deleted, and a CI runner read nine more, on two pull requests. The
+  first answer — a second batch, after one that absorbs one-time work,
+  naming the kinds that grew — named them the next time: one window,
+  three frames, four labels and the window's own close command, which
+  is one Recently deleted row's hover preview. On a headless display the
+  pointer rests where the display put it; on that runner it rested over
+  a row, and the preview opened inside the counted batch. The local Linux
+  image could not show it: there, a row drawn under a pointer at rest
+  opens nothing (measured, with the pointer warped onto a row).
+
+  One helper now counts for every check of this kind,
+  `leaves_nothing_behind` in `_qa_support.py`: three batches, waiting
+  timers left out, and the smaller of the two growths decides. A leak
+  grows in both; something that opens once can land between two counts
+  at most. Four scripts had counted this four ways, and qa9's left out
+  commands ending in `callit`, a name tkinter no longer gives a timer's
+  command — it names it after the callback. Proved both ways: the old
+  form fails on a preview opened at the end of its counted batch exactly
+  as CI did (`!label +4, !frame +3, destroy +1, !toplevel +1`) and the
+  new one passes it at either count, while a handler bound on the window
+  at every redraw fails all seven checks, as `<lambda>` growing in both
+  batches.
 - **A background worker can finish before the line after it.**
   `import_data()` and `export_data()` start a worker and poll once on
   their way out. A CI runner finished qa3's tiny backup before that poll,

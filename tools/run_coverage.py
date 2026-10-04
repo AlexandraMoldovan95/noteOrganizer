@@ -17,8 +17,9 @@ Needs the `coverage` package (a dev tool, not an app dependency):
     py -m pip install coverage
 
 The number this prints is a WINDOWS number: the Linux CI leg executes
-different lines (Xvfb branches, POSIX paths). Where the current baseline
-and targets live: qa/COVERAGE_LEDGER.md. A covered line is necessary, not
+different lines (Xvfb branches, POSIX paths). CI holds a floor under the
+Linux number (--fail-under); the old per-layer targets are archived in
+docs/archive/COVERAGE_LEDGER.md. A covered line is necessary, not
 sufficient — whether the checks BITE is the mutation discipline's job
 (qa/README, house rules).
 """

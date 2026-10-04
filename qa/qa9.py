@@ -14,7 +14,9 @@ import note_organizer as NO, tkinter as tk
 # viewable, and the app hides popups whenever another program holds the
 # Windows foreground -- which a test process never owns. See
 # qa/_qa_support.py; _qa_click refuses to click into the void.
-from _qa_support import click as _qa_click, pin_popup_visibility as _qa_pin
+from _qa_support import (click as _qa_click,
+                         leaves_nothing_behind as _qa_leaves_nothing_behind,
+                         pin_popup_visibility as _qa_pin)
 _qa_pin(NO)
 
 
@@ -2800,31 +2802,13 @@ check('after a theme switch the next render draws it again, in the new '
 app.set_theme(_st_theme); app.update()
 # And none of it leaves anything behind: no Tcl command per render, and none
 # per rebuild of the theme picker (each re-bound its long-lived frame).
-
-
-def _st_commands():
-    # after() registers a command per pending callback, which comes and goes
-    # by itself; those are not what this is about.
-    return len([c for c in app.tk.splitlist(app.tk.call('info', 'commands'))
-                if not str(c).endswith('callit')])
-
-
 app.update()
-_st_c0 = _st_commands()
-for _ in range(20):
-    app._render_statistics()
-_st_c1 = _st_commands()
-for _ in range(10):
-    app._refresh_theme_picker()
-app.update()
-_st_c2 = _st_commands()
-# No growth, rather than an equal count: something unrelated finishing in
-# the same stretch can take one away (measured: 2384 -> 2383), and what
-# leaked here added one per render and two per rebuild.
-check('twenty renders of Statistics leave no Tcl command behind (%d -> %d)'
-      % (_st_c0, _st_c1), _st_c1 <= _st_c0)
-check('ten rebuilds of the theme picker leave no Tcl command behind (%d -> %d)'
-      % (_st_c1, _st_c2), _st_c2 <= _st_c1)
+_st_clean, _st_said = _qa_leaves_nothing_behind(app, app._render_statistics, 20)
+check('rendering Statistics again and again leaves no Tcl command behind (%s)'
+      % _st_said, _st_clean)
+_st_clean, _st_said = _qa_leaves_nothing_behind(app, app._refresh_theme_picker, 10)
+check('rebuilding the theme picker again and again leaves no Tcl command '
+      'behind (%s)' % _st_said, _st_clean)
 app.notes = list(_st_notes)
 app._render_statistics(); app.update()
 

@@ -8,6 +8,23 @@ the releases they shipped in are in the [Changelog](../CHANGELOG.md). See also t
 repository's [Issues](https://github.com/AlexandraMoldovan95/noteOrganizer/issues) for
 day-to-day tracking.
 
+## Start here: five stories
+
+New to this log? Between them, these five show most of what the rest of it teaches; each
+is in the table below as well.
+
+1. [The cleanup that deleted the real notebook](#the-cleanup-that-deleted-the-real-notebook) —
+   two harmless steps that together deleted the very notes they were moving, and why the safety
+   rules here are categorical rather than lists of file names.
+2. [The safety net that could not see the gap](#the-safety-net-that-could-not-see-the-gap) — a
+   check written for one kind of bug reported the code clean while that bug was live in it.
+3. [Eleven decisions about your notes, made from half the evidence](#eleven-decisions-about-your-notes-made-from-half-the-evidence)
+   — a deliberate attempt to break the app, and what each automatic action had trusted too much.
+4. [The list that was drawn whole, for every pause in typing](#the-list-that-was-drawn-whole-for-every-pause-in-typing)
+   — measuring where the time went, then removing the cost instead of trimming around it.
+5. [The click that was never delivered](#the-click-that-was-never-delivered) — a toolkit that
+   drops an event in silence, and the experiment that told a flaky test from a real regression.
+
 ## The stories at a glance
 
 | Story | The lesson | Version |
@@ -1027,7 +1044,7 @@ every one of them is refiled the instant a category name is clicked — no
 question, nothing on screen but a status line, and the categories they
 came from gone from the file. The button beside it, **Trash**, asks first
 *and* offers Undo. Recorded as C-1 in the
-[consistency survey](PRODUCT_FINDINGS.md#round-2--the-consistency-survey-2026-09-25).
+[consistency survey](archive/PRODUCT_FINDINGS.md#round-2--the-consistency-survey-2026-09-25).
 
 **Why the obvious fix would have been the wrong one.** "Same shape as its
 neighbour" is easy to say and easy to get half right. The Trash's real

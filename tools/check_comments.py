@@ -11,16 +11,18 @@ package -- two things:
   names the start of a story's title, and ``smaller lessons: ...`` names
   an entry in its "Smaller lessons, moved out of the code" section.
 
-In the modules listed in BRIEF, two limits as well:
+In the modules listed in BRIEF, three limits as well:
 
 * a run of comment lines is at most three lines long;
-* a function's or class's docstring spends at most six lines on prose.
+* a function's or class's docstring spends at most six lines on prose;
+* the module's own docstring, its overview, is at most ten lines.
 
 Three lines hold a reason. What happened, and how it was found, is a
 story: it goes to docs/ISSUES_LOG.md, and the code keeps a pointer to it.
 A docstring's Args:/Returns: sections document an interface rather than
-tell a story, so they are not counted; nor is a module's own docstring,
-which is its overview.
+tell a story, so they are not counted. A module's overview names what the
+module is for and why it is shaped so; the walk through it lives in
+docs/CODE_TOUR.md.
 
 WHY A LIST
 ----------
@@ -50,6 +52,7 @@ BRIEF = [
 
 MAX_COMMENT_LINES = 3
 MAX_DOCSTRING_LINES = 6
+MAX_MODULE_DOCSTRING_LINES = 10
 
 # A release as this project numbers them before 1.0.0. Dates such as
 # 17.10.2026 and toolkit versions such as Tk 8.6.15 do not match.
@@ -188,6 +191,9 @@ def check(path, titles, lessons):
                                  % (length, MAX_COMMENT_LINES)))
         for line, doc, module in docstrings(tree):
             length = prose_lines(doc)
+            if module and length > MAX_MODULE_DOCSTRING_LINES:
+                problems.append((line, "module docstring of %d lines (at most "
+                                 "%d)" % (length, MAX_MODULE_DOCSTRING_LINES)))
             if not module and length > MAX_DOCSTRING_LINES:
                 problems.append((line, "docstring prose of %d lines (at most "
                                  "%d)" % (length, MAX_DOCSTRING_LINES)))

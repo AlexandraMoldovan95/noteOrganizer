@@ -14,6 +14,7 @@ import note_organizer as NO, tkinter as tk, tkinter.filedialog as fd, os, tempfi
 # Windows foreground -- which a test process never owns. See
 # qa/_qa_support.py; _qa_click refuses to click into the void.
 from _qa_support import (click as _qa_click, fire as _qa_fire,
+                         leaves_nothing_behind as _qa_leaves_nothing_behind,
                          pin_popup_visibility as _qa_pin,
                          waiting_timers as _qa_waiting)
 _qa_pin(NO)
@@ -3865,31 +3866,18 @@ check(f"hovering and opening a day of the drawn month ask no note again "
 # as the app ran. The day panel's binding also outlived its note: back on
 # the day's list, a right-click on the panel's bare edge offered the last
 # note's menu.
-def _lb_commands():
-    return len(app.tk.splitlist(app.tk.call('info', 'commands')))
-
-
 app._history_toggle_btn.invoke(); app.update()
-for _ in range(3):
-    app._render_calendar_history(); app.update()
-_lb_before = _lb_commands()
-for _ in range(20):
-    app._render_calendar_history(); app.update()
-_lb_history = _lb_commands() - _lb_before
+_lb_history = _qa_leaves_nothing_behind(
+    app, lambda: (app._render_calendar_history(), app.update()), 20)
 app._history_toggle_btn.invoke(); app.update()
 _od_open_day(_nd_day)
 _lb_note = app.notes_on_date(_nd_day)[0]
-for _ in range(3):
-    app.show_day_note(_lb_note, _nd_day); app.show_day_list(); app.update()
-_lb_before = _lb_commands()
-for _ in range(20):
-    app.show_day_note(_lb_note, _nd_day); app.show_day_list(); app.update()
-_lb_day = _lb_commands() - _lb_before
-# Fewer than five, not zero: a timer of the app's own that fires or is set
-# during the loop moves the count by one or two either way; the leak was
-# one per redraw, twenty here.
-check(f'twenty History renders and twenty day views leave no Tcl command '
-      f'behind ({_lb_history}, {_lb_day})', _lb_history < 5 and _lb_day < 5)
+_lb_day = _qa_leaves_nothing_behind(
+    app, lambda: (app.show_day_note(_lb_note, _nd_day), app.show_day_list(),
+                  app.update()), 20)
+check(f'History renders and day views, again and again, leave no Tcl command '
+      f'behind ({_lb_history[1]} | {_lb_day[1]})',
+      _lb_history[0] and _lb_day[0])
 _lb_menus = []
 app.show_note_context_menu = lambda e, n, **k: _lb_menus.append((n['id'], k))
 try:
