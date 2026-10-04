@@ -50,7 +50,8 @@ The notes stay beside the script when it runs from source, and in
 
 Alexandra Moldovan built Note Organizer with Claude Code, Anthropic's AI
 coding agent. She decided what the app should do and how it should behave,
-chose between the options the agent put forward, tested the builds by hand
+chose between the options the agent put forward, went through the
+[test cases](qa/NoteOrganizer_TestPlan.xlsx) by hand on the packaged app
 and approved every change before it was merged. The agent wrote most of
 the code and the documentation, working under the rules in
 [CLAUDE.md](CLAUDE.md). Commits it made carry a `Co-Authored-By` line;
