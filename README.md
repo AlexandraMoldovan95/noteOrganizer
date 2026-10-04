@@ -175,12 +175,13 @@ noteOrganizer/
 │       ├── note_list.py         #   the note list, drawn on one canvas
 │       └── attachments.py       #   the attachments section
 ├── tools/                    # refactor safety net, run by CI
-│   ├── check_*.py                # seven static gates: names that resolve, the app
+│   ├── check_*.py                # eight static gates: names that resolve, the app
 │   │                             #   class's surface, one definition per judgement,
 │   │                             #   documentation links that go somewhere, English
 │   │                             #   in everything a reader sees, deny rules that
-│   │                             #   cover the wipers, comments that say why briefly
-│   ├── pre_push_check.py         # all seven, runnable locally in seconds
+│   │                             #   cover the wipers, comments that say why briefly,
+│   │                             #   and every theme's text contrast, measured
+│   ├── pre_push_check.py         # all eight, runnable locally in seconds
 │   ├── run_tests.py              # the whole suite, safely, from a scratch copy
 │   ├── run_coverage.py           # the whole suite again, measuring what it executes
 │   ├── mutate.py                 # takes each fix away and checks a check fails

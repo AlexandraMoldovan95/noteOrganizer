@@ -1504,6 +1504,36 @@ for _ in range(10):
     app.update(); time.sleep(0.02)
 
 
+# The window's horizontal scrollbar is for a window narrower than the
+# sidebar and the editor side by side. It used to be packed for good, and
+# sat under every window wide enough not to need it -- in every screenshot.
+# Asked of the layout itself, wide and narrow, twice each.
+def _sb_packed():
+    return app._main_hscroll.winfo_manager() == 'pack'
+
+
+def _sb_at(width):
+    app.geometry('%dx850' % width)
+    for _ in range(10):
+        app.update(); time.sleep(0.02)
+    return _sb_packed()
+
+
+_sb_seen = [(_sb_w, _sb_at(_sb_w)) for _sb_w in (1100, 760, 1100, 760)]
+check("the window's horizontal scrollbar is there only while the window is "
+      "narrower than the app needs (%s)" % _sb_seen,
+      [_sb_s for _sb_w, _sb_s in _sb_seen] == [False, True, False, True])
+check('...and while it is there it scrolls: the content is wider than the '
+      'view (%s)' % (app.main_canvas.xview(),),
+      app.main_canvas.xview()[1] < 1.0)
+check('...and a window exactly as wide as the app needs has none (%d px)'
+      % app._main_min_width,
+      not _sb_at(app._main_min_width))
+app.geometry('1100x850')
+for _ in range(10):
+    app.update(); time.sleep(0.02)
+
+
 # ============================================================
 # HELPERS FOR THE BLOCKS BELOW: real questions, answered from inside
 # ============================================================

@@ -259,5 +259,42 @@
       "qa5"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "W01",
+    "about": "the window's horizontal scrollbar is shown whatever the width",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        bar = getattr(self, \"_main_hscroll\", None)\n",
+        "replace": "        bar = getattr(self, \"_main_hscroll\", None)\n        needed = True\n"
+      }
+    ],
+    "must_fail": [
+      "the window's horizontal scrollbar is there only while the window is narrower",
+      "...and a window exactly as wide as the app needs has none"
+    ],
+    "suites": [
+      "qa9"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "W02",
+    "about": "the window's horizontal scrollbar is never shown",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        bar = getattr(self, \"_main_hscroll\", None)\n",
+        "replace": "        bar = getattr(self, \"_main_hscroll\", None)\n        needed = False\n"
+      }
+    ],
+    "must_fail": [
+      "the window's horizontal scrollbar is there only while the window is narrower"
+    ],
+    "suites": [
+      "qa9"
+    ],
+    "expect": "killed"
   }
 ]

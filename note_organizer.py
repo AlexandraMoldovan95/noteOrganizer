@@ -47,7 +47,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.84.338"
+APP_VERSION = "0.84.340"
 
 
 def parse_version(v):
@@ -12059,12 +12059,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     RESIZE_WATCH_MS = 40    # how often a held drag looks for the release
 
     def _on_main_canvas_configure(self, event):
+        self._show_page_scrollbar(event.width < self._main_min_width)
         self._main_size_wanted = (max(event.width, self._main_min_width),
                                   event.height)
         if self._pointer_button_held() and not self._page_follows_the_drag():
             self._wait_for_resize_to_settle()
             return
         self._lay_out_at_window_size()
+
+    def _show_page_scrollbar(self, needed):
+        """The window's horizontal scrollbar, only while the window is
+        narrower than the sidebar and the editor side by side, as a table's
+        own bar is shown only when the table is wider than the editor
+        (_fit_grid). Packed for good, it sat under every window wide enough
+        not to need it. Its showing changes the window's height, never its
+        width, so the answer cannot flip back and forth."""
+        bar = getattr(self, "_main_hscroll", None)
+        if bar is None or needed == self._is_placed(bar):
+            return
+        if needed:
+            bar.pack(side="bottom", fill="x", before=self.main_canvas)
+        else:
+            bar.pack_forget()
 
     def _page_follows_the_drag(self):
         """Whether the page on screen is laid out at every step of a held
@@ -12160,11 +12176,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # --- Outer horizontal-scroll wrapper ---
         self.main_canvas = tk.Canvas(self, highlightthickness=0)
         self.track_theme(self.main_canvas, bg="bg")
-        main_hscroll = ttk.Scrollbar(self, orient="horizontal", command=self.main_canvas.xview)
+        # Packed only while the window is too narrow (_show_page_scrollbar).
+        self._main_hscroll = ttk.Scrollbar(self, orient="horizontal",
+                                           command=self.main_canvas.xview)
 
-        main_hscroll.pack(side="bottom", fill="x")
         self.main_canvas.pack(side="top", fill="both", expand=True)
-        self.main_canvas.configure(xscrollcommand=main_hscroll.set)
+        self.main_canvas.configure(xscrollcommand=self._main_hscroll.set)
 
         self.main_inner = tk.Frame(self.main_canvas)
         self.track_theme(self.main_inner, bg="bg")

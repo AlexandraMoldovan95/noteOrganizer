@@ -105,6 +105,10 @@ STATIC = [
     # the issues log leads somewhere, and condensed modules stay condensed.
     ("comments say why, briefly",
      [sys.executable, os.path.join("tools", "check_comments.py")]),
+    # The seventh: every theme's text measured against WCAG AA, with the
+    # pairs still below it listed and the list allowed only to shrink.
+    ("contrast measured",
+     [sys.executable, os.path.join("tools", "check_contrast.py")]),
 ]
 
 
