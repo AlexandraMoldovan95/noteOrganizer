@@ -15,6 +15,7 @@ import note_organizer as NO, tkinter as tk, json, os, re
 # Windows foreground -- which a test process never owns. See
 # qa/_qa_support.py; _qa_click refuses to click into the void.
 from _qa_support import (click as _qa_click, fire as _qa_fire,
+                         leaves_nothing_behind as _qa_leaves_nothing_behind,
                          pin_popup_visibility as _qa_pin,
                          waiting_timers as _qa_waiting)
 _qa_pin(NO)
@@ -12732,16 +12733,12 @@ check(f'table undo: Ctrl+Z twice past a row inserted in a narrow table, then '
 set_body(_rd_body)
 app._render_table_grids()
 app.update()
-_lk_base = (len(app.tk.call('info', 'commands')), len(app.body_text.children))
-for _lk_i in range(30):
-    app._render_table_grids()
-app.update()
-_lk_grew = (len(app.tk.call('info', 'commands')) - _lk_base[0],
-            len(app.body_text.children) - _lk_base[1])
-check(f'a table drawn again 30 times leaves no Tcl command or frame behind '
-      f'(commands, frames grown: {_lk_grew})',
-      _lk_grew[0] <= 2 and _lk_grew[1] <= 0
-      and app._grid_at_line(2) is not None)
+_lk_frames = len(app.body_text.children)
+_lk_clean, _lk_said = _qa_leaves_nothing_behind(app, app._render_table_grids, 30)
+_lk_frames = len(app.body_text.children) - _lk_frames
+check(f'a table drawn again and again leaves no Tcl command or frame behind '
+      f'({_lk_said}; frames grown: {_lk_frames})',
+      _lk_clean and _lk_frames <= 0 and app._grid_at_line(2) is not None)
 set_body('')
 
 # ---- CTRL+Z AFTER A TABLE OPERATION BRINGS THE TABLE'S STYLES BACK ----

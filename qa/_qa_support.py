@@ -128,9 +128,20 @@ different questions, and a check that wants the second asserts it itself
     only for the timer it tracks: a job set to None instead of cancelled
     left its timer scheduled with nothing tracking it, and the autosave's
     did that in a relay through a whole qa1 run.
+
+``leaves_nothing_behind(app, redraw, times)``
+    Whether calling *redraw* over and over leaves Tcl commands behind for
+    good: one batch of *times* calls to absorb what is done only once,
+    then two more, each counted with the waiting timers left out. A leak
+    adds something in every batch; a window that opens once -- a hover
+    preview under a pointer that never moves, a timer's popup -- can only
+    fall between two of the three counts, so the smaller growth is the
+    one that counts. Four scripts counted this four ways, one of them with
+    a timer filter that had stopped filtering.
 """
 
 import atexit
+import collections
 import io
 import json
 import os
@@ -451,15 +462,78 @@ def click(widget, **kwargs):
     fire(widget, "<Button-1>", **kwargs)
 
 
-def waiting_timers(app, name):
-    """The ids of the Tcl timers waiting to run a callback called *name*,
-    tracked or not. Tkinter names a timer's command after its callback."""
-    waiting = []
+def _waiting(app):
+    """Each waiting Tcl timer's id and the command it will run."""
     for job in app.tk.splitlist(app.tk.call("after", "info")):
         try:
             script = app.tk.splitlist(app.tk.call("after", "info", job))[0]
         except tk.TclError:
             continue
-        if str(script).endswith(name):
-            waiting.append(str(job))
-    return waiting
+        yield str(job), str(script)
+
+
+def waiting_timers(app, name):
+    """The ids of the Tcl timers waiting to run a callback called *name*,
+    tracked or not. Tkinter names a timer's command after its callback."""
+    return [job for job, script in _waiting(app) if script.endswith(name)]
+
+
+# A leak adds at least one command per call, so a batch of ten or more
+# shows ten or more; a few either way is the app's own business.
+LEAK_FLOOR = 5
+
+
+def _kept_commands(app):
+    """Every Tcl command, less those a timer is waiting to run: a timer's
+    command lives from scheduling to running, so how many wait says how
+    fast the machine is, not what leaked."""
+    timers = {script for _job, script in _waiting(app)}
+    return {str(c) for c in app.tk.splitlist(app.tk.call("info", "commands"))
+            } - timers
+
+
+def _kind(name):
+    """A widget's command is its path, a callback's an id and its
+    function's name: what kind of thing a command is, without the numbers."""
+    if name.startswith("."):
+        return re.sub(r"-?\d+$", "", name.rsplit(".", 1)[-1])
+    return re.sub(r"^\d+", "", name)
+
+
+def leaves_nothing_behind(app, redraw, times):
+    """Call *redraw* three batches of *times*, and say whether it leaves
+    Tcl commands behind for good: ``(clean, said)``.
+
+    The first batch absorbs what a redraw does only once. The next two are
+    counted, and the smaller growth is the verdict: a leak grows in both,
+    while something that appears once can only land between two counts.
+    That once was real. On a CI runner the pointer rests where the display
+    put it, over a Recently deleted row, and that row's hover preview --
+    one window, three frames, four labels -- opened inside one batch and
+    read as nine leaked commands. CI counted exactly nine on two pull
+    requests; the second time the kinds were named, and they were those.
+    """
+    for _ in range(times):
+        redraw()
+    app.update()
+    counts = [_kept_commands(app)]
+    for _ in range(2):
+        for _ in range(times):
+            redraw()
+        app.update()
+        counts.append(_kept_commands(app))
+    grew = [collections.Counter(map(_kind, after)) -
+            collections.Counter(map(_kind, before))
+            for before, after in zip(counts, counts[1:])]
+    growth = min(len(after) - len(before)
+                 for before, after in zip(counts, counts[1:]))
+    said = "%d -> %d -> %d" % tuple(len(c) for c in counts)
+    both = grew[0] & grew[1]
+    once = (grew[0] | grew[1]) - both
+    if both:
+        said += "; grew in both: " + ", ".join(
+            "%s +%d" % kv for kv in both.most_common(6))
+    if once:
+        said += "; once: " + ", ".join(
+            "%s +%d" % kv for kv in once.most_common(6))
+    return growth < LEAK_FLOOR, said

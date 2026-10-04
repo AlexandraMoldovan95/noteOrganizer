@@ -383,16 +383,30 @@ A new surface joins this list the moment it ships.
   assert it is clear**: without that the check passes on a job left over
   from something earlier in the same script, which is exactly how one of
   these survived the mutant that deleted the binding it guards.
-- **A leak is what a second batch adds, not what the first one did.** qa6
-  counted Tcl commands across thirty redraws of Recently deleted and
-  allowed four more; a CI runner read nine more, which a leak that
-  happens at every redraw cannot do. It was not reproducible here, so it
-  was not guessed at: the three panels' checks now run thirty redraws to
-  absorb anything done only once, measure the next thirty with waiting
-  timers left out, and name the kinds of command that grew. Nine lasting
-  commands registered once still fail the old form and pass the new; a
-  handler bound on the rows' frame at every redraw fails the new one as
-  "<lambda> +30".
+- **A leak is what every batch adds — and a pointer at rest is an
+  input.** qa6 counted Tcl commands across thirty redraws of Recently
+  deleted, and a CI runner read nine more, on two pull requests. The
+  first answer — a second batch, after one that absorbs one-time work,
+  naming the kinds that grew — named them the next time: one window,
+  three frames, four labels and the window's own close command, which
+  is one Recently deleted row's hover preview. On a headless display the
+  pointer rests where the display put it; on that runner it rested over
+  a row, and the preview opened inside the counted batch. The local Linux
+  image could not show it: there, a row drawn under a pointer at rest
+  opens nothing (measured, with the pointer warped onto a row).
+
+  One helper now counts for every check of this kind,
+  `leaves_nothing_behind` in `_qa_support.py`: three batches, waiting
+  timers left out, and the smaller of the two growths decides. A leak
+  grows in both; something that opens once can land between two counts
+  at most. Four scripts had counted this four ways, and qa9's left out
+  commands ending in `callit`, a name tkinter no longer gives a timer's
+  command — it names it after the callback. Proved both ways: the old
+  form fails on a preview opened at the end of its counted batch exactly
+  as CI did (`!label +4, !frame +3, destroy +1, !toplevel +1`) and the
+  new one passes it at either count, while a handler bound on the window
+  at every redraw fails all seven checks, as `<lambda>` growing in both
+  batches.
 - **A background worker can finish before the line after it.**
   `import_data()` and `export_data()` start a worker and poll once on
   their way out. A CI runner finished qa3's tiny backup before that poll,
