@@ -1619,6 +1619,41 @@ class SettingsPageMixin:
             for child in rows.winfo_children():
                 self._bind_wheel_tree(child, wheel)
 
+        def ordered_trash():
+            # str(): a hand-edited trash.json can hold a number or a list
+            # beside the dates, and sorting them together raised.
+            return sorted(self.trash, key=lambda e: str(e.get("deleted_at", "")),
+                          reverse=True)
+
+        def draw_rows(ordered, first):
+            """The rows from *first* up to the page's end, and the button
+            for the rest."""
+            for entry in ordered[first:shown_count["n"]]:
+                self._build_trash_row(rows, entry, redraw,
+                                      on_tick=refresh_restore_btn)
+            remaining = len(ordered) - min(len(ordered), shown_count["n"])
+            if remaining > 0:
+                more = tk.Button(rows, text=f"Show {min(remaining, PAGE_SIZE)} more "
+                                            f"({remaining} not shown)",
+                                 relief="flat", cursor="hand2",
+                                 bg=self.colors["sidebar"], fg=self.colors["text"],
+                                 font=("Segoe UI", 8))
+                more.configure(command=lambda: show_more(more))
+                more.pack(fill="x", pady=(6, 2), ipady=4)
+
+        def show_more(button):
+            # The next page goes in under the rows already drawn: drawing
+            # every row again flickered, and grew with every page.
+            first = shown_count["n"]
+            shown_count["n"] += PAGE_SIZE
+            button.destroy()
+            before = set(rows.winfo_children())
+            draw_rows(ordered_trash(), first)
+            for child in rows.winfo_children():
+                if child not in before:
+                    self._bind_wheel_tree(child, wheel)
+            refresh_restore_btn()
+
         def redraw():
             for w in rows.winfo_children():
                 w.destroy()
@@ -1627,24 +1662,7 @@ class SettingsPageMixin:
                          fg=self.colors["subtext"], font=("Segoe UI", 10)).pack(pady=20)
                 wheel_on_rows()
                 return
-            # str(): a hand-edited trash.json can hold a number or a list
-            # beside the dates, and sorting them together raised.
-            ordered = sorted(self.trash, key=lambda e: str(e.get("deleted_at", "")),
-                             reverse=True)
-            visible = ordered[:shown_count["n"]]
-            for entry in visible:
-                self._build_trash_row(rows, entry, redraw,
-                                      on_tick=refresh_restore_btn)
-            remaining = len(ordered) - len(visible)
-            if remaining > 0:
-                def show_more():
-                    shown_count["n"] += PAGE_SIZE
-                    redraw()
-                tk.Button(rows, text=f"Show {min(remaining, PAGE_SIZE)} more "
-                                     f"({remaining} not shown)",
-                          command=show_more, relief="flat", cursor="hand2",
-                          bg=self.colors["sidebar"], fg=self.colors["text"],
-                          font=("Segoe UI", 8)).pack(fill="x", pady=(6, 2), ipady=4)
+            draw_rows(ordered_trash(), 0)
             wheel_on_rows()
             refresh_restore_btn()
 

@@ -92,6 +92,18 @@ PAGE = app.TRASH_PAGE_SIZE
 initial_rows = count_rows(app.settings_trash_panel, 'Deleted')
 check(f'trash paginated to {PAGE} initial rows', initial_rows==PAGE)
 
+def trash_row_labels():
+    out = []
+    def walk(x):
+        for c in x.winfo_children():
+            if isinstance(c, tk.Label) and 'Deleted' in str(c.cget('text')):
+                out.append(c)
+            walk(c)
+    walk(app.settings_trash_panel)
+    return out
+
+
+first_page = trash_row_labels()
 show_more = find_btn(app.settings_trash_panel, 'Show')
 check('Show more button present', show_more is not None)
 if show_more:
@@ -99,6 +111,14 @@ if show_more:
     app.update()
     check(f'Show more expands to {PAGE*2} rows',
           count_rows(app.settings_trash_panel, 'Deleted')==PAGE*2)
+    # Added under the rows already drawn, not all drawn again: that
+    # flickered and grew with every page (field pass). The new rows scroll
+    # with the wheel like the old.
+    both_pages = trash_row_labels()
+    check('...under the rows already drawn, which stay the same rows',
+          both_pages[:PAGE] == first_page
+          and all(w.winfo_exists() for w in first_page)
+          and bool(both_pages[-1].bind('<MouseWheel>')))
 
 # restore preserves pagination + moves note back
 restore_btn = find_btn(app.settings_trash_panel, 'Restore')

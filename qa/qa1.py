@@ -7645,6 +7645,67 @@ check(f'every Ctrl+Z and Ctrl+Y after a renumber beside a drawn table '
       f'changes something ({_rw_seen})',
       _rw_after != _rw_start and _rw_seen == [True, True, True, True]
       and _rw_back and app.body_text.get('1.0', 'end-1c') == _rw_after)
+
+# Enter in a numbered list keeps the note where it is being read (field
+# pass): the renumber rewrote the whole body, which threw the view to the
+# note's first line and tore every drawn table down to draw it again.
+for _vk in ('plain', 'with a table above'):
+    _vk_lines = ['prose line %d' % _i for _i in range(80)]
+    if _vk == 'with a table above':
+        _vk_lines = ['| A | B |', '| --- | --- |', '| x | y |'] + _vk_lines
+    _vk_lines += (['1. one', '2. two', '3. three']
+                  + ['tail %d' % _i for _i in range(60)])
+    set_body(chr(10).join(_vk_lines))
+    app._render_table_grids()
+    app.update()
+    _vk_at = _vk_lines.index('1. one') + 1
+    app.body_text.yview('%d.0' % (_vk_at - 10))
+    app.update()
+    _vk_top0 = app.body_text.index('@0,0')
+    _vk_wins = app.body_text.window_names()
+    app.body_text.mark_set('insert', '%d.end' % _vk_at)
+    if take_focus(app.body_text):
+        app._on_body_return(None)
+        app.update()
+    _vk_top1 = app.body_text.index('@0,0')
+    check(f'Enter in a numbered list keeps the view where it was ({_vk}: '
+          f'{_vk_top0} -> {_vk_top1})',
+          _vk_top1 == _vk_top0
+          and app.body_text.get('%d.0' % (_vk_at + 1), '%d.end' % (_vk_at + 2))
+          == '2. ' + chr(10) + '3. two'
+          and app.body_text.index('insert') == '%d.3' % (_vk_at + 1))
+    if _vk == 'with a table above':
+        check('...and leaves the drawn table standing, not drawn again',
+              bool(_vk_wins) and app.body_text.window_names() == _vk_wins)
+# A marker that grows (9 -> 10) moves its words, and their styles go with
+# them: bold stays on exactly the word it was on.
+set_body(chr(10).join('%d. item%d' % (_i, _i) for _i in range(1, 10)))
+app.body_text.tag_add('bold', '9.3', '9.8')
+app.body_text.mark_set('insert', '1.end')
+if take_focus(app.body_text):
+    app._on_body_return(None)
+    app.update()
+check(f'a renumber that grows a marker keeps the bold on its word '
+      f'({app.body_text.tag_ranges("bold")})',
+      app.body_text.get('10.0', '10.end') == '10. item9'
+      and [str(i) for i in app.body_text.tag_ranges('bold')]
+      == ['10.4', '10.9']
+      and app._list_kind_of(app.body_text, 10) == 'number'
+      # ...and the new digits wear the line's list indent like any other
+      # item's start does (Tk gives inserted text only tags on both sides).
+      and set(app.body_text.tag_names('10.0'))
+      == set(app.body_text.tag_names('1.0')))
+# A caret at an item's start stays there while its number changes under it.
+set_body('1. a' + chr(10) + '2. b' + chr(10) + '3. c')
+app.body_text.mark_set('insert', '2.0')
+app.body_text.tag_remove('sel', '1.0', 'end')
+app._change_paragraph_indent(+1)
+app.update()
+check(f'indenting an item keeps the caret at its start '
+      f'({app.body_text.index("insert")}; {body()!r})',
+      app.body_text.index('insert') == '2.0'
+      and app.body_text.get('3.0', '3.end') == '2. c')
+set_body('')
 # ...also where an alignment meets the table's window: a centred line right
 # above the table (its alignment runs through its line break, up to the
 # window), or the table placed with "Center table on page" (the drawing
@@ -8312,6 +8373,39 @@ if _side_closers:
 app.notes[0].pop('attachments', None)
 app.toggle_share_panel(); app.update()
 
+# "Show N more" in the Share panel adds the next page under the boxes
+# already there; drawing every box again flickered (field pass), and the
+# boxes ticked on the first page must be the same boxes after.
+_sm_saved_notes = app.notes
+app.notes = [NO.normalize_note({'id': 9000 + _i, 'title': 'Many %d' % _i,
+                                'body': 'x'}) for _i in range(130)]
+app.toggle_share_panel(); app.update()
+
+
+def _sm_boxes():
+    return [b for b in _walk_widgets(app.share_panel, tk.Checkbutton)
+            if str(b.cget('text')).startswith('Many')]
+
+
+_sm_first = _sm_boxes()
+_sm_more = next((b for b in _walk_widgets(app.share_panel, tk.Button)
+                 if str(b.cget('text')).startswith('Show 30 more')), None)
+check(f'fixture: the Share panel draws a page and offers the rest '
+      f'({len(_sm_first)} boxes)', len(_sm_first) == 100 and _sm_more is not None)
+if _sm_more is not None:
+    _sm_more.invoke()
+    app.update()
+_sm_after = _sm_boxes()
+check(f'Show more in Share adds the rest under the boxes already drawn '
+      f'({len(_sm_after)} boxes)',
+      len(_sm_after) == 130 and _sm_after[:100] == _sm_first
+      and all(b.winfo_exists() for b in _sm_first)
+      and bool(_sm_after[-1].bind('<MouseWheel>'))
+      and not [b for b in _walk_widgets(app.share_panel, tk.Button)
+               if str(b.cget('text')).startswith('Show ')])
+app.toggle_share_panel(); app.update()
+app.notes = _sm_saved_notes
+
 app.current_attachments = []
 app.update()
 
@@ -8409,6 +8503,36 @@ app.update()
 check('a chip click inserts that emoji into the body',
       _first_emoji in app.body_text.get('1.0', 'end-1c'))
 app._dismiss_mini_popup(); app.update()
+
+# An emoji put into an EMPTY field lands in its grey hint's place (field
+# pass): the picker had taken the focus, the hint came back, and the title
+# was saved as "Note title..." with the emoji after it.
+for _ph_hint in ('Note title...', 'Search notes...'):
+    _ph_field = next(e for e, h in app._placeholders if h == _ph_hint)
+    _ph_field.delete(0, 'end')
+    _ph_field.insert(0, _ph_hint)
+    _ph_field.config(fg=app.colors['subtext'])
+    take_focus(app.body_text)
+    app._show_emoji_picker(_ph_field)
+    app.update()
+    _ph_chips = [l for l in _walk_widgets(app._mini_popup, tk.Label)
+                 if str(l.cget('cursor')) == 'hand2'
+                 and str(l.cget('text')).strip()]
+    _ph_emoji = str(_ph_chips[0].cget('text')).strip() if _ph_chips else '?'
+    if _ph_chips:
+        _qa_click(_ph_chips[0])
+        app.update()
+    _ph_got = _ph_field.get()
+    app._dismiss_mini_popup(); app.update()
+    check(f'an emoji in an empty field takes its hint\'s place '
+          f'({_ph_hint} -> {_ph_got!r})',
+          _ph_got == _ph_emoji
+          and str(_ph_field.cget('fg')) == app.colors['text'])
+    _ph_field.delete(0, 'end')
+    take_focus(app.body_text)
+    app.update()
+app._clear_search()
+app.update()
 
 # Template picker: choosing the seeded template fills the editor.
 app.templates.append(NO.normalize_template(

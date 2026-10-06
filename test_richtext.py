@@ -755,6 +755,78 @@ check(f"working out the runs of {_n} styled words and one size takes work in "
       f"step with the words, not with their square ({_lines} lines ran)",
       _lines <= 120 * _n)
 
+# Copying a long note with many styled words froze the app (field pass): the
+# HTML asked every character about every span of the whole note. The sweep
+# asks only where a span starts or ends, and only that line's spans -- and
+# must write exactly what asking every character wrote.
+from noteorganizer.core import richtext as _rt
+
+
+def _line_html_char_by_char(line, spans, offset):
+    if not line:
+        return ""
+    pieces, run_start = [], 0
+    current = _rt._styles_at(spans, offset)
+    for i in range(1, len(line) + 1):
+        here = _rt._styles_at(spans, offset + i) if i < len(line) else None
+        if here != current:
+            pieces.append(_rt._wrap(line[run_start:i], *current))
+            run_start, current = i, here
+    return "".join(pieces)
+
+
+_sw_rng = _random.Random(20261006)
+_sw_differ = []
+for _case in range(3000):
+    _sw_text = "".join(_sw_rng.choice("ab \n") for _ in range(_sw_rng.randint(0, 40)))
+    _sw_spans = []
+    for _ in range(_sw_rng.randint(0, 10)):
+        _a = _sw_rng.randint(0, len(_sw_text) + 2)
+        _style = _sw_rng.choice(("bold", "italic", "underline", "text_color",
+                                 "highlight", "font_size"))
+        _sp = {"start": _a, "end": _a + _sw_rng.randint(1, 15), "style": _style}
+        if _style in ("text_color", "highlight"):
+            _sp["value"] = _sw_rng.choice(("#d32f2f", "#c8f7c5"))
+        elif _style == "font_size":
+            _sp["value"] = 20
+        _sw_spans.append(_sp)
+    _norm = normalize_formatting(_sw_spans)
+    _off = 0
+    for _ln in _sw_text.split("\n"):
+        if _rt._line_html(_ln, _norm, _off) != _line_html_char_by_char(_ln, _norm, _off):
+            _sw_differ.append((_sw_text, _sw_spans))
+            break
+        _off += len(_ln) + 1
+check(f"the sweep writes the HTML asking every character wrote, on 3,000 "
+      f"random notes ({len(_sw_differ)} differ)", not _sw_differ)
+
+_sw_work = [0]
+_sw_real = _rt._styles_at
+
+
+def _sw_counting(spans, index):
+    _sw_work[0] += len(spans) + 1
+    return _sw_real(spans, index)
+
+
+_rt._styles_at = _sw_counting
+try:
+    _sw_lines = ["plain words then a styled one here %d" % i for i in range(2000)]
+    _sw_body = chr(10).join(_sw_lines)
+    _sw_bold, _at = [], 0
+    for _ln in _sw_lines:
+        _k = _ln.index("styled")
+        _sw_bold.append({"start": _at + _k, "end": _at + _k + 6, "style": "bold"})
+        _at += len(_ln) + 1
+    note_to_html(_sw_body, _sw_bold, [])
+finally:
+    _rt._styles_at = _sw_real
+# Asked at every character against every span this was about 160 million;
+# measured as work, so neither a slow machine nor a fast one decides it.
+check(f"copying 2,000 lines with a bold word each asks in step with the "
+      f"styles, not with characters times styles ({_sw_work[0]} asked)",
+      _sw_work[0] <= 20 * len(_sw_bold))
+
 # An EMPTY highlighted cell: its colour rides the padding between its pipes,
 # and the td wears it -- it used to leave without any colour at all.
 _eh_body = "| h1 | h2 |" + chr(10) + "| --- | --- |" + chr(10) + "| aa |    |"

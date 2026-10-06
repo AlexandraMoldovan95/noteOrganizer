@@ -2388,9 +2388,31 @@ _bulk_shown = sum(1 for t in find_all_labels(app._history_rows) if 'Bulk' in t)
 _more_btn = find_widget(app._history_rows, tk.Button, 'Show more')
 check('long listings render a page plus Show more',
       _bulk_shown == 50 and _more_btn is not None)
+
+
+def _bulk_labels():
+    out, todo = [], [app._history_rows]
+    while todo:
+        w = todo.pop(0)
+        for c in w.winfo_children():
+            if isinstance(c, tk.Label) and 'Bulk' in str(c.cget('text')):
+                out.append(c)
+            todo.append(c)
+    return out
+
+
+_bulk_first = _bulk_labels()
 _more_btn.invoke(); app.update()
 _bulk_shown = sum(1 for t in find_all_labels(app._history_rows) if 'Bulk' in t)
 check('Show more brings the rest', _bulk_shown == 60)
+# ...under the rows already drawn, which stay the same rows: drawing every
+# row again flickered and grew with every page (field pass).
+_bulk_after = _bulk_labels()
+check('...added under the rows already there, not all drawn again',
+      len(_bulk_first) == 50 and all(w.winfo_exists() for w in _bulk_first)
+      and set(_bulk_first) <= set(_bulk_after)
+      and bool(_bulk_after[-1].bind('<MouseWheel>'))
+      and find_widget(app._history_rows, tk.Button, 'Show more') is None)
 app._hide_calendar_history(); app.update()
 check('leaving History restores the grid',
       app.cal_grid_frame.winfo_ismapped() and not app._history_visible)

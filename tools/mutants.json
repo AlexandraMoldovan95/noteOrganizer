@@ -595,5 +595,201 @@
     "must_fail": ["a text cell keeps its words when an emoji comes"],
     "suites": ["qa1"],
     "expect": "killed"
+  },
+  {
+    "id": "Q01",
+    "about": "a renumber moves the view to the top and draws every table again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        b.mark_gravity(\"insert\", \"left\")",
+        "replace": "        b.mark_gravity(\"insert\", \"left\")\n        b.yview_moveto(0)\n        self._render_table_grids()"
+      }
+    ],
+    "must_fail": ["Enter in a numbered list keeps the view where it was", "...and leaves the drawn table standing, not drawn again"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "Q02",
+    "about": "a renumbered marker's new digits go in without the line's tags",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                b.insert(at, new[p:len(new) - s], tags)",
+        "replace": "                b.insert(at, new[p:len(new) - s])"
+      }
+    ],
+    "must_fail": ["Tab demotes the item the cursor is in", "Enter starts the next item at the same depth"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "Q03",
+    "about": "a caret at an item's start rides past its renumbered marker",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        b.mark_gravity(\"insert\", \"left\")",
+        "replace": "        b.mark_gravity(\"insert\", \"right\")"
+      }
+    ],
+    "must_fail": ["indenting an item keeps the caret at its start"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "Q04",
+    "about": "an emoji lands after a field's grey hint again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                getattr(text_widget, \"clear_placeholder\", lambda: None)()\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["an emoji in an empty field takes its hint's place"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "Q05",
+    "about": "a click on empty space leaves the caret in its box",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if held is not None and held.winfo_class() in self._TYPING_CLASSES:\n            self.focus_set()",
+        "replace": "        if held is not None and held.winfo_class() in self._TYPING_CLASSES:\n            pass"
+      }
+    ],
+    "must_fail": ["a click beside the field, on no box at all, finishes with it", "a click on empty space releases the caret from any box"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "Q06",
+    "about": "a click on a popup's blank takes the keyboard out of the popup",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if top is not self or w.winfo_class() not in self._EMPTY_CLICK_CLASSES:",
+        "replace": "            if w.winfo_class() not in self._EMPTY_CLICK_CLASSES:"
+      }
+    ],
+    "must_fail": ["a click on empty space releases the caret from any box"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "Q07",
+    "about": "a click on a label that does something also takes the caret away",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            for tag in w.bindtags():",
+        "replace": "            for tag in ():"
+      }
+    ],
+    "must_fail": ["a click on empty space releases the caret from any box"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "Q08",
+    "about": "the HTML asks about styles at every character again",
+    "edits": [
+      {
+        "file": "noteorganizer/core/richtext.py",
+        "find": "    for i in points[1:]:",
+        "replace": "    for i in range(1, len(line) + 1):"
+      }
+    ],
+    "must_fail": ["copying 2,000 lines with a bold word each asks in step with the styles"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
+  },
+  {
+    "id": "Q09",
+    "about": "every line is checked against the whole note's styles again",
+    "edits": [
+      {
+        "file": "noteorganizer/core/richtext.py",
+        "find": "        n = max(0, bisect.bisect_right(starts, span[\"start\"]) - 1)\n        while n < len(lines) and starts[n] < span[\"end\"]:",
+        "replace": "        n = 0\n        while n < len(lines):"
+      }
+    ],
+    "must_fail": ["copying 2,000 lines with a bold word each asks in step with the styles"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
+  },
+  {
+    "id": "Q10",
+    "about": "Show more in the Trash draws every row again",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "            draw_rows(ordered_trash(), first)",
+        "replace": "            redraw()"
+      }
+    ],
+    "must_fail": ["...under the rows already drawn, which stay the same rows"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "Q11",
+    "about": "Show more in Share draws every box again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            render_checkboxes(first)",
+        "replace": "            for w in inner.winfo_children():\n                w.destroy()\n            rendered[\"ids\"] = []\n            render_checkboxes()"
+      }
+    ],
+    "must_fail": ["Show more in Share adds the rest under the boxes already drawn"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "Q12",
+    "about": "Show more in Share leaves the new boxes deaf to the wheel",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            for w in ([inner] if first == 0 else made):",
+        "replace": "            for w in ([inner] if first == 0 else []):"
+      }
+    ],
+    "must_fail": ["Show more in Share adds the rest under the boxes already drawn"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "Q13",
+    "about": "Show more in the calendar History draws every row again",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/calendar_view.py",
+        "find": "        self._history_draw_rows(self._history_entries_now(), first)",
+        "replace": "        self._render_calendar_history()"
+      }
+    ],
+    "must_fail": ["...added under the rows already there, not all drawn again"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "Q14",
+    "about": "the History's new rows are left deaf to the wheel",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/calendar_view.py",
+        "find": "            if row not in before:",
+        "replace": "            if row not in before and first == 0:"
+      }
+    ],
+    "must_fail": ["...added under the rows already there, not all drawn again"],
+    "suites": ["qa7"],
+    "expect": "killed"
   }
 ]

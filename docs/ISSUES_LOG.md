@@ -152,6 +152,7 @@ is in the table below as well.
 | [The character only the drawn tables had](#the-character-only-the-drawn-tables-had) | An offset belongs to the space it was counted in: convert at every crossing, and compare in the space both sides share. | 0.83.335 |
 | [The tick that took the colour of its words](#the-tick-that-took-the-colour-of-its-words) | A rule written as "always" is a measurement nobody made; judge a control by what it draws, on every theme. | — |
 | [The copy that wrote its own table](#the-copy-that-wrote-its-own-table) | A second writer of the same thing starts as a copy and ends as a subset; when one writer exists, call it. | — |
+| [The list that rewrote the whole note](#the-list-that-rewrote-the-whole-note) | Write only what changed: a rewrite of everything moves everything that hangs off the text — the view, the tables, the caret. | — |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -4483,6 +4484,29 @@ same words copied from elsewhere bring nothing of ours.
 
 **Takeaway:** a second writer of the same thing starts out as a copy and ends as a subset —
 every feature the first one learns, the second never hears of. When one writer exists, call it.
+
+### The list that rewrote the whole note
+
+*(found in the owner's first full manual pass, on the 0.84.341 `.exe`)*
+
+**Symptom:** Enter on a numbered line threw the note's scroll back to the top. The new item and
+the numbers were right; the place in the note was gone, and with tables in the note it went
+further. Backspace, Tab and the list buttons did the same whenever a number changed.
+
+**Root cause:** keeping a numbered list reading 1, 2, 3 changes only the markers, each on its own
+line — but the renumber deleted the whole body and inserted it again, re-laying every style from
+a saved copy. Tk moves the view to the first line when everything above it is deleted, and every
+drawn table went with the text, so each Enter tore every table down and drew it again. The
+caret was put back by hand; nothing put back the view.
+
+**Fix:** `_renumber_lists` writes only the characters of each marker that changed, carrying the
+line's own tags onto the new digits. Every style, the view and every drawn table stay where they
+were, and a caret at an item's start stays there (the caret's mark is left-leaning for the
+edit). Enter in a list now keeps its new line in sight, as Tk's own Enter does.
+
+**Takeaway:** write only what changed. A rewrite of everything moves everything that hangs off
+the text — the view, the tables, the caret — and each of those then needs its own repair, one of
+which will be forgotten.
 
 ## Smaller lessons, moved out of the code
 

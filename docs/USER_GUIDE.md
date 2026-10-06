@@ -137,6 +137,9 @@ it appears everywhere: on the note's card, in the calendar's History, in the Tra
 figures, or none at all, is read only then: while you are still typing, `17.10.20` on its way to
 2026 is never saved as 2020.
 
+Every box in the app lets go the same way: a click on an empty part of the window takes the
+cursor out of whatever box held it, as other programs do.
+
 Whatever you typed, the notes file keeps the date as `2026-10-17`, as it always has. The
 **Ends: On date** box of a repeating note reads dates the same way.
 

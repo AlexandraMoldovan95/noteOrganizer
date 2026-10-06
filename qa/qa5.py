@@ -730,15 +730,19 @@ _w_inside = app.date_entry.get()
 _qa_click(app.date_entry.master)
 app.update()
 _w_clicked = app.date_entry.get()
-_w_kept = app.focus_get() is app.date_entry
+# ...and the caret leaves with it: a click on empty space takes the keyboard
+# out of the box, app-wide (field pass) -- Tk on its own moves it nowhere.
+_w_released = app.focus_get() is not app.date_entry
 app._autosave_now(); app.update()
 check(f'a click beside the field, on no box at all, finishes with it: the '
-      f'date is completed and saved ({_w_focused}; {_w_clicked!r}; '
+      f'date is completed and saved, and the caret leaves the field '
+      f'({_w_focused}; {_w_released}; {_w_clicked!r}; '
       f'{app.find_note(1)["date"]})',
-      _w_focused and _w_kept and _w_clicked == '16.11.%d' % _W_YEAR
+      _w_focused and _w_released and _w_clicked == '16.11.%d' % _W_YEAR
       and app.find_note(1)['date'] == '%d-11-16' % _W_YEAR)
 check(f'...while a click in the field itself finishes nothing ({_w_inside!r})',
       _w_inside == '16.11')
+_w_focus(app.date_entry)
 _w_type('15.11.26')
 app.date_entry.event_generate('<Return>')
 app.update()
@@ -759,6 +763,43 @@ app._cancel_pending_autosave()
 check(f'...and once the keyboard has left the field, a click elsewhere '
       f'leaves it alone ({_w_back}; {_w_untouched!r})',
       _w_back and _w_untouched == '14.11')
+
+# Every box, not only the date: a click on empty space takes the caret out
+# (field pass -- the calendar History search kept blinking through every
+# click around it). What does something with a click keeps its own way, and
+# a popup's blank keeps the popup's box, or the popup would close.
+_er_seen = {}
+for _er_name, _er_box in (('title', app.title_entry), ('body', app.body_text)):
+    _er_ok = _w_focus(_er_box)
+    _qa_click(app.date_entry.master)
+    app.update()
+    _er_seen[_er_name] = _er_ok and app.focus_get() is not _er_box
+_er_hits = []
+_er_link = tk.Label(app, text='a label that does something')
+_er_link.bind('<Button-1>', lambda e: _er_hits.append(1))
+_er_link.place(x=4, y=4)
+app.update()
+_w_focus(app.title_entry)
+_qa_click(_er_link)
+app.update()
+_er_seen['clickable label'] = bool(_er_hits) and app.focus_get() is app.title_entry
+_er_link.destroy()
+_er_pop = tk.Toplevel(app)
+_er_pop_box = tk.Entry(_er_pop)
+_er_pop_box.pack()
+_er_pop_blank = tk.Frame(_er_pop, width=80, height=40)
+_er_pop_blank.pack()
+app.update()
+_w_focus(_er_pop_box)
+_qa_click(_er_pop_blank)
+app.update()
+_er_seen['popup blank'] = app.focus_get() is _er_pop_box
+_er_pop.destroy()
+app.update()
+check(f'a click on empty space releases the caret from any box, and leaves '
+      f'clickable things and popups their own ({_er_seen})',
+      _er_seen == {'title': True, 'body': True, 'clickable label': True,
+                   'popup blank': True})
 
 _w_note(date='2026-10-17')
 _w_type('16.11.26')
