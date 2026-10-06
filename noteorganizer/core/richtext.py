@@ -494,9 +494,15 @@ def _styles_at(spans, index):
                 plain.update(("bold", "italic"))
             elif style in _TAG_FOR:
                 plain.add(style)
-            elif style in ("text_color", "highlight"):
+            elif style in _CSS_FOR:
                 colours[style] = span["value"]
     return frozenset(plain), tuple(sorted(colours.items()))
+
+
+# The valued styles, as the CSS another program reads. Size and typeface go
+# out so Word keeps them; html_to_note drops them on the way IN by design.
+_CSS_FOR = {"text_color": "color:{};", "highlight": "background-color:{};",
+            "font_size": "font-size:{}pt;", "font_family": "font-family:'{}';"}
 
 
 def _wrap(chunk, plain, colours):
@@ -504,8 +510,10 @@ def _wrap(chunk, plain, colours):
     out = escape(chunk)
     for style in sorted(plain):
         out = f"<{_TAG_FOR[style]}>{out}</{_TAG_FOR[style]}>"
-    css = "".join(
-        f"color:{v};" if k == "text_color" else f"background-color:{v};"
+    # A typeface's name sits inside quotes inside an attribute: only the
+    # characters a font name is made of may travel.
+    css = "".join(_CSS_FOR[k].format(
+        re.sub(r"[^\w .\-]", "", str(v)) if k == "font_family" else v)
         for k, v in colours)
     return f'<span style="{css}">{out}</span>' if css else out
 
@@ -545,6 +553,12 @@ def _cell_html(line, spans, offset, start, end):
     return "<br>".join(
         _line_html(value[a:b], spans, offset + start + a)
         for a, b in parts)
+
+
+def cell_html(value, spans):
+    """One cell's inner HTML from its own value and spans counted in it:
+    the copy of table cells writes a cell exactly as the export does."""
+    return _cell_html(value, spans, 0, 0, len(value))
 
 
 def html_document(title, body_html):
@@ -752,6 +766,12 @@ def note_to_html(text, formatting=None, paragraphs=None,
                 # spaces) would collapse with the whitespace and show as
                 # a sliver or nothing.
                 cell_a, cell_b = offset + start, offset + end
+                if cell_b == cell_a:
+                    # An empty cell's highlight rides its padding.
+                    pipes = tables.pipe_positions(line)
+                    if c + 1 < len(pipes):
+                        cell_a = offset + pipes[c] + 1
+                        cell_b = offset + pipes[c + 1]
                 if cell_b > cell_a:
                     for sp in spans:
                         if (sp["style"] == "highlight"

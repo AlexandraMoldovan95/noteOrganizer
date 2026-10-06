@@ -3598,6 +3598,55 @@ set_body('')
 # The toolbar has an emoji button, and it knows about open cells.
 check('the toolbar has an emoji button', hasattr(app, 'emoji_btn'))
 
+# An emoji put into a checkbox cell takes the box's place: beside it, the
+# cell stopped being a checkbox and showed "[ ]" (field pass). Both roads
+# in -- the cell's own menu item and the toolbar button.
+for _cbRoad in ('menu', 'toolbar'):
+    set_body('| h1 | h2 |' + chr(10) + '| --- | --- |' + chr(10)
+             + '| [ ] | x |')
+    app._render_table_grids()
+    app.update()
+    app._open_cell_editor(app._grid_at_line(1), 1, 0, select=False)
+    app.update()
+    if _cbRoad == 'menu':
+        app._show_emoji_picker(app._cell_editor['entry'])
+    else:
+        app._insert_emoji_from_toolbar()
+    app.update()
+    _cbChips = [l for l in _walk_widgets(app._mini_popup, tk.Label)
+                if str(l.cget('cursor')) == 'hand2'
+                and str(l.cget('text')).strip()]
+    _cbEmoji = str(_cbChips[0].cget('text')).strip() if _cbChips else '?'
+    if _cbChips:
+        _qa_click(_cbChips[0])
+        app.update()
+    app._dismiss_mini_popup()
+    app._commit_cell_editor()
+    app.update()
+    _cbVal = app._grid_at_line(1)['cells'][(1, 0)]['value']
+    check(f'an emoji replaces a checkbox, no brackets left ({_cbRoad}: '
+          f'{_cbVal!r})', _cbVal == _cbEmoji)
+    # And deleting it leaves an empty cell, never the old box.
+    app._open_cell_editor(app._grid_at_line(1), 1, 0)
+    app.update()
+    app._cell_editor['entry'].delete('1.0', 'end')
+    app._commit_cell_editor()
+    app.update()
+    _cbVal = app._grid_at_line(1)['cells'][(1, 0)]['value']
+    check(f'and deleting the emoji leaves the cell empty ({_cbRoad}: '
+          f'{_cbVal!r})', _cbVal == '')
+# A text cell is not a checkbox: an emoji goes in beside its words.
+set_body('| h1 | h2 |' + chr(10) + '| --- | --- |' + chr(10) + '| word | x |')
+app._render_table_grids()
+app.update()
+app._open_cell_editor(app._grid_at_line(1), 1, 0, select=False)
+app.update()
+app._emoji_takes_checkbox_place(app._cell_editor['entry'])
+check('a text cell keeps its words when an emoji comes',
+      app._cell_editor['entry'].get('1.0', 'end-1c') == 'word')
+app._commit_cell_editor()
+set_body('')
+
 # And outside a table Tab still types a tab, as it always did.
 clear_selection()
 set_body('ordinary prose')
@@ -7061,6 +7110,124 @@ check('a text-selection copy of a table carries inline borders too',
       _rF8 == 'break' and '<table' in _htmlF8
       and 'border:1px solid #999;' in _htmlF8)
 app.body_text.tag_remove('sel', '1.0', 'end')
+set_body('')
+
+# What a copy of cells carries (field pass): a coloured cell and a word's
+# bold, ink and size -- into Word, into a duplicated table below, and into
+# another table's cells. All three used to arrive as bare text.
+set_body('| h1 | h2 |' + chr(10) + '| --- | --- |' + chr(10)
+         + '| aa | big word |' + chr(10) + 'after')
+app._render_table_grids()
+app.update()
+app._grid_apply_style(app._grid_at_line(1), (1, 0, 1, 0), 'highlight',
+                      '#c8f7c5')
+app.update()
+_kS = app.body_text.get('3.0', '3.end').index('big')
+app.body_text.tag_add('bold', '3.%d' % _kS, '3.%d' % (_kS + 3))
+app.body_text.tag_add(
+    app._ensure_color_tag(app.body_text, 'text_color', '#d32f2f'),
+    '3.%d' % _kS, '3.%d' % (_kS + 3))
+app.body_text.tag_add(
+    app._ensure_font_tag(app.body_text, False, False, 20, 'Georgia'),
+    '3.%d' % (_kS + 4), '3.%d' % (_kS + 8))
+app._render_table_grids()
+app.update()
+_iS = app._grid_at_line(1)
+app._grid_select_range(_iS, (0, 0), (1, 1))
+_stub_clipboard(loopback=True)
+app._grid_copy_selection({'info': _iS, 'box': (0, 0, 1, 1)})
+_htmlS = _written.get('html') or ''
+check(f'copied cells leave for Word with their colour, bold, ink and size '
+      f'({_htmlS})',
+      'background-color:#c8f7c5;' in _htmlS and '<b>big</b>' in _htmlS
+      and 'color:#d32f2f;' in _htmlS and 'font-size:20pt;' in _htmlS)
+
+
+def _cell_recs_of(block_no):
+    _blk = core_tables.find_blocks(body())
+    if len(_blk) <= block_no:
+        return {}
+    a, z = _blk[block_no]
+    return app._grid_read_cell_styles(a + 1, z - a + 1)
+
+
+def _carried(recs):
+    _runs = (recs.get((1, 1)) or {}).get('runs', [])
+    return ((recs.get((1, 0)) or {}).get('paint_bg') == 'highlight_c8f7c5'
+            and ('bold', 0, 3) in _runs
+            and ('text_color_d32f2f', 0, 3) in _runs
+            and any(NO.parse_font_tag(t) and NO.parse_font_tag(t)[2] == 20
+                    and (a, z) == (4, 8) for t, a, z in _runs))
+
+
+app._grid_clear_selection()
+app.body_text.mark_set('insert', '4.end')
+app.update()
+app._on_body_paste()
+app.update()
+_recS = _cell_recs_of(1)
+check(f'a duplicated table keeps each cell\'s colour and its words\' styles '
+      f'({_recS})', _carried(_recS))
+# Into another table's cells: the copy lands at (1, 0) of a blank one.
+set_body('| p | q |' + chr(10) + '| --- | --- |' + chr(10) + '|   |   |'
+         + chr(10) + '|   |   |')
+app._render_table_grids()
+app.update()
+app._grid_paste_cells(app._grid_at_line(1), 1, 0)
+app.update()
+_recS = {(r - 1, c): v for (r, c), v in _cell_recs_of(0).items()}
+check(f'cells pasted into a table bring their colour and styles '
+      f'({_recS})', _carried(_recS))
+# A copy from elsewhere, landing in the same cells, brings none of ours.
+set_body('| p | q |' + chr(10) + '| --- | --- |' + chr(10) + '|   |   |'
+         + chr(10) + '|   |   |')
+app._render_table_grids()
+app.update()
+app.clipboard_clear()
+app.clipboard_append('h1\th2' + chr(10) + 'aa\tother words')
+app._grid_paste_cells(app._grid_at_line(1), 1, 0)
+app.update()
+_recS = _cell_recs_of(0)
+check('cells copied from elsewhere bring none of an older copy\'s styles',
+      not any(v['runs'] or v['paint_bg'] for v in _recS.values()))
+_stub_clipboard()
+set_body('')
+
+# A word's size and typeface travel between notes: the HTML carries them
+# out to Word, and a paste reads none back (a page's sizes stay behind),
+# so our own copy brings them from what it remembered.
+set_body('plain big end')
+app.body_text.tag_add(
+    app._ensure_font_tag(app.body_text, False, False, 20, 'Georgia'),
+    '1.6', '1.9')
+app.body_text.tag_add('sel', '1.0', '1.end')
+app.update()
+_stub_clipboard(loopback=True)
+app._copy_formatted()
+check(f'a sized word leaves with its size and typeface ({_written.get("html")})',
+      "font-size:20pt;" in (_written.get('html') or '')
+      and "font-family:'Georgia';" in (_written.get('html') or ''))
+set_body('')
+app._on_body_paste()
+app.update()
+_fS = [s for s in app._extract_formatting(app.body_text)
+       if s['style'] in ('font_size', 'font_family')]
+check(f'pasted into a note, it keeps both ({_fS})',
+      body() == 'plain big end'
+      and {(s['style'], s['value'], s['start'], s['end']) for s in _fS}
+      == {('font_size', 20, 6, 9), ('font_family', 'Georgia', 6, 9)})
+# The same words from Word bring no size: the remembered copy is ours only.
+set_body('')
+_stub_clipboard(html='<p>plain <span style="font-size:20pt;'
+                     'font-family:Georgia">big</span> end</p>',
+                text='plain big end')
+app._on_body_paste()
+app.update()
+check('the same words pasted from elsewhere bring no size or typeface',
+      body() == 'plain big end'
+      and not [s for s in app._extract_formatting(app.body_text)
+               if s['style'] in ('font_size', 'font_family')])
+_stub_clipboard()
 set_body('')
 
 # The word count counts what the PERSON wrote, not the plumbing: every

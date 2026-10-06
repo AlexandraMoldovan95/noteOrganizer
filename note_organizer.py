@@ -197,9 +197,10 @@ from noteorganizer.core import clipboard
 from noteorganizer.core import tables as core_tables
 from noteorganizer.core.tables import is_table_row, with_caret_line
 from noteorganizer.core.richtext import (html_to_note, note_to_html,
-                                        html_document, reflow_wrapped,
+                                        html_document, reflow_wrapped, cell_html,
                                         MAX_PASTE_CHARS, MAX_PASTE_SPANS)
 from noteorganizer.core.formatting import (
+    tag_to_spans,
     normalize_paragraphs,
     parse_list_marker,
     strip_list_markers,
@@ -4865,7 +4866,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 for n in range(first, first + nrows)]
 
     def _grid_replace_block(self, first, old_nrows, rows, aligns=None,
-                            sep_cols=None, source=None):
+                            sep_cols=None, source=None, extra=None):
         """Wholesale rewrite for the structural ops that reshape columns.
 
         The text is rewritten whole, but no cell the operation did not
@@ -4878,12 +4879,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         old one it came from, for the ops that move cells (an inserted or
         deleted row or column, copies appended at an edge); the identity
         otherwise. See _grid_lay_cell_styles for what a changed cell keeps.
+        *extra* gives styles for new cells that came from elsewhere -- cells
+        pasted in from our own copy -- keyed by their new (row, column).
         """
         b = self.body_text
         # The rewrite deletes the tagged text, and the table's position on
         # the page would go with it -- read it first, put it back after.
         table_align = self._grid_table_align_of(first)
         carried = self._grid_read_cell_styles(first, old_nrows)
+        carried.update(extra or {})
         b.delete(f"{first}.0", f"{first + old_nrows - 1}.end")
         lines = core_tables.format_table(rows, aligns)
         if sep_cols is not None and lines:
@@ -5444,11 +5448,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     @_undo_atom
     def _grid_add_caption(self, info):
-        """A system-managed caption under the table: a centred, numbered
-        label line plus a source line -- ordinary body text after that,
-        editable like anything else. Exists so nobody has to hand-build
-        a caption above or below a table and fight its alignment (the
-        field request: "the system should insert an editable label")."""
+        """A system-managed caption under the table: a numbered label line
+        plus a source line, both placed like the table -- ordinary body
+        text after that, editable like anything else. Exists so nobody has
+        to hand-build a caption above or below a table and fight its
+        alignment (the field request: "the system should insert an editable
+        label")."""
         first = self._grid_first_line(info)
         if first is None:
             return
@@ -5539,10 +5544,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         tsv = "\n".join("\t".join(row) for row in matrix)
         self._grid_cell_clip_text = tsv
         self._grid_cell_clip_widths = None
+        self._grid_cell_clip_styles = {}
+        self._grid_cell_clip_aligns = None
         info, (r0, c0, r1, c1) = sel["info"], sel["box"]
         first = self._grid_first_line(info)
         if first is not None:
-            _rows, _aligns, sep_cols, _sep_at = self._grid_block_parts(
+            _rows, row_aligns, sep_cols, _sep_at = self._grid_block_parts(
                 first, info["nrows"])
             if sep_cols is not None:
                 self._grid_cell_clip_widths = [
@@ -5552,13 +5559,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # The table's place on the page travels with the cells
             # too, so a duplicated centred table comes back centred.
             self._grid_cell_clip_place = self._grid_table_align_of(first)
+            # And each cell's own styles and alignment, so a pasted copy --
+            # in the app or in Word -- is the cells as they were drawn.
+            self._grid_cell_clip_styles = {
+                (r - r0, c - c0): rec for (r, c), rec in
+                self._grid_read_cell_styles(first, info["nrows"]).items()
+                if r0 <= r <= r1 and c0 <= c <= c1}
+            self._grid_cell_clip_aligns = [
+                [row_aligns[r][c] if c < len(row_aligns[r])
+                 else core_tables.ALIGN_LEFT for c in range(c0, c1 + 1)]
+                for r in range(r0, min(r1 + 1, len(row_aligns)))]
         # The HTML mirror of the copy follows the file export's rules:
-        # the table's first row leaves as <th>, merges leave as real
-        # colspan/rowspan cells instead of literal markers, hidden
-        # columns stay hidden, and a checkbox leaves as its glyph. The
-        # TSV keeps every cell verbatim -- it is what a spreadsheet
-        # reads AND what pasting back into the app rebuilds from, so
-        # fidelity lives there.
+        # the first row leaves as <th>, merges as colspan/rowspan, hidden
+        # columns stay hidden. The TSV keeps every value verbatim for a
+        # spreadsheet and for a paste back here, which lays the styles
+        # remembered above back on the cells.
         m_spans, m_covered = core_tables.merge_map(matrix)
         hidden = {i for i, col in enumerate(self._grid_cell_clip_widths or [])
                   if col.get("hidden")}
@@ -5572,19 +5587,35 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 cs -= len([h for h in hidden if ci < h < ci + cs])
                 attr = ((f' colspan="{cs}"' if cs > 1 else "")
                         + (f' rowspan="{rs}"' if rs > 1 else ""))
+                # The cell as the file export writes it: its styles inside,
+                # its colour on the cell, its alignment; a checkbox leaves
+                # as its glyph, centred, in its colour.
+                rec = self._grid_cell_clip_styles.get((ri, ci))
+                spans = [s for tag, a, z in (rec["runs"] if rec else ())
+                         for s in tag_to_spans(tag, a, z)]
                 state = core_tables.checkbox_state(v)
+                css = ""
                 if state is not None:
                     inner = "☑" if state else "☐"
+                    tint = next((s["value"] for s in spans
+                                 if s["style"] == "text_color"), None)
+                    if tint:
+                        inner = f'<span style="color:{tint};">{inner}</span>'
+                    css += "text-align:center;"
                 else:
-                    inner = escape(v).replace(
-                        escape(core_tables.LINE_BREAK), "<br>")
+                    inner = (cell_html(rec["value"], spans) if rec else
+                             escape(v).replace(escape(core_tables.LINE_BREAK), "<br>"))
+                    aligns = self._grid_cell_clip_aligns or []
+                    align = (aligns[ri][ci] if ri < len(aligns)
+                             and ci < len(aligns[ri]) else core_tables.ALIGN_LEFT)
+                    if align != core_tables.ALIGN_LEFT:
+                        css += f"text-align:{align};"
+                if rec and rec["paint_bg"]:
+                    css += f"background-color:#{rec['paint_bg'][len('highlight_'):]};"
                 tag = "th" if r0 + ri == 0 else "td"
                 # Without inline borders Word paints nothing: the pasted
                 # table was a selectable phantom (round-8 field report).
-                # A checkbox rides centred, the way the app draws it.
-                css = "border:1px solid #999;padding:4px 10px;"
-                if state is not None:
-                    css = "text-align:center;" + css
+                css += "border:1px solid #999;padding:4px 10px;"
                 cells.append(f'<{tag}{attr} style="{css}">{inner}</{tag}>')
             parts.append("<tr>" + "".join(cells) + "</tr>")
         html_rows = "".join(parts)
@@ -5788,6 +5819,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             remembered = "\n".join("\t".join(row) for row in matrix)
             if raw != remembered:
                 matrix = None
+        own = bool(matrix)          # still our own copy, styles and all
         if not matrix:
             # Cells copied from a browser: the plain text stacks every
             # cell on its own line ("A\nB" for two side-by-side cells),
@@ -5844,17 +5876,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         while r + len(matrix) > len(rows):
             rows.append([""] * width)
             aligns.append([core_tables.ALIGN_LEFT] * width)
+        clip_styles = getattr(self, "_grid_cell_clip_styles", None) if own else None
+        clip_aligns = (getattr(self, "_grid_cell_clip_aligns", None) or []) if own else []
+        extra = {}
         for dr, source_row in enumerate(matrix):
             for dc, value in enumerate(source_row):
                 if c + dc < len(rows[r + dr]):
                     rows[r + dr][c + dc] = value.replace(
                         core_tables.CELL, "/").strip()
                     if c + dc < len(aligns[r + dr]):
-                        aligns[r + dr][c + dc] = core_tables.ALIGN_LEFT
+                        aligns[r + dr][c + dc] = (
+                            clip_aligns[dr][dc] if dr < len(clip_aligns)
+                            and dc < len(clip_aligns[dr])
+                            else core_tables.ALIGN_LEFT)
+                    if clip_styles and (dr, dc) in clip_styles:
+                        extra[(r + dr, c + dc)] = clip_styles[(dr, dc)]
         # The block may have grown; rewrite against its original height and
         # let format_table emit the extra rows, the separator restored
-        # after the header.
-        self._grid_replace_block(first, nrows, rows, aligns, sep_cols)
+        # after the header. Our own copy brings its cells' styles along.
+        self._grid_replace_block(first, nrows, rows, aligns, sep_cols,
+                                 extra=extra)
         self._grid_after_op(first)
 
     def _grid_copy_cell(self, info, r, c):
@@ -5863,8 +5904,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         # Remembered exactly like a multi-cell copy: pasting cells used to
         # prefer whatever matrix an OLDER copy had remembered, so a fresh
-        # single-cell copy pasted stale content.
+        # single-cell copy pasted stale content -- and nothing of an older
+        # copy's styles may ride along with it.
         self._grid_cell_clip = [[cell["value"]]]
+        self._grid_cell_clip_styles = {}
+        self._grid_cell_clip_aligns = None
         try:
             self.clipboard_clear()
             self.clipboard_append(cell["value"])
@@ -7013,9 +7057,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Our own copy remembers the source columns' set widths -- a
         # duplicated table comes back at the SAME widths, not shrunk
         # to the default. Text from elsewhere gets the plain rule.
+        own = raw == getattr(self, "_grid_cell_clip_text", None)
         clip_widths = None
-        if (raw == getattr(self, "_grid_cell_clip_text", None)
-                and getattr(self, "_grid_cell_clip_widths", None)):
+        if own and getattr(self, "_grid_cell_clip_widths", None):
             clip_widths = list(self._grid_cell_clip_widths)
             while len(clip_widths) < ncols:
                 clip_widths.append({"width": None, "align": None,
@@ -7029,12 +7073,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # beside them is spaces.
         separator = (core_tables.make_separator(clip_widths) if clip_widths
                      else ["---"] * ncols)
+        # Our own copy keeps each cell's alignment; anything else is left.
+        clip_aligns = (getattr(self, "_grid_cell_clip_aligns", None) or []) if own else []
+        aligns = [(list(clip_aligns[i]) if i < len(clip_aligns) else [])
+                  + [core_tables.ALIGN_LEFT] * ncols for i in range(len(rows))]
+        aligns = [row[:ncols] for row in aligns]
         rows = [rows[0], separator] + rows[1:]
-        aligns = [[core_tables.ALIGN_LEFT] * ncols for _ in rows]
+        aligns = [aligns[0], [core_tables.ALIGN_LEFT] * ncols] + aligns[1:]
         lines = core_tables.format_table(rows, aligns)
-        clip_place = None
-        if raw == getattr(self, "_grid_cell_clip_text", None):
-            clip_place = getattr(self, "_grid_cell_clip_place", None)
+        clip_place = getattr(self, "_grid_cell_clip_place", None) if own else None
         # The grids come down before anything is written, selection or not:
         # torn down by the drawing at the end, inside this unit, they split
         # it -- the paste one step, where the windows sit another on top --
@@ -7066,8 +7113,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 prefix = "\n"
         ins_line = int(b.index("insert").split(".")[0])
         b.insert("insert lineend", prefix + "\n".join(lines) + "\n")
+        first_new = ins_line + (1 if prefix else 0)
+        if own and getattr(self, "_grid_cell_clip_styles", None):
+            # The copied cells' own styles, on the same cells again.
+            self._grid_lay_cell_styles(first_new, lines, self._grid_cell_clip_styles)
         if clip_place in ("center", "right"):
-            first_new = ins_line + (1 if prefix else 0)
             for n in range(first_new, first_new + len(lines)):
                 b.tag_add(f"align_{clip_place}", f"{n}.0", f"{n}.end")
         kept = self._tidy_table_paste_left()
@@ -7170,6 +7220,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return False
         cut = {}
         text, spans, paragraphs = html_to_note(markup, report=cut)
+        mine = getattr(self, "_formatted_clip", None)
+        own = (bool(mine) and not any(cut.values())
+               and markup == mine[3])
+        if own:
+            # Our own copy, from a note: everything it carried comes back,
+            # its sizes and typefaces included.
+            text = mine[0]
+            spans = [dict(s) for s in mine[1]]
+            paragraphs = [dict(p) for p in mine[2]]
         if not text:
             return False
         # Only when the source offered no formatting of its own, which is the
@@ -7178,7 +7237,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # same text -- so a source that did send formatting keeps its line
         # breaks rather than have its bold slide out of place. Such a source
         # sent real block tags anyway, which means real paragraphs already.
-        if not spans and not paragraphs:
+        if not spans and not paragraphs and not own:
             text = reflow_wrapped(text)
 
         # The grids down before anything is written (see
@@ -7297,9 +7356,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # export's stylesheet, and Word shows a bare HTML table with no
         # borders at all -- a selectable phantom (the round-8 field
         # report, with screenshots of the invisible table).
-        if not clipboard.write(text, note_to_html(text, clipped, paragraphs,
-                                                  inline_tables=True)):
+        html = note_to_html(text, clipped, paragraphs, inline_tables=True)
+        if not clipboard.write(text, html):
             return None                      # nothing written; Tk's copy runs
+        # Kept for a paste into another note, which reads no size or font
+        # back out of HTML (a web page's are left behind by design).
+        self._formatted_clip = (text, clipped, paragraphs, html)
         return "break"
 
     def _refresh_list_buttons(self):
@@ -9160,6 +9222,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         ("Nature", ["☀️", "🌙", "⛅", "🌧️", "🌈", "🌸", "🍀", "🌳", "☕", "🍕"], "#B9FBC0"),
     ]
 
+    def _emoji_takes_checkbox_place(self, text_widget):
+        """An emoji put into a checkbox cell replaces the box: left beside
+        it, the cell stopped being a checkbox and showed its raw brackets.
+        Deleting the emoji then leaves an empty cell, never "[ ]"."""
+        editor = getattr(self, "_cell_editor", None)
+        if (editor and text_widget is editor["entry"]
+                and core_tables.checkbox_state(
+                    text_widget.get("1.0", "end-1c")) is not None):
+            text_widget.delete("1.0", "end")
+
     def _show_emoji_picker(self, text_widget, anchor=None):
         """Small themed popup for inserting an emoji at the current cursor
         position of whichever field opened it (title, body, comments, etc.).
@@ -9226,6 +9298,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     has_focus = False
                 if not has_focus:
                     text_widget.focus_set()
+                self._emoji_takes_checkbox_place(text_widget)
                 if isinstance(text_widget, tk.Text):
                     at = text_widget.index(tk.INSERT)
                     text_widget.insert(tk.INSERT, emoji)
@@ -19306,10 +19379,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
             title = (note.get("title") or "").strip() or "(untitled)"
             line("Title", title[:60])
-            body = (note.get("body") or "").strip()
+            # The words without the tables, and a line saying the tables
+            # are there -- the calendar's rule; raw, a table read as bars.
+            raw = note.get("body")
+            body, tables_here = core_tables.preview_text(
+                raw if isinstance(raw, str) else "")
+            body = body.strip()
             if body:
                 preview = body[:120] + ("…" if len(body) > 120 else "")
                 line("Note", preview)
+            if tables_here:
+                line("Holds", "▦ 1 table" if tables_here == 1
+                     else "▦ %d tables" % tables_here)
             comments = (note.get("comments") or "").strip()
             if comments:
                 line("Comments", comments[:80] + ("…" if len(comments) > 80 else ""))

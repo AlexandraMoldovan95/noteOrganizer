@@ -231,7 +231,8 @@ bold, the colours and the lists come with it.
   either, even when the thing you copied from puts bullet characters into its own plain-text
   version. There is a **Paste without formatting** entry on the right-click menu too.
 - Copying works the same way outwards: select part of a note, copy it, and paste it into an email
-  or a document, and it arrives still formatted. Copying between two notes keeps everything.
+  or a document, and it arrives still formatted, its font sizes and typefaces included. Copying
+  between two notes keeps everything.
 - A formatted paste keeps up to **100,000 characters** and **2,000 styled pieces** (a bold word,
   a coloured line). Past either, a message says what was left out. For the whole of a very long
   text, press **Ctrl+Z** and paste it again with **Ctrl+Shift+V**, which has no limit — it comes
@@ -288,11 +289,16 @@ A table works the way a spreadsheet has taught your hands to expect:
 - Copying works with the outside world in both directions: cells copied here paste into Excel as
   cells and into Word as a real table with visible borders, and a table copied from Excel or a web
   page lands here as a real table.
+- Copied cells keep how they look — highlights, coloured and bold words, sizes, each cell's
+  alignment — in Word, in a duplicate pasted under the table, and pasted into another table's
+  cells.
 - **Right-click** a cell for everything else — the everyday actions sit on top, and **Align cell /
   Rows / Columns / Merge / Table** each hold their group one hover away.
-- Under **Table** lives **Add caption below…**: a centred, auto-numbered "Table N: description"
-  label (typing replaces the selected placeholder) plus a "Source:" line for links and sources —
-  plain, editable body text ever after, so the wording is yours to change.
+- Under **Table** lives **Add caption below…**: an auto-numbered "Table N: description" label
+  (typing replaces the selected placeholder) plus a "Source:" line for links and sources, both
+  placed like the table — left under a left table, centred under a centred one. They are plain,
+  editable body text ever after, so the wording is yours to change, and moving the table later
+  leaves them where they are.
 - The full set: merge the selected cells into one (their texts join), split a merge back apart,
   insert or delete rows and columns, duplicate whole columns to the end of the table (and whole
   rows to the bottom), insert a **checkbox** (with its own colour palette) or an emoji, and
@@ -302,7 +308,8 @@ A table works the way a spreadsheet has taught your hands to expect:
   syntax (`[ ]` / `[x]`), so it survives share codes as readable text; the exported page draws it
   as a real box (☑ / ☐), and importing that page back turns the boxes into clickable checkboxes
   again. To turn that cell back into words, right-click it and choose **Edit cell as text**,
-  delete the marker, and type.
+  delete the marker, and type. An emoji put into a checkbox cell takes the box's place; delete
+  the emoji and the cell is simply empty, ready for a new checkbox.
 - **Drag the line between two columns** to make a column wider or narrower; **double-click** the
   line to snap the column to its content. With several columns selected, **Autofit column
   width(s)** in the right-click menu snaps them all at once. **Drag the line between two rows** up
@@ -563,6 +570,7 @@ deliberately the quieter of the two, because the sweeping button beside it is th
 Two deleted notes with the same title used to be impossible to tell apart, which made restoring
 both the only safe choice. Hovering a row now floats a small preview of that note's contents
 beside it — it appears on hover and goes when you move away, nothing to click and nothing to close.
+A table in the note is named there (**▦ 1 table**) rather than drawn as rows of bars.
 
 ![Trash panel](screenshots/trash-panel.png)
 

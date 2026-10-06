@@ -106,6 +106,22 @@ How the numbers themselves are counted is the
   opened again, and with nothing selected it only waited for the next letter typed. It now
   colours the whole cell — a cell's highlight is a whole-cell wash — the moment it is given,
   selected or not, and the drawn cell keeps it when the editor closes, an empty cell included.
+- **Previews name a table instead of drawing its pipes.** Hovering a note in Settings →
+  Duplicates or in the Trash (Settings → Recently deleted) showed its table as rows of bars; it
+  now shows the words and a "▦ 1 table" line, as the calendar does. A note card no longer shows
+  a row typed past its last cell as prose either.
+- **Copied table cells keep their look inside the app.** Cells pasted back as a second table,
+  or into another table's cells, came as bare values: highlights, coloured, bold and sized
+  words and each cell's alignment stayed behind. Our own copy now brings them all.
+- **Copied table cells keep their look in Word.** They arrived as a bordered table with every
+  colour gone. The copy now writes each cell the way the export does, its highlight, styled
+  words and alignment included; an exported empty highlighted cell keeps its colour too.
+- **Sizes and typefaces travel.** A word set in another size or font lost both when copied into
+  Word, and when copied into another note — though the guide promised that copying between notes
+  keeps everything. Both now come along; a size or font from a web page still stays behind.
+- **An emoji takes a checkbox's place.** Put into a checkbox cell, it went in beside the box,
+  which turned the cell into text and showed the raw "[ ]". The emoji now replaces the box, and
+  deleting it leaves an empty cell.
 
 ### Testing
 
@@ -114,6 +130,11 @@ How the numbers themselves are counted is the
   plain, a table and a dated note, and that a save which stored nothing says nothing. qa1 checks
   the highlight in an open cell, with and without a selection, and the drawn cell after it
   closes. Mutants T01–T07 take each fix back out.
+- qa7 checks the hover preview and the card of a note holding a table; qa1 copies styled cells
+  into Word, under the table and into another table, pastes a sized word into another note and
+  the same words from elsewhere, and puts an emoji into a checkbox by both roads;
+  test_richtext checks the empty highlighted cell, the size and typeface in the HTML, and a
+  typeface name that tries to leave its attribute. Mutants P01–P13 take each fix back out.
 
 ---
 
