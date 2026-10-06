@@ -3421,6 +3421,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             display_styles = display_styles[:len(trimmed)]
             value, raw_styles = self._styles_display_to_raw(
                 trimmed, display_styles)
+            if core_tables.checkbox_state(cell["value"]) is not None:
+                # Whatever went in beside a box takes its place, by any road
+                # -- the picker, Win+., a paste, typing: never raw brackets.
+                a, z = core_tables.beside_checkbox(value)
+                value, raw_styles = value[a:z], raw_styles[a:z]
             changed_text = value != cell["value"]
             styles_changed = raw_styles != editor.get("styles_in")
             if changed_text:

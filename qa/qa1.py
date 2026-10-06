@@ -3620,12 +3620,14 @@ for _cbRoad in ('menu', 'toolbar'):
     if _cbChips:
         _qa_click(_cbChips[0])
         app.update()
+    # The picker clears the box at once: the open cell shows no brackets.
+    _cbShown = app._cell_editor['entry'].get('1.0', 'end-1c')
     app._dismiss_mini_popup()
     app._commit_cell_editor()
     app.update()
     _cbVal = app._grid_at_line(1)['cells'][(1, 0)]['value']
     check(f'an emoji replaces a checkbox, no brackets left ({_cbRoad}: '
-          f'{_cbVal!r})', _cbVal == _cbEmoji)
+          f'{_cbShown!r} -> {_cbVal!r})', _cbVal == _cbEmoji == _cbShown)
     # And deleting it leaves an empty cell, never the old box.
     app._open_cell_editor(app._grid_at_line(1), 1, 0)
     app.update()
@@ -3645,6 +3647,40 @@ app._emoji_takes_checkbox_place(app._cell_editor['entry'])
 check('a text cell keeps its words when an emoji comes',
       app._cell_editor['entry'].get('1.0', 'end-1c') == 'word')
 app._commit_cell_editor()
+# By every other road too -- Windows' own emoji panel (Win+.) and a paste
+# arrive as typed text, and typed words were the same: whatever lands
+# beside a box takes its place when the cell is left (audit). A cell that
+# was never a box keeps "[ ]" typed into it as the words they are.
+_cbRoads = {}
+for _cbName, _cbAdd, _cbFrom in (
+        ('Win+. emoji', chr(0x1F600), '[x]'),
+        ('typed words', ' buy milk', '[ ]'),
+        ('words before it', 'done ', '[x]')):
+    set_body('| h1 | h2 |' + chr(10) + '| --- | --- |' + chr(10)
+             + '| %s | x |' % _cbFrom)
+    app._render_table_grids()
+    app.update()
+    app._open_cell_editor(app._grid_at_line(1), 1, 0, select=False)
+    app.update()
+    _cbE = app._cell_editor['entry']
+    _cbE.insert('1.0' if _cbName == 'words before it' else 'end', _cbAdd)
+    app._commit_cell_editor()
+    app.update()
+    _cbRoads[_cbName] = app._grid_at_line(1)['cells'][(1, 0)]['value']
+set_body('| h1 | h2 |' + chr(10) + '| --- | --- |' + chr(10) + '|   | x |')
+app._render_table_grids()
+app.update()
+app._open_cell_editor(app._grid_at_line(1), 1, 0)
+app.update()
+app._cell_editor['entry'].insert('end', '[ ] my words')
+app._commit_cell_editor()
+app.update()
+_cbRoads['typed into a plain cell'] = app._grid_at_line(1)['cells'][(1, 0)]['value']
+check(f'whatever lands beside a box takes its place, by every road '
+      f'({_cbRoads})',
+      _cbRoads == {'Win+. emoji': chr(0x1F600), 'typed words': 'buy milk',
+                   'words before it': 'done',
+                   'typed into a plain cell': '[ ] my words'})
 set_body('')
 
 # And outside a table Tab still types a tab, as it always did.

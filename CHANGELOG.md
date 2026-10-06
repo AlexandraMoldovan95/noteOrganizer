@@ -109,7 +109,8 @@ How the numbers themselves are counted is the
 - **Previews name a table instead of drawing its pipes.** Hovering a note in Settings →
   Duplicates or in the Trash (Settings → Recently deleted) showed its table as rows of bars; it
   now shows the words and a "▦ 1 table" line, as the calendar does. A note card no longer shows
-  a row typed past its last cell as prose either.
+  a row typed past its last cell as prose either, while a line of maths such as "|x| = 5" stays
+  words everywhere a preview is drawn.
 - **Copied table cells keep their look inside the app.** Cells pasted back as a second table,
   or into another table's cells, came as bare values: highlights, coloured, bold and sized
   words and each cell's alignment stayed behind. Our own copy now brings them all.
@@ -119,9 +120,10 @@ How the numbers themselves are counted is the
 - **Sizes and typefaces travel.** A word set in another size or font lost both when copied into
   Word, and when copied into another note — though the guide promised that copying between notes
   keeps everything. Both now come along; a size or font from a web page still stays behind.
-- **An emoji takes a checkbox's place.** Put into a checkbox cell, it went in beside the box,
-  which turned the cell into text and showed the raw "[ ]". The emoji now replaces the box, and
-  deleting it leaves an empty cell.
+- **What goes into a checkbox cell takes the box's place.** An emoji put into one went in
+  beside the box, which turned the cell into text and showed the raw "[ ]". Now an emoji — from
+  the app's picker or Windows' own (Win+.) — typed words or a paste replace the box, and
+  deleting them leaves an empty cell.
 - **Enter in a numbered list keeps your place.** It threw the note's scroll back to the top,
   and so did Backspace, Tab and the list buttons whenever a number changed: keeping the numbers
   right rewrote the whole note, and drew every table in it again. Only the numbers that change
@@ -173,6 +175,10 @@ How the numbers themselves are counted is the
   leaving a table cell open with no keyboard, Show more after a delete elsewhere, and four
   smaller. Each is fixed with a check of its own (mutants A01–A09); the whole catalogue was run
   again, and U40 retargeted at the one case only the date field's own watch still covers.
+- test_tables checks what a checkbox cell keeps when something lands beside its marker, and that
+  a line of maths is words in a preview while a row the editor draws is still a table; qa1 puts
+  an emoji, words before and after, and "[ ]" typed into a plain cell through the real cell
+  editor. Mutants B01–B04 take each fix back out.
 
 ---
 

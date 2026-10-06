@@ -1043,5 +1043,61 @@
     "must_fail": ["a selection across a renumbered list stays whole"],
     "suites": ["qa1"],
     "expect": "killed"
+  },
+  {
+    "id": "B01",
+    "about": "a box with something beside it keeps its brackets when the cell is left",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                value, raw_styles = value[a:z], raw_styles[a:z]",
+        "replace": "                pass"
+      }
+    ],
+    "must_fail": ["whatever lands beside a box takes its place, by every road"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "B02",
+    "about": "a box marker after the words is kept",
+    "edits": [
+      {
+        "file": "noteorganizer/core/tables.py",
+        "find": "    tail = _EDGE_MARKERS[1].search(value, start)",
+        "replace": "    tail = None"
+      }
+    ],
+    "must_fail": ["an emoji beside a box takes its place"],
+    "suites": ["test_tables"],
+    "expect": "killed"
+  },
+  {
+    "id": "B03",
+    "about": "a preview takes a line of maths for a table again",
+    "edits": [
+      {
+        "file": "noteorganizer/core/tables.py",
+        "find": "    return (stripped.startswith(CELL) and stripped.count(CELL) >= 2\n            and stripped[1:2].isspace())",
+        "replace": "    return (stripped.startswith(CELL) and stripped.count(CELL) >= 2)"
+      }
+    ],
+    "must_fail": ["a line of maths is words, not a table"],
+    "suites": ["test_tables"],
+    "expect": "killed"
+  },
+  {
+    "id": "B04",
+    "about": "a preview forgets a row written without padding",
+    "edits": [
+      {
+        "file": "noteorganizer/core/tables.py",
+        "find": "    if is_table_row(stripped):\n        return True",
+        "replace": "    if False:\n        return True"
+      }
+    ],
+    "must_fail": ["...while a row written without padding is still the row the editor draws"],
+    "suites": ["test_tables"],
+    "expect": "killed"
   }
 ]
