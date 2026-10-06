@@ -165,8 +165,14 @@ How the numbers themselves are counted is the
   than timed. Mutants Q01–Q14 take each fix back out.
 - qa3 asks about unchanged notes by the backup route and the code route, one note and several,
   Skip and copies, and checks that Skip is what Enter and Escape give; qa1 checks that every
-  sentence sending people to the backup names a place that exists. Mutants K01–K08 take each fix
+  sentence sending people to the backup names a place that exists. Mutants K01–K09 take each fix
   back out.
+- Before release, three independent reviews of these changes found nine regressions in them —
+  a highlight lost when a note was left with its cell open, a copied header read one letter off,
+  ticked rows unreadable after a theme switch with their panel open, a click on empty space
+  leaving a table cell open with no keyboard, Show more after a delete elsewhere, and four
+  smaller. Each is fixed with a check of its own (mutants A01–A09); the whole catalogue was run
+  again, and U40 retargeted at the one case only the date field's own watch still covers.
 
 ---
 

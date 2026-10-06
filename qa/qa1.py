@@ -7193,6 +7193,76 @@ check('cells copied from elsewhere bring none of an older copy\'s styles',
 _stub_clipboard()
 set_body('')
 
+# The header row is read where its words are: a drawn table's window sits
+# at column 0 of that line, and the copy read every style one place to the
+# left (audit) -- "Name" red left as "N" plain and "ame" red.
+set_body('| Name | Qty |' + chr(10) + '| --- | --- |' + chr(10) + '| a | 1 |')
+app._render_table_grids()
+app.update()
+_kH = app.body_text.get('1.0', '1.end').index('Name')
+app.body_text.tag_add(
+    app._ensure_color_tag(app.body_text, 'text_color', '#d32f2f'),
+    '1.%d' % (_kH + app._col_base(1)), '1.%d' % (_kH + app._col_base(1) + 4))
+_iH2 = app._grid_at_line(1)
+app._grid_select_range(_iH2, (0, 0), (1, 1))
+_stub_clipboard(loopback=True)
+app._grid_copy_selection({'info': _iH2, 'box': (0, 0, 1, 1)})
+_runsH = (app._grid_cell_clip_styles.get((0, 0)) or {}).get('runs')
+check(f'a copied header cell keeps its colour on its own letters ({_runsH}; '
+      f'{_written.get("html")})',
+      _runsH == [('text_color_d32f2f', 0, 4)]
+      and '<span style="color:#d32f2f;">Name</span>' in (_written.get('html') or ''))
+app._grid_clear_selection()
+_stub_clipboard()
+
+# A highlight given in an open cell reaches the note even when the note is
+# left with the cell still open (audit): only closing the cell laid it,
+# and leaving a note flushes the cell without closing it.
+set_body('| h1 | h2 |' + chr(10) + '| --- | --- |' + chr(10) + '|   | x |')
+app._render_table_grids()
+app.update()
+app._open_cell_editor(app._grid_at_line(1), 1, 0, select=False)
+app.update()
+app._apply_body_color('highlight', '#ffe08a')
+app._cell_editor['entry'].insert('end', 'abc')
+app.update()
+_lvState = app.capture_editor_state()
+_lvHi = [s for s in _lvState.get('formatting', [])
+         if s['style'] == 'highlight' and s.get('value') == '#ffe08a']
+_lvRow = _lvState['body'].split(chr(10))[2]
+_lvCell = (_lvRow.index('abc'), _lvRow.index('abc') + 3)
+_lvAt = len(_lvState['body'].split(chr(10))[0]) + len(
+    _lvState['body'].split(chr(10))[1]) + 2
+check(f'leaving a note with a highlighted cell still open keeps the '
+      f'highlight ({_lvHi}; {_lvRow!r})',
+      'abc' in _lvRow and any(s['start'] <= _lvAt + _lvCell[0]
+                              and s['end'] >= _lvAt + _lvCell[1]
+                              for s in _lvHi))
+app._commit_cell_editor()
+app.update()
+
+# A copied cell that lands in a column the paste adds keeps its alignment
+# (audit): the new column's cells grew, their alignments did not.
+set_body('| p | q |' + chr(10) + '| --- | --- |' + chr(10) + '| left | mid |')
+app._render_table_grids()
+app.update()
+app._grid_set_alignment(app._grid_at_line(1), (1, 1, 1, 1),
+                        core_tables.ALIGN_CENTER)
+app.update()
+_iA = app._grid_at_line(1)
+app._grid_select_range(_iA, (1, 0), (1, 1))
+_stub_clipboard(loopback=True)
+app._grid_copy_selection({'info': _iA, 'box': (1, 0, 1, 1)})
+app._grid_clear_selection()
+app._grid_paste_cells(app._grid_at_line(1), 1, 1)
+app.update()
+_alA = core_tables.cell_alignments(app.body_text.get('3.0', '3.end'))
+check(f'a copied cell pasted into a new column keeps its alignment ({_alA}; '
+      f'{body()!r})',
+      len(_alA) == 3 and _alA[2] == core_tables.ALIGN_CENTER)
+_stub_clipboard()
+set_body('')
+
 # A word's size and typeface travel between notes: the HTML carries them
 # out to Word, and a paste reads none back (a page's sizes stay behind),
 # so our own copy brings them from what it remembered.
@@ -7227,6 +7297,26 @@ check('the same words pasted from elsewhere bring no size or typeface',
       body() == 'plain big end'
       and not [s for s in app._extract_formatting(app.body_text)
                if s['style'] in ('font_size', 'font_family')])
+# One word copied from an indented paragraph does not indent the paragraph
+# it lands in (audit): the HTML never carried a plain paragraph's indent,
+# and the remembered copy must not start to.
+set_body('an indented line' + chr(10) + 'plain target here')
+app.body_text.mark_set('insert', '1.0')
+app.body_text.tag_remove('sel', '1.0', 'end')
+app._change_paragraph_indent(+1)
+app.body_text.tag_add('sel', '1.3', '1.11')
+app.update()
+_stub_clipboard(loopback=True)
+app._copy_formatted()
+app.body_text.tag_remove('sel', '1.0', 'end')
+app.body_text.mark_set('insert', '2.6')
+app._on_body_paste()
+app.update()
+check(f'a word from an indented paragraph pastes without its indent '
+      f'({app._paragraph_indent_of(app.body_text, 2)}; {body()!r})',
+      app._paragraph_indent_of(app.body_text, 1) == 1
+      and app._paragraph_indent_of(app.body_text, 2) == 0
+      and 'indented' in app.body_text.get('2.0', '2.end'))
 _stub_clipboard()
 set_body('')
 
@@ -7705,6 +7795,18 @@ check(f'indenting an item keeps the caret at its start '
       f'({app.body_text.index("insert")}; {body()!r})',
       app.body_text.index('insert') == '2.0'
       and app.body_text.get('3.0', '3.end') == '2. c')
+# A selection across the items stays one piece through the renumber
+# (audit): the new digits went in without it, leaving holes.
+set_body('1. a' + chr(10) + '2. b' + chr(10) + '3. c' + chr(10) + '4. d')
+app.body_text.tag_add('sel', '2.0', '4.end')
+app.body_text.mark_set('insert', '4.end')
+app._change_paragraph_indent(+1)
+app.update()
+_selR = [str(i) for i in app.body_text.tag_ranges('sel')]
+check(f'a selection across a renumbered list stays whole ({_selR})',
+      _selR == ['2.0', '4.end'.replace('end', str(len(
+          app.body_text.get('4.0', '4.end'))))])
+app.body_text.tag_remove('sel', '1.0', 'end')
 set_body('')
 # ...also where an alignment meets the table's window: a centred line right
 # above the table (its alignment runs through its line break, up to the
@@ -8271,7 +8373,6 @@ app.toggle_settings_panel('backup'); app.update()
 _sh_export = [w for w in _walk_widgets(app.settings_backup_panel, tk.Widget)
               if w.winfo_class() in ('Button', 'Label')
               and str(w.cget('text')) == 'Export']
-app.toggle_settings_panel('backup'); app.update()
 check(f'the backup is named as Settings → Backup → Export, which exists '
       f'({_sh_said}; {len(_sh_export)} Export button)',
       len(_sh_said) == 3 and len(_sh_export) == 1
@@ -8429,6 +8530,21 @@ check(f'Show more in Share adds the rest under the boxes already drawn '
       and bool(_sm_after[-1].bind('<MouseWheel>'))
       and not [b for b in _walk_widgets(app.share_panel, tk.Button)
                if str(b.cget('text')).startswith('Show ')])
+app.toggle_share_panel(); app.update()
+# A note deleted while the panel is open shifts the list under it: Show
+# more then draws every box again, or a note was left with no box (audit).
+app.toggle_share_panel(); app.update()
+del app.notes[5]
+_sm_more = next((b for b in _walk_widgets(app.share_panel, tk.Button)
+                 if str(b.cget('text')).startswith('Show ')), None)
+if _sm_more is not None:
+    _sm_more.invoke()
+    app.update()
+_sm_titles = [str(b.cget('text')) for b in _sm_boxes()]
+check(f'Show more in Share after a delete gives every note one box '
+      f'({len(_sm_titles)} boxes)',
+      _sm_more is not None and len(_sm_titles) == 129
+      and sorted(_sm_titles) == sorted(n['title'] for n in app.notes))
 app.toggle_share_panel(); app.update()
 app.notes = _sm_saved_notes
 

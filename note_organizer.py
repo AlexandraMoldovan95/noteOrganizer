@@ -3451,13 +3451,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._grid_redraw_cell_text(info, r, c)
                 editor["styles_in"] = [dict(s) for s in raw_styles]
                 wrote = True
+        if "cell_highlight" in editor:
+            # The cell's own highlight, laid the way a highlight on a closed
+            # cell is: pipe to pipe, so an empty cell keeps it. At every
+            # commit -- leaving the note flushes without closing the cell.
+            self._grid_apply_style(info, (r, c, r, c), "highlight",
+                                   editor.pop("cell_highlight"),
+                                   through_editor=False)
+            wrote = True
         if close:
-            if "cell_highlight" in editor:
-                # The cell's own highlight, laid the way a highlight on a
-                # closed cell is: pipe to pipe, so an empty cell keeps it.
-                self._grid_apply_style(info, (r, c, r, c), "highlight",
-                                       editor["cell_highlight"],
-                                       through_editor=False)
             self._close_cell_editor()
         if wrote:
             self._schedule_autosave()
@@ -4929,6 +4931,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         data = [i for i in range(len(block)) if i != sep_at]
         runs = {i: [] for i in data}
         top, bottom = f"{first}.0", f"{first + nrows - 1}.end"
+        # A drawn table's window sits at column 0 of its first line, counted
+        # by the indices and not by get(): the copy reads with grids up.
+        first_base = self._col_base(first)
         for tag in b.tag_names():
             if not is_format_tag(tag):
                 continue
@@ -4945,8 +4950,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     if i not in runs:
                         continue
                     line = block[i]
-                    a = self._py_col(line, s_col) if n == s_line else 0
-                    z = self._py_col(line, e_col) if n == e_line else len(line)
+                    base = first_base if n == first else 0
+                    a = (self._py_col(line, max(0, s_col - base))
+                         if n == s_line else 0)
+                    z = (self._py_col(line, max(0, e_col - base))
+                         if n == e_line else len(line))
                     if z > a:
                         runs[i].append((tag, a, z))
         cells = {}
@@ -5875,6 +5883,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         width = max([ncols] + [c + len(line) for line in matrix])
         for row in rows:
             row.extend([""] * (width - len(row)))
+        # The alignments grow with them, or a copied cell landing in a new
+        # column has nowhere to keep its own.
+        for row_aligns in aligns:
+            row_aligns.extend(
+                [core_tables.ALIGN_LEFT] * (width - len(row_aligns)))
         while r + len(matrix) > len(rows):
             rows.append([""] * width)
             aligns.append([core_tables.ALIGN_LEFT] * width)
@@ -7230,7 +7243,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # its sizes and typefaces included.
             text = mine[0]
             spans = [dict(s) for s in mine[1]]
-            paragraphs = [dict(p) for p in mine[2]]
+            # A plain paragraph's indent stays home, as the HTML has always
+            # left it: one word copied from an indented line must not indent
+            # the paragraph it is pasted into.
+            paragraphs = []
+            for p in mine[2]:
+                p = dict(p)
+                if not p.get("kind"):
+                    p.pop("indent", None)
+                if len(p) > 1:
+                    paragraphs.append(p)
         if not text:
             return False
         # Only when the source offered no formatting of its own, which is the
@@ -8001,7 +8023,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 while s < room - p and old[-1 - s] == new[-1 - s]:
                     s += 1
                 at = f"{n}.{self._tk_col(old, p)}"
-                tags = tuple(t for t in b.tag_names(at) if t != "sel")
+                # Every tag of the character replaced, the selection's
+                # included: a selection across the list stays one piece.
+                tags = tuple(b.tag_names(at))
                 b.delete(at, f"{n}.{self._tk_col(old, len(old) - s)}")
                 b.insert(at, new[p:len(new) - s], tags)
         finally:
@@ -10120,6 +10144,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # flickered, and grew with every page.
             first = shown["n"]
             shown["n"] += SHARE_PAGE_SIZE
+            if [n["id"] for n in self.notes[:first]] != rendered["ids"]:
+                # The notebook changed under the boxes on screen (a note
+                # deleted while this is open): all drawn again, or a note
+                # would be left with no box at all.
+                for w in inner.winfo_children():
+                    w.destroy()
+                rendered["ids"] = []
+                render_checkboxes()
+                return
             button.destroy()
             render_checkboxes(first)
 
@@ -11872,6 +11905,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.track_theme(box, **colours)
         else:
             box.configure(**{opt: self.colors[key] for opt, key in colours.items()})
+            # Its panel is not rebuilt by a theme switch while it is open:
+            # _recolor_stragglers lays these keys again from the new palette.
+            box.tick_palette = colours
         return box
 
 
@@ -12102,6 +12138,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         w.configure(**{opt: remap[val]})
                     except tk.TclError:
                         pass
+            # A drawn tick box's fill when ticked is a third colour this
+            # walk cannot see; it names its palette keys (_drawn_tick_box).
+            keys = getattr(w, "tick_palette", None)
+            if keys:
+                try:
+                    w.configure(**{opt: cur[key] for opt, key in keys.items()})
+                except tk.TclError:
+                    pass
             for child in w.winfo_children():
                 walk(child)
 
@@ -16572,6 +16616,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except (tk.TclError, KeyError):
             return
         if held is not None and held.winfo_class() in self._TYPING_CLASSES:
+            # An open table cell is left the way any click elsewhere leaves
+            # it, committed and closed: with the focus on the window its own
+            # FocusOut reads the move as passing and keeps it open.
+            editor = getattr(self, "_cell_editor", None)
+            if editor is not None and held is editor["entry"]:
+                self._commit_cell_editor()
             self.focus_set()
 
     def _leave_settings_for_the_editor(self):

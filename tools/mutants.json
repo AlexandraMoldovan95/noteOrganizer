@@ -253,7 +253,7 @@
       }
     ],
     "must_fail": [
-      "a click beside the field, on no box at all, finishes with it"
+      "a click on a clickable label beside the date field finishes the date too"
     ],
     "suites": [
       "qa5"
@@ -728,7 +728,7 @@
     "edits": [
       {
         "file": "noteorganizer/ui/settings_page.py",
-        "find": "            draw_rows(ordered_trash(), first)",
+        "find": "            draw_rows(ordered, first)",
         "replace": "            redraw()"
       }
     ],
@@ -916,6 +916,132 @@
     ],
     "must_fail": ["two questions about one batch count it the same way"],
     "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "A01",
+    "about": "a highlight given in an open cell reaches the note only when the cell closes",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if \"cell_highlight\" in editor:",
+        "replace": "        if close and \"cell_highlight\" in editor:"
+      }
+    ],
+    "must_fail": ["leaving a note with a highlighted cell still open keeps the highlight"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "A02",
+    "about": "a copied header row reads its styles one place to the left",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                    base = first_base if n == first else 0",
+        "replace": "                    base = 0"
+      }
+    ],
+    "must_fail": ["a copied header cell keeps its colour on its own letters"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "A03",
+    "about": "a ticked box in an open panel keeps the old theme's fill",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            keys = getattr(w, \"tick_palette\", None)",
+        "replace": "            keys = None"
+      }
+    ],
+    "must_fail": ["a ticked box in an open panel takes the new theme when it switches"],
+    "suites": ["qa4"],
+    "expect": "killed"
+  },
+  {
+    "id": "A04",
+    "about": "a word copied from an indented paragraph indents where it lands",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                    p.pop(\"indent\", None)",
+        "replace": "                    pass"
+      }
+    ],
+    "must_fail": ["a word from an indented paragraph pastes without its indent"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "A05",
+    "about": "a copied cell landing in a new column loses its alignment",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        for row_aligns in aligns:\n            row_aligns.extend(\n                [core_tables.ALIGN_LEFT] * (width - len(row_aligns)))",
+        "replace": "        pass"
+      }
+    ],
+    "must_fail": ["a copied cell pasted into a new column keeps its alignment"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "A06",
+    "about": "a click on empty space leaves a table cell open with no keyboard",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                self._commit_cell_editor()\n            self.focus_set()",
+        "replace": "                pass\n            self.focus_set()"
+      }
+    ],
+    "must_fail": ["a click on empty space commits and closes an open table cell"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "A07",
+    "about": "Show more in the Trash adds a page under rows the Trash has moved",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "            if [id(e) for e in ordered[:first]] != drawn[\"ids\"]:",
+        "replace": "            if False:"
+      }
+    ],
+    "must_fail": ["Show more after a delete elsewhere shows each note once"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "A08",
+    "about": "Show more in Share adds a page under boxes the notebook has moved",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if [n[\"id\"] for n in self.notes[:first]] != rendered[\"ids\"]:",
+        "replace": "            if False:"
+      }
+    ],
+    "must_fail": ["Show more in Share after a delete gives every note one box"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "A09",
+    "about": "a renumber leaves holes in a selection across the list",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                tags = tuple(b.tag_names(at))",
+        "replace": "                tags = tuple(t for t in b.tag_names(at) if t != \"sel\")"
+      }
+    ],
+    "must_fail": ["a selection across a renumbered list stays whole"],
+    "suites": ["qa1"],
     "expect": "killed"
   }
 ]

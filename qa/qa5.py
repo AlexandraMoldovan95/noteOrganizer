@@ -801,6 +801,48 @@ check(f'a click on empty space releases the caret from any box, and leaves '
       _er_seen == {'title': True, 'body': True, 'clickable label': True,
                    'popup blank': True})
 
+# An open table cell is left the way any click elsewhere leaves it,
+# committed and closed (audit): with the keyboard moved to the window, its
+# own FocusOut read the move as passing, and the cell stayed open with no
+# keyboard -- the next Bold went to the cell instead of the body.
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', '| a | b |' + chr(10) + '| --- | --- |' + chr(10)
+                     + '| c | d |' + chr(10))
+app._render_table_grids(); app.update()
+app._open_cell_editor(app._grid_at_line(1), 1, 0)
+app.update()
+_ec_box = app._cell_editor['entry'] if app._cell_editor else None
+if _ec_box is not None:
+    _ec_box.delete('1.0', 'end')
+    _ec_box.insert('1.0', 'typed')
+    _w_focus(_ec_box)
+_qa_click(app.date_entry.master)
+app.update(); app.update_idletasks(); app.update()
+_ec_grid = app._grid_at_line(1)
+check(f'a click on empty space commits and closes an open table cell '
+      f'({app._cell_editor}; '
+      f'{_ec_grid["cells"][(1, 0)]["value"] if _ec_grid else None!r})',
+      _ec_box is not None and app._cell_editor is None
+      and _ec_grid is not None and _ec_grid['cells'][(1, 0)]['value'] == 'typed')
+app._cancel_pending_autosave()
+
+# A click on something that does something with it moves no keyboard, so
+# the date field's own watch is what finishes it there.
+_w_note(date='2026-10-17')
+_w_focus(app.date_entry)
+_w_type('16.11')
+_ed_link = tk.Label(app, text='a label that does something')
+_ed_link.bind('<Button-1>', lambda e: None)
+_ed_link.place(x=4, y=4)
+app.update()
+_qa_click(_ed_link)
+app.update()
+_ed_after = app.date_entry.get()
+_ed_link.destroy()
+app._cancel_pending_autosave()
+check(f'a click on a clickable label beside the date field finishes the date '
+      f'too ({_ed_after!r})', _ed_after == '16.11.%d' % _W_YEAR)
+
 _w_note(date='2026-10-17')
 _w_type('16.11.26')
 del _w_asked[:]

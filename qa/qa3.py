@@ -120,6 +120,33 @@ if show_more:
           and all(w.winfo_exists() for w in first_page)
           and bool(both_pages[-1].bind('<MouseWheel>')))
 
+# A note deleted while the panel is open (from the sidebar, which stays on
+# screen) moves every row down one: Show more then draws them all again,
+# or one row showed twice and the new one never (audit).
+app.toggle_settings_panel('trash'); app.update()
+_st_note = NO.normalize_note({'id': 7777, 'title': 'FreshlyTrashed', 'body': 'x'})
+app.notes.append(_st_note)
+app._move_notes_to_trash([_st_note])
+_st_more = find_btn(app.settings_trash_panel, 'Show')
+if _st_more:
+    _st_more.invoke()
+    app.update()
+_st_titles = []
+def _st_walk(x):
+    for c in x.winfo_children():
+        if isinstance(c, tk.Label):
+            t = str(c.cget('text'))
+            if t.startswith('Deleted') or t == 'FreshlyTrashed':
+                _st_titles.append(t)
+        _st_walk(c)
+_st_walk(app.settings_trash_panel)
+check(f'Show more after a delete elsewhere shows each note once, the new one '
+      f'included ({len(_st_titles)} rows)',
+      _st_more is not None and 'FreshlyTrashed' in _st_titles
+      and len(_st_titles) == len(set(_st_titles)) == PAGE * 2)
+app.trash = [e for e in app.trash if e.get('title') != 'FreshlyTrashed']
+app.toggle_settings_panel('trash'); app.update()
+
 # restore preserves pagination + moves note back
 restore_btn = find_btn(app.settings_trash_panel, 'Restore')
 before_trash = len(app.trash)

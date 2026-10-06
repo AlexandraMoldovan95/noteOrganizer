@@ -153,6 +153,7 @@ is in the table below as well.
 | [The tick that took the colour of its words](#the-tick-that-took-the-colour-of-its-words) | A rule written as "always" is a measurement nobody made; judge a control by what it draws, on every theme. | — |
 | [The copy that wrote its own table](#the-copy-that-wrote-its-own-table) | A second writer of the same thing starts as a copy and ends as a subset; when one writer exists, call it. | — |
 | [The list that rewrote the whole note](#the-list-that-rewrote-the-whole-note) | Write only what changed: a rewrite of everything moves everything that hangs off the text — the view, the tables, the caret. | — |
+| [Nine regressions in fifteen fixes](#nine-regressions-in-fifteen-fixes) | A fix that changes WHEN something happens must be walked through every reader of that moment, not only the route it was reported on. | — |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -4507,6 +4508,33 @@ edit). Enter in a list now keeps its new line in sight, as Tk's own Enter does.
 **Takeaway:** write only what changed. A rewrite of everything moves everything that hangs off
 the text — the view, the tables, the caret — and each of those then needs its own repair, one of
 which will be forgotten.
+
+### Nine regressions in fifteen fixes
+
+*(found by three read-only reviews of the fixes above, before any of them shipped)*
+
+**Symptom:** none reached a user. Fifteen fixes from the owner's manual pass were done, tested,
+mutation-tested and green on the whole suite; three reviewers, each reading one part of the change
+and running nothing, found nine ways the fixes broke something else.
+
+**Root cause:** most of them changed WHEN something happens, and were checked only on the route
+they were reported on. The open-cell highlight was laid when the cell closed — and leaving a note
+flushes a cell without closing it. The click on empty space moved the keyboard to the window — and
+an open table cell's own focus check reads "the window" as a passing moment, so it stayed open.
+"Show more" now added a page under the rows on screen — and nothing redraws those rows when a
+note is deleted from the sidebar beside them. The tick boxes took their fill at build — and a theme
+switch does not rebuild an open panel. The cell copy read styles with the tables drawn — while the
+reader had only ever run with them down, where no window sits at a line's start.
+
+**Fix:** each one, with a check that fails without it (mutants A01–A09). And one older mutant,
+U40, survived the whole-catalogue run for a good reason: the new click handler now finishes the
+date field on a click on empty space too, so the date's own click watch is needed only where a
+click moves no keyboard — the check was moved to that case.
+
+**Takeaway:** a fix that changes when something happens has to be walked through every reader of
+that moment — every caller of the flush, every holder of the focus, every panel left open across
+the change — not only the route it was reported on. The suite proves what it was told to; readers
+of the diff find what nobody told it.
 
 ## Smaller lessons, moved out of the code
 
