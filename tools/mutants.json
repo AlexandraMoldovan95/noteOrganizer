@@ -791,5 +791,117 @@
     "must_fail": ["...added under the rows already there, not all drawn again"],
     "suites": ["qa7"],
     "expect": "killed"
+  },
+  {
+    "id": "K01",
+    "about": "notes already here, unchanged, are skipped without asking again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            copies = self._unchanged_copies(same, len(incoming), source)",
+        "replace": "            copies = []"
+      }
+    ],
+    "must_fail": ["a note arriving exactly as it is here is not offered as an update", "a code holding notes exactly as they are here asks once"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "K02",
+    "about": "Enter on the unchanged-notes question adds the copies",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            default=skip)",
+        "replace": "            default=None)"
+      }
+    ],
+    "must_fail": ["the question about unchanged notes skips unless told otherwise"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "K03",
+    "about": "a copy of a note already here keeps its identity",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            copy.pop(\"uid\", None)",
+        "replace": "            pass"
+      }
+    ],
+    "must_fail": ["...and \"Add copies anyway\" hands back a copy without the identity"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "K04",
+    "about": "a copy asked for by name meets the look-alike question too",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if not asked and _dup_key(normalize_note(incoming)) in existing_keys:",
+        "replace": "            if _dup_key(normalize_note(incoming)) in existing_keys:"
+      }
+    ],
+    "must_fail": ["a code holding notes exactly as they are here asks once"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "K05",
+    "about": "a backup's copies asked for are never added",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        for note in list(to_import) + copies:",
+        "replace": "        for note in list(to_import):"
+      }
+    ],
+    "must_fail": ["\"Add copies anyway\" adds the note again as its own note"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "K06",
+    "about": "a code's copies asked for are never added",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        for sn in list(to_import) + copies:",
+        "replace": "        for sn in list(to_import):"
+      }
+    ],
+    "must_fail": ["a code holding notes exactly as they are here asks once"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "K07",
+    "about": "a damaged code sends people to an Import (ZIP) no screen has",
+    "edits": [
+      {
+        "file": "noteorganizer/core/sharing.py",
+        "find": "            \"sender to send it again, or to send a backup instead (Settings → \"\n            \"Backup → Export).\"",
+        "replace": "            \"sender to send it again, or use Import (ZIP) for large transfers.\""
+      }
+    ],
+    "must_fail": ["the backup is named as Settings → Backup → Export, which exists"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "K08",
+    "about": "the share warning says only \"use Export for files\" again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        \"⚠ A code carries the text, not attached files — \"\n        \"use Settings → Backup → Export for those.\")",
+        "replace": "        \"⚠ Attachments aren't included in a code — use Export for files.\")"
+      }
+    ],
+    "must_fail": ["and warns that attachments are not included, naming where they do go"],
+    "suites": ["qa1"],
+    "expect": "killed"
   }
 ]

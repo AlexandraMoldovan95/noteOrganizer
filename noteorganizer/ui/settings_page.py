@@ -1906,12 +1906,13 @@ class SettingsPageMixin:
         self.toggle_settings_panel("duplicates")
 
     def _build_theme_picker(self, parent):
-        """The theme swatches for the current mode, as in the reference design.
+        """The theme swatches, dark and light together, as in the reference
+        design.
 
         Four across, each a bordered tile holding a small preview of that
         theme -- its own sidebar strip and three text lines painted in its own
         colours -- with the name beneath and a tick badge on the selected one.
-        Switching light/dark swaps which set is shown.
+        Both sets are always shown, so a theme of the other mode is one click.
         """
         for w in parent.winfo_children():
             w.destroy()

@@ -138,6 +138,13 @@ How the numbers themselves are counted is the
   not the characters.
 - **"Show more" adds rows instead of drawing all of them again**, in the Trash, the Share panel
   and the calendar History: each page flickered, and more with every page.
+- **Importing notes you already have, unchanged, asks before skipping them.** A backup or a code
+  holding notes exactly as they are here skipped them without a word until the end. You are now
+  asked once: **Skip** them — the answer Enter and Escape give — or **Add copies anyway**, as
+  separate notes with identities (and, from a backup, files) of their own.
+- **The share-code warning names where attached files do travel.** "Use Export for files" left
+  three exports to guess between, and three messages about large or damaged codes sent people
+  to an "Import (ZIP)" / "Export (ZIP)" no screen has. All now say Settings → Backup → Export.
 
 ### Testing
 
@@ -156,6 +163,10 @@ How the numbers themselves are counted is the
   History; qa5 the click on empty space from several boxes, a clickable label and a popup;
   test_richtext the copy's HTML against asking every character, and its work counted rather
   than timed. Mutants Q01–Q14 take each fix back out.
+- qa3 asks about unchanged notes by the backup route and the code route, one note and several,
+  Skip and copies, and checks that Skip is what Enter and Escape give; qa1 checks that every
+  sentence sending people to the backup names a place that exists. Mutants K01–K08 take each fix
+  back out.
 
 ---
 

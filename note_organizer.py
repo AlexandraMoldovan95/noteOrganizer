@@ -1168,11 +1168,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     # One sentence for one fact. A share code carries a note's text and not
     # its files, and the two places that say so said it differently -- the
     # sidebar "Attachments not included", the editor "Attachments aren't
-    # included in a code". The editor's wording is the one kept, because it
-    # names WHICH mechanism leaves them out, which is the part a reader needs
-    # to know that Export does include them.
+    # included in a code". It names where the files DO travel, as the note
+    # export's status line does: "use Export" left three exports to guess
+    # between, and read as a warning that the files were being lost.
     SHARE_ATTACHMENT_WARNING = (
-        "⚠ Attachments aren't included in a code — use Export for files.")
+        "⚠ A code carries the text, not attached files — "
+        "use Settings → Backup → Export for those.")
 
     def _refresh_title_count(self, event=None):
         """Show how much title is left, once there is little enough of it.
@@ -9536,11 +9537,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _take_known_notes(self, incoming, source):
         """Ask once about the notes in a batch we already have.
 
-        Returns ``(proceed, remaining, updates, unchanged)``: *remaining*
-        is what the caller should go on to import as new notes, *proceed*
-        is False when the user cancelled, *updates* is what "Update" agreed
-        to, and *unchanged* counts the notes that arrived exactly as they
-        are here and need nothing at all.
+        Returns ``(proceed, remaining, updates, unchanged, copies)``:
+        *remaining* is what the caller should go on to import as new notes,
+        *proceed* is False when the user cancelled, *updates* is what
+        "Update" agreed to, *unchanged* counts the notes that arrived
+        exactly as they are here and were skipped, and *copies* are those
+        the person chose to add again anyway (_unchanged_copies) -- added
+        as they are, past the look-alike question, which they were just
+        asked.
 
         The updates are NOT applied here. The caller applies them with
         _apply_known_updates once the last question of its import is
@@ -9561,15 +9565,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         it is attrition.
         """
         known, fresh = split_by_identity(self.notes, incoming)
-        # A note that arrives exactly as it is here needs nothing: not an
-        # update (see shared_update_changes for what that used to cost),
-        # and not a second copy either.
-        differing = [(mine, theirs) for mine, theirs in known
-                     if self._known_note_differs(mine, theirs, source)]
-        unchanged = len(known) - len(differing)
+        # A note that arrives exactly as it is here needs no update (see
+        # shared_update_changes for what that used to cost); a second copy
+        # of it is the person's to ask for.
+        differing, same = [], []
+        for mine, theirs in known:
+            (differing if self._known_note_differs(mine, theirs, source)
+             else same).append((mine, theirs))
+        unchanged = len(same)
         known = differing
+
+        def finish(remaining, updates):
+            copies = self._unchanged_copies(same, len(incoming), source)
+            return True, remaining, updates, unchanged - len(copies), copies
+
         if not known:
-            return True, fresh, [], unchanged
+            return finish(fresh, [])
         count = len(known)
         plural = "" if count == 1 else "s"
         if fresh:
@@ -9608,7 +9619,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                      (f"Update the {count}", "update")],
         )
         if choice is None or choice == "cancel":
-            return False, [], [], unchanged
+            return False, [], [], unchanged, []
         if choice == "update":
             # Same order as the single-note route, for the same reason:
             # the editor's unsaved work is saved before anything replaces
@@ -9617,17 +9628,51 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # declined to let go of.
             if self._flush_autosave(leaving=self.selected_note_id in {
                     mine.get("id") for mine, _theirs in known}) is False:
-                return False, [], [], unchanged
-            return True, fresh, known, unchanged
+                return False, [], [], unchanged, []
+            return finish(fresh, known)
         # "add": the copies go on as new notes, without the identity they
         # arrived with -- two notes wearing one uid is the collision this
         # whole field exists to prevent.
-        stripped = []
-        for _mine, theirs in known:
+        return finish(fresh + self._without_identity(known), [])
+
+    @staticmethod
+    def _without_identity(pairs):
+        """The arriving side of (mine, theirs) pairs, each without its uid:
+        a copy that keeps it would be two notes wearing one identity."""
+        copies = []
+        for _mine, theirs in pairs:
             copy = dict(theirs)
             copy.pop("uid", None)
-            stripped.append(copy)
-        return True, fresh + stripped, [], unchanged
+            copies.append(copy)
+        return copies
+
+    def _unchanged_copies(self, same, total, source):
+        """Ask whether the notes of an import that are already here, exactly
+        as they arrived, should be added again as copies. Skipping is the
+        answer Enter and Escape give; the copies come back without their
+        identity. Re-importing a backup used to skip them without asking,
+        and the person had wanted the choice (field pass)."""
+        if not same:
+            return []
+        count = len(same)
+        one = count == 1
+        if count == total:
+            lead = (f"The note in this {source} is" if one
+                    else f"All {count} notes in this {source} are")
+        else:
+            lead = (f"{count} of the {total} notes in this {source} "
+                    f"{'is' if one else 'are'}")
+        skip = "Skip it" if one else f"Skip the {count}"
+        choice = self._themed_dialog(
+            "Already here, unchanged",
+            f"{lead} already here, exactly as on this device.\n\n"
+            "Skipping changes nothing. A copy is a second, separate note.",
+            kind="question",
+            buttons=[(skip, "skip"),
+                     ("Add a copy anyway" if one else "Add copies anyway",
+                      "copies")],
+            default=skip)
+        return self._without_identity(same) if choice == "copies" else []
 
     def _apply_known_updates(self, updates, source):
         """Apply what "Update" agreed to in _take_known_notes; returns how
@@ -9747,16 +9792,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # different precisely because it was edited, so it would say
             # "new note" and quietly leave two copies behind.
             mine = find_by_uid(self.notes, normalize_note(incoming).get("uid"))
+            asked = False
             if mine is not None and not self._known_note_differs(
                     mine, incoming, "code"):
                 # The code holds this note exactly as it is here. "The two
                 # differ" was said without comparing, and Update then
                 # replaced the rescue copy with a duplicate of the note.
-                self.import_status.config(
-                    text="This note is already here, exactly as in the code.",
-                    fg=self.colors["success"])
-                return
-            if mine is not None:
+                # Nothing to update; a copy only if asked for.
+                copies = self._unchanged_copies([(mine, incoming)], 1, "code")
+                if not copies:
+                    self.import_status.config(
+                        text="This note is already here, exactly as in the code.",
+                        fg=self.colors["success"])
+                    return
+                incoming, asked = copies[0], True
+                valid = [incoming]
+            elif mine is not None:
                 choice = self._themed_dialog(
                     "Same note, a different version",
                     "This note is already here, and the two differ.\n\n"
@@ -9811,7 +9862,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 incoming.pop("uid", None)
                 valid = [incoming]
             existing_keys = {_dup_key(n) for n in self.notes}
-            if _dup_key(normalize_note(incoming)) in existing_keys:
+            if not asked and _dup_key(normalize_note(incoming)) in existing_keys:
                 choice = self._themed_dialog(
                     "Possible duplicate",
                     "This note looks identical to one you already have (same "
@@ -9836,10 +9887,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.toggle_import_panel()
             return
         # Identity first: notes this batch says we already have.
-        proceed, valid, updates, unchanged = self._take_known_notes(valid, "code")
+        proceed, valid, updates, unchanged, copies = self._take_known_notes(
+            valid, "code")
         if not proceed:
             return
-        if not valid:
+        if not valid and not copies:
             updated = self._apply_known_updates(updates, "code")
             if updated:
                 self.save_notes()
@@ -9888,7 +9940,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Every question is answered: only now do the updates happen.
         updated = self._apply_known_updates(updates, "code")
         added = 0
-        for sn in to_import:
+        for sn in list(to_import) + copies:
             note = normalize_note(sn)
             note["id"] = next_id
             next_id += 1
@@ -10745,7 +10797,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             added_names.clear()
 
         # Identity first, exactly as the share-code route asks it.
-        proceed, valid_notes, updates, unchanged = self._take_known_notes(
+        proceed, valid_notes, updates, unchanged, copies = self._take_known_notes(
             valid_notes, "backup")
         if not proceed:
             _undo_category_merge()
@@ -10841,7 +10893,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                    for a in (n.get("attachments") or [])
                    if isinstance(a, dict)}
         next_id = max([n["id"] for n in self.notes], default=0) + 1
-        for note in to_import:
+        # With the copies asked for of notes already here, past the
+        # look-alike question: they were just asked about, by name.
+        for note in list(to_import) + copies:
             note = normalize_note(note)
             for a in note.get("attachments", []):
                 if not isinstance(a, dict):
@@ -10957,9 +11011,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             known_note += (f" Updated {updated} note(s) you already had "
                            "(“↩ Restore previous” undoes each one).")
         if unchanged:
-            known_note += f" {unchanged} note(s) were already here, unchanged."
+            known_note += (f" {unchanged} note(s) were already here, "
+                           "unchanged, and were skipped.")
         self.show_info("Import complete",
-                       f"Added {len(to_import)} note(s) from the backup."
+                       f"Added {len(to_import) + len(copies)} note(s) from the backup."
                        f"{known_note}{skipped_note}{extras_note}")
 
     # ---------- Theme helpers ----------

@@ -8249,8 +8249,35 @@ _share_lbls = [str(l.cget('text'))
                for l in _walk_widgets(app.editor_code_area, tk.Label)]
 check('the inline share panel shows a real NOTE1 code',
       any(t.startswith('NOTE1:') for t in _share_texts))
-check('and warns that attachments are not included',
-      any("Attachments aren't included" in t for t in _share_lbls))
+check('and warns that attachments are not included, naming where they do go',
+      any("not attached files" in t and 'Settings → Backup → Export' in t
+          for t in _share_lbls))
+# Every sentence that sends someone to the backup names a place that exists
+# (field pass): three said "Import (ZIP)" / "Export (ZIP)", which no screen
+# has, and "use Export for files" left three exports to guess between.
+from noteorganizer.core import sharing as _sh_core
+import base64 as _sh_b64, zlib as _sh_zlib
+_sh_many = _sh_core.SHARE_CODE_PREFIX + _sh_b64.urlsafe_b64encode(_sh_zlib.compress(
+    json.dumps({'v': 1, 'notes': [{'title': 'x'}] * (_sh_core.MAX_SHARED_NOTES + 1)}
+               ).encode('utf-8'))).decode('ascii')
+_sh_said = []
+for _sh_code in ('NOTE1:' + 'A' * (_sh_core.MAX_SHARE_CODE_CHARS + 1),
+                 _sh_core.SHARE_CODE_PREFIX + 'AAAA' * 10, _sh_many):
+    try:
+        NO.decode_share_code(_sh_code)
+    except ValueError as _sh_exc:
+        _sh_said.append(str(_sh_exc))
+app.toggle_settings_panel('backup'); app.update()
+_sh_export = [w for w in _walk_widgets(app.settings_backup_panel, tk.Widget)
+              if w.winfo_class() in ('Button', 'Label')
+              and str(w.cget('text')) == 'Export']
+app.toggle_settings_panel('backup'); app.update()
+check(f'the backup is named as Settings → Backup → Export, which exists '
+      f'({_sh_said}; {len(_sh_export)} Export button)',
+      len(_sh_said) == 3 and len(_sh_export) == 1
+      and all('Settings → Backup → Export' in s and '(ZIP)' not in s
+              for s in _sh_said + [NO.NoteOrganizer.SHARE_ATTACHMENT_WARNING])
+      and 'Backup' in [s[1] for s in NO.NoteOrganizer.SETTINGS_SECTIONS])
 _decoded_share = NO.decode_share_code(
     next(t for t in _share_texts if t.startswith('NOTE1:')))
 check('the shown code round-trips to the note',
@@ -8259,9 +8286,8 @@ check('the shown code round-trips to the note',
 # ---- ONE SENTENCE, AND AN ✕ ON BOTH CODE AREAS (C-24) ----
 # Two surfaces generate a share code, and they warned about attachments in
 # two different sentences for one fact -- "Attachments not included" in the
-# sidebar, "Attachments aren't included in a code" in the editor. The
-# editor's is the one kept: it names WHICH mechanism leaves them out, which
-# is what tells a reader Export does include them. Asserted against the
+# sidebar, "Attachments aren't included in a code" in the editor. One is
+# kept, and it now names where the files DO travel. Asserted against the
 # constant rather than a copy of the string, so a reworded sentence moves
 # both places or fails here.
 check('the editor code area uses the shared attachments sentence',

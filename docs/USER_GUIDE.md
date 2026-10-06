@@ -730,6 +730,11 @@ Paste a code you received into **Import code** in the sidebar. If any of the not
 look identical to ones you already have, you'll be asked whether to skip the duplicates, import
 everything anyway, or cancel — nothing is silently duplicated.
 
+A code made from a note you have — or a backup made on this computer — holds some notes exactly
+as they are here. Those are recognised as the same notes, and you are asked once: **Skip** them
+(the answer Enter and Escape give, and nothing changes) or **Add copies anyway**, as second,
+separate notes.
+
 ![Import code](screenshots/import-code.png)
 
 #### When the code holds a note you already have
@@ -806,10 +811,11 @@ brings everything the backup's copy carries: its text and checklist, its skipped
 per-day edits, its pin, and any files attached on the other device. Files already attached here
 stay attached; an update only ever adds them. **↩ Restore previous** takes the rest back.
 
-A note the backup holds exactly as you have it is left alone — neither updated nor added again —
-so importing the same backup twice changes nothing, and the result says how many notes were
-already here. If the backup's copy is **older** than yours (a backup from last month, say), the
-question says so before you choose to update. Every question is asked before anything changes:
+A note the backup holds exactly as you have it is never updated, and you are asked once about
+all such notes: **Skip** them — the answer Enter and Escape give, so importing the same backup
+twice changes nothing — or **Add copies anyway**, as second, separate notes with files of their
+own. The result says how many were skipped. If the backup's copy is **older** than yours (a
+backup from last month, say), the question says so before you choose to update. Every question is asked before anything changes:
 **Cancel** at any of them leaves your notes, files and Trash exactly as they were.
 
 ![Import backup](screenshots/import-backup.png)
