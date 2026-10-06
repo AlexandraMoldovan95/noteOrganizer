@@ -189,10 +189,13 @@ override; editing "this and all future" (or the whole series) edits the base not
 An import that meets notes this device already has (a share code or a backup) asks every
 question before it changes anything: `_take_known_notes` hands back the updates "Update" agreed
 to, and the caller applies them (`_apply_known_updates`) only after its last question — the
-duplicate check — is answered. A note that arrives exactly as it is here is neither an update nor
-a copy (`shared_update_changes`): an update that changes nothing would still overwrite the rescue
-copy that "↩ Restore previous" reads. The duplicate check is asked about the notebook as it will
-be (`_dup_keys_after`), since the updates are not applied yet when it runs.
+duplicate check — is answered. A note that arrives exactly as it is here is never an update
+(`shared_update_changes`): an update that changes nothing would still overwrite the rescue copy
+that "↩ Restore previous" reads. Whether to add it again is asked once for all such notes
+(`_unchanged_copies`, Skip by default); copies asked for leave without their identity and are
+added past the duplicate check, having just been asked about. The duplicate check is asked about
+the notebook as it will be (`_dup_keys_after`), since the updates are not applied yet when it
+runs.
 
 ### A name lives in more than one place
 

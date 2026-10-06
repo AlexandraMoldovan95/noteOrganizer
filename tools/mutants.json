@@ -903,5 +903,19 @@
     "must_fail": ["and warns that attachments are not included, naming where they do go"],
     "suites": ["qa1"],
     "expect": "killed"
+  },
+  {
+    "id": "K09",
+    "about": "the question about edited notes says All while unchanged ones are counted next",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if fresh or same:",
+        "replace": "        if fresh:"
+      }
+    ],
+    "must_fail": ["two questions about one batch count it the same way"],
+    "suites": ["qa3"],
+    "expect": "killed"
   }
 ]

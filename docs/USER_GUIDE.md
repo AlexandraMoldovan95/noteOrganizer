@@ -815,8 +815,11 @@ A note the backup holds exactly as you have it is never updated, and you are ask
 all such notes: **Skip** them — the answer Enter and Escape give, so importing the same backup
 twice changes nothing — or **Add copies anyway**, as second, separate notes with files of their
 own. The result says how many were skipped. If the backup's copy is **older** than yours (a
-backup from last month, say), the question says so before you choose to update. Every question is asked before anything changes:
-**Cancel** at any of them leaves your notes, files and Trash exactly as they were.
+backup from last month, say), the question says so before you choose to update.
+
+Every question is asked before anything changes: **Cancel**, on any question that offers it,
+leaves your notes, files and Trash exactly as they were. The question about unchanged notes has
+no Cancel — skipping them already changes nothing — so the import goes on with the rest.
 
 ![Import backup](screenshots/import-backup.png)
 

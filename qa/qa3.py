@@ -2225,6 +2225,20 @@ check('...and "Add copies anyway" hands back a copy without the identity',
       _nt_res[0] and _nt_res[1] == [] and _nt_res[3] == 0
       and len(_nt_res[4]) == 1 and 'uid' not in _nt_res[4][0]
       and _nt_res[4][0]['body'] == 'v1 - older')
+# One edited elsewhere and one unchanged: the two questions, one after the
+# other, count the same batch. The first said "All 1 note" -- it chose its
+# "All" without the unchanged notes, asked about straight after.
+_nt_other = NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'other text'})
+app.notes = [_nt_mine, _nt_other]; app.save_notes()
+_nt_asked = []
+app._themed_dialog = lambda *a, **k: (_nt_asked.append(a[1]), 'cancel-ish')[1]
+app._take_known_notes([{'uid': _nt_mine['uid'], 'title': 'Report',
+                        'body': 'edited on the laptop'}, dict(_nt_other)], 'backup')
+app._themed_dialog = _real_dialog
+check(f'two questions about one batch count it the same way ({_nt_asked})',
+      len(_nt_asked) == 2
+      and all('1 of the 2 notes in this backup' in m for m in _nt_asked))
+app.notes = [_nt_mine]; app.save_notes()
 
 # "Update" waits for the import's last answer. The updates were applied
 # at once, so Cancel on the duplicate question that follows left them in

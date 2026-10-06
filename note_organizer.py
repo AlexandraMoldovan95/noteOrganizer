@@ -9583,7 +9583,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return finish(fresh, [])
         count = len(known)
         plural = "" if count == 1 else "s"
-        if fresh:
+        # "All" only when it is all: the unchanged notes are counted in the
+        # batch too, and are asked about straight after this question.
+        if fresh or same:
             message = (
                 f"{count} of the {len(incoming)} note{'' if len(incoming) == 1 else 's'} "
                 f"in this {source} {'is' if count == 1 else 'are'} already here, "
@@ -9663,10 +9665,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             lead = (f"{count} of the {total} notes in this {source} "
                     f"{'is' if one else 'are'}")
         skip = "Skip it" if one else f"Skip the {count}"
+        # Said as what was compared: everything the import holds, which for
+        # a code is not everything a note has (its skipped days, its files).
         choice = self._themed_dialog(
             "Already here, unchanged",
-            f"{lead} already here, exactly as on this device.\n\n"
-            "Skipping changes nothing. A copy is a second, separate note.",
+            f"{lead} already here: the {source} holds nothing about "
+            f"{'it' if one else 'them'} that this device lacks.\n\n"
+            "Skipping changes nothing. A copy is a second, separate note, "
+            f"made from what the {source} holds.",
             kind="question",
             buttons=[(skip, "skip"),
                      ("Add a copy anyway" if one else "Add copies anyway",
@@ -9887,8 +9893,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.toggle_import_panel()
             return
         # Identity first: notes this batch says we already have.
+        arrived = len(valid)
         proceed, valid, updates, unchanged, copies = self._take_known_notes(
             valid, "code")
+        # The look-alike question counts what is left once the notes known
+        # by identity are out; it says so, after a question that counted all.
+        other = " other" if len(valid) < arrived else ""
         if not proceed:
             return
         if not valid and not copies:
@@ -9917,8 +9927,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if fresh:
                 choice = self._themed_dialog(
                     "Possible duplicates",
-                    f"{dupe_count} of the {len(valid)} note(s) in this code look "
-                    "identical to notes you already have (same title, text, "
+                    f"{dupe_count} of the{other} {len(valid)} note(s) in this code "
+                    "look identical to notes you already have (same title, text, "
                     "comments and category).",
                     kind="question",
                     buttons=[("Cancel", "cancel"),
@@ -9928,8 +9938,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             else:
                 choice = self._themed_dialog(
                     "All notes already imported",
-                    f"All {len(valid)} note(s) in this code look identical to "
-                    "notes you already have. Import them anyway as new copies?",
+                    f"All {len(valid)}{other} note(s) in this code look identical "
+                    "to notes you already have. Import them anyway as new copies?",
                     kind="question",
                     buttons=[("Cancel", "cancel"), ("Import anyway", "all")]
                 )
@@ -10797,8 +10807,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             added_names.clear()
 
         # Identity first, exactly as the share-code route asks it.
+        arrived = len(valid_notes)
         proceed, valid_notes, updates, unchanged, copies = self._take_known_notes(
             valid_notes, "backup")
+        # Counted as what is left once the notes known by identity are out.
+        other = " other" if len(valid_notes) < arrived else ""
         if not proceed:
             _undo_category_merge()
             # The extracted backup goes with it, as it does when the
@@ -10816,8 +10829,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if fresh:
                 choice = self._themed_dialog(
                     "Possible duplicates",
-                    f"{dupe_count} of the {len(valid_notes)} note(s) in this backup "
-                    "look identical to notes you already have (same title, "
+                    f"{dupe_count} of the{other} {len(valid_notes)} note(s) in this "
+                    "backup look identical to notes you already have (same title, "
                     "text, comments, category, checklist and repeat rule).",
                     kind="question",
                     buttons=[("Cancel", "cancel"),
@@ -10827,8 +10840,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             else:
                 choice = self._themed_dialog(
                     "All notes already imported",
-                    f"All {len(valid_notes)} note(s) in this backup look identical "
-                    "to notes you already have. Import them anyway as new copies?",
+                    f"All {len(valid_notes)}{other} note(s) in this backup look "
+                    "identical to notes you already have. Import them anyway as "
+                    "new copies?",
                     kind="question",
                     buttons=[("Cancel", "cancel"), ("Import anyway", "all")]
                 )
