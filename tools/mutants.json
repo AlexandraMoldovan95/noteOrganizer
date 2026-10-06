@@ -315,5 +315,103 @@
       "qa6"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "T01",
+    "about": "the Share boxes take Tk's own mark again, drawn in their light words' colour",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                self._drawn_tick_box(cb, \"sidebar\", \"text\", track=False)\n                cb.pack(fill=\"x\", anchor=\"w\")",
+        "replace": "                cb.configure(bg=self.colors[\"sidebar\"], fg=self.colors[\"text\"], selectcolor=self.colors[\"check_well\"])\n                cb.pack(fill=\"x\", anchor=\"w\")"
+      }
+    ],
+    "must_fail": ["on every theme, a ticked box's mark stands out from its well"],
+    "suites": ["qa4"],
+    "expect": "killed"
+  },
+  {
+    "id": "T02",
+    "about": "the Duplicates boxes take Tk's own mark again, drawn in their light words' colour",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                self._drawn_tick_box(cb, \"sidebar\", \"text\", track=False)\n                cb.pack(fill=\"x\", padx=20)",
+        "replace": "                cb.configure(bg=self.colors[\"sidebar\"], fg=self.colors[\"text\"], selectcolor=self.colors[\"check_well\"])\n                cb.pack(fill=\"x\", padx=20)"
+      }
+    ],
+    "must_fail": ["on every theme, a ticked box's mark stands out from its well"],
+    "suites": ["qa4"],
+    "expect": "killed"
+  },
+  {
+    "id": "T03",
+    "about": "a theme switch repaints the repeat panel through the call that also schedules a save",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self.refresh_weekday_buttons()\n        self._paint_end_fields()\n        self.style_notebook()",
+        "replace": "        self.refresh_weekday_buttons()\n        self.on_end_mode_changed()\n        self.style_notebook()"
+      }
+    ],
+    "must_fail": ["a theme switch schedules no save"],
+    "suites": ["qa4"],
+    "expect": "killed"
+  },
+  {
+    "id": "T04",
+    "about": "a save that could only leave an unreadable date out still says Note updated",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                note[\"updated\"] = stored_before[1]\n                announce = False\n",
+        "replace": "                note[\"updated\"] = stored_before[1]\n"
+      }
+    ],
+    "must_fail": ["an autosave that can only leave an unreadable date out says no"],
+    "suites": ["qa4"],
+    "expect": "killed"
+  },
+  {
+    "id": "T05",
+    "about": "redrawing a cell after its editor closes leaves the old fill",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            canvas.itemconfigure(cell[\"rect\"], fill=(\n                self._blend_hex(paint[\"bg\"], surface, 0.45)\n                if paint[\"bg\"] else surface))",
+        "replace": "            canvas.itemconfigure(cell[\"rect\"], fill=canvas.itemcget(cell[\"rect\"], \"fill\"))"
+      }
+    ],
+    "must_fail": ["and the drawn cell wears it as soon as the editor closes"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "T06",
+    "about": "a highlight given in an open cell does not show until the cell is opened again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            t.configure(bg=self._blend_hex(value, surface, 0.45)\n                        if value else surface)",
+        "replace": "            pass"
+      }
+    ],
+    "must_fail": ["a highlight given in an open cell colours the whole cell at once"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "T07",
+    "about": "a highlight given in an open cell with nothing selected only waits for typing",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if not has_sel and kind == \"text_color\":",
+        "replace": "        if not has_sel and kind in (\"text_color\", \"highlight\"):"
+      }
+    ],
+    "must_fail": ["with nothing selected too: the whole cell takes it at once"],
+    "suites": ["qa1"],
+    "expect": "killed"
   }
 ]

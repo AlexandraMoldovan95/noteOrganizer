@@ -3176,6 +3176,39 @@ check('the floating editor forwards a right-click to the menu',
 app._commit_cell_editor()
 app.update()
 
+# A highlight given inside an open cell shows at once, over the whole cell,
+# and the drawn cell wears it when the editor closes. Field-reported: it
+# appeared only after the cell was opened again.
+_t = app._grid_at_line(1)
+app._open_cell_editor(_t, 1, 0)
+_hl_e = app._cell_editor['entry']
+_hl_e.tag_add('sel', '1.0', '1.1')
+app._apply_body_color('highlight', '#ffe08a')
+app.update()
+_hl_want = app._blend_hex('#ffe08a', app.colors['card'], 0.45).lower()
+_hl_open = str(_hl_e.cget('bg')).lower()
+app._commit_cell_editor()
+app.update()
+_t = app._grid_at_line(1)
+_hl_fill = str(_t['canvas'].itemcget(_t['cells'][(1, 0)]['rect'], 'fill')).lower()
+check(f'a highlight given in an open cell colours the whole cell at once '
+      f'({_hl_open} / {_hl_want})', _hl_open == _hl_want)
+check(f'...and the drawn cell wears it as soon as the editor closes, with no '
+      f'reopen ({_hl_fill})', _hl_fill == _hl_want)
+app._open_cell_editor(_t, 1, 1)
+app._cell_editor['entry'].tag_remove('sel', '1.0', 'end')   # it opens selected
+app._apply_body_color('highlight', '#c8f0d0')   # nothing selected this time
+app.update()
+_hl_want = app._blend_hex('#c8f0d0', app.colors['card'], 0.45).lower()
+_hl_open = str(app._cell_editor['entry'].cget('bg')).lower()
+app._commit_cell_editor()
+app.update()
+_t = app._grid_at_line(1)
+_hl_fill = str(_t['canvas'].itemcget(_t['cells'][(1, 1)]['rect'], 'fill')).lower()
+check(f'...with nothing selected too: the whole cell takes it at once and keeps '
+      f'it on close ({_hl_open} / {_hl_fill} / {_hl_want})',
+      _hl_open == _hl_want and _hl_fill == _hl_want)
+
 # Over a drawn table the pointer is a pointer, not an I-beam.
 check(f'the table shows an arrow cursor '
       f'({_t["canvas"].cget("cursor")!r})',
@@ -7885,21 +7918,16 @@ check('find/theme: a theme switch keeps the open cell search alive',
 check('find/theme: the find highlight is re-tinted to the new accent',
       app.body_text.tag_cget('find_current', 'background').lower()
       == app.colors['accent'].lower())
-# The "Aa" case checkbox is long-lived (built once with the bar); its
-# selectcolor -- the box's own fill -- must follow the theme too, or a
-# switch leaves a stuck box you can't read as checked.
-#
-# It used to be asked for the SIDEBAR colour by name, which made this
-# check agree with the defect beside it: a well the same value as the
-# surface behind it passed happily, and on every dark theme a ticked box
-# therefore looked exactly like an empty one. The well has its own
-# palette entry now, so the question is the one that was always meant --
-# is it still the palette's, and is it still not the surface it sits on?
-check('find/theme: the case checkbox well follows the theme and stays readable',
-      str(app._find_case_cb.cget('selectcolor')).lower()
-      == app.colors['check_well'].lower()
-      and str(app._find_case_cb.cget('selectcolor')).lower()
-      != str(app._find_case_cb.cget('bg')).lower())
+# The "Aa" case checkbox is long-lived (built once with the bar), so it must
+# follow the theme. It draws its own well and mark now: Tk painted its mark
+# in the words' colour, light on dark themes, on a light well, so a ticked
+# box read as empty. The question is that it draws the shared box (redrawn
+# with the theme; qa4 judges its pixels on every theme) on the current
+# surface.
+check('find/theme: the case checkbox draws its own box and follows the theme',
+      str(app._find_case_cb.cget('indicatoron')) in ('0', 'false', 'False')
+      and str(app._find_case_cb.cget('selectimage')) == str(app._tick_images[1])
+      and str(app._find_case_cb.cget('bg')).lower() == app.colors['card'].lower())
 # The bar's accent-coloured border is likewise long-lived; changing the
 # accent while the bar is open must recolour it, not leave the old accent
 # framing the bar.

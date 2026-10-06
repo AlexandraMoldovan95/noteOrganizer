@@ -46,9 +46,9 @@ THEMES = {
         "accent": "#7c5cff",
         "accent_hover": "#9377ff",
         "card": "#2e2e48",
-        # The well a check mark sits in. Tk draws that mark dark on
-        # Windows whatever the palette says, so this stays light in
-        # every theme -- a dark well made a ticked box read as empty.
+        # The well a check mark sits in, light in every theme because the
+        # mark is dark. Tk paints the mark in a box's text colour, so a box
+        # with words draws its own (_drawn_tick_box); the rest keep Tk's.
         "check_well": "#f7f7fb",
         "text": "#f2f2f7",
         "subtext": "#a0a0c0",
@@ -62,9 +62,9 @@ THEMES = {
         "accent": "#2f9be0",
         "accent_hover": "#54b0ec",
         "card": "#1c3350",
-        # The well a check mark sits in. Tk draws that mark dark on
-        # Windows whatever the palette says, so this stays light in
-        # every theme -- a dark well made a ticked box read as empty.
+        # The well a check mark sits in, light in every theme because the
+        # mark is dark. Tk paints the mark in a box's text colour, so a box
+        # with words draws its own (_drawn_tick_box); the rest keep Tk's.
         "check_well": "#f7f7fb",
         "text": "#eaf2fb",
         "subtext": "#8fa8c4",
@@ -78,9 +78,9 @@ THEMES = {
         "accent": "#43c07a",
         "accent_hover": "#5ed494",
         "card": "#213e30",
-        # The well a check mark sits in. Tk draws that mark dark on
-        # Windows whatever the palette says, so this stays light in
-        # every theme -- a dark well made a ticked box read as empty.
+        # The well a check mark sits in, light in every theme because the
+        # mark is dark. Tk paints the mark in a box's text colour, so a box
+        # with words draws its own (_drawn_tick_box); the rest keep Tk's.
         "check_well": "#f7f7fb",
         "text": "#eafaf0",
         "subtext": "#8fbaa1",
@@ -94,9 +94,9 @@ THEMES = {
         "accent": "#e0863f",
         "accent_hover": "#ec9d5a",
         "card": "#2d2d38",
-        # The well a check mark sits in. Tk draws that mark dark on
-        # Windows whatever the palette says, so this stays light in
-        # every theme -- a dark well made a ticked box read as empty.
+        # The well a check mark sits in, light in every theme because the
+        # mark is dark. Tk paints the mark in a box's text colour, so a box
+        # with words draws its own (_drawn_tick_box); the rest keep Tk's.
         "check_well": "#f7f7fb",
         "text": "#f3f2f0",
         "subtext": "#a8a8b0",
@@ -111,9 +111,9 @@ THEMES = {
         "accent": "#7c5cff",
         "accent_hover": "#6a49e6",
         "card": "#ffffff",
-        # The well a check mark sits in. Tk draws that mark dark on
-        # Windows whatever the palette says, so this stays light in
-        # every theme -- a dark well made a ticked box read as empty.
+        # The well a check mark sits in, light in every theme because the
+        # mark is dark. Tk paints the mark in a box's text colour, so a box
+        # with words draws its own (_drawn_tick_box); the rest keep Tk's.
         "check_well": "#f7f7fb",
         "text": "#22223a",
         "subtext": "#676780",
@@ -127,9 +127,9 @@ THEMES = {
         "accent": "#1f88d6",
         "accent_hover": "#1873ba",
         "card": "#ffffff",
-        # The well a check mark sits in. Tk draws that mark dark on
-        # Windows whatever the palette says, so this stays light in
-        # every theme -- a dark well made a ticked box read as empty.
+        # The well a check mark sits in, light in every theme because the
+        # mark is dark. Tk paints the mark in a box's text colour, so a box
+        # with words draws its own (_drawn_tick_box); the rest keep Tk's.
         "check_well": "#f7f7fb",
         "text": "#173049",
         "subtext": "#536b81",
@@ -143,9 +143,9 @@ THEMES = {
         "accent": "#2aa971",
         "accent_hover": "#238e5f",
         "card": "#ffffff",
-        # The well a check mark sits in. Tk draws that mark dark on
-        # Windows whatever the palette says, so this stays light in
-        # every theme -- a dark well made a ticked box read as empty.
+        # The well a check mark sits in, light in every theme because the
+        # mark is dark. Tk paints the mark in a box's text colour, so a box
+        # with words draws its own (_drawn_tick_box); the rest keep Tk's.
         "check_well": "#f7f7fb",
         "text": "#183328",
         "subtext": "#527061",
@@ -159,9 +159,9 @@ THEMES = {
         "accent": "#d97a2b",
         "accent_hover": "#bd6822",
         "card": "#ffffff",
-        # The well a check mark sits in. Tk draws that mark dark on
-        # Windows whatever the palette says, so this stays light in
-        # every theme -- a dark well made a ticked box read as empty.
+        # The well a check mark sits in, light in every theme because the
+        # mark is dark. Tk paints the mark in a box's text colour, so a box
+        # with words draws its own (_drawn_tick_box); the rest keep Tk's.
         "check_well": "#f7f7fb",
         "text": "#3a2c1c",
         "subtext": "#776653",

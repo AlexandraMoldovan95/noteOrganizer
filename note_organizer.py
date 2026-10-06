@@ -2642,13 +2642,27 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return items
 
     def _grid_redraw_cell_text(self, info, r, c):
-        """Replace one drawn cell's text items with a fresh run layout --
-        after a commit, a restyle, or anything that changed the value or
-        the tags underneath it."""
+        """Repaint one drawn cell from its tags -- its fill, and its text
+        as a fresh run layout -- after a commit, a restyle, or anything
+        that changed the value or the tags underneath it. The fill used to
+        wait for a full restyle, so a highlight showed only on a reopen."""
         cell = info["cells"].get((r, c))
-        if cell is None or c in info.get("hidden_cols", ()):
+        if cell is None:
             return
         canvas = info["canvas"]
+        paint = self._grid_cell_paint(info, r, c)
+        surface = (inset_surface(self.colors) if r == 0
+                   else self.colors["card"])
+        # The saved colour stays pure; only the DRAWING blends it toward the
+        # cell's own surface, so the text stays readable on either theme.
+        try:
+            canvas.itemconfigure(cell["rect"], fill=(
+                self._blend_hex(paint["bg"], surface, 0.45)
+                if paint["bg"] else surface))
+        except tk.TclError:
+            pass
+        if c in info.get("hidden_cols", ()):
+            return
         for item in cell.get("texts", ()):
             try:
                 canvas.delete(item)
@@ -2881,21 +2895,27 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             has_sel = t.compare(s, "<", e)
         except tk.TclError:
             has_sel = False
-        if not has_sel and kind in ("text_color", "highlight"):
+        if not has_sel and kind == "text_color":
             # No selection: the colour becomes the PENDING one -- shown
             # as a swatch on the toolbar button, worn by whatever is
             # typed next, in the cell and in the body alike.
-            label = "Highlight" if kind == "highlight" else "Text color"
-            if kind == "text_color":
-                self._pending_text_color = value
-            else:
-                self._pending_highlight_color = value
-            self.set_status(f"{label} on — applies to what you type next"
-                            if value else f"{label} off")
+            self._pending_text_color = value
+            self.set_status("Text color on — applies to what you type next"
+                            if value else "Text color off")
             self._refresh_format_buttons()
             return
         if not has_sel:
             s, e = "1.0", "end-1c"
+        if kind == "highlight":
+            # A cell's highlight is a whole-cell wash, as the drawing paints
+            # it: it takes the whole cell, selected or not, shows at once,
+            # and the commit lays it pipe to pipe, an empty cell included.
+            s, e = "1.0", "end-1c"
+            editor["cell_highlight"] = value
+            surface = (inset_surface(self.colors) if editor["r"] == 0
+                       else self.colors["card"])
+            t.configure(bg=self._blend_hex(value, surface, 0.45)
+                        if value else surface)
         if t.compare(s, ">=", e):
             return
 
@@ -3429,6 +3449,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 editor["styles_in"] = [dict(s) for s in raw_styles]
                 wrote = True
         if close:
+            if "cell_highlight" in editor:
+                # The cell's own highlight, laid the way a highlight on a
+                # closed cell is: pipe to pipe, so an empty cell keeps it.
+                self._grid_apply_style(info, (r, c, r, c), "highlight",
+                                       editor["cell_highlight"],
+                                       through_editor=False)
             self._close_cell_editor()
         if wrote:
             self._schedule_autosave()
@@ -6090,16 +6116,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return None
 
     @_undo_atom(tags_only=True)
-    def _grid_apply_style(self, info, box, kind, value=None):
+    def _grid_apply_style(self, info, box, kind, value=None, through_editor=True):
         """One toolbar action, over every selected cell's text.
 
         The toggle decision is made once across all the cells -- a mixed
         selection turns the style ON everywhere, the way the body's own
         selection behaves -- and the drawn grid repaints in place.
+        `through_editor=False` styles the body even under an open editor:
+        its commit lays the cell's own highlight that way.
         """
         r0, c0, r1, c1 = box
         editor = getattr(self, "_cell_editor", None)
-        if (editor is not None and editor.get("info") is info
+        if (through_editor and editor is not None and editor.get("info") is info
                 and (r0, c0, r1, c1) == (editor["r"], editor["c"],
                                          editor["r"], editor["c"])):
             # The cell is OPEN: style the selection inside the editor --
@@ -6193,20 +6221,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         The text is redrawn as runs, so a single coloured letter shows as
         itself; the highlight stays a whole-cell wash -- a background is
         the one style the drawing paints cell-wide."""
-        canvas = info["canvas"]
-        for (r, c), cell in info["cells"].items():
-            paint = self._grid_cell_paint(info, r, c)
-            surface = (inset_surface(self.colors) if r == 0
-                       else self.colors["card"])
-            # The saved colour stays pure; only the DRAWING blends it
-            # toward the cell's own surface, so the text stays readable
-            # on either theme -- a solid palette fill buried it.
-            bg = (self._blend_hex(paint["bg"], surface, 0.45)
-                  if paint["bg"] else surface)
-            try:
-                canvas.itemconfigure(cell["rect"], fill=bg)
-            except tk.TclError:
-                pass
+        for (r, c) in info["cells"]:
             self._grid_redraw_cell_text(info, r, c)
 
     def _grid_stub_menu(self, info, event, c):
@@ -9938,11 +9953,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 extra = " 📎" if n.get("attachments") else ""
                 cb = tk.Checkbutton(inner, text=title + extra, variable=var,
                                     command=refresh_select_all_label,
-                                    bg=self.colors["sidebar"], fg=self.colors["text"],
-                                    selectcolor=self.colors["check_well"],
-                                    activebackground=self.colors["sidebar"],
-                                    activeforeground=self.colors["text"],
                                     font=("Segoe UI", 8), anchor="w")
+                self._drawn_tick_box(cb, "sidebar", "text", track=False)
                 cb.pack(fill="x", anchor="w")
             remaining = len(self.notes) - len(visible_notes)
             if remaining > 0:
@@ -11660,6 +11672,51 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if self._widget_alive(w)]
         self._themed_pruned_at = max(256, len(self.themed_widgets))
 
+    # Tk paints a tick box's mark in its text colour, so a box with words
+    # draws its own: light well, dark mark, on every theme. ISSUES_LOG:
+    # "The tick that took the colour of its words".
+    TICK_BOX = 13
+
+    def _paint_tick_images(self):
+        """The empty and the ticked box, (re)drawn in the current theme."""
+        images = getattr(self, "_tick_images", None)
+        if images is None:
+            images = self._tick_images = tuple(
+                tk.PhotoImage(master=self, width=self.TICK_BOX + 4,
+                              height=self.TICK_BOX) for _ in range(2))
+        size = self.TICK_BOX
+        for image, ticked in zip(images, (False, True)):
+            image.blank()
+            image.put(self.colors["subtext"], to=(0, 0, size, size))
+            image.put(self.colors["check_well"], to=(1, 1, size - 1, size - 1))
+            if ticked:
+                for (x0, y0), (x1, y1) in (((2, 6), (5, 9)), ((5, 9), (10, 3))):
+                    steps = max(abs(x1 - x0), abs(y1 - y0))
+                    for k in range(steps + 1):
+                        x = round(x0 + (x1 - x0) * k / steps)
+                        y = round(y0 + (y1 - y0) * k / steps)
+                        image.put(self.CARD_CHECK_MARK, to=(x, y, x + 2, y + 2))
+        return images
+
+    def _drawn_tick_box(self, box, bg, fg, track):
+        """Give a tick box that carries words a drawn box. `bg` and `fg`
+        are palette keys; `track` for a box that lives as long as the app
+        (one rebuilt with its panel takes the colours as they are)."""
+        empty, ticked = self._paint_tick_images()
+        box.configure(indicatoron=False, image=empty, selectimage=ticked,
+                      compound="left", relief="flat", offrelief="flat",
+                      overrelief="flat", bd=0, highlightthickness=0,
+                      cursor="hand2")
+        # selectcolor floods a drawn box's whole button when ticked; it
+        # matches the surface, so only the drawn mark changes.
+        colours = dict(bg=bg, fg=fg, selectcolor=bg, activebackground=bg,
+                       activeforeground=fg)
+        if track:
+            self.track_theme(box, **colours)
+        else:
+            box.configure(**{opt: self.colors[key] for opt, key in colours.items()})
+        return box
+
 
     def toggle_theme(self):
         """Quick toggle between the last dark and last light theme. Kept for the
@@ -11711,6 +11768,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             except tk.TclError:
                 pass
         self._refresh_placeholder_colors()
+        # The drawn tick boxes share two images; redrawn, every box follows.
+        if getattr(self, "_tick_images", None) is not None:
+            self._paint_tick_images()
         # The drawn tables carry their colours in canvas items; without a
         # rebuild they kept the OLD theme until the next edit touched them.
         # The commit first: render's contract is "never while focus is in
@@ -11731,7 +11791,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             except tk.TclError:
                 pass
         self.refresh_weekday_buttons()
-        self.on_end_mode_changed()
+        self._paint_end_fields()
         self.style_notebook()
         # Statistics is deliberately NOT re-rendered here: a theme switch
         # changes no statistic -- only the palette, which
@@ -12544,15 +12604,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             group_row, text="Group by category", variable=self.group_by_category,
             command=self._on_toggle_group_by_category,
             font=("Segoe UI", 8), anchor="w")
-        # This checkbox is built ONCE at startup and lives for the whole app
-        # session (unlike other checkboxes in the app, which sit inside
-        # panels that get fully rebuilt — and so naturally pick up the
-        # current theme — every time they're opened). Being long-lived means
-        # it needs LIVE theme tracking, or selectcolor stays stuck at
-        # whichever theme was active when the app started, regardless of any
-        # later theme switch.
-        self.track_theme(group_cb, bg="sidebar", fg="subtext", selectcolor="check_well",
-                         activebackground="sidebar")
+        # Built ONCE and kept for the whole session, so its colours are
+        # tracked live, unlike the boxes in panels rebuilt on every visit.
+        self._drawn_tick_box(group_cb, "sidebar", "subtext", track=True)
         group_cb.pack(side="left")
 
         # Multi-select: pick several notes at once for a bulk action (move to
@@ -14368,7 +14422,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # The well is the CARD colour, which is the opposite of what the
             # tick boxes need -- measured, not assumed. Tk on Windows paints
             # a selected radio's dot in the button's own foreground colour
-            # (a tick box's mark is dark whatever the palette says), and the
+            # (a tick box's mark too, hence _drawn_tick_box), and the
             # foreground is the text colour, light on every dark theme. On
             # the light check_well that dot was invisible: whichever of the
             # three was chosen, all three looked unchosen. card stands well
@@ -14437,6 +14491,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def on_end_mode_changed(self):
         """Grey out the inputs that don't apply, so the panel can't imply an
         end condition that won't actually be saved."""
+        self._paint_end_fields()
+        self.update_recurrence_summary()
+
+    def _paint_end_fields(self):
+        """The end-condition fields' state and colours, and nothing else: a
+        theme switch repaints them, and a repaint is no reason to save."""
         mode = self.rec_end_mode_var.get()
         for entry, active in ((self.rec_end_date_entry, mode == "on"),
                               (self.rec_count_entry, mode == "after")):
@@ -14452,7 +14512,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if hasattr(self, "rec_end_date_pick_btn"):
             self.rec_end_date_pick_btn.configure(
                 state="normal" if mode == "on" else "disabled")
-        self.update_recurrence_summary()
 
     def toggle_weekday(self, index):
         self.rec_weekday_state[index] = not self.rec_weekday_state[index]
@@ -16455,14 +16514,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._find_case = tk.BooleanVar(value=False)
         cb = tk.Checkbutton(bar, text="Aa", variable=self._find_case,
                             command=lambda: self._find_rescan(reveal=False),
-                            relief="flat", bd=0, font=("Segoe UI", 8, "bold"))
-        # Built once with the bar and long-lived, so selectcolor (the box's
-        # own fill) and activebackground need LIVE tracking too -- left off
-        # the map they stay stuck at whichever theme was active when the bar
-        # was first built, leaving a dark box on a light theme where the
-        # checkmark can't be read (the group-by checkbox hit the same trap).
-        self.track_theme(cb, bg="card", fg="subtext", selectcolor="check_well",
-                         activebackground="card")
+                            font=("Segoe UI", 8, "bold"))
+        # Built once with the bar and long-lived, so its colours are tracked
+        # live; left off the map they stay at the theme it was built in.
+        self._drawn_tick_box(cb, "card", "subtext", track=True)
         self._find_case_cb = cb
         cb.pack(side="left", padx=(2, 2))
         close = tk.Button(bar, text="✕", command=self._close_find,
@@ -18598,6 +18653,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # that day's, not the series'.
             own_day = (occurrence_date is not None and is_recurring(note)
                        and occurrence_date in (note.get("overrides") or {}))
+            # Announced once it is known that something was stored.
+            announce = False
 
             if scope == "occurrence":
                 # Only content is overridden. Date, recurrence rule and
@@ -18655,8 +18712,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                 + f"{show_date(occurrence_date)} only"
                                 + (" — the date and the repeat stay the "
                                    "whole series'" if schedule_changed else ""))
-                if auto:
-                    self._show_toast("Note updated", yield_to_action=True)
+                announce = auto
             elif own_day and not asked:
                 # Only a series-owned field changed -- a ticked checklist
                 # item, an attachment, the repeat rule -- while looking at a
@@ -18671,8 +18727,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 note["updated"] = now
                 self.set_status(("Auto-saved " if auto else "Saved at ") + show_stamp(now)
                                 + (self._REPEAT_OFF_KEPT if rescued else ""))
-                if auto:
-                    self._show_toast("Note updated", yield_to_action=True)
+                announce = auto
             else:
                 # Before overwriting, keep a one-step backup of the OLD version
                 # if the user just removed a lot of text — either a big fraction
@@ -18752,8 +18807,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     note["overrides"] = {}
                 self.set_status(("Auto-saved " if auto else "Saved at ") + show_stamp(now)
                                 + (self._REPEAT_OFF_KEPT if days_lost else ""))
-                if auto:
-                    self._show_toast("Note updated", yield_to_action=True)
+                announce = auto
             # A series save can have just removed the recurrence — an
             # occurrence view of a note that no longer repeats is a lie
             # the day banner must not keep telling. And what the editor
@@ -18772,6 +18826,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # again, and each moved the note up "Recently updated" and
                 # rewrote its "Last updated" with no edit made.
                 note["updated"] = stored_before[1]
+                announce = False
+            if announce:
+                self._show_toast("Note updated", yield_to_action=True)
         # Recurrence or override counts may have just changed either way.
         self._update_occurrence_banner()
 

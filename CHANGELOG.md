@@ -90,6 +90,33 @@ How the numbers themselves are counted is the
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **A tick shows on every theme.** On the dark themes a tick in Share notes or in Settings →
+  Duplicates did not show, though it was taken: Tk draws a box's mark in the colour of its words,
+  light there, on a light box. "Group by category" and the find bar's "Aa" showed a faint one. A
+  box with words now draws its own box, a light well and a dark mark, on every theme.
+- **Changing the theme no longer says "Note updated".** Every switch scheduled a save, and a
+  save that could only leave out an unreadable date announced an update that stored nothing. A
+  switch now repaints and saves nothing, and a save says "Note updated" only when it stored
+  something.
+- **A highlight given inside a table cell shows at once.** It appeared only after the cell was
+  opened again, and with nothing selected it only waited for the next letter typed. It now
+  colours the whole cell — a cell's highlight is a whole-cell wash — the moment it is given,
+  selected or not, and the drawn cell keeps it when the editor closes, an empty cell included.
+
+### Testing
+
+- qa4 judges every ticked box on every theme by what is drawn, the mark against its well, with
+  Share, Duplicates and the find bar open; and checks that a theme switch schedules no save, on a
+  plain, a table and a dated note, and that a save which stored nothing says nothing. qa1 checks
+  the highlight in an open cell, with and without a selection, and the drawn cell after it
+  closes. Mutants T01–T07 take each fix back out.
+
+---
+
 ## [0.84.341] — 2026-10-04
 
 *Highlights: the hint shown when there is no template to pick sends you to the section of

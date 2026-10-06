@@ -14,7 +14,8 @@ import note_organizer as NO, tkinter as tk, time
 # Windows foreground -- which a test process never owns. See
 # qa/_qa_support.py; _qa_click refuses to click into the void.
 from _qa_support import (click as _qa_click, fire as _qa_fire,
-                         pin_popup_visibility as _qa_pin)
+                         pin_popup_visibility as _qa_pin,
+                         waiting_timers as _qa_waiting)
 _qa_pin(NO)
 fails=[]
 def check(name, cond):
@@ -3052,6 +3053,11 @@ def _inspect_wells(route):
           len(toggles) >= 3)
     borrowed, dark, dot_lost, radios = [], [], [], 0
     for widget in toggles:
+        # A box that draws its own well and mark (indicatoron off) is judged
+        # on its pixels below, on every theme; its selectcolor matches the
+        # surface on purpose, so ticking it does not flood the words.
+        if str(widget.cget('indicatoron')) in ('0', 'false', 'False'):
+            continue
         try:
             well = str(widget.cget('selectcolor')).lower()
             behind = str(widget.cget('bg')).lower()
@@ -3113,10 +3119,140 @@ app.update()
 check('on every theme, a chosen radio\'s dot stands out from its well '
       '(%s)' % (', '.join(_rw_lost) or 'every theme'), not _rw_lost)
 
+# ...and a tick box's MARK, on every theme, judged on what a person sees.
+# Tk paints a box's mark in the box's text colour. The Share and Duplicates
+# boxes carry light words on a dark theme, so their mark was light on the
+# light well, and a ticked box looked empty (field-reported: "the tick
+# doesn't work in dark mode"). The rule above held boxes only to "the well
+# is light". A box with words now draws its own box; either way, the mark
+# a person sees must stand apart from the well it sits in.
+
+
+def _seen_tick(box):
+    """(well, mark) luminance of a ticked box as it is drawn."""
+    def lum(r, g, b):
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    if str(box.cget('indicatoron')) in ('0', 'false', 'False'):
+        image = str(box.cget('selectimage'))
+        if not image:
+            return None
+        size = int(app.tk.call(image, 'cget', '-height'))
+        pixels = [tuple(int(v) / 255.0 for v in app.tk.splitlist(
+            app.tk.call(image, 'get', x, y))[:3])
+            for x in range(1, size - 1) for y in range(1, size - 1)]
+        well = lum(*pixels[0])
+        return well, min(lum(*p) for p in pixels)
+    well = lum(*(v / 65535.0 for v in box.winfo_rgb(box.cget('selectcolor'))))
+    return well, lum(*(v / 65535.0 for v in box.winfo_rgb(box.cget('fg'))))
+
+
+app.notes = [NO.normalize_note({'id': 990 + i, 'title': 'Twin', 'body': 'same',
+                                'category': 'General'}) for i in range(2)]
+app.save_notes()
+app.refresh_note_list()
+app._open_find()
+app.update()
+_tk_lost, _tk_seen = [], set()
+_tk_before = app.theme_name
+def _judge_ticks(theme):
+    for box in _every_toggle(app):
+        if isinstance(box, tk.Radiobutton) or not box.winfo_ismapped():
+            continue
+        _tk_seen.add(str(box.cget('text')).split('   ')[0])
+        judged = _seen_tick(box)
+        if judged is None or abs(judged[0] - judged[1]) < 0.5:
+            _tk_lost.append('%s/%s' % (theme, box.cget('text')))
+
+
+for _tk_theme in NO.THEMES:
+    app.set_theme(_tk_theme)
+    app.update()
+    app.toggle_share_panel()          # built now, in this theme
+    app.update()
+    _judge_ticks(_tk_theme)           # Share, Group by category, Aa
+    app.show_settings_page()
+    app.toggle_settings_panel('duplicates')
+    app.update()
+    _judge_ticks(_tk_theme)           # Duplicates
+    app.hide_settings_page()
+    app.toggle_share_panel()
+    app.update()
+app.set_theme(_tk_before)
+app.update()
+check('the boxes judged include Share, Duplicates, Group by category and '
+      'Aa (%s)' % sorted(_tk_seen),
+      {'Twin', 'Delete this copy', 'Group by category', 'Aa'} <= _tk_seen)
+check('on every theme, a ticked box\'s mark stands out from its well '
+      '(%s)' % (', '.join(sorted(set(_tk_lost))[:6]) or 'every box, every theme'),
+      not _tk_lost)
+app._close_find()
+app.update()
+
 app.hide_settings_page()
 app.update()
 if app.selection_mode:
     app._toggle_selection_mode()
+app.notes = []
+app.save_notes()
+app.new_note()
+app.update()
+
+# ---- A THEME SWITCH SAVES NOTHING, AND A SAVE THAT STORED NOTHING SAYS NOTHING ----
+# Field-reported: a green "Note updated" after every theme change. The switch
+# repainted the repeat panel through the function that also refreshes the
+# repeat's summary, which schedules a save; and a save that could only leave
+# an unreadable date out toasted before learning it had stored nothing.
+_ts_toasts = []
+app._show_toast = lambda text, *a, **k: _ts_toasts.append(text)
+app.notes = [
+    NO.normalize_note({'id': 7001, 'title': 'Plain', 'body': 'words'}),
+    NO.normalize_note({'id': 7002, 'title': 'Table',
+                       'body': 'Intro\n| a | b |\n| c | d |'}),
+    NO.normalize_note({'id': 7003, 'title': 'Dated', 'body': 'x',
+                       'date': '2026-10-20'})]
+app.save_notes()
+app.refresh_note_list()
+_ts_scheduled, _ts_said, _ts_restamped = [], [], []
+for _ts_note in list(app.notes):
+    app.open_note_in_tab(_ts_note)
+    app.update()
+    for _ts_job in _qa_waiting(app, '_autosave_now'):
+        app.after_cancel(_ts_job)        # the open's own business, not the switch's
+    _ts_stamp = _ts_note['updated']
+    del _ts_toasts[:]
+    app.toggle_theme()
+    app.update()
+    if _qa_waiting(app, '_autosave_now'):
+        _ts_scheduled.append(_ts_note['title'])
+    _ts_end = time.time() + 0.8
+    while time.time() < _ts_end:
+        app.update()
+        time.sleep(0.02)
+    if _ts_toasts:
+        _ts_said.append(_ts_note['title'])
+    if app.find_note(_ts_note['id'])['updated'] != _ts_stamp:
+        _ts_restamped.append(_ts_note['title'])
+check('a theme switch schedules no save, on a plain note, a table and a dated '
+      'note (%s)' % (_ts_scheduled or 'none'), not _ts_scheduled)
+check('...and nothing says "Note updated", nor does any note look newly '
+      'edited (%s / %s)' % (_ts_said or 'quiet', _ts_restamped or 'untouched'),
+      not _ts_said and not _ts_restamped)
+app.open_note_in_tab(app.find_note(7001))
+app.update()
+app.date_entry.delete(0, 'end')
+app.date_entry.insert(0, '31/09/2026')   # a day that does not exist
+del _ts_toasts[:]
+app._autosave_now()
+app.update()
+check('an autosave that can only leave an unreadable date out says no '
+      '"Note updated" (%s)' % (_ts_toasts or 'quiet'), not _ts_toasts)
+app.body_text.insert('end', ' and more')
+app._autosave_now()
+app.update()
+check('...while a real edit beside it still does (%s)' % _ts_toasts,
+      _ts_toasts == ['Note updated'])
+del app._show_toast
+app.date_entry.delete(0, 'end')
 app.notes = []
 app.save_notes()
 app.new_note()
