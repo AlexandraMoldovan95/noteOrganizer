@@ -8472,6 +8472,86 @@ check('find/switch: no stale find highlight survives the switch',
 app._close_find()
 app.update()
 
+# Her re-test (case 600): the bar belongs to the note. Leaving it -- for
+# another note, the Calendar or Settings -- puts it away, and Ctrl+F brings
+# back its words; the same note loaded again over itself (a save's reload,
+# Restore previous) is the same search and keeps the bar.
+_fz_id = next(n['id'] for n in app.notes if n.get('title') == 'FindA')
+app.load_note(app.find_note(_fz_id)); app.update()
+app._open_find(); app._find_var.set('switchword'); app._find_rescan(reveal=True)
+app.update()
+app.load_note(app.find_note(_fz_id)); app.update()
+_fz_same = (app._find_open, len(app._find_matches))
+app.new_note(); app.update()
+_fz_new = (app._find_open, app._find_bar.winfo_manager())
+app._open_find(); app.update()
+_fz_back = (app._find_open, app._find_var.get())
+check(f'find/switch: the same note loaded again keeps the bar and its search, '
+      f'another note puts it away, and Ctrl+F brings its words back '
+      f'({_fz_same}; {_fz_new}; {_fz_back})',
+      _fz_same == (True, 2) and _fz_new == (False, '')
+      and _fz_back == (True, 'switchword'))
+# Words found nowhere: the box takes a tint of the theme's warning colour,
+# mixed from the palette -- one fixed dark red served every theme, and on
+# a light one the words typed were dark on dark. A theme switched while it
+# shows keeps the tint, mixed again (the editor has a theme toggle).
+_fz_tint = {}
+_fz_theme = app.theme_name
+for _fz_t in ('light', 'dark_forest'):
+    app.set_theme(_fz_t); app.update()
+    _fz_tint[_fz_t] = (str(app._find_entry.cget('bg')).lower()
+                       == NO.miss_surface(app.colors).lower())
+app.set_theme(_fz_theme); app.update()
+app.load_note(app.find_note(_fz_id)); app.update()
+app._open_find()
+app._find_var.set('zz-nowhere-zz'); app._find_rescan(reveal=False); app.update()
+_fz_tint['here'] = (str(app._find_entry.cget('bg')).lower()
+                    == NO.miss_surface(app.colors).lower())
+app._find_var.set('switchword'); app._find_rescan(reveal=False); app.update()
+_fz_found_bg = str(app._find_entry.cget('bg')).lower()
+check(f'find/miss: words found nowhere tint the box with the theme\'s warning '
+      f'colour, mixed again on a theme switch, and found words take it off '
+      f'({_fz_tint}; {_fz_found_bg})',
+      all(_fz_tint.values()) and len(_fz_tint) == 3
+      and _fz_found_bg == app.colors['sidebar'].lower())
+# The Calendar and Settings put it away too; Ctrl+F from either comes back
+# to the note first, and the tab change that follows must not close it.
+app.notebook.select(app.TAB_CALENDAR); app.update()
+_fz_cal = app._find_open
+app._shortcut_find(); app.update()
+_fz_cal_back = (app.notebook.index('current') == app.TAB_NOTES, app._find_open)
+app.show_settings_page(); app.update()
+_fz_set = app._find_open
+app._shortcut_find(); app.update()
+_fz_set_back = (bool(getattr(app, '_settings_open', False)), app._find_open)
+check(f'find/leave: the Calendar and Settings put the bar away, and Ctrl+F '
+      f'from either brings it back open ({_fz_cal}, {_fz_cal_back}, '
+      f'{_fz_set}, {_fz_set_back})',
+      _fz_cal is False and _fz_cal_back == (True, True)
+      and _fz_set is False and _fz_set_back == (False, True))
+# The keyboard: put away from its own box, it goes to the window, not into
+# a hidden box; put away while it is elsewhere -- a note card clicked in
+# the list -- it stays where it went. Recorded, not polled.
+_fz_asked = []
+_fz_real_focus_set = tk.Misc.focus_set
+tk.Misc.focus_set = lambda w: (_fz_asked.append(w), _fz_real_focus_set(w))[1]
+try:
+    app.title_entry.focus_set(); app.update()
+    del _fz_asked[:]
+    app._hide_find()
+    _fz_elsewhere = list(_fz_asked)
+    app._open_find(); app.update()
+    app._find_entry.focus_set(); app.update()
+    del _fz_asked[:]
+    app._hide_find()
+    _fz_own = list(_fz_asked)
+finally:
+    tk.Misc.focus_set = _fz_real_focus_set
+app.update()
+check(f'find/leave: put away, the bar takes the keyboard off its own box and '
+      f'nowhere else ({_fz_elsewhere}; {_fz_own})',
+      _fz_elsewhere == [] and _fz_own == [app])
+
 # ---- LIFT #2: cell styling, raw-row Tab, category dropdown, share panel ----
 
 # Bold/italic INSIDE the cell editor (_editor_apply_style's chars walk).

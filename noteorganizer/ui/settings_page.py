@@ -2086,6 +2086,8 @@ class SettingsPageMixin:
         if not self._dismiss_mini_popup_asking():
             return
         self._catch_up_deferred_refresh()
+        # The find bar belongs to the note being left (her re-test, 600).
+        self._hide_find()
         self.notebook.pack_forget()
         # Stated, not inferred. Whether the notebook is on screen is
         # asked by _calendar_is_showing(), which decides whether a

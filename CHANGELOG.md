@@ -127,6 +127,17 @@ How the numbers themselves are counted is the
   moment the keyboard was in its box — all the time it is used — on every theme. Tk paints a
   frame's border in another colour while the keyboard is inside it, and that colour was never
   set. The picture preview's border did the same when one of its buttons had the keyboard.
+- **The find box can be read on a light theme when nothing is found.** Words found nowhere
+  turned the box one fixed dark red on every theme, and on a light one the words typed into it
+  were dark on dark (1.2:1). It takes a light tint of the theme's own warning colour now, which
+  reads at 8.4:1 or better on all eight themes, and keeps it through a theme switch.
+
+### Changed
+
+- **The find bar closes when you leave the note** — for another note, the Calendar or Settings.
+  It stayed open over the next note, often reading "0/0" in red for a search that belonged to
+  the last one. Its words are kept: Ctrl+F brings them back, selected, and the matches show at
+  once. The same note loaded again over itself — after a save, Restore previous — keeps it open.
 
 ### Testing
 
@@ -173,6 +184,12 @@ How the numbers themselves are counted is the
   something that takes the keyboard, with its two border colours apart; qa1 runs it on the
   checklist and the find bar (and switches to a theme with another accent), qa7 on the picture
   preview, qa9 on a template's checklist. Mutants O21–O23 and X01–X03 take each part back out.
+- qa1 opens the find bar, loads the same note over itself and keeps it, opens another note and
+  finds it put away with its words kept, leaves for the Calendar and for Settings and comes back
+  with Ctrl+F, and records where the keyboard goes when the bar is put away. It tints a search
+  found nowhere on a light and a dark theme, switched while it shows. The contrast gate measures
+  the tint on all eight themes through a new `DERIVED` table, and fails on the old fixed red.
+  Mutants Z01–Z09 take each part back out.
 
 ---
 

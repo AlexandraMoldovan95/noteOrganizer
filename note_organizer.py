@@ -434,6 +434,7 @@ from noteorganizer.core.themes import (
     contrasting_fg as core_contrasting_fg,
     inset_surface,
     hairline,
+    miss_surface,
     THEMES,
     DARK_THEMES,
     LIGHT_THEMES,
@@ -12391,6 +12392,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if hasattr(self, "body_text"):
             self._retint_find_tags(self.body_text)
         self._find_reflash()
+        self._find_paint_entry()
         # (The History register's rebuilt rows need no hook here: the
         # straggler pass above recolors them — qa7's theme-while-open
         # check guards that promise regardless of mechanism.)
@@ -12918,10 +12920,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         def _on_tab_changed(event):
             try:
-                self.notebook.index(self.notebook.select())
+                shown = self.notebook.index(self.notebook.select())
             except tk.TclError:
                 return
             self._catch_up_deferred_refresh()
+            # The find bar belongs to the note: leaving for the Calendar
+            # puts it away (her re-test, case 600). Ctrl+F from there
+            # comes back to Notes first, so it is not closed on arrival.
+            if shown != self.TAB_NOTES:
+                self._hide_find()
             # The Calendar tab's home is the month grid; History is only a
             # view of it. Leaving the tab (or returning to it) resets to
             # the grid, so the calendar never reopens showing History
@@ -17158,14 +17165,32 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._find_rescan(reveal=True)
 
     def _close_find(self, event=None):
-        if getattr(self, "_find_bar", None) is not None:
-            self._find_bar.place_forget()
-        self._find_open = False
-        self._find_clear()
+        self._hide_find()
         try:
             self.body_text.focus_set()
         except tk.TclError:
             pass
+
+    def _hide_find(self):
+        """Put the bar away as the person leaves the note -- for another
+        note, the Calendar or Settings. Its words stay for the next Ctrl+F;
+        the keyboard is moved only off the bar's own box, never taken from
+        where it went (a note card clicked in the list keeps it)."""
+        bar = getattr(self, "_find_bar", None)
+        if bar is not None:
+            # focus_get() answers None while another program is in front;
+            # the window's own record is where the keyboard will return.
+            try:
+                held = str(self.focus_get() or self.tk.call(
+                    "focus", "-lastfor", self._w))
+            except (KeyError, tk.TclError):
+                held = ""
+            if held.startswith(str(bar) + "."):
+                self.focus_set()
+            bar.place_forget()
+        self._find_open = False
+        self._find_missed = False
+        self._find_clear()
 
     def _find_clear(self):
         """Remove ONLY the find tags and the throwaway flash. No existing
@@ -17220,10 +17245,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 pass
         self._find_debounce = self.after(180, self._find_debounce_fire, False)
 
-    def _find_on_context_switch(self):
+    def _find_on_context_switch(self, leaving=True):
         """Note/tab switch or load: the old note's match model is invalid.
         Clear synchronously and cancel any pending debounce so no navigation
-        runs against stale indices; rescan the new note if the bar is open."""
+        runs against stale indices. Leaving the note closes the bar (her
+        re-test, case 600); the same note loaded again over itself is the
+        same search, rescanned."""
         job = getattr(self, "_find_debounce", None)
         if job is not None:
             try:
@@ -17233,7 +17260,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._find_debounce = None
         self._find_clear()
         self._find_model_dirty = False
-        if getattr(self, "_find_open", False) and getattr(self, "_find_bar", None):
+        if leaving:
+            self._hide_find()
+        elif getattr(self, "_find_open", False) and getattr(self, "_find_bar", None):
             self._find_rescan(reveal=False)
 
     def _find_norm_cell(self, value):
@@ -17343,6 +17372,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._find_debounce = None
         self._find_rescan(reveal=reveal)
 
+    def _find_paint_entry(self):
+        """The find box's ground: the theme's warning tint while its words
+        are found nowhere, the plain field otherwise. Asked again by a theme
+        switch, which lays the plain field back on a tracked box."""
+        entry = getattr(self, "_find_entry", None)
+        if entry is None:
+            return
+        missed = (getattr(self, "_find_open", False)
+                  and getattr(self, "_find_missed", False))
+        try:
+            entry.configure(bg=miss_surface(self.colors) if missed
+                            else self.colors["sidebar"])
+        except tk.TclError:
+            pass
+
     def _find_rescan(self, reveal=False):
         if not getattr(self, "_find_open", False):
             return
@@ -17362,10 +17406,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._find_index = -1
             self._find_model_dirty = False
             self._find_count_lbl.config(text="")
-            try:
-                self._find_entry.configure(bg=self.colors["sidebar"])
-            except tk.TclError:
-                pass
+            self._find_missed = False
+            self._find_paint_entry()
             return
         self._find_matches = self._find_scan_model(query)
         self._find_model_dirty = False
@@ -17381,15 +17423,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not n:
             self._find_index = -1
             self._find_count_lbl.config(text="0/0")
-            try:
-                self._find_entry.configure(bg="#5a2b2b")
-            except tk.TclError:
-                pass
+            self._find_missed = True
+            self._find_paint_entry()
             return
-        try:
-            self._find_entry.configure(bg=self.colors["sidebar"])
-        except tk.TclError:
-            pass
+        self._find_missed = False
+        self._find_paint_entry()
         capped = n >= self.FIND_MATCH_CAP
         if reveal:
             self._find_index = 0
@@ -17631,10 +17669,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Update -- starts a new list: the item it brought back as a new
         # entry was put back again beside it, and stored twice.
         day = occurrence_date if is_recurring(note) else None
+        same_session = (self.selected_note_id == note.get("id")
+                        and self.current_occurrence_date == day)
         kept_checklist = (getattr(self, "_working_checklist", None)
-                          if (self.selected_note_id == note.get("id")
-                              and self.current_occurrence_date == day)
-                          else None)
+                          if same_session else None)
         self.selected_note_id = note["id"]
         self.current_occurrence_date = day
         # A new note's status line names nothing left out (see
@@ -17717,7 +17755,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._reset_editor_scroll()
         self._reset_text_undo()
         self._update_restore_button()
-        self._find_on_context_switch()
+        self._find_on_context_switch(leaving=not same_session)
         self._share_code_on_context_switch()
         self._update_occurrence_banner()
 

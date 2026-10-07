@@ -536,9 +536,16 @@ with these numbers in hand.
 | white text on an accent button, pointed at | **3.3** ✗ | **2.4** ✗ | **1.9** ✗ | **2.2** ✗ | 5.7 | 5.0 | **4.1** ✗ | **4.1** ✗ |
 | white text on a destructive button | **3.0** ✗ | **2.8** ✗ | **2.5** ✗ | **2.8** ✗ | **4.1** ✗ | **4.1** ✗ | **4.1** ✗ | **4.1** ✗ |
 | white text on a confirming button | **1.8** ✗ | **2.0** ✗ | **1.8** ✗ | **1.8** ✗ | **2.8** ✗ | **2.8** ✗ | **2.8** ✗ | **2.8** ✗ |
+| text in the find box when nothing is found | 9.6 | 9.7 | 9.0 | 9.5 | 9.8 | 8.4 | 8.5 | 8.4 |
 
 A note's own colour, used for the tags line on its card, is the person's choice from a palette
 and is not in this table; a colour picked for its look may not read as text on every theme.
+
+The last row is a surface the app mixes rather than reads off the palette: the find box's ground
+while its words are found nowhere, a tint of the warning colour (`miss_surface` in
+`core/themes.py`). It used to be one fixed dark red on every theme, which put dark words on a dark
+ground on the light ones (1.2:1); a mixed surface is measured here like any other, through the
+gate's `DERIVED` table.
 
 ### Layout arithmetic belongs in core, not in the widgets
 

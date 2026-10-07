@@ -3150,7 +3150,6 @@ app.notes = [NO.normalize_note({'id': 990 + i, 'title': 'Twin', 'body': 'same',
                                 'category': 'General'}) for i in range(2)]
 app.save_notes()
 app.refresh_note_list()
-app._open_find()
 app.update()
 _tk_lost, _tk_seen = [], set()
 _tk_before = app.theme_name
@@ -3166,6 +3165,9 @@ def _judge_ticks(theme):
 
 for _tk_theme in NO.THEMES:
     app.set_theme(_tk_theme)
+    app.update()
+    # Opened each round: Settings, visited below, puts the find bar away.
+    app._shortcut_find()
     app.update()
     app.toggle_share_panel()          # built now, in this theme
     app.update()

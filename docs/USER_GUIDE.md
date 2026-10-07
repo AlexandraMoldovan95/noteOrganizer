@@ -449,8 +449,13 @@ the top-right corner of the editor — inside the window, not a separate dialog.
 the note's text and its tables: type a word and every match highlights, with the current one
 picked out; **Enter** and **Shift+Enter** step forward and back (wrapping around at the ends), the
 count reads "3/12", and **Aa** switches on case-sensitivity. A match inside a table scrolls the
-table into view and outlines the cell it's in. Find only highlights — it never changes the note —
-and **Esc** or the **✕** closes the bar.
+table into view and outlines the cell it's in. Words found nowhere tint the box a light shade of
+red and the count reads "0/0". Find only highlights — it never changes the note — and **Esc** or
+the **✕** closes the bar.
+
+The bar belongs to the note you are reading: it closes by itself when you open another note or
+go to the Calendar or Settings. Your words are kept, so **Ctrl+F** brings them back, already
+selected, with the matches showing.
 
 Each note's card previews its first words. A table would be pipe soup at that size, so the preview
 shows only the note's plain text and the card's tag row marks the table itself — **▦ 1 table**, or

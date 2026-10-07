@@ -1776,5 +1776,131 @@
     "must_fail": ["the image preview keeps its accent border while the keyboard is on its buttons"],
     "suites": ["qa7"],
     "expect": "killed"
+  },
+  {
+    "id": "Z01",
+    "about": "the find box goes the same dark red on every theme when its words are found nowhere, as it shipped",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            entry.configure(bg=miss_surface(self.colors) if missed\n",
+        "replace": "            entry.configure(bg=\"#5a2b2b\" if missed\n"
+      }
+    ],
+    "must_fail": ["find/miss: words found nowhere tint the box with the theme's warning colour"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "Z02",
+    "about": "a theme switch takes the not-found tint off the find box",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._find_reflash()\n        self._find_paint_entry()\n",
+        "replace": "        self._find_reflash()\n"
+      }
+    ],
+    "must_fail": ["find/miss: words found nowhere tint the box with the theme's warning colour"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "Z03",
+    "about": "the find bar stays open over another note, as it did",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if leaving:\n            self._hide_find()\n        elif getattr(self, \"_find_open\", False)",
+        "replace": "        if False:\n            self._hide_find()\n        elif getattr(self, \"_find_open\", False)"
+      }
+    ],
+    "must_fail": ["find/switch: the same note loaded again keeps the bar and its search, another note puts it away"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "Z04",
+    "about": "the same note loaded again over itself closes the find bar",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._find_on_context_switch(leaving=not same_session)\n",
+        "replace": "        self._find_on_context_switch()\n"
+      }
+    ],
+    "must_fail": ["find/switch: the same note loaded again keeps the bar and its search, another note puts it away"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "Z05",
+    "about": "the find bar stays open behind the Calendar",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if shown != self.TAB_NOTES:\n                self._hide_find()\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["find/leave: the Calendar and Settings put the bar away"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "Z06",
+    "about": "arriving on the Notes tab closes the find bar Ctrl+F has just opened",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if shown != self.TAB_NOTES:\n                self._hide_find()\n",
+        "replace": "            if True:\n                self._hide_find()\n"
+      }
+    ],
+    "must_fail": ["find/leave: the Calendar and Settings put the bar away"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "Z07",
+    "about": "the find bar stays open behind Settings",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "        self._hide_find()\n        self.notebook.pack_forget()\n",
+        "replace": "        self.notebook.pack_forget()\n"
+      }
+    ],
+    "must_fail": ["find/leave: the Calendar and Settings put the bar away"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "Z08",
+    "about": "putting the find bar away takes the keyboard from wherever it went",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if held.startswith(str(bar) + \".\"):\n                self.focus_set()\n",
+        "replace": "            if True:\n                self.focus_set()\n"
+      }
+    ],
+    "must_fail": ["find/leave: put away, the bar takes the keyboard off its own box and nowhere else"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "Z09",
+    "about": "putting the find bar away leaves the keyboard in its hidden box",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if held.startswith(str(bar) + \".\"):\n                self.focus_set()\n",
+        "replace": "            if held.startswith(str(bar) + \".\"):\n                pass\n"
+      }
+    ],
+    "must_fail": ["find/leave: put away, the bar takes the keyboard off its own box and nowhere else"],
+    "suites": ["qa1"],
+    "expect": "killed"
   }
 ]
