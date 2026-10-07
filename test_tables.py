@@ -389,6 +389,32 @@ _pv7, _pn7 = tables.preview_text("top\n\n\n| a | b |\n\n\nbottom")
 check("the gap a table leaves behind is collapsed, not doubled",
       _pv7 == "top\n\nbottom")
 
+# A line of maths starts with a pipe too, but not the way a cell is
+# written -- the app pads every cell, so its rows open "| ". A card
+# claimed "1 table" for this note and hid the line (audit).
+_pv8, _pn8 = tables.preview_text("|x| = 5 for x = -5\n|x| + |y| = 3")
+check(f"a line of maths is words, not a table ({_pv8!r}, {_pn8})",
+      _pv8 == "|x| = 5 for x = -5\n|x| + |y| = 3" and _pn8 == 0)
+def _kept(value):
+    a, z = tables.beside_checkbox(value)
+    return value[a:z]
+
+
+# What a checkbox cell keeps when something lands beside its marker: the
+# something, never the brackets (audit) -- by any road it arrived.
+check("an emoji beside a box takes its place",
+      _kept("[ ]\U0001F600") == "\U0001F600"
+      and _kept("\U0001F600 [x]") == "\U0001F600")
+check("words typed beside a box take its place, a line break too",
+      _kept("[ ] buy milk") == "buy milk" and _kept("[x]<br>done") == "done")
+check("a box alone stays a box, and a marker in the middle is words",
+      _kept("[ ]") == "[ ]" and _kept(" [X] ") == " [X] "
+      and _kept("see [ ] here") == "see [ ] here" and _kept("") == "")
+
+_pv9, _pn9 = tables.preview_text("words\n|a|b|")
+check("...while a row written without padding is still the row the editor "
+      "draws", _pv9 == "words" and _pn9 == 1)
+
 
 print()
 print(f"FAILURES: {fails if fails else 'none'}")

@@ -2438,6 +2438,22 @@ finally:
     app.show_info = _cut_real_info
 set_body('')
 
+# Bold and italic as a web page writes them reach the note by the real
+# paste route (field pass: they arrived plain) -- semibold 600 and an
+# oblique slant, the spellings the reader did not know.
+_stub_clipboard(html='<p>A <span style="font-weight:600">semi</span> and '
+                     '<span style="font-style:oblique">slant</span> word</p>',
+                text='A semi and slant word')
+app._on_body_paste()
+app.update()
+_wpS = {(s['style'], s['start'], s['end'])
+        for s in app._extract_formatting(app.body_text)}
+check(f'bold and italic from a web page arrive by the real paste ({_wpS})',
+      body() == 'A semi and slant word'
+      and ('bold', 2, 6) in _wpS and ('italic', 11, 16) in _wpS)
+_stub_clipboard()
+set_body('')
+
 # ---- Copying ----
 set_body('heading\nmilk\neggs')
 app.body_text.tag_add('sel', '1.0', '1.end')
@@ -3620,12 +3636,14 @@ for _cbRoad in ('menu', 'toolbar'):
     if _cbChips:
         _qa_click(_cbChips[0])
         app.update()
+    # The picker clears the box at once: the open cell shows no brackets.
+    _cbShown = app._cell_editor['entry'].get('1.0', 'end-1c')
     app._dismiss_mini_popup()
     app._commit_cell_editor()
     app.update()
     _cbVal = app._grid_at_line(1)['cells'][(1, 0)]['value']
     check(f'an emoji replaces a checkbox, no brackets left ({_cbRoad}: '
-          f'{_cbVal!r})', _cbVal == _cbEmoji)
+          f'{_cbShown!r} -> {_cbVal!r})', _cbVal == _cbEmoji == _cbShown)
     # And deleting it leaves an empty cell, never the old box.
     app._open_cell_editor(app._grid_at_line(1), 1, 0)
     app.update()
@@ -3645,6 +3663,40 @@ app._emoji_takes_checkbox_place(app._cell_editor['entry'])
 check('a text cell keeps its words when an emoji comes',
       app._cell_editor['entry'].get('1.0', 'end-1c') == 'word')
 app._commit_cell_editor()
+# By every other road too -- Windows' own emoji panel (Win+.) and a paste
+# arrive as typed text, and typed words were the same: whatever lands
+# beside a box takes its place when the cell is left (audit). A cell that
+# was never a box keeps "[ ]" typed into it as the words they are.
+_cbRoads = {}
+for _cbName, _cbAdd, _cbFrom in (
+        ('Win+. emoji', chr(0x1F600), '[x]'),
+        ('typed words', ' buy milk', '[ ]'),
+        ('words before it', 'done ', '[x]')):
+    set_body('| h1 | h2 |' + chr(10) + '| --- | --- |' + chr(10)
+             + '| %s | x |' % _cbFrom)
+    app._render_table_grids()
+    app.update()
+    app._open_cell_editor(app._grid_at_line(1), 1, 0, select=False)
+    app.update()
+    _cbE = app._cell_editor['entry']
+    _cbE.insert('1.0' if _cbName == 'words before it' else 'end', _cbAdd)
+    app._commit_cell_editor()
+    app.update()
+    _cbRoads[_cbName] = app._grid_at_line(1)['cells'][(1, 0)]['value']
+set_body('| h1 | h2 |' + chr(10) + '| --- | --- |' + chr(10) + '|   | x |')
+app._render_table_grids()
+app.update()
+app._open_cell_editor(app._grid_at_line(1), 1, 0)
+app.update()
+app._cell_editor['entry'].insert('end', '[ ] my words')
+app._commit_cell_editor()
+app.update()
+_cbRoads['typed into a plain cell'] = app._grid_at_line(1)['cells'][(1, 0)]['value']
+check(f'whatever lands beside a box takes its place, by every road '
+      f'({_cbRoads})',
+      _cbRoads == {'Win+. emoji': chr(0x1F600), 'typed words': 'buy milk',
+                   'words before it': 'done',
+                   'typed into a plain cell': '[ ] my words'})
 set_body('')
 
 # And outside a table Tab still types a tab, as it always did.
@@ -7193,6 +7245,76 @@ check('cells copied from elsewhere bring none of an older copy\'s styles',
 _stub_clipboard()
 set_body('')
 
+# The header row is read where its words are: a drawn table's window sits
+# at column 0 of that line, and the copy read every style one place to the
+# left (audit) -- "Name" red left as "N" plain and "ame" red.
+set_body('| Name | Qty |' + chr(10) + '| --- | --- |' + chr(10) + '| a | 1 |')
+app._render_table_grids()
+app.update()
+_kH = app.body_text.get('1.0', '1.end').index('Name')
+app.body_text.tag_add(
+    app._ensure_color_tag(app.body_text, 'text_color', '#d32f2f'),
+    '1.%d' % (_kH + app._col_base(1)), '1.%d' % (_kH + app._col_base(1) + 4))
+_iH2 = app._grid_at_line(1)
+app._grid_select_range(_iH2, (0, 0), (1, 1))
+_stub_clipboard(loopback=True)
+app._grid_copy_selection({'info': _iH2, 'box': (0, 0, 1, 1)})
+_runsH = (app._grid_cell_clip_styles.get((0, 0)) or {}).get('runs')
+check(f'a copied header cell keeps its colour on its own letters ({_runsH}; '
+      f'{_written.get("html")})',
+      _runsH == [('text_color_d32f2f', 0, 4)]
+      and '<span style="color:#d32f2f;">Name</span>' in (_written.get('html') or ''))
+app._grid_clear_selection()
+_stub_clipboard()
+
+# A highlight given in an open cell reaches the note even when the note is
+# left with the cell still open (audit): only closing the cell laid it,
+# and leaving a note flushes the cell without closing it.
+set_body('| h1 | h2 |' + chr(10) + '| --- | --- |' + chr(10) + '|   | x |')
+app._render_table_grids()
+app.update()
+app._open_cell_editor(app._grid_at_line(1), 1, 0, select=False)
+app.update()
+app._apply_body_color('highlight', '#ffe08a')
+app._cell_editor['entry'].insert('end', 'abc')
+app.update()
+_lvState = app.capture_editor_state()
+_lvHi = [s for s in _lvState.get('formatting', [])
+         if s['style'] == 'highlight' and s.get('value') == '#ffe08a']
+_lvRow = _lvState['body'].split(chr(10))[2]
+_lvCell = (_lvRow.index('abc'), _lvRow.index('abc') + 3)
+_lvAt = len(_lvState['body'].split(chr(10))[0]) + len(
+    _lvState['body'].split(chr(10))[1]) + 2
+check(f'leaving a note with a highlighted cell still open keeps the '
+      f'highlight ({_lvHi}; {_lvRow!r})',
+      'abc' in _lvRow and any(s['start'] <= _lvAt + _lvCell[0]
+                              and s['end'] >= _lvAt + _lvCell[1]
+                              for s in _lvHi))
+app._commit_cell_editor()
+app.update()
+
+# A copied cell that lands in a column the paste adds keeps its alignment
+# (audit): the new column's cells grew, their alignments did not.
+set_body('| p | q |' + chr(10) + '| --- | --- |' + chr(10) + '| left | mid |')
+app._render_table_grids()
+app.update()
+app._grid_set_alignment(app._grid_at_line(1), (1, 1, 1, 1),
+                        core_tables.ALIGN_CENTER)
+app.update()
+_iA = app._grid_at_line(1)
+app._grid_select_range(_iA, (1, 0), (1, 1))
+_stub_clipboard(loopback=True)
+app._grid_copy_selection({'info': _iA, 'box': (1, 0, 1, 1)})
+app._grid_clear_selection()
+app._grid_paste_cells(app._grid_at_line(1), 1, 1)
+app.update()
+_alA = core_tables.cell_alignments(app.body_text.get('3.0', '3.end'))
+check(f'a copied cell pasted into a new column keeps its alignment ({_alA}; '
+      f'{body()!r})',
+      len(_alA) == 3 and _alA[2] == core_tables.ALIGN_CENTER)
+_stub_clipboard()
+set_body('')
+
 # A word's size and typeface travel between notes: the HTML carries them
 # out to Word, and a paste reads none back (a page's sizes stay behind),
 # so our own copy brings them from what it remembered.
@@ -7227,6 +7349,26 @@ check('the same words pasted from elsewhere bring no size or typeface',
       body() == 'plain big end'
       and not [s for s in app._extract_formatting(app.body_text)
                if s['style'] in ('font_size', 'font_family')])
+# One word copied from an indented paragraph does not indent the paragraph
+# it lands in (audit): the HTML never carried a plain paragraph's indent,
+# and the remembered copy must not start to.
+set_body('an indented line' + chr(10) + 'plain target here')
+app.body_text.mark_set('insert', '1.0')
+app.body_text.tag_remove('sel', '1.0', 'end')
+app._change_paragraph_indent(+1)
+app.body_text.tag_add('sel', '1.3', '1.11')
+app.update()
+_stub_clipboard(loopback=True)
+app._copy_formatted()
+app.body_text.tag_remove('sel', '1.0', 'end')
+app.body_text.mark_set('insert', '2.6')
+app._on_body_paste()
+app.update()
+check(f'a word from an indented paragraph pastes without its indent '
+      f'({app._paragraph_indent_of(app.body_text, 2)}; {body()!r})',
+      app._paragraph_indent_of(app.body_text, 1) == 1
+      and app._paragraph_indent_of(app.body_text, 2) == 0
+      and 'indented' in app.body_text.get('2.0', '2.end'))
 _stub_clipboard()
 set_body('')
 
@@ -7705,6 +7847,18 @@ check(f'indenting an item keeps the caret at its start '
       f'({app.body_text.index("insert")}; {body()!r})',
       app.body_text.index('insert') == '2.0'
       and app.body_text.get('3.0', '3.end') == '2. c')
+# A selection across the items stays one piece through the renumber
+# (audit): the new digits went in without it, leaving holes.
+set_body('1. a' + chr(10) + '2. b' + chr(10) + '3. c' + chr(10) + '4. d')
+app.body_text.tag_add('sel', '2.0', '4.end')
+app.body_text.mark_set('insert', '4.end')
+app._change_paragraph_indent(+1)
+app.update()
+_selR = [str(i) for i in app.body_text.tag_ranges('sel')]
+check(f'a selection across a renumbered list stays whole ({_selR})',
+      _selR == ['2.0', '4.end'.replace('end', str(len(
+          app.body_text.get('4.0', '4.end'))))])
+app.body_text.tag_remove('sel', '1.0', 'end')
 set_body('')
 # ...also where an alignment meets the table's window: a centred line right
 # above the table (its alignment runs through its line break, up to the
@@ -8249,8 +8403,34 @@ _share_lbls = [str(l.cget('text'))
                for l in _walk_widgets(app.editor_code_area, tk.Label)]
 check('the inline share panel shows a real NOTE1 code',
       any(t.startswith('NOTE1:') for t in _share_texts))
-check('and warns that attachments are not included',
-      any("Attachments aren't included" in t for t in _share_lbls))
+check('and warns that attachments are not included, naming where they do go',
+      any("not attached files" in t and 'Settings → Backup → Export' in t
+          for t in _share_lbls))
+# Every sentence that sends someone to the backup names a place that exists
+# (field pass): three said "Import (ZIP)" / "Export (ZIP)", which no screen
+# has, and "use Export for files" left three exports to guess between.
+from noteorganizer.core import sharing as _sh_core
+import base64 as _sh_b64, zlib as _sh_zlib
+_sh_many = _sh_core.SHARE_CODE_PREFIX + _sh_b64.urlsafe_b64encode(_sh_zlib.compress(
+    json.dumps({'v': 1, 'notes': [{'title': 'x'}] * (_sh_core.MAX_SHARED_NOTES + 1)}
+               ).encode('utf-8'))).decode('ascii')
+_sh_said = []
+for _sh_code in ('NOTE1:' + 'A' * (_sh_core.MAX_SHARE_CODE_CHARS + 1),
+                 _sh_core.SHARE_CODE_PREFIX + 'AAAA' * 10, _sh_many):
+    try:
+        NO.decode_share_code(_sh_code)
+    except ValueError as _sh_exc:
+        _sh_said.append(str(_sh_exc))
+app.toggle_settings_panel('backup'); app.update()
+_sh_export = [w for w in _walk_widgets(app.settings_backup_panel, tk.Widget)
+              if w.winfo_class() in ('Button', 'Label')
+              and str(w.cget('text')) == 'Export']
+check(f'the backup is named as Settings → Backup → Export, which exists '
+      f'({_sh_said}; {len(_sh_export)} Export button)',
+      len(_sh_said) == 3 and len(_sh_export) == 1
+      and all('Settings → Backup → Export' in s and '(ZIP)' not in s
+              for s in _sh_said + [NO.NoteOrganizer.SHARE_ATTACHMENT_WARNING])
+      and 'Backup' in [s[1] for s in NO.NoteOrganizer.SETTINGS_SECTIONS])
 _decoded_share = NO.decode_share_code(
     next(t for t in _share_texts if t.startswith('NOTE1:')))
 check('the shown code round-trips to the note',
@@ -8259,9 +8439,8 @@ check('the shown code round-trips to the note',
 # ---- ONE SENTENCE, AND AN ✕ ON BOTH CODE AREAS (C-24) ----
 # Two surfaces generate a share code, and they warned about attachments in
 # two different sentences for one fact -- "Attachments not included" in the
-# sidebar, "Attachments aren't included in a code" in the editor. The
-# editor's is the one kept: it names WHICH mechanism leaves them out, which
-# is what tells a reader Export does include them. Asserted against the
+# sidebar, "Attachments aren't included in a code" in the editor. One is
+# kept, and it now names where the files DO travel. Asserted against the
 # constant rather than a copy of the string, so a reworded sentence moves
 # both places or fails here.
 check('the editor code area uses the shared attachments sentence',
@@ -8403,6 +8582,21 @@ check(f'Show more in Share adds the rest under the boxes already drawn '
       and bool(_sm_after[-1].bind('<MouseWheel>'))
       and not [b for b in _walk_widgets(app.share_panel, tk.Button)
                if str(b.cget('text')).startswith('Show ')])
+app.toggle_share_panel(); app.update()
+# A note deleted while the panel is open shifts the list under it: Show
+# more then draws every box again, or a note was left with no box (audit).
+app.toggle_share_panel(); app.update()
+del app.notes[5]
+_sm_more = next((b for b in _walk_widgets(app.share_panel, tk.Button)
+                 if str(b.cget('text')).startswith('Show ')), None)
+if _sm_more is not None:
+    _sm_more.invoke()
+    app.update()
+_sm_titles = [str(b.cget('text')) for b in _sm_boxes()]
+check(f'Show more in Share after a delete gives every note one box '
+      f'({len(_sm_titles)} boxes)',
+      _sm_more is not None and len(_sm_titles) == 129
+      and sorted(_sm_titles) == sorted(n['title'] for n in app.notes))
 app.toggle_share_panel(); app.update()
 app.notes = _sm_saved_notes
 

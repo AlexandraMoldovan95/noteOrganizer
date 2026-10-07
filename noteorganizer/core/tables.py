@@ -25,6 +25,8 @@ Nothing here imports tkinter: it turns strings into strings, so it can be
 tested on any machine.
 """
 
+import re
+
 CELL = "|"
 # A line break INSIDE a cell, as markdown itself writes one -- a table
 # row must stay one line of text, so the break is a marker in the value.
@@ -48,6 +50,28 @@ def checkbox_state(value):
     if v.lower() == CHECKBOX_DONE:
         return True
     return None
+
+
+_EDGE_MARKERS = (
+    re.compile(r"^\s*\[[ xX]\](?:\s|%s)*" % re.escape(LINE_BREAK)),
+    re.compile(r"(?:\s|%s)*\[[ xX]\]\s*$" % re.escape(LINE_BREAK)))
+
+
+def beside_checkbox(value):
+    """``(start, end)``: what to keep of a checkbox cell's new value.
+
+    A cell that was a checkbox and got something beside its marker -- an
+    emoji, typed words, a paste -- takes that in the box's place: kept, the
+    marker showed as raw brackets. The whole value when it is still just a
+    box, or holds no marker at either end."""
+    value = value or ""
+    if checkbox_state(value) is not None:
+        return 0, len(value)
+    head = _EDGE_MARKERS[0].match(value)
+    start = head.end() if head else 0
+    tail = _EDGE_MARKERS[1].search(value, start)
+    end = tail.start() if tail else len(value)
+    return (start, end) if end > start else (0, len(value))
 # A cell holding exactly one of these is not content but a merge marker:
 # "<" belongs to the cell on its left, "^" to the cell above. Anchors sit
 # at the top-left of their rectangle. Typing one of these alone into a cell
@@ -563,9 +587,16 @@ def _reads_as_plumbing(line):
     note's words and that line has none to show -- just punctuation. It
     was field-reported twice from the calendar, as "I only see vertical
     lines".
+
+    Loose, but not past the way a row is written: every cell the app
+    writes opens with a pipe and a space. A line of maths does not --
+    "|x| = 5" stayed words, where a card had claimed a table for it.
     """
     stripped = (line or "").strip()
-    return stripped.startswith(CELL) and stripped.count(CELL) >= 2
+    if is_table_row(stripped):
+        return True
+    return (stripped.startswith(CELL) and stripped.count(CELL) >= 2
+            and stripped[1:2].isspace())
 
 
 def preview_text(body):

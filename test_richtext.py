@@ -46,6 +46,42 @@ _t, _s, _p = html_to_note('<p style="font-weight:bold">x</p>')
 check("bold expressed as CSS rather than a tag is still bold",
       _s == [{"start": 0, "end": 1, "style": "bold"}])
 
+# Bold and italic as web pages really write them (field pass: bold and
+# italic words copied from a page arrived plain). The reader knew four
+# spellings of bold and one of italic.
+_said = {}
+for _name, _markup in (
+        ("semibold 600", '<span style="font-weight:600">x</span>'),
+        ("bolder", '<span style="font-weight: bolder">x</span>'),
+        ("capitals and !important", '<span style="FONT-WEIGHT: BOLD !important">x</span>'),
+        ("the font shorthand", '<span style="font: italic 700 14px/1.4 Arial">x</span>'),
+        ("oblique", '<span style="font-style: oblique 10deg">x</span>'),
+        ("medium 500", '<span style="font-weight:500">x</span>')):
+    _said[_name] = sorted(s["style"] for s in html_to_note(_markup)[1])
+check(f"bold and italic are read however a page writes them ({_said})",
+      _said == {"semibold 600": ["bold"], "bolder": ["bold"],
+                "capitals and !important": ["bold"],
+                "the font shorthand": ["bold_italic"], "oblique": ["italic"],
+                "medium 500": []})
+# Google Docs wraps a whole copy in <b style="font-weight:normal">: the
+# tag's own CSS takes back what the tag means, and only what Docs marks
+# bold is bold. Its end tag closes only itself, never an outer bold.
+_t, _s, _p = html_to_note(
+    '<b style="font-weight:normal;" id="docs-internal-guid-1">'
+    '<span style="font-weight:700">Bold</span> plain</b>')
+check(f"a Google Docs copy is not bold all over ({_s})",
+      _t == "Bold plain" and _s == [{"start": 0, "end": 4, "style": "bold"}])
+_t, _s, _p = html_to_note('<strong>a <b style="font-weight:normal">b</b> c</strong>')
+check(f"...and a tag that took its bold back closes no one else's ({_s})",
+      _s == [{"start": 0, "end": 5, "style": "bold"}])
+# The same reading serves colours and alignment, which met the same walls.
+_t, _s, _p = html_to_note('<p style="TEXT-ALIGN: CENTER">x <span '
+                          'style="color: #D32F2F !important">red</span></p>')
+check(f"a colour marked !important and an alignment in capitals arrive "
+      f"({_s}; {_p})",
+      {"start": 2, "end": 5, "style": "text_color", "value": "#d32f2f"} in _s
+      and {"line": 0, "align": "center"} in _p)
+
 text, spans, paras = html_to_note("<ul><li>milk</li><li>eggs</li></ul>")
 check("a bulleted list gets markers in the text",
       text == BULLET + "milk\n" + BULLET + "eggs")

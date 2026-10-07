@@ -129,8 +129,9 @@ def decode_share_code(code):
         raise ValueError("No code was pasted.")
     if len(code) > MAX_SHARE_CODE_CHARS:
         raise ValueError(
-            "That code is far too large to import safely. Use Import (ZIP) for "
-            "very large transfers."
+            "That code is far too large to import safely. For a transfer this "
+            "large, send a backup instead: Settings → Backup → Export, then "
+            "Import on the other computer."
         )
     if not code.startswith(SHARE_CODE_PREFIX):
         raise ValueError(
@@ -150,7 +151,8 @@ def decode_share_code(code):
     except (zlib.error, ValueError):
         raise ValueError(
             "This share code is damaged, or too large to import safely. Ask the "
-            "sender to send it again, or use Import (ZIP) for large transfers."
+            "sender to send it again, or to send a backup instead (Settings → "
+            "Backup → Export)."
         )
     try:
         payload = json.loads(raw.decode("utf-8"))
@@ -184,7 +186,8 @@ def decode_share_code(code):
         raise ValueError(
             f"This code contains {len(notes)} notes, which is over the "
             f"{MAX_SHARED_NOTES}-note limit for a single code. Ask the sender to "
-            "split it into smaller codes, or to use Export (ZIP) instead."
+            "split it into smaller codes, or to send a backup instead "
+            "(Settings → Backup → Export)."
         )
     # Project each note through the SAME shareable slice encode produces,
     # so a hand-crafted code can carry only the fields a real one would.

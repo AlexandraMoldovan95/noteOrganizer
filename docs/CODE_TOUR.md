@@ -528,8 +528,10 @@ when the note is exported, shared as a code, or pasted into an email.
 
 The cost is that renumbering rewrites real characters, which moves
 everything after them. So `renumber()` returns the shifts it caused and
-`shift_spans()` moves the character spans to match — otherwise bold slides
-sideways the moment `9.` becomes `10.`.
+`shift_spans()` can move character spans to match — otherwise bold slides
+sideways the moment `9.` becomes `10.`. In the editor, `_renumber_lists`
+writes only the characters of each marker that changed, and Tk moves every
+tag, the view and the drawn tables along by itself.
 
 Bullets change glyph with depth (`•`, `◦`, `▪`) because those are
 characters nobody types by accident. Numbers deliberately don't: `1.` then

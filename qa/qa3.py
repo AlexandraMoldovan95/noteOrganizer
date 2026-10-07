@@ -120,6 +120,33 @@ if show_more:
           and all(w.winfo_exists() for w in first_page)
           and bool(both_pages[-1].bind('<MouseWheel>')))
 
+# A note deleted while the panel is open (from the sidebar, which stays on
+# screen) moves every row down one: Show more then draws them all again,
+# or one row showed twice and the new one never (audit).
+app.toggle_settings_panel('trash'); app.update()
+_st_note = NO.normalize_note({'id': 7777, 'title': 'FreshlyTrashed', 'body': 'x'})
+app.notes.append(_st_note)
+app._move_notes_to_trash([_st_note])
+_st_more = find_btn(app.settings_trash_panel, 'Show')
+if _st_more:
+    _st_more.invoke()
+    app.update()
+_st_titles = []
+def _st_walk(x):
+    for c in x.winfo_children():
+        if isinstance(c, tk.Label):
+            t = str(c.cget('text'))
+            if t.startswith('Deleted') or t == 'FreshlyTrashed':
+                _st_titles.append(t)
+        _st_walk(c)
+_st_walk(app.settings_trash_panel)
+check(f'Show more after a delete elsewhere shows each note once, the new one '
+      f'included ({len(_st_titles)} rows)',
+      _st_more is not None and 'FreshlyTrashed' in _st_titles
+      and len(_st_titles) == len(set(_st_titles)) == PAGE * 2)
+app.trash = [e for e in app.trash if e.get('title') != 'FreshlyTrashed']
+app.toggle_settings_panel('trash'); app.update()
+
 # restore preserves pagination + moves note back
 restore_btn = find_btn(app.settings_trash_panel, 'Restore')
 before_trash = len(app.trash)
@@ -587,6 +614,54 @@ check('...and every one of them has its own identity',
       len(set(_bulk_uids)) == len(_bulk_uids))
 
 del app.notes[_bulk_base:]
+app.save_notes()
+app.open_blank_tab()
+app.update()
+
+# A code holding notes exactly as they are here: whether to add them again
+# is asked (field pass), Skip being the answer that changes nothing -- and
+# a copy asked for meets no look-alike question after it.
+_uc_base = len(app.notes)
+app.notes.append(NO.normalize_note({'id': 9003, 'title': 'Same', 'body': 'same text'}))
+app.notes.append(NO.normalize_note({'id': 9004, 'title': 'Twin', 'body': 'twin text'}))
+app.save_notes()
+_uc_one = NO.encode_share_code([app.notes[-2]])
+_uc_two = NO.encode_share_code(app.notes[-2:])
+_uc_seen = {}
+_real_dlg_uc = app._themed_dialog
+for _uc_name, _uc_code, _uc_answer in (('one, skipped', _uc_one, 'skip'),
+                                       ('one, copied', _uc_one, 'copies'),
+                                       ('two, skipped', _uc_two, 'skip'),
+                                       ('two, copied', _uc_two, 'copies')):
+    _uc_asked = []
+    app._themed_dialog = lambda *a, _w=_uc_answer, **k: (_uc_asked.append(a[0]), _w)[1]
+    app.open_blank_tab(); app.update()
+    _uc_before = len(app.notes)
+    app.import_box.delete('1.0', 'end')
+    app.import_box.insert('1.0', _uc_code)
+    app._do_inline_import()
+    app.update()
+    app._themed_dialog = _real_dlg_uc
+    if _uc_name == 'one, copied':
+        # A single note opens for review, unsaved; the save makes it a note.
+        _uc_review = app.title_entry.get()
+        app.save_current_note(auto=False); app.update()
+        _uc_seen[_uc_name] = (_uc_asked, len(app.notes) - _uc_before, _uc_review)
+    else:
+        _uc_seen[_uc_name] = (_uc_asked, len(app.notes) - _uc_before,
+                              str(app.import_status.cget('text')))
+app._themed_dialog = _real_dlg_uc
+_uc_uids = [n['uid'] for n in app.notes[_uc_base:]]
+check(f'a code holding notes exactly as they are here asks once, Skip adds '
+      f'nothing, and a copy is a note of its own ({_uc_seen})',
+      _uc_seen['one, skipped'][:2] == (['Already here, unchanged'], 0)
+      and 'already here' in _uc_seen['one, skipped'][2]
+      and _uc_seen['one, copied'][:2] == (['Already here, unchanged'], 1)
+      and _uc_seen['one, copied'][2] == 'Same'
+      and _uc_seen['two, skipped'][:2] == (['Already here, unchanged'], 0)
+      and _uc_seen['two, copied'][:2] == (['Already here, unchanged'], 2)
+      and len(set(_uc_uids)) == len(_uc_uids))
+del app.notes[_uc_base:]
 app.save_notes()
 app.open_blank_tab()
 app.update()
@@ -2155,11 +2230,42 @@ check('...and the same update again leaves that rescue copy alone',
       _nt_mine['_prev']['body'] == 'v2 - newer')
 app.notes = [_nt_mine]; app.save_notes()
 _nt_asked = []
-app._themed_dialog = lambda *a, **k: (_nt_asked.append(a), 'update')[1]
+app._themed_dialog = lambda *a, **k: (_nt_asked.append((a, k)), 'update')[1]
 _nt_res = app._take_known_notes([dict(_nt_theirs)], 'backup')
 app._themed_dialog = _real_dialog
-check('a note arriving exactly as it is here is not offered as an update',
-      not _nt_asked and _nt_res[2] == [] and _nt_res[3] == 1)
+check(f'a note arriving exactly as it is here is not offered as an update '
+      f'({[q[0][0] for q in _nt_asked]})',
+      [q[0][0] for q in _nt_asked] == ['Already here, unchanged']
+      and _nt_res[2] == [] and _nt_res[3] == 1 and _nt_res[4] == [])
+# ...but whether to add it again is asked (field pass: re-importing a
+# backup skipped such notes without a word, and the choice was wanted).
+# Skipping is the safe answer, and the one Escape and Enter give.
+_nt_kw = _nt_asked[0][1] if _nt_asked else {}
+check(f'the question about unchanged notes skips unless told otherwise '
+      f'({_nt_kw.get("buttons")}; default {_nt_kw.get("default")!r})',
+      bool(_nt_kw.get('buttons')) and _nt_kw['buttons'][0][1] == 'skip'
+      and _nt_kw.get('default') == _nt_kw['buttons'][0][0])
+app._themed_dialog = lambda *a, **k: 'copies'
+_nt_res = app._take_known_notes([dict(_nt_theirs)], 'backup')
+app._themed_dialog = _real_dialog
+check('...and "Add copies anyway" hands back a copy without the identity',
+      _nt_res[0] and _nt_res[1] == [] and _nt_res[3] == 0
+      and len(_nt_res[4]) == 1 and 'uid' not in _nt_res[4][0]
+      and _nt_res[4][0]['body'] == 'v1 - older')
+# One edited elsewhere and one unchanged: the two questions, one after the
+# other, count the same batch. The first said "All 1 note" -- it chose its
+# "All" without the unchanged notes, asked about straight after.
+_nt_other = NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'other text'})
+app.notes = [_nt_mine, _nt_other]; app.save_notes()
+_nt_asked = []
+app._themed_dialog = lambda *a, **k: (_nt_asked.append(a[1]), 'cancel-ish')[1]
+app._take_known_notes([{'uid': _nt_mine['uid'], 'title': 'Report',
+                        'body': 'edited on the laptop'}, dict(_nt_other)], 'backup')
+app._themed_dialog = _real_dialog
+check(f'two questions about one batch count it the same way ({_nt_asked})',
+      len(_nt_asked) == 2
+      and all('1 of the 2 notes in this backup' in m for m in _nt_asked))
+app.notes = [_nt_mine]; app.save_notes()
 
 # "Update" waits for the import's last answer. The updates were applied
 # at once, so Cancel on the duplicate question that follows left them in
@@ -2502,12 +2608,37 @@ t0 = time.time()
 while app._import_state is not None and time.time() - t0 < 8:
     app.update()
 app._themed_dialog = _ie_real_dlg
-check(f'importing a backup holding that note exactly as it is asks nothing '
-      f'({_ie_asked})', not any('already have' in t for t in _ie_asked))
+check(f'importing a backup holding that note exactly as it is offers no '
+      f'update, only whether to add a copy ({_ie_asked})',
+      not any('already have' in t for t in _ie_asked)
+      and [t for t in _ie_asked if t != 'Import notes']
+      == ['Already here, unchanged'])
 check('...and the rescue copy is untouched',
       len(app.notes) == 1
       and (app.find_note(1).get('_prev') or {}).get('body')
       == 'THE ORIGINAL LONG TEXT')
+# The same backup again, answering "Add copies anyway": a second, separate
+# note, with an identity of its own -- and no look-alike question after it,
+# for the notes it was just asked about by name.
+_ie_asked = []
+app._themed_dialog = lambda *a, **k: (_ie_asked.append(a[0]), 'copies')[1]
+_ie_info = []
+_ie_real_info = app.show_info
+app.show_info = lambda *a, **k: _ie_info.append(a[1])
+app.import_data()
+t0 = time.time()
+while app._import_state is not None and time.time() - t0 < 8:
+    app.update()
+app._themed_dialog = _ie_real_dlg
+app.show_info = _ie_real_info
+_ie_uids = [n.get('uid') for n in app.notes]
+check(f'"Add copies anyway" adds the note again as its own note '
+      f'({_ie_asked}; {_ie_info})',
+      [t for t in _ie_asked if t != 'Import notes']
+      == ['Already here, unchanged'] and len(app.notes) == 2
+      and len(set(_ie_uids)) == 2 and all(_ie_uids)
+      and app.notes[1]['title'] == app.notes[0]['title']
+      and any('Added 1 note' in s for s in _ie_info))
 if os.path.exists(_iezip):
     os.remove(_iezip)
 # The one colour kept raw: "Reset to category" on a day of a COLOURED

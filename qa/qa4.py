@@ -3185,6 +3185,35 @@ check('the boxes judged include Share, Duplicates, Group by category and '
 check('on every theme, a ticked box\'s mark stands out from its well '
       '(%s)' % (', '.join(sorted(set(_tk_lost))[:6]) or 'every box, every theme'),
       not _tk_lost)
+
+# The theme switched WHILE Share and Duplicates are open: neither panel is
+# rebuilt, and a ticked box's fill kept the old theme's surface, its words
+# unreadable on it (audit). Each box must wear the new theme's colours.
+app.set_theme(list(NO.DARK_THEMES)[0])
+app.update()
+app.toggle_share_panel()
+app.show_settings_page()
+app.toggle_settings_panel('duplicates')
+app.update()
+_tw_boxes = [b for b in _every_toggle(app)
+             if str(b.cget('text')).split('   ')[0] in ('Twin', 'Delete this copy')
+             and str(b.cget('indicatoron')) in ('0', 'false', 'False')]
+for _tw_b in _tw_boxes:
+    _tw_b.select()
+app.set_theme(list(NO.LIGHT_THEMES)[0])
+app.update()
+_tw_wrong = [str(b.cget('text'))[:20] for b in _tw_boxes
+             if str(b.cget('selectcolor')).lower() != app.colors['sidebar'].lower()
+             or str(b.cget('fg')).lower() != app.colors['text'].lower()]
+check(f'a ticked box in an open panel takes the new theme when it switches '
+      f'({len(_tw_boxes)} boxes; wrong: {_tw_wrong})',
+      len(_tw_boxes) >= 2 and not _tw_wrong)
+for _tw_b in _tw_boxes:
+    _tw_b.deselect()
+app.hide_settings_page()
+app.toggle_share_panel()
+app.set_theme(_tk_before)
+app.update()
 app._close_find()
 app.update()
 

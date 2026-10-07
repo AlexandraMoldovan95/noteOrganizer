@@ -228,7 +228,8 @@ are, however long they are.
 ### Pasting and copying
 
 Copy something from a web page, an email or Word, paste it into a note with **Ctrl+V**, and the
-bold, the colours and the lists come with it.
+bold, the colours and the lists come with it — bold however the page writes it, semibold
+included, and a copy from Google Docs bold only where the document is.
 
 - **Ctrl+Shift+V** pastes the words on their own, with none of the styling — and no bullets
   either, even when the thing you copied from puts bullet characters into its own plain-text
@@ -310,9 +311,9 @@ A table works the way a spreadsheet has taught your hands to expect:
   a row's condition is met, a habit done, anything you invent. It is stored as Markdown's own task
   syntax (`[ ]` / `[x]`), so it survives share codes as readable text; the exported page draws it
   as a real box (☑ / ☐), and importing that page back turns the boxes into clickable checkboxes
-  again. To turn that cell back into words, right-click it and choose **Edit cell as text**,
-  delete the marker, and type. An emoji put into a checkbox cell takes the box's place; delete
-  the emoji and the cell is simply empty, ready for a new checkbox.
+  again. To turn that cell back into words, right-click it, choose **Edit cell as text** and
+  type. Anything put beside a checkbox — an emoji, words, a paste — takes the box's place, so
+  its raw `[ ]` never shows; delete it and the cell is simply empty, ready for a new checkbox.
 - **Drag the line between two columns** to make a column wider or narrower; **double-click** the
   line to snap the column to its content. With several columns selected, **Autofit column
   width(s)** in the right-click menu snaps them all at once. **Drag the line between two rows** up
@@ -730,6 +731,11 @@ Paste a code you received into **Import code** in the sidebar. If any of the not
 look identical to ones you already have, you'll be asked whether to skip the duplicates, import
 everything anyway, or cancel — nothing is silently duplicated.
 
+A code made from a note you have — or a backup made on this computer — holds some notes exactly
+as they are here. Those are recognised as the same notes, and you are asked once: **Skip** them
+(the answer Enter and Escape give, and nothing changes) or **Add copies anyway**, as second,
+separate notes.
+
 ![Import code](screenshots/import-code.png)
 
 #### When the code holds a note you already have
@@ -806,11 +812,15 @@ brings everything the backup's copy carries: its text and checklist, its skipped
 per-day edits, its pin, and any files attached on the other device. Files already attached here
 stay attached; an update only ever adds them. **↩ Restore previous** takes the rest back.
 
-A note the backup holds exactly as you have it is left alone — neither updated nor added again —
-so importing the same backup twice changes nothing, and the result says how many notes were
-already here. If the backup's copy is **older** than yours (a backup from last month, say), the
-question says so before you choose to update. Every question is asked before anything changes:
-**Cancel** at any of them leaves your notes, files and Trash exactly as they were.
+A note the backup holds exactly as you have it is never updated, and you are asked once about
+all such notes: **Skip** them — the answer Enter and Escape give, so importing the same backup
+twice changes nothing — or **Add copies anyway**, as second, separate notes with files of their
+own. The result says how many were skipped. If the backup's copy is **older** than yours (a
+backup from last month, say), the question says so before you choose to update.
+
+Every question is asked before anything changes: **Cancel**, on any question that offers it,
+leaves your notes, files and Trash exactly as they were. The question about unchanged notes has
+no Cancel — skipping them already changes nothing — so the import goes on with the rest.
 
 ![Import backup](screenshots/import-backup.png)
 

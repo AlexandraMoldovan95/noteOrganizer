@@ -253,7 +253,7 @@
       }
     ],
     "must_fail": [
-      "a click beside the field, on no box at all, finishes with it"
+      "a click on a clickable label beside the date field finishes the date too"
     ],
     "suites": [
       "qa5"
@@ -728,7 +728,7 @@
     "edits": [
       {
         "file": "noteorganizer/ui/settings_page.py",
-        "find": "            draw_rows(ordered_trash(), first)",
+        "find": "            draw_rows(ordered, first)",
         "replace": "            redraw()"
       }
     ],
@@ -790,6 +790,426 @@
     ],
     "must_fail": ["...added under the rows already there, not all drawn again"],
     "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "K01",
+    "about": "notes already here, unchanged, are skipped without asking again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            copies = self._unchanged_copies(same, len(incoming), source)",
+        "replace": "            copies = []"
+      }
+    ],
+    "must_fail": ["a note arriving exactly as it is here is not offered as an update", "a code holding notes exactly as they are here asks once"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "K02",
+    "about": "Enter on the unchanged-notes question adds the copies",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            default=skip)",
+        "replace": "            default=None)"
+      }
+    ],
+    "must_fail": ["the question about unchanged notes skips unless told otherwise"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "K03",
+    "about": "a copy of a note already here keeps its identity",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            copy.pop(\"uid\", None)",
+        "replace": "            pass"
+      }
+    ],
+    "must_fail": ["...and \"Add copies anyway\" hands back a copy without the identity"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "K04",
+    "about": "a copy asked for by name meets the look-alike question too",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if not asked and _dup_key(normalize_note(incoming)) in existing_keys:",
+        "replace": "            if _dup_key(normalize_note(incoming)) in existing_keys:"
+      }
+    ],
+    "must_fail": ["a code holding notes exactly as they are here asks once"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "K05",
+    "about": "a backup's copies asked for are never added",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        for note in list(to_import) + copies:",
+        "replace": "        for note in list(to_import):"
+      }
+    ],
+    "must_fail": ["\"Add copies anyway\" adds the note again as its own note"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "K06",
+    "about": "a code's copies asked for are never added",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        for sn in list(to_import) + copies:",
+        "replace": "        for sn in list(to_import):"
+      }
+    ],
+    "must_fail": ["a code holding notes exactly as they are here asks once"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "K07",
+    "about": "a damaged code sends people to an Import (ZIP) no screen has",
+    "edits": [
+      {
+        "file": "noteorganizer/core/sharing.py",
+        "find": "            \"sender to send it again, or to send a backup instead (Settings → \"\n            \"Backup → Export).\"",
+        "replace": "            \"sender to send it again, or use Import (ZIP) for large transfers.\""
+      }
+    ],
+    "must_fail": ["the backup is named as Settings → Backup → Export, which exists"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "K08",
+    "about": "the share warning says only \"use Export for files\" again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        \"⚠ A code carries the text, not attached files — \"\n        \"use Settings → Backup → Export for those.\")",
+        "replace": "        \"⚠ Attachments aren't included in a code — use Export for files.\")"
+      }
+    ],
+    "must_fail": ["and warns that attachments are not included, naming where they do go"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "K09",
+    "about": "the question about edited notes says All while unchanged ones are counted next",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if fresh or same:",
+        "replace": "        if fresh:"
+      }
+    ],
+    "must_fail": ["two questions about one batch count it the same way"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "A01",
+    "about": "a highlight given in an open cell reaches the note only when the cell closes",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if \"cell_highlight\" in editor:",
+        "replace": "        if close and \"cell_highlight\" in editor:"
+      }
+    ],
+    "must_fail": ["leaving a note with a highlighted cell still open keeps the highlight"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "A02",
+    "about": "a copied header row reads its styles one place to the left",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                    base = first_base if n == first else 0",
+        "replace": "                    base = 0"
+      }
+    ],
+    "must_fail": ["a copied header cell keeps its colour on its own letters"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "A03",
+    "about": "a ticked box in an open panel keeps the old theme's fill",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            keys = getattr(w, \"tick_palette\", None)",
+        "replace": "            keys = None"
+      }
+    ],
+    "must_fail": ["a ticked box in an open panel takes the new theme when it switches"],
+    "suites": ["qa4"],
+    "expect": "killed"
+  },
+  {
+    "id": "A04",
+    "about": "a word copied from an indented paragraph indents where it lands",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                    p.pop(\"indent\", None)",
+        "replace": "                    pass"
+      }
+    ],
+    "must_fail": ["a word from an indented paragraph pastes without its indent"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "A05",
+    "about": "a copied cell landing in a new column loses its alignment",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        for row_aligns in aligns:\n            row_aligns.extend(\n                [core_tables.ALIGN_LEFT] * (width - len(row_aligns)))",
+        "replace": "        pass"
+      }
+    ],
+    "must_fail": ["a copied cell pasted into a new column keeps its alignment"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "A06",
+    "about": "a click on empty space leaves a table cell open with no keyboard",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                self._commit_cell_editor()\n            self.focus_set()",
+        "replace": "                pass\n            self.focus_set()"
+      }
+    ],
+    "must_fail": ["a click on empty space commits and closes an open table cell"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "A07",
+    "about": "Show more in the Trash adds a page under rows the Trash has moved",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "            if [id(e) for e in ordered[:first]] != drawn[\"ids\"]:",
+        "replace": "            if False:"
+      }
+    ],
+    "must_fail": ["Show more after a delete elsewhere shows each note once"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "A08",
+    "about": "Show more in Share adds a page under boxes the notebook has moved",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if [n[\"id\"] for n in self.notes[:first]] != rendered[\"ids\"]:",
+        "replace": "            if False:"
+      }
+    ],
+    "must_fail": ["Show more in Share after a delete gives every note one box"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "A09",
+    "about": "a renumber leaves holes in a selection across the list",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                tags = tuple(b.tag_names(at))",
+        "replace": "                tags = tuple(t for t in b.tag_names(at) if t != \"sel\")"
+      }
+    ],
+    "must_fail": ["a selection across a renumbered list stays whole"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "B01",
+    "about": "a box with something beside it keeps its brackets when the cell is left",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                value, raw_styles = value[a:z], raw_styles[a:z]",
+        "replace": "                pass"
+      }
+    ],
+    "must_fail": ["whatever lands beside a box takes its place, by every road"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "B02",
+    "about": "a box marker after the words is kept",
+    "edits": [
+      {
+        "file": "noteorganizer/core/tables.py",
+        "find": "    tail = _EDGE_MARKERS[1].search(value, start)",
+        "replace": "    tail = None"
+      }
+    ],
+    "must_fail": ["an emoji beside a box takes its place"],
+    "suites": ["test_tables"],
+    "expect": "killed"
+  },
+  {
+    "id": "B03",
+    "about": "a preview takes a line of maths for a table again",
+    "edits": [
+      {
+        "file": "noteorganizer/core/tables.py",
+        "find": "    return (stripped.startswith(CELL) and stripped.count(CELL) >= 2\n            and stripped[1:2].isspace())",
+        "replace": "    return (stripped.startswith(CELL) and stripped.count(CELL) >= 2)"
+      }
+    ],
+    "must_fail": ["a line of maths is words, not a table"],
+    "suites": ["test_tables"],
+    "expect": "killed"
+  },
+  {
+    "id": "B04",
+    "about": "a preview forgets a row written without padding",
+    "edits": [
+      {
+        "file": "noteorganizer/core/tables.py",
+        "find": "    if is_table_row(stripped):\n        return True",
+        "replace": "    if False:\n        return True"
+      }
+    ],
+    "must_fail": ["...while a row written without padding is still the row the editor draws"],
+    "suites": ["test_tables"],
+    "expect": "killed"
+  },
+  {
+    "id": "G01",
+    "about": "semibold (600) is not bold",
+    "edits": [
+      {
+        "file": "noteorganizer/core/richtext.py",
+        "find": "        return float(value) >= 600",
+        "replace": "        return float(value) >= 700"
+      }
+    ],
+    "must_fail": ["bold and italic are read however a page writes them", "bold and italic from a web page arrive by the real paste"],
+    "suites": ["test_richtext", "qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "G02",
+    "about": "a value marked !important reads as no value",
+    "edits": [
+      {
+        "file": "noteorganizer/core/richtext.py",
+        "find": "        if value.endswith(\"!important\"):\n            value = value[:-len(\"!important\")].strip()",
+        "replace": "        pass"
+      }
+    ],
+    "must_fail": ["bold and italic are read however a page writes them", "a colour marked !important and an alignment in capitals arrive"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
+  },
+  {
+    "id": "G03",
+    "about": "a style value written in capitals reads as no value",
+    "edits": [
+      {
+        "file": "noteorganizer/core/richtext.py",
+        "find": "        value = value.strip().lower()",
+        "replace": "        value = value.strip()"
+      }
+    ],
+    "must_fail": ["bold and italic are read however a page writes them", "a colour marked !important and an alignment in capitals arrive"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
+  },
+  {
+    "id": "G04",
+    "about": "the font shorthand is not read",
+    "edits": [
+      {
+        "file": "noteorganizer/core/richtext.py",
+        "find": "    font = style.get(\"font\")",
+        "replace": "    font = None"
+      }
+    ],
+    "must_fail": ["bold and italic are read however a page writes them"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
+  },
+  {
+    "id": "G05",
+    "about": "an oblique slant is not italic",
+    "edits": [
+      {
+        "file": "noteorganizer/core/richtext.py",
+        "find": "        italic = style[\"font-style\"].startswith((\"italic\", \"oblique\"))",
+        "replace": "        italic = style[\"font-style\"] == \"italic\""
+      }
+    ],
+    "must_fail": ["bold and italic are read however a page writes them", "bold and italic from a web page arrive by the real paste"],
+    "suites": ["test_richtext", "qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "G06",
+    "about": "a tag's own CSS cannot take back what the tag means",
+    "edits": [
+      {
+        "file": "noteorganizer/core/richtext.py",
+        "find": "            kept = not ((implied == \"bold\" and bold is False)\n                        or (implied == \"italic\" and italic is False))",
+        "replace": "            kept = True"
+      }
+    ],
+    "must_fail": ["a Google Docs copy is not bold all over"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
+  },
+  {
+    "id": "G07",
+    "about": "a tag that took its bold back closes an outer bold at its end",
+    "edits": [
+      {
+        "file": "noteorganizer/core/richtext.py",
+        "find": "            if not taken or taken.pop():",
+        "replace": "            if True:"
+      }
+    ],
+    "must_fail": ["...and a tag that took its bold back closes no one else's"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
+  },
+  {
+    "id": "G08",
+    "about": "bolder is not bold",
+    "edits": [
+      {
+        "file": "noteorganizer/core/richtext.py",
+        "find": "    if value in (\"bold\", \"bolder\"):",
+        "replace": "    if value == \"bold\":"
+      }
+    ],
+    "must_fail": ["bold and italic are read however a page writes them"],
+    "suites": ["test_richtext"],
     "expect": "killed"
   }
 ]

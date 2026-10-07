@@ -1625,9 +1625,13 @@ class SettingsPageMixin:
             return sorted(self.trash, key=lambda e: str(e.get("deleted_at", "")),
                           reverse=True)
 
+        drawn = {"ids": []}     # the entries on screen, in their order
+
         def draw_rows(ordered, first):
             """The rows from *first* up to the page's end, and the button
             for the rest."""
+            drawn["ids"] = drawn["ids"][:first] + [
+                id(e) for e in ordered[first:shown_count["n"]]]
             for entry in ordered[first:shown_count["n"]]:
                 self._build_trash_row(rows, entry, redraw,
                                       on_tick=refresh_restore_btn)
@@ -1646,9 +1650,16 @@ class SettingsPageMixin:
             # every row again flickered, and grew with every page.
             first = shown_count["n"]
             shown_count["n"] += PAGE_SIZE
+            ordered = ordered_trash()
+            if [id(e) for e in ordered[:first]] != drawn["ids"]:
+                # The Trash changed under the rows on screen -- a note
+                # deleted from the sidebar while this is open: all drawn
+                # again, or one row would show twice and the new one never.
+                redraw()
+                return
             button.destroy()
             before = set(rows.winfo_children())
-            draw_rows(ordered_trash(), first)
+            draw_rows(ordered, first)
             for child in rows.winfo_children():
                 if child not in before:
                     self._bind_wheel_tree(child, wheel)
@@ -1906,12 +1917,13 @@ class SettingsPageMixin:
         self.toggle_settings_panel("duplicates")
 
     def _build_theme_picker(self, parent):
-        """The theme swatches for the current mode, as in the reference design.
+        """The theme swatches, dark and light together, as in the reference
+        design.
 
         Four across, each a bordered tile holding a small preview of that
         theme -- its own sidebar strip and three text lines painted in its own
         colours -- with the name beneath and a tick badge on the selected one.
-        Switching light/dark swaps which set is shown.
+        Both sets are always shown, so a theme of the other mode is one click.
         """
         for w in parent.winfo_children():
             w.destroy()
