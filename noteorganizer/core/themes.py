@@ -275,10 +275,13 @@ def hairline(palette):
 
 def miss_surface(palette):
     """The ground of a search box whose words were not found: a tint of the
-    theme's warning colour, light enough that the text on it still reads.
-    One fixed dark red served every theme, and on a light one the words
-    typed into it were dark on dark (1.2:1)."""
-    return blend(palette["sidebar"], palette["danger"], 0.22)
+    theme's warning red over white on a light theme, over near-black on a
+    dark one. Mixed into the theme's own surface instead, the red went grey
+    on the blue and green themes; one fixed dark red, before that, put dark
+    words on dark on the light ones (1.2:1). The two strengths are hers."""
+    if contrasting_fg(palette["bg"]) == "#ffffff":
+        return blend("#1c1c1c", palette["danger"], 0.24)
+    return blend("#ffffff", palette["danger"], 0.10)
 
 
 def contrasting_fg(hex_color):
