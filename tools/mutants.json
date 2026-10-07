@@ -315,5 +315,285 @@
       "qa6"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "T01",
+    "about": "the Share boxes take Tk's own mark again, drawn in their light words' colour",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                self._drawn_tick_box(cb, \"sidebar\", \"text\", track=False)\n                cb.pack(fill=\"x\", anchor=\"w\")",
+        "replace": "                cb.configure(bg=self.colors[\"sidebar\"], fg=self.colors[\"text\"], selectcolor=self.colors[\"check_well\"])\n                cb.pack(fill=\"x\", anchor=\"w\")"
+      }
+    ],
+    "must_fail": ["on every theme, a ticked box's mark stands out from its well"],
+    "suites": ["qa4"],
+    "expect": "killed"
+  },
+  {
+    "id": "T02",
+    "about": "the Duplicates boxes take Tk's own mark again, drawn in their light words' colour",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                self._drawn_tick_box(cb, \"sidebar\", \"text\", track=False)\n                cb.pack(fill=\"x\", padx=20)",
+        "replace": "                cb.configure(bg=self.colors[\"sidebar\"], fg=self.colors[\"text\"], selectcolor=self.colors[\"check_well\"])\n                cb.pack(fill=\"x\", padx=20)"
+      }
+    ],
+    "must_fail": ["on every theme, a ticked box's mark stands out from its well"],
+    "suites": ["qa4"],
+    "expect": "killed"
+  },
+  {
+    "id": "T03",
+    "about": "a theme switch repaints the repeat panel through the call that also schedules a save",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self.refresh_weekday_buttons()\n        self._paint_end_fields()\n        self.style_notebook()",
+        "replace": "        self.refresh_weekday_buttons()\n        self.on_end_mode_changed()\n        self.style_notebook()"
+      }
+    ],
+    "must_fail": ["a theme switch schedules no save"],
+    "suites": ["qa4"],
+    "expect": "killed"
+  },
+  {
+    "id": "T04",
+    "about": "a save that could only leave an unreadable date out still says Note updated",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                note[\"updated\"] = stored_before[1]\n                announce = False\n",
+        "replace": "                note[\"updated\"] = stored_before[1]\n"
+      }
+    ],
+    "must_fail": ["an autosave that can only leave an unreadable date out says no"],
+    "suites": ["qa4"],
+    "expect": "killed"
+  },
+  {
+    "id": "T05",
+    "about": "redrawing a cell after its editor closes leaves the old fill",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            canvas.itemconfigure(cell[\"rect\"], fill=(\n                self._blend_hex(paint[\"bg\"], surface, 0.45)\n                if paint[\"bg\"] else surface))",
+        "replace": "            canvas.itemconfigure(cell[\"rect\"], fill=canvas.itemcget(cell[\"rect\"], \"fill\"))"
+      }
+    ],
+    "must_fail": ["and the drawn cell wears it as soon as the editor closes"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "T06",
+    "about": "a highlight given in an open cell does not show until the cell is opened again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            t.configure(bg=self._blend_hex(value, surface, 0.45)\n                        if value else surface)",
+        "replace": "            pass"
+      }
+    ],
+    "must_fail": ["a highlight given in an open cell colours the whole cell at once"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "T07",
+    "about": "a highlight given in an open cell with nothing selected only waits for typing",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if not has_sel and kind == \"text_color\":",
+        "replace": "        if not has_sel and kind in (\"text_color\", \"highlight\"):"
+      }
+    ],
+    "must_fail": ["with nothing selected too: the whole cell takes it at once"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "P01",
+    "about": "a hover preview shows a table as raw bars again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            body, tables_here = core_tables.preview_text(\n                raw if isinstance(raw, str) else \"\")",
+        "replace": "            body, tables_here = (raw if isinstance(raw, str) else \"\"), 0"
+      }
+    ],
+    "must_fail": ["a table in a hover preview is named, not drawn as bars"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "P02",
+    "about": "a note card keeps the rows of a table that was typed past its last cell",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/note_list.py",
+        "find": "        prose, table_count = core_tables.preview_text(note_body)",
+        "replace": "        prose, table_count = note_body, 0"
+      }
+    ],
+    "must_fail": ["a card shows the words without the table"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "P03",
+    "about": "copied cells forget their styles",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                (r - r0, c - c0): rec for (r, c), rec in\n                self._grid_read_cell_styles(first, info[\"nrows\"]).items()\n                if r0 <= r <= r1 and c0 <= c <= c1}",
+        "replace": "                (r - r0, c - c0): rec for (r, c), rec in\n                self._grid_read_cell_styles(first, info[\"nrows\"]).items()\n                if False}"
+      }
+    ],
+    "must_fail": ["copied cells leave for Word with their colour, bold, ink and size", "a duplicated table keeps each cell's colour", "cells pasted into a table bring their colour and styles"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "P04",
+    "about": "a duplicated table is pasted without laying the remembered styles",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self._grid_lay_cell_styles(first_new, lines, self._grid_cell_clip_styles)",
+        "replace": "            pass"
+      }
+    ],
+    "must_fail": ["a duplicated table keeps each cell's colour"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "P05",
+    "about": "cells pasted into a table leave the copy's styles behind",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        carried.update(extra or {})",
+        "replace": "        pass"
+      }
+    ],
+    "must_fail": ["cells pasted into a table bring their colour and styles"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "P06",
+    "about": "any paste into cells counts as our own copy",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        own = bool(matrix)          # still our own copy, styles and all",
+        "replace": "        own = True"
+      }
+    ],
+    "must_fail": ["cells copied from elsewhere bring none of an older copy's styles"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "P07",
+    "about": "the HTML of a note carries no size or typeface",
+    "edits": [
+      {
+        "file": "noteorganizer/core/richtext.py",
+        "find": "            \"font_size\": \"font-size:{}pt;\", \"font_family\": \"font-family:'{}';\"}",
+        "replace": "            }"
+      }
+    ],
+    "must_fail": ["a size and a typeface reach the HTML", "a sized word leaves with its size and typeface"],
+    "suites": ["test_richtext", "qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "P08",
+    "about": "a typeface name goes into the attribute as it is",
+    "edits": [
+      {
+        "file": "noteorganizer/core/richtext.py",
+        "find": "        re.sub(r\"[^\\w .\\-]\", \"\", str(v)) if k == \"font_family\" else v)",
+        "replace": "        v)"
+      }
+    ],
+    "must_fail": ["a typeface name cannot break out of its attribute"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
+  },
+  {
+    "id": "P09",
+    "about": "an empty highlighted cell leaves its td uncoloured",
+    "edits": [
+      {
+        "file": "noteorganizer/core/richtext.py",
+        "find": "                if cell_b == cell_a:\n                    # An empty cell's highlight rides its padding.",
+        "replace": "                if False:\n                    # An empty cell's highlight rides its padding."
+      }
+    ],
+    "must_fail": ["an empty highlighted cell colours its td"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
+  },
+  {
+    "id": "P10",
+    "about": "a paste between notes reads the size and typeface out of nothing",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        own = (bool(mine) and not any(cut.values())\n               and markup == mine[3])",
+        "replace": "        own = False"
+      }
+    ],
+    "must_fail": ["pasted into a note, it keeps both"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "P11",
+    "about": "any paste with the same words takes our remembered copy's formatting",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "               and markup == mine[3])",
+        "replace": "               and (clipboard.read_text() or \"\") == mine[0])"
+      }
+    ],
+    "must_fail": ["the same words pasted from elsewhere bring no size or typeface"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "P12",
+    "about": "an emoji goes in beside a checkbox's brackets again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                self._emoji_takes_checkbox_place(text_widget)\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["an emoji replaces a checkbox, no brackets left"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "P13",
+    "about": "an emoji wipes any cell it goes into, words and all",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                and core_tables.checkbox_state(\n                    text_widget.get(\"1.0\", \"end-1c\")) is not None):\n            text_widget.delete(\"1.0\", \"end\")",
+        "replace": "                ):\n            text_widget.delete(\"1.0\", \"end\")"
+      }
+    ],
+    "must_fail": ["a text cell keeps its words when an emoji comes"],
+    "suites": ["qa1"],
+    "expect": "killed"
   }
 ]

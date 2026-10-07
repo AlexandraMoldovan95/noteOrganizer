@@ -90,6 +90,54 @@ How the numbers themselves are counted is the
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **A tick shows on every theme.** On the dark themes a tick in Share notes or in Settings →
+  Duplicates did not show, though it was taken: Tk draws a box's mark in the colour of its words,
+  light there, on a light box. "Group by category" and the find bar's "Aa" showed a faint one. A
+  box with words now draws its own box, a light well and a dark mark, on every theme.
+- **Changing the theme no longer says "Note updated".** Every switch scheduled a save, and a
+  save that could only leave out an unreadable date announced an update that stored nothing. A
+  switch now repaints and saves nothing, and a save says "Note updated" only when it stored
+  something.
+- **A highlight given inside a table cell shows at once.** It appeared only after the cell was
+  opened again, and with nothing selected it only waited for the next letter typed. It now
+  colours the whole cell — a cell's highlight is a whole-cell wash — the moment it is given,
+  selected or not, and the drawn cell keeps it when the editor closes, an empty cell included.
+- **Previews name a table instead of drawing its pipes.** Hovering a note in Settings →
+  Duplicates or in the Trash (Settings → Recently deleted) showed its table as rows of bars; it
+  now shows the words and a "▦ 1 table" line, as the calendar does. A note card no longer shows
+  a row typed past its last cell as prose either.
+- **Copied table cells keep their look inside the app.** Cells pasted back as a second table,
+  or into another table's cells, came as bare values: highlights, coloured, bold and sized
+  words and each cell's alignment stayed behind. Our own copy now brings them all.
+- **Copied table cells keep their look in Word.** They arrived as a bordered table with every
+  colour gone. The copy now writes each cell the way the export does, its highlight, styled
+  words and alignment included; an exported empty highlighted cell keeps its colour too.
+- **Sizes and typefaces travel.** A word set in another size or font lost both when copied into
+  Word, and when copied into another note — though the guide promised that copying between notes
+  keeps everything. Both now come along; a size or font from a web page still stays behind.
+- **An emoji takes a checkbox's place.** Put into a checkbox cell, it went in beside the box,
+  which turned the cell into text and showed the raw "[ ]". The emoji now replaces the box, and
+  deleting it leaves an empty cell.
+
+### Testing
+
+- qa4 judges every ticked box on every theme by what is drawn, the mark against its well, with
+  Share, Duplicates and the find bar open; and checks that a theme switch schedules no save, on a
+  plain, a table and a dated note, and that a save which stored nothing says nothing. qa1 checks
+  the highlight in an open cell, with and without a selection, and the drawn cell after it
+  closes. Mutants T01–T07 take each fix back out.
+- qa7 checks the hover preview and the card of a note holding a table; qa1 copies styled cells
+  into Word, under the table and into another table, pastes a sized word into another note and
+  the same words from elsewhere, and puts an emoji into a checkbox by both roads;
+  test_richtext checks the empty highlighted cell, the size and typeface in the HTML, and a
+  typeface name that tries to leave its attribute. Mutants P01–P13 take each fix back out.
+
+---
+
 ## [0.84.341] — 2026-10-04
 
 *Highlights: the hint shown when there is no template to pick sends you to the section of

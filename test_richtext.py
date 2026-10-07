@@ -755,6 +755,35 @@ check(f"working out the runs of {_n} styled words and one size takes work in "
       f"step with the words, not with their square ({_lines} lines ran)",
       _lines <= 120 * _n)
 
+# An EMPTY highlighted cell: its colour rides the padding between its pipes,
+# and the td wears it -- it used to leave without any colour at all.
+_eh_body = "| h1 | h2 |" + chr(10) + "| --- | --- |" + chr(10) + "| aa |    |"
+_eh_row = _eh_body.index("| aa |")
+_eh_html = note_to_html(_eh_body, [{"start": _eh_row + 6, "end": _eh_row + 10,
+                                    "style": "highlight", "value": "#c8f7c5"}],
+                        [])
+check(f"an empty highlighted cell colours its td ({_eh_html})",
+      'background-color:#c8f7c5;' in _eh_html)
+# Size and typeface leave for Word, and a typeface's name cannot break out
+# of the attribute it sits in.
+_fz_html = note_to_html("big word", [
+    {"start": 0, "end": 3, "style": "font_size", "value": 20},
+    {"start": 4, "end": 8, "style": "font_family", "value": "Georgia"}], [])
+check(f"a size and a typeface reach the HTML ({_fz_html})",
+      'font-size:20pt;' in _fz_html and "font-family:'Georgia';" in _fz_html)
+# A note's own spans are normalised to the known typefaces first; a cell
+# copy's come straight off the editor's tags, so the guard is met there.
+from noteorganizer.core.richtext import cell_html
+_fq_html = cell_html("x", [{"start": 0, "end": 1, "style": "font_family",
+                            "value": 'Evil"><b>'}])
+check(f"a typeface name cannot break out of its attribute ({_fq_html})",
+      '"><b>' not in _fq_html and "font-family:'Evilb';" in _fq_html)
+# What our own cell copy writes is the export's own cell markup.
+check("cell_html styles a cell's words and keeps its line breaks",
+      cell_html("ab" + _tbl.LINE_BREAK + "cd",
+                [{"start": 0, "end": 2, "style": "bold"}])
+      == "<b>ab</b><br>cd")
+
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
 

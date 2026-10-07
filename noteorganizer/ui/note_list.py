@@ -26,7 +26,6 @@ from ..core.recurrence import (
     show_date,
 )
 from ..core.storage import load_settings, save_settings
-from ..core.tables import is_table_row
 
 
 class NoteListMixin:
@@ -1852,11 +1851,11 @@ class NoteListMixin:
 
         # Table rows read as pipe soup at card size, so the preview shows
         # only the note's plain text; the tags row says a table is there.
-        table_count = len(core_tables.find_blocks(note_body))
+        # The calendar's rule, so a row typed past its last cell goes too.
+        prose, table_count = core_tables.preview_text(note_body)
         if table_count:
             preview_src = " ".join(
-                ln.strip() for ln in note_body.split("\n")
-                if ln.strip() and not is_table_row(ln))
+                ln.strip() for ln in prose.split("\n") if ln.strip())
         else:
             preview_src = note_body.replace("\n", " ")
         # The cap is a glimpse, not a width: the drawing wraps the glimpse

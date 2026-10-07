@@ -508,6 +508,32 @@ def parse_font_tag(name):
     return None
 
 
+def tag_to_spans(tag, start, end):
+    """The note spans one format tag stands for over [start, end).
+
+    A plain style keeps its name, a colour tag gives its style and hex, and
+    a composite font tag its size and family -- its weight and slant ride
+    their own tags, which is how the editor reads them back too.
+    """
+    if end <= start or not is_format_tag(tag):
+        return []
+    if tag in KNOWN_FORMAT_STYLES:
+        return [{"start": start, "end": end, "style": tag}]
+    for style in COLOR_FORMAT_STYLES:
+        if tag.startswith(style + "_"):
+            return [{"start": start, "end": end, "style": style,
+                     "value": "#" + tag[len(style) + 1:]}]
+    _bold, _italic, size, family = parse_font_tag(tag)
+    spans = []
+    if size is not None:
+        spans.append({"start": start, "end": end, "style": "font_size",
+                      "value": size})
+    if family is not None:
+        spans.append({"start": start, "end": end, "style": "font_family",
+                      "value": family})
+    return spans
+
+
 def is_format_tag(name):
     """True for a Tk tag that carries CHARACTER formatting.
 

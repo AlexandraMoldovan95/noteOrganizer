@@ -150,6 +150,8 @@ is in the table below as well.
 | [The rule the app already had](#the-rule-the-app-already-had) | When two screens disagree, do not pick one — ask what the rest of the app does and make the odd one out match; and read what a gesture really offers before calling it a duplicate. | 0.75.174 |
 | [The list that moved under the pointer](#the-list-that-moved-under-the-pointer) | An action that moves the layout must keep the user's target under the pointer — or remember what they pointed at. | 0.83.335 |
 | [The character only the drawn tables had](#the-character-only-the-drawn-tables-had) | An offset belongs to the space it was counted in: convert at every crossing, and compare in the space both sides share. | 0.83.335 |
+| [The tick that took the colour of its words](#the-tick-that-took-the-colour-of-its-words) | A rule written as "always" is a measurement nobody made; judge a control by what it draws, on every theme. | — |
+| [The copy that wrote its own table](#the-copy-that-wrote-its-own-table) | A second writer of the same thing starts as a copy and ends as a subset; when one writer exists, call it. | — |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -4429,6 +4431,58 @@ refuses a read). No other program can take part, and nothing the person copied i
 race; taking the shared thing out of the test ends it — the same lesson as
 [The tests that borrowed the notebook](#the-tests-that-borrowed-the-notebook), for the
 clipboard.
+
+### The tick that took the colour of its words
+
+*(found in the owner's first full manual pass, on the 0.84.341 `.exe`)*
+
+**Symptom:** on every dark theme, a tick in Share notes or in Settings → Duplicates did not
+show. The tick was taken — the copies still went to the Trash, the code was still made — so a
+second click "to make it work" took it away again, and Share answered "Pick at least one note".
+Light themes were fine.
+
+**Root cause:** Tk paints a tick box's mark in the box's own text colour. That had been
+measured for the radio buttons, whose dot vanished the same way; for the tick boxes the palette
+and a comment said the opposite — "the mark is dark whatever the palette says" — eight times
+over, and nobody had measured it. It held only for boxes that set no text colour. Once every
+well became light, the two boxes that carry light words drew a light mark on a light well;
+"Group by category" and the find bar's "Aa" drew a faint one.
+
+**Fix:** a tick box that carries words draws its own box (`_drawn_tick_box`): two shared
+images, a light well and a dark mark, redrawn with the theme — the way the Select-mode boxes on
+the note cards were already drawn. Boxes without words keep Tk's dark default. qa4 now judges
+every ticked box on every theme by what is drawn, the mark against its well, with Share,
+Duplicates and the find bar open; the old rule asked only that the well be light.
+
+**Takeaway:** a rule written as "always" is a measurement nobody made. The radio was measured
+and fixed; its twin was assumed and shipped. Judge a control by what it draws, on every theme,
+not by the option you think draws it.
+
+### The copy that wrote its own table
+
+*(found in the owner's first full manual pass, on the 0.84.341 `.exe`)*
+
+**Symptom:** table cells copied into Word arrived as a bordered table with every colour gone;
+pasted back into a note, as a second table or into another table's cells, they came as bare
+values. A word set in another size or font lost both on its way to Word and on its way into
+another note — though the guide promised that copying between notes keeps everything.
+
+**Root cause:** the cell copy built its own HTML, one escaped value per cell, while the export
+already knew how to write a cell with its highlight, styled words and alignment. And what it
+remembered for a paste back here — values, widths, the table's place — had no room for styles.
+The note's own HTML writer, for its part, left size and typeface out entirely, and a paste
+reads neither back on purpose (a web page's sizes are not the note's), so even a copy between
+two notes had nowhere to carry them.
+
+**Fix:** one cell writer — the copy now writes each cell through the export's own
+(`cell_html`) — and the copy remembers each cell's styles and alignment, laid back on the same
+cells when our own copy is pasted (`_grid_lay_cell_styles`, through the rewrite's `extra`). The
+HTML now carries size and typeface out; a paste still reads none in, and our own copy brings
+them from what it remembered, recognised by its exact HTML rather than by its words, so the
+same words copied from elsewhere bring nothing of ours.
+
+**Takeaway:** a second writer of the same thing starts out as a copy and ends as a subset —
+every feature the first one learns, the second never hears of. When one writer exists, call it.
 
 ## Smaller lessons, moved out of the code
 

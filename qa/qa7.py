@@ -341,6 +341,14 @@ _pv_chip = next((w.cget('text') for w in _pv_texts
                 '')
 check('calendar preview strips the table to plain text',
       '|' not in _pv_text and 'Text above' in _pv_text and 'Text below' in _pv_text)
+# The note card follows the same rule: a row typed past its last cell is
+# part of the table, not words with bars in them.
+_card_says = app._card_texts(NO.normalize_note(
+    {'id': 991, 'title': 'Card', 'body': 'Words\n| a | b |\n| --- | --- |\n| c | d |and more'}))
+check(f'a card shows the words without the table, a row typed past its last '
+      f'cell included ({_card_says["preview"]!r} / {_card_says["tags"]!r})',
+      '|' not in _card_says['preview'] and 'Words' in _card_says['preview']
+      and '▦ 1 table' in _card_says['tags'])
 check('calendar preview does not dump the comments inline',
       'a comment that must not' not in _pv_text)
 check('calendar preview flags table + checklist + comments as chips',
@@ -4118,6 +4126,46 @@ _qa_fire(_pv_lbl, '<Leave>')
 app.update()
 check('leaving the row hides the preview',
       not any(w.winfo_exists() for w in _tips))
+_pv_lbl.destroy(); app.update()
+
+# A note with a table: the preview gives its words and says a table is
+# there, as the calendar's does. Field-reported from Recently deleted and
+# Duplicates: "only parallel vertical lines". A row typed past its last
+# cell counts as part of the table, and a body that is not text (a trash
+# entry is not normalised) shows no words rather than failing.
+_pv_lbl = tk.Label(app, text='hover me')
+_pv_lbl.pack()
+app._attach_dup_preview(_pv_lbl, dict(
+    _pv_note, body='Shopping list\n| Milk | 2 |\n| --- | --- |\n| Eggs | 6 |and more\nEnd'))
+app.update()
+_pv_before = set()
+_all_tops7(app, _pv_before)
+_qa_fire(_pv_lbl, '<Enter>')
+app.update()
+_pv_after = set()
+_all_tops7(app, _pv_after)
+_pv_said = _tip_txts7(list(_pv_after - _pv_before))
+check(f'a table in a hover preview is named, not drawn as bars ({_pv_said})',
+      not any('|' in t for t in _pv_said)
+      and any('▦ 1 table' in t for t in _pv_said)
+      and any('Shopping list' in t for t in _pv_said))
+_qa_fire(_pv_lbl, '<Leave>')
+app.update()
+_pv_lbl.destroy(); app.update()
+_pv_lbl = tk.Label(app, text='hover me')
+_pv_lbl.pack()
+app._attach_dup_preview(_pv_lbl, dict(_pv_note, body=['not', 'text']))
+_pv_before = set()
+_all_tops7(app, _pv_before)
+_qa_fire(_pv_lbl, '<Enter>')
+app.update()
+_pv_after = set()
+_all_tops7(app, _pv_after)
+_pv_said = _tip_txts7(list(_pv_after - _pv_before))
+check(f'a preview of a body that is not text still opens ({_pv_said})',
+      any('PreviewNote' in t for t in _pv_said))
+_qa_fire(_pv_lbl, '<Leave>')
+app.update()
 _pv_lbl.destroy(); app.update()
 
 print()

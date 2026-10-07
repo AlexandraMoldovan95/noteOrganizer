@@ -24,6 +24,19 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
   re-importing an overlapping backup; a pixel-level investigation of the post-push-down second
   grid rebuild before any de-flicker fix is trusted.
 
+- **Ideas from the first full manual pass over the test plan (October 2026)**, each small and
+  each crossing a seam that needs its own check:
+  - **A table follows its caption.** Centring a caption centres only the caption; the table moves
+    through right-click → Table → Center table on page. Re-aligning the caption lines under a
+    table when the table moves (or the reverse) would keep the pair together.
+  - **Reorder checklist items**, with ▲▼ beside each item or Alt+↑/↓ as in the note list. The
+    delete Undo puts an item back by position, so a move must keep that honest.
+  - **Search and order in the Share panel.** For notebooks of hundreds of notes: a search box
+    using the main search's rule, with Select all meaning "what the search shows"; and drawing
+    the panel in the note list's order rather than the order notes entered the notebook.
+  - **A "📎 With files" choice in the list's Show filter** — one option and one judgement in the
+    function every reader of the filter already asks.
+
 - **Small candidates from the 2026-08-31 idea pass** (put aside deliberately, in rough order of
   appeal; two candidates from that pass have since shipped — see
   [Global keyboard shortcuts](#global-keyboard-shortcuts) and, for the delete-toast Undo,

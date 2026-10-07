@@ -1777,11 +1777,8 @@ class SettingsPageMixin:
                     meta += f" · updated {show_date(updated[:10])}"
                 cb = tk.Checkbutton(
                     box, text=f"Delete this copy   ({meta})" if meta else "Delete this copy",
-                    variable=var,
-                    bg=self.colors["sidebar"], fg=self.colors["text"],
-                    selectcolor=self.colors["check_well"],
-                    activebackground=self.colors["sidebar"], activeforeground=self.colors["text"],
-                    font=("Segoe UI", 8), anchor="w")
+                    variable=var, font=("Segoe UI", 8), anchor="w")
+                self._drawn_tick_box(cb, "sidebar", "text", track=False)
                 cb.pack(fill="x", padx=20)
                 self._attach_dup_preview(cb, note)
 
