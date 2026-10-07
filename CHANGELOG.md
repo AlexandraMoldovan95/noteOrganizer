@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.84.357](#084357--2026-10-07) | 2026-10-07 | What a first full manual pass found: ticks on dark themes, tables that copy as they look, a list that keeps your place, imports that ask, and bold from a web page that stays bold. |
 | [0.84.341](#084341--2026-10-04) | 2026-10-04 | The hint shown with no template to pick sends you to the section of Settings that really holds them. |
 | [0.84.340](#084340--2026-10-03) | 2026-10-03 | The light themes' secondary text reads against every surface, with every theme's text now measured against WCAG — and the window's bottom scrollbar shows only when the window is too narrow. |
 | [0.84.338](#084338--2026-10-03) | 2026-10-03 | Dates typed the way people write them — 17.10.2026, 2026-10-17, "17 Oct 2026" — and shown day first everywhere, while the notes file keeps the one form it always had. |
@@ -90,7 +91,12 @@ How the numbers themselves are counted is the
 
 ---
 
-## [Unreleased]
+## [0.84.357] — 2026-10-07
+
+*Highlights: sixteen fixes from the first full manual pass over the test plan — ticks that show
+on dark themes, table cells that copy as they look (in the app and in Word), Enter in a list
+that keeps your place, imports that ask before skipping, and bold from a web page that arrives
+bold.*
 
 ### Fixed
 

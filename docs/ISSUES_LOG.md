@@ -150,10 +150,10 @@ is in the table below as well.
 | [The rule the app already had](#the-rule-the-app-already-had) | When two screens disagree, do not pick one — ask what the rest of the app does and make the odd one out match; and read what a gesture really offers before calling it a duplicate. | 0.75.174 |
 | [The list that moved under the pointer](#the-list-that-moved-under-the-pointer) | An action that moves the layout must keep the user's target under the pointer — or remember what they pointed at. | 0.83.335 |
 | [The character only the drawn tables had](#the-character-only-the-drawn-tables-had) | An offset belongs to the space it was counted in: convert at every crossing, and compare in the space both sides share. | 0.83.335 |
-| [The tick that took the colour of its words](#the-tick-that-took-the-colour-of-its-words) | A rule written as "always" is a measurement nobody made; judge a control by what it draws, on every theme. | — |
-| [The copy that wrote its own table](#the-copy-that-wrote-its-own-table) | A second writer of the same thing starts as a copy and ends as a subset; when one writer exists, call it. | — |
-| [The list that rewrote the whole note](#the-list-that-rewrote-the-whole-note) | Write only what changed: a rewrite of everything moves everything that hangs off the text — the view, the tables, the caret. | — |
-| [Nine regressions in fifteen fixes](#nine-regressions-in-fifteen-fixes) | A fix that changes WHEN something happens must be walked through every reader of that moment, not only the route it was reported on. | — |
+| [The tick that took the colour of its words](#the-tick-that-took-the-colour-of-its-words) | A rule written as "always" is a measurement nobody made; judge a control by what it draws, on every theme. | 0.84.357 |
+| [The copy that wrote its own table](#the-copy-that-wrote-its-own-table) | A second writer of the same thing starts as a copy and ends as a subset; when one writer exists, call it. | 0.84.357 |
+| [The list that rewrote the whole note](#the-list-that-rewrote-the-whole-note) | Write only what changed: a rewrite of everything moves everything that hangs off the text — the view, the tables, the caret. | 0.84.357 |
+| [Nine regressions in fifteen fixes](#nine-regressions-in-fifteen-fixes) | A fix that changes WHEN something happens must be walked through every reader of that moment, not only the route it was reported on. | 0.84.357 |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.

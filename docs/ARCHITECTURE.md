@@ -413,8 +413,11 @@ the tag over it is only the hanging indent. Reading the tag instead let a pasted
 as a bullet with no bullet in it — see
 [The bullet that had no bullet in it](ISSUES_LOG.md#the-bullet-that-had-no-bullet-in-it).
 Renumbering therefore rewrites real characters, which moves everything after them, so
-`renumber()` returns the shifts it caused and `shift_spans()` moves the character spans to
-match; otherwise bold slides sideways the moment `9.` becomes `10.`.
+`renumber()` returns the shifts it caused, for anything holding spans as offsets
+(`shift_spans()` moves them to match; otherwise bold slides sideways the moment `9.` becomes
+`10.`). The editor itself writes only the characters of each marker that changed, so Tk carries
+every tag, the view and every drawn table along by itself — see
+[The list that rewrote the whole note](ISSUES_LOG.md#the-list-that-rewrote-the-whole-note).
 
 #### One tag per combination, built lazily
 
@@ -711,9 +714,11 @@ its end (`_undo_sig_is`), because that is how Tk will give each of those texts b
 ### Large lists: draw what can be seen, the rest on demand
 
 The Trash (Settings → Recently deleted) and the multi-note Share panel both cap how many rows
-they build at once (50 and 100 respectively), with a "Show more" button to reveal the next
+they build at once (25 and 100 respectively), with a "Show more" button to reveal the next
 batch, rather than rendering every entry immediately. This was enough to take the Trash panel
-from ~1.8s to ~100ms with 600 entries.
+from ~1.8s to ~100ms with 600 entries. "Show more" adds the next batch under the rows already
+drawn — drawing them all again flickered — unless the list has moved under them since (a note
+deleted while the panel is open), when it draws them all once more.
 
 The main note list does the same job without a button, because it is the app's main way
 around and a button every thirty notes would be felt — and it is **drawn**, not built of
