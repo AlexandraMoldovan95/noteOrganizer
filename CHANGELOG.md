@@ -93,6 +93,14 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+### Added
+
+- **A table and its caption move together.** Centring a caption from the toolbar left its table
+  where it was; the table moved only from its own right-click menu. Now aligning the caption —
+  its label or its "Source:" line — places the table with it, and placing the table brings the
+  caption along. A line that only looks like a caption, away from its table, moves nothing.
+  Selecting every cell and aligning still aligns the cells' text, and says how to move the table.
+
 ### Fixed
 
 - **An open checkbox cell no longer shows its brackets.** Opened with Edit cell as text, or
@@ -105,6 +113,12 @@ How the numbers themselves are counted is the
   and closes the box untouched; mutants H01–H03 take the fix back out. The two guards added in
   0.84.357 for the same complaint — the picker clearing the box, the commit dropping the
   marker — had nothing left to guard and went with their mutants (P12, P13, B01, B02).
+- qa1 moves a table by its caption's label and its source line, takes both back with one
+  Ctrl+Z, moves the table from its menu, leaves a far "Table 9:" line alone, and centres every
+  cell; test_tables reads what a caption is. Save and reopen, the HTML export and a share code
+  were probed for the placement. Mutants L01–L05 take the feature back out.
+- Q05 had lost its target: the audit fix A06 split the two lines it mutated, and the runs after
+  it never named it. It aims at them as they are now; the whole catalogue was run again.
 
 ---
 

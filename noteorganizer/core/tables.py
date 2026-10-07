@@ -25,6 +25,8 @@ Nothing here imports tkinter: it turns strings into strings, so it can be
 tested on any machine.
 """
 
+import re
+
 CELL = "|"
 # A line break INSIDE a cell, as markdown itself writes one -- a table
 # row must stay one line of text, so the break is a marker in the value.
@@ -48,6 +50,23 @@ def checkbox_state(value):
     if v.lower() == CHECKBOX_DONE:
         return True
     return None
+
+
+# A table's caption, as the app writes one under it: a numbered label --
+# "Tab. N:" in notes from before the labels went English -- and the line
+# its source goes on.
+_CAPTION_LABEL = re.compile(r"(?:Table|Tab\.) \d+:")
+
+
+def is_caption_line(line):
+    """True for a caption's label line: "Table 3: ...". Prose that merely
+    begins with the word is not one -- the number and colon are."""
+    return bool(_CAPTION_LABEL.match((line or "").strip()))
+
+
+def is_source_line(line):
+    """True for the line a caption keeps its source on."""
+    return (line or "").strip().startswith("Source:")
 # A cell holding exactly one of these is not content but a merge marker:
 # "<" belongs to the cell on its left, "^" to the cell above. Anchors sit
 # at the top-left of their rectangle. Typing one of these alone into a cell

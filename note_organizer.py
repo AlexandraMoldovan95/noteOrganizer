@@ -5449,7 +5449,27 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if align in ("center", "right"):
                 self.body_text.tag_add(f"align_{align}",
                                        f"{n}.0", f"{n}.end")
+        # Its caption goes with it: on the page the two are one block.
+        self._align_lines(self._caption_lines_of(info), align)
         self._schedule_autosave()
+
+    def _caption_lines_of(self, info):
+        """The caption right under a drawn table, as line numbers: its
+        "Table N:" line and the "Source:" line after it. Empty when the
+        line under the table is not a caption -- only one touching its
+        table belongs to it."""
+        first = self._grid_first_line(info)
+        if first is None:
+            return []
+        below = first + info["nrows"]
+        b = self.body_text
+        if not core_tables.is_caption_line(b.get(f"{below}.0", f"{below}.end")):
+            return []
+        lines = [below]
+        if core_tables.is_source_line(
+                b.get(f"{below + 1}.0", f"{below + 1}.end")):
+            lines.append(below + 1)
+        return lines
 
     def _grid_table_align_of(self, first):
         """Which position the block's window line carries.
@@ -5482,7 +5502,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # captions inserted before the labels went English, so numbering in
         # an older note carries on instead of restarting at 1.
         n = 1 + sum(1 for ln in b.get("1.0", "end-1c").split("\n")
-                    if re.match(r"(?:Table|Tab\.) \d+:", ln.strip()))
+                    if core_tables.is_caption_line(ln))
         caption_text = f"Table {n}: description"
         b.insert(f"{below}.end", "\n" + caption_text + "\nSource: ")
         cap_line = below + 1
@@ -6605,10 +6625,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         sel = getattr(self, "_grid_sel", None)
         if (sel is not None
                 and self._grid_first_line(sel["info"]) is not None):
-            self._grid_set_alignment(sel["info"], sel["box"], {
+            info, box = sel["info"], sel["box"]
+            whole = (box[0] == 0 and box[1] == 0
+                     and box[2] >= info["data_rows"] - 1
+                     and box[3] >= info["ncols"] - 1)
+            self._grid_set_alignment(info, box, {
                 "center": core_tables.ALIGN_CENTER,
                 "right": core_tables.ALIGN_RIGHT,
             }.get(align, core_tables.ALIGN_LEFT))
+            if whole:
+                # Every cell selected reads as "the table" -- but this is
+                # the cells' text (field pass: the table stayed put).
+                self._show_toast(
+                    "That aligns the text in every cell. To move the table "
+                    "itself, align its caption, or right-click it → Table.",
+                    kind="info")
             return
         # With a table cell open, the toolbar buttons mean that cell --
         # reaching for the same button that aligns a paragraph is exactly
@@ -6630,7 +6661,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if all(self._paragraph_align_of(self.body_text, n) == align
                for n in range(first, last + 1)):
             align = "left"
-        for line_no in range(first, last + 1):
+        self._align_lines(range(first, last + 1), align)
+        # A caption carries its table along, and the table its caption
+        # (field pass: centring the label left the table where it was).
+        lines = set(range(first, last + 1))
+        for info in list(getattr(self, "_table_grids", [])):
+            if lines & set(self._caption_lines_of(info)):
+                self._grid_set_table_align(info, align)
+        self._refresh_list_buttons()
+        self._schedule_autosave()
+
+    def _align_lines(self, line_numbers, align):
+        """Give whole lines one alignment; "left" takes it away."""
+        for line_no in line_numbers:
             for name in ("center", "right"):
                 self.body_text.tag_remove(f"align_{name}",
                                           f"{line_no}.0", f"{line_no}.end+1c")
@@ -6641,8 +6684,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # the left the moment you press Enter on a centred line.
                 self.body_text.tag_add(f"align_{align}",
                                        f"{line_no}.0", f"{line_no}.end+1c")
-        self._refresh_list_buttons()
-        self._schedule_autosave()
 
     def _list_kind_of(self, text_widget, line_no):
         """Which kind of list line this is, or None if it is not one.

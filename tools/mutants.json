@@ -630,8 +630,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        if held is not None and held.winfo_class() in self._TYPING_CLASSES:\n            self.focus_set()",
-        "replace": "        if held is not None and held.winfo_class() in self._TYPING_CLASSES:\n            pass"
+        "find": "                self._commit_cell_editor()\n            self.focus_set()",
+        "replace": "                self._commit_cell_editor()\n            pass"
       }
     ],
     "must_fail": ["a click beside the field, on no box at all, finishes with it", "a click on empty space releases the caret from any box"],
@@ -1195,6 +1195,76 @@
       }
     ],
     "must_fail": ["a checkbox cell opens empty by every way in"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "L01",
+    "about": "aligning a caption leaves its table where it was",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if lines & set(self._caption_lines_of(info)):",
+        "replace": "            if False:"
+      }
+    ],
+    "must_fail": ["a table and its caption move together"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "L02",
+    "about": "placing a table leaves its caption behind",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._align_lines(self._caption_lines_of(info), align)",
+        "replace": "        pass"
+      }
+    ],
+    "must_fail": ["a table and its caption move together"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "L03",
+    "about": "any line starting with Table counts as a caption",
+    "edits": [
+      {
+        "file": "noteorganizer/core/tables.py",
+        "find": "    return bool(_CAPTION_LABEL.match((line or \"\").strip()))",
+        "replace": "    return (line or \"\").strip().startswith(\"Tab\")"
+      }
+    ],
+    "must_fail": ["a caption's label is a number and a colon after Table"],
+    "suites": ["test_tables"],
+    "expect": "killed"
+  },
+  {
+    "id": "L04",
+    "about": "centring every cell says nothing about moving the table",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if whole:",
+        "replace": "            if False:"
+      }
+    ],
+    "must_fail": ["centring every cell aligns their text and says how to move the table"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "L05",
+    "about": "a caption's source line is not part of it",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            lines.append(below + 1)",
+        "replace": "            pass"
+      }
+    ],
+    "must_fail": ["a table and its caption move together"],
     "suites": ["qa1"],
     "expect": "killed"
   }

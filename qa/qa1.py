@@ -7084,6 +7084,83 @@ check('numbering counts old-label captions but not prose starting '
       'Table 2: description' in app.body_text.get('1.0', 'end-1c'))
 set_body('')
 
+# A table follows its caption, and the caption its table (field pass:
+# centring the caption left the table where it was). Only a caption right
+# under its table belongs to it; one Ctrl+Z takes both back.
+set_body('intro' + chr(10) + '| a | b |' + chr(10) + '| --- | --- |' + chr(10)
+         + '| 1 | 2 |' + chr(10) + 'tail' + chr(10) + 'Table 9: far away')
+app._render_table_grids()
+app.update()
+app._grid_add_caption(app._grid_at_line(2))
+app.update()
+app.body_text.tag_remove('sel', '1.0', 'end')
+
+
+def _tf_where():
+    """(table, caption, source, a far 'Table 9:' line) placements."""
+    _b = app.body_text.get('1.0', 'end-1c').split(chr(10))
+    _far = _b.index('Table 9: far away') + 1
+    return (app._grid_table_align_of(2),
+            app._paragraph_align_of(app.body_text, 5),
+            app._paragraph_align_of(app.body_text, 6),
+            app._paragraph_align_of(app.body_text, _far))
+
+
+_tf = {'start': _tf_where()}
+app._reset_text_undo()
+app.body_text.mark_set('insert', '5.3')            # on the caption's label
+app._set_paragraph_align('center')
+app.update()
+_tf['caption centred'] = _tf_where()
+app._body_undo_redo('undo')
+app.update()
+_tf['one Ctrl+Z'] = _tf_where()
+app.body_text.mark_set('insert', '6.2')            # on its source line
+app._set_paragraph_align('right')
+app.update()
+_tf['source right'] = _tf_where()
+app._set_paragraph_align('right')                   # pressed again: back left
+app.update()
+_tf['pressed again'] = _tf_where()
+app._grid_set_table_align(app._grid_at_line(2), 'center')   # the menu's road
+app.update()
+_tf['table centred'] = _tf_where()
+_far = app.body_text.get('1.0', 'end-1c').split(chr(10)).index('Table 9: far away') + 1
+app.body_text.mark_set('insert', '%d.2' % _far)
+app._set_paragraph_align('right')
+app.update()
+_tf['far line right'] = _tf_where()
+check(f'a table and its caption move together, one Ctrl+Z takes both back, '
+      f'and a caption away from its table moves nothing ({_tf})',
+      _tf == {'start': ('left', 'left', 'left', 'left'),
+              'caption centred': ('center', 'center', 'center', 'left'),
+              'one Ctrl+Z': ('left', 'left', 'left', 'left'),
+              'source right': ('right', 'right', 'right', 'left'),
+              'pressed again': ('left', 'left', 'left', 'left'),
+              'table centred': ('center', 'center', 'center', 'left'),
+              'far line right': ('center', 'center', 'center', 'right')})
+# Every cell selected and centred centres the cells' text, as a spreadsheet
+# does, and says how the table itself moves.
+_tf_said = []
+_tf_real_toast = app._show_toast
+app._show_toast = lambda text, **k: _tf_said.append(text)
+try:
+    _tfI = app._grid_at_line(2)
+    app._grid_select_range(_tfI, (0, 0), (_tfI['data_rows'] - 1, _tfI['ncols'] - 1))
+    app.update()
+    app._set_paragraph_align('right')
+    app.update()
+finally:
+    app._show_toast = _tf_real_toast
+app._grid_clear_selection()
+_tf_cells = core_tables.cell_alignments(app.body_text.get('4.0', '4.end'))
+check(f'centring every cell aligns their text and says how to move the table '
+      f'({_tf_said}; {_tf_cells}; {app._grid_table_align_of(2)})',
+      _tf_cells == [core_tables.ALIGN_RIGHT] * 2
+      and app._grid_table_align_of(2) == 'center'
+      and len(_tf_said) == 1 and 'To move the table itself' in _tf_said[0])
+set_body('')
+
 # The table's placement travels with the cell copy.
 set_body('| p | q |' + chr(10) + '| --- | --- |' + chr(10)
          + '| 1 | 2 |' + chr(10) + chr(10) + 'tail')

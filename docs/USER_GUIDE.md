@@ -301,8 +301,10 @@ A table works the way a spreadsheet has taught your hands to expect:
 - Under **Table** lives **Add caption below…**: an auto-numbered "Table N: description" label
   (typing replaces the selected placeholder) plus a "Source:" line for links and sources, both
   placed like the table — left under a left table, centred under a centred one. They are plain,
-  editable body text ever after, so the wording is yours to change, and moving the table later
-  leaves them where they are.
+  editable body text ever after, so the wording is yours to change, and the caption and its
+  table move together: align the caption from the toolbar and the table goes with it, or move
+  the table (right-click → **Table**) and the caption follows. Selecting every cell and pressing
+  an alignment button aligns the text *inside* the cells, as a spreadsheet does.
 - The full set: merge the selected cells into one (their texts join), split a merge back apart,
   insert or delete rows and columns, duplicate whole columns to the end of the table (and whole
   rows to the bottom), insert a **checkbox** (with its own colour palette) or an emoji, and
