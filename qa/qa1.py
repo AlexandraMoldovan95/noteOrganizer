@@ -8219,6 +8219,25 @@ check('Ctrl+F opens the in-window find bar (a placed Frame, not a Toplevel)',
       and isinstance(app._find_bar, tk.Frame))
 check('Ctrl+F puts the focus in the find entry',
       app._find_entry in _ff_focused)
+
+# Tk paints a frame's border in highlightcolor while the keyboard is inside
+# it: the find bar's accent was the system grey all the time it was used.
+from _qa_support import ring_mismatches as _ring_mismatches
+_rm_found = _ring_mismatches(app)
+check(f'a bordered frame with a box inside keeps its border colour while the '
+      f'keyboard is in the box -- the find bar too ({_rm_found})',
+      not _rm_found)
+# And a theme with another accent recolours both, the bar being built once.
+_rm_theme = app.theme_name
+app.set_theme('dark_ocean' if _rm_theme != 'dark_ocean' else 'dark')
+app.update()
+_rm_colours = {o: str(app._find_bar.cget(o)).lower()
+               for o in ('highlightbackground', 'highlightcolor')}
+check(f'...and a theme with another accent gives the find bar its border in '
+      f'both colours ({_rm_colours}, accent {app.colors["accent"]})',
+      set(_rm_colours.values()) == {app.colors['accent'].lower()})
+app.set_theme(_rm_theme)
+app.update()
 app._close_find()
 app.update()
 check('the X (close) hides the bar and drops the find tags',

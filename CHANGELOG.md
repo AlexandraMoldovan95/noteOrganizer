@@ -123,6 +123,10 @@ How the numbers themselves are counted is the
   less, a long item's text took the whole row: its 🗑 was squeezed to nothing, so the item could
   not be removed, and its last words were cut off. The buttons keep their room now, and the text
   wraps at the width it has.
+- **The find bar keeps its accent border while you type.** Its border went the system grey the
+  moment the keyboard was in its box — all the time it is used — on every theme. Tk paints a
+  frame's border in another colour while the keyboard is inside it, and that colour was never
+  set. The picture preview's border did the same when one of its buttons had the keyboard.
 
 ### Testing
 
@@ -163,6 +167,12 @@ How the numbers themselves are counted is the
   with the panel open, and watches it follow with the ticks kept.
   Mutants V01–V08 take each part back out, and A08 aims at Show more's check as it is now.
 - qa1 reads the dialog that centring every cell now opens, by its title and its directions.
+- A photograph of the checklist's ring showed it grey while its check passed: the check read
+  the colour that was set, not the one Tk draws while the keyboard is inside a frame.
+  `ring_mismatches` in `qa/_qa_support.py` now walks a window for any bordered frame holding
+  something that takes the keyboard, with its two border colours apart; qa1 runs it on the
+  checklist and the find bar (and switches to a theme with another accent), qa7 on the picture
+  preview, qa9 on a template's checklist. Mutants O21–O23 and X01–X03 take each part back out.
 
 ---
 

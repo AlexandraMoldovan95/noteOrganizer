@@ -1030,6 +1030,12 @@ app.open_attachment(0)
 app.update()
 img = app._image_preview_ref
 check('small image gets zoomed up for visibility (capped at 8x)', img[0].width() == 8 and img[0].height() == 8)
+# Tk paints a frame's border in highlightcolor while the keyboard is on
+# one of its buttons: the preview's accent border must be both colours.
+from _qa_support import ring_mismatches as _ring_mismatches
+_pv_rings = _ring_mismatches(app)
+check(f'the image preview keeps its accent border while the keyboard is on '
+      f'its buttons ({_pv_rings})', not _pv_rings)
 app._dismiss_mini_popup(); app.update()
 
 app.open_attachment(1)

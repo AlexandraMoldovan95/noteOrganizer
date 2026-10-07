@@ -17083,14 +17083,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         non-scrolling viewport frame), so it lives inside the app window,
         never scrolls away, and -- because place() is outside pack -- never
         reflows the editor or churns the scrollregion."""
+        # highlightcolor as well: Tk draws the border in it while the
+        # keyboard is in the bar's box, which is all the time it is used.
         bar = tk.Frame(self.editor_outer, bg=self.colors["card"],
                        highlightthickness=1,
-                       highlightbackground=self.colors["accent"])
+                       highlightbackground=self.colors["accent"],
+                       highlightcolor=self.colors["accent"])
         # The accent-coloured border must be tracked too, not just the fill:
         # left off the map it stays frozen at the theme the bar was first
         # built under, so changing the accent (purple -> blue) leaves the
         # old colour framing the bar until it is rebuilt.
-        self.track_theme(bar, bg="card", highlightbackground="accent")
+        self.track_theme(bar, bg="card", highlightbackground="accent",
+                         highlightcolor="accent")
         self._find_var = tk.StringVar()
         entry = tk.Entry(bar, textvariable=self._find_var, relief="flat",
                          width=22, font=("Segoe UI", 10),

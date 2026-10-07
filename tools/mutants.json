@@ -1729,5 +1729,52 @@
     "must_fail": ["move: every row draws its border in one colour"],
     "suites": ["qa1"],
     "expect": "killed"
+  },
+  {
+    "id": "X01",
+    "about": "a theme switch leaves the find bar's border, while typing, in the old accent",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self.track_theme(bar, bg=\"card\", highlightbackground=\"accent\",\n                         highlightcolor=\"accent\")\n",
+        "replace": "        self.track_theme(bar, bg=\"card\", highlightbackground=\"accent\")\n"
+      }
+    ],
+    "must_fail": ["...and a theme with another accent gives the find bar its border in both colours"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "X02",
+    "about": "the find bar's accent border turns the system grey while its box has the keyboard, as it shipped",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                       highlightbackground=self.colors[\"accent\"],\n                       highlightcolor=self.colors[\"accent\"])\n",
+        "replace": "                       highlightbackground=self.colors[\"accent\"])\n"
+      },
+      {
+        "file": "note_organizer.py",
+        "find": "        self.track_theme(bar, bg=\"card\", highlightbackground=\"accent\",\n                         highlightcolor=\"accent\")\n",
+        "replace": "        self.track_theme(bar, bg=\"card\", highlightbackground=\"accent\")\n"
+      }
+    ],
+    "must_fail": ["a bordered frame with a box inside keeps its border colour while the keyboard is in the box"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "X03",
+    "about": "the image preview's accent border turns the system grey while a button in it has the keyboard",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "                           highlightbackground=self.colors[\"accent\"],\n                           highlightcolor=self.colors[\"accent\"])\n",
+        "replace": "                           highlightbackground=self.colors[\"accent\"])\n"
+      }
+    ],
+    "must_fail": ["the image preview keeps its accent border while the keyboard is on its buttons"],
+    "suites": ["qa7"],
+    "expect": "killed"
   }
 ]
