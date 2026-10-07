@@ -147,7 +147,9 @@ How the numbers themselves are counted is the
 - qa1 orders the Share panel by two sorts and pins, searches it by a word in a table and in five
   more queries against the sidebar search's own rule, selects all under a search, generates a
   code holding a hidden pick, finds nothing, clears with ✕, and closes with a search waiting; qa4
-  switches the theme with the search box open; qa9 keeps it on screen in the smallest window.
+  switches the theme with the search box open; qa9 keeps it on screen in the smallest window. The
+  Linux image found the panel 14 pixels over its room at 1150×860, so the search row is paid for
+  out of the list's height and the panel kept its size.
   Mutants V01–V07 take each part back out, and A08 aims at Show more's check as it is now.
 
 ---

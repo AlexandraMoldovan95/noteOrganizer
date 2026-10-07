@@ -9477,8 +9477,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     # How far an open panel's scrolling middle gives when the window is
     # short: (natural, comfortable, least) -- pixels of Share's list of
-    # notes, lines of Import's paste box.
-    SIDEBAR_PANEL_BODY = {"share": (130, 56, 28), "import": (4, 2, 1)}
+    # notes, lines of Import's paste box. Share's search row is paid for
+    # out of its list (130 before it), so the panel kept its height.
+    SIDEBAR_PANEL_BODY = {"share": (105, 56, 28), "import": (4, 2, 1)}
 
     def _fit_sidebar_panel(self, _event=None):
         """Keep the open panel's own buttons -- and a generated code -- on
