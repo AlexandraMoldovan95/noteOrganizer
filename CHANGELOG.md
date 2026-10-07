@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.88.361](#088361--2026-10-08) | 2026-10-08 | What two re-tests asked for: a table that moves with its caption, a filter for notes with files, checklist items you can move, a Share panel that searches and keeps the list's order, and a find bar that reads on every theme. |
 | [0.84.357](#084357--2026-10-07) | 2026-10-07 | What a first full manual pass found: ticks on dark themes, tables that copy as they look, a list that keeps your place, imports that ask, and bold from a web page that stays bold. |
 | [0.84.341](#084341--2026-10-04) | 2026-10-04 | The hint shown with no template to pick sends you to the section of Settings that really holds them. |
 | [0.84.340](#084340--2026-10-03) | 2026-10-03 | The light themes' secondary text reads against every surface, with every theme's text now measured against WCAG — and the window's bottom scrollbar shows only when the window is too narrow. |
@@ -91,7 +92,12 @@ How the numbers themselves are counted is the
 
 ---
 
-## [Unreleased]
+## [0.88.361] — 2026-10-08
+
+*Highlights: four additions and four fixes from the owner's two re-tests of 0.84.357 — a table
+that moves with its caption, "📎 With files" in the list's Show filter, checklist items moved
+with ▲ ▼ or Alt+↑/↓ (in a template too), a Share panel that searches and follows the list's
+order, and a find bar that keeps its colours and closes when you leave the note.*
 
 ### Added
 

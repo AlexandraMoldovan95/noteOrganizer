@@ -154,7 +154,7 @@ is in the table below as well.
 | [The copy that wrote its own table](#the-copy-that-wrote-its-own-table) | A second writer of the same thing starts as a copy and ends as a subset; when one writer exists, call it. | 0.84.357 |
 | [The list that rewrote the whole note](#the-list-that-rewrote-the-whole-note) | Write only what changed: a rewrite of everything moves everything that hangs off the text — the view, the tables, the caret. | 0.84.357 |
 | [Nine regressions in fifteen fixes](#nine-regressions-in-fifteen-fixes) | A fix that changes WHEN something happens must be walked through every reader of that moment, not only the route it was reported on. | 0.84.357 |
-| [The border that went grey whenever it was used](#the-border-that-went-grey-whenever-it-was-used) | A check that reads the option you set proves the option, not the colour on the screen; photograph what a person sees. | — |
+| [The border that went grey whenever it was used](#the-border-that-went-grey-whenever-it-was-used) | A check that reads the option you set proves the option, not the colour on the screen; photograph what a person sees. | 0.88.361 |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.

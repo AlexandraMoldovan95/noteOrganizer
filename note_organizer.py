@@ -47,7 +47,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.84.357"
+APP_VERSION = "0.88.361"
 
 
 def parse_version(v):
@@ -11481,9 +11481,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _render_checklist_items(self):
         """Redraw the checklist rows from the working list -- while the
         section is OPEN. Closed, no row is built: a note switch collapses
-        the section anyway, and each row is four widgets (a frame, a tick
-        box, a label, a bin), so building them for a closed section was
-        pure cost -- a 50-item note paid ~200 widgets on every open.
+        the section anyway, and each row is five widgets (a frame, its
+        arrows, a tick box, a label, a bin), so building them for a closed
+        section was pure cost -- a 50-item note paid ~250 on every open.
         toggle_checklist_section builds them the moment it opens. The
         rows drawn are recorded (see _checklist_rows_current), so a
         change can touch the one row it concerns instead of all of them.

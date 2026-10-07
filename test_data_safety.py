@@ -1181,7 +1181,7 @@ check("genuinely identical notes still collapse",
       len(_model.clean_notes([_same_a, _same_b])[0]) == 1)
 
 # ---- A pasted share code cannot make a note that kills the app (T0-7) ----
-# Every checklist item becomes four widgets at render time and nothing
+# Every checklist item becomes five widgets at render time and nothing
 # capped the count: 20,000 items is a 60KB code that passes every decoder
 # guard, and the app never starts again once the note is saved.
 _bomb = _model.normalize_note(
