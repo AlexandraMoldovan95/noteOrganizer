@@ -207,7 +207,6 @@ from noteorganizer.core.formatting import (
     marker_for,
     bullet_level_of,
     renumber,
-    shift_spans,
     merge_spans,
     split_toolbar_rows,
     MAX_INDENT,
@@ -861,6 +860,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.configure(bg=self.colors["bg"])
         self.build_ui()
         self._bind_global_shortcuts()
+        self.bind_all("<ButtonPress-1>", self._release_caret_on_empty_click,
+                      add="+")
         self.refresh_note_list()
         self.render_calendar()
         last_open_id = load_settings().get("last_open_note_id")
@@ -7347,10 +7348,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             lo, hi = max(span["start"], first), min(span["end"], last)
             if hi > lo:
                 clipped.append(dict(span, start=lo - first, end=hi - first))
+        line_count = text.count("\n") + 1      # once, not once per paragraph
         paragraphs = [
             dict(p, line=p["line"] - first_line)
             for p in self._extract_paragraphs(self.body_text)
-            if 0 <= p["line"] - first_line < len(text.split("\n"))]
+            if 0 <= p["line"] - first_line < line_count]
 
         # inline_tables: a clipboard fragment travels without the file
         # export's stylesheet, and Word shows a bare HTML table with no
@@ -7968,44 +7970,41 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _renumber_lists(self):
         """Make every numbered run read 1, 2, 3 again after any change.
 
-        The arithmetic is in core/formatting.py; this applies the result and
-        moves the formatting spans by however much the markers grew or shrank,
-        so bold text does not slide sideways when 9 becomes 10.
+        The arithmetic is in core/formatting.py; this writes only the
+        characters of each marker that changed, so every style, the view and
+        every drawn table stay exactly where they were. It used to rewrite
+        the whole body, which threw the view to the note's first line on
+        every Enter in a numbered list and tore down every table to redraw
+        it (ISSUES_LOG: "The list that rewrote the whole note").
         """
-        body = self.body_text.get("1.0", "end-1c")
-        paragraphs = self._extract_paragraphs(self.body_text)
-        new_body, shifts = renumber(body, paragraphs)
+        b = self.body_text
+        body = b.get("1.0", "end-1c")
+        new_body, _shifts = renumber(body, self._extract_paragraphs(b))
         if new_body == body:
             return
-        # The rewrite below is delete-everything + reinsert. Left as two
-        # recorded edits, one Ctrl+Z undid the reinsert but not the
-        # delete and the note showed EMPTY; bracket it as ONE undo unit.
-        # The bracket sits AFTER the no-change early return, so a keystroke
-        # that doesn't renumber emits no separator — normal typing undo is
-        # untouched. Re-entrant, so when a wrapped list op called this the
-        # whole op stays one unit.
+        # Several edits, one Ctrl+Z; after the no-change return, so a
+        # keystroke that renumbers nothing leaves typing's undo untouched.
         self._undo_atom_begin()
+        # A caret at a marker's start stays there rather than ride past it.
+        gravity = b.mark_gravity("insert")
+        b.mark_gravity("insert", "left")
         try:
-            spans = shift_spans(self._extract_formatting(self.body_text), shifts)
-            insert_at = self.body_text.index("insert")
-            self.body_text.delete("1.0", "end-1c")
-            self.body_text.insert("1.0", new_body)
-            self._apply_formatting(self.body_text, spans)
-            self._apply_paragraphs(self.body_text, paragraphs)
-            # The whole-body delete also tore out any drawn table grids
-            # (their embedded window characters). If the body still holds
-            # a table, redraw it or it dissolves into raw pipe rows — the
-            # exact "Enter in a list dissolves my table" field failure.
-            # Skipped when there's no table, so a plain list keeps its
-            # keystroke-cheap path. _render_table_grids is undo-hidden, so
-            # this adds no undo noise inside the atom.
-            if core_tables.find_blocks(new_body):
-                self._render_table_grids()
-            try:
-                self.body_text.mark_set("insert", insert_at)
-            except tk.TclError:
-                pass
+            for n, (old, new) in enumerate(
+                    zip(body.split("\n"), new_body.split("\n")), start=1):
+                if old == new:
+                    continue
+                p, room = 0, min(len(old), len(new))
+                while p < room and old[p] == new[p]:
+                    p += 1
+                s = 0
+                while s < room - p and old[-1 - s] == new[-1 - s]:
+                    s += 1
+                at = f"{n}.{self._tk_col(old, p)}"
+                tags = tuple(t for t in b.tag_names(at) if t != "sel")
+                b.delete(at, f"{n}.{self._tk_col(old, len(old) - s)}")
+                b.insert(at, new[p:len(new) - s], tags)
         finally:
+            b.mark_gravity("insert", gravity)
             self._undo_atom_end()
 
     def _on_body_return(self, event):
@@ -8073,6 +8072,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._paragraph_tag(self.body_text, kind, indent),
             f"{new_line}.0", f"{new_line}.end")
         self._renumber_lists()
+        # Tk's own Enter keeps the new line in sight; this one replaces it.
+        self.body_text.see("insert")
         self._schedule_autosave()
         return "break"
 
@@ -9298,6 +9299,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     has_focus = False
                 if not has_focus:
                     text_widget.focus_set()
+                # A field showing its grey hint takes the emoji in its place.
+                getattr(text_widget, "clear_placeholder", lambda: None)()
                 self._emoji_takes_checkbox_place(text_widget)
                 if isinstance(text_widget, tk.Text):
                     at = text_widget.index(tk.INSERT)
@@ -10013,11 +10016,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             except tk.TclError:
                 pass
 
-        def render_checkboxes():
-            for w in inner.winfo_children():
-                w.destroy()
-            visible_notes = self.notes[:shown["n"]]
-            rendered["ids"] = [n["id"] for n in visible_notes]
+        def render_checkboxes(first=0):
+            """The tick boxes from *first* to the page's end, under any
+            already drawn, and the button for the rest."""
+            visible_notes = self.notes[first:shown["n"]]
+            rendered["ids"] = rendered["ids"][:first] + [
+                n["id"] for n in visible_notes]
+            made = []
             for n in visible_notes:
                 if n["id"] not in self._share_vars:
                     self._share_vars[n["id"]] = tk.BooleanVar(value=False)
@@ -10029,22 +10034,32 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                     font=("Segoe UI", 8), anchor="w")
                 self._drawn_tick_box(cb, "sidebar", "text", track=False)
                 cb.pack(fill="x", anchor="w")
-            remaining = len(self.notes) - len(visible_notes)
+                made.append(cb)
+            remaining = len(self.notes) - min(len(self.notes), shown["n"])
             if remaining > 0:
-                def show_more():
-                    shown["n"] += SHARE_PAGE_SIZE
-                    render_checkboxes()
-                tk.Button(inner, text=f"Show {min(remaining, SHARE_PAGE_SIZE)} more "
-                                      f"({remaining} not shown)",
-                          command=show_more, relief="flat", cursor="hand2",
-                          bg=self.colors["card"], fg=self.colors["text"],
-                          font=("Segoe UI", 8)).pack(fill="x", pady=(4, 2))
-            # Bind the wheel now that the checkboxes exist, so scrolling works
-            # with the cursor anywhere over the list.
-            self._bind_mousewheel_recursive(inner, self._share_checklist_canvas)
+                more = tk.Button(inner, text=f"Show {min(remaining, SHARE_PAGE_SIZE)} more "
+                                             f"({remaining} not shown)",
+                                 relief="flat", cursor="hand2",
+                                 bg=self.colors["card"], fg=self.colors["text"],
+                                 font=("Segoe UI", 8))
+                more.configure(command=lambda: show_more(more))
+                more.pack(fill="x", pady=(4, 2))
+                made.append(more)
+            # The wheel, so scrolling works with the cursor anywhere over the
+            # list: the list itself once, then only what each page adds.
+            for w in ([inner] if first == 0 else made):
+                self._bind_mousewheel_recursive(w, self._share_checklist_canvas)
             # "Show 100 more" reveals notes that are not ticked, so a button
             # reading "Unselect all" would be wrong the moment the page grows.
             refresh_select_all_label()
+
+        def show_more(button):
+            # Added under the boxes already drawn: drawing them all again
+            # flickered, and grew with every page.
+            first = shown["n"]
+            shown["n"] += SHARE_PAGE_SIZE
+            button.destroy()
+            render_checkboxes(first)
 
         render_checkboxes()
 
@@ -15552,6 +15567,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 entry.delete(0, "end")
                 entry.config(fg=self.colors["text"])
 
+        # Kept on the field, and gone with it, for what puts text in with
+        # no key and no paste: the emoji picker took the focus away, the
+        # hint came back, and the emoji landed after it.
+        entry.clear_placeholder = clear_if_placeholder
+
         def on_focus_in(e):
             clear_if_placeholder()
 
@@ -16448,6 +16468,42 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 ("<Control-s>", "<Control-S>", self._shortcut_save_now)):
             self.bind_all(lower, handler, add="+")
             self.bind_all(upper, handler, add="+")
+
+    # Where a click is on nothing: these classes take no click of their own.
+    _EMPTY_CLICK_CLASSES = frozenset(
+        ("Frame", "Label", "Canvas", "Labelframe", "TFrame", "TLabel", "Tk"))
+    _TYPING_CLASSES = frozenset(
+        ("Entry", "Text", "Spinbox", "TEntry", "TSpinbox", "TCombobox"))
+    _CLICK_SEQUENCES = ("<Button-1>", "<ButtonRelease-1>",
+                        "<Double-Button-1>", "<B1-Motion>")
+
+    def _release_caret_on_empty_click(self, event):
+        """A click on empty space -- a frame, a label, a blank stretch of
+        the window -- takes the keyboard out of the box that held it, as
+        other programs do. Tk moves the focus nowhere on such a click, so
+        the caret kept blinking in the box it had left (field pass).
+
+        Left alone: a click inside a popup (its own Toplevel, with its own
+        rules), and any widget that does something with a click -- a
+        binding of its own or on any of its tags except the window's and
+        "all", which every widget shares."""
+        w = event.widget
+        if not isinstance(w, tk.Misc):
+            return
+        try:
+            top = w.winfo_toplevel()
+            if top is not self or w.winfo_class() not in self._EMPTY_CLICK_CLASSES:
+                return
+            for tag in w.bindtags():
+                if tag in ("all", str(top)):
+                    continue
+                if any(w.bind_class(tag, seq) for seq in self._CLICK_SEQUENCES):
+                    return
+            held = self.focus_get()
+        except (tk.TclError, KeyError):
+            return
+        if held is not None and held.winfo_class() in self._TYPING_CLASSES:
+            self.focus_set()
 
     def _leave_settings_for_the_editor(self):
         """What a shortcut that needs the editor does first: let a popup

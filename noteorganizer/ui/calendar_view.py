@@ -1572,9 +1572,7 @@ class CalendarViewMixin:
                 activeforeground="white")
 
         query = self._history_query()
-        entries = history_entries(self.notes, query=query,
-                                  year_bucket=self._history_bucket,
-                                  memo=self._history_memo)
+        entries = self._history_entries_now()
 
         if not entries:
             lbl = tk.Label(self._history_rows,
@@ -1586,6 +1584,17 @@ class CalendarViewMixin:
                            fg=self.colors["subtext"])
             lbl.pack(pady=20)
             return
+        self._history_draw_rows(entries, 0)
+
+    def _history_entries_now(self):
+        return history_entries(self.notes, query=self._history_query(),
+                               year_bucket=self._history_bucket,
+                               memo=self._history_memo)
+
+    def _history_draw_rows(self, entries, first):
+        """The rows for entries[first:] up to the page's end, under any
+        already drawn, and the button for the rest."""
+        before = set(self._history_rows.winfo_children())
 
         def one_row(parent, parts, fg, command, context_cmd=None, indent=0,
                     bold=False):
@@ -1608,7 +1617,7 @@ class CalendarViewMixin:
         by_id = {}
         for n in self.notes:
             by_id.setdefault(n.get("id"), n)
-        shown = entries[:self._history_shown]
+        shown = entries[first:self._history_shown]
         for entry in shown:
             note = by_id.get(entry["note_id"])
             if note is None:
@@ -1678,6 +1687,7 @@ class CalendarViewMixin:
                             bg=self.colors["bg"], fg=self.colors["subtext"])
                         info.pack(fill="x", padx=(26, 0))
 
+        self._history_more_btn = None
         if len(entries) > self._history_shown:
             more = tk.Button(
                 self._history_rows,
@@ -1688,12 +1698,14 @@ class CalendarViewMixin:
                 activeforeground=self.colors["accent"],
                 command=self._history_show_more)
             more.pack(fill="x", pady=(6, 2))
+            self._history_more_btn = more
 
         # The rows are new; the frame holding them is bound once, where it
         # is built -- binding it again here left one more Tcl command
         # behind at every render, for as long as the app ran.
         for row in self._history_rows.winfo_children():
-            self._bind_mousewheel_recursive(row, self.cal_scroll_canvas)
+            if row not in before:
+                self._bind_mousewheel_recursive(row, self.cal_scroll_canvas)
 
     def _history_toggle_group(self, note_id):
         if note_id in self._history_expanded:
@@ -1703,8 +1715,21 @@ class CalendarViewMixin:
         self._render_calendar_history()
 
     def _history_show_more(self):
+        """The next 50 go in under the rows already drawn: drawing every
+        row again flickered, and grew with every page. A search still
+        waiting to run means the rows on screen are stale: all of them
+        are drawn again then, for the new search."""
+        first = self._history_shown
         self._history_shown += 50
-        self._render_calendar_history()
+        more = getattr(self, "_history_more_btn", None)
+        if (getattr(self, "_history_search_job", None) is not None
+                or not (self._history_visible and self._history_built)
+                or more is None or not more.winfo_exists()):
+            self._render_calendar_history()
+            return
+        more.destroy()
+        self._history_more_btn = None
+        self._history_draw_rows(self._history_entries_now(), first)
 
     def _history_open_day(self, note, date_str):
         """Back to the grid, on that exact month, with the day panel

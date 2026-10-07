@@ -122,6 +122,22 @@ How the numbers themselves are counted is the
 - **An emoji takes a checkbox's place.** Put into a checkbox cell, it went in beside the box,
   which turned the cell into text and showed the raw "[ ]". The emoji now replaces the box, and
   deleting it leaves an empty cell.
+- **Enter in a numbered list keeps your place.** It threw the note's scroll back to the top,
+  and so did Backspace, Tab and the list buttons whenever a number changed: keeping the numbers
+  right rewrote the whole note, and drew every table in it again. Only the numbers that change
+  are written now.
+- **An emoji in an empty field replaces its grey hint.** Put into an empty title with the
+  right-click picker, it landed after the hint, and the note was saved as "Note title...😀".
+  The same for the search boxes and the date field.
+- **A click on an empty part of the window lets go of the cursor**, from any box — the calendar
+  History search kept it blinking through every click around it. Buttons, links and popups keep
+  their own way.
+- **Copying a long note no longer freezes the app.** Copying with many styled words checked
+  every character against every style in the note: 70,000 characters with 2,000 bold words took
+  4.4 s, and a note several times that size stopped answering. The work now follows the styles,
+  not the characters.
+- **"Show more" adds rows instead of drawing all of them again**, in the Trash, the Share panel
+  and the calendar History: each page flickered, and more with every page.
 
 ### Testing
 
@@ -135,6 +151,11 @@ How the numbers themselves are counted is the
   the same words from elsewhere, and puts an emoji into a checkbox by both roads;
   test_richtext checks the empty highlighted cell, the size and typeface in the HTML, and a
   typeface name that tries to leave its attribute. Mutants P01–P13 take each fix back out.
+- qa1 checks the view, the drawn table, the styles and the caret through a renumber, the emoji
+  into a hinted field, and Show more in Share; qa3 and qa7 the same for the Trash and the
+  History; qa5 the click on empty space from several boxes, a clickable label and a popup;
+  test_richtext the copy's HTML against asking every character, and its work counted rather
+  than timed. Mutants Q01–Q14 take each fix back out.
 
 ---
 

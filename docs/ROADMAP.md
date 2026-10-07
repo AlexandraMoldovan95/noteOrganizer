@@ -513,3 +513,13 @@ here. None is a bug being chased; each has a reason.
   Ctrl+B on the whole of a note of 8,000 styled words takes 0.6–0.8 s (the toolbar's reading of
   the selection, a character at a time); a table cell's own size or font is not refitted when
   its bold changes, invisible while the grid is drawn. Seen by the last round, not measured further.
+
+**One very long paragraph (measured 2026-10-06)** — Tk's text widget lays a paragraph out whole,
+so the time to reach and edit the end of ONE paragraph grows with its square. Measured on a bare
+Tk text box, nothing of the app's in it: 70,000 characters with no line break take 1.2 s to
+scroll to the end and 0.2 s a keystroke there; 150,000 take 4.6 s and 0.8 s. Pasting a paragraph
+onto itself again and again reaches the point where the window stops answering. The same text
+broken into ordinary paragraphs is quick (a 140,000-character note: the paste 0.1 s). The app's
+own share of it — copying, which asked every character about every style — was fixed with this
+measurement; what is left is Tk's, and whether to warn when a paragraph grows that long is on the
+owner's list.

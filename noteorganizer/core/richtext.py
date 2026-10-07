@@ -33,6 +33,7 @@ saying so, which is exactly what the editor would have produced had the
 list been typed by hand.
 """
 
+import bisect
 import re
 from html import escape
 from html.parser import HTMLParser
@@ -519,17 +520,44 @@ def _wrap(chunk, plain, colours):
 
 
 def _line_html(line, spans, offset):
-    """One line's text with its character styles applied."""
+    """One line's text with its character styles applied.
+
+    The styles are worked out only where a span starts or ends, never per
+    character: asked at every character against every span, copying a long
+    note with many styled words took seconds and then minutes."""
     if not line:
         return ""
+    end = offset + len(line)
+    cuts = {0, len(line)}
+    for span in spans:
+        for at in (span["start"], span["end"]):
+            if offset < at < end:
+                cuts.add(at - offset)
+    points = sorted(cuts)
     pieces, run_start = [], 0
     current = _styles_at(spans, offset)
-    for i in range(1, len(line) + 1):
+    for i in points[1:]:
         here = _styles_at(spans, offset + i) if i < len(line) else None
         if here != current:
             pieces.append(_wrap(line[run_start:i], *current))
             run_start, current = i, here
     return "".join(pieces)
+
+
+def _spans_by_line(spans, lines):
+    """Each line's spans -- the ones that reach into it -- in one pass, so
+    a line is never checked against the whole note's styles."""
+    starts, at = [], 0
+    for line in lines:
+        starts.append(at)
+        at += len(line) + 1
+    by_line = [[] for _ in lines]
+    for span in spans:
+        n = max(0, bisect.bisect_right(starts, span["start"]) - 1)
+        while n < len(lines) and starts[n] < span["end"]:
+            by_line[n].append(span)
+            n += 1
+    return by_line
 
 
 def _cell_html(line, spans, offset, start, end):
@@ -614,8 +642,8 @@ def note_to_html(text, formatting=None, paragraphs=None,
     a bullet-shaped letter rather than as a list.
     """
     text = text or ""
-    spans = normalize_formatting(formatting or [])
     lines = text.split("\n")
+    line_spans = _spans_by_line(normalize_formatting(formatting or []), lines)
     props = {p["line"]: p for p in normalize_paragraphs(paragraphs or [], len(lines))}
 
     # Merge markers only make sense against their whole block, so every
@@ -650,6 +678,7 @@ def note_to_html(text, formatting=None, paragraphs=None,
 
     out, offset, open_lists, in_table = [], 0, [], False
     for number, line in enumerate(lines):
+        spans = line_spans[number]
         entry = props.get(number, {})
         kind = entry.get("kind")
         indent = entry.get("indent", 0)
