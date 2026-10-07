@@ -278,10 +278,13 @@ def miss_surface(palette):
     theme's warning red over white on a light theme, over near-black on a
     dark one. Mixed into the theme's own surface instead, the red went grey
     on the blue and green themes; one fixed dark red, before that, put dark
-    words on dark on the light ones (1.2:1). The two strengths are hers."""
+    words on dark on the light ones (1.2:1). The strengths, and the light
+    themes' truer red, are her choices from photographed boards."""
     if contrasting_fg(palette["bg"]) == "#ffffff":
         return blend("#1c1c1c", palette["danger"], 0.24)
-    return blend("#ffffff", palette["danger"], 0.10)
+    danger = palette["danger"]
+    red = danger[:5] + danger[3:5]      # its blue brought down to its green
+    return blend("#ffffff", red, 0.18)
 
 
 def contrasting_fg(hex_color):

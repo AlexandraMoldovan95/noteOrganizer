@@ -129,8 +129,8 @@ How the numbers themselves are counted is the
   set. The picture preview's border did the same when one of its buttons had the keyboard.
 - **The find box can be read on a light theme when nothing is found.** Words found nowhere
   turned the box one fixed dark red on every theme, and on a light one the words typed into it
-  were dark on dark (1.2:1). It takes a pale tint of the theme's warning red now — over white on
-  a light theme, over near-black on a dark one — which reads at 10.3:1 or better on all eight
+  were dark on dark (1.2:1). It takes a light tint of the theme's warning red now — a pale red
+  on a light theme, a dark red on a dark one — which reads at 10.3:1 or better on all eight
   themes, and keeps it through a theme switch.
 
 ### Changed
