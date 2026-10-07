@@ -2167,6 +2167,42 @@ check('the Dated filter shows only dated non-repeating notes',
       any('DatedVis' in t for t in _vis)
       and not any('SeriesVis' in t for t in _vis)
       and not any('PlainVis' in t for t in _vis))
+
+# "📎 With files": the notes whose card shows 📎×N, through the same one
+# judgment -- so the list, Select all and a save agree on what it shows.
+app.notes.append(NO.normalize_note({
+    'id': 67, 'title': 'FilesVis', 'body': 'x', 'category': 'General',
+    'attachments': [{'filename': 'plan.txt',
+                     'stored_as': 'q7_files_plan.txt'}]}))
+app.save_notes()
+app.filter_var.set(app.FILTER_FILES)
+app.refresh_note_list(); app.update()
+_vis = list_texts()
+check(f'the With files filter shows only the notes with a file ({_vis})',
+      any('FilesVis' in t for t in _vis)
+      and not any(other in t for t in _vis
+                  for other in ('SeriesVis', 'DatedVis', 'PlainVis')))
+app.selected_note_ids = set()
+app._bulk_select_all(); app.update()
+check(f'Select all under it takes those notes and no other '
+      f'({sorted(app.selected_note_ids)})', app.selected_note_ids == {67})
+app.selected_note_ids = set()
+app._update_bulk_selected_label()
+# Its last file taken off, the note leaves the list at the save, as a
+# Dated note does when its date is cleared.
+app.load_note(app.find_note(67)); app.update()
+_wf_ask = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.remove_attachment(0)
+finally:
+    app.ask_yes_no = _wf_ask
+app._flush_autosave(); app.update()
+check(f'a note whose last file is removed leaves the With files list '
+      f'({list_texts()})',
+      not app.find_note(67).get('attachments')
+      and not any('FilesVis' in t for t in list_texts()))
+app.new_note(); app.update()
 app.filter_var.set('All')
 app.refresh_note_list(); app.update()
 

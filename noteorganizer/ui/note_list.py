@@ -169,10 +169,11 @@ class NoteListMixin:
         self.refresh_note_list()
 
     # ---------- Note list rendering ----------
-    # The filter dropdown offers a category or one of these two types; every
+    # The filter dropdown offers a category or one of these types; every
     # reader goes through _note_passes_filter, so "visible" means one thing.
     FILTER_REPEATING = "🔁 Repeating"
     FILTER_DATED = "📅 Dated"
+    FILTER_FILES = "📎 With files"
 
     def _filter_options(self):
         """Everything the sidebar's filter dropdown offers, in order: the
@@ -180,8 +181,8 @@ class NoteListMixin:
         it. A half-remembered copy asked `not in CATEGORY_COLORS`, true of
         both type filters, so adding a category threw a Repeating filter
         away. ISSUES_LOG, smaller lessons: _filter_options."""
-        return ["All", self.FILTER_REPEATING, self.FILTER_DATED] + \
-            list(CATEGORY_COLORS.keys())
+        return ["All", self.FILTER_REPEATING, self.FILTER_DATED,
+                self.FILTER_FILES] + list(CATEGORY_COLORS.keys())
 
     def _keep_filter_valid(self):
         """Fall back to All if the current filter is no longer on offer.
@@ -202,6 +203,9 @@ class NoteListMixin:
             return is_recurring(note)
         if selected == self.FILTER_DATED:
             return not is_recurring(note) and bool(note.get("date"))
+        if selected == self.FILTER_FILES:
+            # The notes whose card shows 📎×N.
+            return bool(note.get("attachments"))
         return note.get("category") == selected
 
     def refresh_note_list(self):

@@ -31,8 +31,6 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
   - **Search and order in the Share panel.** For notebooks of hundreds of notes: a search box
     using the main search's rule, with Select all meaning "what the search shows"; and drawing
     the panel in the note list's order rather than the order notes entered the notebook.
-  - **A "📎 With files" choice in the list's Show filter** — one option and one judgement in the
-    function every reader of the filter already asks.
 
 - **Small candidates from the 2026-08-31 idea pass** (put aside deliberately, in rough order of
   appeal; two candidates from that pass have since shipped — see

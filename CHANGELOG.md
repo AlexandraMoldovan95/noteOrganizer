@@ -100,6 +100,9 @@ How the numbers themselves are counted is the
   its label or its "Source:" line — places the table with it, and placing the table brings the
   caption along. A line that only looks like a caption, away from its table, moves nothing.
   Selecting every cell and aligning still aligns the cells' text, and says how to move the table.
+- **"📎 With files" in the list's Show filter.** It narrows the list to the notes that carry an
+  attachment — the ones whose card shows 📎×N — and is remembered like the other choices. Select
+  all takes what it shows, and a note whose last file is removed leaves it at the save.
 
 ### Fixed
 
@@ -121,6 +124,9 @@ How the numbers themselves are counted is the
   it never named it. It aims at them as they are now; the whole catalogue was run again. And a
   ninth static gate, `tools/check_mutant_targets.py`, now fails on every run when any mutant's
   text is no longer in its file -- in `tools/run_tests.py` and in CI.
+- qa7 filters to "📎 With files", selects all under it and takes a note's last file off; qa1
+  keeps the choice when a category is touched and finds it again after a restart. Mutants F01–F02
+  take the option and the judgement back out.
 
 ---
 

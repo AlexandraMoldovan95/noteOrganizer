@@ -7580,6 +7580,15 @@ check('a stored sort that IS on offer comes back',
 check('and so does a stored type filter',
       _fresh2.filter_var.get() == _fresh2.FILTER_DATED)
 _fresh.destroy(); _fresh2.destroy()
+# The newest type, the same way: a filter left on "📎 With files" is the
+# filter found at the next launch.
+NO.save_setting('note_filter', app.FILTER_FILES)
+_fresh3 = NO.NoteOrganizer(); _fresh3._poll_active_dirty = lambda: None
+_fresh3.show_info = lambda *a, **k: True
+_fresh3.update()
+check('and so does the With files filter',
+      _fresh3.filter_var.get() == _fresh3.FILTER_FILES)
+_fresh3.destroy()
 
 # ---- TOUCHING A CATEGORY NO LONGER THROWS THE FILTER AWAY ----
 # Found by the pre-flight for the row above: the guard that keeps the
@@ -7590,6 +7599,7 @@ _fresh.destroy(); _fresh2.destroy()
 for _name, _value, _survives in (
         ('the Repeating type filter', app.FILTER_REPEATING, True),
         ('the Dated type filter', app.FILTER_DATED, True),
+        ('the With files type filter', app.FILTER_FILES, True),
         ('a category that is gone', 'No Such Category', False)):
     app.filter_var.set(_value)
     app.update()

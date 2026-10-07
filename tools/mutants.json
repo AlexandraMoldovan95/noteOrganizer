@@ -1267,5 +1267,33 @@
     "must_fail": ["a table and its caption move together"],
     "suites": ["qa1"],
     "expect": "killed"
+  },
+  {
+    "id": "F01",
+    "about": "the Show filter no longer offers With files, so a stored or kept choice falls back to All",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/note_list.py",
+        "find": "        return [\"All\", self.FILTER_REPEATING, self.FILTER_DATED,\n                self.FILTER_FILES] + list(CATEGORY_COLORS.keys())",
+        "replace": "        return [\"All\", self.FILTER_REPEATING, self.FILTER_DATED] + \\\n            list(CATEGORY_COLORS.keys())"
+      }
+    ],
+    "must_fail": ["the With files type filter survives a category being touched", "and so does the With files filter"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "F02",
+    "about": "With files lets every note through",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/note_list.py",
+        "find": "            return bool(note.get(\"attachments\"))",
+        "replace": "            return True"
+      }
+    ],
+    "must_fail": ["the With files filter shows only the notes with a file", "Select all under it takes those notes and no other", "a note whose last file is removed leaves the With files list"],
+    "suites": ["qa7"],
+    "expect": "killed"
   }
 ]

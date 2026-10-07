@@ -427,7 +427,8 @@ which. **Sort** offers eight orders — Recently updated, Oldest updated, Title 
 Category, Calendar: soonest, Calendar: oldest, and **Custom order**, the one you arrange yourself
 (below). **Show** narrows the list instead of reordering it:
 all your categories, plus **🔁 Repeating** and **📅 Dated** for the notes that live on the
-calendar. Both are remembered, so the list you left is the list you come back to; if the category
+calendar, and **📎 With files** for the notes that carry an attachment (the ones whose card shows
+📎×N). Both are remembered, so the list you left is the list you come back to; if the category
 a filter names is later deleted, the filter falls back to **All** rather than showing you nothing.
 
 A long list fills in as you scroll: the app draws the first screenful straight away and the next
