@@ -13534,6 +13534,189 @@ check('double-click: a click after the double-click window removes as usual',
 _dc_click(_cu_bin(1), _dc_x, _dc_y + 40, 101000)
 check('double-click: a quick click on a bin elsewhere is a click of its own',
       _cu_texts() == ['milk'])
+
+# ---- MOVING A CHECKLIST ITEM ----
+# ▲ and ▼ on every row, Alt+Up/Down on its tick box (the owner's re-test of
+# 0.84.357, case 306). Only the two rows trade places, and the record of the
+# drawn rows trades with them: each row's box, bin and arrows close over
+# their own item, so a record left behind makes one act on another's item.
+def _mv_rows():
+    return [w for w in app.checklist_items_frame.winfo_children()
+            if isinstance(w, tk.Frame)]
+
+
+def _mv_packed_texts():
+    return [str(_c.cget('text'))
+            for _r in app.checklist_items_frame.pack_slaves()
+            for _c in _r.winfo_children() if isinstance(_c, tk.Label)]
+
+
+def _mv_in(row, klass, text=None):
+    return next((w for w in row.winfo_children() if isinstance(w, klass)
+                 and (text is None or str(w.cget('text')) == text)), None)
+
+
+def _mv_arrow(position, glyph):
+    rows = _mv_rows()
+    return (_mv_in(rows[position], tk.Button, glyph)
+            if 0 <= position < len(rows) else None)
+
+
+def _mv_press(position, glyph):
+    arrow = _mv_arrow(position, glyph)
+    if arrow is not None:
+        arrow.invoke()
+        app.update()
+
+
+def _mv_agree(expected):
+    """The list, the rows in Tab order and the rows as packed all say it."""
+    return (_cu_texts() == expected and _cl_texts() == expected
+            and _mv_packed_texts() == expected)
+
+
+check('move: fixture opens four items',
+      _cu_setup(['milk', 'eggs', 'bread', 'butter']))
+_mv_0 = [str(w) for w in _mv_rows()]
+_mv_asked = {'n': 0}
+_mv_real_schedule = app._schedule_autosave
+
+
+def _mv_counting(*a, **k):
+    _mv_asked['n'] += 1
+    return _mv_real_schedule(*a, **k)
+
+
+app._schedule_autosave = _mv_counting
+try:
+    _mv_press(2, '▲')
+finally:
+    del app._schedule_autosave
+check(f'move: ▲ takes an item one place up, on screen too ({_cu_texts()})',
+      _mv_agree(['milk', 'bread', 'eggs', 'butter']))
+check('move: the same two rows trade places -- nothing is rebuilt',
+      [str(w) for w in _mv_rows()] == [_mv_0[0], _mv_0[2], _mv_0[1], _mv_0[3]])
+check('move: and it asks for its own save', _mv_asked['n'] >= 1)
+_mv_press(0, '▲')
+_mv_press(3, '▼')
+check('move: ▲ on the first row and ▼ on the last move nothing',
+      _mv_agree(['milk', 'bread', 'eggs', 'butter']))
+_mv_box = _mv_in(_mv_rows()[1], tk.Checkbutton)
+if _mv_box is not None:
+    _mv_box.invoke()
+    app.update()
+check("move: the moved row's box ticks its own item",
+      [i['done'] for i in app._get_checklist()] == [False, True, False, False])
+_cu_press(2)
+check("move: the bin of the row it passed removes that row's item",
+      _mv_agree(['milk', 'bread', 'butter']))
+_mv_undo = app._toast_action
+_mv_press(2, '▲')
+check('fixture: an item moved while the Undo is still offered',
+      _mv_agree(['milk', 'butter', 'bread']) and _mv_undo is not None)
+if _mv_undo is not None:
+    _mv_undo()
+    app.update()
+check(f"move: the delete's Undo after a move puts the item back at its place, "
+      f"and the rows on screen agree ({_cu_texts()} / {_cl_texts()})",
+      _mv_agree(['milk', 'butter', 'eggs', 'bread']))
+
+# The keyboard: Alt+Up/Down on the tick box, which keeps the focus.
+_mv_kbox = _mv_in(_mv_rows()[1], tk.Checkbutton)
+check('fixture: the moving tick box has the keyboard',
+      _mv_kbox is not None and take_focus(_mv_kbox))
+if _mv_kbox is not None:
+    _mv_kbox.event_generate('<Alt-Down>')
+    app.update()
+check('move: Alt+Down on a tick box moves its item, and the keyboard stays '
+      'on it', _mv_agree(['milk', 'eggs', 'butter', 'bread'])
+      and app.focus_get() is _mv_kbox)
+if _mv_kbox is not None and take_focus(_mv_kbox):
+    _mv_kbox.event_generate('<Alt-Up>')
+    app.update()
+check('move: Alt+Up takes it back', _mv_agree(['milk', 'butter', 'eggs', 'bread']))
+
+# A double-click on ▼: the first click moves the item away, and the second
+# press lands on the arrow of the row slid into its place.
+_dc_click(_mv_arrow(1, '▼'), 400, 300, 200000)
+check('double-click on ▼: the first click moves its item (fixture)',
+      _cu_texts() == ['milk', 'eggs', 'butter', 'bread'])
+_dc_click(_mv_arrow(1, '▼'), 400, 300, 200250)
+check(f'double-click on ▼: the second press, on the row slid into place, '
+      f'moves nothing ({_cu_texts()})',
+      _cu_texts() == ['milk', 'eggs', 'butter', 'bread'])
+_dc_click(_mv_arrow(1, '▼'), 400, 300, 200900)
+check('double-click on ▼: a click after the window moves as usual',
+      _cu_texts() == ['milk', 'butter', 'eggs', 'bread'])
+app._flush_autosave()
+app.update()
+_mv_disk = json.load(open('notes_data.json', encoding='utf-8'))
+check('move: the order reaches the file',
+      [i['text'] for i in next(n for n in _mv_disk
+                               if n['id'] == 9100)['checklist']] == _cu_texts())
+
+# A theme switched while the list is open: the rows are not rebuilt, so the
+# arrows' pressed colours must be laid again (_recolor_checklist_boxes).
+_mv_theme = app.theme_name
+app.set_theme('light' if _mv_theme in NO.DARK_THEMES else 'dark')
+app.update()
+_mv_wrong = [str(b.cget('text')) for r in _mv_rows()
+             for b in r.winfo_children()
+             if isinstance(b, tk.Button) and str(b.cget('text')) in ('▲', '▼')
+             and (str(b.cget('bg')).lower() != app.colors['card'].lower()
+                  or str(b.cget('fg')).lower() != app.colors['subtext'].lower()
+                  or str(b.cget('activebackground')).lower()
+                  != app.colors['card'].lower()
+                  or str(b.cget('activeforeground')).lower()
+                  != app.colors['text'].lower())]
+check(f'move: the arrows take a theme switched while the list is open '
+      f'({_mv_wrong})', bool(_mv_rows()) and not _mv_wrong)
+# Its rows are not this theme's now, so the move draws them again: the
+# keyboard must be put on the new tick box of the item it moved.
+_mv_kbox = _mv_in(_mv_rows()[0], tk.Checkbutton)
+check('fixture: the first tick box has the keyboard after the switch',
+      _mv_kbox is not None and take_focus(_mv_kbox))
+if _mv_kbox is not None:
+    _mv_kbox.event_generate('<Alt-Down>')
+    app.update()
+_mv_focus = app.focus_get()
+check('move: a move after the switch keeps the rows and the list agreeing',
+      _mv_agree(['butter', 'milk', 'eggs', 'bread']))
+check(f'move: and the keyboard is on the item it moved, in its new row '
+      f'({_mv_focus})',
+      isinstance(_mv_focus, tk.Checkbutton) and _mv_focus is not _mv_kbox
+      and _mv_focus.master is _mv_rows()[1])
+app.set_theme(_mv_theme)
+app.update()
+
+# A long item in a narrow window. Its text was packed first and wrapped at
+# a fixed 380 px, so at 1024 px and below the bin was squeezed to nothing --
+# the item could not be removed -- and the text's last words were cut off.
+_mv_geom = app.geometry()
+app.geometry('800x600')
+app.update()
+check('fixture: a long item in a narrow window',
+      _cu_setup(['milk', 'a long item that keeps going and going so that it '
+                 'has to wrap onto more than one line, the way a real to-do '
+                 'sometimes does']))
+app.update()
+_mv_long = _mv_rows()[1] if len(_mv_rows()) > 1 else None
+_mv_btns = ([w for w in _mv_long.winfo_children() if isinstance(w, tk.Button)]
+            if _mv_long is not None else [])
+_mv_lbl = _mv_in(_mv_long, tk.Label) if _mv_long is not None else None
+check(f'narrow: a long item keeps its bin and arrows on its row '
+      f'({[(str(b.cget("text")), b.winfo_x(), b.winfo_width()) for b in _mv_btns]}'
+      f' in {_mv_long.winfo_width() if _mv_long is not None else 0})',
+      len(_mv_btns) == 3
+      and all(b.winfo_width() > 5
+              and b.winfo_x() + b.winfo_width() <= _mv_long.winfo_width()
+              for b in _mv_btns))
+check(f'narrow: and its words wrap inside the room it has '
+      f'({_mv_lbl.winfo_reqwidth() if _mv_lbl else 0} wanted, '
+      f'{_mv_lbl.winfo_width() if _mv_lbl else 0} given)',
+      _mv_lbl is not None and _mv_lbl.winfo_reqwidth() <= _mv_lbl.winfo_width())
+app.geometry(_mv_geom)
+app.update()
 app.notes = list(_cu_saved)
 app.save_notes()
 app.new_note(); app.update()

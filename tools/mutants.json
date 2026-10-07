@@ -924,7 +924,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            keys = getattr(w, \"tick_palette\", None)",
+        "find": "            keys = getattr(w, \"palette_keys\", None)",
         "replace": "            keys = None"
       }
     ],
@@ -1294,6 +1294,174 @@
     ],
     "must_fail": ["the With files filter shows only the notes with a file", "Select all under it takes those notes and no other", "a note whose last file is removed leaves the With files list"],
     "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "O01",
+    "about": "a checklist move leaves the record of the drawn rows behind",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            rows[at], rows[to] = rows[to], rows[at]\n",
+        "replace": "            pass\n"
+      }
+    ],
+    "must_fail": ["move: ▲ takes an item one place up, on screen too"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "O02",
+    "about": "a moved checklist row keeps its old place in the Tab order",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            upper.lower(lower)\n",
+        "replace": "            pass\n"
+      }
+    ],
+    "must_fail": ["move: ▲ takes an item one place up, on screen too", "move: the same two rows trade places"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "O03",
+    "about": "a moved checklist row stays where it was packed",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            upper.pack_configure(before=lower)\n",
+        "replace": "            pass\n"
+      }
+    ],
+    "must_fail": ["move: ▲ takes an item one place up, on screen too"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "O04",
+    "about": "a checklist move asks for no save",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self._render_checklist_items()\n        self._schedule_autosave()\n        self._show_checklist_row(item)\n",
+        "replace": "            self._render_checklist_items()\n        self._show_checklist_row(item)\n"
+      }
+    ],
+    "must_fail": ["move: and it asks for its own save"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "O05",
+    "about": "a checklist move at either end wraps round to the other",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if at is None or not 0 <= at + step < len(items):\n",
+        "replace": "        if at is None:\n"
+      }
+    ],
+    "must_fail": ["move: ▲ on the first row and ▼ on the last move nothing"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "O06",
+    "about": "a double-click on a checklist arrow moves two items",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            buttons.append(arrow)\n",
+        "replace": "            pass\n"
+      }
+    ],
+    "must_fail": ["double-click on ▼: the second press, on the row slid into place, moves nothing"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "O07",
+    "about": "Alt+Up/Down loses the keyboard when the rows are drawn again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if box is not None:\n                box.focus_set()\n        return \"break\"\n",
+        "replace": "            pass\n        return \"break\"\n"
+      }
+    ],
+    "must_fail": ["move: and the keyboard is on the item it moved"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "O08",
+    "about": "Alt+Up/Down on a checklist tick box does nothing",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        cb.bindtags((\"ChecklistBox\",) + cb.bindtags())\n",
+        "replace": "        pass\n"
+      }
+    ],
+    "must_fail": ["move: Alt+Down on a tick box moves its item"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "O09",
+    "about": "a theme switch leaves the checklist arrows' pressed colours behind",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            arrow.palette_keys = {\"activebackground\": \"card\",\n                                  \"activeforeground\": \"text\"}\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["move: the arrows take a theme switched while the list is open"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "O10",
+    "about": "a checklist item wraps at 380 px whatever room its row has",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if now != wrap and (label.winfo_reqwidth() > width or now < wrap):\n",
+        "replace": "        if False:\n"
+      }
+    ],
+    "must_fail": ["narrow: and its words wrap inside the room it has"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "O11",
+    "about": "a checklist item's text is packed before its buttons, as it was",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        lbl.pack(side=\"left\", fill=\"x\", expand=True, padx=(2, 4))\n        self._restyle_checklist_label(lbl, item.get(\"done\"))\n",
+        "replace": "        lbl.pack(side=\"left\", fill=\"x\", expand=True, padx=(2, 4), before=bin_btn)\n        self._restyle_checklist_label(lbl, item.get(\"done\"))\n"
+      }
+    ],
+    "must_fail": ["narrow: a long item keeps its bin and arrows on its row"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "O12",
+    "about": "the shortcuts page leaves out the checklist's Alt+Up/Down",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "        (\"Checklist (Tab to an item's tick box)\", (\n            (\"Alt+Up  /  Alt+Down\", \"Move the item one place up or down, as \"\n                                    \"the ▲ ▼ beside it do.\"),\n        )),\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["every key a checklist item binds is named in the Checklist group"],
+    "suites": ["qa6"],
     "expect": "killed"
   }
 ]

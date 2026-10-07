@@ -3565,6 +3565,10 @@ class SettingsPageMixin:
                           "note. The menu key does the same where a "
                           "keyboard has one."),
         )),
+        ("Checklist (Tab to an item's tick box)", (
+            ("Alt+Up  /  Alt+Down", "Move the item one place up or down, as "
+                                    "the ▲ ▼ beside it do."),
+        )),
         ("Calendar (while the Calendar tab is showing)", (
             ("Page Up  /  Page Down", "Previous / next month."),
             ("Ctrl+Page Up  /  Ctrl+Page Down", "Previous / next year."),

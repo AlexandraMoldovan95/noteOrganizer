@@ -103,12 +103,19 @@ How the numbers themselves are counted is the
 - **"📎 With files" in the list's Show filter.** It narrows the list to the notes that carry an
   attachment — the ones whose card shows 📎×N — and is remembered like the other choices. Select
   all takes what it shows, and a note whose last file is removed leaves it at the save.
+- **Checklist items can be moved.** A small ▲ ▼ beside each item moves it one place, and
+  Alt+↑ / Alt+↓ does the same from its box. The order is saved with the note, and travels with
+  it into a template, a share code and an export.
 
 ### Fixed
 
 - **An open checkbox cell no longer shows its brackets.** Opened with Edit cell as text, or
   reached with Tab, the cell showed the box's stored "[ ]" until something replaced it. It opens
   empty now: what goes in takes the box's place, and left empty the box stays as it was.
+- **A long checklist item keeps its bin in a narrow window.** In a window 1024 pixels wide or
+  less, a long item's text took the whole row: its 🗑 was squeezed to nothing, so the item could
+  not be removed, and its last words were cut off. The buttons keep their room now, and the text
+  wraps at the width it has.
 
 ### Testing
 
@@ -127,6 +134,12 @@ How the numbers themselves are counted is the
 - qa7 filters to "📎 With files", selects all under it and takes a note's last file off; qa1
   keeps the choice when a category is touched and finds it again after a restart. Mutants F01–F02
   take the option and the judgement back out.
+- qa1 moves checklist items with ▲ ▼ and Alt+↑/↓ — the rows trade places without a rebuild,
+  in Tab order too; the ends move nothing; a moved row's box and bin act on their own item; the
+  delete's Undo after a move; a double-click on ▼; the order on disk; a theme switched while the
+  list is open — and puts a long item in an 800-pixel window; qa6 finds the keys on the shortcuts
+  page. Mutants O01–O12 take each part back out. The mark a rebuilt widget leaves for a theme
+  switch, `tick_palette`, is `palette_keys` now: the arrows carry it too.
 
 ---
 

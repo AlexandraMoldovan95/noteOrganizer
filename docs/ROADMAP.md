@@ -26,8 +26,8 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
 
 - **Ideas from the first full manual pass over the test plan (October 2026)**, each small and
   each crossing a seam that needs its own check:
-  - **Reorder checklist items**, with ▲▼ beside each item or Alt+↑/↓ as in the note list. The
-    delete Undo puts an item back by position, so a move must keep that honest.
+  - **Reorder a template's checklist too.** A note's checklist items move with ▲ ▼ and Alt+↑/↓;
+    the template editor's list, a separate set of rows in a fixed-width popup, does not yet.
   - **Search and order in the Share panel.** For notebooks of hundreds of notes: a search box
     using the main search's rule, with Select all meaning "what the search shows"; and drawing
     the panel in the note list's order rather than the order notes entered the notebook.

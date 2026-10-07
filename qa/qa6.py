@@ -1677,6 +1677,17 @@ _qw_missing = [s for s in _qw_bound
                if s in _QW_KEY_NAMES and _QW_KEY_NAMES[s] not in _allQW]
 check('...and every one of them is on the shortcuts page (missing: %s)'
       % _qw_missing, _qw_missing == [])
+# A checklist item's keys live on a tag every row's tick box carries, so
+# they are asked of that tag -- and named in the Checklist group itself:
+# Alt+Up is on the page already, for the note list.
+_qw_cl_bound = [s for s in app.bind_class('ChecklistBox')
+                if s not in _QW_NOT_KEYS]
+_qw_cl_group = ' '.join(k for title, rows in app.SHORTCUT_GROUPS
+                        if title.startswith('Checklist') for k, _d in rows)
+check('every key a checklist item binds is named in the Checklist group '
+      '(bound: %s)' % _qw_cl_bound,
+      bool(_qw_cl_bound)
+      and all(_QW_KEY_NAMES.get(s, s) in _qw_cl_group for s in _qw_cl_bound))
 
 # Every nav entry draws a real glyph -- a section registered without a
 # branch in _draw_icon would show a BLANK icon and nothing would error

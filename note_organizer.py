@@ -11122,8 +11122,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     _DOUBLE_CLICK_PX = 5
 
     def _second_press_of_double_click(self, event):
-        """True when *event*, a press on a button that removes its own row,
-        is the second half of a double-click.
+        """True when *event*, a press on a button that removes or moves its
+        own row, is the second half of a double-click.
 
         Many people double-click every button. The first click removes the
         row and the row below slides up into its place, so the second press
@@ -11272,6 +11272,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._checklist_canvas = canvas
         self._bind_wheel_tree(self.checklist_items_frame,
                               lambda e: self._panel_or_page_wheel(canvas, e))
+        # Bound once, on tags every row's widgets carry: a binding per
+        # widget is one more Tcl command for every row drawn.
+        self.bind_class("ChecklistRowButton", "<ButtonPress-1>",
+                        self._checklist_button_press)
+        self.bind_class("ChecklistBox", "<Alt-Up>",
+                        lambda e: self._move_checklist_by_key(e.widget, -1))
+        self.bind_class("ChecklistBox", "<Alt-Down>",
+                        lambda e: self._move_checklist_by_key(e.widget, 1))
+        self.bind_class("ChecklistText", "<Configure>",
+                        lambda e: self._wrap_to_width(e.widget, e.width))
 
         # Expand/Collapse bar, the same full-width flat bar the note body and
         # comments boxes carry (_add_text_resize_toggle), so the three read
@@ -11364,14 +11374,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                             selectcolor=self.colors["check_well"], bd=0,
                             highlightthickness=0)
         cb.pack(side="left")
-
-        lbl = tk.Label(row, text=item.get("text", ""), bg=self.colors["card"],
-                       fg=self.colors["text"], font=("Segoe UI", 10), anchor="w",
-                       justify="left", wraplength=380)
-        lbl.pack(side="left", fill="x", expand=True, padx=(2, 4))
-        self._restyle_checklist_label(lbl, item.get("done"))
-        # Click the text to toggle too.
-        lbl.bind("<Button-1>", lambda e: (var.set(0 if var.get() else 1), on_toggle()))
+        # Alt+Up/Down moves it (_build_checklist_section binds the tag).
+        cb.bindtags(("ChecklistBox",) + cb.bindtags())
 
         def delete():
             items = self._get_checklist()
@@ -11417,14 +11421,60 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                             cursor="hand2", bg=self.colors["card"],
                             fg=self.colors["danger"], font=("Segoe UI", 9),
                             bd=0)
+        # Packed before the text, so a long item cannot squeeze them out.
         bin_btn.pack(side="right")
-        # A double-click's second press lands on the NEXT row's bin, slid
-        # up into this one's place: it must not remove that row too.
-        bin_btn.bind("<ButtonPress-1>",
-                     lambda e: "break"
-                     if self._second_press_of_double_click(e) else None,
-                     add="+")
+        buttons = [bin_btn]
+        for glyph, step in (("▼", 1), ("▲", -1)):
+            # Not a Tab stop: the keyboard moves an item with Alt+Up/Down.
+            arrow = tk.Button(
+                row, text=glyph, relief="flat", cursor="hand2", bd=0, padx=3,
+                takefocus=0, font=("Segoe UI", 7),
+                command=lambda s=step: self._move_checklist_item(item, s),
+                bg=self.colors["card"], fg=self.colors["subtext"],
+                activebackground=self.colors["card"],
+                activeforeground=self.colors["text"])
+            # Laid again by a theme switched while the list is open.
+            arrow.palette_keys = {"activebackground": "card",
+                                  "activeforeground": "text"}
+            arrow.pack(side="right")
+            buttons.append(arrow)
+        # Ahead of the Button class, so a double-click's second press is
+        # stopped before it arms the button (_checklist_button_press).
+        for button in buttons:
+            button.bindtags(("ChecklistRowButton",) + button.bindtags())
+
+        lbl = tk.Label(row, text=item.get("text", ""), bg=self.colors["card"],
+                       fg=self.colors["text"], font=("Segoe UI", 10), anchor="w",
+                       justify="left", wraplength=self.CHECKLIST_WRAP)
+        lbl.pack(side="left", fill="x", expand=True, padx=(2, 4))
+        self._restyle_checklist_label(lbl, item.get("done"))
+        # Click the text to toggle too.
+        lbl.bind("<Button-1>", lambda e: (var.set(0 if var.get() else 1), on_toggle()))
+        # Wrapped at the width it is given (_wrap_to_width).
+        lbl.bindtags(("ChecklistText",) + lbl.bindtags())
         return record
+
+    def _checklist_button_press(self, event):
+        """A press on a row's bin or arrow. A double-click's second press
+        lands on the NEXT row's button, slid up into this one's place: it
+        must not remove or move that row too."""
+        return "break" if self._second_press_of_double_click(event) else None
+
+    # Where a checklist item's text wraps, unless its row is narrower.
+    CHECKLIST_WRAP = 380
+
+    def _wrap_to_width(self, label, width):
+        """Make *label* wrap its text inside *width* pixels, its own -- only
+        when its text is cut off, or has room again: rewrapping every row
+        doubled the time a long checklist took to open."""
+        if width <= 1:
+            return
+        edge = 2 * sum(int(str(label.cget(option)))
+                       for option in ("bd", "padx", "highlightthickness"))
+        wrap = min(self.CHECKLIST_WRAP, max(40, width - edge))
+        now = int(str(label.cget("wraplength")))
+        if now != wrap and (label.winfo_reqwidth() > width or now < wrap):
+            label.configure(wraplength=wrap)
 
     def _restyle_checklist_label(self, lbl, done):
         """Dim + strike-through style for completed items (overstrike font).
@@ -11487,6 +11537,72 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.checklist_add_entry.focus_set()
         except tk.TclError:
             pass
+
+    def _move_checklist_item(self, item, step):
+        """Move *item* one place up (step -1) or down (+1); at either end,
+        nothing. Returns whether it moved.
+
+        When the rows on screen are this list's (_checklist_rows_current),
+        only the two rows trade places, and the record of the drawn rows
+        trades with them: each row's box, bin and arrows close over their
+        own item, and the delete's Undo puts a row back by that record."""
+        items = self._get_checklist()
+        at = next((i for i, it in enumerate(items) if it is item), None)
+        if at is None or not 0 <= at + step < len(items):
+            return False
+        drawn = getattr(self, "_checklist_drawn", None)
+        in_step = (getattr(self, "_checklist_open", False)
+                   and _checklist_rows_current(
+                       drawn, items, getattr(self, "theme_name", None)))
+        to = at + step
+        items[at], items[to] = items[to], items[at]
+        if in_step:
+            rows = drawn["rows"]
+            rows[at], rows[to] = rows[to], rows[at]
+            upper, lower = rows[min(at, to)][1], rows[max(at, to)][1]
+            upper.pack_configure(before=lower)
+            # Tab walks the stacking order, which packing leaves alone.
+            upper.lower(lower)
+        else:
+            self._render_checklist_items()
+        self._schedule_autosave()
+        self._show_checklist_row(item)
+        return True
+
+    def _move_checklist_by_key(self, box, step):
+        """Alt+Up/Down on an item's tick box: the item moves, and the
+        keyboard goes with it."""
+        drawn = getattr(self, "_checklist_drawn", None) or {}
+        item = next((r[0] for r in drawn.get("rows", ())
+                     if r[1] is box.master), None)
+        if item is not None and self._move_checklist_item(item, step):
+            box = self._show_checklist_row(item)
+            if box is not None:
+                box.focus_set()
+        return "break"
+
+    def _show_checklist_row(self, item):
+        """Scroll the list so *item*'s row is in view; returns its tick box,
+        or None when no row stands for it."""
+        drawn = getattr(self, "_checklist_drawn", None) or {}
+        rec = next((r for r in drawn.get("rows", ()) if r[0] is item), None)
+        if rec is None:
+            return None
+        row, canvas = rec[1], self._checklist_canvas
+        try:
+            self.update_idletasks()
+            total = max(1, self.checklist_items_frame.winfo_height())
+            top = row.winfo_y() / total
+            bottom = (row.winfo_y() + row.winfo_height()) / total
+            first, last = canvas.yview()
+            if top < first:
+                canvas.yview_moveto(top)
+            elif bottom > last:
+                canvas.yview_moveto(bottom - (last - first))
+            return next((w for w in row.winfo_children()
+                         if isinstance(w, tk.Checkbutton)), None)
+        except tk.TclError:
+            return None
 
     def _update_checklist_progress(self):
         if not hasattr(self, "checklist_progress_lbl"):
@@ -11945,7 +12061,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             box.configure(**{opt: self.colors[key] for opt, key in colours.items()})
             # Its panel is not rebuilt by a theme switch while it is open:
             # _recolor_stragglers lays these keys again from the new palette.
-            box.tick_palette = colours
+            box.palette_keys = colours
         return box
 
 
@@ -12176,9 +12292,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         w.configure(**{opt: remap[val]})
                     except tk.TclError:
                         pass
-            # A drawn tick box's fill when ticked is a third colour this
-            # walk cannot see; it names its palette keys (_drawn_tick_box).
-            keys = getattr(w, "tick_palette", None)
+            # Colours this walk cannot see -- a ticked box's fill, a caret, a
+            # pressed button -- on a widget no theme switch rebuilds: it
+            # names their palette keys (_drawn_tick_box sets them too).
+            keys = getattr(w, "palette_keys", None)
             if keys:
                 try:
                     w.configure(**{opt: cur[key] for opt, key in keys.items()})

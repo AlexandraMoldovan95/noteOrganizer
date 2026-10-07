@@ -378,7 +378,9 @@ that note only — it doesn't touch anything else.
 
 Any note can have a checklist. Click **☑ Checklist** in the editor to open it, add items, and
 check them off as you go — the note's card in the list shows progress at a glance (e.g. "☑ 2/5").
-The box sits beside the calculator at the same size; when a list gets long, **⤢ Expand** in its
+To change the order, use the small **▲ ▼** beside an item: each press moves it one place. From
+the keyboard, Tab to the item's box and press **Alt+↑** or **Alt+↓**. The new order is saved
+with the note. The box sits beside the calculator at the same size; when a list gets long, **⤢ Expand** in its
 header grows it to give more room (and it always scrolls, expanded or not). The expanded size is a
 per-view choice — switching notes returns it to the compact size.
 
@@ -904,6 +906,7 @@ keys that only mean something inside a list, in the find bar, or on the note lis
 | **Alt+↑** / **Alt+↓** | note list | Moves the note with the ring one place up or down (Custom order). |
 | **Esc** | note list, while dragging | Puts the dragged card back where it was. |
 | **Shift+F10** or the menu key | note list | Opens that note's own right-click menu, at the note. |
+| **Alt+↑** / **Alt+↓** | checklist item's box | Moves the item one place up or down, as its ▲ ▼ do. |
 | **Page Up** / **Page Down** | Calendar tab | Previous / next month. |
 | **Ctrl+Page Up** / **Ctrl+Page Down** | Calendar tab | Previous / next year. |
 | **Home** | Calendar tab | Jumps back to today. |
