@@ -25,8 +25,6 @@ Nothing here imports tkinter: it turns strings into strings, so it can be
 tested on any machine.
 """
 
-import re
-
 CELL = "|"
 # A line break INSIDE a cell, as markdown itself writes one -- a table
 # row must stay one line of text, so the break is a marker in the value.
@@ -35,8 +33,8 @@ LINE_BREAK = "<br>"
 # A cell holding exactly one of these IS a checkbox -- markdown's own
 # task idiom, so the stored text stays plainly readable and any
 # markdown-aware tool shows a task box. The app draws it as a real
-# box and a click toggles it; delete it and type, and the cell is
-# ordinary text again.
+# box and a click toggles it; opened, it shows empty, and what is
+# typed there takes the box's place.
 CHECKBOX_EMPTY = "[ ]"
 CHECKBOX_DONE = "[x]"
 
@@ -50,28 +48,6 @@ def checkbox_state(value):
     if v.lower() == CHECKBOX_DONE:
         return True
     return None
-
-
-_EDGE_MARKERS = (
-    re.compile(r"^\s*\[[ xX]\](?:\s|%s)*" % re.escape(LINE_BREAK)),
-    re.compile(r"(?:\s|%s)*\[[ xX]\]\s*$" % re.escape(LINE_BREAK)))
-
-
-def beside_checkbox(value):
-    """``(start, end)``: what to keep of a checkbox cell's new value.
-
-    A cell that was a checkbox and got something beside its marker -- an
-    emoji, typed words, a paste -- takes that in the box's place: kept, the
-    marker showed as raw brackets. The whole value when it is still just a
-    box, or holds no marker at either end."""
-    value = value or ""
-    if checkbox_state(value) is not None:
-        return 0, len(value)
-    head = _EDGE_MARKERS[0].match(value)
-    start = head.end() if head else 0
-    tail = _EDGE_MARKERS[1].search(value, start)
-    end = tail.start() if tail else len(value)
-    return (start, end) if end > start else (0, len(value))
 # A cell holding exactly one of these is not content but a merge marker:
 # "<" belongs to the cell on its left, "^" to the cell above. Anchors sit
 # at the top-left of their rectangle. Typing one of these alone into a cell

@@ -3636,7 +3636,7 @@ for _cbRoad in ('menu', 'toolbar'):
     if _cbChips:
         _qa_click(_cbChips[0])
         app.update()
-    # The picker clears the box at once: the open cell shows no brackets.
+    # The open cell shows the emoji alone, never beside brackets.
     _cbShown = app._cell_editor['entry'].get('1.0', 'end-1c')
     app._dismiss_mini_popup()
     app._commit_cell_editor()
@@ -3653,25 +3653,48 @@ for _cbRoad in ('menu', 'toolbar'):
     _cbVal = app._grid_at_line(1)['cells'][(1, 0)]['value']
     check(f'and deleting the emoji leaves the cell empty ({_cbRoad}: '
           f'{_cbVal!r})', _cbVal == '')
-# A text cell is not a checkbox: an emoji goes in beside its words.
-set_body('| h1 | h2 |' + chr(10) + '| --- | --- |' + chr(10) + '| word | x |')
+# An open checkbox cell shows no brackets at all, by any way in: it opens
+# empty (field pass -- "[ ]" showed until something replaced it). Left
+# empty, the box stays, colour and all; a text cell opens with its words.
+set_body('| h1 | h2 |' + chr(10) + '| --- | --- |' + chr(10) + '| [x] | word |')
 app._render_table_grids()
 app.update()
-app._open_cell_editor(app._grid_at_line(1), 1, 0, select=False)
+_cbLine = app.body_text.get('3.0', '3.end')
+_cbAt = _cbLine.index('[x]')
+app.body_text.tag_add(
+    app._ensure_color_tag(app.body_text, 'text_color', '#d32f2f'),
+    '3.%d' % _cbAt, '3.%d' % (_cbAt + 3))
+app._render_table_grids()
 app.update()
-app._emoji_takes_checkbox_place(app._cell_editor['entry'])
-check('a text cell keeps its words when an emoji comes',
-      app._cell_editor['entry'].get('1.0', 'end-1c') == 'word')
+_cbOpen = {}
+app._open_cell_editor(app._grid_at_line(1), 1, 0)     # Edit cell as text
+app.update()
+_cbOpen['edit as text'] = app._cell_editor['entry'].get('1.0', 'end-1c')
 app._commit_cell_editor()
-# By every other road too -- Windows' own emoji panel (Win+.) and a paste
-# arrive as typed text, and typed words were the same: whatever lands
-# beside a box takes its place when the cell is left (audit). A cell that
-# was never a box keeps "[ ]" typed into it as the words they are.
+app.update()
+app._open_cell_editor(app._grid_at_line(1), 1, 1)     # then Shift+Tab back
+app.update()
+_cbOpen['text cell'] = app._cell_editor['entry'].get('1.0', 'end-1c')
+app._editor_step(-1)
+app.update()
+_cbOpen['Shift+Tab'] = (app._cell_editor['entry'].get('1.0', 'end-1c')
+                        if app._cell_editor else None)
+app._commit_cell_editor()
+app.update()
+_cbKept = app._grid_at_line(1)['cells'][(1, 0)]['value']
+_cbTint = app.body_text.tag_names('3.%d' % (_cbAt + 1))
+check(f'a checkbox cell opens empty by every way in, a text cell with its '
+      f'words, and a box left empty stays the box it was ({_cbOpen}; '
+      f'{_cbKept!r})',
+      _cbOpen == {'edit as text': '', 'text cell': 'word', 'Shift+Tab': ''}
+      and _cbKept == '[x]' and 'text_color_d32f2f' in _cbTint)
+# Whatever goes in takes the box's place, by every road -- Windows' own
+# emoji panel (Win+.) and a paste arrive as typed text. A cell that was
+# never a box keeps "[ ]" typed into it as the words they are.
 _cbRoads = {}
 for _cbName, _cbAdd, _cbFrom in (
         ('Win+. emoji', chr(0x1F600), '[x]'),
-        ('typed words', ' buy milk', '[ ]'),
-        ('words before it', 'done ', '[x]')):
+        ('typed words', ' buy milk', '[ ]')):
     set_body('| h1 | h2 |' + chr(10) + '| --- | --- |' + chr(10)
              + '| %s | x |' % _cbFrom)
     app._render_table_grids()
@@ -3679,7 +3702,7 @@ for _cbName, _cbAdd, _cbFrom in (
     app._open_cell_editor(app._grid_at_line(1), 1, 0, select=False)
     app.update()
     _cbE = app._cell_editor['entry']
-    _cbE.insert('1.0' if _cbName == 'words before it' else 'end', _cbAdd)
+    _cbE.insert('end', _cbAdd)
     app._commit_cell_editor()
     app.update()
     _cbRoads[_cbName] = app._grid_at_line(1)['cells'][(1, 0)]['value']
@@ -3692,10 +3715,9 @@ app._cell_editor['entry'].insert('end', '[ ] my words')
 app._commit_cell_editor()
 app.update()
 _cbRoads['typed into a plain cell'] = app._grid_at_line(1)['cells'][(1, 0)]['value']
-check(f'whatever lands beside a box takes its place, by every road '
+check(f'whatever goes into a box takes its place, by every road '
       f'({_cbRoads})',
       _cbRoads == {'Win+. emoji': chr(0x1F600), 'typed words': 'buy milk',
-                   'words before it': 'done',
                    'typed into a plain cell': '[ ] my words'})
 set_body('')
 

@@ -311,9 +311,9 @@ A table works the way a spreadsheet has taught your hands to expect:
   a row's condition is met, a habit done, anything you invent. It is stored as Markdown's own task
   syntax (`[ ]` / `[x]`), so it survives share codes as readable text; the exported page draws it
   as a real box (☑ / ☐), and importing that page back turns the boxes into clickable checkboxes
-  again. To turn that cell back into words, right-click it, choose **Edit cell as text** and
-  type. Anything put beside a checkbox — an emoji, words, a paste — takes the box's place, so
-  its raw `[ ]` never shows; delete it and the cell is simply empty, ready for a new checkbox.
+  again. To turn that cell into words, right-click it and choose **Edit cell as text**: it
+  opens empty, and whatever you put there — words, a paste, an emoji — takes the box's place.
+  Leave it empty and the box stays as it was; **Clear cell** empties it.
 - **Drag the line between two columns** to make a column wider or narrower; **double-click** the
   line to snap the column to its content. With several columns selected, **Autofit column
   width(s)** in the right-click menu snaps them all at once. **Drag the line between two rows** up

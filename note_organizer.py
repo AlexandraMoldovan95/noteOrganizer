@@ -3210,16 +3210,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         bg=editor_bg, fg=self.colors["text"],
                         insertbackground=self.colors["text"],
                         highlightthickness=0, padx=2, pady=2, undo=True)
-        entry.insert("1.0", cell["value"].replace(
-            core_tables.LINE_BREAK, "\n"))
+        # A checkbox opens empty: its marker is how the box is stored, not
+        # words -- shown, it read as raw brackets until replaced (field
+        # pass). What goes in takes the box's place; nothing keeps the box.
+        box = core_tables.checkbox_state(cell["value"]) is not None
+        if not box:
+            entry.insert("1.0", cell["value"].replace(
+                core_tables.LINE_BREAK, "\n"))
         self._editor_configure_style_tags(entry, r == 0)
         raw_styles = []
         row_line = self._grid_line_of_row(info, r)
         if row_line is not None:
             line = self.body_text.get(f"{row_line}.0", f"{row_line}.end")
-            raw_styles = self._cell_value_styles(row_line, line, c)
-            self._editor_apply_display_styles(entry, cell["value"],
-                                              raw_styles)
+            if not box:
+                raw_styles = self._cell_value_styles(row_line, line, c)
+                self._editor_apply_display_styles(entry, cell["value"],
+                                                  raw_styles)
             row_aligns = core_tables.cell_alignments(line)
             if c < len(row_aligns):
                 entry.tag_configure("cellalign", justify={
@@ -3235,7 +3241,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                    width=cell["w"] - 2, height=cell["h"] - 2,
                                    window=entry)
         self._cell_editor = {"entry": entry, "win": win, "info": info,
-                             "r": r, "c": c,
+                             "r": r, "c": c, "box": box,
                              "styles_in": [dict(s) for s in raw_styles]}
         entry.focus_set()
         self._refresh_list_buttons()
@@ -3406,6 +3412,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 editor["entry"], content)
         except tk.TclError:
             content, display_styles = None, None
+        if editor.get("box") and content is not None and not content.strip():
+            content = None      # a box opened and left empty stays a box
         wrote = False
         cell = info["cells"].get((r, c))
         if content is not None and cell is not None:
@@ -3421,11 +3429,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             display_styles = display_styles[:len(trimmed)]
             value, raw_styles = self._styles_display_to_raw(
                 trimmed, display_styles)
-            if core_tables.checkbox_state(cell["value"]) is not None:
-                # Whatever went in beside a box takes its place, by any road
-                # -- the picker, Win+., a paste, typing: never raw brackets.
-                a, z = core_tables.beside_checkbox(value)
-                value, raw_styles = value[a:z], raw_styles[a:z]
             changed_text = value != cell["value"]
             styles_changed = raw_styles != editor.get("styles_in")
             if changed_text:
@@ -6410,8 +6413,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if core_tables.checkbox_state(
                 info["cells"].get((r, c), {}).get("value")) is not None:
             # A click on a checkbox toggles it, so the way into its text
-            # lives here: delete the marker and type, and the cell is an
-            # ordinary text cell again.
+            # lives here: it opens empty, and what is typed takes the box's
+            # place (left empty, the box stays).
             menu.add_command(label="Edit cell as text",
                              command=lambda: self._open_cell_editor(
                                  info, r, c))
@@ -9253,16 +9256,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         ("Nature", ["☀️", "🌙", "⛅", "🌧️", "🌈", "🌸", "🍀", "🌳", "☕", "🍕"], "#B9FBC0"),
     ]
 
-    def _emoji_takes_checkbox_place(self, text_widget):
-        """An emoji put into a checkbox cell replaces the box: left beside
-        it, the cell stopped being a checkbox and showed its raw brackets.
-        Deleting the emoji then leaves an empty cell, never "[ ]"."""
-        editor = getattr(self, "_cell_editor", None)
-        if (editor and text_widget is editor["entry"]
-                and core_tables.checkbox_state(
-                    text_widget.get("1.0", "end-1c")) is not None):
-            text_widget.delete("1.0", "end")
-
     def _show_emoji_picker(self, text_widget, anchor=None):
         """Small themed popup for inserting an emoji at the current cursor
         position of whichever field opened it (title, body, comments, etc.).
@@ -9331,7 +9324,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     text_widget.focus_set()
                 # A field showing its grey hint takes the emoji in its place.
                 getattr(text_widget, "clear_placeholder", lambda: None)()
-                self._emoji_takes_checkbox_place(text_widget)
                 if isinstance(text_widget, tk.Text):
                     at = text_widget.index(tk.INSERT)
                     text_widget.insert(tk.INSERT, emoji)

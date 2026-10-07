@@ -196,7 +196,6 @@
   "_editor_step": "(self, delta)",
   "_editor_typing_style": "(self, t)",
   "_ellipsize": "(self, value, font, max_px)",
-  "_emoji_takes_checkbox_place": "(self, text_widget)",
   "_end_list_drag": "(self, drag)",
   "_ensure_color_tag": "(self, text_widget, style, hex_color)",
   "_ensure_font_tag": "(self, text_widget, is_bold, is_italic, size, family)",

@@ -91,6 +91,23 @@ How the numbers themselves are counted is the
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **An open checkbox cell no longer shows its brackets.** Opened with Edit cell as text, or
+  reached with Tab, the cell showed the box's stored "[ ]" until something replaced it. It opens
+  empty now: what goes in takes the box's place, and left empty the box stays as it was.
+
+### Testing
+
+- qa1 opens a coloured checkbox by Edit cell as text and by Shift+Tab, a text cell beside it,
+  and closes the box untouched; mutants H01–H03 take the fix back out. The two guards added in
+  0.84.357 for the same complaint — the picker clearing the box, the commit dropping the
+  marker — had nothing left to guard and went with their mutants (P12, P13, B01, B02).
+
+---
+
 ## [0.84.357] — 2026-10-07
 
 *Highlights: sixteen fixes from the first full manual pass over the test plan — ticks that show
