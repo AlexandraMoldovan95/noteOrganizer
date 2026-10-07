@@ -304,7 +304,8 @@ A table works the way a spreadsheet has taught your hands to expect:
   editable body text ever after, so the wording is yours to change, and the caption and its
   table move together: align the caption from the toolbar and the table goes with it, or move
   the table (right-click → **Table**) and the caption follows. Selecting every cell and pressing
-  an alignment button aligns the text *inside* the cells, as a spreadsheet does.
+  an alignment button aligns the text *inside* the cells, as a spreadsheet does — and a short
+  dialog, which stays until you press OK, says how to move the table itself.
 - The full set: merge the selected cells into one (their texts join), split a merge back apart,
   insert or delete rows and columns, duplicate whole columns to the end of the table (and whole
   rows to the bottom), insert a **checkbox** (with its own colour palette) or an emoji, and
@@ -378,9 +379,11 @@ that note only — it doesn't touch anything else.
 
 Any note can have a checklist. Click **☑ Checklist** in the editor to open it, add items, and
 check them off as you go — the note's card in the list shows progress at a glance (e.g. "☑ 2/5").
-To change the order, use the small **▲ ▼** beside an item: each press moves it one place. From
-the keyboard, Tab to the item's box and press **Alt+↑** or **Alt+↓**. The new order is saved
-with the note. The box sits beside the calculator at the same size; when a list gets long, **⤢ Expand** in its
+To change the order, use the small **▲ ▼** at the left of an item: the top arrow moves it one
+place up, the bottom one down. A press also picks the item — a ring shows round its row — so
+**Alt+↑** or **Alt+↓** carries on moving it from the keyboard (Tab to an item's box picks it
+too). The new order is saved with the note, and a template's checklist moves the same way.
+The box sits beside the calculator at the same size; when a list gets long, **⤢ Expand** in its
 header grows it to give more room (and it always scrolls, expanded or not). The expanded size is a
 per-view choice — switching notes returns it to the compact size.
 
@@ -728,7 +731,9 @@ notebook the list arrives a hundred at a time, and a button that silently ticked
 never seen would be the opposite of the control you asked for. Reveal more and press it again; its
 label reads **Unselect all** once everything on screen is ticked.
 
-The notes come in the same order as the note list (your **Sort** choice, pinned notes first). The
+The notes come in the same order as the note list (your **Sort** choice, pinned notes first),
+and keep to it while the panel is open: change the sort or pin a note and the panel follows at
+once, ticks kept. The
 🔍 box under the heading narrows them as you type, by the same rule as the sidebar search: titles,
 text (a word inside a table counts) and comments, upper or lower case alike. Ticks stay when you
 search again, so you can gather notes from several searches into one code. When a search hides
@@ -913,7 +918,7 @@ keys that only mean something inside a list, in the find bar, or on the note lis
 | **Alt+↑** / **Alt+↓** | note list | Moves the note with the ring one place up or down (Custom order). |
 | **Esc** | note list, while dragging | Puts the dragged card back where it was. |
 | **Shift+F10** or the menu key | note list | Opens that note's own right-click menu, at the note. |
-| **Alt+↑** / **Alt+↓** | checklist item's box | Moves the item one place up or down, as its ▲ ▼ do. |
+| **Alt+↑** / **Alt+↓** | checklist item with the ring (after a press on its ▲ ▼, or Tab to its box) | Moves the item one place up or down, as its ▲ ▼ do — in a note or a template. |
 | **Page Up** / **Page Down** | Calendar tab | Previous / next month. |
 | **Ctrl+Page Up** / **Ctrl+Page Down** | Calendar tab | Previous / next year. |
 | **Home** | Calendar tab | Jumps back to today. |

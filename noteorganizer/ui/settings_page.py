@@ -1113,17 +1113,37 @@ class SettingsPageMixin:
                  font=("Segoe UI", 8, "bold"), anchor="w").pack(fill="x", pady=(6, 0))
         tpl_cl_list_frame = tk.Frame(frame, bg=self.colors["sidebar"])
         tpl_cl_list_frame.pack(fill="x", pady=(0, 2))
+        # Each row's tick box, by item, for the keyboard after a move.
+        tpl_boxes = {}
+
+        def move_tpl_item(it, step):
+            """One place up (-1) or down (+1), as in a note's checklist; at
+            either end nothing moves, and the keyboard is on the item."""
+            at = next((i for i, x in enumerate(tpl_checklist) if x is it), None)
+            if at is not None and 0 <= at + step < len(tpl_checklist):
+                to = at + step
+                tpl_checklist[at], tpl_checklist[to] = (tpl_checklist[to],
+                                                        tpl_checklist[at])
+                render_tpl_checklist()
+            box = tpl_boxes.get(id(it))
+            if box is not None:
+                box.focus_set()
 
         def render_tpl_checklist():
             for w in tpl_cl_list_frame.winfo_children():
                 w.destroy()
+            tpl_boxes.clear()
             if not tpl_checklist:
                 tk.Label(tpl_cl_list_frame, text="No items yet — type below and press Enter.",
                          bg=self.colors["sidebar"], fg=self.colors["subtext"],
                          font=("Segoe UI", 8), anchor="w").pack(fill="x", padx=6, pady=4)
                 return
             for item in tpl_checklist:
-                row = tk.Frame(tpl_cl_list_frame, bg=self.colors["sidebar"])
+                # The border is the ring of the item the keyboard is on.
+                row = tk.Frame(tpl_cl_list_frame, bg=self.colors["sidebar"],
+                               highlightthickness=1,
+                               highlightbackground=self.colors["sidebar"],
+                               highlightcolor=self.colors["sidebar"])
                 row.pack(fill="x", padx=4, pady=1)
                 v = tk.IntVar(value=1 if item.get("done") else 0)
 
@@ -1131,14 +1151,24 @@ class SettingsPageMixin:
                     it["done"] = bool(var.get())
                     render_tpl_checklist()
 
+                # ▲ over ▼ at the left, as in a note's checklist: the top
+                # half moves the item up, the bottom half down.
+                self._icon_button(
+                    row, "updown", bg_key="sidebar", removes_row=True,
+                    takes_event=True,
+                    command=lambda e, it=item: move_tpl_item(
+                        it, -1 if e.y < e.widget.winfo_height() / 2 else 1)
+                ).pack(side="left")
                 cb = tk.Checkbutton(row, variable=v, command=on_tog,
                                     bg=self.colors["sidebar"], activebackground=self.colors["sidebar"],
                                     selectcolor=self.colors["check_well"], bd=0, highlightthickness=0)
                 cb.pack(side="left")
-                lbl = tk.Label(row, text=item.get("text", ""), bg=self.colors["sidebar"],
-                               fg=self.colors["subtext"] if item.get("done") else self.colors["text"],
-                               font=("Segoe UI", 9), anchor="w", wraplength=320, justify="left")
-                lbl.pack(side="left", fill="x", expand=True, padx=(2, 4))
+                cb.bindtags(("TemplateChecklistBox",) + cb.bindtags())
+                cb.bind("<Alt-Up>", lambda e, it=item: (move_tpl_item(it, -1),
+                                                        "break")[1])
+                cb.bind("<Alt-Down>", lambda e, it=item: (move_tpl_item(it, 1),
+                                                          "break")[1])
+                tpl_boxes[id(item)] = cb
 
                 def do_del(it=item):
                     try:
@@ -1147,16 +1177,20 @@ class SettingsPageMixin:
                         pass
                     render_tpl_checklist()
 
-                # The drawn glyph every other delete in Settings uses. This
-                # row was the last emoji bin left: an emoji is a fixed-colour
-                # bitmap, so it stayed the same red on all eight themes while
-                # the shapes beside it followed the palette -- and it was red
-                # at rest, where the drawn ones are faint until hovered. Same
-                # bg_key as the row it sits in, and no track_theme, because
-                # render_tpl_checklist() rebuilds these rows.
+                # The drawn glyph every other delete in Settings uses, faint
+                # at rest; the same bg_key as its row, and no track_theme,
+                # because render_tpl_checklist() rebuilds these rows. Packed
+                # before the text, so a long item cannot squeeze it out.
                 self._icon_button(row, "trash", do_del, danger=True,
                                   bg_key="sidebar", removes_row=True
                                   ).pack(side="right")
+                lbl = tk.Label(row, text=item.get("text", ""), bg=self.colors["sidebar"],
+                               fg=self.colors["subtext"] if item.get("done") else self.colors["text"],
+                               font=("Segoe UI", 9), anchor="w", wraplength=320, justify="left")
+                lbl.pack(side="left", fill="x", expand=True, padx=(2, 4))
+                # Wrapped at the width it is given, as in a note's checklist.
+                if lbl.winfo_reqwidth() > self.CHECKLIST_SHORT:
+                    lbl.bindtags(("ChecklistText",) + lbl.bindtags())
 
         render_tpl_checklist()
 
@@ -2528,6 +2562,9 @@ class SettingsPageMixin:
                                tags="glyph")
             canvas.create_line(3.5, 8, 12.5, 8, fill=color, width=1.8,
                                tags="glyph")
+        elif kind == "updown":                  # ▲ over ▼: move one place
+            canvas.create_polygon(8, 1.6, 12.6, 6.8, 3.4, 6.8, **f)
+            canvas.create_polygon(3.4, 9.2, 12.6, 9.2, 8, 14.4, **f)
 
         if size and size != 16:
             canvas.scale("glyph", 0, 0, size / 16.0, size / 16.0)
@@ -2705,17 +2742,22 @@ class SettingsPageMixin:
                                     "deleted."),
         "plus":       ("Add", ""),
         "templates":  ("Template", ""),
+        "updown":     ("Move", "The top arrow moves this item up, the bottom "
+                               "one down. Alt+Up and Alt+Down on its box do "
+                               "the same."),
     }
 
     def _icon_button(self, parent, kind, command=None, danger=False,
-                     bg_key="card", tip=None, removes_row=False):
+                     bg_key="card", tip=None, removes_row=False,
+                     takes_event=False):
         """A small drawn-glyph button for a list row.
 
-        ``removes_row`` is for a button that takes its own row away with no
-        question in between: the row below slides up under the pointer, so
-        the second press of a double-click would take that one too. It is
-        ignored, by the rule the checklist bin follows
-        (_second_press_of_double_click).
+        ``removes_row`` is for a button that takes its own row away, or
+        moves it, with no question in between: another row slides in under
+        the pointer, so the second press of a double-click would act on that
+        one too. It is ignored, by the rule the checklist bin follows
+        (_second_press_of_double_click). ``takes_event`` hands the press to
+        ``command``, for a glyph whose halves do different things.
 
         Replaces the emoji these rows used to use. Emoji are fixed-colour
         bitmaps, so a red wastebasket stayed the same shade of red on all
@@ -2752,7 +2794,7 @@ class SettingsPageMixin:
                     return "break"
                 # A command that has answered the press says "break", so
                 # the window's click-outside does not answer it again.
-                return command()
+                return command(event) if takes_event else command()
 
             c.bind("<Button-1>", _press)
             hot = self.colors["danger"] if danger else self.colors["text"]
@@ -3565,9 +3607,10 @@ class SettingsPageMixin:
                           "note. The menu key does the same where a "
                           "keyboard has one."),
         )),
-        ("Checklist (Tab to an item's tick box)", (
+        ("Checklist (click an item's ▲ ▼, or Tab to its box)", (
             ("Alt+Up  /  Alt+Down", "Move the item one place up or down, as "
-                                    "the ▲ ▼ beside it do."),
+                                    "the ▲ ▼ at its left do; in a template's "
+                                    "checklist too."),
         )),
         ("Calendar (while the Calendar tab is showing)", (
             ("Page Up  /  Page Down", "Previous / next month."),

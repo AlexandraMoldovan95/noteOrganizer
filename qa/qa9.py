@@ -777,6 +777,151 @@ if _drawnBins:
           {c.lower() for c in _binColours})
 
 # ============================================================
+# A TEMPLATE'S CHECKLIST ITEMS MOVE TOO (her re-test, cases 591 and 593)
+# ============================================================
+# ▲ over ▼ at the left of each row, drawn like the bin: the top half moves
+# the item up, the bottom half down, and the keyboard goes to the item;
+# Alt+Up/Down on its box does the same. The order is saved with the
+# template, and closing after a move asks to save it.
+from _qa_support import fire as _tm_fire
+app._dismiss_mini_popup()
+app.update()
+_tplMove = NO.normalize_template({
+    'name': 'MoveTest', 'title': 't', 'body': 'b', 'category': 'General',
+    'checklist': [{'text': t, 'done': False} for t in ('one', 'two', 'three')]})
+app.templates.append(_tplMove)
+app._edit_template(_tplMove, lambda: None)
+app.update()
+
+
+def _tm_rows():
+    return [w for w in _all_widgets9(app._mini_popup) if isinstance(w, tk.Frame)
+            and any(getattr(c, '_icon_kind', None) == 'updown'
+                    for c in w.winfo_children())]
+
+
+def _tm_part(row, kind=None, klass=None):
+    return next((c for c in row.winfo_children()
+                 if (kind and getattr(c, '_icon_kind', None) == kind)
+                 or (klass and isinstance(c, klass))), None)
+
+
+def _tm_texts():
+    return [str(_tm_part(r, klass=tk.Label).cget('text')) for r in _tm_rows()]
+
+
+_tm_clock = {'t': 500000}
+
+
+def _tm_press(position, half):
+    rows = _tm_rows()
+    if not 0 <= position < len(rows):
+        return
+    arrows = _tm_part(rows[position], kind='updown')
+    app.update_idletasks()
+    y = 3 if half == 'up' else max(4, arrows.winfo_height() - 3)
+    _tm_clock['t'] += 1000
+    _tm_fire(arrows, '<ButtonPress-1>', x=6, y=y, time=_tm_clock['t'],
+             rootx=arrows.winfo_rootx() + 6, rooty=arrows.winfo_rooty() + y)
+    app.update()
+
+
+def _tm_take_focus(w, attempts=60):
+    w.focus_force()
+    for _ in range(attempts):
+        app.update()
+        if app.focus_get() is w:
+            return True
+        time.sleep(0.01)
+    return False
+
+
+_tm_r0 = _tm_rows()[0] if _tm_rows() else None
+check('template move: the arrows sit at the left, before the tick box and '
+      'the text, and the bin at the right',
+      _tm_r0 is not None
+      and _tm_part(_tm_r0, kind='updown').winfo_x()
+      < _tm_part(_tm_r0, klass=tk.Checkbutton).winfo_x()
+      < _tm_part(_tm_r0, klass=tk.Label).winfo_x()
+      < _tm_part(_tm_r0, kind='trash').winfo_x())
+from _qa_support import ring_mismatches as _tm_ring_mismatches
+_tm_bad_rings = _tm_ring_mismatches(app._mini_popup)
+check(f'template move: every row draws its border in one colour, the '
+      f'keyboard in it or not ({_tm_bad_rings})', not _tm_bad_rings)
+_tm_focus_asked = []
+_tm_real_focus_set = tk.Misc.focus_set
+tk.Misc.focus_set = lambda w: (_tm_focus_asked.append(w),
+                               _tm_real_focus_set(w))[1]
+try:
+    _tm_press(0, 'down')
+finally:
+    tk.Misc.focus_set = _tm_real_focus_set
+check(f'template move: the bottom half moves an item down ({_tm_texts()})',
+      _tm_texts() == ['two', 'one', 'three'])
+check('template move: and asks the keyboard for the moved item, in its new row',
+      bool(_tm_focus_asked) and _tm_focus_asked[-1]
+      is _tm_part(_tm_rows()[1], klass=tk.Checkbutton))
+_tm_press(2, 'up')
+check(f'template move: the top half moves an item up ({_tm_texts()})',
+      _tm_texts() == ['two', 'three', 'one'])
+_tm_press(0, 'up')
+_tm_press(2, 'down')
+check('template move: at either end nothing moves',
+      _tm_texts() == ['two', 'three', 'one'])
+_tm_box = _tm_part(_tm_rows()[0], klass=tk.Checkbutton)
+if _tm_box is not None and _tm_take_focus(_tm_box):
+    _tm_box.event_generate('<Alt-Down>')
+    app.update()
+_tm_held = app.focus_get()
+check(f'template move: Alt+Down on a box moves its item, and the keyboard is '
+      f'on it in its new row ({_tm_texts()})',
+      _tm_texts() == ['three', 'two', 'one']
+      and _tm_held is _tm_part(_tm_rows()[1], klass=tk.Checkbutton)
+      and str(_tm_rows()[1].cget('highlightbackground')).lower()
+      == str(_tm_rows()[1].cget('highlightcolor')).lower()
+      == app.colors['accent'].lower())
+_fake_ask.answer = True
+del _asks[:]
+app.ask_yes_no_cancel = _fake_ask
+try:
+    app._maybe_dismiss_mini_popup(_outside)
+    app.update()
+finally:
+    del app.ask_yes_no_cancel
+_tm_saved = next((t for t in app.templates if t.get('name') == 'MoveTest'), {})
+check(f'template move: closing after a move asks to save it, and the order is '
+      f'saved ({_asks}; {[i["text"] for i in _tm_saved.get("checklist", [])]})',
+      _asks == ['Save changes?']
+      and [i['text'] for i in _tm_saved.get('checklist', [])]
+      == ['three', 'two', 'one'])
+app._dismiss_mini_popup()
+app.update()
+app.templates = [t for t in app.templates if t.get('name') != 'MoveTest']
+# A long item: the arrows and the bin keep their room, and the words wrap.
+_tplLong = NO.normalize_template({
+    'name': 'LongTest', 'title': 't', 'body': 'b', 'category': 'General',
+    'checklist': [{'text': 'a long template item that keeps going so that it '
+                           'has to wrap onto more than one line, the way a real '
+                           'to-do sometimes does when written out', 'done': False}]})
+app._edit_template(_tplLong, lambda: None)
+app.update()
+_tm_lr = _tm_rows()[0] if _tm_rows() else None
+_tm_parts = ([_tm_part(_tm_lr, kind='updown'), _tm_part(_tm_lr, kind='trash')]
+             if _tm_lr is not None else [])
+_tm_ll = _tm_part(_tm_lr, klass=tk.Label) if _tm_lr is not None else None
+check('template move: a long item keeps its arrows and bin on its row, and '
+      'its words wrap inside the room it has',
+      len(_tm_parts) == 2 and None not in _tm_parts
+      and all(p.winfo_width() > 5
+              and p.winfo_x() + p.winfo_width() <= _tm_lr.winfo_width()
+              for p in _tm_parts)
+      and _tm_ll is not None and _tm_ll.winfo_reqwidth() <= _tm_ll.winfo_width())
+app._dismiss_mini_popup()
+app.update()
+app._edit_template(_tplBin, lambda: None)
+app.update()
+
+# ============================================================
 # ONE PLUS CHARACTER IN THE WHOLE INTERFACE (C-20)
 # ============================================================
 # Add-buttons were spelled with two different plus signs -- ASCII "+" in four

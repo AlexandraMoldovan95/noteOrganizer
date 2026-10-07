@@ -99,15 +99,18 @@ How the numbers themselves are counted is the
   where it was; the table moved only from its own right-click menu. Now aligning the caption —
   its label or its "Source:" line — places the table with it, and placing the table brings the
   caption along. A line that only looks like a caption, away from its table, moves nothing.
-  Selecting every cell and aligning still aligns the cells' text, and says how to move the table.
+  Selecting every cell and aligning still aligns the cells' text, and a dialog that waits for OK
+  says how to move the table.
 - **"📎 With files" in the list's Show filter.** It narrows the list to the notes that carry an
   attachment — the ones whose card shows 📎×N — and is remembered like the other choices. Select
   all takes what it shows, and a note whose last file is removed leaves it at the save.
-- **Checklist items can be moved.** A small ▲ ▼ beside each item moves it one place, and
-  Alt+↑ / Alt+↓ does the same from its box. The order is saved with the note, and travels with
-  it into a template, a share code and an export.
+- **Checklist items can be moved.** A small ▲ ▼ at the left of each item moves it one place and
+  picks it — a ring shows which — so Alt+↑ / Alt+↓ carries on from the keyboard. The order is
+  saved with the note, and travels with it into a template, a share code and an export; a
+  template's own checklist moves the same way.
 - **Search and order in the Share panel.** Its notes came in the order they entered the notebook,
-  oldest first; they come in the note list's order now, pinned notes first. A search box narrows
+  oldest first; they come in the note list's order now, pinned notes first, and follow a new sort
+  or a pin while the panel is open. A search box narrows
   them by the sidebar search's rule, Select all ticks what it shows, and ticks outlive a search —
   a line says how many picked notes the search is hiding, since the code includes them.
 
@@ -142,15 +145,24 @@ How the numbers themselves are counted is the
   in Tab order too; the ends move nothing; a moved row's box and bin act on their own item; the
   delete's Undo after a move; a double-click on ▼; the order on disk; a theme switched while the
   list is open — and puts a long item in an 800-pixel window; qa6 finds the keys on the shortcuts
-  page. Mutants O01–O12 take each part back out. The mark a rebuilt widget leaves for a theme
-  switch, `tick_palette`, is `palette_keys` now: the arrows carry it too.
+  page. A press on the arrows hands the item the keyboard even at either end, the ring marks
+  that row alone and survives a theme switch, and Alt+↓ carries on after a press. qa9 moves a
+  template's items by both halves of the arrows and by Alt+↓, saves the order on close, and
+  wraps a long item. Mutants O01–O20 take each part back out. The mark a rebuilt widget leaves
+  for a theme switch, `tick_palette`, is `palette_keys` now: the row's ring carries it too.
+- The checklist's open time, measured at 200 items on Windows: about 415 ms before the arrows,
+  about 645 ms with ▲ and ▼ as two buttons, about 550 ms now — the arrows are one element at the
+  left, and a short item's text is not watched for wrapping. Each element of a row is a window
+  Windows creates as the list opens, which is the floor.
 - qa1 orders the Share panel by two sorts and pins, searches it by a word in a table and in five
   more queries against the sidebar search's own rule, selects all under a search, generates a
   code holding a hidden pick, finds nothing, clears with ✕, and closes with a search waiting; qa4
   switches the theme with the search box open; qa9 keeps it on screen in the smallest window. The
   Linux image found the panel 14 pixels over its room at 1150×860, so the search row is paid for
-  out of the list's height and the panel kept its size.
-  Mutants V01–V07 take each part back out, and A08 aims at Show more's check as it is now.
+  out of the list's height and the panel kept its size. qa1 also changes the Sort and pins a note
+  with the panel open, and watches it follow with the ticks kept.
+  Mutants V01–V08 take each part back out, and A08 aims at Show more's check as it is now.
+- qa1 reads the dialog that centring every cell now opens, by its title and its directions.
 
 ---
 

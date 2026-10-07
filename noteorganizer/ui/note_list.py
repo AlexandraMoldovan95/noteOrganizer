@@ -241,6 +241,8 @@ class NoteListMixin:
         # Every data change ends here, so the Statistics panel refreshes too,
         # live while Settings is open -- before the early returns below.
         self._render_statistics()
+        # And an open Share panel keeps to the list's order.
+        self._share_panel_follows()
         # Whether the keyboard is on the list decides how far the rebuild
         # draws (see _list_draw_target). The keyboard itself stays where it
         # is: the canvas survives a rebuild, only its drawing is replaced.

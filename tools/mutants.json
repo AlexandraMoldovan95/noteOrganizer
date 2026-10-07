@@ -1372,8 +1372,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            buttons.append(arrow)\n",
-        "replace": "            pass\n"
+        "find": "        if self._second_press_of_double_click(event):\n            return \"break\"\n        arrows = event.widget\n",
+        "replace": "        arrows = event.widget\n"
       }
     ],
     "must_fail": ["double-click on ▼: the second press, on the row slid into place, moves nothing"],
@@ -1386,11 +1386,11 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            if box is not None:\n                box.focus_set()\n        return \"break\"\n",
-        "replace": "            pass\n        return \"break\"\n"
+        "find": "        if box is not None:\n            try:\n                box.focus_set()\n            except tk.TclError:\n                pass\n        return \"break\"\n",
+        "replace": "        return \"break\"\n"
       }
     ],
-    "must_fail": ["move: and the keyboard is on the item it moved"],
+    "must_fail": ["move: a press on the arrows gives that item the keyboard", "move: and the keyboard is on the item it moved"],
     "suites": ["qa1"],
     "expect": "killed"
   },
@@ -1410,11 +1410,11 @@
   },
   {
     "id": "O09",
-    "about": "a theme switch leaves the checklist arrows' pressed colours behind",
+    "about": "a theme switch leaves the checklist rows' borders in the old theme",
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            arrow.palette_keys = {\"activebackground\": \"card\",\n                                  \"activeforeground\": \"text\"}\n",
+        "find": "        row.palette_keys = {\"highlightbackground\": \"card\",\n                            \"highlightcolor\": \"card\"}\n",
         "replace": ""
       }
     ],
@@ -1456,7 +1456,7 @@
     "edits": [
       {
         "file": "noteorganizer/ui/settings_page.py",
-        "find": "        (\"Checklist (Tab to an item's tick box)\", (\n            (\"Alt+Up  /  Alt+Down\", \"Move the item one place up or down, as \"\n                                    \"the ▲ ▼ beside it do.\"),\n        )),\n",
+        "find": "        (\"Checklist (click an item's ▲ ▼, or Tab to its box)\", (\n            (\"Alt+Up  /  Alt+Down\", \"Move the item one place up or down, as \"\n                                    \"the ▲ ▼ at its left do; in a template's \"\n                                    \"checklist too.\"),\n        )),\n",
         "replace": ""
       }
     ],
@@ -1560,6 +1560,174 @@
     ],
     "must_fail": ["the Share search box takes the new theme too"],
     "suites": ["qa4"],
+    "expect": "killed"
+  },
+  {
+    "id": "O13",
+    "about": "a checklist item's arrows move it down whichever half is pressed",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            step = -1 if event.y < arrows.winfo_height() / 2 else 1\n",
+        "replace": "            step = 1\n"
+      }
+    ],
+    "must_fail": ["move: ▲ takes an item one place up, on screen too"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "O14",
+    "about": "the checklist item with the keyboard wears no ring",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self.bind_class(tag, \"<FocusIn>\",\n                            lambda e: self._ring_checklist_row(e.widget, True))\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["move: the item with the keyboard has a ring round its row", "template move: Alt+Down on a box moves its item"],
+    "suites": ["qa1", "qa9"],
+    "expect": "killed"
+  },
+  {
+    "id": "O15",
+    "about": "a checklist item's arrows sit at the right, by the bin, as they did",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        arrows.pack(side=\"left\")\n",
+        "replace": "        arrows.pack(side=\"right\")\n"
+      }
+    ],
+    "must_fail": ["move: the arrows sit at the left of the row"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "O16",
+    "about": "a theme switch takes the ring off the checklist item with the keyboard",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if isinstance(held, tk.Checkbutton) and held.master.master is frame:\n                self._ring_checklist_row(held, True)\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["move: and the item with the keyboard keeps its ring through the switch"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "O17",
+    "about": "a template's checklist arrows move nothing",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                tpl_checklist[at], tpl_checklist[to] = (tpl_checklist[to],\n                                                        tpl_checklist[at])\n",
+        "replace": "                pass\n"
+      }
+    ],
+    "must_fail": ["template move: the bottom half moves an item down"],
+    "suites": ["qa9"],
+    "expect": "killed"
+  },
+  {
+    "id": "O18",
+    "about": "a template's checklist arrows move down whichever half is pressed",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                        it, -1 if e.y < e.widget.winfo_height() / 2 else 1)\n",
+        "replace": "                        it, 1)\n"
+      }
+    ],
+    "must_fail": ["template move: the top half moves an item up"],
+    "suites": ["qa9"],
+    "expect": "killed"
+  },
+  {
+    "id": "O19",
+    "about": "Alt+Down on a template's checklist box does nothing",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                cb.bind(\"<Alt-Down>\", lambda e, it=item: (move_tpl_item(it, 1),\n                                                          \"break\")[1])\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["template move: Alt+Down on a box moves its item"],
+    "suites": ["qa9"],
+    "expect": "killed"
+  },
+  {
+    "id": "O20",
+    "about": "a template's checklist move leaves the keyboard behind",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "            box = tpl_boxes.get(id(it))\n            if box is not None:\n                box.focus_set()\n",
+        "replace": "            box = tpl_boxes.get(id(it))\n"
+      }
+    ],
+    "must_fail": ["template move: and asks the keyboard for the moved item"],
+    "suites": ["qa9"],
+    "expect": "killed"
+  },
+  {
+    "id": "V08",
+    "about": "an open Share panel keeps the order it was opened in",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/note_list.py",
+        "find": "        self._share_panel_follows()\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["share: an open panel follows a new Sort and a pin at once"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "O21",
+    "about": "the checklist ring is set in the colour Tk does not draw while the box has the keyboard",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            row.configure(highlightbackground=color, highlightcolor=color)\n",
+        "replace": "            row.configure(highlightbackground=color)\n"
+      }
+    ],
+    "must_fail": ["move: the item with the keyboard has a ring round its row", "template move: Alt+Down on a box moves its item"],
+    "suites": ["qa1", "qa9"],
+    "expect": "killed"
+  },
+  {
+    "id": "O22",
+    "about": "a template's checklist row draws its border in the system grey while its box has the keyboard",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                               highlightbackground=self.colors[\"sidebar\"],\n                               highlightcolor=self.colors[\"sidebar\"])\n",
+        "replace": "                               highlightbackground=self.colors[\"sidebar\"])\n"
+      }
+    ],
+    "must_fail": ["template move: every row draws its border in one colour"],
+    "suites": ["qa9"],
+    "expect": "killed"
+  },
+  {
+    "id": "O23",
+    "about": "a note's checklist row draws its border in the system grey while its box has the keyboard",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                       highlightbackground=self.colors[\"card\"],\n                       highlightcolor=self.colors[\"card\"])\n",
+        "replace": "                       highlightbackground=self.colors[\"card\"])\n"
+      }
+    ],
+    "must_fail": ["move: every row draws its border in one colour"],
+    "suites": ["qa1"],
     "expect": "killed"
   }
 ]

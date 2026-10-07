@@ -7140,10 +7140,11 @@ check(f'a table and its caption move together, one Ctrl+Z takes both back, '
               'table centred': ('center', 'center', 'center', 'left'),
               'far line right': ('center', 'center', 'center', 'right')})
 # Every cell selected and centred centres the cells' text, as a spreadsheet
-# does, and says how the table itself moves.
+# does, and says how the table itself moves -- in a dialog that waits to be
+# read (her re-test: the banner went before she had read it).
 _tf_said = []
-_tf_real_toast = app._show_toast
-app._show_toast = lambda text, **k: _tf_said.append(text)
+_tf_real_info = app.show_info
+app.show_info = lambda title, message, **k: _tf_said.append((title, message))
 try:
     _tfI = app._grid_at_line(2)
     app._grid_select_range(_tfI, (0, 0), (_tfI['data_rows'] - 1, _tfI['ncols'] - 1))
@@ -7151,14 +7152,16 @@ try:
     app._set_paragraph_align('right')
     app.update()
 finally:
-    app._show_toast = _tf_real_toast
+    app.show_info = _tf_real_info
 app._grid_clear_selection()
 _tf_cells = core_tables.cell_alignments(app.body_text.get('4.0', '4.end'))
 check(f'centring every cell aligns their text and says how to move the table '
       f'({_tf_said}; {_tf_cells}; {app._grid_table_align_of(2)})',
       _tf_cells == [core_tables.ALIGN_RIGHT] * 2
       and app._grid_table_align_of(2) == 'center'
-      and len(_tf_said) == 1 and 'To move the table itself' in _tf_said[0])
+      and len(_tf_said) == 1
+      and _tf_said[0][0] == 'The cells moved, not the table'
+      and 'Center table on page' in _tf_said[0][1])
 set_body('')
 
 # The table's placement travels with the cell copy.
@@ -8767,6 +8770,28 @@ check(f'share: and in another sort, the same order as the list '
       f'({_sp_titles()} / {_sp_list})',
       _sp_titles() == ['Cherry jam', 'Banana bread', 'Apple pie']
       and _sp_titles() == _sp_list)
+# Her re-test (case 594): with the panel open, a new Sort -- picked the way
+# the dropdown picks it -- or a pin shows there at once, ticks kept.
+app._share_vars[9303].set(True)
+app.sort_var.set('Title A–Z')
+app._on_sort_chosen('Title A–Z')
+app.update()
+_sp_follow_sort = _sp_titles()
+app.sort_var.set('Recently updated')
+app._on_sort_chosen('Recently updated')
+app.update()
+app.toggle_pin(app.find_note(9302))
+app.update()
+_sp_follow_pin = _sp_titles()
+app.toggle_pin(app.find_note(9302))
+app.update()
+check(f'share: an open panel follows a new Sort and a pin at once, ticks '
+      f'kept ({_sp_follow_sort}; {_sp_follow_pin})',
+      _sp_follow_sort == ['Cherry jam', 'Apple pie', 'Banana bread']
+      and _sp_follow_pin == ['Cherry jam', 'Apple pie', 'Banana bread']
+      and _sp_titles() == ['Cherry jam', 'Banana bread', 'Apple pie']
+      and app._share_vars[9303].get())
+app._share_vars[9303].set(False)
 app._share_vars[9301].set(True)
 check('share: typing waits for a pause before the list is drawn again, and '
       'drawing it now settles that', _sp_search('CINNAMON'))
@@ -9648,7 +9673,8 @@ check('checklist undo: the rows on screen come back with it',
       [str(_w.cget('text'))
        for _r in app.checklist_items_frame.winfo_children()
        for _w in _r.winfo_children()
-       if isinstance(_w, tk.Label)] == ['milk', 'bread', 'eggs'])
+       if isinstance(_w, tk.Label) and str(_w.cget('text')) != '▲\n▼']
+      == ['milk', 'bread', 'eggs'])
 
 # The offer must survive the save the deletion itself scheduled. A plain
 # banner replaces _toast_action with None, so the autosave's own "Note
@@ -13537,10 +13563,12 @@ def _cl_rows():
 
 
 def _cl_texts():
+    """Each row's item text, in Tab order -- its ▲ ▼ are a Label too."""
     return [str(_c.cget('text'))
             for _r in app.checklist_items_frame.winfo_children()
             if isinstance(_r, tk.Frame)
-            for _c in _r.winfo_children() if isinstance(_c, tk.Label)]
+            for _c in _r.winfo_children() if isinstance(_c, tk.Label)
+            and str(_c.cget('text')) != '▲\n▼']
 
 
 check('checklist rows: fixture opens three items',
@@ -13653,10 +13681,14 @@ def _mv_rows():
             if isinstance(w, tk.Frame)]
 
 
+_MV_ARROWS = '▲\n▼'
+
+
 def _mv_packed_texts():
     return [str(_c.cget('text'))
             for _r in app.checklist_items_frame.pack_slaves()
-            for _c in _r.winfo_children() if isinstance(_c, tk.Label)]
+            for _c in _r.winfo_children() if isinstance(_c, tk.Label)
+            and str(_c.cget('text')) != _MV_ARROWS]
 
 
 def _mv_in(row, klass, text=None):
@@ -13664,17 +13696,55 @@ def _mv_in(row, klass, text=None):
                  and (text is None or str(w.cget('text')) == text)), None)
 
 
-def _mv_arrow(position, glyph):
+def _mv_text(row):
+    return next((w for w in row.winfo_children() if isinstance(w, tk.Label)
+                 and str(w.cget('text')) != _MV_ARROWS), None)
+
+
+def _mv_arrows(position):
     rows = _mv_rows()
-    return (_mv_in(rows[position], tk.Button, glyph)
+    return (_mv_in(rows[position], tk.Label, _MV_ARROWS)
             if 0 <= position < len(rows) else None)
 
 
+_mv_clock = {'t': 300000}
+
+
+def _mv_click(position, glyph, t=None, root=None):
+    """A press on a row's ▲ over ▼ -- its top half for ▲, its bottom half
+    for ▼ -- each at a moment of its own, so two presses are taken for a
+    double-click only when a check asks for one."""
+    arrows = _mv_arrows(position)
+    if arrows is None:
+        return
+    app.update_idletasks()
+    y = 2 if glyph == '▲' else max(3, arrows.winfo_height() - 2)
+    if t is None:
+        _mv_clock['t'] += 1000
+        t = _mv_clock['t']
+    rx, ry = root or (arrows.winfo_rootx() + 4, arrows.winfo_rooty() + y)
+    _qa_fire(arrows, '<Enter>')
+    _qa_fire(arrows, '<ButtonPress-1>', x=4, y=y, rootx=rx, rooty=ry, time=t)
+    _qa_fire(arrows, '<ButtonRelease-1>', x=4, y=y, rootx=rx, rooty=ry,
+             time=t + 60)
+    # The pointer moves on, as a person's does: the arrows lit under it go
+    # back to rest (_light_arrows).
+    if arrows.winfo_exists():
+        _qa_fire(arrows, '<Leave>')
+    app.update()
+
+
 def _mv_press(position, glyph):
-    arrow = _mv_arrow(position, glyph)
-    if arrow is not None:
-        arrow.invoke()
-        app.update()
+    _mv_click(position, glyph)
+
+
+def _mv_rings():
+    """Which rows wear the keyboard's ring, by position: in both border
+    colours, as Tk draws highlightcolor while the focus is inside a row."""
+    return [i for i, r in enumerate(_mv_rows())
+            if str(r.cget('highlightbackground')).lower()
+            == str(r.cget('highlightcolor')).lower()
+            == app.colors['accent'].lower()]
 
 
 def _mv_agree(expected):
@@ -13705,10 +13775,43 @@ check(f'move: ▲ takes an item one place up, on screen too ({_cu_texts()})',
 check('move: the same two rows trade places -- nothing is rebuilt',
       [str(w) for w in _mv_rows()] == [_mv_0[0], _mv_0[2], _mv_0[1], _mv_0[3]])
 check('move: and it asks for its own save', _mv_asked['n'] >= 1)
-_mv_press(0, '▲')
-_mv_press(3, '▼')
+# Her re-test (case 591): an item could not be chosen for the keyboard as a
+# note can. A press on its arrows asks the keyboard for its box -- even where
+# nothing moves. Recorded rather than polled: focus_get() answers None when
+# this process does not own the desktop's foreground (qa/README, flakes).
+_mv_focus_asked = []
+_mv_real_focus_set = tk.Misc.focus_set
+tk.Misc.focus_set = lambda w: (_mv_focus_asked.append(w),
+                               _mv_real_focus_set(w))[1]
+try:
+    _mv_press(0, '▲')
+    _mv_press(3, '▼')
+finally:
+    tk.Misc.focus_set = _mv_real_focus_set
 check('move: ▲ on the first row and ▼ on the last move nothing',
       _mv_agree(['milk', 'bread', 'eggs', 'butter']))
+check(f'move: a press on the arrows gives that item the keyboard, even where '
+      f'nothing moves ({_mv_focus_asked[-2:]})',
+      _mv_focus_asked[-2:] == [_mv_in(_mv_rows()[0], tk.Checkbutton),
+                               _mv_in(_mv_rows()[3], tk.Checkbutton)])
+# And the row whose box has the keyboard wears a ring, the only one.
+take_focus(_mv_in(_mv_rows()[3], tk.Checkbutton))
+_mv_ring_3 = _mv_rings()
+take_focus(_mv_in(_mv_rows()[1], tk.Checkbutton))
+check(f'move: the item with the keyboard has a ring round its row, and only '
+      f'that row ({_mv_ring_3}, then {_mv_rings()})',
+      _mv_ring_3 == [3] and _mv_rings() == [1])
+from _qa_support import ring_mismatches as _mv_ring_mismatches
+_mv_bad_rings = _mv_ring_mismatches(app.checklist_items_frame)
+check(f'move: every row draws its border in one colour, the keyboard in it '
+      f'or not ({_mv_bad_rings})', not _mv_bad_rings)
+_mv_r0 = _mv_rows()[0]
+_mv_a0, _mv_b0, _mv_t0 = (_mv_in(_mv_r0, tk.Label, _MV_ARROWS),
+                          _mv_in(_mv_r0, tk.Checkbutton), _mv_text(_mv_r0))
+check('move: the arrows sit at the left of the row, ▲ over ▼, before the '
+      'tick box and the text (her re-test, case 593)',
+      None not in (_mv_a0, _mv_b0, _mv_t0)
+      and _mv_a0.winfo_x() < _mv_b0.winfo_x() < _mv_t0.winfo_x())
 _mv_box = _mv_in(_mv_rows()[1], tk.Checkbutton)
 if _mv_box is not None:
     _mv_box.invoke()
@@ -13743,17 +13846,30 @@ if _mv_kbox is not None and take_focus(_mv_kbox):
     _mv_kbox.event_generate('<Alt-Up>')
     app.update()
 check('move: Alt+Up takes it back', _mv_agree(['milk', 'butter', 'eggs', 'bread']))
+# After a press on its arrows, Alt+Down carries on with the same item: the
+# press gave its box the keyboard (her re-test, case 591).
+_mv_click(1, '▼')
+_mv_kbox = _mv_in(_mv_rows()[2], tk.Checkbutton)
+if _mv_kbox is not None and take_focus(_mv_kbox):
+    _mv_kbox.event_generate('<Alt-Down>')
+    app.update()
+check('move: after a press on its arrows, Alt+Down carries on moving the '
+      'same item', _mv_agree(['milk', 'eggs', 'bread', 'butter']))
+_mv_click(3, '▲')
+_mv_click(2, '▲')
+check('fixture: back to the order before', _cu_texts() == ['milk', 'butter',
+                                                           'eggs', 'bread'])
 
 # A double-click on ▼: the first click moves the item away, and the second
-# press lands on the arrow of the row slid into its place.
-_dc_click(_mv_arrow(1, '▼'), 400, 300, 200000)
+# press lands on the arrows of the row slid into its place.
+_mv_click(1, '▼', t=200000, root=(400, 300))
 check('double-click on ▼: the first click moves its item (fixture)',
       _cu_texts() == ['milk', 'eggs', 'butter', 'bread'])
-_dc_click(_mv_arrow(1, '▼'), 400, 300, 200250)
+_mv_click(1, '▼', t=200250, root=(400, 300))
 check(f'double-click on ▼: the second press, on the row slid into place, '
       f'moves nothing ({_cu_texts()})',
       _cu_texts() == ['milk', 'eggs', 'butter', 'bread'])
-_dc_click(_mv_arrow(1, '▼'), 400, 300, 200900)
+_mv_click(1, '▼', t=200900, root=(400, 300))
 check('double-click on ▼: a click after the window moves as usual',
       _cu_texts() == ['milk', 'butter', 'eggs', 'bread'])
 app._flush_autosave()
@@ -13764,21 +13880,25 @@ check('move: the order reaches the file',
                                if n['id'] == 9100)['checklist']] == _cu_texts())
 
 # A theme switched while the list is open: the rows are not rebuilt, so the
-# arrows' pressed colours must be laid again (_recolor_checklist_boxes).
+# arrows and each row's border (the ring, at rest) must take the new theme,
+# and the row the keyboard is on keeps its ring (_recolor_checklist_boxes).
+_mv_ringed = take_focus(_mv_in(_mv_rows()[2], tk.Checkbutton))
 _mv_theme = app.theme_name
 app.set_theme('light' if _mv_theme in NO.DARK_THEMES else 'dark')
 app.update()
-_mv_wrong = [str(b.cget('text')) for r in _mv_rows()
-             for b in r.winfo_children()
-             if isinstance(b, tk.Button) and str(b.cget('text')) in ('▲', '▼')
-             and (str(b.cget('bg')).lower() != app.colors['card'].lower()
-                  or str(b.cget('fg')).lower() != app.colors['subtext'].lower()
-                  or str(b.cget('activebackground')).lower()
-                  != app.colors['card'].lower()
-                  or str(b.cget('activeforeground')).lower()
-                  != app.colors['text'].lower())]
+_mv_wrong = [i for i, r in enumerate(_mv_rows())
+             for a in [_mv_in(r, tk.Label, _MV_ARROWS)]
+             if a is None
+             or str(a.cget('bg')).lower() != app.colors['card'].lower()
+             or str(a.cget('fg')).lower() != app.colors['subtext'].lower()
+             or (i != 2 and any(str(r.cget(o)).lower()
+                                != app.colors['card'].lower()
+                                for o in ('highlightbackground',
+                                          'highlightcolor')))]
 check(f'move: the arrows take a theme switched while the list is open '
-      f'({_mv_wrong})', bool(_mv_rows()) and not _mv_wrong)
+      f'(rows wrong: {_mv_wrong})', bool(_mv_rows()) and not _mv_wrong)
+check(f'move: and the item with the keyboard keeps its ring through the '
+      f'switch ({_mv_rings()})', _mv_ringed and _mv_rings() == [2])
 # Its rows are not this theme's now, so the move draws them again: the
 # keyboard must be put on the new tick box of the item it moved.
 _mv_kbox = _mv_in(_mv_rows()[0], tk.Checkbutton)
@@ -13809,13 +13929,14 @@ check('fixture: a long item in a narrow window',
                  'sometimes does']))
 app.update()
 _mv_long = _mv_rows()[1] if len(_mv_rows()) > 1 else None
-_mv_btns = ([w for w in _mv_long.winfo_children() if isinstance(w, tk.Button)]
+_mv_btns = ([w for w in _mv_long.winfo_children() if isinstance(w, tk.Button)
+             or (isinstance(w, tk.Label) and str(w.cget('text')) == _MV_ARROWS)]
             if _mv_long is not None else [])
-_mv_lbl = _mv_in(_mv_long, tk.Label) if _mv_long is not None else None
+_mv_lbl = _mv_text(_mv_long) if _mv_long is not None else None
 check(f'narrow: a long item keeps its bin and arrows on its row '
       f'({[(str(b.cget("text")), b.winfo_x(), b.winfo_width()) for b in _mv_btns]}'
       f' in {_mv_long.winfo_width() if _mv_long is not None else 0})',
-      len(_mv_btns) == 3
+      len(_mv_btns) == 2
       and all(b.winfo_width() > 5
               and b.winfo_x() + b.winfo_width() <= _mv_long.winfo_width()
               for b in _mv_btns))
