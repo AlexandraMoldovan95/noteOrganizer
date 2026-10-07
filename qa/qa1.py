@@ -2438,6 +2438,22 @@ finally:
     app.show_info = _cut_real_info
 set_body('')
 
+# Bold and italic as a web page writes them reach the note by the real
+# paste route (field pass: they arrived plain) -- semibold 600 and an
+# oblique slant, the spellings the reader did not know.
+_stub_clipboard(html='<p>A <span style="font-weight:600">semi</span> and '
+                     '<span style="font-style:oblique">slant</span> word</p>',
+                text='A semi and slant word')
+app._on_body_paste()
+app.update()
+_wpS = {(s['style'], s['start'], s['end'])
+        for s in app._extract_formatting(app.body_text)}
+check(f'bold and italic from a web page arrive by the real paste ({_wpS})',
+      body() == 'A semi and slant word'
+      and ('bold', 2, 6) in _wpS and ('italic', 11, 16) in _wpS)
+_stub_clipboard()
+set_body('')
+
 # ---- Copying ----
 set_body('heading\nmilk\neggs')
 app.body_text.tag_add('sel', '1.0', '1.end')

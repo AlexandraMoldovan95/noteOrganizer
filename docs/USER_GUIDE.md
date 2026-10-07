@@ -228,7 +228,8 @@ are, however long they are.
 ### Pasting and copying
 
 Copy something from a web page, an email or Word, paste it into a note with **Ctrl+V**, and the
-bold, the colours and the lists come with it.
+bold, the colours and the lists come with it — bold however the page writes it, semibold
+included, and a copy from Google Docs bold only where the document is.
 
 - **Ctrl+Shift+V** pastes the words on their own, with none of the styling — and no bullets
   either, even when the thing you copied from puts bullet characters into its own plain-text

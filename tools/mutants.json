@@ -1099,5 +1099,117 @@
     "must_fail": ["...while a row written without padding is still the row the editor draws"],
     "suites": ["test_tables"],
     "expect": "killed"
+  },
+  {
+    "id": "G01",
+    "about": "semibold (600) is not bold",
+    "edits": [
+      {
+        "file": "noteorganizer/core/richtext.py",
+        "find": "        return float(value) >= 600",
+        "replace": "        return float(value) >= 700"
+      }
+    ],
+    "must_fail": ["bold and italic are read however a page writes them", "bold and italic from a web page arrive by the real paste"],
+    "suites": ["test_richtext", "qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "G02",
+    "about": "a value marked !important reads as no value",
+    "edits": [
+      {
+        "file": "noteorganizer/core/richtext.py",
+        "find": "        if value.endswith(\"!important\"):\n            value = value[:-len(\"!important\")].strip()",
+        "replace": "        pass"
+      }
+    ],
+    "must_fail": ["bold and italic are read however a page writes them", "a colour marked !important and an alignment in capitals arrive"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
+  },
+  {
+    "id": "G03",
+    "about": "a style value written in capitals reads as no value",
+    "edits": [
+      {
+        "file": "noteorganizer/core/richtext.py",
+        "find": "        value = value.strip().lower()",
+        "replace": "        value = value.strip()"
+      }
+    ],
+    "must_fail": ["bold and italic are read however a page writes them", "a colour marked !important and an alignment in capitals arrive"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
+  },
+  {
+    "id": "G04",
+    "about": "the font shorthand is not read",
+    "edits": [
+      {
+        "file": "noteorganizer/core/richtext.py",
+        "find": "    font = style.get(\"font\")",
+        "replace": "    font = None"
+      }
+    ],
+    "must_fail": ["bold and italic are read however a page writes them"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
+  },
+  {
+    "id": "G05",
+    "about": "an oblique slant is not italic",
+    "edits": [
+      {
+        "file": "noteorganizer/core/richtext.py",
+        "find": "        italic = style[\"font-style\"].startswith((\"italic\", \"oblique\"))",
+        "replace": "        italic = style[\"font-style\"] == \"italic\""
+      }
+    ],
+    "must_fail": ["bold and italic are read however a page writes them", "bold and italic from a web page arrive by the real paste"],
+    "suites": ["test_richtext", "qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "G06",
+    "about": "a tag's own CSS cannot take back what the tag means",
+    "edits": [
+      {
+        "file": "noteorganizer/core/richtext.py",
+        "find": "            kept = not ((implied == \"bold\" and bold is False)\n                        or (implied == \"italic\" and italic is False))",
+        "replace": "            kept = True"
+      }
+    ],
+    "must_fail": ["a Google Docs copy is not bold all over"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
+  },
+  {
+    "id": "G07",
+    "about": "a tag that took its bold back closes an outer bold at its end",
+    "edits": [
+      {
+        "file": "noteorganizer/core/richtext.py",
+        "find": "            if not taken or taken.pop():",
+        "replace": "            if True:"
+      }
+    ],
+    "must_fail": ["...and a tag that took its bold back closes no one else's"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
+  },
+  {
+    "id": "G08",
+    "about": "bolder is not bold",
+    "edits": [
+      {
+        "file": "noteorganizer/core/richtext.py",
+        "find": "    if value in (\"bold\", \"bolder\"):",
+        "replace": "    if value == \"bold\":"
+      }
+    ],
+    "must_fail": ["bold and italic are read however a page writes them"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
   }
 ]

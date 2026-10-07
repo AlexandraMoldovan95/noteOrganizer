@@ -135,14 +135,50 @@ def _is_meaningful(hex_colour, kind):
 
 
 def _css(style_attr):
-    """A style attribute as a dict, lowercased, without failing on junk."""
+    """A style attribute as a dict, names and values lowercased, without
+    failing on junk. "!important" is how a page insists, not part of the
+    value: "700 !important" or "#D32F2F !important" read as nothing."""
     out = {}
     for chunk in (style_attr or "").split(";"):
         if ":" not in chunk:
             continue
         name, _, value = chunk.partition(":")
-        out[name.strip().lower()] = value.strip()
+        value = value.strip().lower()
+        if value.endswith("!important"):
+            value = value[:-len("!important")].strip()
+        out[name.strip().lower()] = value
     return out
+
+
+def _weight_is_bold(value):
+    """Whether a CSS font-weight is bold: the words, or a number from 600 --
+    semibold, which pages use for bold more often than 700."""
+    if value in ("bold", "bolder"):
+        return True
+    try:
+        return float(value) >= 600
+    except ValueError:
+        return False
+
+
+def _bold_and_italic(style):
+    """``(bold, italic)`` as a parsed style says them: True or False where
+    it says, None where it says nothing. The ``font`` shorthand counts too,
+    and resets both as CSS does; the longhands win over it."""
+    bold = italic = None
+    font = style.get("font")
+    if font:
+        bold = italic = False
+        for token in font.split("/")[0].split():
+            if token == "italic" or token.startswith("oblique"):
+                italic = True
+            elif _weight_is_bold(token):
+                bold = True
+    if "font-weight" in style:
+        bold = _weight_is_bold(style["font-weight"])
+    if "font-style" in style:
+        italic = style["font-style"].startswith(("italic", "oblique"))
+    return bold, italic
 
 
 class _Reader(HTMLParser):
@@ -155,6 +191,7 @@ class _Reader(HTMLParser):
         self.spans = []
         self.paragraphs = []
         self._open = []          # (style, value, start offset)
+        self._implied = {}       # tag -> [whether each open one took its style]
         self._lists = []         # ('bullet'|'number', count so far)
         self._line = 0
         self._line_has_text = False
@@ -253,6 +290,8 @@ class _Reader(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
+        style = _css(attrs.get("style"))
+        bold, italic = _bold_and_italic(style)
         if tag == "table":
             self._tbl_active = getattr(self, "_tbl_active", 0) + 1
             self._tbl_pending = {}
@@ -260,7 +299,15 @@ class _Reader(HTMLParser):
         elif tag == "tr" and getattr(self, "_tbl_active", 0):
             self._tbl_col = 0
         if tag in _STYLE_TAGS:
-            self._open.append((_STYLE_TAGS[tag], None, self.length))
+            # A tag's own CSS can take back what the tag means: Google Docs
+            # wraps a whole copy in <b style="font-weight:normal">, and all
+            # of it came in bold. Remembered, so its end closes only itself.
+            implied = _STYLE_TAGS[tag]
+            kept = not ((implied == "bold" and bold is False)
+                        or (implied == "italic" and italic is False))
+            if kept:
+                self._open.append((implied, None, self.length))
+            self._implied.setdefault(tag, []).append(kept)
         if tag in ("ul", "ol"):
             if len(self._lists) < MAX_INDENT:
                 self._lists.append(["bullet" if tag == "ul" else "number", 0])
@@ -311,7 +358,6 @@ class _Reader(HTMLParser):
             # bleed this registry exists to stop. A styled <br>/<img>
             # simply has its inline style ignored.
             return
-        style = _css(attrs.get("style"))
         opened = []
         for prop, name in (("color", "text_color"),
                            ("background", "highlight"),
@@ -320,10 +366,10 @@ class _Reader(HTMLParser):
             if hex_value and _is_meaningful(hex_value, name):
                 self._open.append((name, hex_value, self.length))
                 opened.append(name)
-        if style.get("font-weight") in ("bold", "700", "800", "900"):
+        if bold:
             self._open.append(("bold", None, self.length))
             opened.append("bold")
-        if style.get("font-style") == "italic":
+        if italic:
             self._open.append(("italic", None, self.length))
             opened.append("italic")
         if opened:
@@ -354,7 +400,9 @@ class _Reader(HTMLParser):
                 for name in reversed(lst.pop()):
                     self._close(name)
         if tag in _STYLE_TAGS:
-            self._close(_STYLE_TAGS[tag])
+            taken = self._implied.get(tag)
+            if not taken or taken.pop():
+                self._close(_STYLE_TAGS[tag])
         if tag in ("ul", "ol"):
             if self._lists:
                 self._lists.pop()

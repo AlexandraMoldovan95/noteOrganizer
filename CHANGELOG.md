@@ -144,6 +144,11 @@ How the numbers themselves are counted is the
   holding notes exactly as they are here skipped them without a word until the end. You are now
   asked once: **Skip** them — the answer Enter and Escape give — or **Add copies anyway**, as
   separate notes with identities (and, from a backup, files) of their own.
+- **Bold and italic from a web page arrive as bold and italic.** The paste knew four ways a page
+  can write bold and one way to write italic; semibold (600), "bolder", the `font` shorthand,
+  an oblique slant, capitals and `!important` all arrived plain. And a copy from Google Docs,
+  which wraps everything in a `<b>` it then marks not bold, would have come in bold all over.
+  Colours marked `!important` and alignments written in capitals now arrive too.
 - **The share-code warning names where attached files do travel.** "Use Export for files" left
   three exports to guess between, and three messages about large or damaged codes sent people
   to an "Import (ZIP)" / "Export (ZIP)" no screen has. All now say Settings → Backup → Export.
@@ -179,6 +184,9 @@ How the numbers themselves are counted is the
   a line of maths is words in a preview while a row the editor draws is still a table; qa1 puts
   an emoji, words before and after, and "[ ]" typed into a plain cell through the real cell
   editor. Mutants B01–B04 take each fix back out.
+- test_richtext reads bold and italic in every spelling a page uses, a Google Docs copy, and a
+  colour and an alignment written the way a page insists; qa1 pastes semibold and an oblique
+  slant through the real paste route. Mutants G01–G08 take each fix back out.
 
 ---
 
