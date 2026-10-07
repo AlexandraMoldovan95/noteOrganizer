@@ -118,7 +118,9 @@ How the numbers themselves are counted is the
   cell; test_tables reads what a caption is. Save and reopen, the HTML export and a share code
   were probed for the placement. Mutants L01–L05 take the feature back out.
 - Q05 had lost its target: the audit fix A06 split the two lines it mutated, and the runs after
-  it never named it. It aims at them as they are now; the whole catalogue was run again.
+  it never named it. It aims at them as they are now; the whole catalogue was run again. And a
+  ninth static gate, `tools/check_mutant_targets.py`, now fails on every run when any mutant's
+  text is no longer in its file -- in `tools/run_tests.py` and in CI.
 
 ---
 

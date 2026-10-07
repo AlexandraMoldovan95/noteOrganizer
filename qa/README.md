@@ -29,11 +29,11 @@ says.
 
 | Layer | What it is | When it runs | What it catches |
 |---|---|---|---|
-| Static gates | Eight `tools/check_*.py` scripts, seconds in all | Seven on every pull request; the link check before a push | A name used but never defined; a method lost from the app class; a judgement about a note written out twice; a dead documentation link; Romanian in anything public; a script that wipes its folder with no deny rule; a long story told in a comment; text below WCAG contrast |
+| Static gates | Nine `tools/check_*.py` scripts, seconds in all | Eight on every pull request; the link check before a push | A name used but never defined; a method lost from the app class; a judgement about a note written out twice; a dead documentation link; Romanian in anything public; a script that wipes its folder with no deny rule; a long story told in a comment; text below WCAG contrast; a mutant that no longer finds the code it mutates |
 | Unit suites | Seven `test_*.py`, no window for six of them | Every pull request | Dates, repeats, the calculator, tables, rich text, data safety, a note's identity |
 | The qa suite | Nine scripts, ~2,700 checks, driving the real app headlessly | Every pull request | What a person would notice: a note that must survive a restart, a share code or a backup; formatting and tables that must come back exactly; a question that must not lose what was typed |
 | Stories | Three scripts that press the buttons a person presses, restart the app and photograph it | On demand: by hand, or from the Actions tab | A screen that changed shape; a route nobody asked a check about |
-| Mutants | `tools/mutate.py` and its catalogue: the 14 worth re-running, and 2 that test the runner | On demand, the same way. Most mutants were one-off runs while a fix was made, named in its commit | A check that stays green with its fix taken away |
+| Mutants | `tools/mutate.py` and its catalogue: the 83 worth re-running, and 2 that test the runner | On demand, the same way. Most mutants were one-off runs while a fix was made, named in its commit | A check that stays green with its fix taken away |
 | Coverage | `tools/run_coverage.py` | Every pull request, with a floor of 80% | Code no test reaches |
 | The test plan | `NoteOrganizer_TestPlan.xlsx`, ~570 cases | By a person, on the built `.exe` | What needs a person: how a screen reads, the built `.exe`, real hardware — each row says whether a script already walks it |
 

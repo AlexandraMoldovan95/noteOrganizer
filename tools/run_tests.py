@@ -109,6 +109,10 @@ STATIC = [
     # pairs still below it listed and the list allowed only to shrink.
     ("contrast measured",
      [sys.executable, os.path.join("tools", "check_contrast.py")]),
+    # The eighth: every mutant in the catalogue still finds the code it
+    # mutates. One lost its lines to a later fix and guarded nothing for a day.
+    ("mutants find their code",
+     [sys.executable, os.path.join("tools", "check_mutant_targets.py")]),
 ]
 
 
