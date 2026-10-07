@@ -24,13 +24,10 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
   re-importing an overlapping backup; a pixel-level investigation of the post-push-down second
   grid rebuild before any de-flicker fix is trusted.
 
-- **Ideas from the first full manual pass over the test plan (October 2026)**, each small and
-  each crossing a seam that needs its own check:
+- **Left over from the first full manual pass over the test plan (October 2026)** — its three
+  ideas shipped (see [CHANGELOG](../CHANGELOG.md)); one follow-up is open:
   - **Reorder a template's checklist too.** A note's checklist items move with ▲ ▼ and Alt+↑/↓;
     the template editor's list, a separate set of rows in a fixed-width popup, does not yet.
-  - **Search and order in the Share panel.** For notebooks of hundreds of notes: a search box
-    using the main search's rule, with Select all meaning "what the search shows"; and drawing
-    the panel in the note list's order rather than the order notes entered the notebook.
 
 - **Small candidates from the 2026-08-31 idea pass** (put aside deliberately, in rough order of
   appeal; two candidates from that pass have since shipped — see

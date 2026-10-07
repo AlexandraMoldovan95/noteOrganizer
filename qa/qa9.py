@@ -2653,8 +2653,9 @@ for _pn_size in ('640x600', '1366x690', '1150x860'):
     find_widget(app.share_panel, tk.Button, 'Generate code').invoke(); _pn_settle()
     _pn_share = (_pn_buttons(app.share_panel, ('Generate code', 'Close'))
                  + [w for w in _walk9(app.share_code_area)
-                    if isinstance(w, (tk.Button, tk.Text))])
-    check('%s: Share\'s own buttons and its generated code are on screen (%s)'
+                    if isinstance(w, (tk.Button, tk.Text))]
+                 + [app.share_search_entry])
+    check('%s: Share\'s search, own buttons and generated code are on screen (%s)'
           % (_pn_size, [str(w) for w in _pn_share if not _pn_whole(w)][:3]),
           _pn_ids and len(_pn_share) >= 5 and all(_pn_whole(w) for w in _pn_share))
     if _pn_size == '1150x860':
@@ -2682,8 +2683,9 @@ if not app.selection_mode:
 _pn_settle()
 _pn_share = (_pn_buttons(app.share_panel, ('Generate code', 'Close'))
              + [w for w in _walk9(app.share_code_area)
-                if isinstance(w, (tk.Button, tk.Text))])
-check('1366x690 with the selection bar open above it: Share\'s buttons and '
+                if isinstance(w, (tk.Button, tk.Text))]
+             + [app.share_search_entry])
+check('1366x690 with the selection bar open above it: Share\'s search, buttons and '
       'code are still on screen (%s)'
       % [str(w) for w in _pn_share if not _pn_whole(w)][:3],
       app._is_placed(app.bulk_action_bar) and len(_pn_share) >= 5

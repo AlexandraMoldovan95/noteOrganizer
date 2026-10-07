@@ -106,6 +106,10 @@ How the numbers themselves are counted is the
 - **Checklist items can be moved.** A small ▲ ▼ beside each item moves it one place, and
   Alt+↑ / Alt+↓ does the same from its box. The order is saved with the note, and travels with
   it into a template, a share code and an export.
+- **Search and order in the Share panel.** Its notes came in the order they entered the notebook,
+  oldest first; they come in the note list's order now, pinned notes first. A search box narrows
+  them by the sidebar search's rule, Select all ticks what it shows, and ticks outlive a search —
+  a line says how many picked notes the search is hiding, since the code includes them.
 
 ### Fixed
 
@@ -140,6 +144,11 @@ How the numbers themselves are counted is the
   list is open — and puts a long item in an 800-pixel window; qa6 finds the keys on the shortcuts
   page. Mutants O01–O12 take each part back out. The mark a rebuilt widget leaves for a theme
   switch, `tick_palette`, is `palette_keys` now: the arrows carry it too.
+- qa1 orders the Share panel by two sorts and pins, searches it by a word in a table and in five
+  more queries against the sidebar search's own rule, selects all under a search, generates a
+  code holding a hidden pick, finds nothing, clears with ✕, and closes with a search waiting; qa4
+  switches the theme with the search box open; qa9 keeps it on screen in the smallest window.
+  Mutants V01–V07 take each part back out, and A08 aims at Show more's check as it is now.
 
 ---
 

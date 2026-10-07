@@ -8707,6 +8707,114 @@ check(f'Show more in Share after a delete gives every note one box '
       _sm_more is not None and len(_sm_titles) == 129
       and sorted(_sm_titles) == sorted(n['title'] for n in app.notes))
 app.toggle_share_panel(); app.update()
+
+# ---- THE SHARE PANEL: THE LIST'S ORDER, AND A SEARCH OF ITS OWN ----
+# The owner's re-test of 0.84.357 (case 343). The notes came in the order
+# they entered the notebook; they come in the order the list shows them
+# now, pins first. A search box narrows them by the sidebar search's own
+# rule -- a word inside a table counts, a table's plumbing does not --
+# and ticks outlive a search, so the panel says how many it is hiding.
+_sp_sort = app.sort_var.get()
+app.notes = [
+    NO.normalize_note({'id': 9301, 'title': 'Banana bread',
+                       'body': 'flour and sugar',
+                       'created': '2026-01-01 10:00:00',
+                       'updated': '2026-01-03 10:00:00'}),
+    NO.normalize_note({'id': 9302, 'title': 'Apple pie',
+                       'body': '| Item | Qty |\n| --- | --- |\n| cinnamon | 1 |',
+                       'created': '2026-01-02 10:00:00',
+                       'updated': '2026-01-01 10:00:00'}),
+    NO.normalize_note({'id': 9303, 'title': 'Cherry jam', 'body': 'x',
+                       'comments': 'from grandma', 'pinned': True,
+                       'created': '2026-01-03 10:00:00',
+                       'updated': '2026-01-02 10:00:00'})]
+
+
+def _sp_titles():
+    return [str(b.cget('text')) for b in _sm_boxes_any()]
+
+
+def _sm_boxes_any():
+    _vars = {str(v) for v in app._share_vars.values()}
+    return [b for b in _walk_widgets(app.share_panel, tk.Checkbutton)
+            if str(b.cget('variable')) in _vars]
+
+
+def _sp_lines():
+    return [str(l.cget('text')) for l in _walk_widgets(app.share_panel, tk.Label)
+            if 'hidden by' in str(l.cget('text'))
+            or 'No notes match' in str(l.cget('text'))]
+
+
+def _sp_search(text):
+    app.share_search_var.set(text)
+    _waiting = app._share_search_job is not None
+    app._share_refilter()
+    app.update()
+    return _waiting and app._share_search_job is None
+
+
+app.sort_var.set('Title A–Z')
+app.toggle_share_panel(); app.update()
+check(f"share: the panel lists the notes in the list's order, pins first "
+      f"({_sp_titles()})", _sp_titles() == ['Cherry jam', 'Apple pie',
+                                            'Banana bread'])
+app.toggle_share_panel()
+app.sort_var.set('Recently updated')
+app.toggle_share_panel(); app.update()
+_sp_list = [r[1]['title'] for r in app._list_rows() if r[0] == 'note']
+check(f'share: and in another sort, the same order as the list '
+      f'({_sp_titles()} / {_sp_list})',
+      _sp_titles() == ['Cherry jam', 'Banana bread', 'Apple pie']
+      and _sp_titles() == _sp_list)
+app._share_vars[9301].set(True)
+check('share: typing waits for a pause before the list is drawn again, and '
+      'drawing it now settles that', _sp_search('CINNAMON'))
+check(f'share: the search finds a word inside a table, whatever its case '
+      f'({_sp_titles()})', _sp_titles() == ['Apple pie'])
+check(f'share: and says a picked note is hidden by it ({_sp_lines()})',
+      _sp_lines() == ['1 picked note is hidden by this search'])
+check('share: its ✕ shows while there is a search',
+      app._is_placed(app.share_search_clear))
+for _sp_q in ('grandma', 'BREAD', '---', 'pie', 'a'):
+    _sp_search(_sp_q)
+    _sp_rule = [n['title'] for n in app.notes
+                if NO.NoteOrganizer._query_matches_note(_sp_q.lower(), n)]
+    check(f"share: {_sp_q!r} finds what the sidebar search's rule finds "
+          f"({sorted(_sp_titles())} / {sorted(_sp_rule)})",
+          sorted(_sp_titles()) == sorted(_sp_rule))
+_sp_search('pie')
+_sp_all = next((b for b in _walk_widgets(app.share_panel, tk.Button)
+                if str(b.cget('text')) in ('Select all', 'Unselect all')), None)
+if _sp_all is not None:
+    _sp_all.invoke()
+    app.update()
+check('share: Select all ticks what the search shows, and nothing it hides',
+      app._share_vars[9302].get() and not app._share_vars[9303].get())
+app._generate_inline_share(); app.update()
+_sp_code = next((str(w.get('1.0', 'end-1c'))
+                 for w in _walk_widgets(app.share_code_area, tk.Text)), '')
+_sp_shared = (sorted(n.get('title') for n in NO.decode_share_code(_sp_code))
+              if _sp_code else [])
+check(f'share: Generate code shares the picked note the search hides, as the '
+      f'panel said ({_sp_shared})',
+      _sp_shared == ['Apple pie', 'Banana bread'])
+_sp_search('zzzz')
+check(f'share: a search that finds nothing says so ({_sp_lines()})',
+      not _sp_titles() and 'No notes match.' in _sp_lines())
+app.share_search_clear.invoke()
+app._share_refilter(); app.update()
+check(f'share: the ✕ takes the search away and every note is back '
+      f'({_sp_titles()})',
+      _sp_titles() == ['Cherry jam', 'Banana bread', 'Apple pie']
+      and not app._is_placed(app.share_search_clear) and not _sp_lines())
+app.share_search_var.set('pie')
+app.toggle_share_panel(); app.update()
+check('share: closing the panel calls off a search still waiting',
+      app._share_search_job is None)
+for _sp_v in app._share_vars.values():
+    _sp_v.set(False)
+app.sort_var.set(_sp_sort)
 app.notes = _sm_saved_notes
 
 app.current_attachments = []

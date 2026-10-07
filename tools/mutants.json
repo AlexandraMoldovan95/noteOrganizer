@@ -994,7 +994,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            if [n[\"id\"] for n in self.notes[:first]] != rendered[\"ids\"]:",
+        "find": "            if [n[\"id\"] for n in fresh[:first]] != rendered[\"ids\"]:",
         "replace": "            if False:"
       }
     ],
@@ -1462,6 +1462,104 @@
     ],
     "must_fail": ["every key a checklist item binds is named in the Checklist group"],
     "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "V01",
+    "about": "the Share panel lists notes in the order they entered the notebook",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            notes = list(self.notes)\n            self._sort_notes(notes)\n            query = query_var.get().lower()\n",
+        "replace": "            notes = list(self.notes)\n            query = query_var.get().lower()\n"
+      }
+    ],
+    "must_fail": ["share: the panel lists the notes in the list's order, pins first", "share: and in another sort, the same order as the list"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "V02",
+    "about": "the Share panel's search narrows nothing",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if query:\n                notes = [n for n in notes if self._query_in_texts(\n",
+        "replace": "            if False:\n                notes = [n for n in notes if self._query_in_texts(\n"
+      }
+    ],
+    "must_fail": ["share: the search finds a word inside a table, whatever its case", "share: a search that finds nothing says so"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "V03",
+    "about": "the Share panel's search minds the case, as the sidebar's does not",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            query = query_var.get().lower()\n",
+        "replace": "            query = query_var.get()\n"
+      }
+    ],
+    "must_fail": ["share: the search finds a word inside a table, whatever its case", "share: 'BREAD' finds what the sidebar search's rule finds"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "V04",
+    "about": "the Share panel says nothing of the picked notes a search hides",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if hidden:\n                lines.append(f\"{hidden} picked note\"\n",
+        "replace": "            if False:\n                lines.append(f\"{hidden} picked note\"\n"
+      }
+    ],
+    "must_fail": ["share: and says a picked note is hidden by it"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "V05",
+    "about": "the Share panel draws its list again on every keystroke",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self._share_search_job = self.after(180, refilter)\n",
+        "replace": "            refilter()\n"
+      }
+    ],
+    "must_fail": ["share: typing waits for a pause before the list is drawn again"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "V06",
+    "about": "closing the Share panel leaves its search waiting",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self.share_panel.pack_forget()\n            self._cancel_share_search()\n",
+        "replace": "            self.share_panel.pack_forget()\n"
+      }
+    ],
+    "must_fail": ["share: closing the panel calls off a search still waiting"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "V07",
+    "about": "a theme switch leaves the Share search box's caret behind",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        search.palette_keys = {\"insertbackground\": \"text\"}\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["the Share search box takes the new theme too"],
+    "suites": ["qa4"],
     "expect": "killed"
   }
 ]

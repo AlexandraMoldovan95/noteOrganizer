@@ -728,6 +728,13 @@ notebook the list arrives a hundred at a time, and a button that silently ticked
 never seen would be the opposite of the control you asked for. Reveal more and press it again; its
 label reads **Unselect all** once everything on screen is ticked.
 
+The notes come in the same order as the note list (your **Sort** choice, pinned notes first). The
+🔍 box under the heading narrows them as you type, by the same rule as the sidebar search: titles,
+text (a word inside a table counts) and comments, upper or lower case alike. Ticks stay when you
+search again, so you can gather notes from several searches into one code. When a search hides
+some of the notes you picked, a line above the list says how many — **Generate code** includes
+them too. The **✕** in the box clears the search.
+
 ![Share panel](screenshots/share-panel.png)
 
 ### Import a code

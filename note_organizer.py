@@ -10034,6 +10034,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def toggle_share_panel(self):
         if self._is_placed(self.share_panel):
             self.share_panel.pack_forget()
+            self._cancel_share_search()
         else:
             if self._is_placed(self.import_panel):
                 self.import_panel.pack_forget()
@@ -10044,6 +10045,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _build_share_panel(self):
         """Inline multi-note share: checkboxes to pick notes, then a generated
         code shown right here with a Copy button."""
+        self._cancel_share_search()
         for w in self.share_panel.winfo_children():
             w.destroy()
         p = self.share_panel
@@ -10068,6 +10070,34 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             relief="flat", font=("Segoe UI", 8), cursor="hand2",
             bg=self.colors["card"], fg=self.colors["text"], bd=0)
         select_all_btn.pack(side="right", ipadx=4)
+
+        # A search of its own, by the sidebar search's rule: a notebook of
+        # hundreds of notes was a long scroll to the few wanted. No hint text
+        # in the box, so there is no hint to be mistaken for a query.
+        search_row = tk.Frame(p, bg=self.colors["card"])
+        search_row.pack(fill="x", padx=6, pady=(0, 3))
+        tk.Label(search_row, text="🔍", font=("Segoe UI", 8),
+                 bg=self.colors["card"], fg=self.colors["subtext"]
+                 ).pack(side="left", padx=(5, 0))
+        query_var = self.share_search_var = tk.StringVar()
+        search = tk.Entry(search_row, textvariable=query_var, relief="flat",
+                          width=1, font=("Segoe UI", 9), bg=self.colors["card"],
+                          fg=self.colors["text"],
+                          insertbackground=self.colors["text"])
+        # The caret, laid again by a theme switched while this is open.
+        search.palette_keys = {"insertbackground": "text"}
+        self._guard_entry_astral(search)
+        self._add_paste_menu(search)
+        search.pack(side="left", fill="x", expand=True, ipady=2, padx=(3, 0))
+        clear = tk.Button(search_row, text="✕", command=lambda: query_var.set(""),
+                          relief="flat", bd=0, cursor="hand2",
+                          highlightthickness=0, font=("Segoe UI", 8, "bold"),
+                          bg=self.colors["card"], fg=self.colors["subtext"],
+                          activebackground=self.colors["card"],
+                          activeforeground=self.colors["text"])
+        clear.palette_keys = {"activebackground": "card",
+                              "activeforeground": "text"}
+        self.share_search_entry, self.share_search_clear = search, clear
 
         # Scrollable checklist (a notebook can have many notes). Fixed height so
         # it never grows the whole panel off-screen; the scrollbar handles the
@@ -10140,13 +10170,54 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             except tk.TclError:
                 pass
 
+        def offered():
+            """The notes the panel offers: in the note list's order, pins
+            first -- they came in the order they entered the notebook -- and
+            narrowed by the search box, with the sidebar search's own rule."""
+            notes = list(self.notes)
+            self._sort_notes(notes)
+            query = query_var.get().lower()
+            if query:
+                notes = [n for n in notes if self._query_in_texts(
+                    query, self._cached_search_texts(n))]
+            return notes
+
+        offer = {"notes": []}
+
+        def above_the_boxes(notes):
+            """That the search hides some of what is picked -- Generate code
+            shares those too -- or that it found nothing."""
+            showing = {n["id"] for n in notes}
+            hidden = sum(1 for n in self.notes if n["id"] not in showing
+                         and self._share_vars.get(n["id"]) is not None
+                         and self._share_vars[n["id"]].get())
+            lines = []
+            if hidden:
+                lines.append(f"{hidden} picked note"
+                             f"{' is' if hidden == 1 else 's are'} hidden by "
+                             "this search")
+            if not notes:
+                lines.append("No notes match.")
+            made = []
+            for text in lines:
+                line = tk.Label(inner, text=text, font=("Segoe UI", 8),
+                                anchor="w", justify="left", wraplength=200,
+                                bg=self.colors["sidebar"],
+                                fg=self.colors["subtext"])
+                line.pack(fill="x", pady=2)
+                made.append(line)
+            return made
+
         def render_checkboxes(first=0):
             """The tick boxes from *first* to the page's end, under any
             already drawn, and the button for the rest."""
-            visible_notes = self.notes[first:shown["n"]]
+            if first == 0:
+                offer["notes"] = offered()
+            notes = offer["notes"]
+            visible_notes = notes[first:shown["n"]]
             rendered["ids"] = rendered["ids"][:first] + [
                 n["id"] for n in visible_notes]
-            made = []
+            made = above_the_boxes(notes) if first == 0 else []
             for n in visible_notes:
                 if n["id"] not in self._share_vars:
                     self._share_vars[n["id"]] = tk.BooleanVar(value=False)
@@ -10159,7 +10230,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._drawn_tick_box(cb, "sidebar", "text", track=False)
                 cb.pack(fill="x", anchor="w")
                 made.append(cb)
-            remaining = len(self.notes) - min(len(self.notes), shown["n"])
+            remaining = len(notes) - min(len(notes), shown["n"])
             if remaining > 0:
                 more = tk.Button(inner, text=f"Show {min(remaining, SHARE_PAGE_SIZE)} more "
                                              f"({remaining} not shown)",
@@ -10177,23 +10248,56 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # reading "Unselect all" would be wrong the moment the page grows.
             refresh_select_all_label()
 
+        def redraw():
+            for w in inner.winfo_children():
+                w.destroy()
+            rendered["ids"] = []
+            render_checkboxes()
+
         def show_more(button):
             # Added under the boxes already drawn: drawing them all again
             # flickered, and grew with every page.
             first = shown["n"]
             shown["n"] += SHARE_PAGE_SIZE
-            if [n["id"] for n in self.notes[:first]] != rendered["ids"]:
+            fresh = offered()
+            if [n["id"] for n in fresh[:first]] != rendered["ids"]:
                 # The notebook changed under the boxes on screen (a note
-                # deleted while this is open): all drawn again, or a note
-                # would be left with no box at all.
-                for w in inner.winfo_children():
-                    w.destroy()
-                rendered["ids"] = []
-                render_checkboxes()
+                # deleted, or saved to a new place in the order, while this
+                # is open): all drawn again, or a note would have no box.
+                redraw()
                 return
+            offer["notes"] = fresh
             button.destroy()
             render_checkboxes(first)
 
+        def refilter():
+            """Draw the list for the search as it stands now."""
+            self._cancel_share_search()
+            try:
+                if not inner.winfo_exists():
+                    return
+            except tk.TclError:
+                return
+            shown["n"] = SHARE_PAGE_SIZE
+            redraw()
+            canvas.yview_moveto(0)
+
+        def on_query(*_args):
+            # The ✕ at once; the list after a pause in typing, as the
+            # sidebar search does -- each draw is up to a page of boxes.
+            try:
+                if query_var.get():
+                    if not self._is_placed(clear):
+                        clear.pack(side="right", padx=(0, 4), before=search)
+                elif self._is_placed(clear):
+                    clear.pack_forget()
+            except tk.TclError:
+                return
+            self._cancel_share_search()
+            self._share_search_job = self.after(180, refilter)
+
+        query_var.trace_add("write", on_query)
+        self._share_refilter = refilter
         render_checkboxes()
 
         gen_row = tk.Frame(p, bg=self.colors["sidebar"])
@@ -10210,6 +10314,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # The generated code appears here after "Generate code".
         self.share_code_area = tk.Frame(p, bg=self.colors["sidebar"])
         self.share_code_area.pack(fill="x", padx=6, pady=(0, 6))
+
+    def _cancel_share_search(self):
+        """Call off the Share panel's search waiting for a pause in typing:
+        it is about to draw now, or its panel is closing or drawn anew."""
+        job = getattr(self, "_share_search_job", None)
+        self._share_search_job = None
+        if job is not None:
+            try:
+                self.after_cancel(job)
+            except (tk.TclError, ValueError):
+                pass
 
     def _generate_inline_share(self):
         chosen = [n for n in self.notes if self._share_vars.get(n["id"]) and self._share_vars[n["id"]].get()]

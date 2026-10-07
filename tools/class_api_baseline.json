@@ -106,6 +106,7 @@
   "_can_edit_undo": "(self, widget)",
   "_cancel_list_drag": "(self)",
   "_cancel_pending_autosave": "(self)",
+  "_cancel_share_search": "(self)",
   "_canvas_width_sync": "(self, canvas, item)",
   "_caption_lines_of": "(self, info)",
   "_capture_grid_views": "(self)",
