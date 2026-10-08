@@ -157,7 +157,7 @@ is in the table below as well.
 | [The border that went grey whenever it was used](#the-border-that-went-grey-whenever-it-was-used) | A check that reads the option you set proves the option, not the colour on the screen; photograph what a person sees. | 0.88.361 |
 | [The heart that left a gap](#the-heart-that-left-a-gap) | An invisible character is still drawn; when the toolkit draws it badly, keep it out of what the app writes, and say what is left. | 0.89.362 |
 | [Save and Delete, the same khaki](#save-and-delete-the-same-khaki) | A gate measures the pairs it was told about — walk what is on the screen; and two colours that differ only in hue are one colour to a reader who cannot see hue. | 0.89.365 |
-| [Two answers to one question](#two-answers-to-one-question) | Two helpers answering one question disagree somewhere — measure them against each other; and a base theme's state map silently overrides what you configured. | next |
+| [Two answers to one question](#two-answers-to-one-question) | Two helpers answering one question disagree somewhere — measure them against each other; and a base theme's state map silently overrides what you configured. | 0.89.371 |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -3439,7 +3439,7 @@ each one to the function it calls before writing it down.
 
 ### Two answers to one question
 
-*(next release · found by showing the app to simulated colour-blind readers)*
+*([0.89.371](../CHANGELOG.md#089371--2026-10-08) · found by showing the app to simulated colour-blind readers)*
 
 **Symptom:** none reported. Photographs of the running app were simulated for protanopia,
 deuteranopia and tritanopia (Machado 2009, full severity) and given to three reviewers who saw

@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.89.371](#089371--2026-10-08) | 2026-10-08 | What simulated colour-blind readers hesitated over: a boxed find match, a raised open tab with no dotted box after a click, letters that read on every colour you pick — and every icon the app uses in the emoji picker. |
 | [0.89.365](#089365--2026-10-08) | 2026-10-08 | Every coloured word and button readable in every theme, Save and Delete told apart without colour, and a dark red fill kept for what cannot be undone. |
 | [0.89.362](#089362--2026-10-08) | 2026-10-08 | A welcome note that greets a first start and shows each part of the app, and emoji from the app's own pickers that leave no gap after them. |
 | [0.88.361](#088361--2026-10-08) | 2026-10-08 | What two re-tests asked for: a table that moves with its caption, a filter for notes with files, checklist items you can move, a Share panel that searches and keeps the list's order, and a find bar that reads on every theme. |
@@ -96,9 +97,15 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
-*Found by showing the app to colour-blind readers: photographs of the running app, simulated
-for protanopia, deuteranopia and tritanopia, read by four reviewers — three seeing only the
-simulated pictures, one with normal colour vision as the control.*
+---
+
+## [0.89.371] — 2026-10-08
+
+*Highlights: the app shown to colour-blind readers — photographs of the running app, simulated
+for protanopia, deuteranopia and tritanopia, read by four reviewers, three seeing only the
+simulated pictures and one with normal colour vision as the control. What they hesitated over
+now carries its meaning by shape as well as colour, the letters on a colour you pick always
+read, and the emoji picker offers every icon the app itself uses.*
 
 ### Fixed
 
