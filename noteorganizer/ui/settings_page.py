@@ -1913,11 +1913,19 @@ class SettingsPageMixin:
                     v.set(0 if i == 0 else 1)
             do_cleanup()
 
-        if len(groups) > 1:
+        # The panel's main action first; the sweeping one, when there is
+        # more than one group, below it.
+        sweeping = len(groups) > 1
+        tk.Button(parent, text="🧹  Move ticked duplicates to trash", command=do_cleanup,
+                  bg=self.colors["accent"], fg=self._on_fill("accent"), relief="flat",
+                  font=("Segoe UI", 10, "bold"), cursor="hand2"
+                  ).pack(fill="x", padx=12, pady=(4, 4 if sweeping else 10), ipady=6)
+
+        if sweeping:
             # Painted as the bigger action, because it is. This button was
             # the quietest thing on the panel -- the sidebar fill, the
             # theme's ordinary text colour, a smaller font and less padding
-            # than the button below it, which only acts on what you ticked.
+            # than the button beside it, which only acts on what you ticked.
             # Visual weight is how a reader works out which action is the
             # broad one, and it said the opposite (finding C-6).
             #
@@ -1939,12 +1947,7 @@ class SettingsPageMixin:
                       highlightbackground=self.colors["danger_text"],
                       activebackground=self.colors["card"],
                       activeforeground=self.colors["danger_text"]
-                      ).pack(fill="x", padx=12, pady=(4, 4), ipady=6)
-
-        tk.Button(parent, text="🧹  Move ticked duplicates to trash", command=do_cleanup,
-                  bg=self.colors["accent"], fg=self._on_fill("accent"), relief="flat",
-                  font=("Segoe UI", 10, "bold"), cursor="hand2"
-                  ).pack(fill="x", padx=12, pady=(4, 10), ipady=6)
+                      ).pack(fill="x", padx=12, pady=(4, 10), ipady=6)
 
     def _reopen_dup_panel(self):
         """Rebuild the duplicates panel in place after a cleanup -- the way

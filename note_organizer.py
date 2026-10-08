@@ -13352,7 +13352,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             bottom_row, text="🗂 Category ▾",
             relief="flat", font=("Segoe UI", 8), cursor="hand2")
         self._toggles_its_popup(bulk_category_btn, self._bulk_change_category)
-        self.track_theme(bulk_category_btn, bg="accent", fg="on_accent")
+        # Quiet, as Export beside it: a menu, not the bar's main action,
+        # and a fill here read as "already chosen".
+        self.track_theme(bulk_category_btn, bg="card", fg="text")
         _bulk_pack(bulk_category_btn)
         self._bulk_category_btn = bulk_category_btn
         bulk_export_btn = tk.Button(
@@ -14289,7 +14291,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
         )
         self.track_theme(save_btn, bg="success", fg="on_success",
-                         activebackground="success", activeforeground="on_success")
+                         activebackground="success_pressed",
+                         activeforeground="on_success")
 
         share_btn = tk.Button(
             action_row, text="📋 Generate code", command=self.share_current_note_as_code,

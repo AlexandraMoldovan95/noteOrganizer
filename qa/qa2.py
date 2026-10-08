@@ -733,6 +733,14 @@ if _dp_everything is not None and _dp_ticked_btn is not None:
     check('duplicates: the precise action keeps the accent, so the eye is '
           'warned by the sweeping one rather than drawn to it',
           str(_dp_ticked_btn.cget('bg')) == str(app.colors['accent']))
+    # The panel's main action first, the sweeping one below it -- on the
+    # screen, where a reader meets them.
+    app.update()
+    _dp_ys = (_dp_ticked_btn.winfo_rooty(), _dp_everything.winfo_rooty())
+    check(f'duplicates: the main action comes first, the sweeping one below it '
+          f'({_dp_ys})',
+          _dp_ticked_btn.winfo_ismapped() and _dp_everything.winfo_ismapped()
+          and _dp_ys[0] < _dp_ys[1])
 
 if _dp_everything is not None:
     _dp_asked = []

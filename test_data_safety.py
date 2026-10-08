@@ -715,6 +715,10 @@ check('the on_* names give the words for that fill, other names the colour',
           for pal in NO.THEMES.values()
           for role in ('accent', 'danger', 'success'))
       and _pvalue(NO.THEMES['dark'], 'card') == NO.THEMES['dark']['card'])
+check('a held-down Save is a darker shade of its fill, so a press shows',
+      all(_pvalue(pal, 'success_pressed') != pal['success']
+          and _ratio_fn(_pvalue(pal, 'success_pressed'), pal['success']) >= 1.2
+          for pal in NO.THEMES.values()))
 check('a fill it cannot read gets white words',
       _letters(None) == _letters('#zz') == _letters('') == '#ffffff')
 # Delete is the dark fill with white words and Save the light one with dark

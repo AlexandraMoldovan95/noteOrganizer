@@ -2375,12 +2375,68 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        self.track_theme(save_btn, bg=\"success\", fg=\"on_success\",\n                         activebackground=\"success\", activeforeground=\"on_success\")\n",
+        "find": "        self.track_theme(save_btn, bg=\"success\", fg=\"on_success\",\n                         activebackground=\"success_pressed\",\n                         activeforeground=\"on_success\")\n",
         "replace": "        self.track_theme(save_btn, bg=\"success\", fg=\"on_success\")\n"
       }
     ],
     "must_fail": ["palette: the editor's buttons name their pressed colours"],
     "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC18",
+    "about": "the selection bar's Category menu is a filled accent button again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self.track_theme(bulk_category_btn, bg=\"card\", fg=\"text\")\n",
+        "replace": "        self.track_theme(bulk_category_btn, bg=\"accent\", fg=\"on_accent\")\n"
+      }
+    ],
+    "must_fail": ["palette: the filled buttons built once name their words"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC19",
+    "about": "a held-down Save is the same colour as one at rest",
+    "edits": [
+      {
+        "file": "noteorganizer/core/themes.py",
+        "find": "    \"success_pressed\": lambda palette: blend(palette[\"success\"], \"#000000\", 0.12),\n",
+        "replace": "    \"success_pressed\": lambda palette: palette[\"success\"],\n"
+      }
+    ],
+    "must_fail": ["a held-down Save is a darker shade of its fill, so a press shows"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC20",
+    "about": "the Duplicates panel puts the sweeping clean-up above its main action again",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                  ).pack(fill=\"x\", padx=12, pady=(4, 4 if sweeping else 10), ipady=6)\n",
+        "replace": "                  ).pack(fill=\"x\", padx=12, pady=(4, 4 if sweeping else 10), ipady=6,\n                         side=\"bottom\")\n"
+      }
+    ],
+    "must_fail": ["duplicates: the main action comes first, the sweeping one below it"],
+    "suites": ["qa2"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC21",
+    "about": "the question about too many attachments is asked as a warning again, with a red Yes",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "                    icon=\"question\", default=\"no\"):\n",
+        "replace": "                    icon=\"warning\", default=\"no\"):\n"
+      }
+    ],
+    "must_fail": ["asked as a question, so its Yes is not the red of a deletion"],
+    "suites": ["qa6"],
     "expect": "killed"
   }
 ]

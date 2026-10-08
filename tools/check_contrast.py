@@ -79,6 +79,7 @@ PAIRS = [
     ("on_accent", "accent_hover", "words on an accent button, pointed at"),
     ("on_danger", "danger", "words on a destructive button"),
     ("on_success", "success", "words on a confirming button"),
+    ("on_success", "success_pressed", "words on a confirming button, held down"),
     ("text", "find_all", "text of the other find matches"),
     ("text", "find_miss", "text in the find box when nothing is found"),
 ]

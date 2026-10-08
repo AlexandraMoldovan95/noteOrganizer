@@ -800,11 +800,15 @@ def settings_overview():
 
 @scene('theme-picker')
 def theme_picker():
-    """Settings -> Appearance, with the theme cards."""
+    """Settings -> Appearance, with the theme cards -- on a light theme, so
+    the README's gallery shows both modes."""
     _demo_notebook()
+    was = app.theme_name
+    app.set_theme('light')
     _settings('appearance')
     capture('theme-picker')
     app.hide_settings_page()
+    app.set_theme(was)
     pump()
 
 

@@ -8599,10 +8599,11 @@ for _pl_w, _pl_map in app.themed_widgets:
         _pl_txt = str(_pl_w.cget('text'))
     except Exception:
         continue
-    if _pl_txt in ('💾 Save', '🗑 Delete', '+ New Note', '+ Add file', '🗑 Trash'):
+    if _pl_txt in ('💾 Save', '🗑 Delete', '+ New Note', '+ Add file', '🗑 Trash',
+                   '🗂 Category ▾'):
         _pl_reg[_pl_txt] = (_pl_map.get('bg'), _pl_map.get('fg'))
 # The selection bar's Trash, like the editor's Delete, moves notes to the
-# Trash: quiet, in the warning's words.
+# Trash: quiet, in the warning's words; its Category menu is quiet, as Export.
 check(f'palette: the filled buttons built once name their words for the theme '
       f'switch, not a colour written down; the moves to the Trash are quiet '
       f'({_pl_reg})',
@@ -8610,7 +8611,8 @@ check(f'palette: the filled buttons built once name their words for the theme '
                   '🗑 Delete': ('sidebar', 'danger_text'),
                   '+ New Note': ('accent', 'on_accent'),
                   '+ Add file': ('accent', 'on_accent'),
-                  '🗑 Trash': ('card', 'danger_text')})
+                  '🗑 Trash': ('card', 'danger_text'),
+                  '🗂 Category ▾': ('card', 'text')})
 
 # The row reads Save, Generate code, Delete -- Save no longer beside Delete --
 # and Tab walks it in that order; each button names its pressed colours,
@@ -8625,7 +8627,7 @@ for _pl_w, _pl_map in app.themed_widgets:
         _pl_press[_pl_txt] = (_pl_map.get('activebackground'),
                               _pl_map.get('activeforeground'))
 check(f'palette: the editor\'s buttons name their pressed colours ({_pl_press})',
-      _pl_press == {'💾 Save': ('success', 'on_success'),
+      _pl_press == {'💾 Save': ('success_pressed', 'on_success'),
                     '📋 Generate code': ('card', 'text'),
                     '🗑 Delete': ('card', 'danger_text'),
                     '📄 Duplicate': ('card', 'text')})

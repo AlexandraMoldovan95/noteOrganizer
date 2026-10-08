@@ -77,7 +77,7 @@ class AttachmentsMixin:
                     f"A note can keep {MAX_ATTACHMENTS} attached files, and "
                     f"there is room for {room} more.\n\n"
                     f"Attach the first {room} and leave the rest?",
-                    icon="warning", default="no"):
+                    icon="question", default="no"):
                 return
             if asked_about != (getattr(self, "selected_note_id", None),
                                self.current_attachments):

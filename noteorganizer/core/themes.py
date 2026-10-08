@@ -421,10 +421,21 @@ def legible_on(colour, ground, ink, minimum=4.6):
     return ink
 
 
+# Palette names worked out from another of its colours rather than written
+# down: the shade a filled Save takes while it is held, so a press shows.
+DERIVED_KEYS = {
+    "success_pressed": lambda palette: blend(palette["success"], "#000000", 0.12),
+}
+
+
 def palette_value(palette, key):
-    """A colour of *palette* by its name, the ``on_*`` names included."""
+    """A colour of *palette* by its name, the ``on_*`` and derived names
+    included."""
     fill = LETTER_KEYS.get(key)
-    return letters_on(palette[fill]) if fill else palette[key]
+    if fill:
+        return letters_on(palette[fill])
+    derive = DERIVED_KEYS.get(key)
+    return derive(palette) if derive else palette[key]
 
 
 def contrasting_fg(hex_color):
