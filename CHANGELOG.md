@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.88.361](#088361--2026-10-08) | 2026-10-08 | What two re-tests asked for: a table that moves with its caption, a filter for notes with files, checklist items you can move, a Share panel that searches and keeps the list's order, and a find bar that reads on every theme. |
 | [0.84.357](#084357--2026-10-07) | 2026-10-07 | What a first full manual pass found: ticks on dark themes, tables that copy as they look, a list that keeps your place, imports that ask, and bold from a web page that stays bold. |
 | [0.84.341](#084341--2026-10-04) | 2026-10-04 | The hint shown with no template to pick sends you to the section of Settings that really holds them. |
 | [0.84.340](#084340--2026-10-03) | 2026-10-03 | The light themes' secondary text reads against every surface, with every theme's text now measured against WCAG — and the window's bottom scrollbar shows only when the window is too narrow. |
@@ -91,7 +92,12 @@ How the numbers themselves are counted is the
 
 ---
 
-## [Unreleased]
+## [0.88.361] — 2026-10-08
+
+*Highlights: four additions and four fixes from the owner's two re-tests of 0.84.357 — a table
+that moves with its caption, "📎 With files" in the list's Show filter, checklist items moved
+with ▲ ▼ or Alt+↑/↓ (in a template too), a Share panel that searches and follows the list's
+order, and a find bar that keeps its colours and closes when you leave the note.*
 
 ### Added
 
@@ -99,13 +105,46 @@ How the numbers themselves are counted is the
   where it was; the table moved only from its own right-click menu. Now aligning the caption —
   its label or its "Source:" line — places the table with it, and placing the table brings the
   caption along. A line that only looks like a caption, away from its table, moves nothing.
-  Selecting every cell and aligning still aligns the cells' text, and says how to move the table.
+  Selecting every cell and aligning still aligns the cells' text, and a dialog that waits for OK
+  says how to move the table.
+- **"📎 With files" in the list's Show filter.** It narrows the list to the notes that carry an
+  attachment — the ones whose card shows 📎×N — and is remembered like the other choices. Select
+  all takes what it shows, and a note whose last file is removed leaves it at the save.
+- **Checklist items can be moved.** A small ▲ ▼ at the left of each item moves it one place and
+  picks it — a ring shows which — so Alt+↑ / Alt+↓ carries on from the keyboard. The order is
+  saved with the note, and travels with it into a template, a share code and an export; a
+  template's own checklist moves the same way.
+- **Search and order in the Share panel.** Its notes came in the order they entered the notebook,
+  oldest first; they come in the note list's order now, pinned notes first, and follow a new sort
+  or a pin while the panel is open. A search box narrows
+  them by the sidebar search's rule, Select all ticks what it shows, and ticks outlive a search —
+  a line says how many picked notes the search is hiding, since the code includes them.
 
 ### Fixed
 
 - **An open checkbox cell no longer shows its brackets.** Opened with Edit cell as text, or
   reached with Tab, the cell showed the box's stored "[ ]" until something replaced it. It opens
   empty now: what goes in takes the box's place, and left empty the box stays as it was.
+- **A long checklist item keeps its bin in a narrow window.** In a window 1024 pixels wide or
+  less, a long item's text took the whole row: its 🗑 was squeezed to nothing, so the item could
+  not be removed, and its last words were cut off. The buttons keep their room now, and the text
+  wraps at the width it has.
+- **The find bar keeps its accent border while you type.** Its border went the system grey the
+  moment the keyboard was in its box — all the time it is used — on every theme. Tk paints a
+  frame's border in another colour while the keyboard is inside it, and that colour was never
+  set. The picture preview's border did the same when one of its buttons had the keyboard.
+- **The find box can be read on a light theme when nothing is found.** Words found nowhere
+  turned the box one fixed dark red on every theme, and on a light one the words typed into it
+  were dark on dark (1.2:1). It takes a light tint of the theme's warning red now — a pale red
+  on a light theme, a dark red on a dark one — which reads at 10.3:1 or better on all eight
+  themes, and keeps it through a theme switch.
+
+### Changed
+
+- **The find bar closes when you leave the note** — for another note, the Calendar or Settings.
+  It stayed open over the next note, often reading "0/0" in red for a search that belonged to
+  the last one. Its words are kept: Ctrl+F brings them back, selected, and the matches show at
+  once. The same note loaded again over itself — after a save, Restore previous — keeps it open.
 
 ### Testing
 
@@ -121,6 +160,43 @@ How the numbers themselves are counted is the
   it never named it. It aims at them as they are now; the whole catalogue was run again. And a
   ninth static gate, `tools/check_mutant_targets.py`, now fails on every run when any mutant's
   text is no longer in its file -- in `tools/run_tests.py` and in CI.
+- qa7 filters to "📎 With files", selects all under it and takes a note's last file off; qa1
+  keeps the choice when a category is touched and finds it again after a restart. Mutants F01–F02
+  take the option and the judgement back out.
+- qa1 moves checklist items with ▲ ▼ and Alt+↑/↓ — the rows trade places without a rebuild,
+  in Tab order too; the ends move nothing; a moved row's box and bin act on their own item; the
+  delete's Undo after a move; a double-click on ▼; the order on disk; a theme switched while the
+  list is open — and puts a long item in an 800-pixel window; qa6 finds the keys on the shortcuts
+  page. A press on the arrows hands the item the keyboard even at either end, the ring marks
+  that row alone and survives a theme switch, and Alt+↓ carries on after a press. qa9 moves a
+  template's items by both halves of the arrows and by Alt+↓, saves the order on close, and
+  wraps a long item. Mutants O01–O20 take each part back out. The mark a rebuilt widget leaves
+  for a theme switch, `tick_palette`, is `palette_keys` now: the row's ring carries it too.
+- The checklist's open time, measured at 200 items on Windows: about 415 ms before the arrows,
+  about 645 ms with ▲ and ▼ as two buttons, about 550 ms now — the arrows are one element at the
+  left, and a short item's text is not watched for wrapping. Each element of a row is a window
+  Windows creates as the list opens, which is the floor.
+- qa1 orders the Share panel by two sorts and pins, searches it by a word in a table and in five
+  more queries against the sidebar search's own rule, selects all under a search, generates a
+  code holding a hidden pick, finds nothing, clears with ✕, and closes with a search waiting; qa4
+  switches the theme with the search box open; qa9 keeps it on screen in the smallest window. The
+  Linux image found the panel 14 pixels over its room at 1150×860, so the search row is paid for
+  out of the list's height and the panel kept its size. qa1 also changes the Sort and pins a note
+  with the panel open, and watches it follow with the ticks kept.
+  Mutants V01–V08 take each part back out, and A08 aims at Show more's check as it is now.
+- qa1 reads the dialog that centring every cell now opens, by its title and its directions.
+- A photograph of the checklist's ring showed it grey while its check passed: the check read
+  the colour that was set, not the one Tk draws while the keyboard is inside a frame.
+  `ring_mismatches` in `qa/_qa_support.py` now walks a window for any bordered frame holding
+  something that takes the keyboard, with its two border colours apart; qa1 runs it on the
+  checklist and the find bar (and switches to a theme with another accent), qa7 on the picture
+  preview, qa9 on a template's checklist. Mutants O21–O23 and X01–X03 take each part back out.
+- qa1 opens the find bar, loads the same note over itself and keeps it, opens another note and
+  finds it put away with its words kept, leaves for the Calendar and for Settings and comes back
+  with Ctrl+F, and records where the keyboard goes when the bar is put away. It tints a search
+  found nowhere on a light and a dark theme, switched while it shows. The contrast gate measures
+  the tint on all eight themes through a new `DERIVED` table, and fails on the old fixed red.
+  Mutants Z01–Z09 take each part back out.
 
 ---
 

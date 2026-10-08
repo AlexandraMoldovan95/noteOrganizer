@@ -46,7 +46,7 @@ body:
     attributes:
       label: Version
       description: Settings, then About, shows it.
-      placeholder: "0.84.357"
+      placeholder: "0.88.361"
     validations:
       required: true
   - type: input

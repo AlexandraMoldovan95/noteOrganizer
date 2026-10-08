@@ -70,7 +70,7 @@ that have moved, so existing callers — including the ~270 `note_organizer.<nam
 across the QA scripts — keep working untouched. That's deliberate: it means each extraction is
 a pure move that leaves the whole test suite green, rather than a rewrite.
 
-What remains in the file is ~19,700 lines of genuinely shared surface. It grew again through
+What remains in the file is ~20,400 lines of genuinely shared surface. It grew again through
 the rich-text and tables work even as the pure logic behind those features went into `core/`,
 and dropped by ~2,700 when the note list moved to `ui/note_list.py` (see the
 [case study](#the-list-measured-again)).
@@ -536,9 +536,18 @@ with these numbers in hand.
 | white text on an accent button, pointed at | **3.3** ✗ | **2.4** ✗ | **1.9** ✗ | **2.2** ✗ | 5.7 | 5.0 | **4.1** ✗ | **4.1** ✗ |
 | white text on a destructive button | **3.0** ✗ | **2.8** ✗ | **2.5** ✗ | **2.8** ✗ | **4.1** ✗ | **4.1** ✗ | **4.1** ✗ | **4.1** ✗ |
 | white text on a confirming button | **1.8** ✗ | **2.0** ✗ | **1.8** ✗ | **1.8** ✗ | **2.8** ✗ | **2.8** ✗ | **2.8** ✗ | **2.8** ✗ |
+| text in the find box when nothing is found | 10.7 | 10.3 | 10.3 | 10.4 | 12.1 | 10.6 | 10.6 | 10.5 |
 
 A note's own colour, used for the tags line on its card, is the person's choice from a palette
 and is not in this table; a colour picked for its look may not read as text on every theme.
+
+The last row is a surface the app mixes rather than reads off the palette: the find box's ground
+while its words are found nowhere, a tint of the warning red over white on a light theme (a truer
+red there, its pink taken out) and over near-black on a dark one (`miss_surface` in
+`core/themes.py`). It used to be one fixed dark red
+on every theme, which put dark words on a dark ground on the light ones (1.2:1); mixed into each
+theme's own surface instead, the red went grey on the blue and green themes. A mixed surface is
+measured here like any other, through the gate's `DERIVED` table.
 
 ### Layout arithmetic belongs in core, not in the widgets
 

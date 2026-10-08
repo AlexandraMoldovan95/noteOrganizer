@@ -47,7 +47,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.84.357"
+APP_VERSION = "0.88.361"
 
 
 def parse_version(v):
@@ -434,6 +434,7 @@ from noteorganizer.core.themes import (
     contrasting_fg as core_contrasting_fg,
     inset_surface,
     hairline,
+    miss_surface,
     THEMES,
     DARK_THEMES,
     LIGHT_THEMES,
@@ -6634,12 +6635,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "right": core_tables.ALIGN_RIGHT,
             }.get(align, core_tables.ALIGN_LEFT))
             if whole:
-                # Every cell selected reads as "the table" -- but this is
-                # the cells' text (field pass: the table stayed put).
-                self._show_toast(
-                    "That aligns the text in every cell. To move the table "
-                    "itself, align its caption, or right-click it → Table.",
-                    kind="info")
+                # Every cell selected reads as "the table", but this is the
+                # cells' text. Said in a dialog that waits to be read, once
+                # this step is done (a banner went before it was read).
+                self.after_idle(self._explain_cells_not_table)
             return
         # With a table cell open, the toolbar buttons mean that cell --
         # reaching for the same button that aligns a paragraph is exactly
@@ -6670,6 +6669,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._grid_set_table_align(info, align)
         self._refresh_list_buttons()
         self._schedule_autosave()
+
+    def _explain_cells_not_table(self):
+        """Say how a table moves, after every one of its cells was aligned."""
+        self.show_info(
+            "The cells moved, not the table",
+            "That lined up the text inside every cell. The table itself "
+            "stayed where it was.\n\n"
+            "To move the whole table across the page, right-click it and "
+            "choose Table → Center table on page (or Table left on page, "
+            "Table right on page).\n\n"
+            "If the table has a caption, a line such as “Table 1: …” right "
+            "under it, aligning that line moves the table too.")
 
     def _align_lines(self, line_numbers, align):
         """Give whole lines one alignment; "left" takes it away."""
@@ -9477,8 +9488,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     # How far an open panel's scrolling middle gives when the window is
     # short: (natural, comfortable, least) -- pixels of Share's list of
-    # notes, lines of Import's paste box.
-    SIDEBAR_PANEL_BODY = {"share": (130, 56, 28), "import": (4, 2, 1)}
+    # notes, lines of Import's paste box. Share's search row is paid for
+    # out of its list (130 before it), so the panel kept its height.
+    SIDEBAR_PANEL_BODY = {"share": (105, 56, 28), "import": (4, 2, 1)}
 
     def _fit_sidebar_panel(self, _event=None):
         """Keep the open panel's own buttons -- and a generated code -- on
@@ -10034,6 +10046,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def toggle_share_panel(self):
         if self._is_placed(self.share_panel):
             self.share_panel.pack_forget()
+            self._cancel_share_search()
         else:
             if self._is_placed(self.import_panel):
                 self.import_panel.pack_forget()
@@ -10044,6 +10057,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _build_share_panel(self):
         """Inline multi-note share: checkboxes to pick notes, then a generated
         code shown right here with a Copy button."""
+        self._cancel_share_search()
         for w in self.share_panel.winfo_children():
             w.destroy()
         p = self.share_panel
@@ -10068,6 +10082,34 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             relief="flat", font=("Segoe UI", 8), cursor="hand2",
             bg=self.colors["card"], fg=self.colors["text"], bd=0)
         select_all_btn.pack(side="right", ipadx=4)
+
+        # A search of its own, by the sidebar search's rule: a notebook of
+        # hundreds of notes was a long scroll to the few wanted. No hint text
+        # in the box, so there is no hint to be mistaken for a query.
+        search_row = tk.Frame(p, bg=self.colors["card"])
+        search_row.pack(fill="x", padx=6, pady=(0, 3))
+        tk.Label(search_row, text="🔍", font=("Segoe UI", 8),
+                 bg=self.colors["card"], fg=self.colors["subtext"]
+                 ).pack(side="left", padx=(5, 0))
+        query_var = self.share_search_var = tk.StringVar()
+        search = tk.Entry(search_row, textvariable=query_var, relief="flat",
+                          width=1, font=("Segoe UI", 9), bg=self.colors["card"],
+                          fg=self.colors["text"],
+                          insertbackground=self.colors["text"])
+        # The caret, laid again by a theme switched while this is open.
+        search.palette_keys = {"insertbackground": "text"}
+        self._guard_entry_astral(search)
+        self._add_paste_menu(search)
+        search.pack(side="left", fill="x", expand=True, ipady=2, padx=(3, 0))
+        clear = tk.Button(search_row, text="✕", command=lambda: query_var.set(""),
+                          relief="flat", bd=0, cursor="hand2",
+                          highlightthickness=0, font=("Segoe UI", 8, "bold"),
+                          bg=self.colors["card"], fg=self.colors["subtext"],
+                          activebackground=self.colors["card"],
+                          activeforeground=self.colors["text"])
+        clear.palette_keys = {"activebackground": "card",
+                              "activeforeground": "text"}
+        self.share_search_entry, self.share_search_clear = search, clear
 
         # Scrollable checklist (a notebook can have many notes). Fixed height so
         # it never grows the whole panel off-screen; the scrollbar handles the
@@ -10140,13 +10182,54 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             except tk.TclError:
                 pass
 
+        def offered():
+            """The notes the panel offers: in the note list's order, pins
+            first -- they came in the order they entered the notebook -- and
+            narrowed by the search box, with the sidebar search's own rule."""
+            notes = list(self.notes)
+            self._sort_notes(notes)
+            query = query_var.get().lower()
+            if query:
+                notes = [n for n in notes if self._query_in_texts(
+                    query, self._cached_search_texts(n))]
+            return notes
+
+        offer = {"notes": []}
+
+        def above_the_boxes(notes):
+            """That the search hides some of what is picked -- Generate code
+            shares those too -- or that it found nothing."""
+            showing = {n["id"] for n in notes}
+            hidden = sum(1 for n in self.notes if n["id"] not in showing
+                         and self._share_vars.get(n["id"]) is not None
+                         and self._share_vars[n["id"]].get())
+            lines = []
+            if hidden:
+                lines.append(f"{hidden} picked note"
+                             f"{' is' if hidden == 1 else 's are'} hidden by "
+                             "this search")
+            if not notes:
+                lines.append("No notes match.")
+            made = []
+            for text in lines:
+                line = tk.Label(inner, text=text, font=("Segoe UI", 8),
+                                anchor="w", justify="left", wraplength=200,
+                                bg=self.colors["sidebar"],
+                                fg=self.colors["subtext"])
+                line.pack(fill="x", pady=2)
+                made.append(line)
+            return made
+
         def render_checkboxes(first=0):
             """The tick boxes from *first* to the page's end, under any
             already drawn, and the button for the rest."""
-            visible_notes = self.notes[first:shown["n"]]
+            if first == 0:
+                offer["notes"] = offered()
+            notes = offer["notes"]
+            visible_notes = notes[first:shown["n"]]
             rendered["ids"] = rendered["ids"][:first] + [
                 n["id"] for n in visible_notes]
-            made = []
+            made = above_the_boxes(notes) if first == 0 else []
             for n in visible_notes:
                 if n["id"] not in self._share_vars:
                     self._share_vars[n["id"]] = tk.BooleanVar(value=False)
@@ -10159,7 +10242,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._drawn_tick_box(cb, "sidebar", "text", track=False)
                 cb.pack(fill="x", anchor="w")
                 made.append(cb)
-            remaining = len(self.notes) - min(len(self.notes), shown["n"])
+            remaining = len(notes) - min(len(notes), shown["n"])
             if remaining > 0:
                 more = tk.Button(inner, text=f"Show {min(remaining, SHARE_PAGE_SIZE)} more "
                                              f"({remaining} not shown)",
@@ -10177,23 +10260,63 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # reading "Unselect all" would be wrong the moment the page grows.
             refresh_select_all_label()
 
+        def redraw():
+            for w in inner.winfo_children():
+                w.destroy()
+            rendered["ids"] = []
+            render_checkboxes()
+
         def show_more(button):
             # Added under the boxes already drawn: drawing them all again
             # flickered, and grew with every page.
             first = shown["n"]
             shown["n"] += SHARE_PAGE_SIZE
-            if [n["id"] for n in self.notes[:first]] != rendered["ids"]:
+            fresh = offered()
+            if [n["id"] for n in fresh[:first]] != rendered["ids"]:
                 # The notebook changed under the boxes on screen (a note
-                # deleted while this is open): all drawn again, or a note
-                # would be left with no box at all.
-                for w in inner.winfo_children():
-                    w.destroy()
-                rendered["ids"] = []
-                render_checkboxes()
+                # deleted, or saved to a new place in the order, while this
+                # is open): all drawn again, or a note would have no box.
+                redraw()
                 return
+            offer["notes"] = fresh
             button.destroy()
             render_checkboxes(first)
 
+        def refilter():
+            """Draw the list for the search as it stands now."""
+            self._cancel_share_search()
+            try:
+                if not inner.winfo_exists():
+                    return
+            except tk.TclError:
+                return
+            shown["n"] = SHARE_PAGE_SIZE
+            redraw()
+            canvas.yview_moveto(0)
+
+        def follow_order():
+            """Draw again when the list's order moved under the panel."""
+            if [n["id"] for n in offered()][:shown["n"]] != rendered["ids"]:
+                refilter()
+
+        self._share_follow_order = follow_order
+
+        def on_query(*_args):
+            # The ✕ at once; the list after a pause in typing, as the
+            # sidebar search does -- each draw is up to a page of boxes.
+            try:
+                if query_var.get():
+                    if not self._is_placed(clear):
+                        clear.pack(side="right", padx=(0, 4), before=search)
+                elif self._is_placed(clear):
+                    clear.pack_forget()
+            except tk.TclError:
+                return
+            self._cancel_share_search()
+            self._share_search_job = self.after(180, refilter)
+
+        query_var.trace_add("write", on_query)
+        self._share_refilter = refilter
         render_checkboxes()
 
         gen_row = tk.Frame(p, bg=self.colors["sidebar"])
@@ -10210,6 +10333,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # The generated code appears here after "Generate code".
         self.share_code_area = tk.Frame(p, bg=self.colors["sidebar"])
         self.share_code_area.pack(fill="x", padx=6, pady=(0, 6))
+
+    def _share_panel_follows(self):
+        """Keep an open Share panel in the note list's order: a new sort, a
+        pin or a move shows there at once (her re-test, case 594)."""
+        follow = getattr(self, "_share_follow_order", None)
+        if follow is not None and self._is_placed(self.share_panel):
+            follow()
+
+    def _cancel_share_search(self):
+        """Call off the Share panel's search waiting for a pause in typing:
+        it is about to draw now, or its panel is closing or drawn anew."""
+        job = getattr(self, "_share_search_job", None)
+        self._share_search_job = None
+        if job is not None:
+            try:
+                self.after_cancel(job)
+            except (tk.TclError, ValueError):
+                pass
 
     def _generate_inline_share(self):
         chosen = [n for n in self.notes if self._share_vars.get(n["id"]) and self._share_vars[n["id"]].get()]
@@ -11122,8 +11263,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     _DOUBLE_CLICK_PX = 5
 
     def _second_press_of_double_click(self, event):
-        """True when *event*, a press on a button that removes its own row,
-        is the second half of a double-click.
+        """True when *event*, a press on a button that removes or moves its
+        own row, is the second half of a double-click.
 
         Many people double-click every button. The first click removes the
         row and the row below slides up into its place, so the second press
@@ -11272,6 +11413,29 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._checklist_canvas = canvas
         self._bind_wheel_tree(self.checklist_items_frame,
                               lambda e: self._panel_or_page_wheel(canvas, e))
+        # Bound once, on tags every row's widgets carry: a binding per
+        # widget is one more Tcl command for every row drawn.
+        self.bind_class("ChecklistRowButton", "<ButtonPress-1>",
+                        self._checklist_button_press)
+        self.bind_class("ChecklistBox", "<Alt-Up>",
+                        lambda e: self._move_checklist_by_key(e.widget, -1))
+        self.bind_class("ChecklistBox", "<Alt-Down>",
+                        lambda e: self._move_checklist_by_key(e.widget, 1))
+        self.bind_class("ChecklistText", "<Configure>",
+                        lambda e: self._wrap_to_width(e.widget, e.width))
+        self.bind_class("ChecklistArrows", "<ButtonPress-1>",
+                        self._checklist_arrow_press)
+        self.bind_class("ChecklistArrows", "<Enter>",
+                        lambda e: self._light_arrows(e.widget, True))
+        self.bind_class("ChecklistArrows", "<Leave>",
+                        lambda e: self._light_arrows(e.widget, False))
+        # The ring that shows which item the keyboard is on, in a note's
+        # checklist and a template's.
+        for tag in ("ChecklistBox", "TemplateChecklistBox"):
+            self.bind_class(tag, "<FocusIn>",
+                            lambda e: self._ring_checklist_row(e.widget, True))
+            self.bind_class(tag, "<FocusOut>",
+                            lambda e: self._ring_checklist_row(e.widget, False))
 
         # Expand/Collapse bar, the same full-width flat bar the note body and
         # comments boxes carry (_add_text_resize_toggle), so the three read
@@ -11317,9 +11481,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _render_checklist_items(self):
         """Redraw the checklist rows from the working list -- while the
         section is OPEN. Closed, no row is built: a note switch collapses
-        the section anyway, and each row is four widgets (a frame, a tick
-        box, a label, a bin), so building them for a closed section was
-        pure cost -- a 50-item note paid ~200 widgets on every open.
+        the section anyway, and each row is five widgets (a frame, its
+        arrows, a tick box, a label, a bin), so building them for a closed
+        section was pure cost -- a 50-item note paid ~250 on every open.
         toggle_checklist_section builds them the moment it opens. The
         rows drawn are recorded (see _checklist_rows_current), so a
         change can touch the one row it concerns instead of all of them.
@@ -11347,7 +11511,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _build_checklist_row(self, idx, item):
         """One row, packed at the end. Returns its record for the drawn
         list: ``[item, row frame, (text, done) as drawn]``."""
-        row = tk.Frame(self.checklist_items_frame, bg=self.colors["card"])
+        # The border is the ring of the item the keyboard is on, card-
+        # coloured until then (_ring_checklist_row).
+        row = tk.Frame(self.checklist_items_frame, bg=self.colors["card"],
+                       highlightthickness=1,
+                       highlightbackground=self.colors["card"],
+                       highlightcolor=self.colors["card"])
+        row.palette_keys = {"highlightbackground": "card",
+                            "highlightcolor": "card"}
         row.pack(fill="x", pady=1)
         record = [item, row, (item.get("text", ""), bool(item.get("done")))]
         var = tk.IntVar(value=1 if item.get("done") else 0)
@@ -11359,19 +11530,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._restyle_checklist_label(lbl, item["done"])
             self._schedule_autosave()
 
+        # ▲ over ▼ at the left, as one element: each element of a row is a
+        # window Windows makes when the list opens (_checklist_arrow_press).
+        arrows = tk.Label(row, text="▲\n▼", font=("Segoe UI", 7), padx=3,
+                          pady=0, cursor="hand2", bg=self.colors["card"],
+                          fg=self.colors["subtext"])
+        arrows.bindtags(("ChecklistArrows",) + arrows.bindtags())
+        arrows.pack(side="left")
         cb = tk.Checkbutton(row, variable=var, command=on_toggle,
                             bg=self.colors["card"], activebackground=self.colors["card"],
                             selectcolor=self.colors["check_well"], bd=0,
                             highlightthickness=0)
         cb.pack(side="left")
-
-        lbl = tk.Label(row, text=item.get("text", ""), bg=self.colors["card"],
-                       fg=self.colors["text"], font=("Segoe UI", 10), anchor="w",
-                       justify="left", wraplength=380)
-        lbl.pack(side="left", fill="x", expand=True, padx=(2, 4))
-        self._restyle_checklist_label(lbl, item.get("done"))
-        # Click the text to toggle too.
-        lbl.bind("<Button-1>", lambda e: (var.set(0 if var.get() else 1), on_toggle()))
+        # Alt+Up/Down moves it (_build_checklist_section binds the tag).
+        cb.bindtags(("ChecklistBox",) + cb.bindtags())
 
         def delete():
             items = self._get_checklist()
@@ -11417,14 +11589,85 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                             cursor="hand2", bg=self.colors["card"],
                             fg=self.colors["danger"], font=("Segoe UI", 9),
                             bd=0)
+        # Packed before the text, so a long item cannot squeeze it out; and
+        # ahead of the Button class, a double-click's second press is
+        # stopped before it arms the button (_checklist_button_press).
         bin_btn.pack(side="right")
-        # A double-click's second press lands on the NEXT row's bin, slid
-        # up into this one's place: it must not remove that row too.
-        bin_btn.bind("<ButtonPress-1>",
-                     lambda e: "break"
-                     if self._second_press_of_double_click(e) else None,
-                     add="+")
+        bin_btn.bindtags(("ChecklistRowButton",) + bin_btn.bindtags())
+
+        lbl = tk.Label(row, text=item.get("text", ""), bg=self.colors["card"],
+                       fg=self.colors["text"], font=("Segoe UI", 10), anchor="w",
+                       justify="left", wraplength=self.CHECKLIST_WRAP)
+        lbl.pack(side="left", fill="x", expand=True, padx=(2, 4))
+        self._restyle_checklist_label(lbl, item.get("done"))
+        # Click the text to toggle too.
+        lbl.bind("<Button-1>", lambda e: (var.set(0 if var.get() else 1), on_toggle()))
+        # Wrapped at the width it is given (_wrap_to_width), when it is long
+        # enough that a row could ever be too narrow for it.
+        if lbl.winfo_reqwidth() > self.CHECKLIST_SHORT:
+            lbl.bindtags(("ChecklistText",) + lbl.bindtags())
         return record
+
+    def _checklist_button_press(self, event):
+        """A press on a row's bin. A double-click's second press lands on
+        the NEXT row's bin, slid up into this one's place: it must not
+        remove that row too."""
+        return "break" if self._second_press_of_double_click(event) else None
+
+    def _checklist_arrow_press(self, event):
+        """A press on a row's ▲ over ▼: the top half moves its item up, the
+        bottom half down, and the keyboard goes to the item, so Alt+Up and
+        Alt+Down carry on moving it. A double-click's second press lands on
+        the arrows of the row slid into this one's place: it moves nothing."""
+        if self._second_press_of_double_click(event):
+            return "break"
+        arrows = event.widget
+        box = next((w for w in arrows.master.winfo_children()
+                    if isinstance(w, tk.Checkbutton)), None)
+        if box is not None:
+            step = -1 if event.y < arrows.winfo_height() / 2 else 1
+            self._move_checklist_by_key(box, step)
+        return None
+
+    def _light_arrows(self, arrows, on):
+        """A row's ▲ ▼ brighten under the pointer, as a button would."""
+        try:
+            arrows.configure(fg=self.colors["text" if on else "subtext"])
+        except tk.TclError:
+            pass
+
+    def _ring_checklist_row(self, box, on):
+        """The ring round the checklist row whose tick box has the keyboard,
+        in a note or a template: without it Tab and Alt+Up/Down went to an
+        item nobody could see was chosen (her re-test, case 591)."""
+        try:
+            row = box.master
+            color = self.colors["accent"] if on else row.cget("bg")
+            # Both: Tk draws the border in highlightcolor while the focus
+            # is anywhere inside the row, and the box is inside it.
+            row.configure(highlightbackground=color, highlightcolor=color)
+        except tk.TclError:
+            pass
+
+    # A checklist item's text no wider than this fits even the narrowest
+    # row, so it is never watched for wrapping (159 px at 640x600).
+    CHECKLIST_SHORT = 150
+
+    # Where a checklist item's text wraps, unless its row is narrower.
+    CHECKLIST_WRAP = 380
+
+    def _wrap_to_width(self, label, width):
+        """Make *label* wrap its text inside *width* pixels, its own -- only
+        when its text is cut off, or has room again: rewrapping every row
+        doubled the time a long checklist took to open."""
+        if width <= 1:
+            return
+        edge = 2 * sum(int(str(label.cget(option)))
+                       for option in ("bd", "padx", "highlightthickness"))
+        wrap = min(self.CHECKLIST_WRAP, max(40, width - edge))
+        now = int(str(label.cget("wraplength")))
+        if now != wrap and (label.winfo_reqwidth() > width or now < wrap):
+            label.configure(wraplength=wrap)
 
     def _restyle_checklist_label(self, lbl, done):
         """Dim + strike-through style for completed items (overstrike font).
@@ -11487,6 +11730,78 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.checklist_add_entry.focus_set()
         except tk.TclError:
             pass
+
+    def _move_checklist_item(self, item, step):
+        """Move *item* one place up (step -1) or down (+1); at either end,
+        nothing. Returns whether it moved.
+
+        When the rows on screen are this list's (_checklist_rows_current),
+        only the two rows trade places, and the record of the drawn rows
+        trades with them: each row's box, bin and arrows close over their
+        own item, and the delete's Undo puts a row back by that record."""
+        items = self._get_checklist()
+        at = next((i for i, it in enumerate(items) if it is item), None)
+        if at is None or not 0 <= at + step < len(items):
+            return False
+        drawn = getattr(self, "_checklist_drawn", None)
+        in_step = (getattr(self, "_checklist_open", False)
+                   and _checklist_rows_current(
+                       drawn, items, getattr(self, "theme_name", None)))
+        to = at + step
+        items[at], items[to] = items[to], items[at]
+        if in_step:
+            rows = drawn["rows"]
+            rows[at], rows[to] = rows[to], rows[at]
+            upper, lower = rows[min(at, to)][1], rows[max(at, to)][1]
+            upper.pack_configure(before=lower)
+            # Tab walks the stacking order, which packing leaves alone.
+            upper.lower(lower)
+        else:
+            self._render_checklist_items()
+        self._schedule_autosave()
+        self._show_checklist_row(item)
+        return True
+
+    def _move_checklist_by_key(self, box, step):
+        """Alt+Up/Down on an item's tick box, or its arrows: the item moves,
+        and the keyboard goes with it -- to its box even at either end,
+        where an arrow pressed still chooses the item."""
+        drawn = getattr(self, "_checklist_drawn", None) or {}
+        item = next((r[0] for r in drawn.get("rows", ())
+                     if r[1] is box.master), None)
+        if item is None:
+            return "break"
+        if self._move_checklist_item(item, step):
+            box = self._show_checklist_row(item)
+        if box is not None:
+            try:
+                box.focus_set()
+            except tk.TclError:
+                pass
+        return "break"
+
+    def _show_checklist_row(self, item):
+        """Scroll the list so *item*'s row is in view; returns its tick box,
+        or None when no row stands for it."""
+        drawn = getattr(self, "_checklist_drawn", None) or {}
+        rec = next((r for r in drawn.get("rows", ()) if r[0] is item), None)
+        if rec is None:
+            return None
+        row, canvas = rec[1], self._checklist_canvas
+        try:
+            self.update_idletasks()
+            total = max(1, self.checklist_items_frame.winfo_height())
+            top = row.winfo_y() / total
+            bottom = (row.winfo_y() + row.winfo_height()) / total
+            first, last = canvas.yview()
+            if top < first:
+                canvas.yview_moveto(top)
+            elif bottom > last:
+                canvas.yview_moveto(bottom - (last - first))
+            return next((w for w in row.winfo_children()
+                         if isinstance(w, tk.Checkbutton)), None)
+        except tk.TclError:
+            return None
 
     def _update_checklist_progress(self):
         if not hasattr(self, "checklist_progress_lbl"):
@@ -11945,7 +12260,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             box.configure(**{opt: self.colors[key] for opt, key in colours.items()})
             # Its panel is not rebuilt by a theme switch while it is open:
             # _recolor_stragglers lays these keys again from the new palette.
-            box.tick_palette = colours
+            box.palette_keys = colours
         return box
 
 
@@ -12077,6 +12392,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if hasattr(self, "body_text"):
             self._retint_find_tags(self.body_text)
         self._find_reflash()
+        self._find_paint_entry()
         # (The History register's rebuilt rows need no hook here: the
         # straggler pass above recolors them — qa7's theme-while-open
         # check guards that promise regardless of mechanism.)
@@ -12102,7 +12418,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         try:
             walk(frame)
-        except tk.TclError:
+            # The straggler pass laid every row's border to the new card;
+            # the row the keyboard is on keeps its ring.
+            held = self.focus_get()
+            if isinstance(held, tk.Checkbutton) and held.master.master is frame:
+                self._ring_checklist_row(held, True)
+        except (tk.TclError, KeyError):
             pass
 
     def _calendar_is_showing(self):
@@ -12176,9 +12497,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         w.configure(**{opt: remap[val]})
                     except tk.TclError:
                         pass
-            # A drawn tick box's fill when ticked is a third colour this
-            # walk cannot see; it names its palette keys (_drawn_tick_box).
-            keys = getattr(w, "tick_palette", None)
+            # Colours this walk cannot see -- a ticked box's fill, a caret, a
+            # pressed button -- on a widget no theme switch rebuilds: it
+            # names their palette keys (_drawn_tick_box sets them too).
+            keys = getattr(w, "palette_keys", None)
             if keys:
                 try:
                     w.configure(**{opt: cur[key] for opt, key in keys.items()})
@@ -12598,10 +12920,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         def _on_tab_changed(event):
             try:
-                self.notebook.index(self.notebook.select())
+                shown = self.notebook.index(self.notebook.select())
             except tk.TclError:
                 return
             self._catch_up_deferred_refresh()
+            # The find bar belongs to the note: leaving for the Calendar
+            # puts it away (her re-test, case 600). Ctrl+F from there
+            # comes back to Notes first, so it is not closed on arrival.
+            if shown != self.TAB_NOTES:
+                self._hide_find()
             # The Calendar tab's home is the month grid; History is only a
             # view of it. Leaving the tab (or returning to it) resets to
             # the grid, so the calendar never reopens showing History
@@ -16763,14 +17090,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         non-scrolling viewport frame), so it lives inside the app window,
         never scrolls away, and -- because place() is outside pack -- never
         reflows the editor or churns the scrollregion."""
+        # highlightcolor as well: Tk draws the border in it while the
+        # keyboard is in the bar's box, which is all the time it is used.
         bar = tk.Frame(self.editor_outer, bg=self.colors["card"],
                        highlightthickness=1,
-                       highlightbackground=self.colors["accent"])
+                       highlightbackground=self.colors["accent"],
+                       highlightcolor=self.colors["accent"])
         # The accent-coloured border must be tracked too, not just the fill:
         # left off the map it stays frozen at the theme the bar was first
         # built under, so changing the accent (purple -> blue) leaves the
         # old colour framing the bar until it is rebuilt.
-        self.track_theme(bar, bg="card", highlightbackground="accent")
+        self.track_theme(bar, bg="card", highlightbackground="accent",
+                         highlightcolor="accent")
         self._find_var = tk.StringVar()
         entry = tk.Entry(bar, textvariable=self._find_var, relief="flat",
                          width=22, font=("Segoe UI", 10),
@@ -16834,14 +17165,32 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._find_rescan(reveal=True)
 
     def _close_find(self, event=None):
-        if getattr(self, "_find_bar", None) is not None:
-            self._find_bar.place_forget()
-        self._find_open = False
-        self._find_clear()
+        self._hide_find()
         try:
             self.body_text.focus_set()
         except tk.TclError:
             pass
+
+    def _hide_find(self):
+        """Put the bar away as the person leaves the note -- for another
+        note, the Calendar or Settings. Its words stay for the next Ctrl+F;
+        the keyboard is moved only off the bar's own box, never taken from
+        where it went (a note card clicked in the list keeps it)."""
+        bar = getattr(self, "_find_bar", None)
+        if bar is not None:
+            # focus_get() answers None while another program is in front;
+            # the window's own record is where the keyboard will return.
+            try:
+                held = str(self.focus_get() or self.tk.call(
+                    "focus", "-lastfor", self._w))
+            except (KeyError, tk.TclError):
+                held = ""
+            if held.startswith(str(bar) + "."):
+                self.focus_set()
+            bar.place_forget()
+        self._find_open = False
+        self._find_missed = False
+        self._find_clear()
 
     def _find_clear(self):
         """Remove ONLY the find tags and the throwaway flash. No existing
@@ -16896,10 +17245,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 pass
         self._find_debounce = self.after(180, self._find_debounce_fire, False)
 
-    def _find_on_context_switch(self):
+    def _find_on_context_switch(self, leaving=True):
         """Note/tab switch or load: the old note's match model is invalid.
         Clear synchronously and cancel any pending debounce so no navigation
-        runs against stale indices; rescan the new note if the bar is open."""
+        runs against stale indices. Leaving the note closes the bar (her
+        re-test, case 600); the same note loaded again over itself is the
+        same search, rescanned."""
         job = getattr(self, "_find_debounce", None)
         if job is not None:
             try:
@@ -16909,7 +17260,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._find_debounce = None
         self._find_clear()
         self._find_model_dirty = False
-        if getattr(self, "_find_open", False) and getattr(self, "_find_bar", None):
+        if leaving:
+            self._hide_find()
+        elif getattr(self, "_find_open", False) and getattr(self, "_find_bar", None):
             self._find_rescan(reveal=False)
 
     def _find_norm_cell(self, value):
@@ -17019,6 +17372,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._find_debounce = None
         self._find_rescan(reveal=reveal)
 
+    def _find_paint_entry(self):
+        """The find box's ground: the theme's warning tint while its words
+        are found nowhere, the plain field otherwise. Asked again by a theme
+        switch, which lays the plain field back on a tracked box."""
+        entry = getattr(self, "_find_entry", None)
+        if entry is None:
+            return
+        missed = (getattr(self, "_find_open", False)
+                  and getattr(self, "_find_missed", False))
+        try:
+            entry.configure(bg=miss_surface(self.colors) if missed
+                            else self.colors["sidebar"])
+        except tk.TclError:
+            pass
+
     def _find_rescan(self, reveal=False):
         if not getattr(self, "_find_open", False):
             return
@@ -17038,10 +17406,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._find_index = -1
             self._find_model_dirty = False
             self._find_count_lbl.config(text="")
-            try:
-                self._find_entry.configure(bg=self.colors["sidebar"])
-            except tk.TclError:
-                pass
+            self._find_missed = False
+            self._find_paint_entry()
             return
         self._find_matches = self._find_scan_model(query)
         self._find_model_dirty = False
@@ -17057,15 +17423,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not n:
             self._find_index = -1
             self._find_count_lbl.config(text="0/0")
-            try:
-                self._find_entry.configure(bg="#5a2b2b")
-            except tk.TclError:
-                pass
+            self._find_missed = True
+            self._find_paint_entry()
             return
-        try:
-            self._find_entry.configure(bg=self.colors["sidebar"])
-        except tk.TclError:
-            pass
+        self._find_missed = False
+        self._find_paint_entry()
         capped = n >= self.FIND_MATCH_CAP
         if reveal:
             self._find_index = 0
@@ -17307,10 +17669,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Update -- starts a new list: the item it brought back as a new
         # entry was put back again beside it, and stored twice.
         day = occurrence_date if is_recurring(note) else None
+        same_session = (self.selected_note_id == note.get("id")
+                        and self.current_occurrence_date == day)
         kept_checklist = (getattr(self, "_working_checklist", None)
-                          if (self.selected_note_id == note.get("id")
-                              and self.current_occurrence_date == day)
-                          else None)
+                          if same_session else None)
         self.selected_note_id = note["id"]
         self.current_occurrence_date = day
         # A new note's status line names nothing left out (see
@@ -17393,7 +17755,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._reset_editor_scroll()
         self._reset_text_undo()
         self._update_restore_button()
-        self._find_on_context_switch()
+        self._find_on_context_switch(leaving=not same_session)
         self._share_code_on_context_switch()
         self._update_occurrence_banner()
 

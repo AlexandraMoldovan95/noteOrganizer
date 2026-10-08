@@ -304,7 +304,8 @@ A table works the way a spreadsheet has taught your hands to expect:
   editable body text ever after, so the wording is yours to change, and the caption and its
   table move together: align the caption from the toolbar and the table goes with it, or move
   the table (right-click → **Table**) and the caption follows. Selecting every cell and pressing
-  an alignment button aligns the text *inside* the cells, as a spreadsheet does.
+  an alignment button aligns the text *inside* the cells, as a spreadsheet does — and a short
+  dialog, which stays until you press OK, says how to move the table itself.
 - The full set: merge the selected cells into one (their texts join), split a merge back apart,
   insert or delete rows and columns, duplicate whole columns to the end of the table (and whole
   rows to the bottom), insert a **checkbox** (with its own colour palette) or an emoji, and
@@ -378,6 +379,10 @@ that note only — it doesn't touch anything else.
 
 Any note can have a checklist. Click **☑ Checklist** in the editor to open it, add items, and
 check them off as you go — the note's card in the list shows progress at a glance (e.g. "☑ 2/5").
+To change the order, use the small **▲ ▼** at the left of an item: the top arrow moves it one
+place up, the bottom one down. A press also picks the item — a ring shows round its row — so
+**Alt+↑** or **Alt+↓** carries on moving it from the keyboard (Tab to an item's box picks it
+too). The new order is saved with the note, and a template's checklist moves the same way.
 The box sits beside the calculator at the same size; when a list gets long, **⤢ Expand** in its
 header grows it to give more room (and it always scrolls, expanded or not). The expanded size is a
 per-view choice — switching notes returns it to the compact size.
@@ -427,7 +432,8 @@ which. **Sort** offers eight orders — Recently updated, Oldest updated, Title 
 Category, Calendar: soonest, Calendar: oldest, and **Custom order**, the one you arrange yourself
 (below). **Show** narrows the list instead of reordering it:
 all your categories, plus **🔁 Repeating** and **📅 Dated** for the notes that live on the
-calendar. Both are remembered, so the list you left is the list you come back to; if the category
+calendar, and **📎 With files** for the notes that carry an attachment (the ones whose card shows
+📎×N). Both are remembered, so the list you left is the list you come back to; if the category
 a filter names is later deleted, the filter falls back to **All** rather than showing you nothing.
 
 A long list fills in as you scroll: the app draws the first screenful straight away and the next
@@ -443,8 +449,13 @@ the top-right corner of the editor — inside the window, not a separate dialog.
 the note's text and its tables: type a word and every match highlights, with the current one
 picked out; **Enter** and **Shift+Enter** step forward and back (wrapping around at the ends), the
 count reads "3/12", and **Aa** switches on case-sensitivity. A match inside a table scrolls the
-table into view and outlines the cell it's in. Find only highlights — it never changes the note —
-and **Esc** or the **✕** closes the bar.
+table into view and outlines the cell it's in. Words found nowhere tint the box a light shade of
+red and the count reads "0/0". Find only highlights — it never changes the note — and **Esc** or
+the **✕** closes the bar.
+
+The bar belongs to the note you are reading: it closes by itself when you open another note or
+go to the Calendar or Settings. Your words are kept, so **Ctrl+F** brings them back, already
+selected, with the matches showing.
 
 Each note's card previews its first words. A table would be pipe soup at that size, so the preview
 shows only the note's plain text and the card's tag row marks the table itself — **▦ 1 table**, or
@@ -725,6 +736,15 @@ notebook the list arrives a hundred at a time, and a button that silently ticked
 never seen would be the opposite of the control you asked for. Reveal more and press it again; its
 label reads **Unselect all** once everything on screen is ticked.
 
+The notes come in the same order as the note list (your **Sort** choice, pinned notes first),
+and keep to it while the panel is open: change the sort or pin a note and the panel follows at
+once, ticks kept. The
+🔍 box under the heading narrows them as you type, by the same rule as the sidebar search: titles,
+text (a word inside a table counts) and comments, upper or lower case alike. Ticks stay when you
+search again, so you can gather notes from several searches into one code. When a search hides
+some of the notes you picked, a line above the list says how many — **Generate code** includes
+them too. The **✕** in the box clears the search.
+
 ![Share panel](screenshots/share-panel.png)
 
 ### Import a code
@@ -903,6 +923,7 @@ keys that only mean something inside a list, in the find bar, or on the note lis
 | **Alt+↑** / **Alt+↓** | note list | Moves the note with the ring one place up or down (Custom order). |
 | **Esc** | note list, while dragging | Puts the dragged card back where it was. |
 | **Shift+F10** or the menu key | note list | Opens that note's own right-click menu, at the note. |
+| **Alt+↑** / **Alt+↓** | checklist item with the ring (after a press on its ▲ ▼, or Tab to its box) | Moves the item one place up or down, as its ▲ ▼ do — in a note or a template. |
 | **Page Up** / **Page Down** | Calendar tab | Previous / next month. |
 | **Ctrl+Page Up** / **Ctrl+Page Down** | Calendar tab | Previous / next year. |
 | **Home** | Calendar tab | Jumps back to today. |

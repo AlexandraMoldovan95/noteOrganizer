@@ -275,8 +275,11 @@ class AttachmentsMixin:
         # After the dismiss, which closes whatever file the PREVIOUS
         # preview was still reading from.
         self._preview_source = source
+        # Both border colours: Tk draws highlightcolor while the keyboard
+        # is on one of the overlay's buttons.
         overlay = tk.Frame(self, bg=self.colors["bg"], highlightthickness=1,
-                           highlightbackground=self.colors["accent"])
+                           highlightbackground=self.colors["accent"],
+                           highlightcolor=self.colors["accent"])
         self._image_preview_ref = frames  # keep alive — see refresh_attachments_list
         self._mini_popup = overlay
 

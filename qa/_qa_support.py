@@ -462,6 +462,41 @@ def click(widget, **kwargs):
     fire(widget, "<Button-1>", **kwargs)
 
 
+_HOLDS_KEYS = (tk.Entry, tk.Text, tk.Button, tk.Checkbutton, tk.Radiobutton,
+               tk.Spinbox, tk.Listbox)
+
+
+def ring_mismatches(top):
+    """Bordered frames under *top* that would lose their border colour.
+
+    Tk paints a frame's border in ``highlightbackground`` until the
+    keyboard is on anything INSIDE the frame, and then in
+    ``highlightcolor`` -- the system grey unless it is set. The find bar's
+    accent border was grey the whole time anyone typed in it, which no
+    check saw and a photograph did. Returns the frames, by path, whose two
+    colours differ and which hold something that can take the keyboard.
+    """
+    def holds_keys(w):
+        return any((isinstance(c, _HOLDS_KEYS)
+                    and str(c.cget("takefocus")) != "0") or holds_keys(c)
+                   for c in w.winfo_children()
+                   if not isinstance(c, tk.Toplevel))
+
+    out = []
+
+    def walk(w):
+        for c in w.winfo_children():
+            if (isinstance(c, tk.Frame)
+                    and int(str(c.cget("highlightthickness")))
+                    and str(c.cget("highlightcolor")).lower()
+                    != str(c.cget("highlightbackground")).lower()
+                    and holds_keys(c)):
+                out.append(str(c))
+            walk(c)
+    walk(top)
+    return out
+
+
 def _waiting(app):
     """Each waiting Tcl timer's id and the command it will run."""
     for job in app.tk.splitlist(app.tk.call("after", "info")):

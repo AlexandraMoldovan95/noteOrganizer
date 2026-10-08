@@ -154,6 +154,7 @@ is in the table below as well.
 | [The copy that wrote its own table](#the-copy-that-wrote-its-own-table) | A second writer of the same thing starts as a copy and ends as a subset; when one writer exists, call it. | 0.84.357 |
 | [The list that rewrote the whole note](#the-list-that-rewrote-the-whole-note) | Write only what changed: a rewrite of everything moves everything that hangs off the text — the view, the tables, the caret. | 0.84.357 |
 | [Nine regressions in fifteen fixes](#nine-regressions-in-fifteen-fixes) | A fix that changes WHEN something happens must be walked through every reader of that moment, not only the route it was reported on. | 0.84.357 |
+| [The border that went grey whenever it was used](#the-border-that-went-grey-whenever-it-was-used) | A check that reads the option you set proves the option, not the colour on the screen; photograph what a person sees. | 0.88.361 |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -4535,6 +4536,35 @@ click moves no keyboard — the check was moved to that case.
 that moment — every caller of the flush, every holder of the focus, every panel left open across
 the change — not only the route it was reported on. The suite proves what it was told to; readers
 of the diff find what nobody told it.
+
+### The border that went grey whenever it was used
+
+*(found on a photograph of the checklist's new ring, before it shipped)*
+
+**Symptom:** the ring that marks the checklist item the keyboard is on came out grey in the
+photograph, not the theme's accent — while the check for it, reading the row's border colour,
+passed. Looking for siblings turned up a shipped one: the find bar's accent border was the same
+grey the whole time anyone typed in it, on every theme, since the bar was built.
+
+**Root cause:** Tk paints a frame's border in `highlightbackground` only while the keyboard is
+outside the frame. The moment it is on anything inside — the tick box in the row, the box in the
+find bar — Tk counts the frame as holding the focus and paints `highlightcolor` instead, which
+nobody had set, so the system grey stood in. A pure-Tk probe showed it in four lines: red with the
+focus outside, grey (100, 100, 100) with it on the frame's child, blue once `highlightcolor` was
+blue. The check read the option that was set, so it agreed with the code and not with the screen.
+
+**Fix:** a frame with a coloured border sets both colours, and moves both together: the
+checklist's rows (a note's and a template's), the find bar, which tracks both with the theme, and
+the picture preview, whose buttons can hold the keyboard. `ring_mismatches` in qa's support
+module walks a window for any bordered frame holding something that takes the keyboard, with the
+two colours apart; qa1, qa7 and qa9 run it where those frames are open. Mutants O21–O23 and
+X01–X03 take each part back out. The frames left alone hold only labels, which never take the
+keyboard: the category dropdowns and the export progress bar. The Settings buttons are another
+case: the border changes while the button itself holds the keyboard, which is Tk's focus ring,
+there on purpose.
+
+**Takeaway:** an option is a request, and the toolkit decides when it applies. A check that reads
+back the option you set can only agree with you; the photograph is what disagreed.
 
 ## Smaller lessons, moved out of the code
 

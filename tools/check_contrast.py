@@ -59,7 +59,12 @@ PAIRS = [
     (WHITE, "accent_hover", "white text on an accent button, pointed at"),
     (WHITE, "danger", "white text on a destructive button"),
     (WHITE, "success", "white text on a confirming button"),
+    ("text", "find_miss", "text in the find box when nothing is found"),
 ]
+
+# Surfaces the app mixes from a palette rather than reading off it, by the
+# function in themes.py that mixes them.
+DERIVED = {"find_miss": themes.miss_surface}
 
 # Below AA today, each for the reason given. Accent, danger and success
 # are each used both as text and as a button's fill under white text: on
@@ -111,6 +116,8 @@ def ratio(one, other):
 
 
 def colour_of(theme, key):
+    if key in DERIVED:
+        return DERIVED[key](themes.THEMES[theme])
     return key if key.startswith("#") else themes.THEMES[theme][key]
 
 

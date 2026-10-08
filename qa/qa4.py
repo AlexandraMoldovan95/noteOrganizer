@@ -3150,7 +3150,6 @@ app.notes = [NO.normalize_note({'id': 990 + i, 'title': 'Twin', 'body': 'same',
                                 'category': 'General'}) for i in range(2)]
 app.save_notes()
 app.refresh_note_list()
-app._open_find()
 app.update()
 _tk_lost, _tk_seen = [], set()
 _tk_before = app.theme_name
@@ -3166,6 +3165,9 @@ def _judge_ticks(theme):
 
 for _tk_theme in NO.THEMES:
     app.set_theme(_tk_theme)
+    app.update()
+    # Opened each round: Settings, visited below, puts the find bar away.
+    app._shortcut_find()
     app.update()
     app.toggle_share_panel()          # built now, in this theme
     app.update()
@@ -3208,6 +3210,21 @@ _tw_wrong = [str(b.cget('text'))[:20] for b in _tw_boxes
 check(f'a ticked box in an open panel takes the new theme when it switches '
       f'({len(_tw_boxes)} boxes; wrong: {_tw_wrong})',
       len(_tw_boxes) >= 2 and not _tw_wrong)
+# The Share panel's search box, in the same open panel: its caret and its
+# ✕'s pressed colours are not bg/fg, so the straggler pass lays them only
+# because the widgets name them (palette_keys).
+_tw_entry = getattr(app, 'share_search_entry', None)
+_tw_clear = getattr(app, 'share_search_clear', None)
+check(f'the Share search box takes the new theme too, caret and ✕ '
+      f'({_tw_entry.cget("insertbackground") if _tw_entry else None})',
+      _tw_entry is not None and _tw_clear is not None
+      and str(_tw_entry.cget('insertbackground')).lower()
+      == app.colors['text'].lower()
+      and str(_tw_entry.cget('bg')).lower() == app.colors['card'].lower()
+      and str(_tw_clear.cget('activebackground')).lower()
+      == app.colors['card'].lower()
+      and str(_tw_clear.cget('activeforeground')).lower()
+      == app.colors['text'].lower())
 for _tw_b in _tw_boxes:
     _tw_b.deselect()
 app.hide_settings_page()

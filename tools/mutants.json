@@ -924,7 +924,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            keys = getattr(w, \"tick_palette\", None)",
+        "find": "            keys = getattr(w, \"palette_keys\", None)",
         "replace": "            keys = None"
       }
     ],
@@ -994,7 +994,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            if [n[\"id\"] for n in self.notes[:first]] != rendered[\"ids\"]:",
+        "find": "            if [n[\"id\"] for n in fresh[:first]] != rendered[\"ids\"]:",
         "replace": "            if False:"
       }
     ],
@@ -1265,6 +1265,641 @@
       }
     ],
     "must_fail": ["a table and its caption move together"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "F01",
+    "about": "the Show filter no longer offers With files, so a stored or kept choice falls back to All",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/note_list.py",
+        "find": "        return [\"All\", self.FILTER_REPEATING, self.FILTER_DATED,\n                self.FILTER_FILES] + list(CATEGORY_COLORS.keys())",
+        "replace": "        return [\"All\", self.FILTER_REPEATING, self.FILTER_DATED] + \\\n            list(CATEGORY_COLORS.keys())"
+      }
+    ],
+    "must_fail": ["the With files type filter survives a category being touched", "and so does the With files filter"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "F02",
+    "about": "With files lets every note through",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/note_list.py",
+        "find": "            return bool(note.get(\"attachments\"))",
+        "replace": "            return True"
+      }
+    ],
+    "must_fail": ["the With files filter shows only the notes with a file", "Select all under it takes those notes and no other", "a note whose last file is removed leaves the With files list"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "O01",
+    "about": "a checklist move leaves the record of the drawn rows behind",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            rows[at], rows[to] = rows[to], rows[at]\n",
+        "replace": "            pass\n"
+      }
+    ],
+    "must_fail": ["move: ▲ takes an item one place up, on screen too"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "O02",
+    "about": "a moved checklist row keeps its old place in the Tab order",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            upper.lower(lower)\n",
+        "replace": "            pass\n"
+      }
+    ],
+    "must_fail": ["move: ▲ takes an item one place up, on screen too", "move: the same two rows trade places"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "O03",
+    "about": "a moved checklist row stays where it was packed",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            upper.pack_configure(before=lower)\n",
+        "replace": "            pass\n"
+      }
+    ],
+    "must_fail": ["move: ▲ takes an item one place up, on screen too"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "O04",
+    "about": "a checklist move asks for no save",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self._render_checklist_items()\n        self._schedule_autosave()\n        self._show_checklist_row(item)\n",
+        "replace": "            self._render_checklist_items()\n        self._show_checklist_row(item)\n"
+      }
+    ],
+    "must_fail": ["move: and it asks for its own save"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "O05",
+    "about": "a checklist move at either end wraps round to the other",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if at is None or not 0 <= at + step < len(items):\n",
+        "replace": "        if at is None:\n"
+      }
+    ],
+    "must_fail": ["move: ▲ on the first row and ▼ on the last move nothing"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "O06",
+    "about": "a double-click on a checklist arrow moves two items",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if self._second_press_of_double_click(event):\n            return \"break\"\n        arrows = event.widget\n",
+        "replace": "        arrows = event.widget\n"
+      }
+    ],
+    "must_fail": ["double-click on ▼: the second press, on the row slid into place, moves nothing"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "O07",
+    "about": "Alt+Up/Down loses the keyboard when the rows are drawn again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if box is not None:\n            try:\n                box.focus_set()\n            except tk.TclError:\n                pass\n        return \"break\"\n",
+        "replace": "        return \"break\"\n"
+      }
+    ],
+    "must_fail": ["move: a press on the arrows gives that item the keyboard", "move: and the keyboard is on the item it moved"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "O08",
+    "about": "Alt+Up/Down on a checklist tick box does nothing",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        cb.bindtags((\"ChecklistBox\",) + cb.bindtags())\n",
+        "replace": "        pass\n"
+      }
+    ],
+    "must_fail": ["move: Alt+Down on a tick box moves its item"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "O09",
+    "about": "a theme switch leaves the checklist rows' borders in the old theme",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        row.palette_keys = {\"highlightbackground\": \"card\",\n                            \"highlightcolor\": \"card\"}\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["move: the arrows take a theme switched while the list is open"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "O10",
+    "about": "a checklist item wraps at 380 px whatever room its row has",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if now != wrap and (label.winfo_reqwidth() > width or now < wrap):\n",
+        "replace": "        if False:\n"
+      }
+    ],
+    "must_fail": ["narrow: and its words wrap inside the room it has"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "O11",
+    "about": "a checklist item's text is packed before its buttons, as it was",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        lbl.pack(side=\"left\", fill=\"x\", expand=True, padx=(2, 4))\n        self._restyle_checklist_label(lbl, item.get(\"done\"))\n",
+        "replace": "        lbl.pack(side=\"left\", fill=\"x\", expand=True, padx=(2, 4), before=bin_btn)\n        self._restyle_checklist_label(lbl, item.get(\"done\"))\n"
+      }
+    ],
+    "must_fail": ["narrow: a long item keeps its bin and arrows on its row"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "O12",
+    "about": "the shortcuts page leaves out the checklist's Alt+Up/Down",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "        (\"Checklist (click an item's ▲ ▼, or Tab to its box)\", (\n            (\"Alt+Up  /  Alt+Down\", \"Move the item one place up or down, as \"\n                                    \"the ▲ ▼ at its left do; in a template's \"\n                                    \"checklist too.\"),\n        )),\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["every key a checklist item binds is named in the Checklist group"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "V01",
+    "about": "the Share panel lists notes in the order they entered the notebook",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            notes = list(self.notes)\n            self._sort_notes(notes)\n            query = query_var.get().lower()\n",
+        "replace": "            notes = list(self.notes)\n            query = query_var.get().lower()\n"
+      }
+    ],
+    "must_fail": ["share: the panel lists the notes in the list's order, pins first", "share: and in another sort, the same order as the list"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "V02",
+    "about": "the Share panel's search narrows nothing",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if query:\n                notes = [n for n in notes if self._query_in_texts(\n",
+        "replace": "            if False:\n                notes = [n for n in notes if self._query_in_texts(\n"
+      }
+    ],
+    "must_fail": ["share: the search finds a word inside a table, whatever its case", "share: a search that finds nothing says so"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "V03",
+    "about": "the Share panel's search minds the case, as the sidebar's does not",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            query = query_var.get().lower()\n",
+        "replace": "            query = query_var.get()\n"
+      }
+    ],
+    "must_fail": ["share: the search finds a word inside a table, whatever its case", "share: 'BREAD' finds what the sidebar search's rule finds"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "V04",
+    "about": "the Share panel says nothing of the picked notes a search hides",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if hidden:\n                lines.append(f\"{hidden} picked note\"\n",
+        "replace": "            if False:\n                lines.append(f\"{hidden} picked note\"\n"
+      }
+    ],
+    "must_fail": ["share: and says a picked note is hidden by it"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "V05",
+    "about": "the Share panel draws its list again on every keystroke",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self._share_search_job = self.after(180, refilter)\n",
+        "replace": "            refilter()\n"
+      }
+    ],
+    "must_fail": ["share: typing waits for a pause before the list is drawn again"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "V06",
+    "about": "closing the Share panel leaves its search waiting",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self.share_panel.pack_forget()\n            self._cancel_share_search()\n",
+        "replace": "            self.share_panel.pack_forget()\n"
+      }
+    ],
+    "must_fail": ["share: closing the panel calls off a search still waiting"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "V07",
+    "about": "a theme switch leaves the Share search box's caret behind",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        search.palette_keys = {\"insertbackground\": \"text\"}\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["the Share search box takes the new theme too"],
+    "suites": ["qa4"],
+    "expect": "killed"
+  },
+  {
+    "id": "O13",
+    "about": "a checklist item's arrows move it down whichever half is pressed",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            step = -1 if event.y < arrows.winfo_height() / 2 else 1\n",
+        "replace": "            step = 1\n"
+      }
+    ],
+    "must_fail": ["move: ▲ takes an item one place up, on screen too"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "O14",
+    "about": "the checklist item with the keyboard wears no ring",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self.bind_class(tag, \"<FocusIn>\",\n                            lambda e: self._ring_checklist_row(e.widget, True))\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["move: the item with the keyboard has a ring round its row", "template move: Alt+Down on a box moves its item"],
+    "suites": ["qa1", "qa9"],
+    "expect": "killed"
+  },
+  {
+    "id": "O15",
+    "about": "a checklist item's arrows sit at the right, by the bin, as they did",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        arrows.pack(side=\"left\")\n",
+        "replace": "        arrows.pack(side=\"right\")\n"
+      }
+    ],
+    "must_fail": ["move: the arrows sit at the left of the row"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "O16",
+    "about": "a theme switch takes the ring off the checklist item with the keyboard",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if isinstance(held, tk.Checkbutton) and held.master.master is frame:\n                self._ring_checklist_row(held, True)\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["move: and the item with the keyboard keeps its ring through the switch"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "O17",
+    "about": "a template's checklist arrows move nothing",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                tpl_checklist[at], tpl_checklist[to] = (tpl_checklist[to],\n                                                        tpl_checklist[at])\n",
+        "replace": "                pass\n"
+      }
+    ],
+    "must_fail": ["template move: the bottom half moves an item down"],
+    "suites": ["qa9"],
+    "expect": "killed"
+  },
+  {
+    "id": "O18",
+    "about": "a template's checklist arrows move down whichever half is pressed",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                        it, -1 if e.y < e.widget.winfo_height() / 2 else 1)\n",
+        "replace": "                        it, 1)\n"
+      }
+    ],
+    "must_fail": ["template move: the top half moves an item up"],
+    "suites": ["qa9"],
+    "expect": "killed"
+  },
+  {
+    "id": "O19",
+    "about": "Alt+Down on a template's checklist box does nothing",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                cb.bind(\"<Alt-Down>\", lambda e, it=item: (move_tpl_item(it, 1),\n                                                          \"break\")[1])\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["template move: Alt+Down on a box moves its item"],
+    "suites": ["qa9"],
+    "expect": "killed"
+  },
+  {
+    "id": "O20",
+    "about": "a template's checklist move leaves the keyboard behind",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "            box = tpl_boxes.get(id(it))\n            if box is not None:\n                box.focus_set()\n",
+        "replace": "            box = tpl_boxes.get(id(it))\n"
+      }
+    ],
+    "must_fail": ["template move: and asks the keyboard for the moved item"],
+    "suites": ["qa9"],
+    "expect": "killed"
+  },
+  {
+    "id": "V08",
+    "about": "an open Share panel keeps the order it was opened in",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/note_list.py",
+        "find": "        self._share_panel_follows()\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["share: an open panel follows a new Sort and a pin at once"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "O21",
+    "about": "the checklist ring is set in the colour Tk does not draw while the box has the keyboard",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            row.configure(highlightbackground=color, highlightcolor=color)\n",
+        "replace": "            row.configure(highlightbackground=color)\n"
+      }
+    ],
+    "must_fail": ["move: the item with the keyboard has a ring round its row", "template move: Alt+Down on a box moves its item"],
+    "suites": ["qa1", "qa9"],
+    "expect": "killed"
+  },
+  {
+    "id": "O22",
+    "about": "a template's checklist row draws its border in the system grey while its box has the keyboard",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                               highlightbackground=self.colors[\"sidebar\"],\n                               highlightcolor=self.colors[\"sidebar\"])\n",
+        "replace": "                               highlightbackground=self.colors[\"sidebar\"])\n"
+      }
+    ],
+    "must_fail": ["template move: every row draws its border in one colour"],
+    "suites": ["qa9"],
+    "expect": "killed"
+  },
+  {
+    "id": "O23",
+    "about": "a note's checklist row draws its border in the system grey while its box has the keyboard",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                       highlightbackground=self.colors[\"card\"],\n                       highlightcolor=self.colors[\"card\"])\n",
+        "replace": "                       highlightbackground=self.colors[\"card\"])\n"
+      }
+    ],
+    "must_fail": ["move: every row draws its border in one colour"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "X01",
+    "about": "a theme switch leaves the find bar's border, while typing, in the old accent",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self.track_theme(bar, bg=\"card\", highlightbackground=\"accent\",\n                         highlightcolor=\"accent\")\n",
+        "replace": "        self.track_theme(bar, bg=\"card\", highlightbackground=\"accent\")\n"
+      }
+    ],
+    "must_fail": ["...and a theme with another accent gives the find bar its border in both colours"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "X02",
+    "about": "the find bar's accent border turns the system grey while its box has the keyboard, as it shipped",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                       highlightbackground=self.colors[\"accent\"],\n                       highlightcolor=self.colors[\"accent\"])\n",
+        "replace": "                       highlightbackground=self.colors[\"accent\"])\n"
+      },
+      {
+        "file": "note_organizer.py",
+        "find": "        self.track_theme(bar, bg=\"card\", highlightbackground=\"accent\",\n                         highlightcolor=\"accent\")\n",
+        "replace": "        self.track_theme(bar, bg=\"card\", highlightbackground=\"accent\")\n"
+      }
+    ],
+    "must_fail": ["a bordered frame with a box inside keeps its border colour while the keyboard is in the box"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "X03",
+    "about": "the image preview's accent border turns the system grey while a button in it has the keyboard",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "                           highlightbackground=self.colors[\"accent\"],\n                           highlightcolor=self.colors[\"accent\"])\n",
+        "replace": "                           highlightbackground=self.colors[\"accent\"])\n"
+      }
+    ],
+    "must_fail": ["the image preview keeps its accent border while the keyboard is on its buttons"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "Z01",
+    "about": "the find box goes the same dark red on every theme when its words are found nowhere, as it shipped",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            entry.configure(bg=miss_surface(self.colors) if missed\n",
+        "replace": "            entry.configure(bg=\"#5a2b2b\" if missed\n"
+      }
+    ],
+    "must_fail": ["find/miss: words found nowhere tint the box with the theme's warning colour"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "Z02",
+    "about": "a theme switch takes the not-found tint off the find box",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._find_reflash()\n        self._find_paint_entry()\n",
+        "replace": "        self._find_reflash()\n"
+      }
+    ],
+    "must_fail": ["find/miss: words found nowhere tint the box with the theme's warning colour"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "Z03",
+    "about": "the find bar stays open over another note, as it did",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if leaving:\n            self._hide_find()\n        elif getattr(self, \"_find_open\", False)",
+        "replace": "        if False:\n            self._hide_find()\n        elif getattr(self, \"_find_open\", False)"
+      }
+    ],
+    "must_fail": ["find/switch: the same note loaded again keeps the bar and its search, another note puts it away"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "Z04",
+    "about": "the same note loaded again over itself closes the find bar",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._find_on_context_switch(leaving=not same_session)\n",
+        "replace": "        self._find_on_context_switch()\n"
+      }
+    ],
+    "must_fail": ["find/switch: the same note loaded again keeps the bar and its search, another note puts it away"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "Z05",
+    "about": "the find bar stays open behind the Calendar",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if shown != self.TAB_NOTES:\n                self._hide_find()\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["find/leave: the Calendar and Settings put the bar away"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "Z06",
+    "about": "arriving on the Notes tab closes the find bar Ctrl+F has just opened",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if shown != self.TAB_NOTES:\n                self._hide_find()\n",
+        "replace": "            if True:\n                self._hide_find()\n"
+      }
+    ],
+    "must_fail": ["find/leave: the Calendar and Settings put the bar away"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "Z07",
+    "about": "the find bar stays open behind Settings",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "        self._hide_find()\n        self.notebook.pack_forget()\n",
+        "replace": "        self.notebook.pack_forget()\n"
+      }
+    ],
+    "must_fail": ["find/leave: the Calendar and Settings put the bar away"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "Z08",
+    "about": "putting the find bar away takes the keyboard from wherever it went",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if held.startswith(str(bar) + \".\"):\n                self.focus_set()\n",
+        "replace": "            if True:\n                self.focus_set()\n"
+      }
+    ],
+    "must_fail": ["find/leave: put away, the bar takes the keyboard off its own box and nowhere else"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "Z09",
+    "about": "putting the find bar away leaves the keyboard in its hidden box",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if held.startswith(str(bar) + \".\"):\n                self.focus_set()\n",
+        "replace": "            if held.startswith(str(bar) + \".\"):\n                pass\n"
+      }
+    ],
+    "must_fail": ["find/leave: put away, the bar takes the keyboard off its own box and nowhere else"],
     "suites": ["qa1"],
     "expect": "killed"
   }
