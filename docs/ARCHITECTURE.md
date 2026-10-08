@@ -548,10 +548,17 @@ the selected note's ring to 5.0:1.
 That left a rule worth stating, and a third look caught it stated wrongly: these docs said the
 dark fill stayed "where a deletion is final", naming the calendar's day and the selection bar,
 both of which only move notes to the Trash. The rule is now true in the code: **the dark red
-fill means "cannot be undone"** — a row's Delete in the Trash, an attachment's ✕ — and every
-move to the Trash wears the warning's words instead: the editor's Delete, a day's note in the
-calendar, the selection bar's Trash, and the Duplicates clean-up, outlined as Empty trash is so
-that it still reads as a button (finding C-6 had it blend into its panel once).
+fill marks a single deletion that cannot be undone** — a row's Delete in the Trash, an
+attachment's ✕ — and the moves to the Trash wear the warning's words instead: the editor's
+Delete, a day's note in the calendar, the selection bar's Trash, and the Duplicates clean-up,
+outlined as Empty trash is so that it still reads as a button (finding C-6 had it blend into
+its panel once). A fourth look held the sentence to every button and found two that keep their
+own look by design, so they are named rather than swept under "every": Empty trash, final for
+everything in it, is outlined — findable, not inviting — and asks first; and the Duplicates
+panel's "Move ticked…" is that panel's main action, in the accent, now above the clean-up.
+Two smaller strays went the same way: the selection bar's Category menu, filled though it is
+no main action, is quiet like Export; and the question before attaching only some of the files
+picked was asked as a warning, which dresses its Yes in the deletion red, and is a question now.
 
 Measuring every pair the app draws, rather than the ones the table already had, found three
 it had never measured: the selected Settings section's name on its tint of the accent, a
@@ -584,6 +591,7 @@ text colour on the full accent, below 4.5:1 in every theme. The match's words no
 | words on an accent button, pointed at | 8.8 | 7.3 | 9.4 | 7.9 | 7.1 | 6.7 | 7.2 | 6.9 |
 | words on a destructive button | 6.8 | 6.8 | 6.8 | 6.8 | 7.9 | 7.9 | 7.9 | 7.9 |
 | words on a confirming button | 9.7 | 8.7 | 9.7 | 9.9 | 6.2 | 6.2 | 7.0 | 7.1 |
+| words on a confirming button, held down | 7.5 | 6.8 | 7.5 | 7.6 | 4.9 | 4.9 | 5.4 | 5.6 |
 | text of the other find matches | 6.5 | 6.7 | 5.8 | 6.9 | 9.1 | 8.2 | 9.4 | 9.3 |
 | text in the find box when nothing is found | 10.7 | 10.3 | 10.3 | 10.4 | 12.1 | 10.6 | 10.6 | 10.5 |
 

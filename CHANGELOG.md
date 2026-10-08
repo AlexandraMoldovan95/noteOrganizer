@@ -121,11 +121,15 @@ How the numbers themselves are counted is the
 
 - **Save is the one filled button in the editor, and a dark red fill means "for good".** The
   editor's row had three filled buttons of equal weight. Generate code now looks like Duplicate
-  and stands between Save and Delete, and Delete is quiet with red words; each button has its
-  own pressed colours. Every action that only moves notes to the Trash — the editor's Delete,
-  a day's note in the calendar, the selection bar's Trash, the Duplicates clean-up — wears the
-  warning's words rather than its fill; the dark red fill is kept for what cannot be undone: a
-  row's Delete in the Trash and an attachment's ✕.
+  and stands between Save and Delete, Delete is quiet with red words, and each button has its
+  own pressed colours — Save darkens while held. The moves to the Trash — the editor's Delete,
+  a day's note in the calendar, the selection bar's Trash, the Duplicates clean-up — wear the
+  warning's words rather than its fill; the dark red fill marks a single deletion that cannot
+  be undone: a row's Delete in the Trash and an attachment's ✕. Two buttons keep their own look
+  on purpose: Empty trash, final for everything in it, is outlined so it is findable rather than
+  inviting and asks first; the Duplicates panel's "Move ticked…" is that panel's main action,
+  in the accent, above the clean-up. The selection bar's Category menu is quiet, as Export is,
+  and the question before attaching only some of the files picked no longer wears a red Yes.
 - **A source run can keep its notebook outside the working tree.** A `notebook_location.txt`
   beside `note_organizer.py`, git-ignored, names the folder — one path on a line, environment
   variables allowed (`%LOCALAPPDATA%\NoteOrganizer-dev`). Every notebook this project lost was
@@ -140,18 +144,20 @@ How the numbers themselves are counted is the
   back with a warning when the folder cannot be used, and starts a process of its own against a
   stand-in APPDATA to show the folder named brings nothing in — beside a control without the
   file, which does copy. Mutants NL01–NL04 take each part back out.
-- `tools/check_contrast.py` measures 200 pairs now, all at AA: the text shades, the words on
-  every fill and on its hover, the surfaces the app mixes (the Settings section tint, the
-  warning buttons' and the bins' hover, the find matches), with a drawn glyph held to WCAG's
-  3:1. It also fails when a theme's accent has no window icon — the app finds the icon by the
+- `tools/check_contrast.py` measures 208 pairs now, all at AA: the text shades, the words on
+  every fill, on its hover and on a held-down Save, the surfaces the app mixes (the Settings
+  section tint, the warning buttons' and the bins' hover, the find matches), with a drawn glyph
+  held to WCAG's 3:1. It also fails when a theme's accent has no window icon — the app finds the icon by the
   accent's colour and quietly fell back to the default — and when an icon is left over for an
   accent no theme wears, which the build would ship unused. qa1 walks every widget showing
   words on a fill, in all eight themes; follows the editor's row (its order, its Tab order and
   its pressed colours), an untracked button and Tk's own "white" across theme switches; and
   reads a card's tags line drawn and recoloured. qa7 and qa2 check that the calendar's Delete
-  and the Duplicates clean-up are quiet moves to the Trash. test_data_safety checks the words,
-  the darker warning fill, every swatch as words on every card (4.6:1, the warm ones keeping
-  their hue), and the fixed "nothing found" tint. Mutants PC01–PC17 take each part back out.
+  and the Duplicates clean-up are quiet moves to the Trash, and that the clean-up sits below the
+  panel's main action; qa6 that the question before attaching only some files is no warning.
+  test_data_safety checks the words, the darker warning fill, a held-down Save's shade, every
+  swatch as words on every card (4.6:1, the warm ones keeping their hue), and the fixed
+  "nothing found" tint. Mutants PC01–PC21 take each part back out.
 
 ---
 

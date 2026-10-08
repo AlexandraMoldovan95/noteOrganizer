@@ -3411,7 +3411,7 @@ eye. Each role now has a fill and a text shade, and the words on a fill are neve
 white words and the confirming fill light with dark words in every theme, so they differ in
 lightness, not only in hue: ΔE2000 20.7 at the closest. The theme switch's straggler net picks a
 fill's words by the fill they sit on, because a remap by value would have turned white words
-into a dark theme's card. The gate measures 200 pairs now, mixed surfaces included, and qa1
+into a dark theme's card. The gate measures 208 pairs now, mixed surfaces included, and qa1
 walks every widget showing words on a fill, in every theme.
 
 Shown the result, the same reviewers found the next layer: on the light themes the dark red
@@ -3423,9 +3423,13 @@ of it that reads (`legible_on`) while the stripe keeps it whole.
 A third look found a sentence wrong rather than a colour. The docs said the dark fill stayed
 "where a deletion is final", and named the calendar's day and the selection bar — read in the
 code, both call the same move to the Trash as the editor's Delete. A rule had been written down
-from three examples nobody had traced. It is true now: the dark red fill means "cannot be
-undone" (a Trash row's Delete, an attachment's ✕), and every move to the Trash wears the
-warning's words, the Duplicates clean-up outlined so it still reads as a button.
+from three examples nobody had traced. It is true now: the dark red fill marks a single
+deletion that cannot be undone (a Trash row's Delete, an attachment's ✕), and the moves to the
+Trash wear the warning's words, the Duplicates clean-up outlined so it still reads as a button.
+The fix was written with "every" in it, and a fourth look found the word untrue twice: Empty
+trash (final, outlined on purpose) and the Duplicates panel's main action (a move to the Trash,
+in the accent). Both are deliberate, so the sentence now names them instead of the code
+bending to the word.
 
 **Takeaway:** a gate measures the pairs it was told about; walk what is on the screen instead.
 And two colours that differ only in hue are one colour to a reader who cannot see hue — make the
