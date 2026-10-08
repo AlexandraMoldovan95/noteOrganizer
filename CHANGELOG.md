@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.89.362](#089362--2026-10-08) | 2026-10-08 | A welcome note that greets a first start and shows each part of the app, and emoji from the app's own pickers that leave no gap after them. |
 | [0.88.361](#088361--2026-10-08) | 2026-10-08 | What two re-tests asked for: a table that moves with its caption, a filter for notes with files, checklist items you can move, a Share panel that searches and keeps the list's order, and a find bar that reads on every theme. |
 | [0.84.357](#084357--2026-10-07) | 2026-10-07 | What a first full manual pass found: ticks on dark themes, tables that copy as they look, a list that keeps your place, imports that ask, and bold from a web page that stays bold. |
 | [0.84.341](#084341--2026-10-04) | 2026-10-04 | The hint shown with no template to pick sends you to the section of Settings that really holds them. |
@@ -92,7 +93,11 @@ How the numbers themselves are counted is the
 
 ---
 
-## [Unreleased]
+## [0.89.362] — 2026-10-08
+
+*Highlights: a first start now opens on a welcome note — a short, friendly guide to each part of
+the app that Settings → About can always bring back — and emoji from the app's own pickers no
+longer leave a gap after them.*
 
 ### Added
 
