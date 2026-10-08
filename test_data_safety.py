@@ -539,6 +539,16 @@ check('no line of the welcome note leaves its bold open, and no icon '
       'carries the variation selector',
       all(line.count('**') % 2 == 0 for line in _WELCOME_LINES)
       and '\ufe0f' not in _welcome['title'] + _welcome['body'])
+# The note shows the app; an icon in it the emoji picker cannot give back
+# is one the person cannot use. Five of its ten were missing once.
+import unicodedata as _ud
+_picker_emoji = {e for _g, items, _c in NO.NoteOrganizer.EMOJI_GROUPS for e in items}
+_welcome_icons = sorted({ch for ch in _welcome['title'] + _welcome['body']
+                         if ord(ch) > 0x2100 and _ud.category(ch) == 'So'})
+_welcome_unpickable = [ch for ch in _welcome_icons if ch not in _picker_emoji]
+check(f'every icon of the welcome note ({len(_welcome_icons)}) is one the emoji '
+      f'picker offers ({_welcome_unpickable or "all"})',
+      len(_welcome_icons) >= 5 and not _welcome_unpickable)
 
 # ---- the core layer stays free of the interface ----
 #

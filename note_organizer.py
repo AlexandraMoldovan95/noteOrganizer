@@ -907,6 +907,34 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     TAB_PADDING = (16, 8)
     TAB_PADDING_SELECTED = (16, 12, 16, 8)
 
+    def _tab_ring_colour(self):
+        """The tabs' focus ring is for the keyboard. After a click it stayed
+        dotted on the open tab until the window lost focus, so a click hides
+        it -- drawn in the open tab's own fill -- and a key on the tabs, or
+        a Tab key arriving at them, shows it in that tab's letters again."""
+        if getattr(self, "_tab_ring_hidden", False):
+            return self.colors["accent"]
+        return self._on_fill("accent")
+
+    def _set_tab_ring(self, shown):
+        self._tab_ring_hidden = not shown
+        try:
+            ttk.Style().configure("TNotebook.Tab",
+                                  focuscolor=self._tab_ring_colour())
+        except tk.TclError:
+            pass
+
+    def _tab_ring_if_tabbed_to(self, event, backwards=False):
+        # Asks where the Tab key is taking the keyboard, the way Tk's own
+        # traversal does, rather than asking focus_get afterwards.
+        try:
+            w = event.widget
+            target = w.tk_focusPrev() if backwards else w.tk_focusNext()
+        except (tk.TclError, KeyError, AttributeError):
+            return
+        if target is self.notebook:
+            self._set_tab_ring(True)
+
     def _bind_window_only(self, sequence, func):
         """Bind `func` to `sequence` on the main window itself -- never on
         the widgets inside it.
@@ -9367,11 +9395,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     EMOJI_GROUPS = [
         ("Faces", ["😀", "😄", "😂", "🙂", "😉", "😍", "🤔", "😅", "😢", "😮",
                   "😴", "🥳", "😎", "🙄", "😬", "🤯"], "#FFD166"),
-        ("Gestures", ["👍", "👎", "👏", "🙌", "🤝", "✌", "🤞", "👌", "💪", "🙏"], "#6EC6CA"),
+        ("Gestures", ["👍", "👎", "👏", "🙌", "🤝", "✌", "🤞", "👌", "💪", "🙏",
+                      "👋", "✍"], "#6EC6CA"),
         ("Hearts & stars", ["❤", "💜", "💙", "💚", "🧡", "💛", "⭐", "✨", "🌟", "💯"], "#FF8FA3"),
         ("Checks & flags", ["✅", "❌", "☑", "⚠", "🚩", "🔴", "🟡", "🟢", "🔵", "⏰"], "#A0C4FF"),
         ("Objects", ["📌", "📎", "📅", "📝", "💡", "🔥", "🎯", "🎉", "🚀", "📦",
-                    "🔑", "📞", "💬", "🔗", "🏆"], "#FFB4A2"),
+                    "🔑", "📞", "💬", "🔗", "🏆", "🗂", "🔒", "🎨"], "#FFB4A2"),
         ("Nature", ["☀", "🌙", "⛅", "🌧", "🌈", "🌸", "🍀", "🌳", "☕", "🍕"], "#B9FBC0"),
     ]
 
@@ -12660,7 +12689,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         style.configure("TNotebook", background=c["bg"], borderwidth=0)
         style.configure(
             "TNotebook.Tab", background=c["sidebar"], foreground=c["text"],
-            padding=self.TAB_PADDING, font=("Segoe UI", 10, "bold")
+            padding=self.TAB_PADDING, font=("Segoe UI", 10, "bold"),
+            focuscolor=self._tab_ring_colour()
         )
         # clam maps its own padding for the selected tab, which beat the one
         # above and drew the open tab SMALLER than the others. Restated here,
@@ -12991,6 +13021,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # window's own close button.
         self.notebook = ttk.Notebook(self.main_inner)
         self.notebook.pack(fill="both", expand=True)
+        # Its focus ring is for the keyboard (_tab_ring_colour): a click
+        # hides it, a key on the tabs or a Tab that lands on them shows it.
+        self.notebook.bind("<ButtonPress-1>",
+                           lambda e: self._set_tab_ring(False), add="+")
+        for _key in ("<Left>", "<Right>"):   # the keys that walk the tabs
+            self.notebook.bind(_key, lambda e: self._set_tab_ring(True), add="+")
+        # Tk walks the keyboard on these virtual events, not on <Tab> itself;
+        # "+" runs this after its own traversal, which it must never replace.
+        self.bind_all("<<NextWindow>>", self._tab_ring_if_tabbed_to, add="+")
+        self.bind_all("<<PrevWindow>>",
+                      lambda e: self._tab_ring_if_tabbed_to(e, backwards=True),
+                      add="+")
 
         notes_tab = tk.Frame(self.notebook)
         self.track_theme(notes_tab, bg="bg")

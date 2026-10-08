@@ -8738,6 +8738,56 @@ check(f'palette: the open tab stands taller than the other, under both themes '
       f'({_pl_tabs})',
       len(_pl_tabs) == 4 and not any(k[-1] == 'WRONG' for k in _pl_tabs))
 
+# The tabs' focus ring is for the keyboard: after a click it stayed dotted on
+# the open tab until the window lost focus. A click hides it (the ring drawn
+# in the tab's own fill), the arrow keys or a Tab landing on the tabs show it.
+from tkinter import ttk as _rg_ttk
+
+
+def _rg_ring():
+    return str(_rg_ttk.Style().lookup('TNotebook.Tab', 'focuscolor')).lower()
+
+
+def _rg_on_first_tab(x, y):
+    try:
+        return app.notebook.index('@%d,%d' % (x, y)) == 0
+    except tk.TclError:
+        return False
+
+
+_rg_seen = {}
+_rg_xy = next(((x, y) for y in range(2, 40) for x in range(2, 200, 4)
+               if _rg_on_first_tab(x, y)), None)
+if _rg_xy:
+    app.notebook.event_generate('<ButtonPress-1>', x=_rg_xy[0], y=_rg_xy[1])
+    app.notebook.event_generate('<ButtonRelease-1>', x=_rg_xy[0], y=_rg_xy[1])
+    app.update()
+_rg_seen['click'] = _rg_ring()
+_rg_other = next(t for t in NO.THEMES if t != app.theme_name)
+app.set_theme(_rg_other); app.update()
+_rg_seen['theme'] = _rg_ring()
+_rg_hidden_ok = (_rg_seen['click'] != app._on_fill('accent').lower()
+                 and _rg_seen['theme'] == app.colors['accent'].lower())
+app.notebook.event_generate('<Right>'); app.update()
+_rg_seen['arrow'] = _rg_ring()
+_rg_arrow_ok = _rg_seen['arrow'] == app._on_fill('accent').lower()
+app.notebook.select(app.TAB_NOTES); app.update()
+app._set_tab_ring(False)
+_rg_prev = app.notebook.tk_focusPrev()
+if _rg_prev is not None:
+    # A generated key goes to the window holding the keyboard, so the Tab
+    # starts where a person's would: on the widget before the tabs.
+    _rg_prev.focus_force(); app.update()
+    _rg_prev.event_generate('<Tab>'); app.update()
+_rg_seen['tabbed'] = _rg_ring()
+app.set_theme(_pl_theme); app.notebook.select(app.TAB_NOTES); app.update()
+check(f'palette: a click on the tabs hides their focus ring, through a theme '
+      f'switch too ({_rg_xy}, {_rg_seen})', bool(_rg_xy) and _rg_hidden_ok)
+check(f'palette: the arrow keys and a Tab landing on the tabs show the ring again '
+      f'({_rg_prev}, {_rg_seen})',
+      _rg_arrow_ok and _rg_prev is not None
+      and _rg_seen['tabbed'] == app._on_fill('accent').lower())
+
 # The colour palette's tick marks the colour in use -- the only sign of it
 # when two swatches look alike to a colour-blind eye -- and was white on 13
 # of its 20 colours (1.3:1 on the yellow).

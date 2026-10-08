@@ -2496,5 +2496,61 @@
     "must_fail": ["palette: the colour picker's tick reads on every colour it can sit on"],
     "suites": ["qa1"],
     "expect": "killed"
+  },
+  {
+    "id": "CB05",
+    "about": "the emoji picker loses icons the welcome note uses, so the note shows ones the person cannot pick",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                      \"👋\", \"✍\"], \"#6EC6CA\"),\n",
+        "replace": "                      ], \"#6EC6CA\"),\n"
+      }
+    ],
+    "must_fail": ["every icon of the welcome note"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "CB06",
+    "about": "a click on the tabs leaves their dotted focus ring showing again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self.notebook.bind(\"<ButtonPress-1>\",\n                           lambda e: self._set_tab_ring(False), add=\"+\")\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["palette: a click on the tabs hides their focus ring"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "CB07",
+    "about": "a Tab that lands on the tabs no longer brings their focus ring back",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self.bind_all(\"<<NextWindow>>\", self._tab_ring_if_tabbed_to, add=\"+\")\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["palette: the arrow keys and a Tab landing on the tabs show the ring again"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "CB08",
+    "about": "the arrow keys walking the tabs no longer bring their focus ring back",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self.notebook.bind(_key, lambda e: self._set_tab_ring(True), add=\"+\")\n",
+        "replace": "            pass\n"
+      }
+    ],
+    "must_fail": ["palette: the arrow keys and a Tab landing on the tabs show the ring again"],
+    "suites": ["qa1"],
+    "expect": "killed"
   }
 ]
