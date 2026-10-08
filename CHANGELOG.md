@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.89.371](#089371--2026-10-08) | 2026-10-08 | What simulated colour-blind readers hesitated over: a boxed find match, a raised open tab with no dotted box after a click, letters that read on every colour you pick — and every icon the app uses in the emoji picker. |
 | [0.89.365](#089365--2026-10-08) | 2026-10-08 | Every coloured word and button readable in every theme, Save and Delete told apart without colour, and a dark red fill kept for what cannot be undone. |
 | [0.89.362](#089362--2026-10-08) | 2026-10-08 | A welcome note that greets a first start and shows each part of the app, and emoji from the app's own pickers that leave no gap after them. |
 | [0.88.361](#088361--2026-10-08) | 2026-10-08 | What two re-tests asked for: a table that moves with its caption, a filter for notes with files, checklist items you can move, a Share panel that searches and keeps the list's order, and a find bar that reads on every theme. |
@@ -95,6 +96,58 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+---
+
+## [0.89.371] — 2026-10-08
+
+*Highlights: the app shown to colour-blind readers — photographs of the running app, simulated
+for protanopia, deuteranopia and tritanopia, read by four reviewers, three seeing only the
+simulated pictures and one with normal colour vision as the control. What they hesitated over
+now carries its meaning by shape as well as colour, the letters on a colour you pick always
+read, and the emoji picker offers every icon the app itself uses.*
+
+### Fixed
+
+- **The find bar's current match is boxed.** It was told from the other matches by its fill
+  alone, which to a colour-blind eye was one shade among three — all four readers hesitated
+  over it, the control included. It now has a thin box, as a match inside a table cell already
+  had.
+- **The open tab stands taller than the other.** The Notes and Calendar tabs drew the open one
+  smaller and lower: the base theme's padding for a selected tab replaced the app's, so the
+  tab's shape said the opposite of its colour. The open tab is now the raised one, which reads
+  without its colour.
+- **Letters on a colour you pick read on it.** A painted calendar day's number, titles and
+  markers, and the text-colour and highlight buttons showing their colour, chose white or
+  near-black by a brightness threshold of their own, and put white on 9 of the 20 colours a
+  day can be painted — 2.2:1 on the light blue. They now use the same measured answer as every
+  button in the app.
+- **The colour picker's tick shows on every swatch.** The tick marking the colour in use was
+  always white, 1.3:1 on the yellow and below 3:1 on 13 of the 20 colours — and when two
+  swatches look alike to a colour-blind eye, the tick is the only way to tell which is in use.
+- **Clicking a tab no longer leaves a dotted box on it.** The Notes and Calendar tabs kept a
+  dotted focus ring after a click until the window lost focus. A click now hides it; the ring
+  is for the keyboard, and comes back — in the tab's own letter colour, readable on every
+  theme — when the arrow keys walk the tabs or Tab lands on them.
+- **Every icon the app itself uses can be picked.** Six of the welcome note's eleven icons
+  (👋 ✍ 🗂 🔒 🎨 ℹ) were not in the emoji picker, so the note showed icons a person could not
+  insert — and nine of the calendar's eighteen day markers (❗ 🎂 ✈ 🔔 🎁 💰 🩺 🍽 🚗) were not
+  either, so a day marked with one could not be written about in a note. All of them are now in
+  the picker's groups; the calendar keeps its own short list for marking days.
+
+### Testing
+
+- Five checks across qa1, qa7 and the unit suite: the current match boxed, before and after a
+  theme switch; the open tab taller than the other under two themes, measured where each tab
+  begins; the picker's tick at 4.1:1 or better on all 20 colours; every pickable colour (39)
+  given the letters that read on it. Four mutants (CB01–CB04), each killed. The two qa7 checks
+  that promised white on a painted orange day now promise the near-black that reads there.
+- Three more: a click hides the tabs' ring through a theme switch, the arrow keys and a Tab
+  landing on the tabs show it, every icon of the welcome note is in the picker — counted
+  as anything from U+2100 up but the arrows, since by category alone ℹ is a letter — and so
+  is every calendar day marker. Mutants CB05–CB10, each killed.
+- The screenshot tools open a note the way a person does, so the README's main window shows
+  the open note's ring.
 
 ---
 

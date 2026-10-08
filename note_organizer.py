@@ -47,7 +47,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.89.365"
+APP_VERSION = "0.89.371"
 
 
 def parse_version(v):
@@ -902,6 +902,38 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     # A bind tag only the main window carries. See _bind_window_only.
     _WINDOW_ONLY_TAG = "NoteOrganizerWindowOnly"
+
+    # The Notes/Calendar tabs (style_ttk): the open one stands 4px taller.
+    TAB_PADDING = (16, 8)
+    TAB_PADDING_SELECTED = (16, 12, 16, 8)
+
+    def _tab_ring_colour(self):
+        """The tabs' focus ring is for the keyboard. After a click it stayed
+        dotted on the open tab until the window lost focus, so a click hides
+        it -- drawn in the open tab's own fill -- and a key on the tabs, or
+        a Tab key arriving at them, shows it in that tab's letters again."""
+        if getattr(self, "_tab_ring_hidden", False):
+            return self.colors["accent"]
+        return self._on_fill("accent")
+
+    def _set_tab_ring(self, shown):
+        self._tab_ring_hidden = not shown
+        try:
+            ttk.Style().configure("TNotebook.Tab",
+                                  focuscolor=self._tab_ring_colour())
+        except tk.TclError:
+            pass
+
+    def _tab_ring_if_tabbed_to(self, event, backwards=False):
+        # Asks where the Tab key is taking the keyboard, the way Tk's own
+        # traversal does, rather than asking focus_get afterwards.
+        try:
+            w = event.widget
+            target = w.tk_focusPrev() if backwards else w.tk_focusNext()
+        except (tk.TclError, KeyError, AttributeError):
+            return
+        if target is self.notebook:
+            self._set_tab_ring(True)
 
     def _bind_window_only(self, sequence, func):
         """Bind `func` to `sequence` on the main window itself -- never on
@@ -9363,12 +9395,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     EMOJI_GROUPS = [
         ("Faces", ["😀", "😄", "😂", "🙂", "😉", "😍", "🤔", "😅", "😢", "😮",
                   "😴", "🥳", "😎", "🙄", "😬", "🤯"], "#FFD166"),
-        ("Gestures", ["👍", "👎", "👏", "🙌", "🤝", "✌", "🤞", "👌", "💪", "🙏"], "#6EC6CA"),
+        ("Gestures", ["👍", "👎", "👏", "🙌", "🤝", "✌", "🤞", "👌", "💪", "🙏",
+                      "👋", "✍"], "#6EC6CA"),
         ("Hearts & stars", ["❤", "💜", "💙", "💚", "🧡", "💛", "⭐", "✨", "🌟", "💯"], "#FF8FA3"),
-        ("Checks & flags", ["✅", "❌", "☑", "⚠", "🚩", "🔴", "🟡", "🟢", "🔵", "⏰"], "#A0C4FF"),
+        ("Checks & flags", ["✅", "❌", "☑", "⚠", "🚩", "🔴", "🟡", "🟢", "🔵", "⏰",
+                            "ℹ", "❗"], "#A0C4FF"),
         ("Objects", ["📌", "📎", "📅", "📝", "💡", "🔥", "🎯", "🎉", "🚀", "📦",
-                    "🔑", "📞", "💬", "🔗", "🏆"], "#FFB4A2"),
-        ("Nature", ["☀", "🌙", "⛅", "🌧", "🌈", "🌸", "🍀", "🌳", "☕", "🍕"], "#B9FBC0"),
+                    "🔑", "📞", "💬", "🔗", "🏆", "🗂", "🔒", "🎨",
+                    "🎂", "🎁", "🔔", "💰", "🩺", "✈", "🚗"], "#FFB4A2"),
+        ("Nature", ["☀", "🌙", "⛅", "🌧", "🌈", "🌸", "🍀", "🌳", "☕", "🍕",
+                    "🍽"], "#B9FBC0"),
     ]
 
     def _show_emoji_picker(self, text_widget, anchor=None):
@@ -12141,8 +12177,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                              bg=self.colors["card"], cursor="hand2")
             self._rounded_rect(cell, 2, 2, 24, 24, 7, fill=color, outline=color)
             if color == current:
-                cell.create_text(13, 13, text="✓", fill="white",
-                                 font=("Segoe UI", 11, "bold"))
+                # The tick is the only sign of the colour in use, and two
+                # swatches can look alike to a colour-blind eye: it must read.
+                cell.create_text(13, 13, text="✓", fill=letters_on(color),
+                                 font=("Segoe UI", 11, "bold"), tags="tick")
             cell.grid(row=r, column=c, padx=3, pady=3)
             # "break": the pick destroys this popup (see _show_inline_rename).
             cell.bind("<Button-1>", lambda e, col=color: (pick(col), "break")[1])
@@ -12654,12 +12692,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         style.configure("TNotebook", background=c["bg"], borderwidth=0)
         style.configure(
             "TNotebook.Tab", background=c["sidebar"], foreground=c["text"],
-            padding=(16, 8), font=("Segoe UI", 10, "bold")
+            padding=self.TAB_PADDING, font=("Segoe UI", 10, "bold"),
+            focuscolor=self._tab_ring_colour()
         )
+        # clam maps its own padding for the selected tab, which beat the one
+        # above and drew the open tab SMALLER than the others. Restated here,
+        # it stands taller instead: a raised tab, readable without its colour.
         style.map(
             "TNotebook.Tab",
             background=[("selected", c["accent"])],
             foreground=[("selected", self._on_fill("accent"))],
+            padding=[("selected", self.TAB_PADDING_SELECTED)],
         )
 
         # --- Subtle sidebar comboboxes (sort + filter) ---
@@ -12981,6 +13024,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # window's own close button.
         self.notebook = ttk.Notebook(self.main_inner)
         self.notebook.pack(fill="both", expand=True)
+        # Its focus ring is for the keyboard (_tab_ring_colour): a click
+        # hides it, a key on the tabs or a Tab that lands on them shows it.
+        self.notebook.bind("<ButtonPress-1>",
+                           lambda e: self._set_tab_ring(False), add="+")
+        for _key in ("<Left>", "<Right>"):   # the keys that walk the tabs
+            self.notebook.bind(_key, lambda e: self._set_tab_ring(True), add="+")
+        # Tk walks the keyboard on these virtual events, not on <Tab> itself;
+        # "+" runs this after its own traversal, which it must never replace.
+        self.bind_all("<<NextWindow>>", self._tab_ring_if_tabbed_to, add="+")
+        self.bind_all("<<PrevWindow>>",
+                      lambda e: self._tab_ring_if_tabbed_to(e, backwards=True),
+                      add="+")
 
         notes_tab = tk.Frame(self.notebook)
         self.track_theme(notes_tab, bg="bg")
@@ -17661,13 +17716,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         Both colours are blended from the theme, so a theme switch must
         refresh them or the next find would paint in the old accent. The
         current match is the full accent, and the note's own text colour
-        fell below 4.5:1 on it in every theme: its words are letters_on."""
+        fell below 4.5:1 on it in every theme: its words are letters_on.
+
+        It is also boxed, as a table cell's match is: told from the others
+        by its fill alone, it was one shade among three to a colour-blind
+        eye. Tk draws a solid relief dark on any fill, so it reads on all."""
         try:
             text_widget.tag_configure("find_all",
                                       background=find_all_surface(self.colors))
             text_widget.tag_configure("find_current",
                                       background=self.colors["accent"],
-                                      foreground=self._on_fill("accent"))
+                                      foreground=self._on_fill("accent"),
+                                      relief="solid", borderwidth=1)
         except tk.TclError:
             pass
 

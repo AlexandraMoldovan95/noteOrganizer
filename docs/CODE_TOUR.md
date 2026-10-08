@@ -435,7 +435,11 @@ contrast, and code asks for them as `self._on_fill("accent")`, or as the
 names `on_accent`, `on_danger`, `on_success` wherever a palette key is
 expected (`track_theme`, `palette_keys`), which `palette_value()` resolves.
 That way a fill and its words cannot drift apart from one theme to the
-next. A colour the person picked (a category's, a note's own) goes the
+next. Letters on a colour the person picked — a painted calendar day, the
+colour picker's tick — are `letters_on` too; `contrasting_fg`, which the
+calendar and the formatting bar call, is it by name: it once had a formula
+of its own and disagreed on 9 of the 20 day colours. Words in such a colour
+(a category's, a note's own) go the
 other way: `legible_on(colour, card, text)` keeps it if it reads as
 words on the card and otherwise finds the nearest shade that does — darker
 in the same hue on a light card, toward the text colour on a dark one;

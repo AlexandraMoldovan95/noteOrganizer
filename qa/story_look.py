@@ -55,7 +55,7 @@ app.refresh_note_list()
 """),
     ("02-editor", """
 app.notebook.select(app.TAB_NOTES)
-app.load_note(app.notes[0])
+app.open_note_in_tab(app.notes[0])
 """),
     ("03-calendar", """
 app.notebook.select(app.TAB_CALENDAR)
@@ -138,7 +138,7 @@ app._edit_template(app.templates[-1], lambda: None)
 app._dismiss_mini_popup()
 app.hide_settings_page()
 app.notebook.select(app.TAB_NOTES)
-app.load_note(app.notes[0])
+app.open_note_in_tab(app.notes[0])
 app.body_text.tag_add('sel', '1.0', '1.10')
 app._open_color_swatch_popup('highlight')
 """),

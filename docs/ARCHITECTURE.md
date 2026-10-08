@@ -566,6 +566,21 @@ warning button's words when pointed at, and the find bar's current match — the
 text colour on the full accent, below 4.5:1 in every theme. The match's words now come from
 `letters_on` too.
 
+Then the app was shown to colour-blind readers: photographs of the running app simulated for
+protanopia, deuteranopia and tritanopia, each read by a reviewer who saw only those pictures,
+and a fourth with normal vision as the control. None was blocked; what they hesitated over was
+wherever colour carried a meaning alone. The find bar's current match is now **boxed** as well
+as filled (Tk draws a `solid` relief dark on any fill), as a table cell's match already was.
+The open Notes/Calendar tab is now the **taller** one: clam maps its own padding for a selected
+tab, which beat the app's and drew it smaller, so its shape said the opposite of its colour —
+the app restates it in `style.map`. And the letters for a colour the person picks have one
+answer: `contrasting_fg` had a brightness threshold of its own, put white on 9 of the 20 day
+colours (2.2:1 on `#00bbf9`), and is now `letters_on` by name — two formulas for one question
+disagree somewhere. The colour picker's tick, the only sign of the colour in use when two
+swatches look alike, takes the same letters. The simulation also measured what holds: on the
+dark themes Save's fill and Delete's words are nearly one colour to a deuteranope
+(ΔE2000 2.7–3.4), and the reader still found Save first, because it is the one filled button.
+
 | Text, and where | Midnight Purple | Ocean Blue | Forest Green | Warm Charcoal | Soft Lavender | Sky Blue | Fresh Mint | Warm Cream |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | text on the window | 14.7 | 15.3 | 15.1 | 15.2 | 14.2 | 12.4 | 12.7 | 12.5 |

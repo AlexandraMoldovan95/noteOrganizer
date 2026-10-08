@@ -415,7 +415,7 @@ def _weekly_note():
     app.notes.append(note)
     app.save_notes()
     app.refresh_note_list()
-    app.load_note(note)
+    app.open_note_in_tab(note)
     pump(12)
     return note
 
@@ -555,7 +555,9 @@ def _table_note(open_it=True):
     app.save_notes()
     app.refresh_note_list()
     if open_it:
-        app.load_note(note)
+        # A person's route, as every scene here: load_note alone skips the
+        # card's open-note ring, and the README showed the note unmarked.
+        app.open_note_in_tab(note)
         pump(14)
     return note
 
@@ -616,7 +618,7 @@ def checklist():
     app.notes.append(note)
     app.save_notes()
     app.refresh_note_list()
-    app.load_note(note)
+    app.open_note_in_tab(note)
     pump(10)
     if not app.checklist_section.winfo_ismapped():
         app.toggle_checklist_section()
@@ -631,7 +633,7 @@ def checklist():
 def calculator():
     """The calculator open, with a result and a history behind it."""
     _demo_notebook()
-    app.load_note(app.notes[0])
+    app.open_note_in_tab(app.notes[0])
     pump(8)
     if not app.calculator_section.winfo_ismapped():
         app.toggle_calculator_section()
@@ -657,7 +659,7 @@ def attachments():
     app.notes.append(note)
     app.save_notes()
     app.refresh_note_list()
-    app.load_note(note)
+    app.open_note_in_tab(note)
     pump(8)
     app.current_attachments = [
         {'filename': 'policy-2026.pdf', 'stored_as': 'policy-2026.pdf'},
@@ -685,7 +687,7 @@ def formatting_toolbar():
     app.notes.append(note)
     app.save_notes()
     app.refresh_note_list()
-    app.load_note(note)
+    app.open_note_in_tab(note)
     pump(18)
     capture('formatting-toolbar',
             widgets=_editor_box('title_entry', 'body_text'), pad=10)
@@ -726,7 +728,7 @@ def emoji_picker():
     app.notes.append(note)
     app.save_notes()
     app.refresh_note_list()
-    app.load_note(note)
+    app.open_note_in_tab(note)
     pump(10)
     app._show_emoji_picker(app.body_text)
     pump(20)
@@ -931,7 +933,7 @@ def demo():
             recurrence={'freq': 'weekly', 'interval': 1, 'weekdays': [0]}))
         app.save_notes()
         app.refresh_note_list()
-        app.load_note(made[0])
+        app.open_note_in_tab(made[0])
         frame(1600)
         app.new_note()
         frame(500)

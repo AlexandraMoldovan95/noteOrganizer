@@ -2609,9 +2609,11 @@ check(f'a busy day shows a dot per colour, two titles and "+1 more" '
       and len(_cd8['chips']) == 2
       and _cd8['chips'][1] == 'Short' and _cd8['more'] == '+1 more')
 _cd17 = _cd_view('2026-07-17')
-check('a painted day wears its colour, with its text in white',
-      _cd17['bg'] == '#e76f51' and _cd17['day_fill'] == '#ffffff'
-      and _cd17['chip_fill'] == ['#ffffff'])
+# Near-black, not white: white read at 3.3:1 on this paint, near-black at
+# 5.3:1, and the letters for a picked colour are the ones that read best.
+check('a painted day wears its colour, with its text in the near-black that reads on it',
+      _cd17['bg'] == '#e76f51' and _cd17['day_fill'] == '#1a1a1a'
+      and _cd17['chip_fill'] == ['#1a1a1a'])
 # At most three, and only as many as fit beside the day's number -- the
 # rest counted (6g holds the cap at a width where all three fit).
 check(f'four markers show as the first that fit, the rest counted '
@@ -2623,7 +2625,7 @@ _cd11 = _cd_view('2026-07-11')
 check(f"a day's markers are drawn in its own text colour, not black "
       f"({_cd11['badge_fill']}, {_cd17['badge_fill']})",
       _cd11['badge_fill'] == app.colors['text']
-      and _cd17['badge_fill'] == '#ffffff')
+      and _cd17['badge_fill'] == '#1a1a1a')
 # Rows are as tall as the busiest day needs, as the widget grid's were
 # (its rows asked their cells), and all alike.
 _cd_heights = sorted({_cd_view(d)['box'][3] - _cd_view(d)['box'][1]
@@ -3658,11 +3660,12 @@ def _dr_contrast(a, b):
     return (hi + 0.05) / (lo + 0.05)
 
 
-# The two paints the audit measured at 1.28:1 and 1.40:1 must read now; the
-# darker one keeps white, as the older check above holds for its July day.
+# The two paints the audit measured at 1.28:1 and 1.40:1 must read now, and
+# so must the darker one, which kept white at 3.3:1 while the letters for a
+# picked colour had a formula of their own instead of letters_on's.
 for _dr_d, _dr_paint, _dr_least in (('2026-08-18', '#fee440', 4.5),
                                     ('2026-08-19', '#00f5d4', 4.5),
-                                    ('2026-08-14', '#e76f51', 3.0)):
+                                    ('2026-08-14', '#e76f51', 4.5)):
     _dr_v = _cd_view(_dr_d)
     _dr_want = _dr_contrasting_fg(_dr_paint)
     _dr_fills = {_dr_v['day_fill']} | set(_dr_v['chip_fill']) | (

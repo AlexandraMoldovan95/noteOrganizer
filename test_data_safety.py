@@ -539,6 +539,24 @@ check('no line of the welcome note leaves its bold open, and no icon '
       'carries the variation selector',
       all(line.count('**') % 2 == 0 for line in _WELCOME_LINES)
       and '\ufe0f' not in _welcome['title'] + _welcome['body'])
+# The note shows the app; an icon in it the emoji picker cannot give back
+# is one the person cannot use. Six of its eleven were missing once. An icon
+# is anything from U+2100 up but the arrows: by category alone, ℹ is a letter.
+import unicodedata as _ud
+_picker_emoji = {e for _g, items, _c in NO.NoteOrganizer.EMOJI_GROUPS for e in items}
+_welcome_icons = sorted({ch for ch in _welcome['title'] + _welcome['body']
+                         if ord(ch) >= 0x2100 and _ud.category(ch) != 'Sm'})
+_welcome_unpickable = [ch for ch in _welcome_icons if ch not in _picker_emoji]
+check(f'every icon of the welcome note ({len(_welcome_icons)}) is one the emoji '
+      f'picker offers ({_welcome_unpickable or "all"})',
+      len(_welcome_icons) >= 5 and not _welcome_unpickable)
+# A day marked with a sign the picker lacks could not be written about in a
+# note: nine of the calendar's eighteen once.
+_marker_unpickable = [e for e, _c in NO.NoteOrganizer.DAY_MARKER_EMOJIS
+                      if e not in _picker_emoji]
+check(f'every calendar day marker is one the emoji picker offers too '
+      f'({_marker_unpickable or "all"})',
+      len(NO.NoteOrganizer.DAY_MARKER_EMOJIS) >= 10 and not _marker_unpickable)
 
 # ---- the core layer stays free of the interface ----
 #
@@ -710,6 +728,20 @@ check('letters_on picks the side with more contrast on every fill',
       all(_ratio_fn(_letters(c), c)
           >= max(_ratio_fn('#ffffff', c), _ratio_fn('#1a1a1a', c))
           for _t, _r, c in _fills))
+# A colour the person picks gets the same answer as a theme's fill. The two
+# helpers once had two formulas, and white sat at 2.2:1 on #00bbf9, a colour
+# a calendar day can be painted. 4.1 is the worst any colour can do.
+from noteorganizer.core.themes import (
+    PALETTE_COLORS as _pick_day, PRESET_NOTE_COLORS as _pick_note,
+    HIGHLIGHT_COLOR_PALETTE as _pick_hl, DEFAULT_CATEGORY_COLORS as _pick_cat)
+_picked = sorted(set(_pick_day) | set(_pick_note) | set(_pick_hl)
+                 | set(_pick_cat.values()))
+_picked_bad = [(c, _contrast(c), round(_ratio_fn(_contrast(c), c), 2))
+               for c in _picked
+               if _contrast(c) != _letters(c) or _ratio_fn(_contrast(c), c) < 4.1]
+check(f'every pickable colour ({len(_picked)}) gets the letters that read on it '
+      f'({_picked_bad or "all at 4.1:1 or better"})',
+      len(_picked) >= 30 and not _picked_bad)
 check('the on_* names give the words for that fill, other names the colour',
       all(_pvalue(pal, 'on_' + role) == _letters(pal[role])
           for pal in NO.THEMES.values()
