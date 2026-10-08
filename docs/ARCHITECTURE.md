@@ -500,10 +500,11 @@ values.
 
 Every theme's text is measured against WCAG 2.1: the contrast ratio worked out from relative
 luminance, by formula rather than by eye. All of the app's text is 8–11 pt, which WCAG counts as
-normal size, so every pair owes 4.5:1, the AA level. `tools/check_contrast.py` measures each pair
-the app draws and prints the table below (`--markdown`). In CI it fails on any pair below AA that
-is not listed with its reason, and on a listed pair that has started to pass, so the list can
-only shrink. It also checks that a colour value means one role across all eight themes, which
+normal size, so every pair of words owes 4.5:1, the AA level; a drawn glyph owes 3:1, WCAG's
+non-text contrast. `tools/check_contrast.py` measures each pair the app draws and prints the
+table below (`--markdown`). In CI it fails on any pair below its level that is not listed with
+its reason, and on a listed pair that has started to pass, so the list can only shrink — it is
+empty now. It also checks that a colour value means one role across all eight themes, which
 the theme switch depends on, since it remaps colours by value.
 
 The four light themes' secondary text was below AA, on the sidebar most of all, where Sort and
@@ -511,15 +512,59 @@ Show sit. Each is now one step darker: Soft Lavender `#6b6b85` → `#676780`, Sk
 `#536b81`, Fresh Mint `#5b7d6c` → `#527061`, Warm Cream `#8a7660` → `#776653`. Text and secondary
 text now pass in every theme.
 
-What does not pass yet is every pair that uses the accent, the warning red or the confirming
-green, and that waits for a design decision rather than a calculation. Each of those colours is
-used two ways: as text on a surface, and as a button's fill under white text. On a light theme
-one darker shade serves both, but it changes how the theme looks — Warm Cream's orange would
-turn brown. On a dark theme no single shade can: text on a dark surface wants a lighter shade,
-and a fill under white text a darker one. The ways out are a darker shade on the light themes
-with dark text on the dark themes' bright buttons, or a second colour for each role, one for
-text and one for fills. Which way is a question of how the app looks, so it is decided by eye,
-with these numbers in hand.
+What did not pass, for a long time, was every pair that used the accent, the warning red or the
+confirming green — 71 of them — because that waited for a design decision rather than a
+calculation. Each of those colours was used two ways: as text on a surface, and as a button's
+fill under white text. On a light theme one darker shade serves both, but it changes how the
+theme looks — Warm Cream's orange would turn brown. On a dark theme no single shade can: text
+on a dark surface wants a lighter shade, and a fill under white text a darker one.
+
+The decision was made by eye, from five proposals photographed on the running app in all eight
+themes, with these numbers beside them. Each role now has two colours: a **fill** (`accent`,
+`danger`, `success` — a button, a banner, a selected tab) and a **text** shade (`accent_text`,
+`danger_text`, `success_text`). The words *on* a fill are not written down at all:
+`letters_on` in `core/themes.py` picks white or near-black by the same measure this table uses,
+and the theme switch asks for them by name (`on_accent`, through `palette_value`) or, on a
+widget it does not track, by the fill they sit on (`_recolor_stragglers`). Most themes keep the
+fills they had; Warm Cream stays orange, and only its small orange words became a brown-orange
+(`#8a4600`), the cost of reading on cream.
+
+The proposal chosen added one rule the numbers alone did not ask for: **the `danger` fill is
+dark with white words in every theme, the `success` fill light with dark words**, so they
+differ in lightness as well as hue. Simulated for the two common kinds of colour blindness
+(deuteranopia and protanopia, Machado 2009), Save and Delete had been the same khaki in all
+eight themes; they now differ by at least ΔE2000 20.7 (below 10 reads as the same colour). For
+the same reason Save is turquoise rather than green on the four themes whose accent is green or
+orange.
+
+The same reviewers, shown the result on the running app, found the next layer: on a light
+theme the dark red Delete was now the loudest thing in the window (7.3:1 against it) and Save
+the palest (2.3–2.6:1). So the editor's Delete became a quiet button with the warning's text
+shade — the note goes to the Trash, and can come back — and Save is the one filled button
+there. Midnight Purple's accent moved lighter, `#8771ff` → `#a48fff`: the near-black words on it
+had read as muddy in the README's own screenshot, and the lighter shade raises them to 6.6:1 and
+the selected note's ring to 5.0:1.
+
+That left a rule worth stating, and a third look caught it stated wrongly: these docs said the
+dark fill stayed "where a deletion is final", naming the calendar's day and the selection bar,
+both of which only move notes to the Trash. The rule is now true in the code: **the dark red
+fill marks a single deletion that cannot be undone** — a row's Delete in the Trash, an
+attachment's ✕ — and the moves to the Trash wear the warning's words instead: the editor's
+Delete, a day's note in the calendar, the selection bar's Trash, and the Duplicates clean-up,
+outlined as Empty trash is so that it still reads as a button (finding C-6 had it blend into
+its panel once). A fourth look held the sentence to every button and found two that keep their
+own look by design, so they are named rather than swept under "every": Empty trash, final for
+everything in it, is outlined — findable, not inviting — and asks first; and the Duplicates
+panel's "Move ticked…" is that panel's main action, in the accent, now above the clean-up.
+Two smaller strays went the same way: the selection bar's Category menu, filled though it is
+no main action, is quiet like Export; and the question before attaching only some of the files
+picked was asked as a warning, which dresses its Yes in the deletion red, and is a question now.
+
+Measuring every pair the app draws, rather than the ones the table already had, found three
+it had never measured: the selected Settings section's name on its tint of the accent, a
+warning button's words when pointed at, and the find bar's current match — the note's own
+text colour on the full accent, below 4.5:1 in every theme. The match's words now come from
+`letters_on` too.
 
 | Text, and where | Midnight Purple | Ocean Blue | Forest Green | Warm Charcoal | Soft Lavender | Sky Blue | Fresh Mint | Warm Cream |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -529,31 +574,46 @@ with these numbers in hand.
 | secondary text on the window | 6.5 | 7.1 | 7.5 | 7.2 | 5.0 | 5.1 | 5.1 | 5.1 |
 | secondary text on a card (a note's preview) | 5.2 | 5.2 | 5.4 | 5.8 | 5.5 | 5.5 | 5.5 | 5.5 |
 | secondary text in the sidebar (Sort, Show) | 5.8 | 6.1 | 6.3 | 6.4 | 4.6 | 4.6 | 4.5 | 4.5 |
-| accent text on the window (the repeat summary) | **3.8** ✗ | 5.7 | 7.0 | 6.2 | **4.0** ✗ | **3.5** ✗ | **2.8** ✗ | **2.9** ✗ |
-| accent text on a card or panel | **3.0** ✗ | **4.2** ✗ | 5.0 | 5.0 | **4.3** ✗ | **3.8** ✗ | **3.0** ✗ | **3.1** ✗ |
-| accent text in the sidebar | **3.4** ✗ | 4.9 | 5.9 | 5.5 | **3.6** ✗ | **3.1** ✗ | **2.5** ✗ | **2.5** ✗ |
-| warning text on the window | 5.5 | 6.2 | 6.5 | 6.1 | **3.8** ✗ | **3.8** ✗ | **3.9** ✗ | **3.8** ✗ |
-| warning text on a card or panel | **4.4** ✗ | 4.6 | 4.6 | 4.9 | **4.1** ✗ | **4.1** ✗ | **4.1** ✗ | **4.1** ✗ |
-| warning text in the sidebar | 4.9 | 5.4 | 5.4 | 5.4 | **3.4** ✗ | **3.4** ✗ | **3.5** ✗ | **3.4** ✗ |
-| confirmation text on the window | 9.2 | 8.7 | 9.1 | 9.5 | **2.6** ✗ | **2.6** ✗ | **2.6** ✗ | **2.6** ✗ |
-| confirmation text on a card or panel | 7.3 | 6.4 | 6.5 | 7.6 | **2.8** ✗ | **2.8** ✗ | **2.8** ✗ | **2.8** ✗ |
-| confirmation text in the sidebar | 8.2 | 7.5 | 7.7 | 8.4 | **2.3** ✗ | **2.3** ✗ | **2.3** ✗ | **2.3** ✗ |
-| white text on an accent button | **4.3** ✗ | **3.0** ✗ | **2.3** ✗ | **2.7** ✗ | **4.3** ✗ | **3.8** ✗ | **3.0** ✗ | **3.1** ✗ |
-| white text on an accent button, pointed at | **3.3** ✗ | **2.4** ✗ | **1.9** ✗ | **2.2** ✗ | 5.7 | 5.0 | **4.1** ✗ | **4.1** ✗ |
-| white text on a destructive button | **3.0** ✗ | **2.8** ✗ | **2.5** ✗ | **2.8** ✗ | **4.1** ✗ | **4.1** ✗ | **4.1** ✗ | **4.1** ✗ |
-| white text on a confirming button | **1.8** ✗ | **2.0** ✗ | **1.8** ✗ | **1.8** ✗ | **2.8** ✗ | **2.8** ✗ | **2.8** ✗ | **2.8** ✗ |
+| accent text on the window (the repeat summary) | 7.4 | 7.7 | 7.8 | 7.0 | 7.0 | 6.6 | 6.6 | 6.6 |
+| accent text on a card or panel | 5.9 | 5.7 | 5.6 | 5.6 | 7.6 | 7.1 | 7.1 | 7.1 |
+| accent text in the sidebar | 6.6 | 6.7 | 6.5 | 6.2 | 6.3 | 5.9 | 5.9 | 5.8 |
+| the selected Settings section's name | 5.0 | 5.2 | 4.8 | 4.8 | 5.1 | 4.8 | 5.1 | 5.1 |
+| warning text on the window | 7.4 | 7.9 | 8.4 | 7.7 | 6.7 | 6.7 | 6.8 | 6.8 |
+| warning text on a card or panel | 6.0 | 5.8 | 6.0 | 6.2 | 7.3 | 7.3 | 7.3 | 7.3 |
+| warning text in the sidebar | 6.7 | 6.9 | 7.0 | 6.8 | 6.1 | 6.0 | 6.1 | 6.0 |
+| a warning button's words, pointed at | 5.8 | 5.8 | 6.0 | 5.9 | 5.7 | 5.7 | 5.7 | 5.7 |
+| a bin on a card, pointed at (a glyph, owes 3:1) | 5.7 | 5.8 | 6.0 | 5.9 | 5.5 | 5.5 | 5.5 | 5.5 |
+| a bin in a list row, pointed at (a glyph, owes 3:1) | 6.3 | 6.6 | 6.9 | 6.4 | 4.6 | 4.5 | 4.6 | 4.6 |
+| confirmation text on the window | 10.4 | 10.0 | 10.6 | 11.0 | 5.6 | 5.6 | 5.4 | 5.4 |
+| confirmation text on a card or panel | 8.3 | 7.4 | 7.6 | 8.8 | 6.1 | 6.1 | 5.8 | 5.8 |
+| confirmation text in the sidebar | 9.3 | 8.7 | 8.9 | 9.7 | 5.1 | 5.0 | 4.8 | 4.7 |
+| words on an accent button (and the find bar's current match) | 6.6 | 5.7 | 7.5 | 6.3 | 5.7 | 5.0 | 5.6 | 5.6 |
+| words on an accent button, pointed at | 8.8 | 7.3 | 9.4 | 7.9 | 7.1 | 6.7 | 7.2 | 6.9 |
+| words on a destructive button | 6.8 | 6.8 | 6.8 | 6.8 | 7.9 | 7.9 | 7.9 | 7.9 |
+| words on a confirming button | 9.7 | 8.7 | 9.7 | 9.9 | 6.2 | 6.2 | 7.0 | 7.1 |
+| words on a confirming button, held down | 7.5 | 6.8 | 7.5 | 7.6 | 4.9 | 4.9 | 5.4 | 5.6 |
+| text of the other find matches | 6.5 | 6.7 | 5.8 | 6.9 | 9.1 | 8.2 | 9.4 | 9.3 |
 | text in the find box when nothing is found | 10.7 | 10.3 | 10.3 | 10.4 | 12.1 | 10.6 | 10.6 | 10.5 |
 
-A note's own colour, used for the tags line on its card, is the person's choice from a palette
-and is not in this table; a colour picked for its look may not read as text on every theme.
+A note's own colour, or its category's, is the person's choice and so is not in this table, but
+it is shown as words: the tags line on its card. Picked for its look, it often did not read —
+the default Personal yellow was 1.6:1 on a light card. The stripe still wears it whole; the
+words wear `legible_on(colour, card, text)` (in `core/themes.py`): the colour itself when it
+reads at 4.6:1 — a step over AA, for canvas text at 8–9 pt — and otherwise the nearest shade
+that does. On a light card that shade is darker in the same hue, a little richer; it was first
+mixed toward the theme's text, which is bluish, and the yellow came out khaki. On a dark card it
+is mixed toward the theme's light text. test_data_safety holds every swatch the app offers to
+4.6:1 on every theme's card, and the warm ones to their hue and saturation.
 
-The last row is a surface the app mixes rather than reads off the palette: the find box's ground
-while its words are found nowhere, a tint of the warning red over white on a light theme (a truer
-red there, its pink taken out) and over near-black on a dark one (`miss_surface` in
-`core/themes.py`). It used to be one fixed dark red
-on every theme, which put dark words on a dark ground on the light ones (1.2:1); mixed into each
-theme's own surface instead, the red went grey on the blue and green themes. A mixed surface is
-measured here like any other, through the gate's `DERIVED` table.
+The last row is the find box's ground while its words are found nowhere: a tint of the warning
+red over white on a light theme (a truer red there, its pink taken out) and over near-black on a
+dark one (`miss_surface` in `core/themes.py`). It used to be one fixed dark red on every theme,
+which put dark words on a dark ground on the light ones (1.2:1); mixed into each theme's own
+surface instead, the red went grey on the blue and green themes. The tints were mixed from the
+warning reds of the time, and since those reds darkened for contrast they are written into each
+palette as `find_miss`, so a shade chosen by eye did not move. The surfaces the app does still
+mix — the find matches, the Settings tints — are measured here like any other, through the
+gate's `DERIVED` table.
 
 ### Layout arithmetic belongs in core, not in the widgets
 

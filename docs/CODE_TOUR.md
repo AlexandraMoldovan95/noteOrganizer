@@ -427,6 +427,22 @@ derived rather than looked up is invisible to anything that fixes stray
 colours by matching known palette values, which is exactly how the Settings
 panels once stayed dark on a light theme.
 
+Three roles come in pairs: `accent`, `danger` and `success` are **fills**
+(a button, a banner), and `accent_text`, `danger_text`, `success_text` are
+the same roles as words on an ordinary surface. The words *on* a fill are
+never stored: `letters_on(fill)` picks white or near-black by measured
+contrast, and code asks for them as `self._on_fill("accent")`, or as the
+names `on_accent`, `on_danger`, `on_success` wherever a palette key is
+expected (`track_theme`, `palette_keys`), which `palette_value()` resolves.
+That way a fill and its words cannot drift apart from one theme to the
+next. A colour the person picked (a category's, a note's own) goes the
+other way: `legible_on(colour, card, text)` keeps it if it reads as
+words on the card and otherwise finds the nearest shade that does — darker
+in the same hue on a light card, toward the text colour on a dark one;
+that is the tags line under a card's title. Why two shades per
+role, and how they were chosen, is in
+[ARCHITECTURE](ARCHITECTURE.md#contrast-measured).
+
 Nothing in the app ever asks *"which theme is this?"* before picking a
 colour. It asks for `colors["card"]` and gets whatever that means right
 now. **Adding a ninth theme means adding one dict here and changing

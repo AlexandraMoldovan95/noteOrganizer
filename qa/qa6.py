@@ -1972,6 +1972,10 @@ finally:
     app.ask_yes_no = _real_ask6
 check('picking more files than fit asks first, with No pre-selected',
       len(_asked6) == 1 and _asked6[0][1].get('default') == 'no')
+# A question, not a warning: nothing is deleted, and a warning dresses its
+# Yes in the dark red fill the app keeps for what cannot be undone.
+check('...asked as a question, so its Yes is not the red of a deletion',
+      len(_asked6) == 1 and _asked6[0][1].get('icon') != 'warning')
 check('...and answering No attaches none of them',
       len(app.current_attachments) == _cap6 - 1)
 

@@ -720,15 +720,27 @@ if _dp_everything is not None and _dp_ticked_btn is not None:
           str(_dp_everything.cget('font')) == str(_dp_ticked_btn.cget('font'))
           and _dp_everything.pack_info().get('ipady')
           == _dp_ticked_btn.pack_info().get('ipady'))
-    check('duplicates: it carries the fill this app uses for taking notes '
-          'out of the list',
-          str(_dp_everything.cget('bg')) == str(app.colors['danger'])
-          and str(_dp_everything.cget('fg')) == 'white')
+    # The dark red FILL is kept for what cannot be undone; moving notes to
+    # the Trash wears the warning's words, here with a border as Empty
+    # trash has, so it still reads as a button.
+    check('duplicates: it wears the warning\'s words in an outline, as every '
+          'move to the Trash does',
+          str(_dp_everything.cget('bg')) == str(app.colors['card'])
+          and str(_dp_everything.cget('fg')) == str(app.colors['danger_text'])
+          and str(_dp_everything.cget('relief')) == 'solid')
     check('duplicates: and it is no longer the sidebar colour it blended into',
           str(_dp_everything.cget('bg')) != str(app.colors['sidebar']))
     check('duplicates: the precise action keeps the accent, so the eye is '
           'warned by the sweeping one rather than drawn to it',
           str(_dp_ticked_btn.cget('bg')) == str(app.colors['accent']))
+    # The panel's main action first, the sweeping one below it -- on the
+    # screen, where a reader meets them.
+    app.update()
+    _dp_ys = (_dp_ticked_btn.winfo_rooty(), _dp_everything.winfo_rooty())
+    check(f'duplicates: the main action comes first, the sweeping one below it '
+          f'({_dp_ys})',
+          _dp_ticked_btn.winfo_ismapped() and _dp_everything.winfo_ismapped()
+          and _dp_ys[0] < _dp_ys[1])
 
 if _dp_everything is not None:
     _dp_asked = []

@@ -2140,5 +2140,303 @@
     "must_fail": ["a folder it cannot use falls back beside the script"],
     "suites": ["test_data_safety"],
     "expect": "killed"
+  },
+  {
+    "id": "PC01",
+    "about": "the words on every fill are white again, whatever the fill",
+    "edits": [
+      {
+        "file": "noteorganizer/core/themes.py",
+        "find": "    return LETTERS_DARK if dark > light else LETTERS_LIGHT\n",
+        "replace": "    return LETTERS_LIGHT\n"
+      }
+    ],
+    "must_fail": ["palette: the words on every filled widget read at 4.5:1",
+                  "letters_on picks the side with more contrast on every fill"],
+    "suites": ["qa1", "test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC02",
+    "about": "a theme switch leaves an untracked fill's words as they were",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                        w.configure(fg=letters_on(ground))\n",
+        "replace": "                        pass\n"
+      }
+    ],
+    "must_fail": ["palette: an untracked button's words follow its fill"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC03",
+    "about": "the find bar's current match keeps the note's own text colour on the full accent",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                                      background=self.colors[\"accent\"],\n                                      foreground=self._on_fill(\"accent\"))\n",
+        "replace": "                                      background=self.colors[\"accent\"])\n"
+      }
+    ],
+    "must_fail": ["find/theme: the current match's words are the ones that read on the accent"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC04",
+    "about": "Generate code is a filled accent button again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self.track_theme(share_btn, bg=\"sidebar\", fg=\"text\",\n",
+        "replace": "        self.track_theme(share_btn, bg=\"accent\", fg=\"on_accent\",\n"
+      }
+    ],
+    "must_fail": ["palette: Save is the one filled button"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC05",
+    "about": "the repeat summary is written in the accent's fill instead of its text shade",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self.track_theme(self.rec_summary_lbl, bg=\"bg\", fg=\"accent_text\")\n",
+        "replace": "        self.track_theme(self.rec_summary_lbl, bg=\"bg\", fg=\"accent\")\n"
+      }
+    ],
+    "must_fail": ["palette: the repeat summary and the two calendar lines wear the accent's text shade"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC06",
+    "about": "Save's words are written down as white again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self.track_theme(save_btn, bg=\"success\", fg=\"on_success\",\n",
+        "replace": "        save_btn.configure(fg=\"white\")\n        self.track_theme(save_btn, bg=\"success\",\n"
+      }
+    ],
+    "must_fail": ["palette: the filled buttons built once name their words"],
+    "suites": ["qa1"],
+    "expect": "killed",
+    "note": "The theme switch's safety net repaints the words at every switch, so the walk cannot see this one: the check reads the registration instead."
+  },
+  {
+    "id": "PC07",
+    "about": "the \"nothing found\" tint is mixed from the warning red again, and moves with it",
+    "edits": [
+      {
+        "file": "noteorganizer/core/themes.py",
+        "find": "    return palette[\"find_miss\"]\n",
+        "replace": "    return blend(\"#ffffff\", palette[\"danger\"], 0.18)\n"
+      }
+    ],
+    "must_fail": ["the find box's \"nothing found\" tint is the one chosen, in every theme"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC08",
+    "about": "Delete in the editor is a filled dark red button again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self.track_theme(delete_btn, bg=\"sidebar\", fg=\"danger_text\",\n",
+        "replace": "        self.track_theme(delete_btn, bg=\"danger\", fg=\"on_danger\",\n"
+      }
+    ],
+    "must_fail": ["palette: Save is the one filled button",
+                  "palette: the filled buttons built once name their words"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC09",
+    "about": "a drawn card's tags row wears the picked colour as it is, unreadable or not",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/note_list.py",
+        "find": "            font=self.CARD_TAGS_FONT, fill=says[\"words\"], tags=tags)\n",
+        "replace": "            font=self.CARD_TAGS_FONT, fill=says[\"color\"], tags=tags)\n"
+      }
+    ],
+    "must_fail": ["palette: a picked colour stays whole on the card's stripe"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC10",
+    "about": "a theme switch recolours the tags row in the picked colour as it is",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/note_list.py",
+        "find": "                cv.itemconfigure(it[\"tags\"], fill=legible_on(\n                    note_color, c[\"card\"], c[\"text\"]))\n",
+        "replace": "                cv.itemconfigure(it[\"tags\"], fill=note_color)\n"
+      }
+    ],
+    "must_fail": ["palette: a picked colour stays whole on the card's stripe"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC11",
+    "about": "legible_on gives every colour back unchanged",
+    "edits": [
+      {
+        "file": "noteorganizer/core/themes.py",
+        "find": "        if contrast_ratio(colour, ground) >= minimum:\n            return colour\n",
+        "replace": "        return colour\n"
+      }
+    ],
+    "must_fail": ["every swatch, as words on every theme's card, reads at 4.6:1",
+                  "palette: a picked colour stays whole on the card's stripe"],
+    "suites": ["qa1", "test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC12",
+    "about": "the selection bar's Trash is a filled dark red button again, for a move to the Trash",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self.track_theme(bulk_trash_btn, bg=\"card\", fg=\"danger_text\")\n",
+        "replace": "        self.track_theme(bulk_trash_btn, bg=\"danger\", fg=\"on_danger\")\n"
+      }
+    ],
+    "must_fail": ["palette: the filled buttons built once name their words"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC13",
+    "about": "a day's note in the calendar is deleted from a filled dark red button again",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/calendar_view.py",
+        "find": "                  bg=self.colors[\"card\"], fg=self.colors[\"danger_text\"], relief=\"flat\",\n",
+        "replace": "                  bg=self.colors[\"danger\"], fg=self._on_fill(\"danger\"), relief=\"flat\",\n"
+      }
+    ],
+    "must_fail": ["the calendar's Delete is quiet, in the warning's words"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC14",
+    "about": "the Duplicates clean-up is a filled dark red button again",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                      bg=self.colors[\"card\"], fg=self.colors[\"danger_text\"],\n                      highlightbackground=self.colors[\"danger_text\"],\n",
+        "replace": "                      bg=self.colors[\"danger\"], fg=self._on_fill(\"danger\"),\n                      highlightbackground=self.colors[\"danger_text\"],\n"
+      }
+    ],
+    "must_fail": ["duplicates: it wears the warning's words in an outline"],
+    "suites": ["qa2"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC15",
+    "about": "a colour darkened for a light card is mixed toward the theme's text again, and goes khaki",
+    "edits": [
+      {
+        "file": "noteorganizer/core/themes.py",
+        "find": "        if contrast_ratio(LETTERS_DARK, ground) >= contrast_ratio(LETTERS_LIGHT, ground):\n",
+        "replace": "        if False:\n"
+      }
+    ],
+    "must_fail": ["darkened for a light card, a colour keeps its hue and saturation"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC16",
+    "about": "the editor's row puts Delete beside Save again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        grid_buttons = [save_btn, share_btn, delete_btn,\n",
+        "replace": "        grid_buttons = [save_btn, delete_btn, share_btn,\n"
+      }
+    ],
+    "must_fail": ["palette: the row reads Save, Generate code, Delete"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC17",
+    "about": "Save is pressed in the system's grey again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self.track_theme(save_btn, bg=\"success\", fg=\"on_success\",\n                         activebackground=\"success_pressed\",\n                         activeforeground=\"on_success\")\n",
+        "replace": "        self.track_theme(save_btn, bg=\"success\", fg=\"on_success\")\n"
+      }
+    ],
+    "must_fail": ["palette: the editor's buttons name their pressed colours"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC18",
+    "about": "the selection bar's Category menu is a filled accent button again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self.track_theme(bulk_category_btn, bg=\"card\", fg=\"text\")\n",
+        "replace": "        self.track_theme(bulk_category_btn, bg=\"accent\", fg=\"on_accent\")\n"
+      }
+    ],
+    "must_fail": ["palette: the filled buttons built once name their words"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC19",
+    "about": "a held-down Save is the same colour as one at rest",
+    "edits": [
+      {
+        "file": "noteorganizer/core/themes.py",
+        "find": "    \"success_pressed\": lambda palette: blend(palette[\"success\"], \"#000000\", 0.12),\n",
+        "replace": "    \"success_pressed\": lambda palette: palette[\"success\"],\n"
+      }
+    ],
+    "must_fail": ["a held-down Save is a darker shade of its fill, so a press shows"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC20",
+    "about": "the Duplicates panel puts the sweeping clean-up above its main action again",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                  ).pack(fill=\"x\", padx=12, pady=(4, 4 if sweeping else 10), ipady=6)\n",
+        "replace": "                  ).pack(fill=\"x\", padx=12, pady=(4, 4 if sweeping else 10), ipady=6,\n                         side=\"bottom\")\n"
+      }
+    ],
+    "must_fail": ["duplicates: the main action comes first, the sweeping one below it"],
+    "suites": ["qa2"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC21",
+    "about": "the question about too many attachments is asked as a warning again, with a red Yes",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "                    icon=\"question\", default=\"no\"):\n",
+        "replace": "                    icon=\"warning\", default=\"no\"):\n"
+      }
+    ],
+    "must_fail": ["asked as a question, so its Yes is not the red of a deletion"],
+    "suites": ["qa6"],
+    "expect": "killed"
   }
 ]

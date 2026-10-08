@@ -47,7 +47,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.89.362"
+APP_VERSION = "0.89.365"
 
 
 def parse_version(v):
@@ -446,6 +446,12 @@ from noteorganizer.core.themes import (
     inset_surface,
     hairline,
     miss_surface,
+    find_all_surface,
+    legible_on,
+    letters_on,
+    palette_value,
+    LETTERS_DARK,
+    LETTERS_LIGHT,
     THEMES,
     DARK_THEMES,
     LIGHT_THEMES,
@@ -1028,7 +1034,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """The icon files for the current theme, best first.
 
         Named after the accent colour rather than after the theme --
-        `icon_7c5cff.ico` -- which is why there is no table here mapping
+        `icon_d97a2b.ico` -- which is why there is no table here mapping
         one to the other. A table would be a second place to keep in
         step, and a theme added later would quietly get the wrong icon.
         The colour is already in hand, so the filename is computed from
@@ -1202,7 +1208,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         self.title_count_lbl.config(
             text=f"{used}/{self.TITLE_MAX_LEN}",
-            fg=self.colors["danger"] if used >= self.TITLE_MAX_LEN
+            fg=self.colors["danger_text"] if used >= self.TITLE_MAX_LEN
             else self.colors["subtext"],
         )
         if not self._is_placed(self.title_count_lbl):
@@ -1950,9 +1956,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # ones on the old accent. postcommand runs on every open — live
         # palette, zero tracking.
         menu.configure(postcommand=lambda m=menu: m.configure(
-            activebackground=self.colors["accent"], activeforeground="white"))
+            activebackground=self.colors["accent"], activeforeground=self._on_fill("accent")))
         menu.configure(bg=self.colors["card"], fg=self.colors["text"],
-                       activebackground=self.colors["accent"], activeforeground="white",
+                       activebackground=self.colors["accent"],
+                       activeforeground=self._on_fill("accent"),
                        relief="flat", bd=0, font=("Segoe UI", 9))
 
         def do(action):
@@ -6368,7 +6375,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         menu = self._new_context_menu(tearoff=0, bg=self.colors["card"],
                        fg=self.colors["text"],
                        activebackground=self.colors["accent"],
-                       activeforeground="#ffffff")
+                       activeforeground=self._on_fill("accent"))
         menu.add_command(label="Unhide column",
                          command=lambda: self._grid_hide_col(info, c, False))
         menu.add_command(label="Unhide all columns",
@@ -6396,7 +6403,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         menu = self._new_context_menu(tearoff=0, bg=self.colors["card"],
                        fg=self.colors["text"],
                        activebackground=self.colors["accent"],
-                       activeforeground="#ffffff")
+                       activeforeground=self._on_fill("accent"))
         sel = getattr(self, "_grid_sel", None)
         if (sel and sel["info"] is info
                 and sel["box"][0] <= r <= sel["box"][2]
@@ -6509,7 +6516,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             m = tk.Menu(menu, tearoff=0, bg=self.colors["card"],
                         fg=self.colors["text"],
                         activebackground=self.colors["accent"],
-                        activeforeground="white",
+                        activeforeground=self._on_fill("accent"),
                         relief="flat", bd=0, font=("Segoe UI", 9))
             return m
 
@@ -7715,7 +7722,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         has no foreground of its own, so the bars are recoloured instead.
         """
         bg = self.colors["accent"] if active else self.colors["sidebar"]
-        fg = "white" if active else self.colors["text"]
+        fg = self._on_fill("accent") if active else self.colors["text"]
         btn.configure(relief="sunken" if active else "flat", bg=bg)
         if isinstance(btn, tk.Canvas):
             btn.itemconfigure("bar", fill=fg)
@@ -8759,6 +8766,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Black or near-white, whichever reads better against hex_color."""
         return core_contrasting_fg(hex_color)
 
+    def _on_fill(self, role):
+        """The words on a control filled with the theme's *role* colour
+        (accent, accent_hover, danger or success): see letters_on."""
+        return letters_on(self.colors[role])
+
     @_undo_atom(tags_only=True)
     def _toggle_body_style(self, style):
         """Bold/Italic/Underline/Strikethrough toolbar + right-click handler.
@@ -9298,7 +9310,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             btn.configure(
                 relief="sunken" if active else "flat",
                 bg=self.colors["accent"] if active else self.colors["sidebar"],
-                fg="white" if active else self.colors["text"],
+                fg=self._on_fill("accent") if active else self.colors["text"],
             )
 
         if hasattr(self, "font_size_var"):
@@ -9502,13 +9514,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._add_paste_menu(self.import_box)
         self.import_status = tk.Label(p, text="", font=("Segoe UI", 7), anchor="w",
                                       wraplength=200, justify="left",
-                                      bg=self.colors["sidebar"], fg=self.colors["danger"])
+                                      bg=self.colors["sidebar"], fg=self.colors["danger_text"])
         self.import_status.pack(fill="x", padx=6, pady=(2, 0))
         row = tk.Frame(p, bg=self.colors["sidebar"])
         self.track_theme(row, bg="sidebar")
         row.pack(fill="x", padx=6, pady=6)
         tk.Button(row, text="Import", command=self._do_inline_import,
-                  bg=self.colors["accent"], fg="white", relief="flat",
+                  bg=self.colors["accent"], fg=self._on_fill("accent"), relief="flat",
                   font=("Segoe UI", 9, "bold"), cursor="hand2"
                   ).pack(side="left", fill="x", expand=True, padx=(0, 3), ipady=3)
         tk.Button(row, text="Clear", command=self._clear_import_box,
@@ -9886,12 +9898,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         try:
             shared = decode_share_code(code)
         except ValueError as e:
-            self.import_status.config(text=str(e), fg=self.colors["danger"])
+            self.import_status.config(text=str(e), fg=self.colors["danger_text"])
             return
         valid = [sn for sn in shared if isinstance(sn, dict)]
         if not valid:
             self.import_status.config(text="No valid notes in that code.",
-                                      fg=self.colors["danger"])
+                                      fg=self.colors["danger_text"])
             return
         # Oversized notes are trimmed at normalize (the checklist,
         # attachment and styling-span ceilings) — SAY so instead of
@@ -9934,7 +9946,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 if not copies:
                     self.import_status.config(
                         text="This note is already here, exactly as in the code.",
-                        fg=self.colors["success"])
+                        fg=self.colors["success_text"])
                     return
                 incoming, asked = copies[0], True
                 valid = [incoming]
@@ -10092,7 +10104,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                       + (f", {unchanged} already here" if unchanged else ""))
         self.import_status.config(
             text=f"Added {added} notes{known_note} ✓{skipped_note}{oversize_note}",
-            fg=self.colors["success"])
+            fg=self.colors["success_text"])
 
     def toggle_share_panel(self):
         if self._is_placed(self.share_panel):
@@ -10373,7 +10385,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         gen_row = tk.Frame(p, bg=self.colors["sidebar"])
         gen_row.pack(fill="x", padx=6, pady=(4, 2))
         tk.Button(gen_row, text="Generate code", command=self._generate_inline_share,
-                  bg=self.colors["accent"], fg="white", relief="flat",
+                  bg=self.colors["accent"], fg=self._on_fill("accent"), relief="flat",
                   font=("Segoe UI", 9, "bold"), cursor="hand2"
                   ).pack(side="left", fill="x", expand=True, padx=(0, 3), ipady=3)
         tk.Button(gen_row, text="Close", command=self.toggle_share_panel,
@@ -10410,7 +10422,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not chosen:
             tk.Label(self.share_code_area, text="Pick at least one note.",
                      font=("Segoe UI", 8), bg=self.colors["sidebar"],
-                     fg=self.colors["danger"]).pack(anchor="w")
+                     fg=self.colors["danger_text"]).pack(anchor="w")
             return
         had_attachments = any(n.get("attachments") for n in chosen)
         code = encode_share_code(chosen)
@@ -10465,7 +10477,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if had_attachments:
             tk.Label(parent, text=self.SHARE_ATTACHMENT_WARNING,
                      font=("Segoe UI", 7), anchor="w", wraplength=200, justify="left",
-                     bg=self.colors["sidebar"], fg=self.colors["danger"]
+                     bg=self.colors["sidebar"], fg=self.colors["danger_text"]
                      ).pack(fill="x", pady=(0, 2))
         box = tk.Text(parent, height=3, wrap="char", font=("Consolas", 7),
                       relief="flat", bg=self.colors["card"], fg=self.colors["text"],
@@ -10474,7 +10486,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         box.config(state="disabled")
         box.pack(fill="x")
         status = tk.Label(parent, text="", font=("Segoe UI", 7), anchor="w",
-                          bg=self.colors["sidebar"], fg=self.colors["success"])
+                          bg=self.colors["sidebar"], fg=self.colors["success_text"])
         status.pack(fill="x")
 
         def copy():
@@ -10482,12 +10494,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.clipboard_clear()
                 self.clipboard_append(code)
                 self.update()
-                status.config(text="Copied to clipboard ✓", fg=self.colors["success"])
+                status.config(text="Copied to clipboard ✓", fg=self.colors["success_text"])
             except tk.TclError:
                 status.config(text="Select the code and copy manually.",
-                              fg=self.colors["danger"])
+                              fg=self.colors["danger_text"])
         tk.Button(parent, text="📋 Copy code", command=copy, bg=self.colors["accent"],
-                  fg="white", relief="flat", font=("Segoe UI", 9, "bold"), cursor="hand2"
+                  fg=self._on_fill("accent"), relief="flat", font=("Segoe UI", 9, "bold"),
+                  cursor="hand2"
                   ).pack(fill="x", pady=(4, 0), ipady=3)
 
     def export_note_as_file(self, note, fmt):
@@ -10718,7 +10731,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if had_attachments:
             tk.Label(parent, text=self.SHARE_ATTACHMENT_WARNING,
                      font=("Segoe UI", 8), anchor="w", wraplength=600, justify="left",
-                     bg=self.colors["bg"], fg=self.colors["danger"]).pack(fill="x", pady=(2, 2))
+                     bg=self.colors["bg"], fg=self.colors["danger_text"]
+                     ).pack(fill="x", pady=(2, 2))
         box = tk.Text(parent, height=3, wrap="char", font=("Consolas", 9),
                       relief="flat", bg=self.colors["card"], fg=self.colors["text"],
                       padx=10, pady=8)
@@ -10726,7 +10740,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         box.config(state="disabled")
         box.pack(fill="x", pady=(2, 4))
         status = tk.Label(parent, text="", font=("Segoe UI", 8), anchor="w",
-                          bg=self.colors["bg"], fg=self.colors["success"])
+                          bg=self.colors["bg"], fg=self.colors["success_text"])
         status.pack(fill="x")
 
         def copy():
@@ -10734,12 +10748,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.clipboard_clear()
                 self.clipboard_append(code)
                 self.update()
-                status.config(text="Copied to clipboard ✓", fg=self.colors["success"])
+                status.config(text="Copied to clipboard ✓", fg=self.colors["success_text"])
             except tk.TclError:
                 status.config(text="Select the code above and copy it manually (Ctrl+C).",
-                              fg=self.colors["danger"])
+                              fg=self.colors["danger_text"])
         tk.Button(parent, text="📋 Copy code", command=copy, bg=self.colors["accent"],
-                  fg="white", relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
+                  fg=self._on_fill("accent"), relief="flat", font=("Segoe UI", 10, "bold"),
+                  cursor="hand2"
                   ).pack(fill="x", pady=(2, 0), ipady=5)
 
     def _open_imported_note_in_editor(self, shared_note, trimmed=False):
@@ -11515,7 +11530,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # U+FF0B renders noticeably wider, and this one sits a few
         # centimetres from the attachments panel's "+ Add file".
         tk.Button(add_row, text="+ Add", command=self._add_checklist_item,
-                  bg=self.colors["accent"], fg="white", relief="flat",
+                  bg=self.colors["accent"], fg=self._on_fill("accent"), relief="flat",
                   font=("Segoe UI", 9, "bold"), cursor="hand2"
                   ).pack(side="left", padx=(6, 0), ipadx=8, ipady=2)
 
@@ -11635,7 +11650,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         bin_btn = tk.Button(row, text="🗑", command=delete, relief="flat",
                             cursor="hand2", bg=self.colors["card"],
-                            fg=self.colors["danger"], font=("Segoe UI", 9),
+                            fg=self.colors["danger_text"], font=("Segoe UI", 9),
                             bd=0)
         # Packed before the text, so a long item cannot squeeze it out; and
         # ahead of the Button class, a double-click's second press is
@@ -12068,7 +12083,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._dismiss_mini_popup()
 
         tk.Button(frame, text="Save", command=save, relief="flat", cursor="hand2",
-                  bg=self.colors["accent"], fg="white", font=("Segoe UI", 8, "bold")
+                  bg=self.colors["accent"], fg=self._on_fill("accent"),
+                  font=("Segoe UI", 8, "bold")
                   ).pack(side="left", ipadx=6, ipady=2, padx=(0, 3))
         tk.Button(frame, text="✕", command=self._dismiss_mini_popup, relief="flat",
                   cursor="hand2", bg=self.colors["sidebar"], fg=self.colors["text"],
@@ -12182,7 +12198,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                           font=("Segoe UI", 11), cursor="hand2")
             dot.pack(side="left", padx=(10, 6), pady=4)
             lbl = tk.Label(row, text=cat, bg=row.cget("bg"),
-                           fg=self.colors["accent"] if is_cur else self.colors["text"],
+                           fg=self.colors["accent_text"] if is_cur else self.colors["text"],
                            font=("Segoe UI", 10, "bold" if is_cur else "normal"),
                            anchor="w", width=13)
             lbl.pack(side="left", padx=(0, 10))
@@ -12253,7 +12269,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # per call, averaged.
         if len(self.themed_widgets) >= 2 * getattr(self, "_themed_pruned_at", 256):
             self._prune_themed_widgets()
-        widget.configure(**{opt: self.colors[key] for opt, key in option_map.items()})
+        widget.configure(**{opt: palette_value(self.colors, key)
+                            for opt, key in option_map.items()})
         return widget
 
     def _prune_themed_widgets(self):
@@ -12358,7 +12375,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._prune_themed_widgets()
         for widget, option_map in self.themed_widgets:
             try:
-                widget.configure(**{opt: self.colors[key] for opt, key in option_map.items()})
+                widget.configure(**{opt: palette_value(self.colors, key)
+                                    for opt, key in option_map.items()})
             except tk.TclError:
                 pass
         self._refresh_placeholder_colors()
@@ -12424,8 +12442,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         #
         # Deliberately AFTER _recolor_stragglers: a card's stripe/tag colour
         # comes from the note itself, and a custom note colour that happens
-        # to match some other theme's palette entry (e.g. #7c5cff, which is
-        # also the dark theme's accent) would otherwise be swapped out by
+        # to match some other theme's palette entry (e.g. #4cd9a3, which is
+        # also the dark theme's success) would otherwise be swapped out by
         # the straggler pass and left showing the wrong colour. Running last
         # makes the note's own data authoritative. See _recolor_note_cards.
         self._recolor_note_cards()
@@ -12533,9 +12551,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 remap.pop(val.lower(), None)
         for derive in (inset_surface, hairline):
             remap.pop(derive(cur).lower(), None)
+        # Words on a fill follow the fill, not the remap: white is also a
+        # light theme's card, and the new fill may want near-black instead.
+        fills = {cur[role].lower()
+                 for role in ("accent", "accent_hover", "danger", "success")}
+        letters = {"white", LETTERS_LIGHT, LETTERS_DARK}
 
         def walk(w):
+            try:
+                words = str(w.cget("fg")).lower()
+            except tk.TclError:
+                words = None
             for opt in ("bg", "fg"):
+                if opt == "fg" and words in letters:
+                    continue
                 try:
                     val = str(w.cget(opt)).lower()
                 except tk.TclError:
@@ -12545,13 +12574,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         w.configure(**{opt: remap[val]})
                     except tk.TclError:
                         pass
+            if words in letters:
+                try:
+                    ground = str(w.cget("bg")).lower()
+                    if ground in fills:
+                        w.configure(fg=letters_on(ground))
+                    elif words in remap:
+                        w.configure(fg=remap[words])
+                except tk.TclError:
+                    pass
             # Colours this walk cannot see -- a ticked box's fill, a caret, a
             # pressed button -- on a widget no theme switch rebuilds: it
             # names their palette keys (_drawn_tick_box sets them too).
             keys = getattr(w, "palette_keys", None)
             if keys:
                 try:
-                    w.configure(**{opt: cur[key] for opt, key in keys.items()})
+                    w.configure(**{opt: palette_value(cur, key)
+                                   for opt, key in keys.items()})
                 except tk.TclError:
                     pass
             for child in w.winfo_children():
@@ -12562,9 +12601,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except tk.TclError:
             pass
         # An open day's list paints each row's stripe in its note's own
-        # colour, and the walk above cannot tell that from a palette's:
-        # General's #7c5cff is the dark and light accent, Urgent's #ff5c7c
-        # the dark theme's danger, so they were swapped for the new theme's.
+        # colour, and the walk above cannot tell that from a palette's: a
+        # note in #4cd9a3, a preset that is also the dark theme's success,
+        # had it swapped for the new theme's.
         # Drawn again from the notes, as _recolor_note_cards does for the
         # note list -- also while Settings hides it, so that it is right
         # when it shows. (The one-note view has no colour of its own.)
@@ -12620,7 +12659,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         style.map(
             "TNotebook.Tab",
             background=[("selected", c["accent"])],
-            foreground=[("selected", "white")],
+            foreground=[("selected", self._on_fill("accent"))],
         )
 
         # --- Subtle sidebar comboboxes (sort + filter) ---
@@ -12668,7 +12707,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             style.map(
                 name,
                 background=[("active", c["accent"]), ("pressed", c["accent"])],
-                arrowcolor=[("active", "white"), ("pressed", "white")],
+                arrowcolor=[("active", self._on_fill("accent")),
+                            ("pressed", self._on_fill("accent"))],
             )
 
         # The dropdown popup list isn't a themeable ttk element — it's a Tk
@@ -12680,7 +12720,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.option_add("*TCombobox*Listbox.background", c["card"], 80)
         self.option_add("*TCombobox*Listbox.foreground", c["text"], 80)
         self.option_add("*TCombobox*Listbox.selectBackground", c["accent"], 80)
-        self.option_add("*TCombobox*Listbox.selectForeground", "white", 80)
+        self.option_add("*TCombobox*Listbox.selectForeground",
+                        self._on_fill("accent"), 80)
         self.option_add("*TCombobox*Listbox.font", "{Segoe UI} 9", 80)
         self.option_add("*TCombobox*Listbox.borderWidth", 0, 80)
 
@@ -12701,7 +12742,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 combo.tk.call(listbox, "configure", "-background", c["card"])
                 combo.tk.call(listbox, "configure", "-foreground", c["text"])
                 combo.tk.call(listbox, "configure", "-selectbackground", c["accent"])
-                combo.tk.call(listbox, "configure", "-selectforeground", "white")
+                combo.tk.call(listbox, "configure", "-selectforeground",
+                              self._on_fill("accent"))
             except tk.TclError:
                 # Popup not created yet (user never opened this combo) — the
                 # option_add defaults will handle it on first open.
@@ -12884,7 +12926,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.toast_frame = tk.Frame(self, bg=self.colors["success"])
         self.toast_lbl = tk.Label(
             self.toast_frame, font=("Segoe UI", 9, "bold"),
-            bg=self.colors["success"], fg="white", padx=14, pady=6)
+            bg=self.colors["success"], fg=self._on_fill("success"), padx=14, pady=6)
         self.toast_lbl.pack(side="left")
         # The toast can carry one action -- "Undo", after a delete. Built
         # here and packed on demand, so a plain toast looks exactly as it
@@ -12894,7 +12936,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # a widget nobody sees between showings.
         self.toast_action_lbl = tk.Label(
             self.toast_frame, font=("Segoe UI", 9, "bold", "underline"),
-            bg=self.colors["success"], fg="white", padx=0, pady=6,
+            bg=self.colors["success"], fg=self._on_fill("success"), padx=0, pady=6,
             cursor="hand2")
         self._toast_action = None
         self.toast_action_lbl.bind(
@@ -13300,8 +13342,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         bulk_trash_btn = tk.Button(
             top_row, text="🗑 Trash", command=self._bulk_move_to_trash,
             relief="flat", font=("Segoe UI", 8, "bold"), cursor="hand2")
-        self.track_theme(bulk_trash_btn, bg="danger")
-        bulk_trash_btn.configure(fg="white")
+        # Quiet, in the warning's words: the notes go to the Trash. The dark
+        # red fill is kept for what cannot be undone.
+        self.track_theme(bulk_trash_btn, bg="card", fg="danger_text")
         _bulk_pack(bulk_trash_btn)
 
         bottom_row = _bulk_row()
@@ -13309,8 +13352,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             bottom_row, text="🗂 Category ▾",
             relief="flat", font=("Segoe UI", 8), cursor="hand2")
         self._toggles_its_popup(bulk_category_btn, self._bulk_change_category)
-        self.track_theme(bulk_category_btn, bg="accent")
-        bulk_category_btn.configure(fg="white")
+        # Quiet, as Export beside it: a menu, not the bar's main action,
+        # and a fill here read as "already chosen".
+        self.track_theme(bulk_category_btn, bg="card", fg="text")
         _bulk_pack(bulk_category_btn)
         self._bulk_category_btn = bulk_category_btn
         bulk_export_btn = tk.Button(
@@ -13384,9 +13428,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         new_btn = tk.Button(
             bottom_zone, text="+ New Note", command=self.open_blank_tab,
-            fg="white", relief="flat", font=("Segoe UI", 11, "bold"), cursor="hand2"
+            relief="flat", font=("Segoe UI", 11, "bold"), cursor="hand2"
         )
-        self.track_theme(new_btn, bg="accent", activebackground="accent_hover")
+        self.track_theme(new_btn, bg="accent", fg="on_accent",
+                         activebackground="accent_hover",
+                         activeforeground="on_accent")
         # Each button's packing is kept (_fit_sidebar_panel packs a button
         # back exactly as it was after it stepped aside for an open panel).
         new_kw = dict(fill="x", padx=15, pady=(10, 4), ipady=8)
@@ -13515,7 +13561,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             command=self._return_to_calendar, relief="flat", cursor="hand2",
             font=("Segoe UI", 9, "bold")
         )
-        self.track_theme(self.calendar_return_btn, bg="bg", fg="accent")
+        self.track_theme(self.calendar_return_btn, bg="bg", fg="accent_text")
 
         # Shown only while the editor holds one DAY of a repeating series:
         # the date field shows the series' start date, so without this
@@ -13525,7 +13571,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.editor, text="", font=("Segoe UI", 9, "bold"),
             anchor="center"
         )
-        self.track_theme(self.occurrence_banner, bg="bg", fg="accent")
+        self.track_theme(self.occurrence_banner, bg="bg", fg="accent_text")
 
         top_row = tk.Frame(self.editor)
         self.track_theme(top_row, bg="bg")
@@ -14224,8 +14270,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             attach_header, text="+ Add file", command=self.add_attachment,
             relief="flat", font=("Segoe UI", 8, "bold"), cursor="hand2"
         )
-        self.track_theme(add_attach_btn, bg="accent")
-        add_attach_btn.configure(fg="white")
+        self.track_theme(add_attach_btn, bg="accent", fg="on_accent")
         add_attach_btn.pack(side="right")
 
         self.current_attachments = []  # list of {"filename": original name, "stored_as": name on disk}
@@ -14239,50 +14284,63 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.track_theme(action_row, bg="bg")
         action_row.pack(fill="x", padx=30, pady=(0, 8))
 
+        # Each names its pressed colours too: left out, Tk pressed them in
+        # the system's grey with black words, whatever the theme.
         save_btn = tk.Button(
             action_row, text="💾 Save", command=self.save_current_note,
-            fg="white", relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
+            relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
         )
-        self.track_theme(save_btn, bg="success")
-
-        delete_btn = tk.Button(
-            action_row, text="🗑 Delete", command=self.delete_current_note,
-            fg="white", relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
-        )
-        self.track_theme(delete_btn, bg="danger")
+        self.track_theme(save_btn, bg="success", fg="on_success",
+                         activebackground="success_pressed",
+                         activeforeground="on_success")
 
         share_btn = tk.Button(
             action_row, text="📋 Generate code", command=self.share_current_note_as_code,
-            fg="white", relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
+            relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
         )
-        self.track_theme(share_btn, bg="accent")
+        self.track_theme(share_btn, bg="sidebar", fg="text",
+                         activebackground="card", activeforeground="text")
+
+        # Quiet, with the warning colour in its words: the note goes to the
+        # Trash, so it need not shout, and on a light theme a filled dark red
+        # was the loudest thing on screen. Save is the one filled button,
+        # and Generate code stands between them.
+        delete_btn = tk.Button(
+            action_row, text="🗑 Delete", command=self.delete_current_note,
+            relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
+        )
+        self.track_theme(delete_btn, bg="sidebar", fg="danger_text",
+                         activebackground="card", activeforeground="danger_text")
 
         duplicate_btn = tk.Button(
             action_row, text="📄 Duplicate", command=self.duplicate_current_note,
-            fg="white", relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
+            relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
         )
-        self.track_theme(duplicate_btn, bg="sidebar")
-        duplicate_btn.configure(fg=self.colors["text"])
+        self.track_theme(duplicate_btn, bg="sidebar", fg="text",
+                         activebackground="card", activeforeground="text")
 
         template_btn = tk.Button(
             action_row, text="🧩 Save as template",
             command=self.save_current_as_template,
             relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
         )
-        self.track_theme(template_btn, bg="sidebar", fg="text")
+        self.track_theme(template_btn, bg="sidebar", fg="text",
+                         activebackground="card", activeforeground="text")
 
         use_template_btn = tk.Button(
             action_row, text="📎 Use template",
             relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
         )
         self._toggles_its_popup(use_template_btn, self.show_template_picker)
-        self.track_theme(use_template_btn, bg="sidebar", fg="text")
+        self.track_theme(use_template_btn, bg="sidebar", fg="text",
+                         activebackground="card", activeforeground="text")
         self.use_template_btn = use_template_btn
 
         # Two rows of three in a neat grid. Columns share equal width and the
         # buttons fill their cell, so the two rows line up cleanly regardless of
-        # each button's text length.
-        grid_buttons = [save_btn, delete_btn, share_btn,
+        # each button's text length. Built in this order, so Tab walks them
+        # as they read.
+        grid_buttons = [save_btn, share_btn, delete_btn,
                         duplicate_btn, template_btn, use_template_btn]
         for col in range(3):
             action_row.grid_columnconfigure(col, weight=1, uniform="editbtn")
@@ -14372,7 +14430,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         error_lbl = tk.Label(
             frame, text="", font=("Segoe UI", 8),
-            bg=self.colors["card"], fg=self.colors["danger"]
+            bg=self.colors["card"], fg=self.colors["danger_text"]
         )
         error_lbl.pack(pady=(6, 0))
 
@@ -14398,7 +14456,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         btn_row.pack(fill="x", padx=16, pady=(10, 14))
 
         tk.Button(
-            btn_row, text="Go", command=_go, bg=self.colors["accent"], fg="white",
+            btn_row, text="Go", command=_go, bg=self.colors["accent"], fg=self._on_fill("accent"),
             relief="flat", font=("Segoe UI", 9, "bold"), cursor="hand2"
         ).pack(side="left", fill="x", expand=True, padx=(0, 4), ipady=5)
 
@@ -14843,7 +14901,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         grid_frame, text=str(day), width=4, relief="flat",
                         font=("Segoe UI", 9, "bold" if is_selected else "normal"),
                         bg=(self.colors["accent"] if is_selected else self.colors["sidebar"]),
-                        fg=("white" if is_selected else self.colors["text"]),
+                        fg=(self._on_fill("accent") if is_selected
+                            else self.colors["text"]),
                         cursor="hand2", command=lambda d=date_str: _pick(d)
                     )
                     btn.grid(row=r, column=c, padx=1, pady=1)
@@ -14897,7 +14956,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         self.rec_summary_lbl = tk.Label(freq_row, text="", font=("Segoe UI", 8, "italic"),
                                         justify="left")
-        self.track_theme(self.rec_summary_lbl, bg="bg", fg="accent")
+        self.track_theme(self.rec_summary_lbl, bg="bg", fg="accent_text")
         self.rec_summary_lbl.pack(side="left")
 
         def _wrap_summary(_event=None):
@@ -15135,7 +15194,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def refresh_weekday_buttons(self):
         for index, btn in enumerate(getattr(self, "rec_weekday_btns", [])):
             if self.rec_weekday_state[index]:
-                btn.configure(bg=self.colors["accent"], fg="white",
+                btn.configure(bg=self.colors["accent"], fg=self._on_fill("accent"),
                               activebackground=self.colors["accent_hover"])
             else:
                 btn.configure(bg=self.colors["card"], fg=self.colors["subtext"],
@@ -17600,14 +17659,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _retint_find_tags(self, text_widget):
         """(Re)apply the find highlight colours for the current palette.
         Both colours are blended from the theme, so a theme switch must
-        refresh them or the next find would paint in the old accent."""
+        refresh them or the next find would paint in the old accent. The
+        current match is the full accent, and the note's own text colour
+        fell below 4.5:1 on it in every theme: its words are letters_on."""
         try:
-            text_widget.tag_configure(
-                "find_all",
-                background=self._blend_hex(self.colors["accent"],
-                                           self.colors["card"], 0.35))
+            text_widget.tag_configure("find_all",
+                                      background=find_all_surface(self.colors))
             text_widget.tag_configure("find_current",
-                                      background=self.colors["accent"])
+                                      background=self.colors["accent"],
+                                      foreground=self._on_fill("accent"))
         except tk.TclError:
             pass
 
@@ -17919,7 +17979,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         menu = self._new_context_menu(tearoff=0)
         menu.configure(
             bg=self.colors["card"], fg=self.colors["text"],
-            activebackground=self.colors["accent"], activeforeground="white",
+            activebackground=self.colors["accent"], activeforeground=self._on_fill("accent"),
             relief="flat", bd=0, font=("Segoe UI", 9)
         )
 
@@ -17945,7 +18005,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         export_menu = tk.Menu(menu, tearoff=0)
         export_menu.configure(
             bg=self.colors["card"], fg=self.colors["text"],
-            activebackground=self.colors["accent"], activeforeground="white",
+            activebackground=self.colors["accent"], activeforeground=self._on_fill("accent"),
             relief="flat", bd=0, font=("Segoe UI", 9)
         )
         for fmt, fmt_label in (
@@ -17964,7 +18024,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         cat_menu = tk.Menu(menu, tearoff=0)
         cat_menu.configure(
             bg=self.colors["card"], fg=self.colors["text"],
-            activebackground=self.colors["accent"], activeforeground="white",
+            activebackground=self.colors["accent"], activeforeground=self._on_fill("accent"),
             relief="flat", bd=0, font=("Segoe UI", 9)
         )
         current_cat = (note or {}).get("category")
@@ -20371,11 +20431,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._toast_kind = kind
         try:
             self.toast_frame.configure(bg=color)
-            self.toast_lbl.configure(text=f"{mark}  {text}", bg=color, fg="white")
+            self.toast_lbl.configure(text=f"{mark}  {text}", bg=color,
+                                     fg=letters_on(color))
             if action is not None:
                 # Recoloured here, not tracked: see where it is built.
                 self.toast_action_lbl.configure(text=action_text, bg=color,
-                                                fg="white", padx=0)
+                                                fg=letters_on(color), padx=0)
                 self.toast_action_lbl.pack(side="left", padx=(0, 14))
             else:
                 self.toast_action_lbl.pack_forget()

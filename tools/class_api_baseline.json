@@ -441,6 +441,7 @@
   "_on_body_tab": "(self, event, delta)",
   "_on_comments_paste": "(self, event=None)",
   "_on_data_write_failure": "(self, path, exc)",
+  "_on_fill": "(self, role)",
   "_on_format_bar_resize": "(self, event)",
   "_on_main_canvas_configure": "(self, event)",
   "_on_popup_window_event": "(self, token, widget_path='')",

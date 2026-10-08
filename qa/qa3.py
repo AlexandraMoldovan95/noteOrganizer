@@ -1723,6 +1723,10 @@ else:
     check('...including the Undo word inside it',
           str(app.toast_action_lbl.cget('bg')).lower()
           == NO.THEMES[_u_other]['success'].lower())
+    check('...and its words are re-picked for the new fill',
+          {str(app.toast_lbl.cget('fg')).lower(),
+           str(app.toast_action_lbl.cget('fg')).lower()}
+          == {NO.letters_on(NO.THEMES[_u_other]['success']).lower()})
     check('...and it still works after the switch',
           app._toast_action is not None)
     _qa_click(app.toast_action_lbl); app.update()

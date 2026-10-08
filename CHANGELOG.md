@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.89.365](#089365--2026-10-08) | 2026-10-08 | Every coloured word and button readable in every theme, Save and Delete told apart without colour, and a dark red fill kept for what cannot be undone. |
 | [0.89.362](#089362--2026-10-08) | 2026-10-08 | A welcome note that greets a first start and shows each part of the app, and emoji from the app's own pickers that leave no gap after them. |
 | [0.88.361](#088361--2026-10-08) | 2026-10-08 | What two re-tests asked for: a table that moves with its caption, a filter for notes with files, checklist items you can move, a Share panel that searches and keeps the list's order, and a find bar that reads on every theme. |
 | [0.84.357](#084357--2026-10-07) | 2026-10-07 | What a first full manual pass found: ticks on dark themes, tables that copy as they look, a list that keeps your place, imports that ask, and bold from a web page that stays bold. |
@@ -95,8 +96,50 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+---
+
+## [0.89.365] — 2026-10-08
+
+*Highlights: every coloured word and button now reads in every theme, measured — the palette
+chosen with a panel of reviewers over five rounds on the running app. Save is the one filled
+button in the editor, Save and Delete differ in lightness as well as hue so a colour-blind reader
+tells them apart, and a dark red fill now means "this cannot be undone".*
+
+### Fixed
+
+- **Coloured words and buttons read in every theme.** The accent, the warning red and the
+  confirming green each did two jobs — words on a surface and a button under white words — and
+  71 of those pairs were below WCAG AA (4.5:1), Save's white on mint as low as 1.8:1. Each role
+  now has a fill and a text shade, and the words on a fill are white or near-black, whichever
+  reads (`letters_on`). The warning fill is dark with white words and the confirming fill light
+  with dark words in every theme, so a colour-blind reader tells them apart too: simulated,
+  Save and Delete had been the same khaki in all eight themes. The palette was chosen from five
+  proposals photographed on the app; most themes keep their colours, Warm Cream stays orange,
+  Midnight Purple's accent is a lighter violet, and Save turns turquoise where the accent is
+  green or orange. The "nothing found" tint is unchanged.
+- **The find bar's current match is readable.** It is drawn in the full accent, and the note's
+  own text colour sat below 4.5:1 on it in every theme; its words now take the colour that
+  reads on that fill.
+- **A card's tags line reads, whatever its colour.** The line under a note's title is written
+  in its category's or its own colour, and picked for its look that colour often did not read:
+  the default Personal yellow was 1.6:1 on a light card, General's violet 3.0:1 on a dark one.
+  The stripe beside the card keeps the colour whole; the words take the nearest shade of it that
+  reads at 4.6:1 on the card — on a light card a darker shade of the same hue, so the yellow
+  turns mustard rather than khaki.
+
 ### Changed
 
+- **Save is the one filled button in the editor, and a dark red fill means "for good".** The
+  editor's row had three filled buttons of equal weight. Generate code now looks like Duplicate
+  and stands between Save and Delete, Delete is quiet with red words, and each button has its
+  own pressed colours — Save darkens while held. The moves to the Trash — the editor's Delete,
+  a day's note in the calendar, the selection bar's Trash, the Duplicates clean-up — wear the
+  warning's words rather than its fill; the dark red fill marks a single deletion that cannot
+  be undone: a row's Delete in the Trash and an attachment's ✕. Two buttons keep their own look
+  on purpose: Empty trash, final for everything in it, is outlined so it is findable rather than
+  inviting and asks first; the Duplicates panel's "Move ticked…" is that panel's main action,
+  in the accent, above the clean-up. The selection bar's Category menu is quiet, as Export is,
+  and the question before attaching only some of the files picked no longer wears a red Yes.
 - **A source run can keep its notebook outside the working tree.** A `notebook_location.txt`
   beside `note_organizer.py`, git-ignored, names the folder — one path on a line, environment
   variables allowed (`%LOCALAPPDATA%\NoteOrganizer-dev`). Every notebook this project lost was
@@ -111,6 +154,20 @@ How the numbers themselves are counted is the
   back with a warning when the folder cannot be used, and starts a process of its own against a
   stand-in APPDATA to show the folder named brings nothing in — beside a control without the
   file, which does copy. Mutants NL01–NL04 take each part back out.
+- `tools/check_contrast.py` measures 208 pairs now, all at AA: the text shades, the words on
+  every fill, on its hover and on a held-down Save, the surfaces the app mixes (the Settings
+  section tint, the warning buttons' and the bins' hover, the find matches), with a drawn glyph
+  held to WCAG's 3:1. It also fails when a theme's accent has no window icon — the app finds the icon by the
+  accent's colour and quietly fell back to the default — and when an icon is left over for an
+  accent no theme wears, which the build would ship unused. qa1 walks every widget showing
+  words on a fill, in all eight themes; follows the editor's row (its order, its Tab order and
+  its pressed colours), an untracked button and Tk's own "white" across theme switches; and
+  reads a card's tags line drawn and recoloured. qa7 and qa2 check that the calendar's Delete
+  and the Duplicates clean-up are quiet moves to the Trash, and that the clean-up sits below the
+  panel's main action; qa6 that the question before attaching only some files is no warning.
+  test_data_safety checks the words, the darker warning fill, a held-down Save's shade, every
+  swatch as words on every card (4.6:1, the warm ones keeping their hue), and the fixed
+  "nothing found" tint. Mutants PC01–PC21 take each part back out.
 
 ---
 
