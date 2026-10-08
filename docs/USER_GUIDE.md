@@ -455,7 +455,7 @@ at startup, at every pause in typing, and every time you came back to the list.*
 To search *within* the note you already have open, press **Ctrl+F**. A small find bar appears in
 the top-right corner of the editor — inside the window, not a separate dialog. It looks through
 the note's text and its tables: type a word and every match highlights, with the current one
-picked out; **Enter** and **Shift+Enter** step forward and back (wrapping around at the ends), the
+filled in and boxed; **Enter** and **Shift+Enter** step forward and back (wrapping around at the ends), the
 count reads "3/12", and **Aa** switches on case-sensitivity. A match inside a table scrolls the
 table into view and outlines the cell it's in. Words found nowhere tint the box a light shade of
 red and the count reads "0/0". Find only highlights — it never changes the note — and **Esc** or

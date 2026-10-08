@@ -157,6 +157,7 @@ is in the table below as well.
 | [The border that went grey whenever it was used](#the-border-that-went-grey-whenever-it-was-used) | A check that reads the option you set proves the option, not the colour on the screen; photograph what a person sees. | 0.88.361 |
 | [The heart that left a gap](#the-heart-that-left-a-gap) | An invisible character is still drawn; when the toolkit draws it badly, keep it out of what the app writes, and say what is left. | 0.89.362 |
 | [Save and Delete, the same khaki](#save-and-delete-the-same-khaki) | A gate measures the pairs it was told about — walk what is on the screen; and two colours that differ only in hue are one colour to a reader who cannot see hue. | 0.89.365 |
+| [Two answers to one question](#two-answers-to-one-question) | Two helpers answering one question disagree somewhere — measure them against each other; and a base theme's state map silently overrides what you configured. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -3435,6 +3436,38 @@ bending to the word.
 And two colours that differ only in hue are one colour to a reader who cannot see hue — make the
 destructive one the dark one. A rule stated in the docs is a claim about every instance: trace
 each one to the function it calls before writing it down.
+
+### Two answers to one question
+
+*(next release · found by showing the app to simulated colour-blind readers)*
+
+**Symptom:** none reported. Photographs of the running app were simulated for protanopia,
+deuteranopia and tritanopia (Machado 2009, full severity) and given to three reviewers who saw
+only those, with a fourth seeing the originals as the control. None was blocked. All four
+hesitated over the find bar's current match, and two over which tab was open.
+
+**Root cause:** three, none of them a colour. The current match differed from the others by its
+fill alone — the match inside a table cell was already boxed. The open tab was drawn smaller
+than the closed one: the base theme, clam, maps its own padding for a selected tab, and a state
+map beats a configured value, so the app's padding applied to every tab but the open one. And
+the letters for a colour the person picks had a formula of their own. `contrasting_fg` used a
+brightness threshold; `letters_on`, written the same morning for the palette, used the measured
+contrast — and its docstring said the two answered "a different question". Measured on the 20
+colours a day can be painted, they disagreed on 9, the old one putting white at 2.2:1 on the
+light blue. They answered the same question; one answered it worse. The colour picker's tick,
+the only sign of the colour in use when two swatches look alike, was a literal white beside
+both.
+
+**Fix:** the current match is boxed (a `solid` relief, which Tk draws dark on any fill). The
+selected tab's padding is restated in the app's own `style.map`, 4px taller than the others,
+so the open tab is the raised one. `contrasting_fg` is `letters_on` by name, and the tick takes
+the same letters. The checks read the promise rather than the option: where each tab begins on
+screen, the tick on all 20 colours at 4.1:1 or better, every pickable colour given the letters
+that read on it.
+
+**Takeaway:** two helpers answering one question disagree somewhere — measure them against each
+other before writing that they differ. And a base theme's state map overrides the value you
+configured, silently: list what it maps for every option you set.
 
 ## Coordinate systems & units
 

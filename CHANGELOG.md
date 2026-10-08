@@ -96,6 +96,39 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+*Found by showing the app to colour-blind readers: photographs of the running app, simulated
+for protanopia, deuteranopia and tritanopia, read by four reviewers — three seeing only the
+simulated pictures, one with normal colour vision as the control.*
+
+### Fixed
+
+- **The find bar's current match is boxed.** It was told from the other matches by its fill
+  alone, which to a colour-blind eye was one shade among three — all four readers hesitated
+  over it, the control included. It now has a thin box, as a match inside a table cell already
+  had.
+- **The open tab stands taller than the other.** The Notes and Calendar tabs drew the open one
+  smaller and lower: the base theme's padding for a selected tab replaced the app's, so the
+  tab's shape said the opposite of its colour. The open tab is now the raised one, which reads
+  without its colour.
+- **Letters on a colour you pick read on it.** A painted calendar day's number, titles and
+  markers, and the text-colour and highlight buttons showing their colour, chose white or
+  near-black by a brightness threshold of their own, and put white on 9 of the 20 colours a
+  day can be painted — 2.2:1 on the light blue. They now use the same measured answer as every
+  button in the app.
+- **The colour picker's tick shows on every swatch.** The tick marking the colour in use was
+  always white, 1.3:1 on the yellow and below 3:1 on 13 of the 20 colours — and when two
+  swatches look alike to a colour-blind eye, the tick is the only way to tell which is in use.
+
+### Testing
+
+- Five checks across qa1, qa7 and the unit suite: the current match boxed, before and after a
+  theme switch; the open tab taller than the other under two themes, measured where each tab
+  begins; the picker's tick at 4.1:1 or better on all 20 colours; every pickable colour (39)
+  given the letters that read on it. Four mutants (CB01–CB04), each killed. The two qa7 checks
+  that promised white on a painted orange day now promise the near-black that reads there.
+- The screenshot tools open a note the way a person does, so the README's main window shows
+  the open note's ring.
+
 ---
 
 ## [0.89.365] — 2026-10-08
