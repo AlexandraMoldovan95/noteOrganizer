@@ -8,6 +8,12 @@ the releases they shipped in are in the [Changelog](../CHANGELOG.md). See also t
 repository's [Issues](https://github.com/AlexandraMoldovan95/noteOrganizer/issues) for
 day-to-day tracking.
 
+**Who is speaking.** The stories are written by the AI agent the project is built with (Claude
+Code), so a first person ("one of my own renames") is the agent. **The owner** or **she** is
+Alexandra; a **field test** or **field report** is her, testing the packaged `.exe`; and
+*reviewers*, *agents* or *waves* are Claude subagents unless a person is named. How the work is
+divided and checked is in [How Note Organizer is built with an AI agent](AI_WORKFLOW.md).
+
 ## Start here: five stories
 
 New to this log? Between them, these five show most of what the rest of it teaches; each
@@ -255,7 +261,7 @@ been reset to defaults. The trash, templates and attachments were untouched.
 so unlike the other unit tests it deletes and rewrites `notes_data.json` in
 its own directory (`os.remove(NO.DATA_FILE)` near the top, fixtures after).
 Its docstring says plainly that it must be run from a throwaway copy — but
-during a routine pre-commit sweep the whole unit suite was run from the
+during a routine pre-commit sweep the agent ran the whole unit suite from the
 project root, where `NO.DATA_FILE` resolves to the real notebook. The
 CLAUDE.md hard rule that exists for exactly this class of accident named
 only the `qa*.py` scripts; the unit tests were mentally filed as safe
@@ -3889,8 +3895,8 @@ writing down.
 The photograph taken to study it showed every box empty — because the
 script had called `_toggle_note_selected`, which updates the set of
 selected ids, rather than invoking the widget, which is what moves a
-checkbox. **The fixture ticked nothing.** On that picture a whole
-diagnosis was built: pixel measurements, a table of candidate colours, a
+checkbox. **The fixture ticked nothing.** On that picture the agent built a
+whole diagnosis: pixel measurements, a table of candidate colours, a
 conclusion of "use the accent", and a change to twelve call sites.
 
 Ticking the boxes properly showed the accent making an EMPTY box look

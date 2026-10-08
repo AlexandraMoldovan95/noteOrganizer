@@ -1100,8 +1100,8 @@ changed.
 
 ## Testing
 
-Everything runs automatically on every Pull Request, and on every push to
-`main`, via GitHub Actions
+Everything runs automatically on every Pull Request, and every push to
+`main`, that changes more than the documentation, via GitHub Actions
 (`.github/workflows/tests.yml`), on **both** Windows and Linux: the Linux job supplies a
 virtual display via Xvfb, and Windows runs through native win32, which is what makes the
 platform-specific pixel checks bite in CI. A regression shows up as a failed check rather than

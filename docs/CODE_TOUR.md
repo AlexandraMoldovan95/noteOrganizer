@@ -107,8 +107,8 @@ docs/                     these documents
 qa/                       headless GUI tests, the stories and the test plan
 test_*.py                 seven unit suites; six need no window
 tools/                    what CI runs, and the tools behind the docs' numbers
-├── check_*.py            eight static gates: seven on every pull request, links before a push
-├── pre_push_check.py     all eight, locally, in seconds
+├── check_*.py            nine static gates: eight in CI, the link check before a push
+├── pre_push_check.py     the gates, locally, in seconds (links in, mutant targets left to CI)
 ├── run_tests.py          the whole suite, safely, from a scratch copy
 ├── run_coverage.py       the whole suite again, measuring what it executes
 ├── mutate.py             takes each fix away and checks a check fails
