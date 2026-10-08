@@ -113,16 +113,19 @@ How the numbers themselves are counted is the
 - **A card's tags line reads, whatever its colour.** The line under a note's title is written
   in its category's or its own colour, and picked for its look that colour often did not read:
   the default Personal yellow was 1.6:1 on a light card, General's violet 3.0:1 on a dark one.
-  The stripe beside the card keeps the colour whole; the words take a shade of it that reads at
-  4.5:1 on the card, as much of its hue as reading allows.
+  The stripe beside the card keeps the colour whole; the words take the nearest shade of it that
+  reads at 4.6:1 on the card — on a light card a darker shade of the same hue, so the yellow
+  turns mustard rather than khaki.
 
 ### Changed
 
-- **Save is the one filled button in the editor.** Its row had three filled buttons of equal
-  weight. Generate code now looks like Duplicate beside it, and Delete is quiet with red words:
-  the note goes to the Trash, and a filled dark red was the loudest thing on a light theme.
-  Where a deletion is final — the Trash itself, a day's note in the calendar, the selection bar
-  — Delete keeps its dark red fill.
+- **Save is the one filled button in the editor, and a dark red fill means "for good".** The
+  editor's row had three filled buttons of equal weight. Generate code now looks like Duplicate
+  and stands between Save and Delete, and Delete is quiet with red words; each button has its
+  own pressed colours. Every action that only moves notes to the Trash — the editor's Delete,
+  a day's note in the calendar, the selection bar's Trash, the Duplicates clean-up — wears the
+  warning's words rather than its fill; the dark red fill is kept for what cannot be undone: a
+  row's Delete in the Trash and an attachment's ✕.
 - **A source run can keep its notebook outside the working tree.** A `notebook_location.txt`
   beside `note_organizer.py`, git-ignored, names the folder — one path on a line, environment
   variables allowed (`%LOCALAPPDATA%\NoteOrganizer-dev`). Every notebook this project lost was
@@ -143,10 +146,12 @@ How the numbers themselves are counted is the
   3:1. It also fails when a theme's accent has no window icon — the app finds the icon by the
   accent's colour and quietly fell back to the default — and when an icon is left over for an
   accent no theme wears, which the build would ship unused. qa1 walks every widget showing
-  words on a fill, in all eight themes; follows the editor's row, an untracked button and Tk's
-  own "white" across theme switches; and reads a card's tags line drawn and recoloured.
-  test_data_safety checks the words, the darker warning fill, every swatch as words on every
-  card, and the fixed "nothing found" tint. Mutants PC01–PC11 take each part back out.
+  words on a fill, in all eight themes; follows the editor's row (its order, its Tab order and
+  its pressed colours), an untracked button and Tk's own "white" across theme switches; and
+  reads a card's tags line drawn and recoloured. qa7 and qa2 check that the calendar's Delete
+  and the Duplicates clean-up are quiet moves to the Trash. test_data_safety checks the words,
+  the darker warning fill, every swatch as words on every card (4.6:1, the warm ones keeping
+  their hue), and the fixed "nothing found" tint. Mutants PC01–PC17 take each part back out.
 
 ---
 

@@ -3420,9 +3420,17 @@ quiet, in red words (the note goes to the Trash), leaving Save the one filled bu
 the tags line under each card's title, written in a colour the person picked, now takes a shade
 of it that reads (`legible_on`) while the stripe keeps it whole.
 
+A third look found a sentence wrong rather than a colour. The docs said the dark fill stayed
+"where a deletion is final", and named the calendar's day and the selection bar — read in the
+code, both call the same move to the Trash as the editor's Delete. A rule had been written down
+from three examples nobody had traced. It is true now: the dark red fill means "cannot be
+undone" (a Trash row's Delete, an attachment's ✕), and every move to the Trash wears the
+warning's words, the Duplicates clean-up outlined so it still reads as a button.
+
 **Takeaway:** a gate measures the pairs it was told about; walk what is on the screen instead.
 And two colours that differ only in hue are one colour to a reader who cannot see hue — make the
-destructive one the dark one.
+destructive one the dark one. A rule stated in the docs is a claim about every instance: trace
+each one to the function it calls before writing it down.
 
 ## Coordinate systems & units
 

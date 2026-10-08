@@ -27,7 +27,7 @@ in one place they control.
 
 | | | |
 |---|---|---|
-| ![The main window, with a table in a note](docs/screenshots/main-window.png) | ![A repeating note](docs/screenshots/recurrence-setup.png) | ![Settings](docs/screenshots/settings-overview.png) |
+| ![The main window, with a table in a note](docs/screenshots/main-window.png) | ![A repeating note](docs/screenshots/recurrence-setup.png) | ![The eight themes, in Settings → Appearance](docs/screenshots/theme-picker.png) |
 
 Every picture is a capture of the app itself, and its icon is drawn from
 code ([where they come from](docs/screenshots/README.md)).

@@ -437,8 +437,9 @@ expected (`track_theme`, `palette_keys`), which `palette_value()` resolves.
 That way a fill and its words cannot drift apart from one theme to the
 next. A colour the person picked (a category's, a note's own) goes the
 other way: `legible_on(colour, card, text)` keeps it if it reads as
-words on the card and otherwise mixes it toward the text colour until it
-does — that is the tags line under a card's title. Why two shades per
+words on the card and otherwise finds the nearest shade that does — darker
+in the same hue on a light card, toward the text colour on a dark one;
+that is the tags line under a card's title. Why two shades per
 role, and how they were chosen, is in
 [ARCHITECTURE](ARCHITECTURE.md#contrast-measured).
 

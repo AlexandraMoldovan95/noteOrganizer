@@ -945,10 +945,11 @@ Switch between Dark and Light mode, and pick from four variants of each, in Sett
 The choice is remembered the next time you open the app.
 
 Every theme is measured so its coloured words and buttons stay readable. In the editor, **Save is
-the one filled button** and Delete is a quiet one with red words — the note goes to the Trash,
-where you can get it back. Where a deletion is final, as in the Trash itself, Delete is the dark
-red button with white words, and a confirming button is a light one with dark words, so the two
-look different even to someone who cannot tell red from green. A category's or a note's own
+the one filled button** and Delete is a quiet one with red words. Red words mean "this goes to the
+Trash, where you can get it back" — in the editor, on a day in the calendar, in the selection bar.
+**A filled dark red button means "for good"**: a row's Delete in the Trash, or the ✕ that removes
+an attachment. A confirming button is a light one with dark words, so the two look different even
+to someone who cannot tell red from green. A category's or a note's own
 colour stays whole on the stripe beside its card; the small words under the title take a shade of
 it that can be read on the card
 ([how the colours were chosen](ARCHITECTURE.md#contrast-measured)).

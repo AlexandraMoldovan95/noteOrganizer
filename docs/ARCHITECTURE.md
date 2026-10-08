@@ -541,10 +541,17 @@ The same reviewers, shown the result on the running app, found the next layer: o
 theme the dark red Delete was now the loudest thing in the window (7.3:1 against it) and Save
 the palest (2.3–2.6:1). So the editor's Delete became a quiet button with the warning's text
 shade — the note goes to the Trash, and can come back — and Save is the one filled button
-there; where a deletion is final (the Trash, a day's note in the calendar, the selection bar),
-Delete keeps the dark fill. Midnight Purple's accent moved lighter, `#8771ff` → `#a48fff`: the
-near-black words on it had read as muddy in the README's own screenshot, and the lighter shade
-raises them to 6.6:1 and the selected note's ring to 5.0:1.
+there. Midnight Purple's accent moved lighter, `#8771ff` → `#a48fff`: the near-black words on it
+had read as muddy in the README's own screenshot, and the lighter shade raises them to 6.6:1 and
+the selected note's ring to 5.0:1.
+
+That left a rule worth stating, and a third look caught it stated wrongly: these docs said the
+dark fill stayed "where a deletion is final", naming the calendar's day and the selection bar,
+both of which only move notes to the Trash. The rule is now true in the code: **the dark red
+fill means "cannot be undone"** — a row's Delete in the Trash, an attachment's ✕ — and every
+move to the Trash wears the warning's words instead: the editor's Delete, a day's note in the
+calendar, the selection bar's Trash, and the Duplicates clean-up, outlined as Empty trash is so
+that it still reads as a button (finding C-6 had it blend into its panel once).
 
 Measuring every pair the app draws, rather than the ones the table already had, found three
 it had never measured: the selected Settings section's name on its tint of the accent, a
@@ -564,12 +571,12 @@ text colour on the full accent, below 4.5:1 in every theme. The match's words no
 | accent text on a card or panel | 5.9 | 5.7 | 5.6 | 5.6 | 7.6 | 7.1 | 7.1 | 7.1 |
 | accent text in the sidebar | 6.6 | 6.7 | 6.5 | 6.2 | 6.3 | 5.9 | 5.9 | 5.8 |
 | the selected Settings section's name | 5.0 | 5.2 | 4.8 | 4.8 | 5.1 | 4.8 | 5.1 | 5.1 |
-| warning text on the window | 7.4 | 7.9 | 8.4 | 7.7 | 5.5 | 5.5 | 5.6 | 5.5 |
-| warning text on a card or panel | 6.0 | 5.8 | 6.0 | 6.2 | 6.0 | 6.0 | 6.0 | 6.0 |
-| warning text in the sidebar | 6.7 | 6.9 | 7.0 | 6.8 | 4.9 | 4.9 | 5.0 | 4.9 |
-| a warning button's words, pointed at | 5.8 | 5.8 | 6.0 | 5.9 | 4.7 | 4.7 | 4.7 | 4.7 |
-| a bin on a card, pointed at (a glyph, owes 3:1) | 5.7 | 5.8 | 6.0 | 5.9 | 4.5 | 4.5 | 4.5 | 4.5 |
-| a bin in a list row, pointed at (a glyph, owes 3:1) | 6.3 | 6.6 | 6.9 | 6.4 | 3.8 | 3.7 | 3.8 | 3.7 |
+| warning text on the window | 7.4 | 7.9 | 8.4 | 7.7 | 6.7 | 6.7 | 6.8 | 6.8 |
+| warning text on a card or panel | 6.0 | 5.8 | 6.0 | 6.2 | 7.3 | 7.3 | 7.3 | 7.3 |
+| warning text in the sidebar | 6.7 | 6.9 | 7.0 | 6.8 | 6.1 | 6.0 | 6.1 | 6.0 |
+| a warning button's words, pointed at | 5.8 | 5.8 | 6.0 | 5.9 | 5.7 | 5.7 | 5.7 | 5.7 |
+| a bin on a card, pointed at (a glyph, owes 3:1) | 5.7 | 5.8 | 6.0 | 5.9 | 5.5 | 5.5 | 5.5 | 5.5 |
+| a bin in a list row, pointed at (a glyph, owes 3:1) | 6.3 | 6.6 | 6.9 | 6.4 | 4.6 | 4.5 | 4.6 | 4.6 |
 | confirmation text on the window | 10.4 | 10.0 | 10.6 | 11.0 | 5.6 | 5.6 | 5.4 | 5.4 |
 | confirmation text on a card or panel | 8.3 | 7.4 | 7.6 | 8.8 | 6.1 | 6.1 | 5.8 | 5.8 |
 | confirmation text in the sidebar | 9.3 | 8.7 | 8.9 | 9.7 | 5.1 | 5.0 | 4.8 | 4.7 |
@@ -583,10 +590,12 @@ text colour on the full accent, below 4.5:1 in every theme. The match's words no
 A note's own colour, or its category's, is the person's choice and so is not in this table, but
 it is shown as words: the tags line on its card. Picked for its look, it often did not read —
 the default Personal yellow was 1.6:1 on a light card. The stripe still wears it whole; the
-words wear `legible_on(colour, card, text)` (in `core/themes.py`), the colour itself when it
-reads at 4.5:1 and otherwise mixed toward the theme's text a step at a time until it does, so
-it keeps as much of its hue as reading allows. test_data_safety holds every swatch the app
-offers to that on every theme's card.
+words wear `legible_on(colour, card, text)` (in `core/themes.py`): the colour itself when it
+reads at 4.6:1 — a step over AA, for canvas text at 8–9 pt — and otherwise the nearest shade
+that does. On a light card that shade is darker in the same hue, a little richer; it was first
+mixed toward the theme's text, which is bluish, and the yellow came out khaki. On a dark card it
+is mixed toward the theme's light text. test_data_safety holds every swatch the app offers to
+4.6:1 on every theme's card, and the warm ones to their hue and saturation.
 
 The last row is the find box's ground while its words are found nowhere: a tint of the warning
 red over white on a light theme (a truer red there, its pink taken out) and over near-black on a
