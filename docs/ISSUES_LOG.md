@@ -156,6 +156,7 @@ is in the table below as well.
 | [Nine regressions in fifteen fixes](#nine-regressions-in-fifteen-fixes) | A fix that changes WHEN something happens must be walked through every reader of that moment, not only the route it was reported on. | 0.84.357 |
 | [The border that went grey whenever it was used](#the-border-that-went-grey-whenever-it-was-used) | A check that reads the option you set proves the option, not the colour on the screen; photograph what a person sees. | 0.88.361 |
 | [The heart that left a gap](#the-heart-that-left-a-gap) | An invisible character is still drawn; when the toolkit draws it badly, keep it out of what the app writes, and say what is left. | 0.89.362 |
+| [Save and Delete, the same khaki](#save-and-delete-the-same-khaki) | A gate measures the pairs it was told about — walk what is on the screen; and two colours that differ only in hue are one colour to a reader who cannot see hue. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -3383,6 +3384,39 @@ with two cascades costs about 3 ms on Windows, with no app code involved.
 
 **Takeaway:** a widget built per event needs an owner that ends it; and "destroy it when the
 call returns" depends on whether the call blocks, which differs by platform.
+
+### Save and Delete, the same khaki
+
+*(found by a panel of reviewers and a colour-blindness simulation; ships in the next release)*
+
+**Symptom:** none reported, which was the point. The contrast gate had listed 71 pairs below
+WCAG AA for weeks — every use of the accent, the warning red and the confirming green, Save's
+white words on mint at 1.8:1 — each waiting on a design decision. A design reviewer, looking at
+the editor's row of three filled buttons, wrote: "colour no longer means anything".
+
+**Root cause:** two, and only the first had been seen. Each role colour did two jobs, words on a
+surface and a button under white words, and on a dark theme no single shade does both; the
+white was written by hand in some forty places, so no palette alone could fix it. The second
+came from simulating the two common colour-vision deficiencies (Machado 2009): Save's green and
+Delete's red came out the same khaki in all eight themes, ΔE2000 8.6–12.7 where 10 and below
+reads as one colour. They differed only in hue, and hue is exactly what about one man in twelve
+does not see. Measuring every pair the app draws, not only the ones in the table, then found
+three nobody had measured: the selected Settings section's name on its tint, a warning button's
+words when pointed at, and find's current match, where the note's own text sat below 4.5:1 on the
+full accent in every theme.
+
+**Fix:** five proposals were photographed on the running app in all eight themes and chosen by
+eye. Each role now has a fill and a text shade, and the words on a fill are never written down:
+`letters_on` picks white or near-black by the gate's own measure. Delete is the dark fill with
+white words and Save a light one with dark words in every theme, so they differ in lightness,
+not only in hue: ΔE2000 20.7 at the closest. The theme switch's straggler net picks a fill's
+words by the fill they sit on, because a remap by value would have turned white words into a
+dark theme's card. The gate measures 200 pairs now, mixed surfaces included, and qa1 walks every
+widget showing words on a fill, in every theme.
+
+**Takeaway:** a gate measures the pairs it was told about; walk what is on the screen instead.
+And two colours that differ only in hue are one colour to a reader who cannot see hue — make the
+destructive one the dark one.
 
 ## Coordinate systems & units
 

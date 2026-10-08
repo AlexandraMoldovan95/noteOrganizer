@@ -944,6 +944,11 @@ keys that only mean something inside a list, in the find bar, or on the note lis
 Switch between Dark and Light mode, and pick from four variants of each, in Settings → Appearance.
 The choice is remembered the next time you open the app.
 
+Every theme is measured so its coloured words and buttons stay readable. In each of them **Delete
+is the dark red button with white words and Save a light one with dark words**, so the two look
+different even to someone who cannot tell red from green
+([how the colours were chosen](ARCHITECTURE.md#contrast-measured)).
+
 At the end of the formatting toolbar sits a small **light/dark switch** (☀ / 🌙): one press flips
 between your last light and last dark theme without leaving the note. The full theme picker, with
 all eight variants, stays in **Settings → Appearance**.

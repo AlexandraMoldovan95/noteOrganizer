@@ -95,8 +95,26 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+### Fixed
+
+- **Coloured words and buttons read in every theme.** The accent, the warning red and the
+  confirming green each did two jobs — words on a surface and a button under white words — and
+  71 of those pairs were below WCAG AA (4.5:1), Save's white on mint as low as 1.8:1. Each role
+  now has a fill and a text shade, and the words on a fill are white or near-black, whichever
+  reads (`letters_on`). Delete is the dark fill with white words and Save the light one with
+  dark words in every theme, so a colour-blind reader tells them apart too: simulated, the two
+  had been the same khaki in all eight themes. The palette was chosen from five proposals
+  photographed on the app; most themes keep their colours, Warm Cream stays orange, and Save
+  turns turquoise where the accent is green or orange. The "nothing found" tint is unchanged.
+- **The find bar's current match is readable.** It is drawn in the full accent, and the note's
+  own text colour sat below 4.5:1 on it in every theme; its words now take the colour that
+  reads on that fill.
+
 ### Changed
 
+- **Generate code is a quiet button.** The editor's row had three filled buttons of equal
+  weight; Generate code now looks like Duplicate beside it, so the two filled ones left — Save,
+  and Delete — say which actions matter.
 - **A source run can keep its notebook outside the working tree.** A `notebook_location.txt`
   beside `note_organizer.py`, git-ignored, names the folder — one path on a line, environment
   variables allowed (`%LOCALAPPDATA%\NoteOrganizer-dev`). Every notebook this project lost was
@@ -111,6 +129,14 @@ How the numbers themselves are counted is the
   back with a warning when the folder cannot be used, and starts a process of its own against a
   stand-in APPDATA to show the folder named brings nothing in — beside a control without the
   file, which does copy. Mutants NL01–NL04 take each part back out.
+- `tools/check_contrast.py` measures 200 pairs now, all at AA: the text shades, the words on
+  every fill and on its hover, the surfaces the app mixes (the Settings section tint, the
+  warning buttons' and the bins' hover, the find matches), with a drawn glyph held to WCAG's
+  3:1. It also fails when a theme's accent has no window icon — the app finds the icon by the
+  accent's colour and quietly fell back to the default. qa1 walks every widget showing words on
+  a fill, in all eight themes; follows the editor's row, an untracked button and Tk's own
+  "white" across theme switches; and test_data_safety checks the words, the darker Delete and
+  the fixed "nothing found" tint. Mutants PC01–PC07 take each part back out.
 
 ---
 

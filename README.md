@@ -104,9 +104,6 @@ feature added so far, the last every fix
 - The entry file is still large: it is the window's shared surface, split
   as far as measurement supports
   ([why](docs/ARCHITECTURE.md#case-study-deciding-the-split-with-a-call-graph)).
-- Some accent-coloured text and buttons are below WCAG AA contrast; every
-  pair is measured, and the fix is a design choice still to be made
-  ([the table](docs/ARCHITECTURE.md#contrast-measured)).
 - Built for Windows. It runs on Linux too — the tests do — but its fonts
   and window behaviour are tuned for Windows.
 - One computer at a time: notes move between computers by backup or share

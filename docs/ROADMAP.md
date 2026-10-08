@@ -433,10 +433,10 @@ what follows is what it deliberately left as recorded edges rather than fixes. N
 bug being chased.
 
 - *Straggler-pass colour collisions* — `_recolor_stragglers` remaps any widget colour matching
-  another theme's palette hex, so a data-driven colour that happens to equal one (e.g. `#7c5cff`
-  as both the accent and a category colour) can be swapped on widgets outside the note cards
-  (which re-fix themselves afterwards, deliberately). Whitelisting data colours would be
-  architectural; the exposure is cosmetic and theme-pair-specific.
+  another theme's palette hex, so a data-driven colour that happens to equal one (e.g. `#4cd9a3`
+  as both Midnight Purple's Save colour and a note colour) can be swapped on widgets outside the
+  note cards (which re-fix themselves afterwards, deliberately). Whitelisting data colours would
+  be architectural; the exposure is cosmetic and theme-pair-specific.
 - *A second full grid rebuild after a push-down* — a diagnostic-confidence finding about
   `_align_table_on_leaving` re-rendering redundantly (a late echo/flicker); needs a pixel-level
   investigation before any fix is trusted.
