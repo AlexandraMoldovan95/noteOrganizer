@@ -8,6 +8,9 @@ settings.json
 trash.json
 templates.json
 attachments/
+# Names the folder a source run keeps its notebook in, on this machine
+# (core/paths.LOCATION_FILE): a path to one person's own folder.
+notebook_location.txt
 
 # --- Python ---
 __pycache__/

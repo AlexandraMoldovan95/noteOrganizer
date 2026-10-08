@@ -93,6 +93,27 @@ How the numbers themselves are counted is the
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- **A source run can keep its notebook outside the working tree.** A `notebook_location.txt`
+  beside `note_organizer.py`, git-ignored, names the folder — one path on a line, environment
+  variables allowed (`%LOCALAPPDATA%\NoteOrganizer-dev`). Every notebook this project lost was
+  lost in the working tree, and a code review asked for this. The folder it names starts as its
+  own notebook and is never migrated into, so it cannot copy in the `.exe`'s notebook from
+  `%APPDATA%`; a folder it cannot write to falls back beside the script, and says so. The built
+  `.exe` ignores the file, and nothing changes without it.
+
+### Testing
+
+- test_data_safety reads the file (comments skipped, variables expanded, the folder made), falls
+  back with a warning when the folder cannot be used, and starts a process of its own against a
+  stand-in APPDATA to show the folder named brings nothing in — beside a control without the
+  file, which does copy. Mutants NL01–NL04 take each part back out.
+
+---
+
 ## [0.89.362] — 2026-10-08
 
 *Highlights: a first start now opens on a welcome note — a short, friendly guide to each part of

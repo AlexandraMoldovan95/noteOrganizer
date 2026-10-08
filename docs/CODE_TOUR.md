@@ -778,7 +778,14 @@ files* — and it's worth reading precisely for that reason.
 | Running as | Data goes | Why |
 |---|---|---|
 | a `.py` script | beside the script | convenient while developing |
+| a `.py` script with a `notebook_location.txt` beside it | the folder that file names | the developer's own notebook, out of the working tree |
 | a `.exe` | your `%APPDATA%` folder | always writable, never auto-cleaned |
+
+`chosen_notebook_dir` reads that file: its first line that is not blank or
+a `#` comment, with environment variables expanded. The file is git-ignored
+and lives only beside the real checkout, so the scratch copies the tests run
+keep their data in their own folders. And `initialise` brings nothing into
+the folder it names: no migration, no purge.
 
 A one-file `.exe` unpacks into a temp folder Windows later deletes, and
 Program Files may be read-only — so "next to the app" is unreliable once

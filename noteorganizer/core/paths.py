@@ -148,6 +148,34 @@ def _is_writable(folder):
     return writable
 
 
+# Beside the entry point, a git-ignored file that names another folder for
+# the notebook when the app runs from source: the developer's own notebook
+# kept out of the working tree, where every lost notebook was lost. A
+# scratch copy of the code carries no such file, so tests stay in theirs.
+LOCATION_FILE = "notebook_location.txt"
+
+
+def chosen_notebook_dir(script_dir):
+    """The folder ``notebook_location.txt`` beside *script_dir* names, or
+    None. Its first line that is not blank or a ``#`` comment is the path;
+    environment variables in it are expanded (``%LOCALAPPDATA%\\...``), and
+    a relative path is read from *script_dir*. Ignored by the built app."""
+    if getattr(sys, "frozen", False):
+        return None
+    try:
+        with open(os.path.join(script_dir, LOCATION_FILE), "r",
+                  encoding="utf-8-sig") as f:
+            lines = f.read().splitlines()
+    except (IOError, OSError, UnicodeDecodeError):
+        return None
+    for line in lines:
+        line = line.strip()
+        if line and not line.startswith("#"):
+            path = os.path.expanduser(os.path.expandvars(line))
+            return os.path.abspath(os.path.join(script_dir, path))
+    return None
+
+
 def resolve_data_dir(script_dir):
     """Pick the data folder, guaranteeing it's writable.
 
@@ -188,8 +216,19 @@ def resolve_data_dir(script_dir):
             "temporary files can be cleared by Windows."
         )
 
-    # Development: run as a script -> beside the entry-point .py file.
+    # Development: run as a script -> beside the entry-point .py file, or in
+    # the folder notebook_location.txt there names.
     script_dir = os.path.abspath(script_dir)
+    chosen = chosen_notebook_dir(script_dir)
+    if chosen is not None:
+        if _is_writable(chosen):
+            return chosen, None
+        if _is_writable(script_dir):
+            return script_dir, (
+                f"The folder {LOCATION_FILE} names could not be used:\n"
+                f"{chosen}\n\nNotes are being saved beside the app instead, "
+                "until that folder can be written to."
+            )
     if _is_writable(script_dir):
         return script_dir, None
     # If even that isn't writable, don't lose the user's data — use AppData.

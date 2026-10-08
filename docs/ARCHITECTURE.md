@@ -100,7 +100,13 @@ must now call `initialise()` deliberately, which is what `test_data_safety.py` d
 ### Storage
 
 Everything is local JSON — next to the script when run from source, per-user under
-`%APPDATA%\NoteOrganizer` when running as the built `.exe` (`core/paths.py` decides):
+`%APPDATA%\NoteOrganizer` when running as the built `.exe` (`core/paths.py` decides). A source run
+can keep its notebook elsewhere: a git-ignored `notebook_location.txt` beside the script names the
+folder. It exists because every notebook this project lost was lost in the working tree; a file
+rather than an environment variable, because the tests run copies of the code that must keep
+their data in their own folders, and a copy carries no such file while every child process
+inherits a variable. The folder it names is never migrated into — an empty one would otherwise
+copy in the `.exe`'s notebook from `%APPDATA%`:
 
 | File | Contents |
 |---|---|

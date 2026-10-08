@@ -75,6 +75,7 @@ from noteorganizer.core.paths import (
     get_appdata_dir,
     _is_writable,
     resolve_data_dir,
+    chosen_notebook_dir,
     get_legacy_dirs,
     count_notes_in,
     _copy_attachments,
@@ -147,18 +148,25 @@ def initialise(app_dir=None, resolved=None):
     if _initialised:
         return APP_DIR
 
+    # The data folder is resolved relative to THIS file, the entry
+    # point. resolve_data_dir() takes it as an argument rather than
+    # deriving it from its own location: once that code moved into
+    # noteorganizer/core/, its __file__ pointed there instead, and the
+    # app silently picked a data folder two levels below the right one.
+    base = app_dir or os.path.dirname(os.path.abspath(__file__))
     if resolved is not None:
         APP_DIR, STORAGE_WARNING = resolved
     else:
-        # The data folder is resolved relative to THIS file, the entry
-        # point. resolve_data_dir() takes it as an argument rather than
-        # deriving it from its own location: once that code moved into
-        # noteorganizer/core/, its __file__ pointed there instead, and the
-        # app silently picked a data folder two levels below the right one.
-        base = app_dir or os.path.dirname(os.path.abspath(__file__))
         APP_DIR, STORAGE_WARNING = resolve_data_dir(base)
-    MIGRATION_INFO = run_migrations(APP_DIR)
-    PURGED_DIRS = purge_stale_copies(APP_DIR)
+    chosen = chosen_notebook_dir(base)
+    if chosen is not None and os.path.normcase(chosen) == os.path.normcase(APP_DIR):
+        # A folder notebook_location.txt names is the notebook, and nothing
+        # is brought into it: an empty one would copy in the .exe's own
+        # notebook from %APPDATA% (run_migrations, case 2).
+        MIGRATION_INFO, PURGED_DIRS = None, []
+    else:
+        MIGRATION_INFO = run_migrations(APP_DIR)
+        PURGED_DIRS = purge_stale_copies(APP_DIR)
 
     # Hand the resolved folder to core.paths, which works out the individual
     # file locations and creates the attachments folder. Everything in
