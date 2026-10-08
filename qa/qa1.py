@@ -8263,6 +8263,17 @@ check('find/prose: nocase finds all three (incl ALPHA)',
       and all(x['kind'] == 'prose' for x in app._find_matches))
 check('find/prose: the current match carries the find_current tag',
       bool(app.body_text.tag_ranges('find_current')))
+# Boxed, as a table cell's match is: by its fill alone it was one shade among
+# three to a colour-blind eye (all four readers of the simulated screens).
+def _find_boxed():
+    try:
+        return (str(app.body_text.tag_cget('find_current', 'relief')) == 'solid'
+                and int(str(app.body_text.tag_cget('find_current', 'borderwidth')
+                            or 0)) >= 1)
+    except (tk.TclError, ValueError):
+        return False
+check('find/prose: the current match is boxed, not told apart by colour alone',
+      _find_boxed() and not str(app.body_text.tag_cget('find_all', 'relief') or ''))
 app._find_nav(1); app._find_nav(1); app._find_nav(1)
 app.update()
 check('find/prose: Next wraps back to the first match', app._find_index == 0)
@@ -8442,6 +8453,8 @@ check('find/theme: the current match\'s words are the ones that read on the '
       'accent, re-picked for the new theme',
       app.body_text.tag_cget('find_current', 'foreground').lower()
       == app._on_fill('accent').lower())
+check('find/theme: the current match stays boxed through the theme switch',
+      _find_boxed())
 # The "Aa" case checkbox is long-lived (built once with the bar), so it must
 # follow the theme. It draws its own well and mark now: Tk painted its mark
 # in the words' colour, light on dark themes, on a light well, so a ticked
@@ -8688,6 +8701,74 @@ app.set_theme(_pl_theme)
 app.refresh_note_list(); app.update()
 check(f'palette: a picked colour stays whole on the card\'s stripe and its tags '
       f'row reads at 4.6:1, drawn and recoloured ({_pl_words})', not _pl_words)
+
+# The open tab stands taller than the other. clam's own padding for a
+# selected tab beat the app's and drew it SMALLER: its shape said the
+# opposite of its colour. Read where each tab begins, under two themes.
+def _pl_tab_tops():
+    nb = app.notebook
+    tops = {}
+    for y in range(0, 80):
+        for x in range(0, max(1, nb.winfo_width()), 3):
+            try:
+                i = nb.index('@%d,%d' % (x, y))
+            except tk.TclError:
+                continue
+            if isinstance(i, int):
+                tops.setdefault(i, y)
+        if len(tops) >= 2:
+            break
+    return tops
+
+
+_pl_tabs = {}
+for _pl_t in (_pl_theme, 'dark_forest' if _pl_theme != 'dark_forest' else 'light'):
+    app.set_theme(_pl_t); app.update()
+    for _pl_open in (app.TAB_NOTES, app.TAB_CALENDAR):
+        app.notebook.select(_pl_open); app.update()
+        _pl_i = app.notebook.index(_pl_open)
+        _pl_top = _pl_tab_tops()
+        _pl_tabs[(_pl_t, _pl_i)] = _pl_top
+        if not (len(_pl_top) == 2 and all(
+                _pl_top[_pl_i] < y for j, y in _pl_top.items() if j != _pl_i)):
+            _pl_tabs[(_pl_t, _pl_i, 'WRONG')] = True
+app.set_theme(_pl_theme)
+app.notebook.select(app.TAB_NOTES); app.update()
+check(f'palette: the open tab stands taller than the other, under both themes '
+      f'({_pl_tabs})',
+      len(_pl_tabs) == 4 and not any(k[-1] == 'WRONG' for k in _pl_tabs))
+
+# The colour palette's tick marks the colour in use -- the only sign of it
+# when two swatches look alike to a colour-blind eye -- and was white on 13
+# of its 20 colours (1.3:1 on the yellow).
+from noteorganizer.core.themes import contrast_ratio as _pk_ratio
+
+
+def _pk_walk(w):
+    yield w
+    for child in w.winfo_children():
+        yield from _pk_walk(child)
+
+
+_pk_bad = []
+for _pk_c in NO.PALETTE_COLORS:
+    app._show_color_palette(app.title_entry, _pk_c, lambda c: None); app.update()
+    _pk_pop = getattr(app, '_mini_popup', None)
+    _pk_ticks = [(cv, item) for cv in _pk_walk(_pk_pop) if isinstance(cv, tk.Canvas)
+                 for item in cv.find_withtag('tick')] if _pk_pop else []
+    _pk_fill = (_pk_ticks[0][0].itemcget(_pk_ticks[0][1], 'fill')
+                if len(_pk_ticks) == 1 else None)
+    # Through Tk's own reading, so a colour NAME ("white") is measured too
+    # rather than crashing the measure that only knows #rrggbb.
+    try:
+        _pk_fill = '#%02x%02x%02x' % tuple(v // 257 for v in app.winfo_rgb(_pk_fill))
+    except (tk.TclError, TypeError):
+        _pk_fill = None
+    if not (_pk_fill and _pk_ratio(_pk_fill, _pk_c) >= 4.1):
+        _pk_bad.append((_pk_c, len(_pk_ticks), _pk_fill))
+    app._dismiss_mini_popup(); app.update()
+check(f'palette: the colour picker\'s tick reads on every colour it can sit on '
+      f'({_pk_bad or len(NO.PALETTE_COLORS)})', not _pk_bad)
 
 # Switching notes clears the model so no navigation runs on stale indices.
 app.new_note()

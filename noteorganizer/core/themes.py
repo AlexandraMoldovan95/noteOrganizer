@@ -376,11 +376,9 @@ def letters_on(fill):
     """The words for a control filled with *fill*: white or near-black,
     whichever has the higher WCAG contrast on it.
 
-    Not contrasting_fg, which answers a different question (a threshold of
-    perceived brightness, for colours the person picks) and puts white on
-    most of the fills this answers near-black for. This is the measure the
-    contrast gate holds every button to, so the two cannot disagree. A
-    colour it cannot read gets white, as contrasting_fg's does."""
+    contrasting_fg, for the colours a person picks, is this same answer.
+    This is the measure the contrast gate holds every button to, so the
+    two cannot disagree. A colour it cannot read gets white."""
     try:
         dark = contrast_ratio(LETTERS_DARK, fill)
         light = contrast_ratio(LETTERS_LIGHT, fill)
@@ -439,24 +437,17 @@ def palette_value(palette, key):
 
 
 def contrasting_fg(hex_color):
-    """Black or near-white, whichever reads better against *hex_color*.
+    """Black or near-white, whichever reads better against *hex_color*:
+    the letters for a colour the person picked -- a painted calendar day,
+    the text-colour and highlight buttons' own swatch.
 
-    The standard perceived-luminance weighting: the eye is far more
-    sensitive to green than to blue, so a plain average of the channels
-    picks the wrong side on colours like pure blue.
-
-    This exists because the text-colour and highlight buttons show a swatch
-    of the active colour as their own background, and the letter on top has
-    to stay legible against any colour in the palette on any of the themes.
+    It is letters_on, by name. It once had a formula of its own, a
+    threshold of perceived brightness, and put white on 9 of the 20 colours
+    a day can be painted (2.2:1 on #00bbf9). Two answers to one question
+    disagree somewhere; this one now has a single answer.
 
     A colour it cannot read gets white, the answer every painted calendar
     day had before it learned contrast: raising here, in the middle of the
     month's drawing, left the month half drawn and unclickable.
     """
-    try:
-        h = hex_color.lstrip("#")
-        r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
-    except (AttributeError, ValueError):
-        return "#ffffff"
-    luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-    return "#1a1a1a" if luminance > 0.6 else "#ffffff"
+    return letters_on(hex_color)

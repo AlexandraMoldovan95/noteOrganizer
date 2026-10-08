@@ -2176,8 +2176,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                                      background=self.colors[\"accent\"],\n                                      foreground=self._on_fill(\"accent\"))\n",
-        "replace": "                                      background=self.colors[\"accent\"])\n"
+        "find": "                                      background=self.colors[\"accent\"],\n                                      foreground=self._on_fill(\"accent\"),\n",
+        "replace": "                                      background=self.colors[\"accent\"],\n"
       }
     ],
     "must_fail": ["find/theme: the current match's words are the ones that read on the accent"],
@@ -2437,6 +2437,64 @@
     ],
     "must_fail": ["asked as a question, so its Yes is not the red of a deletion"],
     "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "CB01",
+    "about": "the find bar's current match is told from the others by its fill alone again, unboxed",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                                      foreground=self._on_fill(\"accent\"),\n                                      relief=\"solid\", borderwidth=1)\n",
+        "replace": "                                      foreground=self._on_fill(\"accent\"))\n"
+      }
+    ],
+    "must_fail": ["find/prose: the current match is boxed, not told apart by colour alone",
+                  "find/theme: the current match stays boxed through the theme switch"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "CB02",
+    "about": "clam's padding for the selected tab wins again, drawing the open tab smaller than the other",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            padding=[(\"selected\", self.TAB_PADDING_SELECTED)],\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["palette: the open tab stands taller than the other"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "CB03",
+    "about": "the letters for a picked colour go back to their own brightness threshold, white on light blues and oranges",
+    "edits": [
+      {
+        "file": "noteorganizer/core/themes.py",
+        "find": "    return letters_on(hex_color)\n",
+        "replace": "    try:\n        h = hex_color.lstrip(\"#\")\n        r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))\n    except (AttributeError, ValueError):\n        return \"#ffffff\"\n    return \"#1a1a1a\" if (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6 else \"#ffffff\"\n"
+      }
+    ],
+    "must_fail": ["every pickable colour",
+                  "a painted day wears its colour, with its text in the near-black that reads on it"],
+    "suites": ["test_data_safety", "qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "CB04",
+    "about": "the colour picker's tick is white on every swatch again, unreadable on the light ones",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                cell.create_text(13, 13, text=\"✓\", fill=letters_on(color),\n",
+        "replace": "                cell.create_text(13, 13, text=\"✓\", fill=\"white\",\n"
+      }
+    ],
+    "must_fail": ["palette: the colour picker's tick reads on every colour it can sit on"],
+    "suites": ["qa1"],
     "expect": "killed"
   }
 ]
