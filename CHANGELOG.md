@@ -122,9 +122,9 @@ simulated pictures, one with normal colour vision as the control.*
   dotted focus ring after a click until the window lost focus. A click now hides it; the ring
   is for the keyboard, and comes back — in the tab's own letter colour, readable on every
   theme — when the arrow keys walk the tabs or Tab lands on them.
-- **Every icon in the welcome note can be picked.** Five of its ten (👋 ✍ 🗂 🔒 🎨) were not in
-  the emoji picker, so the note showed icons a person could not insert. They are now in its
-  Gestures and Objects groups.
+- **Every icon in the welcome note can be picked.** Six of its eleven (👋 ✍ 🗂 🔒 🎨 ℹ) were not
+  in the emoji picker, so the note showed icons a person could not insert. They are now in its
+  Gestures, Objects and Checks & flags groups.
 
 ### Testing
 
@@ -134,8 +134,9 @@ simulated pictures, one with normal colour vision as the control.*
   given the letters that read on it. Four mutants (CB01–CB04), each killed. The two qa7 checks
   that promised white on a painted orange day now promise the near-black that reads there.
 - Three more: a click hides the tabs' ring through a theme switch, the arrow keys and a Tab
-  landing on the tabs show it, every icon of the welcome note is in the picker. Mutants
-  CB05–CB08, each killed.
+  landing on the tabs show it, every icon of the welcome note is in the picker — counted
+  as anything from U+2100 up but the arrows, since by category alone ℹ is a letter. Mutants
+  CB05–CB09, each killed.
 - The screenshot tools open a note the way a person does, so the README's main window shows
   the open note's ring.
 
