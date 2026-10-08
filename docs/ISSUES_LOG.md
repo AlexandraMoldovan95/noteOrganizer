@@ -156,7 +156,7 @@ is in the table below as well.
 | [Nine regressions in fifteen fixes](#nine-regressions-in-fifteen-fixes) | A fix that changes WHEN something happens must be walked through every reader of that moment, not only the route it was reported on. | 0.84.357 |
 | [The border that went grey whenever it was used](#the-border-that-went-grey-whenever-it-was-used) | A check that reads the option you set proves the option, not the colour on the screen; photograph what a person sees. | 0.88.361 |
 | [The heart that left a gap](#the-heart-that-left-a-gap) | An invisible character is still drawn; when the toolkit draws it badly, keep it out of what the app writes, and say what is left. | 0.89.362 |
-| [Save and Delete, the same khaki](#save-and-delete-the-same-khaki) | A gate measures the pairs it was told about — walk what is on the screen; and two colours that differ only in hue are one colour to a reader who cannot see hue. | next |
+| [Save and Delete, the same khaki](#save-and-delete-the-same-khaki) | A gate measures the pairs it was told about — walk what is on the screen; and two colours that differ only in hue are one colour to a reader who cannot see hue. | 0.89.365 |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -3387,7 +3387,7 @@ call returns" depends on whether the call blocks, which differs by platform.
 
 ### Save and Delete, the same khaki
 
-*(found by a panel of reviewers and a colour-blindness simulation; ships in the next release)*
+*([0.89.365](../CHANGELOG.md#089365--2026-10-08) · found by a panel of reviewers and a colour-blindness simulation)*
 
 **Symptom:** none reported, which was the point. The contrast gate had listed 71 pairs below
 WCAG AA for weeks — every use of the accent, the warning red and the confirming green, Save's

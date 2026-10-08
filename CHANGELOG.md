@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.89.365](#089365--2026-10-08) | 2026-10-08 | Every coloured word and button readable in every theme, Save and Delete told apart without colour, and a dark red fill kept for what cannot be undone. |
 | [0.89.362](#089362--2026-10-08) | 2026-10-08 | A welcome note that greets a first start and shows each part of the app, and emoji from the app's own pickers that leave no gap after them. |
 | [0.88.361](#088361--2026-10-08) | 2026-10-08 | What two re-tests asked for: a table that moves with its caption, a filter for notes with files, checklist items you can move, a Share panel that searches and keeps the list's order, and a find bar that reads on every theme. |
 | [0.84.357](#084357--2026-10-07) | 2026-10-07 | What a first full manual pass found: ticks on dark themes, tables that copy as they look, a list that keeps your place, imports that ask, and bold from a web page that stays bold. |
@@ -94,6 +95,15 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+---
+
+## [0.89.365] — 2026-10-08
+
+*Highlights: every coloured word and button now reads in every theme, measured — the palette
+chosen with a panel of reviewers over five rounds on the running app. Save is the one filled
+button in the editor, Save and Delete differ in lightness as well as hue so a colour-blind reader
+tells them apart, and a dark red fill now means "this cannot be undone".*
 
 ### Fixed
 
