@@ -550,6 +550,13 @@ _welcome_unpickable = [ch for ch in _welcome_icons if ch not in _picker_emoji]
 check(f'every icon of the welcome note ({len(_welcome_icons)}) is one the emoji '
       f'picker offers ({_welcome_unpickable or "all"})',
       len(_welcome_icons) >= 5 and not _welcome_unpickable)
+# A day marked with a sign the picker lacks could not be written about in a
+# note: nine of the calendar's eighteen once.
+_marker_unpickable = [e for e, _c in NO.NoteOrganizer.DAY_MARKER_EMOJIS
+                      if e not in _picker_emoji]
+check(f'every calendar day marker is one the emoji picker offers too '
+      f'({_marker_unpickable or "all"})',
+      len(NO.NoteOrganizer.DAY_MARKER_EMOJIS) >= 10 and not _marker_unpickable)
 
 # ---- the core layer stays free of the interface ----
 #

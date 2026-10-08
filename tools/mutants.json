@@ -2559,11 +2559,25 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                            \"ℹ\"], \"#A0C4FF\"),\n",
-        "replace": "                            ], \"#A0C4FF\"),\n"
+        "find": "                            \"ℹ\", \"❗\"], \"#A0C4FF\"),\n",
+        "replace": "                            \"❗\"], \"#A0C4FF\"),\n"
       }
     ],
     "must_fail": ["every icon of the welcome note"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "CB10",
+    "about": "the emoji picker loses a calendar day marker, so a marked day's sign cannot be written in a note",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                            \"ℹ\", \"❗\"], \"#A0C4FF\"),\n",
+        "replace": "                            \"ℹ\"], \"#A0C4FF\"),\n"
+      }
+    ],
+    "must_fail": ["every calendar day marker is one the emoji picker offers too"],
     "suites": ["test_data_safety"],
     "expect": "killed"
   }
