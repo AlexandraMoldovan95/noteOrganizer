@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.89.362](#089362--2026-10-08) | 2026-10-08 | A welcome note that greets a first start and shows each part of the app, and emoji from the app's own pickers that leave no gap after them. |
 | [0.88.361](#088361--2026-10-08) | 2026-10-08 | What two re-tests asked for: a table that moves with its caption, a filter for notes with files, checklist items you can move, a Share panel that searches and keeps the list's order, and a find bar that reads on every theme. |
 | [0.84.357](#084357--2026-10-07) | 2026-10-07 | What a first full manual pass found: ticks on dark themes, tables that copy as they look, a list that keeps your place, imports that ask, and bold from a web page that stays bold. |
 | [0.84.341](#084341--2026-10-04) | 2026-10-04 | The hint shown with no template to pick sends you to the section of Settings that really holds them. |
@@ -89,6 +90,44 @@ How the numbers themselves are counted is the
 | [0.3.0](#030--tags-removed-categories-as-the-sole-organization-system) | — | Tags come out entirely, leaving categories as the app's one organization system. |
 | [0.2.0](#020--inline-ui-overhaul--data-resilience) | — | Every OS-native popup becomes an in-app themed one, and the calendar grows richer. |
 | [0.1.0](#010--core-application) | — | The founding feature set — notes, recurrence, calendar, templates, sharing, themes. |
+
+---
+
+## [0.89.362] — 2026-10-08
+
+*Highlights: a first start now opens on a welcome note — a short, friendly guide to each part of
+the app that Settings → About can always bring back — and emoji from the app's own pickers no
+longer leave a gap after them.*
+
+### Added
+
+- **A welcome note on the first start.** A brand-new notebook opens on a short guide to each
+  part of the app — writing, organising, planning, sharing and keeping safe, themes, and where
+  the notes are kept — written as an ordinary note, with a good-luck line to end on. Delete it
+  whenever you like; **Settings → About → Show** brings it back, and never adds a second. Only
+  a notebook with no notes file is greeted: an update or an emptied notebook never gets one.
+
+### Fixed
+
+- **Emoji from the app's own pickers no longer leave a gap after them.** ❤️, ✌️, ☑️, ⚠️, ☀️
+  and 🌧️ from the emoji picker, three of the calendar's day markers, two dialog icons and the
+  picture icon in the attachments list were written with an invisible character (U+FE0F) that
+  Tk draws as a blank two letters wide. They carry none now, and day markers saved with it lose
+  it as they are read, so the marker picker knows them again. Text that already has it keeps it
+  (see Known limitations in the ROADMAP).
+
+### Testing
+
+- test_data_safety reads a folder with no notes file as a fresh notebook and an emptied or
+  unreadable one as not, and checks the welcome note is stored as the editor would store it.
+  qa5 starts the app with no notes file and finds it opened on the note, shown exactly as
+  stored; deletes it and starts again; brings it back with About's Show, twice; and starts an
+  emptied notebook and an already-greeted one. Mutants Y01–Y09 take each part back out. A
+  pure-Tk probe showed the emoji variation selector (U+FE0F) drawn as a blank two letters
+  wide, so the note's icons carry none.
+- test_richtext scans every source file of the app for the variation selector and checks the
+  helper that strips it and the day markers' intake; qa5 starts the app over markers saved with
+  it, and qa3 imports a backup carrying one. Mutants I01–I04 take each part back out.
 
 ---
 

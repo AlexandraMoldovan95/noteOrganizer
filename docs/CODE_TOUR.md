@@ -8,7 +8,7 @@ This is a companion to [ARCHITECTURE.md](ARCHITECTURE.md), which is the
 short reference version for someone who already knows the codebase. Start
 here; go there when you want the summary.
 
-> **Scope:** the data and rules layer is fully extracted — all fourteen
+> **Scope:** the data and rules layer is fully extracted — all fifteen
 > `core/` modules below are covered here in depth. The user interface has
 > since been split too: six areas now live in `noteorganizer/ui/` as mixins
 > (calculator panel, Settings page, dialogs/popups, calendar, attachments,
@@ -35,6 +35,7 @@ here; go there when you want the summary.
 - [`noteorganizer/core/storage.py`](#noteorganizercorestoragepy)
 - [`noteorganizer/core/categories.py`](#noteorganizercorecategoriespy)
 - [`noteorganizer/core/model.py`](#noteorganizercoremodelpy)
+- [`noteorganizer/core/welcome.py`](#noteorganizercorewelcomepy)
 - [Where the app starts](#where-the-app-starts)
 
 **Short on time?** Three sections repay a quick read:
@@ -55,7 +56,7 @@ py note_organizer.py
 
 `note_organizer.py` is still the front door. The pure logic has moved into
 the `noteorganizer/` package next to it and is imported back in; the entry
-file itself stays large (~20,400 lines) because it is the UI hub the pieces
+file itself stays large (~20,500 lines) because it is the UI hub the pieces
 hang off, not a junk drawer of stray logic.
 
 To run every test — units + qa1–qa9 — safely in a scratch copy:
@@ -91,6 +92,8 @@ noteorganizer/
 │   ├── paths.py          where data lives, migrations, safe cleanup
 │   ├── storage.py        reading/writing notes, settings, templates, trash
 │   ├── categories.py     the live category map
+│   ├── single_instance.py  one window per notebook (a lock on its folder)
+│   ├── welcome.py        the note a first install opens on
 │   └── model.py          what a note is; normalize_note validates every one
 └── ui/                   on-screen areas, as mixins NoteOrganizer inherits
     ├── calculator_panel.py  the in-note calculator panel
@@ -1022,6 +1025,40 @@ merged, richness decides *which copy to keep* — the one carrying the most
 actual content — rather than picking arbitrarily and hoping. `clean_notes`
 uses both to drop blank notes and de-duplicate on load, and reports what it
 did so the app can tell you rather than silently changing your notebook.
+
+---
+
+## `noteorganizer/core/welcome.py`
+
+**What it's for.** The note a first install opens on: a short guide to
+each part of the app, ending in a good-luck line, as an ordinary note the
+person can delete.
+
+### Written the way the editor would write it
+
+`LINES` is the text, one line at a time, in a markup small enough to read
+at a glance: `# ` starts a heading, `- ` a bullet, `**` marks bold.
+`build_welcome_note()` turns it into a note's own fields — the body with
+its `• ` markers in the text, bold as character spans over that body, each
+bullet line as a `paragraphs` entry — which is exactly the shape
+[`formatting.py`](#noteorganizercoreformattingpy) describes for a typed
+note. So nothing downstream treats it differently: `normalize_note`
+changes nothing on it, and the editor shows it and saves it back
+unchanged (`test_data_safety` and qa5 check both).
+
+### Who gets it, once
+
+`storage.load_notes` reports `fresh_notebook` only when there was no notes
+file at all. The app adds the note on that start alone, and records
+`welcome_offered` so it never adds another on its own. An emptied notebook
+or an unreadable one still had its file, and a notebook a migration copied
+in has one by the time it is read, so none of them is greeted. Settings →
+About's **Show** opens the note by the uid it stored, or adds a fresh copy
+if that one was deleted.
+
+One thing learned building it: its icons carry no emoji variation selector
+(U+FE0F). Tk draws that character as a blank two letters wide, so "✍️ Write"
+showed a gap after the hand.
 
 ---
 

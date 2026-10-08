@@ -44,7 +44,8 @@ py note_organizer.py
 The notes stay beside the script when it runs from source, and in
 `%APPDATA%\NoteOrganizer` when it runs as the packaged `.exe`
 ([building it](docs/RELEASE_WINDOWS.md)). On Linux, install Tk first
-(`python3-tk`).
+(`python3-tk`). The first start opens on a welcome note that shows each
+part of the app.
 
 ## How it was built
 

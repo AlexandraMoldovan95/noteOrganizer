@@ -119,8 +119,8 @@ class DialogsMixin:
         # your changes?) rendered underneath it, unreachable. The popups
         # step back for the dialog's duration and return after.
         stepped_back = self._popups_step_back()
-        icon = {"info": "ℹ️", "warning": "⚠️", "error": "⛔",
-                "question": "❓", "success": "✅"}.get(kind, "ℹ️")
+        icon = {"info": "ℹ", "warning": "⚠", "error": "⛔",
+                "question": "❓", "success": "✅"}.get(kind, "ℹ")
         accent = {"error": self.colors["danger"], "warning": self.colors["danger"],
                   "success": self.colors["success"]}.get(kind, self.colors["accent"])
 

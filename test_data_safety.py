@@ -397,6 +397,61 @@ finally:
     shutil.rmtree(_notes_dir, ignore_errors=True)
     NO_paths.configure(_prev_app_dir)
 
+# ---- the welcome note is for a notebook that did not exist ----
+#
+# load_notes calls a notebook fresh only when there was no notes file at
+# all -- a first install. An emptied notebook, an unreadable one and one a
+# migration copied in all have their file, and must never get a note added.
+from noteorganizer.core.welcome import build_welcome_note, LINES as _WELCOME_LINES
+from noteorganizer.core.model import normalize_note as _normalize_note
+
+_fresh_dir = tempfile.mkdtemp()
+_prev_app_dir = NO_paths.APP_DIR
+try:
+    NO_paths.configure(_fresh_dir)
+    _w_notes, _w_report = _storage.load_notes()
+    check('load_notes calls a folder with no notes file a fresh notebook',
+          _w_report.get('fresh_notebook') is True and _w_notes == [])
+    with open(NO_paths.DATA_FILE, 'w', encoding='utf-8') as f:
+        f.write('[]')
+    check('...an emptied notebook is not one',
+          _storage.load_notes()[1].get('fresh_notebook') is False)
+    with open(NO_paths.DATA_FILE, 'w', encoding='utf-8') as f:
+        f.write('{not json')
+    _w_notes, _w_report = _storage.load_notes()
+    check('...nor an unreadable one, which is reported as unreadable instead',
+          _w_report.get('fresh_notebook') is False
+          and _w_report.get('notes_file_corrupt') is True)
+finally:
+    shutil.rmtree(_fresh_dir, ignore_errors=True)
+    NO_paths.configure(_prev_app_dir)
+
+# Stored as the editor itself would store it: normalize_note changes
+# nothing, each bold span lies on its words, each bullet entry on a line
+# that starts with its marker -- and no icon carries the emoji variation
+# selector, which Tk draws as a blank two letters wide.
+_welcome = build_welcome_note()
+_welcome_kept = _normalize_note(dict(_welcome, id=1))
+_welcome_lines = _welcome['body'].split('\n')
+check('the welcome note passes normalize_note unchanged',
+      all(_welcome_kept[k] == _welcome[k]
+          for k in ('title', 'body', 'formatting', 'paragraphs')))
+check('every bold span of the welcome note lies on its words',
+      bool(_welcome['formatting'])
+      and all(s['end'] > s['start'] and _welcome['body'][s['start']:s['end']]
+              == _welcome['body'][s['start']:s['end']].strip()
+              and '\n' not in _welcome['body'][s['start']:s['end']]
+              for s in _welcome['formatting']))
+check('every bullet of the welcome note is a line that starts with one',
+      len(_welcome['paragraphs'])
+      == sum(1 for line in _WELCOME_LINES if line.startswith('- '))
+      and all(_welcome_lines[p['line']].startswith('• ')
+              for p in _welcome['paragraphs']))
+check('no line of the welcome note leaves its bold open, and no icon '
+      'carries the variation selector',
+      all(line.count('**') % 2 == 0 for line in _WELCOME_LINES)
+      and '\ufe0f' not in _welcome['title'] + _welcome['body'])
+
 # ---- the core layer stays free of the interface ----
 #
 # ARCHITECTURE.md has said "core must never import tkinter" since the split

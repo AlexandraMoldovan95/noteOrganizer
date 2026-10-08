@@ -454,7 +454,7 @@ class AttachmentsMixin:
             # draws an odd row; a crash here corrupts data.
             display_name = att.get("filename") or att.get("stored_as") or ""
             ext = os.path.splitext(display_name)[1].lower()
-            icon = "🖼️" if ext in (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp") else "📄"
+            icon = "🖼" if ext in (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp") else "📄"
             can_preview_inline = ext in (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp")
 
             row = tk.Frame(self.attachments_frame, bg=self.colors["card"])

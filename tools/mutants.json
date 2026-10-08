@@ -1902,5 +1902,187 @@
     "must_fail": ["find/leave: put away, the bar takes the keyboard off its own box and nowhere else"],
     "suites": ["qa1"],
     "expect": "killed"
+  },
+  {
+    "id": "Y01",
+    "about": "a notebook that had its notes file is greeted with the welcome note",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if not getattr(self, \"_fresh_notebook\", False):\n            return None\n        if load_settings().get(\"welcome_offered\"):\n",
+        "replace": "        if load_settings().get(\"welcome_offered\"):\n"
+      }
+    ],
+    "must_fail": ["an emptied notebook gets no welcome note"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "Y02",
+    "about": "the welcome note is offered again to a notebook that already had it",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if load_settings().get(\"welcome_offered\"):\n            return None\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["an emptied notebook gets no welcome note"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "Y03",
+    "about": "a first start adds the welcome note but does not open it",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._remember_last_open_note(note[\"id\"])\n        return note\n",
+        "replace": "        return note\n"
+      }
+    ],
+    "must_fail": ["a first start, with no notes file, opens on the welcome note alone"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "Y04",
+    "about": "Settings -> About adds another welcome note beside the one still there",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                     if uid and n.get(\"uid\") == uid), None)\n",
+        "replace": "                     if False), None)\n"
+      }
+    ],
+    "must_fail": ["Settings -> About's Show brings a deleted welcome note back"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "Y05",
+    "about": "every notebook reads as fresh, an emptied one included",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "              \"fresh_notebook\": not os.path.exists(paths.DATA_FILE)}\n",
+        "replace": "              \"fresh_notebook\": True}\n"
+      }
+    ],
+    "must_fail": ["...an emptied notebook is not one", "an emptied notebook gets no welcome note"],
+    "suites": ["test_data_safety", "qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "Y06",
+    "about": "a welcome heading's icon carries the variation selector Tk draws as a blank",
+    "edits": [
+      {
+        "file": "noteorganizer/core/welcome.py",
+        "find": "    \"# ✍ Write\",\n",
+        "replace": "    \"# ✍️ Write\",\n"
+      }
+    ],
+    "must_fail": ["no line of the welcome note leaves its bold open, and no icon carries the variation selector"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "Y07",
+    "about": "the About page's Show button does nothing",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "        self._text_button(control, \"Show\", self.show_welcome_note).pack()\n",
+        "replace": "        self._text_button(control, \"Show\", lambda: None).pack()\n"
+      }
+    ],
+    "must_fail": ["Settings -> About's Show brings a deleted welcome note back"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "Y08",
+    "about": "a first start never adds the welcome note",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._maybe_seed_welcome_note()\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["a first start, with no notes file, opens on the welcome note alone"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "Y09",
+    "about": "Settings -> About's Show brings the welcome note back without opening it",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self.refresh_note_list()\n        try:\n            self.notebook.select(self.TAB_NOTES)\n        except tk.TclError:\n            pass\n        self.open_note_in_tab(note)\n",
+        "replace": "            self.refresh_note_list()\n"
+      }
+    ],
+    "must_fail": ["Settings -> About's Show brings a deleted welcome note back"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "I01",
+    "about": "the variation selector is left in, where it only draws a gap",
+    "edits": [
+      {
+        "file": "noteorganizer/core/formatting.py",
+        "find": "    return (text or \"\").replace(VARIATION_SELECTOR, \"\")\n",
+        "replace": "    return text or \"\"\n"
+      }
+    ],
+    "must_fail": ["the variation selector comes off, and nothing else"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
+  },
+  {
+    "id": "I02",
+    "about": "a day's markers read at the start keep the variation selector, as they did",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            for d, v in saved_day_emoji.items():\n                kept = self._clean_day_markers(v)\n",
+        "replace": "            for d, v in saved_day_emoji.items():\n                kept = [e for e in v if isinstance(e, str) and e][:3] if isinstance(v, list) else []\n"
+      }
+    ],
+    "must_fail": ["a day's markers saved with the variation selector come in without it"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "I03",
+    "about": "a backup's day markers come in with the variation selector, as they did",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if isinstance(d, str) and d not in self.day_emoji:\n                kept = self._clean_day_markers(v)\n",
+        "replace": "            if isinstance(d, str) and d not in self.day_emoji:\n                kept = [e for e in v if isinstance(e, str) and e][:3] if isinstance(v, list) else []\n"
+      }
+    ],
+    "must_fail": ["a marker the backup carries with the variation selector comes back without it"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "I04",
+    "about": "the day markers' heart carries the variation selector again, as it shipped",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "(\"❤\", \"#FF6B6B\")",
+        "replace": "(\"❤️\", \"#FF6B6B\")"
+      }
+    ],
+    "must_fail": ["no source file of the app carries the variation selector"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
   }
 ]

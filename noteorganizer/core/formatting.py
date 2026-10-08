@@ -625,6 +625,16 @@ def strip_list_markers(text):
     return "\n".join(lines)
 
 
+# U+FE0F asks for an emoji's colour form. Tk has no colour emoji, and draws
+# the character itself as a blank two letters wide right after the emoji.
+VARIATION_SELECTOR = "\ufe0f"
+
+
+def without_variation_selector(text):
+    """*text* without the emoji variation selector, which only leaves a gap."""
+    return (text or "").replace(VARIATION_SELECTOR, "")
+
+
 def bullet_level_of(marker):
     """Which nesting level a bullet marker's glyph stands for, or 0.
 

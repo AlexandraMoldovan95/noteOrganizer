@@ -438,6 +438,114 @@ check('the migration notice carries no promise that the two copies agree',
       and 'dist\\' not in _notices[0][1])
 app5f.destroy()
 
+# ---- A FIRST START OPENS ON THE WELCOME NOTE -- ONCE ----
+# The owner's request: a first install greets the user with a note that
+# shows the app, deletable, and offered again from Settings -> About. Only
+# a notebook with no notes file at this start is greeted -- this folder's
+# was seeded, so it is taken away first, as on a first install (the
+# migrations ran once, at import, so nothing can be adopted here).
+import os as _os5w
+def _w5_reset_settings():
+    _s5w = NO.load_settings()
+    for _k5w in ('welcome_offered', 'welcome_note_uid', 'last_open_note_id'):
+        _s5w.pop(_k5w, None)
+    NO.save_settings(_s5w)
+
+
+def _w5_app():
+    _a = NO.NoteOrganizer(); _a._poll_active_dirty = lambda: None
+    _a.show_info = lambda *a, **k: True
+    _a.ask_yes_no = lambda *a, **k: True
+    _a.update()
+    return _a
+
+
+def _w5_show_button(a):
+    a.show_settings_page(); a.update()
+    a.toggle_settings_panel('about'); a.update()
+    found = []
+
+    def walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Button) and str(c.cget('text')) == 'Show':
+                found.append(c)
+            walk(c)
+    walk(a.settings_page)
+    return found[0] if found else None
+
+
+_W5_TITLE = NO.build_welcome_note()['title']
+if _os5w.path.exists('notes_data.json'):
+    _os5w.remove('notes_data.json')
+_w5_reset_settings()
+app5w = _w5_app()
+_w5_open = (app5w.find_note(app5w.selected_note_id)
+            if app5w.selected_note_id is not None else None)
+check(f'a first start, with no notes file, opens on the welcome note alone '
+      f'({[n["title"] for n in app5w.notes]})',
+      [n['title'] for n in app5w.notes] == [_W5_TITLE]
+      and _w5_open is not None and _w5_open['title'] == _W5_TITLE)
+check('...and the editor shows it exactly as it is stored',
+      _w5_open is not None
+      and app5w.title_entry.get() == _w5_open['title']
+      and app5w.body_text.get('1.0', 'end-1c') == _w5_open['body']
+      and app5w._extract_formatting(app5w.body_text) == _w5_open['formatting']
+      and app5w._extract_paragraphs(app5w.body_text) == _w5_open['paragraphs'])
+app5w.delete_current_note(); app5w.update()
+app5w.destroy()
+app5x = _w5_app()
+check(f'deleted, it does not come back at the next start '
+      f'({[n["title"] for n in app5x.notes]})', app5x.notes == [])
+_w5_btn = _w5_show_button(app5x)
+if _w5_btn is not None:
+    _w5_btn.invoke(); app5x.update()
+_w5_back = app5x.find_note(app5x.selected_note_id) \
+    if app5x.selected_note_id is not None else None
+_w5_btn = _w5_show_button(app5x)
+if _w5_btn is not None:
+    _w5_btn.invoke(); app5x.update()
+check(f"Settings -> About's Show brings a deleted welcome note back, and a "
+      f"second press opens it rather than adding another "
+      f"({[n['title'] for n in app5x.notes]})",
+      _w5_back is not None and _w5_back['title'] == _W5_TITLE
+      and [n['title'] for n in app5x.notes] == [_W5_TITLE]
+      and not app5x._settings_open
+      and app5x.selected_note_id == _w5_back['id'])
+app5x.destroy()
+# A notebook with its file -- emptied by hand -- is never greeted, nor a
+# fresh one whose welcome was already offered once.
+with open('notes_data.json', 'w', encoding='utf-8') as _f5w:
+    _f5w.write('[]')
+_w5_reset_settings()
+app5y = _w5_app()
+_w5_emptied = [n['title'] for n in app5y.notes]
+app5y.destroy()
+_os5w.remove('notes_data.json')
+NO.save_setting('welcome_offered', True)
+app5z = _w5_app()
+_w5_offered = [n['title'] for n in app5z.notes]
+app5z.destroy()
+check(f'an emptied notebook gets no welcome note, nor a fresh one that was '
+      f'offered it before ({_w5_emptied}; {_w5_offered})',
+      _w5_emptied == [] and _w5_offered == [])
+with open('notes_data.json', 'w', encoding='utf-8') as _f5w:
+    _f5w.write('[]')
+
+# ---- A DAY'S MARKER KEPT WITH THE VARIATION SELECTOR LOSES IT ----
+# Tk draws U+FE0F as a gap after the emoji, and older pickers wrote it into
+# the day markers. Read back at the start, each comes in without it -- or
+# the marker picker, whose own heart has none, would not know the day's.
+_VS5 = chr(0xFE0F)
+NO.save_setting('day_emoji', {'2026-05-05': [chr(0x2764) + _VS5, chr(0x2B50)]})
+app5m = _w5_app()
+_m5 = app5m.day_emoji.get('2026-05-05')
+app5m.destroy()
+NO.save_setting('day_emoji', {})
+check(f"a day's markers saved with the variation selector come in without "
+      f"it, and match the picker's own ({_m5!r})",
+      _m5 == [chr(0x2764), chr(0x2B50)]
+      and chr(0x2764) in [em for em, _c in NO.NoteOrganizer.DAY_MARKER_EMOJIS])
+
 print()
 # ============================================================
 # GARBAGE COLOURS CANNOT MAKE THE APP UNOPENABLE

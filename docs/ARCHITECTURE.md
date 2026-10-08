@@ -21,7 +21,7 @@ lives in two places: the `noteorganizer/` package — a `core/` layer of data an
 `ui/` layer of mixins — and `note_organizer.py` itself, the entry point and the UI hub the
 pieces hang off.
 
-Both layers are fully extracted: fourteen `core/` modules and six `ui/` mixins. The annotated,
+Both layers are fully extracted: fifteen `core/` modules and six `ui/` mixins. The annotated,
 module-by-module inventory is [the code tour's project tree](CODE_TOUR.md#the-shape-of-the-project), and
 [CODE_TOUR.md](CODE_TOUR.md) walks through the modules for someone learning the codebase. Three
 of the core modules — `richtext`, `clipboard` and `tables` — landed with the rich-text and
@@ -70,7 +70,7 @@ that have moved, so existing callers — including the ~270 `note_organizer.<nam
 across the QA scripts — keep working untouched. That's deliberate: it means each extraction is
 a pure move that leaves the whole test suite green, rather than a rewrite.
 
-What remains in the file is ~20,400 lines of genuinely shared surface. It grew again through
+What remains in the file is ~20,500 lines of genuinely shared surface. It grew again through
 the rich-text and tables work even as the pure logic behind those features went into `core/`,
 and dropped by ~2,700 when the note list moved to `ui/note_list.py` (see the
 [case study](#the-list-measured-again)).

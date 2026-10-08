@@ -892,6 +892,39 @@ check("cell_html styles a cell's words and keeps its line breaks",
                 [{"start": 0, "end": 2, "style": "bold"}])
       == "<b>ab</b><br>cd")
 
+# ------------------------------------------- the emoji variation selector --
+# Tk draws U+FE0F as a blank two letters wide after the emoji it follows:
+# the picker's heart, sun and warning sign left a gap in every note they
+# went into. No string the app draws may carry it; a day's marker kept
+# from before loses it on the way in.
+import glob as _glob
+import io as _io
+import os as _os
+from noteorganizer.core.formatting import without_variation_selector
+
+check("the variation selector comes off, and nothing else",
+      without_variation_selector("❤\ufe0f love ☀\ufe0f")
+      == "❤ love ☀"
+      and without_variation_selector("plain") == "plain"
+      and without_variation_selector(None) == "")
+_here = _os.path.dirname(_os.path.abspath(__file__))
+_carriers = [
+    _os.path.relpath(path, _here)
+    for path in [_os.path.join(_here, "note_organizer.py")]
+    + _glob.glob(_os.path.join(_here, "noteorganizer", "**", "*.py"),
+                 recursive=True)
+    if "\ufe0f" in _io.open(path, encoding="utf-8").read()]
+check(f"no source file of the app carries the variation selector "
+      f"({_carriers})", not _carriers)
+check("a day's markers come in without it, three at most, and a single "
+      "marker from an older file becomes a list",
+      NO.NoteOrganizer._clean_day_markers(
+          ["❤\ufe0f", "", "⭐", "✈\ufe0f", "\U0001f697"])
+      == ["❤", "⭐", "✈"]
+      and NO.NoteOrganizer._clean_day_markers("☀\ufe0f") == ["☀"]
+      and NO.NoteOrganizer._clean_day_markers({"x": 1}) == []
+      and NO.NoteOrganizer._clean_day_markers(["\ufe0f"]) == [])
+
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
 

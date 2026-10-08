@@ -47,7 +47,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.88.361"
+APP_VERSION = "0.89.362"
 
 
 def parse_version(v):
@@ -191,6 +191,8 @@ from noteorganizer.core.duplicates import (
     _normalize_ws,
     _dup_key,
 )
+# The note a first install opens with: noteorganizer/core/welcome.py.
+from noteorganizer.core.welcome import build_welcome_note
 
 # Rich-text span storage lives in noteorganizer/core/formatting.py.
 from noteorganizer.core import clipboard
@@ -204,6 +206,7 @@ from noteorganizer.core.formatting import (
     normalize_paragraphs,
     parse_list_marker,
     strip_list_markers,
+    without_variation_selector,
     marker_for,
     bullet_level_of,
     renumber,
@@ -837,14 +840,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.day_emoji = {}
         if isinstance(saved_day_emoji, dict):
             for d, v in saved_day_emoji.items():
-                if isinstance(v, list):
-                    kept = [e for e in v if isinstance(e, str) and e][:3]
-                    if kept:
-                        self.day_emoji[d] = kept
-                elif isinstance(v, str) and v:
-                    # Older format stored a single emoji per day — migrate it
-                    # into the new list-based format transparently.
-                    self.day_emoji[d] = [v]
+                kept = self._clean_day_markers(v)
+                if kept:
+                    self.day_emoji[d] = kept
         self.current_occurrence_date = None  # set when opened from a calendar day
         self.themed_widgets = []
 
@@ -863,6 +861,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._bind_global_shortcuts()
         self.bind_all("<ButtonPress-1>", self._release_caret_on_empty_click,
                       add="+")
+        # After the window is built: a save that fails says so in a dialog.
+        self._maybe_seed_welcome_note()
         self.refresh_note_list()
         self.render_calendar()
         last_open_id = load_settings().get("last_open_note_id")
@@ -1626,6 +1626,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         when the app is launched as a script. See core/storage.load_notes.
         """
         notes, report = core_load_notes(VERSION_CHANGE)
+        self._fresh_notebook = bool(report.get("fresh_notebook"))
         if report["version_backup_path"]:
             self._version_backup_path = report["version_backup_path"]
         if report["cleanup_report"]:
@@ -1638,6 +1639,48 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if self._corrupt_notes_report is None:
                 self._corrupt_notes_report = ""
         return notes
+
+    def _maybe_seed_welcome_note(self):
+        """A first install opens on the welcome note -- once ever: a notebook
+        that had no notes file this launch, and was never offered it before.
+        Remembered as the note last open, so the start-up reopen shows it."""
+        if not getattr(self, "_fresh_notebook", False):
+            return None
+        if load_settings().get("welcome_offered"):
+            return None
+        note = self._add_welcome_note()
+        save_setting("welcome_offered", True)
+        self._remember_last_open_note(note["id"])
+        return note
+
+    def _add_welcome_note(self):
+        """Add a fresh welcome note to the notebook and save it; its uid is
+        kept, so Settings -> About can find it again rather than add more."""
+        note = normalize_note(dict(
+            build_welcome_note(),
+            id=max([n["id"] for n in self.notes], default=0) + 1))
+        self.notes.append(note)
+        self.save_notes()
+        save_setting("welcome_note_uid", note["uid"])
+        return note
+
+    def show_welcome_note(self):
+        """Settings -> About's Show, beside the welcome note: the one in the
+        notebook if it is still there, a new one if it was deleted, opened
+        in the editor either way."""
+        uid = load_settings().get("welcome_note_uid")
+        note = next((n for n in self.notes
+                     if uid and n.get("uid") == uid), None)
+        if not self._leave_settings_for_the_editor():
+            return
+        if note is None:
+            note = self._add_welcome_note()
+            self.refresh_note_list()
+        try:
+            self.notebook.select(self.TAB_NOTES)
+        except tk.TclError:
+            pass
+        self.open_note_in_tab(note)
 
     def save_notes(self):
         """Write notes to disk, and say so plainly if it fails.
@@ -9300,12 +9343,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     EMOJI_GROUPS = [
         ("Faces", ["😀", "😄", "😂", "🙂", "😉", "😍", "🤔", "😅", "😢", "😮",
                   "😴", "🥳", "😎", "🙄", "😬", "🤯"], "#FFD166"),
-        ("Gestures", ["👍", "👎", "👏", "🙌", "🤝", "✌️", "🤞", "👌", "💪", "🙏"], "#6EC6CA"),
-        ("Hearts & stars", ["❤️", "💜", "💙", "💚", "🧡", "💛", "⭐", "✨", "🌟", "💯"], "#FF8FA3"),
-        ("Checks & flags", ["✅", "❌", "☑️", "⚠️", "🚩", "🔴", "🟡", "🟢", "🔵", "⏰"], "#A0C4FF"),
+        ("Gestures", ["👍", "👎", "👏", "🙌", "🤝", "✌", "🤞", "👌", "💪", "🙏"], "#6EC6CA"),
+        ("Hearts & stars", ["❤", "💜", "💙", "💚", "🧡", "💛", "⭐", "✨", "🌟", "💯"], "#FF8FA3"),
+        ("Checks & flags", ["✅", "❌", "☑", "⚠", "🚩", "🔴", "🟡", "🟢", "🔵", "⏰"], "#A0C4FF"),
         ("Objects", ["📌", "📎", "📅", "📝", "💡", "🔥", "🎯", "🎉", "🚀", "📦",
                     "🔑", "📞", "💬", "🔗", "🏆"], "#FFB4A2"),
-        ("Nature", ["☀️", "🌙", "⛅", "🌧️", "🌈", "🌸", "🍀", "🌳", "☕", "🍕"], "#B9FBC0"),
+        ("Nature", ["☀", "🌙", "⛅", "🌧", "🌈", "🌸", "🍀", "🌳", "☕", "🍕"], "#B9FBC0"),
     ]
 
     def _show_emoji_picker(self, text_widget, anchor=None):
@@ -11091,13 +11134,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 restored_decor += 1
         for d, v in (state.get("imported_day_emoji") or {}).items():
             if isinstance(d, str) and d not in self.day_emoji:
-                if isinstance(v, str) and v:
-                    v = [v]  # the pre-list format older backups carry
-                if isinstance(v, list):
-                    kept = [e for e in v if isinstance(e, str) and e][:3]
-                    if kept:
-                        self.day_emoji[d] = kept
-                        restored_decor += 1
+                kept = self._clean_day_markers(v)
+                if kept:
+                    self.day_emoji[d] = kept
+                    restored_decor += 1
         if restored_decor:
             save_setting("day_colors", dict(self.day_colors))
             save_setting("day_emoji", dict(self.day_emoji))
@@ -17806,12 +17846,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     # A small curated set for flagging a day — not the full emoji picker,
     # just quick, common markers (star, alert, celebration, etc.).
     DAY_MARKER_EMOJIS = [
-        ("⭐", "#FFD166"), ("❤️", "#FF6B6B"), ("❗", "#E63946"), ("🎉", "#FF8FA3"),
+        ("⭐", "#FFD166"), ("❤", "#FF6B6B"), ("❗", "#E63946"), ("🎉", "#FF8FA3"),
         ("✅", "#6BCB77"), ("🔴", "#E63946"), ("🟡", "#FFD166"), ("🟢", "#6BCB77"),
-        ("💡", "#FFC145"), ("🎂", "#FF8FA3"), ("✈️", "#A0C4FF"), ("📌", "#FFB4A2"),
+        ("💡", "#FFC145"), ("🎂", "#FF8FA3"), ("✈", "#A0C4FF"), ("📌", "#FFB4A2"),
         ("🔔", "#FFA630"), ("🎁", "#FF8FA3"), ("💰", "#6BCB77"), ("🩺", "#A0C4FF"),
-        ("🍽️", "#FFB4A2"), ("🚗", "#A0C4FF"),
+        ("🍽", "#FFB4A2"), ("🚗", "#A0C4FF"),
     ]
+
+    @staticmethod
+    def _clean_day_markers(value):
+        """A day's markers as kept: up to three non-empty strings, each
+        without the emoji variation selector -- older pickers wrote it, Tk
+        draws it as a gap, and the picker would not know its own heart."""
+        if isinstance(value, str):
+            value = [value]           # the one-marker format older files carry
+        if not isinstance(value, list):
+            return []
+        kept = [without_variation_selector(e) for e in value
+                if isinstance(e, str)]
+        return [e for e in kept if e][:3]
 
 
 
