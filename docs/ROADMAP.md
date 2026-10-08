@@ -36,9 +36,6 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
     (the explicit/ambient contract exists because rebuilt windows map late). Rebuilding only the
     touched block would cut both the cost and that complexity. An architectural phase with its own
     design pass, not a patch; measured before, it must be measured after.
-- **Route template deletion through the Trash** — so templates would be restorable like notes.
-  It is a data-format change, not a quick win; meanwhile the delete confirmation says plainly that
-  it skips the Trash (see [Settings redesign](#settings-redesign)).
 - **Spell-check in the editor (desktop only).** A red wavy underline on misspelled words with
   right-click suggestions — **not** silent auto-correct, which would mangle names, technical terms
   and other-language words in a notes app without asking. This is a desktop-only feature: Tkinter
@@ -104,6 +101,13 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
   *text* arrives through the normal PDF paragraph-rejoin — and anyone who wants it structured can
   drop it into a table made from the toolbar. Tables pasted from Excel, Word or web pages (which
   *do* carry structure) arrive as real grids and stay fully supported.
+- Routing template deletion through the Trash — decided against (2026-10-09). Deleting a
+  template already asks first and says plainly that it skips the Trash and cannot be undone
+  (see [Settings redesign](#settings-redesign)). Making templates restorable would put a second
+  kind of entry in `trash.json`, which every reader of the Trash would then have to understand —
+  restore, the retention purge, Empty trash, the selection, backup and import — and so would
+  every older version of the app that opens the file. The warning is the safeguard; a new class
+  of Trash bugs is not worth one extra way back.
 
 Three more features were tried and deliberately taken out again — the decision record, since
 "we had it and removed it" is a stronger ruling than "we never built it":
@@ -216,8 +220,8 @@ real setting (a 7–90 day selector in the Trash panel; the purge, the days-left
 message quote it, and unusable hand-edited values read as the 30-day default), a keyboard-shortcut
 reference (Settings → Keyboard shortcuts, every bound combo grouped and verified against the
 bindings), and template deletion saying plainly that it skips the Trash and can't be undone
-(actually routing templates through the Trash stays an
-[open candidate](#under-consideration)).
+(actually routing templates through the Trash was later
+[decided against](#explicitly-not-planned-right-now)).
 
 ### Splitting the UI into modules
 
