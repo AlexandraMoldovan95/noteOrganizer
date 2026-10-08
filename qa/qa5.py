@@ -531,6 +531,21 @@ check(f'an emptied notebook gets no welcome note, nor a fresh one that was '
 with open('notes_data.json', 'w', encoding='utf-8') as _f5w:
     _f5w.write('[]')
 
+# ---- A DAY'S MARKER KEPT WITH THE VARIATION SELECTOR LOSES IT ----
+# Tk draws U+FE0F as a gap after the emoji, and older pickers wrote it into
+# the day markers. Read back at the start, each comes in without it -- or
+# the marker picker, whose own heart has none, would not know the day's.
+_VS5 = chr(0xFE0F)
+NO.save_setting('day_emoji', {'2026-05-05': [chr(0x2764) + _VS5, chr(0x2B50)]})
+app5m = _w5_app()
+_m5 = app5m.day_emoji.get('2026-05-05')
+app5m.destroy()
+NO.save_setting('day_emoji', {})
+check(f"a day's markers saved with the variation selector come in without "
+      f"it, and match the picker's own ({_m5!r})",
+      _m5 == [chr(0x2764), chr(0x2B50)]
+      and chr(0x2764) in [em for em, _c in NO.NoteOrganizer.DAY_MARKER_EMOJIS])
+
 print()
 # ============================================================
 # GARBAGE COLOURS CANNOT MAKE THE APP UNOPENABLE

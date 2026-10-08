@@ -450,7 +450,7 @@ check('every bullet of the welcome note is a line that starts with one',
 check('no line of the welcome note leaves its bold open, and no icon '
       'carries the variation selector',
       all(line.count('**') % 2 == 0 for line in _WELCOME_LINES)
-      and '️' not in _welcome['title'] + _welcome['body'])
+      and '\ufe0f' not in _welcome['title'] + _welcome['body'])
 
 # ---- the core layer stays free of the interface ----
 #

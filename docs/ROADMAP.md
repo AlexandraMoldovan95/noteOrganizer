@@ -418,6 +418,14 @@ rebuilds what it did not before. **Do not reach for a rendering trick here** —
 the three reverted attempts were. The only thing that removes this is not being Tkinter, which is a
 decision of a different size and lives under [Under consideration](#under-consideration).
 
+**The emoji variation selector** — U+FE0F asks for an emoji's colour form; Tk has no colour emoji
+and draws the character itself as a blank two letters wide after the emoji. The app writes none
+of its own (the emoji picker, the day markers, its icons) and strips it from day markers as they
+are read. Text that already carries it is left as it is, because removing a
+character from a note's body would move every style span after it: a heart chosen from the old
+picker, a paste from a web page, or an emoji typed with Win+. still shows its gap. Delete the
+blank by hand (it is one character after the emoji) if it matters.
+
 **Audit residuals (2026-09-10)** — the code-audit programme (see
 [Shipped & settled](#the-code-audit-programme-2026-09)) closed every finding that warranted code;
 what follows is what it deliberately left as recorded edges rather than fixes. None is an open

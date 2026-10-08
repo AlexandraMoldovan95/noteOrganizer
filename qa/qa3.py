@@ -1061,9 +1061,13 @@ app.save_notes()
 # and one garbage colour a hand-editor (or hostile zip) could carry.
 NO.save_setting('day_colors', {'2026-03-03': '#112233',
                                '2026-03-05': '#zzzzzz'})
-NO.save_setting('day_emoji', {'2026-03-04': ['\u2b50']})
+# A marker written with the emoji variation selector, as older pickers
+# wrote it: Tk draws that character as a gap, so it must come in without.
+_VS3 = chr(0xFE0F)
+NO.save_setting('day_emoji', {'2026-03-04': ['\u2b50'],
+                              '2026-03-06': [chr(0x2764) + _VS3]})
 app.day_colors = {'2026-03-03': '#112233'}
-app.day_emoji = {'2026-03-04': ['\u2b50']}
+app.day_emoji = {'2026-03-04': ['\u2b50'], '2026-03-06': [chr(0x2764) + _VS3]}
 _catzip = os.path.join(tempfile.gettempdir(), 'qa3_categories.zip')
 if os.path.exists(_catzip):
     os.remove(_catzip)
@@ -1102,6 +1106,9 @@ check('day colours and markers come back with the backup',
       app.day_colors.get('2026-03-03') == '#112233'
       and app.day_emoji.get('2026-03-04') == ['\u2b50']
       and NO.get_setting('day_colors', {}).get('2026-03-03') == '#112233')
+check(f"a marker the backup carries with the variation selector comes back "
+      f"without it ({app.day_emoji.get('2026-03-06')!r})",
+      app.day_emoji.get('2026-03-06') == [chr(0x2764)])
 check('a garbage day colour from the backup is refused at the door',
       '2026-03-05' not in app.day_colors
       and '2026-03-05' not in NO.get_setting('day_colors', {}))

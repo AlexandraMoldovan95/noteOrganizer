@@ -102,6 +102,15 @@ How the numbers themselves are counted is the
   whenever you like; **Settings → About → Show** brings it back, and never adds a second. Only
   a notebook with no notes file is greeted: an update or an emptied notebook never gets one.
 
+### Fixed
+
+- **Emoji from the app's own pickers no longer leave a gap after them.** ❤️, ✌️, ☑️, ⚠️, ☀️
+  and 🌧️ from the emoji picker, three of the calendar's day markers, two dialog icons and the
+  picture icon in the attachments list were written with an invisible character (U+FE0F) that
+  Tk draws as a blank two letters wide. They carry none now, and day markers saved with it lose
+  it as they are read, so the marker picker knows them again. Text that already has it keeps it
+  (see Known limitations in the ROADMAP).
+
 ### Testing
 
 - test_data_safety reads a folder with no notes file as a fresh notebook and an emptied or
@@ -111,6 +120,9 @@ How the numbers themselves are counted is the
   emptied notebook and an already-greeted one. Mutants Y01–Y09 take each part back out. A
   pure-Tk probe showed the emoji variation selector (U+FE0F) drawn as a blank two letters
   wide, so the note's icons carry none.
+- test_richtext scans every source file of the app for the variation selector and checks the
+  helper that strips it and the day markers' intake; qa5 starts the app over markers saved with
+  it, and qa3 imports a backup carrying one. Mutants I01–I04 take each part back out.
 
 ---
 

@@ -155,6 +155,7 @@ is in the table below as well.
 | [The list that rewrote the whole note](#the-list-that-rewrote-the-whole-note) | Write only what changed: a rewrite of everything moves everything that hangs off the text — the view, the tables, the caret. | 0.84.357 |
 | [Nine regressions in fifteen fixes](#nine-regressions-in-fifteen-fixes) | A fix that changes WHEN something happens must be walked through every reader of that moment, not only the route it was reported on. | 0.84.357 |
 | [The border that went grey whenever it was used](#the-border-that-went-grey-whenever-it-was-used) | A check that reads the option you set proves the option, not the colour on the screen; photograph what a person sees. | 0.88.361 |
+| [The heart that left a gap](#the-heart-that-left-a-gap) | An invisible character is still drawn; when the toolkit draws it badly, keep it out of what the app writes, and say what is left. | — |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -4565,6 +4566,30 @@ there on purpose.
 
 **Takeaway:** an option is a request, and the toolkit decides when it applies. A check that reads
 back the option you set can only agree with you; the photograph is what disagreed.
+
+### The heart that left a gap
+
+*(found on a photograph of the welcome note, before it shipped)*
+
+**Symptom:** the welcome note's headings showed a wide gap after their icon — "✍     Write". The
+same gap followed ❤️, ✌️, ☀️ and ⚠️ chosen from the emoji picker, three of the calendar's day
+markers, and the picture icon in the attachments list.
+
+**Root cause:** each was written with U+FE0F, the variation selector that asks for an emoji's
+colour form. Tk has no colour emoji, so it ignores the request — and draws the selector itself
+as a blank about two letters wide. A pure-Tk probe measured it: "❤️ love" 71 px, "❤ love" 49 px,
+the same 22 px on every pair, plain and bold.
+
+**Fix:** the app writes none: the picker, the day markers and the icons lost theirs, and
+`without_variation_selector` (in `core/formatting.py`) strips it from day markers as they are
+read from settings or a backup, so a heart saved by the old picker matches the new picker's heart
+and can be taken off its day. test_richtext scans every source file of the app for the character.
+Text that already carries it is left alone on purpose: removing a character from a note's body
+moves every style span after it, which is a change to stored data of its own (Known limitations
+in the ROADMAP).
+
+**Takeaway:** an invisible character is still drawn. When the toolkit draws it badly, keep it out
+of what the app writes, clean it where nothing hangs off the text, and say plainly what is left.
 
 ## Smaller lessons, moved out of the code
 
