@@ -246,7 +246,7 @@ class CalendarViewMixin:
         # _toggles_its_popup) instead of opening a fresh one.
         self._toggles_its_popup(self.cal_month_lbl, self.open_month_jump)
         self.track_theme(self.cal_month_lbl, bg="bg", fg="text",
-                         activebackground="bg", activeforeground="accent")
+                         activebackground="bg", activeforeground="accent_text")
         self.cal_month_lbl.pack(side="left", padx=10)
 
         nav_button(cluster, "▶", lambda: self.shift_calendar(months=1), "left")
@@ -1001,7 +1001,7 @@ class CalendarViewMixin:
         msg = tk.Label(
             self.reminder_bar,
             text=f"🔔  You have {count} {noun} for today ({friendly}).",
-            bg=self.colors["accent"], fg="white", font=("Segoe UI", 9, "bold"),
+            bg=self.colors["accent"], fg=self._on_fill("accent"), font=("Segoe UI", 9, "bold"),
             anchor="w", cursor="hand2"
         )
         msg.pack(side="left", padx=14, pady=6)
@@ -1014,7 +1014,8 @@ class CalendarViewMixin:
                             is False else None))
 
         close = tk.Label(self.reminder_bar, text="✕", bg=self.colors["accent"],
-                         fg="white", font=("Segoe UI", 10, "bold"), cursor="hand2")
+                         fg=self._on_fill("accent"), font=("Segoe UI", 10, "bold"),
+                         cursor="hand2")
         close.pack(side="right", padx=12)
         close.bind("<Button-1>", lambda e: self.dismiss_reminder())
 
@@ -1136,7 +1137,7 @@ class CalendarViewMixin:
 
         if is_recurring(base_note):
             tk.Label(inner, text=describe_recurrence(base_note), bg=self.colors["card"],
-                     fg=self.colors["accent"], font=("Segoe UI", 8, "italic"),
+                     fg=self.colors["accent_text"], font=("Segoe UI", 8, "italic"),
                      anchor="w", justify="left").pack(anchor="w")
 
         # The raw body used to go straight in here, tables and all, so a
@@ -1202,7 +1203,7 @@ class CalendarViewMixin:
                   font=("Segoe UI", 11, "bold"), cursor="hand2"
                   ).pack(side="right", padx=(6, 0))
         tk.Button(header, text="+ Add note", command=lambda: self._add_note_for_date(date_str),
-                  bg=self.colors["accent"], fg="white", relief="flat",
+                  bg=self.colors["accent"], fg=self._on_fill("accent"), relief="flat",
                   font=("Segoe UI", 9, "bold"), cursor="hand2"
                   ).pack(side="right", ipadx=8, ipady=2)
 
@@ -1292,12 +1293,12 @@ class CalendarViewMixin:
                   ).pack(side="left", ipadx=6, ipady=2)
         tk.Button(top, text="✏ Open in editor",
                   command=lambda: self._open_note_from_calendar(base_note, date_str),
-                  bg=self.colors["accent"], fg="white", relief="flat",
+                  bg=self.colors["accent"], fg=self._on_fill("accent"), relief="flat",
                   font=("Segoe UI", 9, "bold"), cursor="hand2"
                   ).pack(side="right", ipadx=6, ipady=2)
         tk.Button(top, text="🗑 Delete",
                   command=lambda: self._delete_note_from_calendar(base_note, date_str),
-                  bg=self.colors["danger"], fg="white", relief="flat",
+                  bg=self.colors["danger"], fg=self._on_fill("danger"), relief="flat",
                   font=("Segoe UI", 9, "bold"), cursor="hand2"
                   ).pack(side="right", padx=(0, 6), ipadx=6, ipady=2)
 
@@ -1362,7 +1363,7 @@ class CalendarViewMixin:
         if chips:
             tk.Label(self.day_panel, text="   ".join(chips),
                      font=("Segoe UI", 8, "bold"), anchor="w",
-                     bg=self.colors["sidebar"], fg=self.colors["accent"]
+                     bg=self.colors["sidebar"], fg=self.colors["accent_text"]
                      ).pack(fill="x", padx=15, pady=(0, 6))
 
         body = tk.Frame(self.day_panel, bg=self.colors["sidebar"])
@@ -1567,9 +1568,9 @@ class CalendarViewMixin:
             active = (bucket == self._history_bucket)
             b.configure(
                 bg=self.colors["accent"] if active else self.colors["card"],
-                fg="white" if active else self.colors["text"],
+                fg=self._on_fill("accent") if active else self.colors["text"],
                 activebackground=self.colors["accent"],
-                activeforeground="white")
+                activeforeground=self._on_fill("accent"))
 
         query = self._history_query()
         entries = self._history_entries_now()
@@ -1659,7 +1660,7 @@ class CalendarViewMixin:
                     self._history_rows,
                     (f"{glyph} 🔁 ", entry['title'] or '(untitled)',
                      f" · {entry['freq_label']}{suffix}"),
-                    self.colors["accent"],
+                    self.colors["accent_text"],
                     row_cmd,
                     context_cmd=lambda e, n=note:
                         self.show_note_context_menu(e, n),
@@ -1693,9 +1694,9 @@ class CalendarViewMixin:
                 self._history_rows,
                 text=f"Show more ({len(entries) - self._history_shown} left)",
                 relief="flat", cursor="hand2", font=("Segoe UI", 9, "bold"),
-                bg=self.colors["card"], fg=self.colors["accent"],
+                bg=self.colors["card"], fg=self.colors["accent_text"],
                 activebackground=self.colors["sidebar"],
-                activeforeground=self.colors["accent"],
+                activeforeground=self.colors["accent_text"],
                 command=self._history_show_more)
             more.pack(fill="x", pady=(6, 2))
             self._history_more_btn = more
@@ -1756,7 +1757,8 @@ class CalendarViewMixin:
         menu = self._new_context_menu(tearoff=0)
         menu.configure(
             bg=self.colors["card"], fg=self.colors["text"],
-            activebackground=self.colors["accent"], activeforeground="white",
+            activebackground=self.colors["accent"],
+            activeforeground=self._on_fill("accent"),
             relief="flat", bd=0, font=("Segoe UI", 9)
         )
         menu.add_command(
@@ -2056,7 +2058,7 @@ class CalendarViewMixin:
                   font=("Segoe UI", 8)).pack(side="left", fill="x", expand=True,
                                              padx=(0, 4), ipady=4)
         tk.Button(btn_row, text="✓ Save", command=save_and_close, relief="flat",
-                  cursor="hand2", bg=self.colors["accent"], fg="white",
+                  cursor="hand2", bg=self.colors["accent"], fg=self._on_fill("accent"),
                   font=("Segoe UI", 8, "bold")).pack(side="left", fill="x", expand=True,
                                                      padx=(4, 0), ipady=4)
 

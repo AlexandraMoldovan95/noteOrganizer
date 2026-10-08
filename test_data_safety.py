@@ -699,6 +699,45 @@ check('every theme colour gets a legible contrasting foreground',
 check('contrasting_fg picks dark text on a light ground', _contrast('#ffffff') == '#1a1a1a')
 check('contrasting_fg picks light text on a dark ground', _contrast('#1e1e2f') == '#ffffff')
 
+# The words on a fill: letters_on picks white or near-black by WCAG contrast,
+# for every fill of every theme, and the theme switch asks for them by name.
+from noteorganizer.core.themes import (
+    letters_on as _letters, palette_value as _pvalue,
+    contrast_ratio as _ratio_fn, relative_luminance as _rel_lum)
+_fills = [(t, role, pal[role]) for t, pal in NO.THEMES.items()
+          for role in ('accent', 'accent_hover', 'danger', 'success')]
+check('letters_on picks the side with more contrast on every fill',
+      all(_ratio_fn(_letters(c), c)
+          >= max(_ratio_fn('#ffffff', c), _ratio_fn('#1a1a1a', c))
+          for _t, _r, c in _fills))
+check('the on_* names give the words for that fill, other names the colour',
+      all(_pvalue(pal, 'on_' + role) == _letters(pal[role])
+          for pal in NO.THEMES.values()
+          for role in ('accent', 'danger', 'success'))
+      and _pvalue(NO.THEMES['dark'], 'card') == NO.THEMES['dark']['card'])
+check('a fill it cannot read gets white words',
+      _letters(None) == _letters('#zz') == _letters('') == '#ffffff')
+# Delete is the dark fill with white words and Save the light one with dark
+# words in every theme: they differ in lightness, not only in a hue a
+# colour-blind reader may not see.
+check('Delete wears white words and Save dark ones, in every theme',
+      all(_letters(pal['danger']) == '#ffffff'
+          and _letters(pal['success']) == '#1a1a1a'
+          for pal in NO.THEMES.values()))
+check('...and Delete is the darker fill of the two, in every theme',
+      all(_rel_lum(pal['danger']) < _rel_lum(pal['success'])
+          for pal in NO.THEMES.values()))
+check('every theme names a text shade for each fill role',
+      all(all(pal.get(k) for k in ('accent_text', 'danger_text', 'success_text'))
+          for pal in NO.THEMES.values()))
+# The "nothing found" tint is her pick from photographed boards; it is
+# written down, so a change of the warning red cannot move it.
+check('the find box\'s "nothing found" tint is the one chosen, in every theme',
+      [NO.miss_surface(NO.THEMES[t]) for t in
+       ('dark', 'dark_ocean', 'dark_forest', 'dark_slate', 'light',
+        'light_sky', 'light_mint', 'light_warm')]
+      == ['#522b33', '#522f2f', '#523333', '#522f2f'] + ['#f9dddd'] * 4)
+
 check('blend at t=0 returns the first colour', _blend_fn('#000000', '#ffffff', 0) == '#000000')
 check('blend at t=1 returns the second colour', _blend_fn('#000000', '#ffffff', 1) == '#ffffff')
 check('blend at t=0.5 lands halfway', _blend_fn('#000000', '#ffffff', 0.5) == '#808080')

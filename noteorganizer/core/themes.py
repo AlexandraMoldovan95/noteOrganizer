@@ -29,6 +29,22 @@ because the palettes are known, the app can spot a widget still holding a
 colour from a *different* theme and remap it. See ``_recolor_stragglers``
 in the UI, and `docs/ISSUES_LOG.md` on the theme-switch flicker.
 
+FILL AND TEXT
+-------------
+``accent``, ``danger`` and ``success`` are FILLS: the colour of a button,
+a banner, a selected tab. Each has a twin for words on an ordinary
+surface -- ``accent_text``, ``danger_text``, ``success_text`` -- because
+no single shade can be both on a dark theme: words on a dark surface want
+a lighter one, a fill under its own words a darker one. The words ON a
+fill are not written down at all: :func:`letters_on` picks white or
+near-black by measured contrast, and the names ``on_accent``,
+``on_danger``, ``on_success`` ask for them (:func:`palette_value`).
+Delete is the dark fill with white words in every theme and Save a light
+one with dark words, so the two differ in lightness as well as hue: a
+reader who cannot tell red from green still tells them apart.
+``tools/check_contrast.py`` measures every pair; see "Contrast, measured"
+in `docs/ARCHITECTURE.md`.
+
 NOTE ON WHAT IS *NOT* HERE
 --------------------------
 The live, mutable category map (``CATEGORY_COLORS``) and the functions
@@ -43,8 +59,8 @@ THEMES = {
     "dark": {  # Midnight Purple (original)
         "bg": "#1e1e2f",
         "sidebar": "#26263f",
-        "accent": "#7c5cff",
-        "accent_hover": "#9377ff",
+        "accent": "#8771ff",
+        "accent_hover": "#9d8bff",
         "card": "#2e2e48",
         # The well a check mark sits in, light in every theme because the
         # mark is dark. Tk paints the mark in a box's text colour, so a box
@@ -52,8 +68,13 @@ THEMES = {
         "check_well": "#f7f7fb",
         "text": "#f2f2f7",
         "subtext": "#a0a0c0",
-        "danger": "#ff5c7c",
+        "danger": "#b01c3c",
         "success": "#4cd9a3",
+        # The same three roles as words on a surface (see FILL AND TEXT).
+        "accent_text": "#aba4ff",
+        "danger_text": "#ff8d9d",
+        "success_text": "#72e2b9",
+        "find_miss": "#522b33",
         "calendar_has_notes": "#3d3168",
     },
     "dark_ocean": {  # deep blue
@@ -68,8 +89,12 @@ THEMES = {
         "check_well": "#f7f7fb",
         "text": "#eaf2fb",
         "subtext": "#8fa8c4",
-        "danger": "#ff6b6b",
+        "danger": "#b01c3c",
         "success": "#3ecf8e",
+        "accent_text": "#50b5fa",
+        "danger_text": "#ff8f8f",
+        "success_text": "#62dba4",
+        "find_miss": "#522f2f",
         "calendar_has_notes": "#1f4266",
     },
     "dark_forest": {  # deep green
@@ -84,8 +109,12 @@ THEMES = {
         "check_well": "#f7f7fb",
         "text": "#eafaf0",
         "subtext": "#8fbaa1",
-        "danger": "#ff7a7a",
-        "success": "#4cd9a3",
+        "danger": "#b01c3c",
+        "success": "#4fd3e0",
+        "accent_text": "#4ec983",
+        "danger_text": "#ffa09d",
+        "success_text": "#7fdfea",
+        "find_miss": "#523333",
         "calendar_has_notes": "#254e39",
     },
     "dark_slate": {  # neutral charcoal, warm accent
@@ -100,16 +129,20 @@ THEMES = {
         "check_well": "#f7f7fb",
         "text": "#f3f2f0",
         "subtext": "#a8a8b0",
-        "danger": "#ff6b6b",
-        "success": "#4cd9a3",
+        "danger": "#b01c3c",
+        "success": "#5ad6d0",
+        "accent_text": "#ec914b",
+        "danger_text": "#ff8f8f",
+        "success_text": "#7fe0dc",
+        "find_miss": "#522f2f",
         "calendar_has_notes": "#3a2f22",
     },
     # ---- LIGHT variants ----
     "light": {  # Soft Lavender (original)
         "bg": "#f5f5fa",
         "sidebar": "#e9e9f5",
-        "accent": "#7c5cff",
-        "accent_hover": "#6a49e6",
+        "accent": "#6a49e6",
+        "accent_hover": "#5a38d6",
         "card": "#ffffff",
         # The well a check mark sits in, light in every theme because the
         # mark is dark. Tk paints the mark in a box's text colour, so a box
@@ -117,15 +150,19 @@ THEMES = {
         "check_well": "#f7f7fb",
         "text": "#22223a",
         "subtext": "#676780",
-        "danger": "#e0405f",
+        "danger": "#9e1838",
         "success": "#2fae82",
+        "accent_text": "#5b2dd2",
+        "danger_text": "#c01f45",
+        "success_text": "#00704f",
+        "find_miss": "#f9dddd",
         "calendar_has_notes": "#e3dbff",
     },
     "light_sky": {  # airy blue
         "bg": "#f0f6fc",
         "sidebar": "#dcebf8",
-        "accent": "#1f88d6",
-        "accent_hover": "#1873ba",
+        "accent": "#1a73b8",
+        "accent_hover": "#135f99",
         "card": "#ffffff",
         # The well a check mark sits in, light in every theme because the
         # mark is dark. Tk paints the mark in a box's text colour, so a box
@@ -133,15 +170,19 @@ THEMES = {
         "check_well": "#f7f7fb",
         "text": "#173049",
         "subtext": "#536b81",
-        "danger": "#e0405f",
+        "danger": "#9e1838",
         "success": "#2fae82",
+        "accent_text": "#005b97",
+        "danger_text": "#c01f45",
+        "success_text": "#00704f",
+        "find_miss": "#f9dddd",
         "calendar_has_notes": "#d3e7f8",
     },
     "light_mint": {  # fresh green
         "bg": "#f1f9f4",
         "sidebar": "#dcefe3",
-        "accent": "#2aa971",
-        "accent_hover": "#238e5f",
+        "accent": "#28a66e",
+        "accent_hover": "#3cbb83",
         "card": "#ffffff",
         # The well a check mark sits in, light in every theme because the
         # mark is dark. Tk paints the mark in a box's text colour, so a box
@@ -149,15 +190,19 @@ THEMES = {
         "check_well": "#f7f7fb",
         "text": "#183328",
         "subtext": "#527061",
-        "danger": "#e0405f",
-        "success": "#2fae82",
+        "danger": "#9e1838",
+        "success": "#2db4c2",
+        "accent_text": "#006640",
+        "danger_text": "#c01f45",
+        "success_text": "#00707c",
+        "find_miss": "#f9dddd",
         "calendar_has_notes": "#d3edde",
     },
     "light_warm": {  # warm cream, orange accent
         "bg": "#faf6f0",
         "sidebar": "#f1e7da",
         "accent": "#d97a2b",
-        "accent_hover": "#bd6822",
+        "accent_hover": "#e58f47",
         "card": "#ffffff",
         # The well a check mark sits in, light in every theme because the
         # mark is dark. Tk paints the mark in a box's text colour, so a box
@@ -165,8 +210,12 @@ THEMES = {
         "check_well": "#f7f7fb",
         "text": "#3a2c1c",
         "subtext": "#776653",
-        "danger": "#e0405f",
-        "success": "#2fae82",
+        "danger": "#9e1838",
+        "success": "#33b8b0",
+        "accent_text": "#8a4600",
+        "danger_text": "#c01f45",
+        "success_text": "#00726b",
+        "find_miss": "#f9dddd",
         "calendar_has_notes": "#f3e2cd",
     },
 }
@@ -279,12 +328,68 @@ def miss_surface(palette):
     dark one. Mixed into the theme's own surface instead, the red went grey
     on the blue and green themes; one fixed dark red, before that, put dark
     words on dark on the light ones (1.2:1). The strengths, and the light
-    themes' truer red, are her choices from photographed boards."""
-    if contrasting_fg(palette["bg"]) == "#ffffff":
-        return blend("#1c1c1c", palette["danger"], 0.24)
-    danger = palette["danger"]
-    red = danger[:5] + danger[3:5]      # its blue brought down to its green
-    return blend("#ffffff", red, 0.18)
+    themes' truer red, are her choices from photographed boards.
+
+    Written into each palette as ``find_miss`` rather than mixed here: the
+    tints were mixed from the warning reds of the time, and those reds have
+    since darkened for contrast, which would have moved a shade chosen by
+    eye."""
+    return palette["find_miss"]
+
+
+def find_all_surface(palette):
+    """The ground of every match the find bar marks in a note: the accent
+    at a third of its strength over the card. The current match wears the
+    accent itself."""
+    return blend(palette["card"], palette["accent"], 0.35)
+
+
+# The words on a filled control: white, or this near-black.
+LETTERS_LIGHT = "#ffffff"
+LETTERS_DARK = "#1a1a1a"
+
+# Palette names for the words on each fill. They are worked out from the
+# fill (see palette_value), so no palette spells them out.
+LETTER_KEYS = {"on_accent": "accent", "on_danger": "danger",
+               "on_success": "success"}
+
+
+def relative_luminance(hex_color):
+    """Relative luminance, as WCAG 2.1 defines it, of a ``#rrggbb`` colour."""
+    channels = [int(hex_color[i:i + 2], 16) / 255.0 for i in (1, 3, 5)]
+    linear = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+              for c in channels]
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+
+def contrast_ratio(one, other):
+    """The WCAG 2.1 contrast ratio between two ``#rrggbb`` colours."""
+    light, dark = sorted((relative_luminance(one), relative_luminance(other)),
+                         reverse=True)
+    return (light + 0.05) / (dark + 0.05)
+
+
+def letters_on(fill):
+    """The words for a control filled with *fill*: white or near-black,
+    whichever has the higher WCAG contrast on it.
+
+    Not contrasting_fg, which answers a different question (a threshold of
+    perceived brightness, for colours the person picks) and puts white on
+    most of the fills this answers near-black for. This is the measure the
+    contrast gate holds every button to, so the two cannot disagree. A
+    colour it cannot read gets white, as contrasting_fg's does."""
+    try:
+        dark = contrast_ratio(LETTERS_DARK, fill)
+        light = contrast_ratio(LETTERS_LIGHT, fill)
+    except (TypeError, ValueError, IndexError):
+        return LETTERS_LIGHT
+    return LETTERS_DARK if dark > light else LETTERS_LIGHT
+
+
+def palette_value(palette, key):
+    """A colour of *palette* by its name, the ``on_*`` names included."""
+    fill = LETTER_KEYS.get(key)
+    return letters_on(palette[fill]) if fill else palette[key]
 
 
 def contrasting_fg(hex_color):

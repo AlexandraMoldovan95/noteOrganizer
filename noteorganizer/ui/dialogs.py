@@ -33,6 +33,8 @@ import tkinter as tk
 from tkinter import ttk
 from types import SimpleNamespace
 
+from ..core.themes import letters_on
+
 
 class DialogsMixin:
     """Dialogs, dropdowns and popups for :class:`NoteOrganizer`.
@@ -204,10 +206,10 @@ class DialogsMixin:
             is_primary = (i == len(buttons) - 1)
             if color_key:
                 btn_color = self.colors.get(color_key, self.colors["sidebar"])
-                fg_color = "white"
+                fg_color = letters_on(btn_color)
             else:
                 btn_color = accent if is_primary else self.colors["sidebar"]
-                fg_color = "white" if is_primary else self.colors["text"]
+                fg_color = letters_on(btn_color) if is_primary else self.colors["text"]
             b = tk.Button(
                 btn_row, text=label, command=lambda v=value: choose(v),
                 relief="flat", cursor="hand2", font=("Segoe UI", 10, "bold"),
@@ -676,7 +678,7 @@ class DialogsMixin:
                     dot.pack(side="left", padx=(10, 6), pady=4)
                     widgets.append(dot)
                 lbl2 = tk.Label(row, text=opt, bg=row_bg,
-                               fg=self.colors["accent"] if is_cur else self.colors["text"],
+                               fg=self.colors["accent_text"] if is_cur else self.colors["text"],
                                font=("Segoe UI", 9, "bold" if is_cur else "normal"),
                                anchor="w")
                 lbl2.pack(side="left", padx=(10 if not color else 0, 10))

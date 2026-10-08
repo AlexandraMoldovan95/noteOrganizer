@@ -767,14 +767,14 @@ check(f'the template checklist rows delete with a drawn bin '
 check('and no literal emoji bin is left in the dialog', not _emojiBins)
 # Faint at rest, like the reference: a list of rows must not read as a column
 # of red warnings before anyone has reached for anything. The emoji one was
-# self.colors["danger"] always.
+# self.colors["danger"] always; pointed at, the drawn one wears danger_text.
 if _drawnBins:
-    _binColours = {str(w.itemcget(i, 'fill'))
+    _binColours = {str(w.itemcget(i, 'fill')).lower()
                    for w in _drawnBins[:1]
                    for i in w.find_withtag('glyph')}
     check(f'the bin is drawn faint, not danger-red, at rest ({_binColours})',
-          str(app.colors['danger']).lower() not in
-          {c.lower() for c in _binColours})
+          not {str(app.colors['danger']).lower(),
+               str(app.colors['danger_text']).lower()} & _binColours)
 
 # ============================================================
 # A TEMPLATE'S CHECKLIST ITEMS MOVE TOO (her re-test, cases 591 and 593)

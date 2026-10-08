@@ -294,7 +294,7 @@ class AttachmentsMixin:
         tk.Button(header, text="Open externally",
                   command=lambda: (self._dismiss_mini_popup(), self._open_externally(path)),
                   relief="flat", cursor="hand2", bg=self.colors["accent"],
-                  fg="white", font=("Segoe UI", 9)
+                  fg=self._on_fill("accent"), font=("Segoe UI", 9)
                   ).pack(side="right", padx=(0, 6), ipadx=6, ipady=2)
 
         img_lbl = tk.Label(overlay, image=frames[0], bg=self.colors["bg"])
@@ -472,7 +472,7 @@ class AttachmentsMixin:
             remove_btn = tk.Button(
                 top_row, text="✕", command=lambda idx=i: self.remove_attachment(idx),
                 relief="flat", font=("Segoe UI", 8), cursor="hand2", width=2,
-                bg=self.colors["danger"], fg="white"
+                bg=self.colors["danger"], fg=self._on_fill("danger")
             )
             remove_btn.pack(side="right", padx=4, pady=2)
 

@@ -207,7 +207,7 @@ class SettingsPageMixin:
                 selected = (key == which)
                 btn.configure(
                     bg=tint if selected else self.colors["sidebar"],
-                    fg=self.colors["accent"] if selected else self.colors["subtext"],
+                    fg=self.colors["accent_text"] if selected else self.colors["subtext"],
                     activebackground=tint if selected else self.colors["card"],
                 )
                 rail = rails.get(key)
@@ -225,7 +225,7 @@ class SettingsPageMixin:
                     icon.configure(bg=tint if selected else self.colors["sidebar"])
                     self._draw_icon(
                         icon, key,
-                        self.colors["accent"] if selected else self.colors["subtext"])
+                        self.colors["accent_text"] if selected else self.colors["subtext"])
             except tk.TclError:
                 pass
 
@@ -664,7 +664,8 @@ class SettingsPageMixin:
 
         new_entry.bind("<Return>", lambda e: add_new())
         tk.Button(add_row, text="+ Add", command=add_new, bg=self.colors["accent"],
-                  fg="white", relief="flat", font=("Segoe UI", 9, "bold"), cursor="hand2"
+                  fg=self._on_fill("accent"), relief="flat", font=("Segoe UI", 9, "bold"),
+                  cursor="hand2"
                   ).pack(side="right", ipadx=10, ipady=4)
 
     def _build_settings_templates_panel(self, parent):
@@ -727,7 +728,7 @@ class SettingsPageMixin:
         # it, and the two characters are visibly different widths.
         new_tpl_btn = tk.Button(add_row, text="+ New template",
                   command=lambda: self._edit_template(None, redraw, new_tpl_btn),
-                  bg=self.colors["accent"], fg="white", relief="flat",
+                  bg=self.colors["accent"], fg=self._on_fill("accent"), relief="flat",
                   font=("Segoe UI", 9, "bold"), cursor="hand2")
         new_tpl_btn.pack(fill="x", ipady=4)
 
@@ -1215,7 +1216,7 @@ class SettingsPageMixin:
 
         cl_entry.bind("<Return>", lambda e: add_tpl_item())
         tk.Button(cl_add_row, text="+ Add", command=add_tpl_item,
-                  bg=self.colors["accent"], fg="white", relief="flat",
+                  bg=self.colors["accent"], fg=self._on_fill("accent"), relief="flat",
                   font=("Segoe UI", 9, "bold"), cursor="hand2"
                   ).pack(side="left", padx=(6, 0), ipadx=8, ipady=2)
 
@@ -1290,7 +1291,8 @@ class SettingsPageMixin:
         btns = tk.Frame(frame, bg=self.colors["card"])
         btns.pack(fill="x", pady=(4, 0))
         tk.Button(btns, text="Save", command=save, relief="flat", cursor="hand2",
-                  bg=self.colors["accent"], fg="white", font=("Segoe UI", 9, "bold")
+                  bg=self.colors["accent"], fg=self._on_fill("accent"),
+                  font=("Segoe UI", 9, "bold")
                   ).pack(side="left", ipadx=10, ipady=3)
         tk.Button(btns, text="Cancel", command=self._dismiss_mini_popup, relief="flat",
                   cursor="hand2", bg=self.colors["sidebar"], fg=self.colors["text"],
@@ -1447,10 +1449,11 @@ class SettingsPageMixin:
             redraw()
 
         tk.Button(row, text="Delete", command=delete_forever, relief="flat",
-                  cursor="hand2", bg=self.colors["danger"], fg="white",
+                  cursor="hand2", bg=self.colors["danger"], fg=self._on_fill("danger"),
                   font=("Segoe UI", 8, "bold")).pack(side="right", padx=(2, 8), ipadx=4, ipady=1)
         restore_btn = tk.Button(row, text="Restore", command=restore, relief="flat",
-                                cursor="hand2", bg=self.colors["accent"], fg="white",
+                                cursor="hand2", bg=self.colors["accent"],
+                                fg=self._on_fill("accent"),
                                 font=("Segoe UI", 8, "bold"))
         restore_btn.pack(side="right", padx=2, ipadx=4, ipady=1)
         # A double-click's second press lands on the row that slid up into
@@ -1748,7 +1751,7 @@ class SettingsPageMixin:
         restore_btn = tk.Button(
             parent, text="↩ Restore selected", command=restore_selected,
             relief="flat", cursor="hand2", font=("Segoe UI", 9, "bold"),
-            bg=self.colors["accent"], fg="white")
+            bg=self.colors["accent"], fg=self._on_fill("accent"))
         empty_holder = self._settings_big_button(
             parent, "Empty trash", empty_trash, kind="danger")
         empty_holder.pack(fill="x", padx=12, pady=(4, 10), ipady=5)
@@ -1782,7 +1785,7 @@ class SettingsPageMixin:
                               "you like — anything left unticked stays. Attachments "
                               "from removed copies are merged into a kept one.",
                  font=("Segoe UI", 8, "italic"), bg=self.colors["card"],
-                 fg=self.colors["accent"], wraplength=520, justify="left"
+                 fg=self.colors["accent_text"], wraplength=520, justify="left"
                  ).pack(padx=12, pady=(0, 8), anchor="w")
 
         wrap = tk.Frame(parent, bg=self.colors["card"], height=260)
@@ -1829,7 +1832,8 @@ class SettingsPageMixin:
                 tk.Label(box, text=f"↳ differing {' & '.join(hints)} will be merged "
                                    "into a kept copy",
                          font=("Segoe UI", 7, "italic"), bg=self.colors["sidebar"],
-                         fg=self.colors["accent"], anchor="w", wraplength=460, justify="left"
+                         fg=self.colors["accent_text"], anchor="w", wraplength=460,
+                         justify="left"
                          ).pack(fill="x", padx=14, pady=(0, 2))
 
             for note, var in zip(group, group_vars):
@@ -1932,12 +1936,12 @@ class SettingsPageMixin:
             # two theming patterns).
             tk.Button(parent, text=f"🧹✨  Clean up ALL {len(groups)} groups (keep first in each)",
                       command=clean_up_everything,
-                      bg=self.colors["danger"], fg="white", relief="flat",
+                      bg=self.colors["danger"], fg=self._on_fill("danger"), relief="flat",
                       font=("Segoe UI", 10, "bold"), cursor="hand2"
                       ).pack(fill="x", padx=12, pady=(4, 4), ipady=6)
 
         tk.Button(parent, text="🧹  Move ticked duplicates to trash", command=do_cleanup,
-                  bg=self.colors["accent"], fg="white", relief="flat",
+                  bg=self.colors["accent"], fg=self._on_fill("accent"), relief="flat",
                   font=("Segoe UI", 10, "bold"), cursor="hand2"
                   ).pack(fill="x", padx=12, pady=(4, 10), ipady=6)
 
@@ -2025,7 +2029,7 @@ class SettingsPageMixin:
 
             lbl = tk.Label(cell, text=THEME_LABELS.get(name, name),
                            bg=self._surface(), cursor="hand2",
-                           fg=(self.colors["accent"] if active
+                           fg=(self.colors["accent_text"] if active
                                else self.colors["subtext"]),
                            font=("Segoe UI", 8, "bold"))
             lbl.pack(pady=(0, 8))
@@ -2037,7 +2041,7 @@ class SettingsPageMixin:
                 badge.create_oval(0, 0, 15, 15, fill=self.colors["accent"],
                                   outline=self.colors["accent"])
                 badge.create_line(4, 8, 6.5, 10.5, 11.5, 5,
-                                  fill="white", width=1.8)
+                                  fill=self._on_fill("accent"), width=1.8)
 
             for w in (edge, cell, sw, lbl):
                 w.bind("<Button-1>", lambda e, n=name: self.set_theme(n))
@@ -2664,7 +2668,7 @@ class SettingsPageMixin:
         wrap.pack(fill="x", pady=(0, 12))
         ico = tk.Canvas(wrap, width=16, height=16, highlightthickness=0, bd=0, bg=bg)
         ico.pack(side="left", padx=(12, 8), pady=11)
-        self._draw_icon(ico, "about", self.colors["accent"], size=16)
+        self._draw_icon(ico, "about", self.colors["accent_text"], size=16)
         band = tk.Label(wrap, text=text, font=("Segoe UI", 9), bg=bg,
                         fg=self.colors["subtext"], anchor="w", justify="left")
         band.pack(side="left", fill="x", expand=True, pady=10, padx=(0, 12))
@@ -2674,11 +2678,11 @@ class SettingsPageMixin:
     def _text_button(self, parent, text, command, kind="normal"):
         """A button sized to its label rather than stretched across the pane."""
         if kind == "danger":
-            fg, border = self.colors["danger"], self.colors["danger"]
+            fg = border = self.colors["danger_text"]
             bg = self._surface()
             hover = self._blend(bg, self.colors["danger"], 0.14)
         elif kind == "primary":
-            fg, border = "white", self.colors["accent"]
+            fg, border = self._on_fill("accent"), self.colors["accent"]
             bg = self.colors["accent"]
             hover = self.colors["accent_hover"]
         else:
@@ -2694,10 +2698,11 @@ class SettingsPageMixin:
         # kind's derived ring are the straggler net's job). The derived
         # activebackground is refreshed live in the hover binds below.
         if kind == "danger":
-            self.track_theme(b, fg="danger", activeforeground="danger",
-                             highlightbackground="danger")
+            self.track_theme(b, fg="danger_text", activeforeground="danger_text",
+                             highlightbackground="danger_text")
         elif kind == "primary":
-            self.track_theme(b, highlightbackground="accent")
+            self.track_theme(b, fg="on_accent", activeforeground="on_accent",
+                             highlightbackground="accent")
         else:
             self.track_theme(b, fg="text", activeforeground="text")
 
@@ -2799,7 +2804,7 @@ class SettingsPageMixin:
                 return command(event) if takes_event else command()
 
             c.bind("<Button-1>", _press)
-            hot = self.colors["danger"] if danger else self.colors["text"]
+            hot = self.colors["danger_text"] if danger else self.colors["text"]
             rest_bg = self.colors[bg_key]
             hover_bg = (self._blend(rest_bg, self.colors["danger"], 0.16) if danger
                         else self._surface("inset"))
@@ -2922,7 +2927,7 @@ class SettingsPageMixin:
             try:
                 c.delete("all")
                 bg = self.colors["card"] if active else self.colors["sidebar"]
-                fg = self.colors["accent"] if active else self.colors["subtext"]
+                fg = self.colors["accent_text"] if active else self.colors["subtext"]
                 c.configure(bg=bg)
                 if mode == "dark":
                     c.create_oval(8, 5, 18, 15, outline=fg, width=1.5)
@@ -2988,23 +2993,23 @@ class SettingsPageMixin:
         if kind == "danger":
             b = tk.Button(parent_frame, text=text, command=command,
                           relief="solid", bd=1, font=("Segoe UI", 10, "bold"),
-                          cursor="hand2", fg=self.colors["danger"],
+                          cursor="hand2", fg=self.colors["danger_text"],
                           bg=self.colors["card"],
-                          highlightbackground=self.colors["danger"],
-                          activeforeground=self.colors["danger"],
+                          highlightbackground=self.colors["danger_text"],
+                          activeforeground=self.colors["danger_text"],
                           activebackground=self.colors["card"])
-            self.track_theme(b, bg="card", fg="danger",
-                             highlightbackground="danger",
+            self.track_theme(b, bg="card", fg="danger_text",
+                             highlightbackground="danger_text",
                              activebackground="card",
-                             activeforeground="danger")
+                             activeforeground="danger_text")
         else:
-            bg = "accent" if kind == "accent" else "sidebar"
             b = tk.Button(parent_frame, text=text, command=command, relief="flat",
                           font=("Segoe UI", 10, "bold"), cursor="hand2",
-                          fg="white" if kind == "accent" else self.colors["text"])
-            self.track_theme(b, bg=bg)
+                          fg=self.colors["text"])
             if kind == "accent":
-                b.configure(fg="white")
+                self.track_theme(b, bg="accent", fg="on_accent")
+            else:
+                self.track_theme(b, bg="sidebar")
 
         # Same hover convention as the rest of the app — but the colours
         # are computed at EVENT time from the live palette. The old
@@ -3379,7 +3384,7 @@ class SettingsPageMixin:
         preview_value.pack(side="left", pady=10)
 
         saved_note = tk.Label(card, text="", font=("Segoe UI", 8),
-                              bg=self._surface(), fg=self.colors["success"],
+                              bg=self._surface(), fg=self.colors["success_text"],
                               anchor="w")
         saved_note.pack(fill="x", pady=(8, 0))
 
@@ -3391,7 +3396,7 @@ class SettingsPageMixin:
             used = len(self.username_var.get())
             counter.configure(
                 text=f"{used}/{USERNAME_MAX_LEN}",
-                fg=self.colors["danger"] if used >= USERNAME_MAX_LEN - 3
+                fg=self.colors["danger_text"] if used >= USERNAME_MAX_LEN - 3
                 else self.colors["subtext"])
 
         refresh_preview()

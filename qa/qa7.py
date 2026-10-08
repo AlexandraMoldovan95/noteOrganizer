@@ -3318,15 +3318,18 @@ if app.selection_mode:
 # stripes in the colours the theme being left also uses -- its accent
 # (General's), its danger (Urgent's), its success -- came back as the new
 # theme's. The list is drawn again from the notes after that pass, as the
-# note list's cards are.
+# note list's cards are. The notes' colours are set outright: the default
+# categories' colours no longer match any theme's, so a fixture leaning on
+# that coincidence would test nothing.
 _od_theme_was = app.theme_name
 app.set_theme('dark'); app.update()
 _od_dark, _od_ocean = NO.THEMES['dark'], NO.THEMES['dark_ocean']
+_od_keys = ('accent', 'danger_text', 'success')
 app.notes = [NO.normalize_note(n) for n in (
-    {'id': 142, 'title': 'OdGeneral', 'body': 'x', 'category': 'General',
-     'date': '2026-07-09'},
-    {'id': 143, 'title': 'OdUrgent', 'body': 'x', 'category': 'Urgent',
-     'date': '2026-07-09'},
+    {'id': 142, 'title': 'OdAccent', 'body': 'x', 'category': 'General',
+     'date': '2026-07-09', 'color': _od_dark['accent']},
+    {'id': 143, 'title': 'OdDanger', 'body': 'x', 'category': 'Urgent',
+     'date': '2026-07-09', 'color': _od_dark['danger_text']},
     {'id': 144, 'title': 'OdOwn', 'body': 'x', 'category': 'General',
      'date': '2026-07-09', 'color': _od_dark['success']},
 )]
@@ -3337,8 +3340,8 @@ _od_want = [app.get_note_color(n) for n in app.notes]
 check(f'fixture: the stripes wear colours the dark theme also uses, which '
       f'Ocean Blue does not ({_od_stripes()})',
       _od_stripes() == _od_want
-      and _od_want == [_od_dark['accent'], _od_dark['danger'], _od_dark['success']]
-      and all(_od_dark[k] != _od_ocean[k] for k in ('accent', 'danger', 'success')))
+      and _od_want == [_od_dark[k] for k in _od_keys]
+      and all(_od_dark[k] != _od_ocean[k] for k in _od_keys))
 app.show_settings_page(); app.update()
 app.set_theme('dark_ocean'); app.update()
 app.hide_settings_page(); app.update()

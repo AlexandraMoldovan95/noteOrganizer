@@ -2140,5 +2140,105 @@
     "must_fail": ["a folder it cannot use falls back beside the script"],
     "suites": ["test_data_safety"],
     "expect": "killed"
+  },
+  {
+    "id": "PC01",
+    "about": "the words on every fill are white again, whatever the fill",
+    "edits": [
+      {
+        "file": "noteorganizer/core/themes.py",
+        "find": "    return LETTERS_DARK if dark > light else LETTERS_LIGHT\n",
+        "replace": "    return LETTERS_LIGHT\n"
+      }
+    ],
+    "must_fail": ["palette: the words on every filled widget read at 4.5:1",
+                  "letters_on picks the side with more contrast on every fill"],
+    "suites": ["qa1", "test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC02",
+    "about": "a theme switch leaves an untracked fill's words as they were",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                        w.configure(fg=letters_on(ground))\n",
+        "replace": "                        pass\n"
+      }
+    ],
+    "must_fail": ["palette: an untracked button's words follow its fill"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC03",
+    "about": "the find bar's current match keeps the note's own text colour on the full accent",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                                      background=self.colors[\"accent\"],\n                                      foreground=self._on_fill(\"accent\"))\n",
+        "replace": "                                      background=self.colors[\"accent\"])\n"
+      }
+    ],
+    "must_fail": ["find/theme: the current match's words are the ones that read on the accent"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC04",
+    "about": "Generate code is a filled accent button again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self.track_theme(share_btn, bg=\"sidebar\", fg=\"text\")\n",
+        "replace": "        self.track_theme(share_btn, bg=\"accent\", fg=\"on_accent\")\n"
+      }
+    ],
+    "must_fail": ["palette: Save wears dark words on its light fill"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC05",
+    "about": "the repeat summary is written in the accent's fill instead of its text shade",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self.track_theme(self.rec_summary_lbl, bg=\"bg\", fg=\"accent_text\")\n",
+        "replace": "        self.track_theme(self.rec_summary_lbl, bg=\"bg\", fg=\"accent\")\n"
+      }
+    ],
+    "must_fail": ["palette: the repeat summary and the two calendar lines wear the accent's text shade"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC06",
+    "about": "Save's words are written down as white again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self.track_theme(save_btn, bg=\"success\", fg=\"on_success\")\n",
+        "replace": "        self.track_theme(save_btn, bg=\"success\")\n        save_btn.configure(fg=\"white\")\n"
+      }
+    ],
+    "must_fail": ["palette: the filled buttons built once name their words"],
+    "suites": ["qa1"],
+    "expect": "killed",
+    "note": "The theme switch's safety net repaints the words at every switch, so the walk cannot see this one: the check reads the registration instead."
+  },
+  {
+    "id": "PC07",
+    "about": "the \"nothing found\" tint is mixed from the warning red again, and moves with it",
+    "edits": [
+      {
+        "file": "noteorganizer/core/themes.py",
+        "find": "    return palette[\"find_miss\"]\n",
+        "replace": "    return blend(\"#ffffff\", palette[\"danger\"], 0.18)\n"
+      }
+    ],
+    "must_fail": ["the find box's \"nothing found\" tint is the one chosen, in every theme"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
   }
 ]

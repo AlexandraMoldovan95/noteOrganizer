@@ -2172,7 +2172,7 @@ check(f'it appears {_FROM} characters before the cap, reading '
       _shown and _text == f'{_CAP - _FROM}/{_CAP}')
 _shown, _text, _fg = _counter_state(_CAP)
 check('at the cap it reads full and turns the warning colour',
-      _shown and _text == f'{_CAP}/{_CAP}' and _fg == app.colors['danger'])
+      _shown and _text == f'{_CAP}/{_CAP}' and _fg == app.colors['danger_text'])
 check('and it goes away again when the title is shortened',
       _counter_state(10)[0] is False)
 
@@ -8431,6 +8431,12 @@ check('find/theme: a theme switch keeps the open cell search alive',
 check('find/theme: the find highlight is re-tinted to the new accent',
       app.body_text.tag_cget('find_current', 'background').lower()
       == app.colors['accent'].lower())
+# The current match is the full accent, and the note's own text colour fell
+# below 4.5:1 on it in every theme; its words are the ones for that fill.
+check('find/theme: the current match\'s words are the ones that read on the '
+      'accent, re-picked for the new theme',
+      app.body_text.tag_cget('find_current', 'foreground').lower()
+      == app._on_fill('accent').lower())
 # The "Aa" case checkbox is long-lived (built once with the bar), so it must
 # follow the theme. It draws its own well and mark now: Tk painted its mark
 # in the words' colour, light on dark themes, on a light well, so a ticked
@@ -8449,6 +8455,165 @@ check('find/theme: the bar border follows the accent',
       == app.colors['accent'].lower())
 app._close_find()
 app.update()
+
+# ============================================================
+# THE PALETTE: FILLS, THE WORDS ON THEM, AND THE TEXT SHADES
+# ============================================================
+# Accent, danger and success are fills; the words ON a fill come from
+# letters_on (white or near-black, by measured contrast) and words on an
+# ordinary surface from the *_text shades. A fill built with its words
+# written down by hand reads on some themes and not others -- so every
+# widget showing words on a fill is measured, in every theme.
+from noteorganizer.core.themes import contrast_ratio as _pl_ratio
+_pl_theme = app.theme_name
+_pl_roles = ('accent', 'accent_hover', 'danger', 'success')
+
+
+def _pl_hex(colour):
+    """Any Tk colour (a name such as 'white' too) as #rrggbb."""
+    return '#%02x%02x%02x' % tuple(v // 256 for v in app.winfo_rgb(colour))
+
+
+def _pl_unreadable():
+    fills = {app.colors[r].lower() for r in _pl_roles}
+    bad = []
+
+    def walk(w):
+        try:
+            bg, fg = str(w.cget('bg')).lower(), str(w.cget('fg'))
+            words = str(w.cget('text'))
+        except Exception:
+            bg = words = None
+        if bg in fills and words:
+            if _pl_ratio(_pl_hex(fg), bg) < 4.5:
+                bad.append((w.winfo_class(), words[:18], fg, bg))
+        for c in w.winfo_children():
+            walk(c)
+    walk(app)
+    return bad
+
+
+def _pl_button(text):
+    found = []
+
+    def walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, NO.tk.Button) and str(c.cget('text')) == text:
+                found.append(c)
+            walk(c)
+    walk(app)
+    return found[0] if found else None
+
+
+app.show_settings_page(); app.update()
+_pl_bad = {}
+for _pl_t in NO.THEMES:
+    app.set_theme(_pl_t); app.update()
+    _pl_found = _pl_unreadable()
+    if _pl_found:
+        _pl_bad[_pl_t] = _pl_found[:4]
+app.hide_settings_page()
+app.set_theme(_pl_theme); app.update()
+check(f'palette: the words on every filled widget read at 4.5:1, in every '
+      f'theme ({_pl_bad})', not _pl_bad)
+
+# The editor's row: Save is the light fill with dark words and Delete the
+# dark one with white words in every theme, so the two differ in lightness
+# and not only in hue; Generate code is quiet, dressed as Duplicate is.
+_pl_save, _pl_del, _pl_gen, _pl_dup = (
+    _pl_button(t) for t in ('💾 Save', '🗑 Delete', '📋 Generate code',
+                            '📄 Duplicate'))
+_pl_row = {}
+if None in (_pl_save, _pl_del, _pl_gen, _pl_dup):
+    _pl_row['missing'] = [b is None for b in (_pl_save, _pl_del, _pl_gen, _pl_dup)]
+else:
+    for _pl_t in NO.THEMES:
+        app.set_theme(_pl_t); app.update()
+        _pl_c = app.colors
+        _pl_ok = (
+            str(_pl_save.cget('bg')).lower() == _pl_c['success'].lower()
+            and _pl_hex(_pl_save.cget('fg')) == NO.LETTERS_DARK
+            and str(_pl_del.cget('bg')).lower() == _pl_c['danger'].lower()
+            and _pl_hex(_pl_del.cget('fg')) == NO.LETTERS_LIGHT
+            and str(_pl_gen.cget('bg')).lower() == _pl_c['sidebar'].lower()
+            and str(_pl_gen.cget('fg')).lower() == _pl_c['text'].lower()
+            and str(_pl_gen.cget('bg')) == str(_pl_dup.cget('bg')))
+        if not _pl_ok:
+            _pl_row[_pl_t] = (str(_pl_save.cget('fg')), str(_pl_del.cget('fg')),
+                              str(_pl_gen.cget('bg')), str(_pl_gen.cget('fg')))
+    app.set_theme(_pl_theme); app.update()
+check(f'palette: Save wears dark words on its light fill and Delete white on '
+      f'its dark one, and Generate code is quiet like Duplicate, in every '
+      f'theme ({_pl_row})', not _pl_row)
+
+# A widget no theme switch tracks -- the way the rebuilt panels build
+# theirs -- keeps words that read on its fill: the straggler net picks them
+# by the fill they sit on, whether written as a value or as Tk's 'white'.
+# Words that are not on a fill are not its business.
+_pl_white = next((t for t in NO.THEMES
+                  if NO.letters_on(NO.THEMES[t]['accent']) == NO.LETTERS_LIGHT),
+                 None)
+_pl_dark = next((t for t in NO.THEMES
+                 if NO.letters_on(NO.THEMES[t]['accent']) == NO.LETTERS_DARK),
+                None)
+if _pl_white is None or _pl_dark is None:
+    check(f'palette fixture: one theme wants white words on its accent and '
+          f'another near-black ({_pl_white}, {_pl_dark})', False)
+else:
+    app.set_theme(_pl_white); app.update()
+    _pl_probe = NO.tk.Button(app.editor, text='probe', bg=app.colors['accent'],
+                             fg=app._on_fill('accent'))
+    _pl_named = NO.tk.Label(app.editor, text='probe', bg=app.colors['danger'],
+                            fg='white')
+    _pl_plain = NO.tk.Label(app.editor, text='probe', bg=app.colors['sidebar'],
+                            fg='white')
+    app.set_theme(_pl_dark); app.update()
+    _pl_there = (_pl_hex(_pl_probe.cget('fg')), str(_pl_probe.cget('bg')).lower())
+    _pl_named_there = _pl_hex(_pl_named.cget('fg'))
+    app.set_theme(_pl_white); app.update()
+    _pl_back = _pl_hex(_pl_probe.cget('fg'))
+    check(f'palette: an untracked button\'s words follow its fill across a theme '
+          f'switch, and back ({_pl_white} -> {_pl_dark}: {_pl_there}; back: '
+          f'{_pl_back})',
+          _pl_there == (NO.LETTERS_DARK, NO.THEMES[_pl_dark]['accent'].lower())
+          and _pl_back == NO.LETTERS_LIGHT)
+    check(f'palette: Tk\'s own "white" on a fill is re-picked too, and "white" '
+          f'off a fill is left alone ({_pl_named_there}, '
+          f'{_pl_plain.cget("fg")})',
+          _pl_named_there == NO.letters_on(NO.THEMES[_pl_dark]['danger'])
+          and str(_pl_plain.cget('fg')) == 'white')
+    for _pl_w in (_pl_probe, _pl_named, _pl_plain):
+        _pl_w.destroy()
+
+# The safety net above repaints a fill's words at every theme switch, so it
+# would hide a button built with its words written down by hand; what a
+# check must see is the mechanism -- the tracked fills name their words.
+_pl_reg = {}
+for _pl_w, _pl_map in app.themed_widgets:
+    try:
+        _pl_txt = str(_pl_w.cget('text'))
+    except Exception:
+        continue
+    if _pl_txt in ('💾 Save', '🗑 Delete', '+ New Note', '+ Add file'):
+        _pl_reg[_pl_txt] = (_pl_map.get('bg'), _pl_map.get('fg'))
+check(f'palette: the filled buttons built once name their words for the theme '
+      f'switch, not a colour written down ({_pl_reg})',
+      _pl_reg == {'💾 Save': ('success', 'on_success'),
+                  '🗑 Delete': ('danger', 'on_danger'),
+                  '+ New Note': ('accent', 'on_accent'),
+                  '+ Add file': ('accent', 'on_accent')})
+
+# Words on an ordinary surface take the role's text shade, not its fill.
+_pl_dark = _pl_dark or 'dark'
+app.set_theme(_pl_dark); app.update()
+_pl_texts = {name: str(getattr(app, name).cget('fg')).lower()
+             for name in ('rec_summary_lbl', 'calendar_return_btn',
+                          'occurrence_banner')}
+app.set_theme(_pl_theme); app.update()
+check(f'palette: the repeat summary and the two calendar lines wear the '
+      f'accent\'s text shade after a theme switch ({_pl_texts})',
+      set(_pl_texts.values())
+      == {NO.THEMES[_pl_dark]['accent_text'].lower()})
 
 # Switching notes clears the model so no navigation runs on stale indices.
 app.new_note()

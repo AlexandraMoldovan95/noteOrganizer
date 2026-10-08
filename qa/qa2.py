@@ -723,7 +723,7 @@ if _dp_everything is not None and _dp_ticked_btn is not None:
     check('duplicates: it carries the fill this app uses for taking notes '
           'out of the list',
           str(_dp_everything.cget('bg')) == str(app.colors['danger'])
-          and str(_dp_everything.cget('fg')) == 'white')
+          and str(_dp_everything.cget('fg')) == app._on_fill('danger'))
     check('duplicates: and it is no longer the sidebar colour it blended into',
           str(_dp_everything.cget('bg')) != str(app.colors['sidebar']))
     check('duplicates: the precise action keeps the accent, so the eye is '

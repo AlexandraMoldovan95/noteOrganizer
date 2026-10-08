@@ -117,8 +117,7 @@ class CalculatorPanelMixin:
                     font=("Segoe UI", 10, "bold"),
                     command=lambda t=label: self._calc_press(t))
                 if is_op:
-                    self.track_theme(btn, bg="accent")
-                    btn.configure(fg="white")
+                    self.track_theme(btn, bg="accent", fg="on_accent")
                 else:
                     self.track_theme(btn, bg="sidebar", fg="text")
                 btn.grid(row=r, column=c, sticky="nsew", padx=1, pady=1, ipady=3)
