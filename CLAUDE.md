@@ -23,8 +23,10 @@ calls, no accounts, no database.
 - **Storage:** plain local JSON — `notes_data.json`, `settings.json`,
   `trash.json`, `templates.json` — plus an `attachments/` folder, no
   database. Location is chosen by `resolve_data_dir()`: beside the script
-  when run from source, `%APPDATA%\NoteOrganizer` when running as the built
-  `.exe`. Every note passes through `normalize_note()` as a single choke
+  when run from source — or in the folder a git-ignored
+  `notebook_location.txt` beside it names, which keeps the owner's own
+  source-run notebook out of the working tree (since 2026-10-08) —
+  `%APPDATA%\NoteOrganizer` when running as the built `.exe`. Every note passes through `normalize_note()` as a single choke
   point that coerces malformed/missing fields to safe defaults.
 - **UI:** every dropdown, popup, and dialog the app draws is a hand-built
   `Toplevel`. The system's own dialogs appear in exactly two situations,

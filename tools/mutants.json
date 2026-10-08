@@ -2084,5 +2084,61 @@
     "must_fail": ["no source file of the app carries the variation selector"],
     "suites": ["test_richtext"],
     "expect": "killed"
+  },
+  {
+    "id": "NL01",
+    "about": "notebook_location.txt is ignored, and a source run keeps its notebook in the working tree",
+    "edits": [
+      {
+        "file": "noteorganizer/core/paths.py",
+        "find": "    chosen = chosen_notebook_dir(script_dir)\n    if chosen is not None:\n",
+        "replace": "    chosen = None\n    if chosen is not None:\n"
+      }
+    ],
+    "must_fail": ["notebook_location.txt names the folder"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "NL02",
+    "about": "an empty folder notebook_location.txt names copies in the .exe's notebook from APPDATA",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "    if chosen is not None and os.path.normcase(chosen) == os.path.normcase(APP_DIR):\n",
+        "replace": "    if False:\n"
+      }
+    ],
+    "must_fail": ["the folder notebook_location.txt names brings nothing in"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "NL03",
+    "about": "a comment in notebook_location.txt is read as the folder",
+    "edits": [
+      {
+        "file": "noteorganizer/core/paths.py",
+        "find": "        if line and not line.startswith(\"#\"):\n",
+        "replace": "        if line:\n"
+      }
+    ],
+    "must_fail": ["notebook_location.txt names the folder"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "NL04",
+    "about": "a folder notebook_location.txt names is used even when nothing can be written there",
+    "edits": [
+      {
+        "file": "noteorganizer/core/paths.py",
+        "find": "    if chosen is not None:\n        if _is_writable(chosen):\n",
+        "replace": "    if chosen is not None:\n        if True:\n"
+      }
+    ],
+    "must_fail": ["a folder it cannot use falls back beside the script"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
   }
 ]

@@ -304,6 +304,94 @@ finally:
     shutil.rmtree(_p1, ignore_errors=True)
     shutil.rmtree(_p2, ignore_errors=True)
 
+# ---- notebook_location.txt: a source run's notebook kept elsewhere ----
+# A notebook_location.txt beside the entry point names the folder a source
+# run keeps its notebook in -- the developer's own, out of the working tree.
+# A scratch copy of the code has no such file, so every test keeps its own.
+_NL = chr(10)
+_loc_script = tempfile.mkdtemp(prefix='qa_loc_script_')
+_loc_parent = tempfile.mkdtemp(prefix='qa_loc_target_')
+_loc_target = os.path.join(_loc_parent, 'notebook')
+try:
+    _r, _w = NO.resolve_data_dir(_loc_script)
+    check('without notebook_location.txt a source run keeps its notebook '
+          'beside the script, as before',
+          os.path.normcase(_r) == os.path.normcase(_loc_script) and _w is None)
+    os.environ['NOTEORG_TEST_LOC'] = _loc_target
+    with open(os.path.join(_loc_script, 'notebook_location.txt'), 'w',
+              encoding='utf-8') as f:
+        f.write('# my own notebook, out of the repo' + _NL + _NL
+                + '$NOTEORG_TEST_LOC' + _NL)
+    _r, _w = NO.resolve_data_dir(_loc_script)
+    check('notebook_location.txt names the folder: comments skipped, '
+          'variables expanded, the folder made',
+          os.path.normcase(_r) == os.path.normcase(_loc_target) and _w is None
+          and os.path.isdir(_loc_target))
+    _blocker = os.path.join(_loc_script, 'a_file')
+    with open(_blocker, 'w', encoding='utf-8') as f:
+        f.write('x')
+    with open(os.path.join(_loc_script, 'notebook_location.txt'), 'w',
+              encoding='utf-8') as f:
+        f.write(os.path.join(_blocker, 'cannot_be_a_folder') + _NL)
+    _r, _w = NO.resolve_data_dir(_loc_script)
+    check('a folder it cannot use falls back beside the script, with a '
+          'warning that names the file',
+          os.path.normcase(_r) == os.path.normcase(_loc_script)
+          and bool(_w) and 'notebook_location.txt' in _w)
+finally:
+    os.environ.pop('NOTEORG_TEST_LOC', None)
+    shutil.rmtree(_loc_script, ignore_errors=True)
+    shutil.rmtree(_loc_parent, ignore_errors=True)
+
+# The folder it names is the notebook, and nothing is brought into it: an
+# empty one would otherwise copy in whatever notebook %APPDATA% holds --
+# the .exe's, the real one. In a process of its own (initialise runs once),
+# against a stand-in APPDATA; the control without the file shows the copy
+# this test would see if it happened.
+import subprocess as _subprocess
+_mig_root = tempfile.mkdtemp(prefix='qa_loc_mig_')
+try:
+    _fake_appdata = os.path.join(_mig_root, 'appdata')
+    os.makedirs(os.path.join(_fake_appdata, 'NoteOrganizer'))
+    with open(os.path.join(_fake_appdata, 'NoteOrganizer', 'notes_data.json'),
+              'w', encoding='utf-8') as f:
+        json.dump([{'id': 1, 'title': 'The exe notebook'}], f)
+    _here = os.path.dirname(os.path.abspath(__file__))
+
+    def _start(script_dir):
+        code = ('import sys, os, json; sys.path.insert(0, %r); '
+                'import note_organizer as NO; NO.initialise(app_dir=%r); '
+                'print(json.dumps([NO.APP_DIR, NO.MIGRATION_INFO is not None, '
+                'os.path.exists(os.path.join(NO.APP_DIR, "notes_data.json"))]))'
+                % (_here, script_dir))
+        env = dict(os.environ, APPDATA=_fake_appdata,
+                   XDG_DATA_HOME=_fake_appdata)
+        run = _subprocess.run([sys.executable, '-c', code], env=env,
+                              capture_output=True, text=True, timeout=120)
+        lines = run.stdout.strip().splitlines()
+        return json.loads(lines[-1]) if lines else None
+
+    _plain = os.path.join(_mig_root, 'plain')
+    os.makedirs(_plain)
+    _control = _start(_plain)
+    _located = os.path.join(_mig_root, 'located')
+    _chosen = os.path.join(_mig_root, 'chosen')
+    os.makedirs(_located)
+    with open(os.path.join(_located, 'notebook_location.txt'), 'w',
+              encoding='utf-8') as f:
+        f.write(_chosen + _NL)
+    _moved = _start(_located)
+    check(f'(control) without the file, an empty folder copies in the '
+          f'notebook APPDATA holds ({_control})',
+          _control is not None and _control[1] and _control[2])
+    check(f'the folder notebook_location.txt names brings nothing in, and '
+          f'starts empty ({_moved})',
+          _moved is not None
+          and os.path.normcase(_moved[0]) == os.path.normcase(_chosen)
+          and not _moved[1] and not _moved[2])
+finally:
+    shutil.rmtree(_mig_root, ignore_errors=True)
+
 # The app's own APP_DIR must sit beside note_organizer.py, not inside the
 # noteorganizer/ package.
 check('APP_DIR is not inside the noteorganizer package',
