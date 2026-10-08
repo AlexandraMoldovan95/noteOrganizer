@@ -301,8 +301,10 @@ A table works the way a spreadsheet has taught your hands to expect:
 - Under **Table** lives **Add caption below…**: an auto-numbered "Table N: description" label
   (typing replaces the selected placeholder) plus a "Source:" line for links and sources, both
   placed like the table — left under a left table, centred under a centred one. They are plain,
-  editable body text ever after, so the wording is yours to change, and moving the table later
-  leaves them where they are.
+  editable body text ever after, so the wording is yours to change, and the caption and its
+  table move together: align the caption from the toolbar and the table goes with it, or move
+  the table (right-click → **Table**) and the caption follows. Selecting every cell and pressing
+  an alignment button aligns the text *inside* the cells, as a spreadsheet does.
 - The full set: merge the selected cells into one (their texts join), split a merge back apart,
   insert or delete rows and columns, duplicate whole columns to the end of the table (and whole
   rows to the bottom), insert a **checkbox** (with its own colour palette) or an emoji, and
@@ -311,9 +313,9 @@ A table works the way a spreadsheet has taught your hands to expect:
   a row's condition is met, a habit done, anything you invent. It is stored as Markdown's own task
   syntax (`[ ]` / `[x]`), so it survives share codes as readable text; the exported page draws it
   as a real box (☑ / ☐), and importing that page back turns the boxes into clickable checkboxes
-  again. To turn that cell back into words, right-click it, choose **Edit cell as text** and
-  type. Anything put beside a checkbox — an emoji, words, a paste — takes the box's place, so
-  its raw `[ ]` never shows; delete it and the cell is simply empty, ready for a new checkbox.
+  again. To turn that cell into words, right-click it and choose **Edit cell as text**: it
+  opens empty, and whatever you put there — words, a paste, an emoji — takes the box's place.
+  Leave it empty and the box stays as it was; **Clear cell** empties it.
 - **Drag the line between two columns** to make a column wider or narrower; **double-click** the
   line to snap the column to its content. With several columns selected, **Autofit column
   width(s)** in the right-click menu snaps them all at once. **Drag the line between two rows** up

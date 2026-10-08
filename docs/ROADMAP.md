@@ -26,9 +26,6 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
 
 - **Ideas from the first full manual pass over the test plan (October 2026)**, each small and
   each crossing a seam that needs its own check:
-  - **A table follows its caption.** Centring a caption centres only the caption; the table moves
-    through right-click → Table → Center table on page. Re-aligning the caption lines under a
-    table when the table moves (or the reverse) would keep the pair together.
   - **Reorder checklist items**, with ▲▼ beside each item or Alt+↑/↓ as in the note list. The
     delete Undo puts an item back by position, so a move must keep that honest.
   - **Search and order in the Share panel.** For notebooks of hundreds of notes: a search box
@@ -522,5 +519,5 @@ scroll to the end and 0.2 s a keystroke there; 150,000 take 4.6 s and 0.8 s. Pas
 onto itself again and again reaches the point where the window stops answering. The same text
 broken into ordinary paragraphs is quick (a 140,000-character note: the paste 0.1 s). The app's
 own share of it — copying, which asked every character about every style — was fixed with this
-measurement; what is left is Tk's, and whether to warn when a paragraph grows that long is on the
-owner's list.
+measurement; what is left is Tk's. **Decided 2026-10-07: no warning** — the owner's call, made
+on the test plan after trying the case: left as it is.

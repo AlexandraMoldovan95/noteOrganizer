@@ -395,21 +395,13 @@ check("the gap a table leaves behind is collapsed, not doubled",
 _pv8, _pn8 = tables.preview_text("|x| = 5 for x = -5\n|x| + |y| = 3")
 check(f"a line of maths is words, not a table ({_pv8!r}, {_pn8})",
       _pv8 == "|x| = 5 for x = -5\n|x| + |y| = 3" and _pn8 == 0)
-def _kept(value):
-    a, z = tables.beside_checkbox(value)
-    return value[a:z]
-
-
-# What a checkbox cell keeps when something lands beside its marker: the
-# something, never the brackets (audit) -- by any road it arrived.
-check("an emoji beside a box takes its place",
-      _kept("[ ]\U0001F600") == "\U0001F600"
-      and _kept("\U0001F600 [x]") == "\U0001F600")
-check("words typed beside a box take its place, a line break too",
-      _kept("[ ] buy milk") == "buy milk" and _kept("[x]<br>done") == "done")
-check("a box alone stays a box, and a marker in the middle is words",
-      _kept("[ ]") == "[ ]" and _kept(" [X] ") == " [X] "
-      and _kept("see [ ] here") == "see [ ] here" and _kept("") == "")
+check("a caption's label is a number and a colon after Table (or the old Tab.)",
+      tables.is_caption_line("Table 3: sales") and tables.is_caption_line("  Tab. 2: x")
+      and not tables.is_caption_line("Tables are useful")
+      and not tables.is_caption_line("Table 3 has no colon")
+      and not tables.is_caption_line(None))
+check("...and its source line says Source:",
+      tables.is_source_line("Source: the web") and not tables.is_source_line("Sources vary"))
 
 _pv9, _pn9 = tables.preview_text("words\n|a|b|")
 check("...while a row written without padding is still the row the editor "

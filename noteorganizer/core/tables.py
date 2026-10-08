@@ -35,8 +35,8 @@ LINE_BREAK = "<br>"
 # A cell holding exactly one of these IS a checkbox -- markdown's own
 # task idiom, so the stored text stays plainly readable and any
 # markdown-aware tool shows a task box. The app draws it as a real
-# box and a click toggles it; delete it and type, and the cell is
-# ordinary text again.
+# box and a click toggles it; opened, it shows empty, and what is
+# typed there takes the box's place.
 CHECKBOX_EMPTY = "[ ]"
 CHECKBOX_DONE = "[x]"
 
@@ -52,26 +52,21 @@ def checkbox_state(value):
     return None
 
 
-_EDGE_MARKERS = (
-    re.compile(r"^\s*\[[ xX]\](?:\s|%s)*" % re.escape(LINE_BREAK)),
-    re.compile(r"(?:\s|%s)*\[[ xX]\]\s*$" % re.escape(LINE_BREAK)))
+# A table's caption, as the app writes one under it: a numbered label --
+# "Tab. N:" in notes from before the labels went English -- and the line
+# its source goes on.
+_CAPTION_LABEL = re.compile(r"(?:Table|Tab\.) \d+:")
 
 
-def beside_checkbox(value):
-    """``(start, end)``: what to keep of a checkbox cell's new value.
+def is_caption_line(line):
+    """True for a caption's label line: "Table 3: ...". Prose that merely
+    begins with the word is not one -- the number and colon are."""
+    return bool(_CAPTION_LABEL.match((line or "").strip()))
 
-    A cell that was a checkbox and got something beside its marker -- an
-    emoji, typed words, a paste -- takes that in the box's place: kept, the
-    marker showed as raw brackets. The whole value when it is still just a
-    box, or holds no marker at either end."""
-    value = value or ""
-    if checkbox_state(value) is not None:
-        return 0, len(value)
-    head = _EDGE_MARKERS[0].match(value)
-    start = head.end() if head else 0
-    tail = _EDGE_MARKERS[1].search(value, start)
-    end = tail.start() if tail else len(value)
-    return (start, end) if end > start else (0, len(value))
+
+def is_source_line(line):
+    """True for the line a caption keeps its source on."""
+    return (line or "").strip().startswith("Source:")
 # A cell holding exactly one of these is not content but a merge marker:
 # "<" belongs to the cell on its left, "^" to the cell above. Anchors sit
 # at the top-left of their rectangle. Typing one of these alone into a cell

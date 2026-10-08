@@ -3636,7 +3636,7 @@ for _cbRoad in ('menu', 'toolbar'):
     if _cbChips:
         _qa_click(_cbChips[0])
         app.update()
-    # The picker clears the box at once: the open cell shows no brackets.
+    # The open cell shows the emoji alone, never beside brackets.
     _cbShown = app._cell_editor['entry'].get('1.0', 'end-1c')
     app._dismiss_mini_popup()
     app._commit_cell_editor()
@@ -3653,25 +3653,48 @@ for _cbRoad in ('menu', 'toolbar'):
     _cbVal = app._grid_at_line(1)['cells'][(1, 0)]['value']
     check(f'and deleting the emoji leaves the cell empty ({_cbRoad}: '
           f'{_cbVal!r})', _cbVal == '')
-# A text cell is not a checkbox: an emoji goes in beside its words.
-set_body('| h1 | h2 |' + chr(10) + '| --- | --- |' + chr(10) + '| word | x |')
+# An open checkbox cell shows no brackets at all, by any way in: it opens
+# empty (field pass -- "[ ]" showed until something replaced it). Left
+# empty, the box stays, colour and all; a text cell opens with its words.
+set_body('| h1 | h2 |' + chr(10) + '| --- | --- |' + chr(10) + '| [x] | word |')
 app._render_table_grids()
 app.update()
-app._open_cell_editor(app._grid_at_line(1), 1, 0, select=False)
+_cbLine = app.body_text.get('3.0', '3.end')
+_cbAt = _cbLine.index('[x]')
+app.body_text.tag_add(
+    app._ensure_color_tag(app.body_text, 'text_color', '#d32f2f'),
+    '3.%d' % _cbAt, '3.%d' % (_cbAt + 3))
+app._render_table_grids()
 app.update()
-app._emoji_takes_checkbox_place(app._cell_editor['entry'])
-check('a text cell keeps its words when an emoji comes',
-      app._cell_editor['entry'].get('1.0', 'end-1c') == 'word')
+_cbOpen = {}
+app._open_cell_editor(app._grid_at_line(1), 1, 0)     # Edit cell as text
+app.update()
+_cbOpen['edit as text'] = app._cell_editor['entry'].get('1.0', 'end-1c')
 app._commit_cell_editor()
-# By every other road too -- Windows' own emoji panel (Win+.) and a paste
-# arrive as typed text, and typed words were the same: whatever lands
-# beside a box takes its place when the cell is left (audit). A cell that
-# was never a box keeps "[ ]" typed into it as the words they are.
+app.update()
+app._open_cell_editor(app._grid_at_line(1), 1, 1)     # then Shift+Tab back
+app.update()
+_cbOpen['text cell'] = app._cell_editor['entry'].get('1.0', 'end-1c')
+app._editor_step(-1)
+app.update()
+_cbOpen['Shift+Tab'] = (app._cell_editor['entry'].get('1.0', 'end-1c')
+                        if app._cell_editor else None)
+app._commit_cell_editor()
+app.update()
+_cbKept = app._grid_at_line(1)['cells'][(1, 0)]['value']
+_cbTint = app.body_text.tag_names('3.%d' % (_cbAt + 1))
+check(f'a checkbox cell opens empty by every way in, a text cell with its '
+      f'words, and a box left empty stays the box it was ({_cbOpen}; '
+      f'{_cbKept!r})',
+      _cbOpen == {'edit as text': '', 'text cell': 'word', 'Shift+Tab': ''}
+      and _cbKept == '[x]' and 'text_color_d32f2f' in _cbTint)
+# Whatever goes in takes the box's place, by every road -- Windows' own
+# emoji panel (Win+.) and a paste arrive as typed text. A cell that was
+# never a box keeps "[ ]" typed into it as the words they are.
 _cbRoads = {}
 for _cbName, _cbAdd, _cbFrom in (
         ('Win+. emoji', chr(0x1F600), '[x]'),
-        ('typed words', ' buy milk', '[ ]'),
-        ('words before it', 'done ', '[x]')):
+        ('typed words', ' buy milk', '[ ]')):
     set_body('| h1 | h2 |' + chr(10) + '| --- | --- |' + chr(10)
              + '| %s | x |' % _cbFrom)
     app._render_table_grids()
@@ -3679,7 +3702,7 @@ for _cbName, _cbAdd, _cbFrom in (
     app._open_cell_editor(app._grid_at_line(1), 1, 0, select=False)
     app.update()
     _cbE = app._cell_editor['entry']
-    _cbE.insert('1.0' if _cbName == 'words before it' else 'end', _cbAdd)
+    _cbE.insert('end', _cbAdd)
     app._commit_cell_editor()
     app.update()
     _cbRoads[_cbName] = app._grid_at_line(1)['cells'][(1, 0)]['value']
@@ -3692,10 +3715,9 @@ app._cell_editor['entry'].insert('end', '[ ] my words')
 app._commit_cell_editor()
 app.update()
 _cbRoads['typed into a plain cell'] = app._grid_at_line(1)['cells'][(1, 0)]['value']
-check(f'whatever lands beside a box takes its place, by every road '
+check(f'whatever goes into a box takes its place, by every road '
       f'({_cbRoads})',
       _cbRoads == {'Win+. emoji': chr(0x1F600), 'typed words': 'buy milk',
-                   'words before it': 'done',
                    'typed into a plain cell': '[ ] my words'})
 set_body('')
 
@@ -7060,6 +7082,83 @@ app.update()
 check('numbering counts old-label captions but not prose starting '
       'with "Table"',
       'Table 2: description' in app.body_text.get('1.0', 'end-1c'))
+set_body('')
+
+# A table follows its caption, and the caption its table (field pass:
+# centring the caption left the table where it was). Only a caption right
+# under its table belongs to it; one Ctrl+Z takes both back.
+set_body('intro' + chr(10) + '| a | b |' + chr(10) + '| --- | --- |' + chr(10)
+         + '| 1 | 2 |' + chr(10) + 'tail' + chr(10) + 'Table 9: far away')
+app._render_table_grids()
+app.update()
+app._grid_add_caption(app._grid_at_line(2))
+app.update()
+app.body_text.tag_remove('sel', '1.0', 'end')
+
+
+def _tf_where():
+    """(table, caption, source, a far 'Table 9:' line) placements."""
+    _b = app.body_text.get('1.0', 'end-1c').split(chr(10))
+    _far = _b.index('Table 9: far away') + 1
+    return (app._grid_table_align_of(2),
+            app._paragraph_align_of(app.body_text, 5),
+            app._paragraph_align_of(app.body_text, 6),
+            app._paragraph_align_of(app.body_text, _far))
+
+
+_tf = {'start': _tf_where()}
+app._reset_text_undo()
+app.body_text.mark_set('insert', '5.3')            # on the caption's label
+app._set_paragraph_align('center')
+app.update()
+_tf['caption centred'] = _tf_where()
+app._body_undo_redo('undo')
+app.update()
+_tf['one Ctrl+Z'] = _tf_where()
+app.body_text.mark_set('insert', '6.2')            # on its source line
+app._set_paragraph_align('right')
+app.update()
+_tf['source right'] = _tf_where()
+app._set_paragraph_align('right')                   # pressed again: back left
+app.update()
+_tf['pressed again'] = _tf_where()
+app._grid_set_table_align(app._grid_at_line(2), 'center')   # the menu's road
+app.update()
+_tf['table centred'] = _tf_where()
+_far = app.body_text.get('1.0', 'end-1c').split(chr(10)).index('Table 9: far away') + 1
+app.body_text.mark_set('insert', '%d.2' % _far)
+app._set_paragraph_align('right')
+app.update()
+_tf['far line right'] = _tf_where()
+check(f'a table and its caption move together, one Ctrl+Z takes both back, '
+      f'and a caption away from its table moves nothing ({_tf})',
+      _tf == {'start': ('left', 'left', 'left', 'left'),
+              'caption centred': ('center', 'center', 'center', 'left'),
+              'one Ctrl+Z': ('left', 'left', 'left', 'left'),
+              'source right': ('right', 'right', 'right', 'left'),
+              'pressed again': ('left', 'left', 'left', 'left'),
+              'table centred': ('center', 'center', 'center', 'left'),
+              'far line right': ('center', 'center', 'center', 'right')})
+# Every cell selected and centred centres the cells' text, as a spreadsheet
+# does, and says how the table itself moves.
+_tf_said = []
+_tf_real_toast = app._show_toast
+app._show_toast = lambda text, **k: _tf_said.append(text)
+try:
+    _tfI = app._grid_at_line(2)
+    app._grid_select_range(_tfI, (0, 0), (_tfI['data_rows'] - 1, _tfI['ncols'] - 1))
+    app.update()
+    app._set_paragraph_align('right')
+    app.update()
+finally:
+    app._show_toast = _tf_real_toast
+app._grid_clear_selection()
+_tf_cells = core_tables.cell_alignments(app.body_text.get('4.0', '4.end'))
+check(f'centring every cell aligns their text and says how to move the table '
+      f'({_tf_said}; {_tf_cells}; {app._grid_table_align_of(2)})',
+      _tf_cells == [core_tables.ALIGN_RIGHT] * 2
+      and app._grid_table_align_of(2) == 'center'
+      and len(_tf_said) == 1 and 'To move the table itself' in _tf_said[0])
 set_body('')
 
 # The table's placement travels with the cell copy.
