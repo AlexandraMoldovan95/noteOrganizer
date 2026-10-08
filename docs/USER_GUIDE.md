@@ -944,9 +944,13 @@ keys that only mean something inside a list, in the find bar, or on the note lis
 Switch between Dark and Light mode, and pick from four variants of each, in Settings → Appearance.
 The choice is remembered the next time you open the app.
 
-Every theme is measured so its coloured words and buttons stay readable. In each of them **Delete
-is the dark red button with white words and Save a light one with dark words**, so the two look
-different even to someone who cannot tell red from green
+Every theme is measured so its coloured words and buttons stay readable. In the editor, **Save is
+the one filled button** and Delete is a quiet one with red words — the note goes to the Trash,
+where you can get it back. Where a deletion is final, as in the Trash itself, Delete is the dark
+red button with white words, and a confirming button is a light one with dark words, so the two
+look different even to someone who cannot tell red from green. A category's or a note's own
+colour stays whole on the stripe beside its card; the small words under the title take a shade of
+it that can be read on the card
 ([how the colours were chosen](ARCHITECTURE.md#contrast-measured)).
 
 At the end of the formatting toolbar sits a small **light/dark switch** (☀ / 🌙): one press flips

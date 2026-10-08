@@ -3407,12 +3407,18 @@ full accent in every theme.
 
 **Fix:** five proposals were photographed on the running app in all eight themes and chosen by
 eye. Each role now has a fill and a text shade, and the words on a fill are never written down:
-`letters_on` picks white or near-black by the gate's own measure. Delete is the dark fill with
-white words and Save a light one with dark words in every theme, so they differ in lightness,
-not only in hue: ΔE2000 20.7 at the closest. The theme switch's straggler net picks a fill's
-words by the fill they sit on, because a remap by value would have turned white words into a
-dark theme's card. The gate measures 200 pairs now, mixed surfaces included, and qa1 walks every
-widget showing words on a fill, in every theme.
+`letters_on` picks white or near-black by the gate's own measure. The warning fill is dark with
+white words and the confirming fill light with dark words in every theme, so they differ in
+lightness, not only in hue: ΔE2000 20.7 at the closest. The theme switch's straggler net picks a
+fill's words by the fill they sit on, because a remap by value would have turned white words
+into a dark theme's card. The gate measures 200 pairs now, mixed surfaces included, and qa1
+walks every widget showing words on a fill, in every theme.
+
+Shown the result, the same reviewers found the next layer: on the light themes the dark red
+Delete was now the loudest thing in the window and Save the palest. The editor's Delete became
+quiet, in red words (the note goes to the Trash), leaving Save the one filled button there; and
+the tags line under each card's title, written in a colour the person picked, now takes a shade
+of it that reads (`legible_on`) while the stripe keeps it whole.
 
 **Takeaway:** a gate measures the pairs it was told about; walk what is on the screen instead.
 And two colours that differ only in hue are one colour to a reader who cannot see hue — make the

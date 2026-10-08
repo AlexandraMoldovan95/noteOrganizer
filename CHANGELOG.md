@@ -101,20 +101,28 @@ How the numbers themselves are counted is the
   confirming green each did two jobs — words on a surface and a button under white words — and
   71 of those pairs were below WCAG AA (4.5:1), Save's white on mint as low as 1.8:1. Each role
   now has a fill and a text shade, and the words on a fill are white or near-black, whichever
-  reads (`letters_on`). Delete is the dark fill with white words and Save the light one with
-  dark words in every theme, so a colour-blind reader tells them apart too: simulated, the two
-  had been the same khaki in all eight themes. The palette was chosen from five proposals
-  photographed on the app; most themes keep their colours, Warm Cream stays orange, and Save
-  turns turquoise where the accent is green or orange. The "nothing found" tint is unchanged.
+  reads (`letters_on`). The warning fill is dark with white words and the confirming fill light
+  with dark words in every theme, so a colour-blind reader tells them apart too: simulated,
+  Save and Delete had been the same khaki in all eight themes. The palette was chosen from five
+  proposals photographed on the app; most themes keep their colours, Warm Cream stays orange,
+  Midnight Purple's accent is a lighter violet, and Save turns turquoise where the accent is
+  green or orange. The "nothing found" tint is unchanged.
 - **The find bar's current match is readable.** It is drawn in the full accent, and the note's
   own text colour sat below 4.5:1 on it in every theme; its words now take the colour that
   reads on that fill.
+- **A card's tags line reads, whatever its colour.** The line under a note's title is written
+  in its category's or its own colour, and picked for its look that colour often did not read:
+  the default Personal yellow was 1.6:1 on a light card, General's violet 3.0:1 on a dark one.
+  The stripe beside the card keeps the colour whole; the words take a shade of it that reads at
+  4.5:1 on the card, as much of its hue as reading allows.
 
 ### Changed
 
-- **Generate code is a quiet button.** The editor's row had three filled buttons of equal
-  weight; Generate code now looks like Duplicate beside it, so the two filled ones left — Save,
-  and Delete — say which actions matter.
+- **Save is the one filled button in the editor.** Its row had three filled buttons of equal
+  weight. Generate code now looks like Duplicate beside it, and Delete is quiet with red words:
+  the note goes to the Trash, and a filled dark red was the loudest thing on a light theme.
+  Where a deletion is final — the Trash itself, a day's note in the calendar, the selection bar
+  — Delete keeps its dark red fill.
 - **A source run can keep its notebook outside the working tree.** A `notebook_location.txt`
   beside `note_organizer.py`, git-ignored, names the folder — one path on a line, environment
   variables allowed (`%LOCALAPPDATA%\NoteOrganizer-dev`). Every notebook this project lost was
@@ -133,10 +141,12 @@ How the numbers themselves are counted is the
   every fill and on its hover, the surfaces the app mixes (the Settings section tint, the
   warning buttons' and the bins' hover, the find matches), with a drawn glyph held to WCAG's
   3:1. It also fails when a theme's accent has no window icon — the app finds the icon by the
-  accent's colour and quietly fell back to the default. qa1 walks every widget showing words on
-  a fill, in all eight themes; follows the editor's row, an untracked button and Tk's own
-  "white" across theme switches; and test_data_safety checks the words, the darker Delete and
-  the fixed "nothing found" tint. Mutants PC01–PC07 take each part back out.
+  accent's colour and quietly fell back to the default — and when an icon is left over for an
+  accent no theme wears, which the build would ship unused. qa1 walks every widget showing
+  words on a fill, in all eight themes; follows the editor's row, an untracked button and Tk's
+  own "white" across theme switches; and reads a card's tags line drawn and recoloured.
+  test_data_safety checks the words, the darker warning fill, every swatch as words on every
+  card, and the fixed "nothing found" tint. Mutants PC01–PC11 take each part back out.
 
 ---
 

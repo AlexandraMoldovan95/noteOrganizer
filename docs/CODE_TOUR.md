@@ -435,7 +435,11 @@ contrast, and code asks for them as `self._on_fill("accent")`, or as the
 names `on_accent`, `on_danger`, `on_success` wherever a palette key is
 expected (`track_theme`, `palette_keys`), which `palette_value()` resolves.
 That way a fill and its words cannot drift apart from one theme to the
-next. Why two shades per role, and how they were chosen, is in
+next. A colour the person picked (a category's, a note's own) goes the
+other way: `legible_on(colour, card, text)` keeps it if it reads as
+words on the card and otherwise mixes it toward the text colour until it
+does — that is the tags line under a card's title. Why two shades per
+role, and how they were chosen, is in
 [ARCHITECTURE](ARCHITECTURE.md#contrast-measured).
 
 Nothing in the app ever asks *"which theme is this?"* before picking a

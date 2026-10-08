@@ -529,12 +529,22 @@ widget it does not track, by the fill they sit on (`_recolor_stragglers`). Most 
 fills they had; Warm Cream stays orange, and only its small orange words became a brown-orange
 (`#8a4600`), the cost of reading on cream.
 
-The proposal chosen added one rule the numbers alone did not ask for: **Delete is the dark fill
-with white words in every theme, Save a light one with dark words**, so the two differ in
-lightness as well as hue. Simulated for the two common kinds of colour blindness (deuteranopia
-and protanopia, Machado 2009), Save and Delete had been the same khaki in all eight themes;
-they now differ by at least ΔE2000 20.7 (below 10 reads as the same colour). For the same
-reason Save is turquoise rather than green on the four themes whose accent is green or orange.
+The proposal chosen added one rule the numbers alone did not ask for: **the `danger` fill is
+dark with white words in every theme, the `success` fill light with dark words**, so they
+differ in lightness as well as hue. Simulated for the two common kinds of colour blindness
+(deuteranopia and protanopia, Machado 2009), Save and Delete had been the same khaki in all
+eight themes; they now differ by at least ΔE2000 20.7 (below 10 reads as the same colour). For
+the same reason Save is turquoise rather than green on the four themes whose accent is green or
+orange.
+
+The same reviewers, shown the result on the running app, found the next layer: on a light
+theme the dark red Delete was now the loudest thing in the window (7.3:1 against it) and Save
+the palest (2.3–2.6:1). So the editor's Delete became a quiet button with the warning's text
+shade — the note goes to the Trash, and can come back — and Save is the one filled button
+there; where a deletion is final (the Trash, a day's note in the calendar, the selection bar),
+Delete keeps the dark fill. Midnight Purple's accent moved lighter, `#8771ff` → `#a48fff`: the
+near-black words on it had read as muddy in the README's own screenshot, and the lighter shade
+raises them to 6.6:1 and the selected note's ring to 5.0:1.
 
 Measuring every pair the app draws, rather than the ones the table already had, found three
 it had never measured: the selected Settings section's name on its tint of the accent, a
@@ -553,7 +563,7 @@ text colour on the full accent, below 4.5:1 in every theme. The match's words no
 | accent text on the window (the repeat summary) | 7.4 | 7.7 | 7.8 | 7.0 | 7.0 | 6.6 | 6.6 | 6.6 |
 | accent text on a card or panel | 5.9 | 5.7 | 5.6 | 5.6 | 7.6 | 7.1 | 7.1 | 7.1 |
 | accent text in the sidebar | 6.6 | 6.7 | 6.5 | 6.2 | 6.3 | 5.9 | 5.9 | 5.8 |
-| the selected Settings section's name | 5.3 | 5.2 | 4.8 | 4.8 | 5.1 | 4.8 | 5.1 | 5.1 |
+| the selected Settings section's name | 5.0 | 5.2 | 4.8 | 4.8 | 5.1 | 4.8 | 5.1 | 5.1 |
 | warning text on the window | 7.4 | 7.9 | 8.4 | 7.7 | 5.5 | 5.5 | 5.6 | 5.5 |
 | warning text on a card or panel | 6.0 | 5.8 | 6.0 | 6.2 | 6.0 | 6.0 | 6.0 | 6.0 |
 | warning text in the sidebar | 6.7 | 6.9 | 7.0 | 6.8 | 4.9 | 4.9 | 5.0 | 4.9 |
@@ -563,15 +573,20 @@ text colour on the full accent, below 4.5:1 in every theme. The match's words no
 | confirmation text on the window | 10.4 | 10.0 | 10.6 | 11.0 | 5.6 | 5.6 | 5.4 | 5.4 |
 | confirmation text on a card or panel | 8.3 | 7.4 | 7.6 | 8.8 | 6.1 | 6.1 | 5.8 | 5.8 |
 | confirmation text in the sidebar | 9.3 | 8.7 | 8.9 | 9.7 | 5.1 | 5.0 | 4.8 | 4.7 |
-| words on an accent button (and the find bar's current match) | 4.8 | 5.7 | 7.5 | 6.3 | 5.7 | 5.0 | 5.6 | 5.6 |
-| words on an accent button, pointed at | 6.3 | 7.3 | 9.4 | 7.9 | 7.1 | 6.7 | 7.2 | 6.9 |
+| words on an accent button (and the find bar's current match) | 6.6 | 5.7 | 7.5 | 6.3 | 5.7 | 5.0 | 5.6 | 5.6 |
+| words on an accent button, pointed at | 8.8 | 7.3 | 9.4 | 7.9 | 7.1 | 6.7 | 7.2 | 6.9 |
 | words on a destructive button | 6.8 | 6.8 | 6.8 | 6.8 | 7.9 | 7.9 | 7.9 | 7.9 |
 | words on a confirming button | 9.7 | 8.7 | 9.7 | 9.9 | 6.2 | 6.2 | 7.0 | 7.1 |
-| text of the other find matches | 7.5 | 6.7 | 5.8 | 6.9 | 9.1 | 8.2 | 9.4 | 9.3 |
+| text of the other find matches | 6.5 | 6.7 | 5.8 | 6.9 | 9.1 | 8.2 | 9.4 | 9.3 |
 | text in the find box when nothing is found | 10.7 | 10.3 | 10.3 | 10.4 | 12.1 | 10.6 | 10.6 | 10.5 |
 
-A note's own colour, used for the tags line on its card, is the person's choice from a palette
-and is not in this table; a colour picked for its look may not read as text on every theme.
+A note's own colour, or its category's, is the person's choice and so is not in this table, but
+it is shown as words: the tags line on its card. Picked for its look, it often did not read —
+the default Personal yellow was 1.6:1 on a light card. The stripe still wears it whole; the
+words wear `legible_on(colour, card, text)` (in `core/themes.py`), the colour itself when it
+reads at 4.5:1 and otherwise mixed toward the theme's text a step at a time until it does, so
+it keeps as much of its hue as reading allows. test_data_safety holds every swatch the app
+offers to that on every theme's card.
 
 The last row is the find box's ground while its words are found nowhere: a tint of the warning
 red over white on a light theme (a truer red there, its pink taken out) and over near-black on a
