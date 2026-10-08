@@ -447,6 +447,7 @@ from noteorganizer.core.themes import (
     hairline,
     miss_surface,
     find_all_surface,
+    legible_on,
     letters_on,
     palette_value,
     LETTERS_DARK,
@@ -1033,7 +1034,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """The icon files for the current theme, best first.
 
         Named after the accent colour rather than after the theme --
-        `icon_7c5cff.ico` -- which is why there is no table here mapping
+        `icon_d97a2b.ico` -- which is why there is no table here mapping
         one to the other. A table would be a second place to keep in
         step, and a theme added later would quietly get the wrong icon.
         The colour is already in hand, so the filename is computed from
@@ -12441,8 +12442,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         #
         # Deliberately AFTER _recolor_stragglers: a card's stripe/tag colour
         # comes from the note itself, and a custom note colour that happens
-        # to match some other theme's palette entry (e.g. #7c5cff, which is
-        # also the dark theme's accent) would otherwise be swapped out by
+        # to match some other theme's palette entry (e.g. #4cd9a3, which is
+        # also the dark theme's success) would otherwise be swapped out by
         # the straggler pass and left showing the wrong colour. Running last
         # makes the note's own data authoritative. See _recolor_note_cards.
         self._recolor_note_cards()
@@ -12600,9 +12601,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except tk.TclError:
             pass
         # An open day's list paints each row's stripe in its note's own
-        # colour, and the walk above cannot tell that from a palette's:
-        # General's #7c5cff is the dark and light accent, Urgent's #ff5c7c
-        # the dark theme's danger, so they were swapped for the new theme's.
+        # colour, and the walk above cannot tell that from a palette's: a
+        # note in #4cd9a3, a preset that is also the dark theme's success,
+        # had it swapped for the new theme's.
         # Drawn again from the notes, as _recolor_note_cards does for the
         # note list -- also while Settings hides it, so that it is right
         # when it shows. (The one-note view has no colour of its own.)
@@ -14285,14 +14286,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         )
         self.track_theme(save_btn, bg="success", fg="on_success")
 
+        # Quiet, with the warning colour in its words: the note goes to the
+        # Trash, so it need not shout, and on a light theme a filled dark red
+        # was the loudest thing on screen. Save is the one filled button.
         delete_btn = tk.Button(
             action_row, text="🗑 Delete", command=self.delete_current_note,
             relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
         )
-        self.track_theme(delete_btn, bg="danger", fg="on_danger")
+        self.track_theme(delete_btn, bg="sidebar", fg="danger_text")
 
-        # Quiet, like the three below it: two filled buttons say which
-        # actions matter (Save, and the one to think twice about).
         share_btn = tk.Button(
             action_row, text="📋 Generate code", command=self.share_current_note_as_code,
             relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"

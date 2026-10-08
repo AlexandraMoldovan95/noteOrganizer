@@ -53,14 +53,16 @@ write ``settings.json``, so they belong with the storage layer, which
 hasn't been extracted yet. Only the immutable defaults live here.
 """
 
+import functools
+
 # ---- Themes ----
 THEMES = {
     # ---- DARK variants ----
     "dark": {  # Midnight Purple (original)
         "bg": "#1e1e2f",
         "sidebar": "#26263f",
-        "accent": "#8771ff",
-        "accent_hover": "#9d8bff",
+        "accent": "#a48fff",
+        "accent_hover": "#bcadff",
         "card": "#2e2e48",
         # The well a check mark sits in, light in every theme because the
         # mark is dark. Tk paints the mark in a box's text colour, so a box
@@ -384,6 +386,25 @@ def letters_on(fill):
     except (TypeError, ValueError, IndexError):
         return LETTERS_LIGHT
     return LETTERS_DARK if dark > light else LETTERS_LIGHT
+
+
+@functools.lru_cache(maxsize=512)
+def legible_on(colour, ground, ink, minimum=4.5):
+    """*colour* as words on *ground*: itself when it reads there at
+    *minimum*, else mixed toward *ink* (the theme's text) a step at a time
+    until it does. For a colour the person picked -- a category's, a note's
+    own -- shown as words: it keeps as much of its hue as reading allows,
+    and the stripe beside it keeps it whole. Unreadable input gets *ink*."""
+    try:
+        if contrast_ratio(colour, ground) >= minimum:
+            return colour
+        for step in range(1, 21):
+            mixed = blend(colour, ink, step / 20)
+            if contrast_ratio(mixed, ground) >= minimum:
+                return mixed
+    except (TypeError, ValueError, IndexError):
+        pass
+    return ink
 
 
 def palette_value(palette, key):

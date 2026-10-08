@@ -23,7 +23,8 @@ in docs/ARCHITECTURE.md must be the one this prints, so it cannot go stale.
 Last, every theme's accent has its window icon: the app looks the icon
 up by the accent's hex (assets/icon_<hex>.ico) and quietly falls back to
 the default when there is none, so a changed accent lost its icon with
-nothing to say so. `py tools/make_icon.py --all` draws them.
+nothing to say so. `py tools/make_icon.py --all` draws them. And no icon is
+left over for an accent no theme wears: the build bundles every one.
 
     py tools/check_contrast.py              # the verdict
     py tools/check_contrast.py --markdown   # the table in ARCHITECTURE.md
@@ -165,6 +166,21 @@ def accents_without_icons():
     return sorted(set(missing))
 
 
+def icons_no_accent_wears():
+    """Per-accent icons in assets/ that no theme's accent asks for any
+    more: the build bundles every icon file, so they would ship unused."""
+    worn = {"icon_" + p["accent"].lstrip("#").lower() for p in themes.THEMES.values()}
+    left = []
+    for name in os.listdir(os.path.join(ROOT, "assets")):
+        stem, ext = os.path.splitext(name)
+        hexpart = stem[len("icon_"):]
+        if (stem.startswith("icon_") and len(hexpart) == 6 and ext in (".ico", ".png")
+                and all(ch in "0123456789abcdef" for ch in hexpart.lower())
+                and stem.lower() not in worn):
+            left.append(name)
+    return sorted(left)
+
+
 def theme_order():
     return list(themes.DARK_THEMES) + list(themes.LIGHT_THEMES)
 
@@ -230,6 +246,9 @@ def main():
     for name in accents_without_icons():
         problems.append("assets/%s is missing: an accent without its window "
                         "icon (py tools/make_icon.py --all)" % name)
+    for name in icons_no_accent_wears():
+        problems.append("assets/%s is an icon no theme's accent wears: the "
+                        "build would ship it unused" % name)
     if problems:
         for line in problems:
             print(line)

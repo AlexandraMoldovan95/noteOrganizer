@@ -2194,7 +2194,7 @@
         "replace": "        self.track_theme(share_btn, bg=\"accent\", fg=\"on_accent\")\n"
       }
     ],
-    "must_fail": ["palette: Save wears dark words on its light fill"],
+    "must_fail": ["palette: Save is the one filled button"],
     "suites": ["qa1"],
     "expect": "killed"
   },
@@ -2239,6 +2239,64 @@
     ],
     "must_fail": ["the find box's \"nothing found\" tint is the one chosen, in every theme"],
     "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC08",
+    "about": "Delete in the editor is a filled dark red button again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self.track_theme(delete_btn, bg=\"sidebar\", fg=\"danger_text\")\n",
+        "replace": "        self.track_theme(delete_btn, bg=\"danger\", fg=\"on_danger\")\n"
+      }
+    ],
+    "must_fail": ["palette: Save is the one filled button",
+                  "palette: the filled buttons built once name their words"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC09",
+    "about": "a drawn card's tags row wears the picked colour as it is, unreadable or not",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/note_list.py",
+        "find": "            font=self.CARD_TAGS_FONT, fill=says[\"words\"], tags=tags)\n",
+        "replace": "            font=self.CARD_TAGS_FONT, fill=says[\"color\"], tags=tags)\n"
+      }
+    ],
+    "must_fail": ["palette: a picked colour stays whole on the card's stripe"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC10",
+    "about": "a theme switch recolours the tags row in the picked colour as it is",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/note_list.py",
+        "find": "                cv.itemconfigure(it[\"tags\"], fill=legible_on(\n                    note_color, c[\"card\"], c[\"text\"]))\n",
+        "replace": "                cv.itemconfigure(it[\"tags\"], fill=note_color)\n"
+      }
+    ],
+    "must_fail": ["palette: a picked colour stays whole on the card's stripe"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "PC11",
+    "about": "legible_on gives every colour back unchanged",
+    "edits": [
+      {
+        "file": "noteorganizer/core/themes.py",
+        "find": "        if contrast_ratio(colour, ground) >= minimum:\n            return colour\n",
+        "replace": "        return colour\n"
+      }
+    ],
+    "must_fail": ["every swatch, as words on every theme's card, reads at 4.5:1",
+                  "palette: a picked colour stays whole on the card's stripe"],
+    "suites": ["qa1", "test_data_safety"],
     "expect": "killed"
   }
 ]

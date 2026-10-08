@@ -26,6 +26,7 @@ from ..core.recurrence import (
     show_date,
 )
 from ..core.storage import load_settings, save_settings
+from ..core.themes import legible_on
 
 
 class NoteListMixin:
@@ -1890,8 +1891,11 @@ class NoteListMixin:
             done = sum(1 for it in checklist
                        if isinstance(it, dict) and it.get("done"))
             tags_text += f"   ☑ {done}/{len(checklist)}"
+        # The stripe wears the colour whole; the tags row's words a shade of
+        # it that reads on the card (a pale yellow was 1.6:1 on white).
+        words = legible_on(color, self.colors["card"], self.colors["text"])
         return {"title": title_text, "preview": preview, "tags": tags_text,
-                "color": color}
+                "color": color, "words": words}
 
     def _draw_note_card(self, note, top):
         """Draw one note's card with its top edge at canvas y `top`, and return
@@ -1936,7 +1940,7 @@ class NoteListMixin:
         y = cv.bbox(items["preview"])[3] + 2 * inset + 3
         items["tags"] = cv.create_text(
             text_x, y, anchor="nw", width=wrap, text=says["tags"] or " ",
-            font=self.CARD_TAGS_FONT, fill=says["color"], tags=tags)
+            font=self.CARD_TAGS_FONT, fill=says["words"], tags=tags)
         bottom = (cv.bbox(items["tags"])[3] + inset + self.CARD_PAD[1]
                   + self.CARD_RING)
         items["bg"] = cv.create_rectangle(
@@ -2038,7 +2042,8 @@ class NoteListMixin:
                 cv.itemconfigure(it["stripe"], fill=note_color)
                 cv.itemconfigure(it["title"], fill=c["text"])
                 cv.itemconfigure(it["preview"], fill=c["subtext"])
-                cv.itemconfigure(it["tags"], fill=note_color)
+                cv.itemconfigure(it["tags"], fill=legible_on(
+                    note_color, c["card"], c["text"]))
                 cv.itemconfigure(it["ring"], outline=self._ring_to_paint(note_id))
                 if "check" in it:
                     cv.itemconfigure(it["check"], fill=c["check_well"],

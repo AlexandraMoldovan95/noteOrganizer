@@ -5797,9 +5797,14 @@ app.new_note()
 app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'Palette clash note')
 app.title_entry.config(fg='black')
 app.body_text.insert('1.0', 'body')
-# '#7c5cff' is a preset note colour AND the dark theme's accent -- the exact
+# '#4cd9a3' is a preset note colour AND the dark theme's success -- the exact
 # case where a colour-swapping pass would wrongly repaint it.
-app.current_note_color = '#7c5cff'
+check('fixture: the clash colour is a preset note colour and a dark-theme '
+      'palette value',
+      '#4cd9a3' in NO.PRESET_NOTE_COLORS
+      and '#4cd9a3' in NO.THEMES['dark'].values()
+      and '#4cd9a3' not in NO.THEMES['dark_ocean'].values())
+app.current_note_color = '#4cd9a3'
 app.save_current_note(auto=False)
 app.update()
 
@@ -8517,9 +8522,9 @@ app.set_theme(_pl_theme); app.update()
 check(f'palette: the words on every filled widget read at 4.5:1, in every '
       f'theme ({_pl_bad})', not _pl_bad)
 
-# The editor's row: Save is the light fill with dark words and Delete the
-# dark one with white words in every theme, so the two differ in lightness
-# and not only in hue; Generate code is quiet, dressed as Duplicate is.
+# The editor's row: Save is the one filled button, light with dark words in
+# every theme; Delete is quiet with the warning's text shade (the note goes
+# to the Trash), and Generate code is quiet, dressed as Duplicate is.
 _pl_save, _pl_del, _pl_gen, _pl_dup = (
     _pl_button(t) for t in ('💾 Save', '🗑 Delete', '📋 Generate code',
                             '📄 Duplicate'))
@@ -8533,8 +8538,8 @@ else:
         _pl_ok = (
             str(_pl_save.cget('bg')).lower() == _pl_c['success'].lower()
             and _pl_hex(_pl_save.cget('fg')) == NO.LETTERS_DARK
-            and str(_pl_del.cget('bg')).lower() == _pl_c['danger'].lower()
-            and _pl_hex(_pl_del.cget('fg')) == NO.LETTERS_LIGHT
+            and str(_pl_del.cget('bg')).lower() == _pl_c['sidebar'].lower()
+            and str(_pl_del.cget('fg')).lower() == _pl_c['danger_text'].lower()
             and str(_pl_gen.cget('bg')).lower() == _pl_c['sidebar'].lower()
             and str(_pl_gen.cget('fg')).lower() == _pl_c['text'].lower()
             and str(_pl_gen.cget('bg')) == str(_pl_dup.cget('bg')))
@@ -8542,9 +8547,9 @@ else:
             _pl_row[_pl_t] = (str(_pl_save.cget('fg')), str(_pl_del.cget('fg')),
                               str(_pl_gen.cget('bg')), str(_pl_gen.cget('fg')))
     app.set_theme(_pl_theme); app.update()
-check(f'palette: Save wears dark words on its light fill and Delete white on '
-      f'its dark one, and Generate code is quiet like Duplicate, in every '
-      f'theme ({_pl_row})', not _pl_row)
+check(f'palette: Save is the one filled button, with dark words; Delete is quiet '
+      f'in red words and Generate code quiet like Duplicate, in every theme '
+      f'({_pl_row})', not _pl_row)
 
 # A widget no theme switch tracks -- the way the rebuilt panels build
 # theirs -- keeps words that read on its fill: the straggler net picks them
@@ -8599,7 +8604,7 @@ for _pl_w, _pl_map in app.themed_widgets:
 check(f'palette: the filled buttons built once name their words for the theme '
       f'switch, not a colour written down ({_pl_reg})',
       _pl_reg == {'💾 Save': ('success', 'on_success'),
-                  '🗑 Delete': ('danger', 'on_danger'),
+                  '🗑 Delete': ('sidebar', 'danger_text'),
                   '+ New Note': ('accent', 'on_accent'),
                   '+ Add file': ('accent', 'on_accent')})
 
@@ -8614,6 +8619,41 @@ check(f'palette: the repeat summary and the two calendar lines wear the '
       f'accent\'s text shade after a theme switch ({_pl_texts})',
       set(_pl_texts.values())
       == {NO.THEMES[_pl_dark]['accent_text'].lower()})
+
+# A colour the person picks shows whole on a card's stripe; its words in the
+# tags row take a shade of it that reads on the card. Both ways a card gets
+# its colours are read: drawn by a rebuild, and recoloured by a theme switch.
+_pl_cards = [NO.normalize_note(n) for n in (
+    {'id': 7701, 'title': 'PaleCategory', 'body': 'x', 'category': 'Personal',
+     'created': '2030-01-01 09:00:00', 'updated': '2030-01-01 09:00:00'},
+    {'id': 7702, 'title': 'PaleOwn', 'body': 'x', 'category': 'General',
+     'color': '#fee440',
+     'created': '2030-01-01 09:00:00', 'updated': '2030-01-01 09:00:01'})]
+app.notes.extend(_pl_cards)
+app.refresh_note_list(); app.update()
+_pl_words = {}
+
+
+def _pl_card_reads(how):
+    for _pl_n in _pl_cards:
+        _pl_v = app._card_view(_pl_n['id'])
+        _pl_want = app.get_note_color(_pl_n).lower()
+        if (_pl_v is None or str(_pl_v['stripe']).lower() != _pl_want
+                or _pl_ratio(_pl_hex(_pl_v['tags_fill']), app.colors['card']) < 4.5):
+            _pl_words[(app.theme_name, how, _pl_n['title'])] = (
+                _pl_v and (_pl_v['stripe'], _pl_v['tags_fill']))
+
+
+for _pl_t in ('light', 'dark_forest'):
+    app.set_theme(_pl_t); app.update()
+    _pl_card_reads('recoloured')
+    app.refresh_note_list(); app.update()
+    _pl_card_reads('drawn')
+app.notes = [n for n in app.notes if n['id'] not in (7701, 7702)]
+app.set_theme(_pl_theme)
+app.refresh_note_list(); app.update()
+check(f'palette: a picked colour stays whole on the card\'s stripe and its tags '
+      f'row reads at 4.5:1, drawn and recoloured ({_pl_words})', not _pl_words)
 
 # Switching notes clears the model so no navigation runs on stale indices.
 app.new_note()
@@ -10257,8 +10297,11 @@ NO.CATEGORY_COLORS[_b3_cat] = '#ff00ff'
 app.hide_settings_page()
 app.refresh_note_list(); app.update()
 _b3_tags = app._card_view(5001)
-check("a category's new colour reaches the note card (plan 27)",
-      _b3_tags is not None and str(_b3_tags['tags_fill']).lower() == '#ff00ff')
+check("a category's new colour reaches the note card (plan 27): whole on its "
+      "stripe, and in its tags row as a shade of it that reads on the card",
+      _b3_tags is not None and str(_b3_tags['stripe']).lower() == '#ff00ff'
+      and str(_b3_tags['tags_fill']).lower()
+      == NO.legible_on('#ff00ff', app.colors['card'], app.colors['text']).lower())
 check('...because the card reads the one stored colour, not a copy',
       NO.CATEGORY_COLORS[_b3_cat].lower() == '#ff00ff')
 NO.CATEGORY_COLORS[_b3_cat] = _b3_was

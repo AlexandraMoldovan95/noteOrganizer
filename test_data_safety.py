@@ -730,6 +730,20 @@ check('...and Delete is the darker fill of the two, in every theme',
 check('every theme names a text shade for each fill role',
       all(all(pal.get(k) for k in ('accent_text', 'danger_text', 'success_text'))
           for pal in NO.THEMES.values()))
+# A colour the person picks, shown as words on a card: every swatch the app
+# offers, on every theme's card, reads at 4.5:1 once legible_on has had it,
+# and a colour that already reads is left exactly as picked.
+from noteorganizer.core.themes import legible_on as _legible
+_swatches = sorted(set(NO.PALETTE_COLORS + NO.PRESET_NOTE_COLORS
+                       + list(NO.DEFAULT_CATEGORY_COLORS.values())))
+check('every swatch, as words on every theme\'s card, reads at 4.5:1',
+      all(_ratio_fn(_legible(c, pal['card'], pal['text']), pal['card']) >= 4.5
+          for pal in NO.THEMES.values() for c in _swatches))
+check('...and a colour that already reads keeps its exact value',
+      _legible('#5b2dd2', '#ffffff', '#22223a') == '#5b2dd2'
+      and _legible('#f9c74f', '#ffffff', '#22223a') != '#f9c74f')
+check('...and a colour it cannot read gives the theme\'s text colour',
+      _legible('nope', '#ffffff', '#22223a') == '#22223a')
 # The "nothing found" tint is her pick from photographed boards; it is
 # written down, so a change of the warning red cannot move it.
 check('the find box\'s "nothing found" tint is the one chosen, in every theme',

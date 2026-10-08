@@ -85,7 +85,7 @@ def accents_in_use():
     """Every distinct accent the app's themes wear, read from the themes.
 
     Read rather than listed, and the FILE IS NAMED AFTER THE COLOUR --
-    `icon_7c5cff.ico` -- on purpose. A table mapping theme names to icon
+    `icon_d97a2b.ico` -- on purpose. A table mapping theme names to icon
     names would be a second place to keep in step, and a theme added
     later would quietly get the wrong icon or none. This way the app
     computes the filename from the colour it is already holding, and a
@@ -519,9 +519,11 @@ def write_sheet():
 def write_every_accent(design=DEFAULT_DESIGN):
     """One .ico and one .png per accent the app can wear.
 
-    Seven files, not eight: `dark` and `light` share the same purple, so
-    they share an icon. The app asks by accent name, which is why the
-    keys of ACCENTS are the filenames.
+    One pair per distinct accent: two themes sharing an accent share an
+    icon. The app asks by accent name, which is why the keys of ACCENTS
+    are the filenames. An accent no theme wears any more leaves its pair
+    behind, and the build would ship it: check_contrast names both the
+    pairs missing and the pairs left over.
     """
     os.makedirs(OUT_DIR, exist_ok=True)
     for accent, themes in sorted(accents_in_use().items()):
