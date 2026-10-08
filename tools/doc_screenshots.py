@@ -445,11 +445,17 @@ def search_and_sort():
     "Date (soonest)", a name that no longer exists, and is missing the
     seventh option entirely.
     """
-    for title, body, cat in (
-            ('Quarterly review', 'Numbers for the board pack.', 'Work'),
-            ('Reading list', 'Three books before the holidays.', 'Personal'),
-            ('Groceries', 'Everything for the weekend.', 'Personal')):
-        app.notes.append(_note(title=title, body=body, category=cat))
+    # Three matches -- in a title and in a body -- with dates, so the
+    # search narrows a real list and the sort visibly orders it; one match
+    # read to reviewers as a picture of an open note, not of a search.
+    for title, body, cat, date in (
+            ('Quarterly review', "Numbers for the board pack, the team's targets.",
+             'Work', '2026-09-30'),
+            ('Team lunch', 'Friday at the Italian place, booked for six.',
+             'Personal', '2026-09-25'),
+            ('Reading list', 'Three books before the holidays.', 'Personal', ''),
+            ('Groceries', 'Everything for the weekend.', 'Personal', '')):
+        app.notes.append(_note(title=title, body=body, category=cat, date=date))
     _weekly_note()
     app.search_var.set('team')
     app.refresh_note_list()
@@ -583,6 +589,34 @@ def main_window():
     _demo_notebook()
     _table_note()
     capture('main-window')
+
+
+@scene('main-window-light')
+def main_window_light():
+    """The hero's window on a light theme, for the guide's Appearance: the
+    stills showed the main screen in the dark default only."""
+    _demo_notebook()
+    _table_note()
+    was = app.theme_name
+    app.set_theme('light')
+    pump(10)
+    capture('main-window-light')
+    app.set_theme(was)
+    pump()
+
+
+@scene('no-match')
+def no_match():
+    """The note list when nothing matches the search: what the list says
+    instead of going blank."""
+    _demo_notebook()
+    app.search_var.set('passport')
+    app.refresh_note_list()
+    pump(10)
+    capture('no-match')
+    app.search_var.set('')
+    app.refresh_note_list()
+    pump()
 
 
 @scene('grouped-notes')

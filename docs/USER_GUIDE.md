@@ -513,6 +513,11 @@ next save. Custom order is the one sort that means "where I put it".*
 
 ![Search and sort](screenshots/search-and-sort.png)
 
+When nothing matches, the list says so rather than going blank, and the **✕** in the search box
+brings every note back:
+
+![A search that matches nothing](screenshots/no-match.png)
+
 **Group by category** (checkbox above the note list) clusters the list under collapsible category
 headers instead of one flat list — click a group's header to collapse or expand it; the state is
 remembered.
@@ -943,6 +948,8 @@ keys that only mean something inside a list, in the find bar, or on the note lis
 
 Switch between Dark and Light mode, and pick from four variants of each, in Settings → Appearance.
 The choice is remembered the next time you open the app.
+
+![The main window on a light theme, Soft Lavender](screenshots/main-window-light.png)
 
 Every theme is measured so its coloured words and buttons stay readable. In the editor, **Save is
 the one filled button** and Delete is a quiet one with red words. Red words on a quiet button mean

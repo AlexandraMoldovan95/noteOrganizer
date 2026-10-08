@@ -60,17 +60,20 @@ Rules that keep the set reading as one app:
 - **One theme throughout** — a partial refresh in another theme silently
   produces a mixed set.
 
-**Current set:** retaken 2026-10-03 in the default dark (purple) theme, all
+**Current set:** retaken 2026-10-08 in the default dark (purple) theme, all
 twenty-two and the demo GIF by `tools/doc_screenshots.py`, on app version
-0.84.340 — dates shown day first, the search box showing its hint, no
-scrollbar under the window, both calendar pictures on the month they
-stage and nothing cut at the bottom edge; update this line whenever the
-set is recaptured.
+0.89.371 — the open tab raised, the open note's card ringed, dates shown
+day first, both calendar pictures on the month they stage and nothing cut
+at the bottom edge. On 2026-10-09 the search picture was retaken with three
+matches, Statistics with a "since" date inside the app's own lifetime, and
+two were added (the main window on a light theme, a search that matches
+nothing). Update this line whenever the set is recaptured.
 
 | Filename | What to capture |
 |---|---|
 | `demo.gif` | The README's moving picture, made by the `demo` scene: a note written, given a table and saved; the month on the calendar; the same note on a light theme |
 | `main-window.png` | The main window, Notes tab: sidebar, a note open with a table, and the full formatting toolbar including the ☀/🌙 theme button at its right end |
+| `main-window-light.png` | The same window on a light theme (Soft Lavender), for the guide's Appearance section |
 | `note-editor.png` | A note open in the editor with some content, the toolbar, and the Checklist + Calculator bars below |
 | `formatting-toolbar.png` | The formatting toolbar close-up, with bold/italic/coloured/highlighted text in the body — and the ☀/🌙 theme button visible at the right end |
 | `tables.png` | A table in a note with a highlighted header row (ideally a checkbox cell and a "Tab. N" caption too) |
@@ -78,7 +81,8 @@ set is recaptured.
 | `checklist.png` | The checklist open beside the calculator, with a mix of checked and unchecked items and the Expand bar |
 | `calculator.png` | The calculator open, with an expression entered and the history showing a calculation |
 | `emoji-picker.png` | The emoji picker open over a text field |
-| `search-and-sort.png` | The search box and sort dropdown, ideally mid-search |
+| `search-and-sort.png` | The search box and sort dropdown, mid-search, with several matches (in titles and in a body) in the chosen order |
+| `no-match.png` | The note list when nothing matches the search, saying so rather than going blank |
 | `grouped-notes.png` | The note list with "Group by category" on, showing at least two groups (one collapsed, one expanded, if possible) |
 | `categories-panel.png` | Settings → Categories, with a few categories listed |
 | `templates-panel.png` | Settings → Templates, with at least one template listed |
