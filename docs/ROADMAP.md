@@ -222,7 +222,7 @@ bindings), and template deletion saying plainly that it skips the Trash and can'
 ### Splitting the UI into modules
 
 Done, and stopped deliberately rather than out of steam. The data-and-rules layer went first —
-fourteen modules under `noteorganizer/core/`, none importing tkinter — and six UI areas now live
+fifteen modules under `noteorganizer/core/`, none importing tkinter — and six UI areas now live
 in `noteorganizer/ui/` as mixins: the calculator panel, the Settings page, the dialogs and popups,
 the calendar, attachments, and — re-measured once it became one drawing — the note list. All the
 pure logic went down into `core/` first. `note_organizer.py` is about 20,400 lines — it dipped

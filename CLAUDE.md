@@ -9,7 +9,7 @@ calls, no accounts, no database.
 - **Organised as a package (split complete, stopped deliberately):** the
   app was a single file by design for most of its life; it now lives as a
   `core/` layer (data and rules; **must never import tkinter**) and a `ui/`
-  layer of mixin classes — fourteen `core/` modules and six `ui/` mixins —
+  layer of mixin classes — fifteen `core/` modules and six `ui/` mixins —
   with `note_organizer.py` (~20,400 lines) remaining the entry point and
   the genuinely shared UI hub, by measurement rather than by neglect (see
   `docs/ARCHITECTURE.md`'s call-graph case study for why the split stopped

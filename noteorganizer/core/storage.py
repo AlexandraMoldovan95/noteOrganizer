@@ -382,6 +382,9 @@ def load_notes(version_change=None):
           filed under that settings.json had lost, now back in the map
           with default colours. The caller says so: the colours changed,
           and the user should know why.
+        * ``fresh_notebook`` -- True only if there was no notes file at all:
+          a first install, the one notebook the welcome note is for. An
+          unreadable or emptied notebook still had its file, so is not.
 
         All are None/False/empty the rest of the time, which is almost
         always.
@@ -393,7 +396,8 @@ def load_notes(version_change=None):
 
     report = {"version_backup_path": None, "cleanup_report": None,
               "notes_file_corrupt": False, "corrupt_backup_path": None,
-              "categories_adopted": []}
+              "categories_adopted": [],
+              "fresh_notebook": not os.path.exists(paths.DATA_FILE)}
     raw = []
     if os.path.exists(paths.DATA_FILE):
         # After an upgrade, a snapshot before this version's code can rewrite

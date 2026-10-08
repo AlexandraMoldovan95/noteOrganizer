@@ -92,6 +92,28 @@ How the numbers themselves are counted is the
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **A welcome note on the first start.** A brand-new notebook opens on a short guide to each
+  part of the app — writing, organising, planning, sharing and keeping safe, themes, and where
+  the notes are kept — written as an ordinary note, with a good-luck line to end on. Delete it
+  whenever you like; **Settings → About → Show** brings it back, and never adds a second. Only
+  a notebook with no notes file is greeted: an update or an emptied notebook never gets one.
+
+### Testing
+
+- test_data_safety reads a folder with no notes file as a fresh notebook and an emptied or
+  unreadable one as not, and checks the welcome note is stored as the editor would store it.
+  qa5 starts the app with no notes file and finds it opened on the note, shown exactly as
+  stored; deletes it and starts again; brings it back with About's Show, twice; and starts an
+  emptied notebook and an already-greeted one. Mutants Y01–Y09 take each part back out. A
+  pure-Tk probe showed the emoji variation selector (U+FE0F) drawn as a blank two letters
+  wide, so the note's icons carry none.
+
+---
+
 ## [0.88.361] — 2026-10-08
 
 *Highlights: four additions and four fixes from the owner's two re-tests of 0.84.357 — a table

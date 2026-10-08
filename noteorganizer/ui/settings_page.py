@@ -3643,8 +3643,9 @@ class SettingsPageMixin:
                 row.pack_forget()
 
     def _build_settings_about_panel(self, parent):
-        """Version, where the data lives, and what changed."""
-        self._settings_subtitle(parent, "Version info and where your notes live.")
+        """Version, where the data lives, and the welcome note."""
+        self._settings_subtitle(
+            parent, "Version info, where your notes live, and the welcome note.")
         head = tk.Frame(parent, bg=self.colors["bg"])
         self.track_theme(head, bg="bg")
         head.pack(fill="x", pady=(0, 14))
@@ -3700,3 +3701,11 @@ class SettingsPageMixin:
 
         self._text_button(buttons, "Open folder", open_folder).pack(side="left")
         self._text_button(buttons, "Copy path", copy_path).pack(side="left", padx=(8, 0))
+
+        # The note a first start opens on, offered again (core/welcome.py).
+        start = self._settings_card(parent)
+        control = self._card_row(
+            start, "Welcome note",
+            "A short guide to every part of the app. Deleted, it comes back "
+            "from here.", first=True)
+        self._text_button(control, "Show", self.show_welcome_note).pack()

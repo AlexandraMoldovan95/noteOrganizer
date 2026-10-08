@@ -39,6 +39,7 @@ every major feature.
   - [Statistics](#statistics)
   - [Keyboard shortcuts](#keyboard-shortcuts)
   - [Appearance](#appearance)
+  - [About](#about)
 
 ---
 
@@ -49,6 +50,11 @@ Note Organizer runs as a single window with two tabs, **Notes** and **Calendar**
 locally on your own computer — there's no account to create and no internet connection required.
 Run from source, the data folder sits next to the script; the installed app keeps it per-user
 under `%APPDATA%\NoteOrganizer` (worth knowing if you ever go looking for your notes folder).
+
+The very first time the app starts, it opens on a **welcome note**: a short tour of what each
+part of the app is for, written as an ordinary note. Delete it whenever you like — it goes to the
+Trash like any other note — and **Settings → About** brings it back if you want it again. It only
+greets a brand-new notebook: an update, or a notebook you have emptied, never gets one.
 
 The window can be made as small as 640 by 600 pixels. While you drag its edge, the page inside
 keeps its size — cut off at the edge, or with an empty strip beside it — and settles to fit the
@@ -941,6 +947,13 @@ between your last light and last dark theme without leaving the note. The full t
 all eight variants, stays in **Settings → Appearance**.
 
 ![Theme picker](screenshots/theme-picker.png)
+
+### About
+
+Settings → About shows which version you are running and **where your notes are stored** on this
+computer, with **Open folder** and **Copy path** beside it. Under it, **Welcome note → Show**
+opens the welcome note from the first start — or, if you deleted it, puts a fresh copy back in
+your notebook and opens that. Pressing it again opens the same note rather than adding another.
 
 ---
 
