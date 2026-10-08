@@ -3388,11 +3388,12 @@ call returns" depends on whether the call blocks, which differs by platform.
 
 ### Save and Delete, the same khaki
 
-*([0.89.365](../CHANGELOG.md#089365--2026-10-08) · found by a panel of reviewers and a colour-blindness simulation)*
+*([0.89.365](../CHANGELOG.md#089365--2026-10-08) · found by a panel of AI reviewer personas and a colour-blindness simulation)*
 
 **Symptom:** none reported, which was the point. The contrast gate had listed 71 pairs below
 WCAG AA for weeks — every use of the accent, the warning red and the confirming green, Save's
-white words on mint at 1.8:1 — each waiting on a design decision. A design reviewer, looking at
+white words on mint at 1.8:1 — each waiting on a design decision. An AI reviewer playing a
+senior designer (one of five Claude subagent personas), looking at
 the editor's row of three filled buttons, wrote: "colour no longer means anything".
 
 **Root cause:** two, and only the first had been seen. Each role colour did two jobs, words on a
@@ -3439,12 +3440,14 @@ each one to the function it calls before writing it down.
 
 ### Two answers to one question
 
-*([0.89.371](../CHANGELOG.md#089371--2026-10-08) · found by showing the app to simulated colour-blind readers)*
+*([0.89.371](../CHANGELOG.md#089371--2026-10-08) · found by AI reviewers reading colour-blindness simulations)*
 
 **Symptom:** none reported. Photographs of the running app were simulated for protanopia,
-deuteranopia and tritanopia (Machado 2009, full severity) and given to three reviewers who saw
-only those, with a fourth seeing the originals as the control. None was blocked. All four
-hesitated over the find bar's current match, and two over which tab was open.
+deuteranopia and tritanopia (Machado 2009, full severity) and given to three AI reviewers
+(Claude subagents) who saw only those, with a fourth seeing the originals as the control. A
+model reading a simulation is an approximation, not a colour-blind person; the test plan's case
+625 asks a real one. None was blocked. All four hesitated over the find bar's current match,
+and two over which tab was open.
 
 **Root cause:** three, none of them a colour. The current match differed from the others by its
 fill alone — the match inside a table cell was already boxed. The open tab was drawn smaller

@@ -519,8 +519,9 @@ fill under white text. On a light theme one darker shade serves both, but it cha
 theme looks — Warm Cream's orange would turn brown. On a dark theme no single shade can: text
 on a dark surface wants a lighter shade, and a fill under white text a darker one.
 
-The decision was made by eye, from five proposals photographed on the running app in all eight
-themes, with these numbers beside them. Each role now has two colours: a **fill** (`accent`,
+The decision was made by eye — the owner's — from five proposals that a panel of AI reviewer
+personas (Claude subagents) put forward, photographed on the running app in all eight themes,
+with these numbers beside them. Each role now has two colours: a **fill** (`accent`,
 `danger`, `success` — a button, a banner, a selected tab) and a **text** shade (`accent_text`,
 `danger_text`, `success_text`). The words *on* a fill are not written down at all:
 `letters_on` in `core/themes.py` picks white or near-black by the same measure this table uses,
@@ -566,10 +567,12 @@ warning button's words when pointed at, and the find bar's current match — the
 text colour on the full accent, below 4.5:1 in every theme. The match's words now come from
 `letters_on` too.
 
-Then the app was shown to colour-blind readers: photographs of the running app simulated for
-protanopia, deuteranopia and tritanopia, each read by a reviewer who saw only those pictures,
-and a fourth with normal vision as the control. None was blocked; what they hesitated over was
-wherever colour carried a meaning alone. The find bar's current match is now **boxed** as well
+Then the app was checked for colour-blind readers, as far as a model can check it: photographs
+of the running app simulated for protanopia, deuteranopia and tritanopia, each read by an AI
+reviewer (a Claude subagent) that saw only those pictures, and a fourth with the originals as
+the control. A model reading a simulation is an approximation, not a colour-blind person — the
+test plan's case 625 asks a real one. None was blocked; what they hesitated over was wherever
+colour carried a meaning alone. The find bar's current match is now **boxed** as well
 as filled (Tk draws a `solid` relief dark on any fill), as a table cell's match already was.
 The open Notes/Calendar tab is now the **taller** one: clam maps its own padding for a selected
 tab, which beat the app's and drew it smaller, so its shape said the opposite of its colour —
@@ -579,7 +582,8 @@ colours (2.2:1 on `#00bbf9`), and is now `letters_on` by name — two formulas f
 disagree somewhere. The colour picker's tick, the only sign of the colour in use when two
 swatches look alike, takes the same letters. The simulation also measured what holds: on the
 dark themes Save's fill and Delete's words are nearly one colour to a deuteranope
-(ΔE2000 2.7–3.4), and the reader still found Save first, because it is the one filled button.
+(ΔE2000 2.7–3.4), and the deuteranopia reviewer still found Save first, because it is the one
+filled button.
 
 | Text, and where | Midnight Purple | Ocean Blue | Forest Green | Warm Charcoal | Soft Lavender | Sky Blue | Fresh Mint | Warm Cream |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -1103,11 +1107,11 @@ virtual display via Xvfb, and Windows runs through native win32, which is what m
 platform-specific pixel checks bite in CI. A regression shows up as a failed check rather than
 being found by hand later.
 
-The automated coverage is nine headless GUI scripts (`qa/qa1.py`–`qa9.py`) plus six standalone
+The automated coverage is nine headless GUI scripts (`qa/qa1.py`–`qa9.py`) plus seven standalone
 unit suites: the recurrence engine, data-safety (backups & migration), the in-note calculator's
-expression evaluator, the rich-text conversion and PDF-rejoin logic (`test_richtext.py`), and
-the table engine (`test_tables.py`) — these five need no GUI — and the entry-module-identity
-guard. [qa/README.md](../qa/README.md) owns the per-script inventory: which script guards which
+expression evaluator, the rich-text conversion and PDF-rejoin logic (`test_richtext.py`), the
+table engine (`test_tables.py`) and a note's identity (`test_note_identity.py`) — these six need
+no GUI — and the entry-module-identity guard, which builds a window. [qa/README.md](../qa/README.md) owns the per-script inventory: which script guards which
 surface, and the house rules new checks follow.
 
 `test_entry_module_identity.py` *does* build a window: it exists because the qa scripts'
@@ -1117,10 +1121,11 @@ copy of the entry module.
 ### The hermetic seed
 
 Every automated qa script opens with a *hermetic seed*, `qa/_qa_support.hermetic_seed` — one
-definition, where there used to be nine copies of it. Before `note_organizer` is even imported
-(its data migrations run at import time) it writes an empty `notes_data.json` and the migration
-marker, so a test's empty folder cannot invite the first-run migration to adopt the developer's
-real notebook from `%APPDATA%`. And it fails closed: it refuses to run unless a scratch run was
+definition, where there used to be nine copies of it. It runs before `note_organizer` is even
+imported — earlier than it must, since the data migrations run in `initialise()`, which
+constructing the app calls ([Startup](#startup)) — and writes an empty `notes_data.json` and the
+migration marker, so a test's empty folder cannot invite the first-run migration to adopt the
+developer's real notebook from `%APPDATA%`. And it fails closed: it refuses to run unless a scratch run was
 declared (`NOTEORG_SCRATCH=1`, set only by `tools/run_tests.py` and the CI workflow), and beside
 any `notes_data.json` it cannot prove empty — one that holds notes, or one it cannot read. The
 copies it replaced read an unreadable notebook as empty and overwrote it.

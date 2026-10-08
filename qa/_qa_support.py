@@ -157,9 +157,10 @@ SCRATCH_MARKER = "NOTEORG_SCRATCH"
 def hermetic_seed():
     """Give this script a data folder of its own -- or refuse to run.
 
-    Called first, BEFORE ``import note_organizer``: the module resolves
-    its data folder and runs the data MIGRATIONS at import time, so by the
-    first line of test code the adoption has already happened. An empty
+    Called first, BEFORE ``import note_organizer`` and so before the app
+    is built: building it calls ``initialise()``, which resolves the data
+    folder and runs the data MIGRATIONS, so by the first line of test code
+    the adoption has already happened. An empty
     folder invites run_migrations to adopt whatever real notebook
     %APPDATA% holds, and real notes then leak into every scenario -- the
     checks start flaking whenever the owner's data changes. Seeding an

@@ -12,7 +12,8 @@ Not a general Git tutorial — just the exact commands I actually use on this pr
 Only for typo-level, docs-only changes — a spelling fix, a broken link, a one-line wording tweak —
 where there's genuinely nothing to test and no need for a trial run. Anything that touches code,
 and any docs change bigger than that, goes through Scenario B — that's the project's branch-always
-rule (see [CLAUDE.md](../CLAUDE.md#git--github-workflow)).
+rule (see [CLAUDE.md](../CLAUDE.md#git--github-workflow)). This shortcut is for a typo fixed by
+hand; work the agent does always goes on a branch, whatever its size.
 
 Put the updated file(s) in place, check what changed, then stage, commit, and send it:
 

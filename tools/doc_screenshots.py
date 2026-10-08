@@ -765,7 +765,9 @@ def settings_overview():
     Statistics rather than General, which holds one blank field and makes
     a picture of an empty page. On a notebook that has been used: the
     figures count from today, and five notes made on one day in September
-    read as a row of zeros under "Using Note Organizer since" today.
+    read as a row of zeros under "Using Note Organizer since" today. Used
+    within the app's own lifetime, though: a "since" a year before the
+    first commit read to reviewers as careless demo data.
     """
     _demo_notebook()
     _table_note()
@@ -775,9 +777,9 @@ def settings_overview():
             (1, 'Plumber visit', 'General', {}),
             (2, 'Sprint retro', 'Work', {'checklist': errands}),
             (9, 'Gift ideas', 'Personal', {'checklist': errands}),
-            (40, 'Holiday budget', 'Personal', {}),
-            (120, 'Onboarding notes', 'Work', {'checklist': errands}),
-            (400, 'Flat viewing', 'General', {})):
+            (25, 'Holiday budget', 'Personal', {}),
+            (40, 'Onboarding notes', 'Work', {'checklist': errands}),
+            (54, 'Flat viewing', 'General', {})):
         stamp = _days_ago(days)
         app.notes.append(_note(title=title, category=category,
                                created=stamp, updated=stamp, **extra))
@@ -790,7 +792,7 @@ def settings_overview():
                   'category': 'General', 'deleted_at': _days_ago(days, '18:00:00')}
                  for days, title in ((3, 'Old to-do'), (11, 'Draft'))]
     since = NO.load_settings().get('first_launch_date')
-    NO.save_setting('first_launch_date', _days_ago(420)[:10])
+    NO.save_setting('first_launch_date', _days_ago(56)[:10])
     try:
         _settings('statistics')
         capture('settings-overview')

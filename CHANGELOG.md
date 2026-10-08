@@ -12,7 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
-| [0.89.371](#089371--2026-10-08) | 2026-10-08 | What simulated colour-blind readers hesitated over: a boxed find match, a raised open tab with no dotted box after a click, letters that read on every colour you pick — and every icon the app uses in the emoji picker. |
+| [0.89.371](#089371--2026-10-08) | 2026-10-08 | What AI reviewers of colour-blindness simulations hesitated over: a boxed find match, a raised open tab with no dotted box after a click, letters that read on every colour you pick — and every icon the app uses in the emoji picker. |
 | [0.89.365](#089365--2026-10-08) | 2026-10-08 | Every coloured word and button readable in every theme, Save and Delete told apart without colour, and a dark red fill kept for what cannot be undone. |
 | [0.89.362](#089362--2026-10-08) | 2026-10-08 | A welcome note that greets a first start and shows each part of the app, and emoji from the app's own pickers that leave no gap after them. |
 | [0.88.361](#088361--2026-10-08) | 2026-10-08 | What two re-tests asked for: a table that moves with its caption, a filter for notes with files, checklist items you can move, a Share panel that searches and keeps the list's order, and a find bar that reads on every theme. |
@@ -101,9 +101,11 @@ How the numbers themselves are counted is the
 
 ## [0.89.371] — 2026-10-08
 
-*Highlights: the app shown to colour-blind readers — photographs of the running app, simulated
-for protanopia, deuteranopia and tritanopia, read by four reviewers, three seeing only the
-simulated pictures and one with normal colour vision as the control. What they hesitated over
+*Highlights: the app checked for colour-blind readers — photographs of the running app,
+simulated for protanopia, deuteranopia and tritanopia, read by four AI reviewers (Claude
+subagents), three seeing only the simulated pictures and one the originals as the control; a
+model reading a simulation is an approximation, and a real colour-blind reader is the test
+plan's case 625. What they hesitated over
 now carries its meaning by shape as well as colour, the letters on a colour you pick always
 read, and the emoji picker offers every icon the app itself uses.*
 
@@ -154,7 +156,8 @@ read, and the emoji picker offers every icon the app itself uses.*
 ## [0.89.365] — 2026-10-08
 
 *Highlights: every coloured word and button now reads in every theme, measured — the palette
-chosen with a panel of reviewers over five rounds on the running app. Save is the one filled
+chosen by the owner from proposals by a panel of AI reviewer personas (Claude subagents), over
+five rounds of photographs of the running app. Save is the one filled
 button in the editor, Save and Delete differ in lightness as well as hue so a colour-blind reader
 tells them apart, and a dark red fill now means "this cannot be undone".*
 
