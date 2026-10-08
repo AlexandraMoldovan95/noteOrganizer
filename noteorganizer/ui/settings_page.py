@@ -1921,13 +1921,11 @@ class SettingsPageMixin:
             # Visual weight is how a reader works out which action is the
             # broad one, and it said the opposite (finding C-6).
             #
-            # `danger` rather than `accent`: in this app that fill means
-            # "this takes notes out of your list" -- the selection bar's
-            # own "🗑 Trash" carries it, and that is a move to the Trash
-            # too, not a permanent delete. Both buttons here go through one
-            # confirming path, so nothing is lost for good either way; the
-            # red is about scope, not about danger of loss. Accent stays on
-            # the precise action, so the eye is warned by the sweeping one
+            # Outlined, in the warning's words, as Empty trash is: in this app
+            # the dark red FILL is kept for what cannot be undone, and both
+            # buttons here only move notes to the Trash. The border keeps it
+            # a button (the sidebar fill had let it blend away); accent stays
+            # on the precise action, so the eye is warned by the sweeping one
             # rather than drawn to it.
             #
             # Colours passed in the constructor, not track_theme: this panel
@@ -1935,9 +1933,12 @@ class SettingsPageMixin:
             # the current palette on every build (see ARCHITECTURE on the
             # two theming patterns).
             tk.Button(parent, text=f"🧹✨  Clean up ALL {len(groups)} groups (keep first in each)",
-                      command=clean_up_everything,
-                      bg=self.colors["danger"], fg=self._on_fill("danger"), relief="flat",
-                      font=("Segoe UI", 10, "bold"), cursor="hand2"
+                      command=clean_up_everything, relief="solid", bd=1,
+                      font=("Segoe UI", 10, "bold"), cursor="hand2",
+                      bg=self.colors["card"], fg=self.colors["danger_text"],
+                      highlightbackground=self.colors["danger_text"],
+                      activebackground=self.colors["card"],
+                      activeforeground=self.colors["danger_text"]
                       ).pack(fill="x", padx=12, pady=(4, 4), ipady=6)
 
         tk.Button(parent, text="🧹  Move ticked duplicates to trash", command=do_cleanup,

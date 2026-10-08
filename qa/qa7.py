@@ -249,6 +249,14 @@ app.show_day_note(app.notes[0], '2026-07-15')
 app.update()
 del_btn_detail = find_widget(app.day_panel, tk.Button, '🗑 Delete')
 check('calendar detail-view delete button exists', del_btn_detail is not None)
+# It moves the note to the Trash, so it is quiet, in the warning's words:
+# the dark red fill is kept for what cannot be undone.
+check('the calendar\'s Delete is quiet, in the warning\'s words (a move to the '
+      'Trash)',
+      del_btn_detail is not None
+      and str(del_btn_detail.cget('bg')).lower() == app.colors['card'].lower()
+      and str(del_btn_detail.cget('fg')).lower()
+      == app.colors['danger_text'].lower())
 
 app.ask_yes_no = lambda *a, **k: False  # Cancel
 del_btn_detail.invoke()

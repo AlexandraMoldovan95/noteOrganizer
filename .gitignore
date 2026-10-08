@@ -62,6 +62,9 @@ notes_data.json.tmp
 # --- QA scratch files (keep the tracked test plan, ignore working copies) ---
 qa/__pycache__/
 qa/*.json
+# Excel's lock beside an open workbook (~$NoteOrganizer_TestPlan.xlsx):
+# never part of the plan, and a `git add qa/` would otherwise take it.
+~$*
 
 # Icon comparison sheets and previews: artefacts of choosing a design,
 # regenerated any time by `py tools/make_icon.py --sheet`. Only the two

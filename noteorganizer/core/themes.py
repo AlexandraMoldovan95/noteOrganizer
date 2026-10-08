@@ -53,6 +53,7 @@ write ``settings.json``, so they belong with the storage layer, which
 hasn't been extracted yet. Only the immutable defaults live here.
 """
 
+import colorsys
 import functools
 
 # ---- Themes ----
@@ -155,7 +156,7 @@ THEMES = {
         "danger": "#9e1838",
         "success": "#2fae82",
         "accent_text": "#5b2dd2",
-        "danger_text": "#c01f45",
+        "danger_text": "#a81a3e",
         "success_text": "#00704f",
         "find_miss": "#f9dddd",
         "calendar_has_notes": "#e3dbff",
@@ -175,7 +176,7 @@ THEMES = {
         "danger": "#9e1838",
         "success": "#2fae82",
         "accent_text": "#005b97",
-        "danger_text": "#c01f45",
+        "danger_text": "#a81a3e",
         "success_text": "#00704f",
         "find_miss": "#f9dddd",
         "calendar_has_notes": "#d3e7f8",
@@ -195,7 +196,7 @@ THEMES = {
         "danger": "#9e1838",
         "success": "#2db4c2",
         "accent_text": "#006640",
-        "danger_text": "#c01f45",
+        "danger_text": "#a81a3e",
         "success_text": "#00707c",
         "find_miss": "#f9dddd",
         "calendar_has_notes": "#d3edde",
@@ -215,7 +216,7 @@ THEMES = {
         "danger": "#9e1838",
         "success": "#33b8b0",
         "accent_text": "#8a4600",
-        "danger_text": "#c01f45",
+        "danger_text": "#a81a3e",
         "success_text": "#00726b",
         "find_miss": "#f9dddd",
         "calendar_has_notes": "#f3e2cd",
@@ -389,19 +390,32 @@ def letters_on(fill):
 
 
 @functools.lru_cache(maxsize=512)
-def legible_on(colour, ground, ink, minimum=4.5):
+def legible_on(colour, ground, ink, minimum=4.6):
     """*colour* as words on *ground*: itself when it reads there at
-    *minimum*, else mixed toward *ink* (the theme's text) a step at a time
-    until it does. For a colour the person picked -- a category's, a note's
-    own -- shown as words: it keeps as much of its hue as reading allows,
-    and the stripe beside it keeps it whole. Unreadable input gets *ink*."""
+    *minimum*, else the nearest shade of it that does. For a colour the
+    person picked -- a category's, a note's own -- shown as words; the stripe
+    beside it keeps it whole. On a light ground the shade is darker in the
+    same hue, a little richer (mixed toward the theme's bluish text, the
+    Personal yellow went khaki); on a dark ground it is mixed toward *ink*,
+    the theme's light text. *minimum* is a step over AA, for canvas text at
+    8-9 pt. Unreadable input gets *ink*."""
     try:
         if contrast_ratio(colour, ground) >= minimum:
             return colour
-        for step in range(1, 21):
-            mixed = blend(colour, ink, step / 20)
-            if contrast_ratio(mixed, ground) >= minimum:
-                return mixed
+        if contrast_ratio(LETTERS_DARK, ground) >= contrast_ratio(LETTERS_LIGHT, ground):
+            red, green, blue = (int(colour[i:i + 2], 16) / 255.0 for i in (1, 3, 5))
+            hue, sat, val = colorsys.rgb_to_hsv(red, green, blue)
+            for step in range(1, 101):
+                shade = colorsys.hsv_to_rgb(hue, min(1.0, sat * (1 + step / 200)),
+                                            val * (1 - step / 100))
+                darker = "#%02x%02x%02x" % tuple(round(c * 255) for c in shade)
+                if contrast_ratio(darker, ground) >= minimum:
+                    return darker
+        else:
+            for step in range(1, 21):
+                mixed = blend(colour, ink, step / 20)
+                if contrast_ratio(mixed, ground) >= minimum:
+                    return mixed
     except (TypeError, ValueError, IndexError):
         pass
     return ink

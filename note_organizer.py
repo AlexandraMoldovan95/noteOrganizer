@@ -13342,7 +13342,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         bulk_trash_btn = tk.Button(
             top_row, text="🗑 Trash", command=self._bulk_move_to_trash,
             relief="flat", font=("Segoe UI", 8, "bold"), cursor="hand2")
-        self.track_theme(bulk_trash_btn, bg="danger", fg="on_danger")
+        # Quiet, in the warning's words: the notes go to the Trash. The dark
+        # red fill is kept for what cannot be undone.
+        self.track_theme(bulk_trash_btn, bg="card", fg="danger_text")
         _bulk_pack(bulk_trash_btn)
 
         bottom_row = _bulk_row()
@@ -14280,53 +14282,62 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.track_theme(action_row, bg="bg")
         action_row.pack(fill="x", padx=30, pady=(0, 8))
 
+        # Each names its pressed colours too: left out, Tk pressed them in
+        # the system's grey with black words, whatever the theme.
         save_btn = tk.Button(
             action_row, text="💾 Save", command=self.save_current_note,
             relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
         )
-        self.track_theme(save_btn, bg="success", fg="on_success")
-
-        # Quiet, with the warning colour in its words: the note goes to the
-        # Trash, so it need not shout, and on a light theme a filled dark red
-        # was the loudest thing on screen. Save is the one filled button.
-        delete_btn = tk.Button(
-            action_row, text="🗑 Delete", command=self.delete_current_note,
-            relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
-        )
-        self.track_theme(delete_btn, bg="sidebar", fg="danger_text")
+        self.track_theme(save_btn, bg="success", fg="on_success",
+                         activebackground="success", activeforeground="on_success")
 
         share_btn = tk.Button(
             action_row, text="📋 Generate code", command=self.share_current_note_as_code,
             relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
         )
-        self.track_theme(share_btn, bg="sidebar", fg="text")
+        self.track_theme(share_btn, bg="sidebar", fg="text",
+                         activebackground="card", activeforeground="text")
+
+        # Quiet, with the warning colour in its words: the note goes to the
+        # Trash, so it need not shout, and on a light theme a filled dark red
+        # was the loudest thing on screen. Save is the one filled button,
+        # and Generate code stands between them.
+        delete_btn = tk.Button(
+            action_row, text="🗑 Delete", command=self.delete_current_note,
+            relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
+        )
+        self.track_theme(delete_btn, bg="sidebar", fg="danger_text",
+                         activebackground="card", activeforeground="danger_text")
 
         duplicate_btn = tk.Button(
             action_row, text="📄 Duplicate", command=self.duplicate_current_note,
-            fg="white", relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
+            relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
         )
-        self.track_theme(duplicate_btn, bg="sidebar")
-        duplicate_btn.configure(fg=self.colors["text"])
+        self.track_theme(duplicate_btn, bg="sidebar", fg="text",
+                         activebackground="card", activeforeground="text")
 
         template_btn = tk.Button(
             action_row, text="🧩 Save as template",
             command=self.save_current_as_template,
             relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
         )
-        self.track_theme(template_btn, bg="sidebar", fg="text")
+        self.track_theme(template_btn, bg="sidebar", fg="text",
+                         activebackground="card", activeforeground="text")
 
         use_template_btn = tk.Button(
             action_row, text="📎 Use template",
             relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
         )
         self._toggles_its_popup(use_template_btn, self.show_template_picker)
-        self.track_theme(use_template_btn, bg="sidebar", fg="text")
+        self.track_theme(use_template_btn, bg="sidebar", fg="text",
+                         activebackground="card", activeforeground="text")
         self.use_template_btn = use_template_btn
 
         # Two rows of three in a neat grid. Columns share equal width and the
         # buttons fill their cell, so the two rows line up cleanly regardless of
-        # each button's text length.
-        grid_buttons = [save_btn, delete_btn, share_btn,
+        # each button's text length. Built in this order, so Tab walks them
+        # as they read.
+        grid_buttons = [save_btn, share_btn, delete_btn,
                         duplicate_btn, template_btn, use_template_btn]
         for col in range(3):
             action_row.grid_columnconfigure(col, weight=1, uniform="editbtn")

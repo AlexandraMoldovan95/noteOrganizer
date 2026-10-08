@@ -736,14 +736,29 @@ check('every theme names a text shade for each fill role',
 from noteorganizer.core.themes import legible_on as _legible
 _swatches = sorted(set(NO.PALETTE_COLORS + NO.PRESET_NOTE_COLORS
                        + list(NO.DEFAULT_CATEGORY_COLORS.values())))
-check('every swatch, as words on every theme\'s card, reads at 4.5:1',
-      all(_ratio_fn(_legible(c, pal['card'], pal['text']), pal['card']) >= 4.5
+check('every swatch, as words on every theme\'s card, reads at 4.6:1',
+      all(_ratio_fn(_legible(c, pal['card'], pal['text']), pal['card']) >= 4.6
           for pal in NO.THEMES.values() for c in _swatches))
 check('...and a colour that already reads keeps its exact value',
       _legible('#5b2dd2', '#ffffff', '#22223a') == '#5b2dd2'
       and _legible('#f9c74f', '#ffffff', '#22223a') != '#f9c74f')
 check('...and a colour it cannot read gives the theme\'s text colour',
       _legible('nope', '#ffffff', '#22223a') == '#22223a')
+# Darkened for a light card, a colour keeps its hue and loses none of its
+# saturation: mixed toward the theme's bluish text, the yellow went khaki.
+import colorsys as _colorsys
+
+
+def _hsv(hex_colour):
+    return _colorsys.rgb_to_hsv(*(int(hex_colour[i:i + 2], 16) / 255.0
+                                  for i in (1, 3, 5)))
+
+
+_warm = [c for c in _swatches if _hsv(c)[1] > 0.3]
+check('...darkened for a light card, a colour keeps its hue and saturation',
+      all(abs(_hsv(_legible(c, '#ffffff', '#22223a'))[0] - _hsv(c)[0]) < 0.02
+          and _hsv(_legible(c, '#ffffff', '#22223a'))[1] >= _hsv(c)[1] - 0.01
+          for c in _warm))
 # The "nothing found" tint is her pick from photographed boards; it is
 # written down, so a change of the warning red cannot move it.
 check('the find box\'s "nothing found" tint is the one chosen, in every theme',

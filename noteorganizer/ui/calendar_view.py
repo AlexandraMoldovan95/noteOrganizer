@@ -1296,9 +1296,11 @@ class CalendarViewMixin:
                   bg=self.colors["accent"], fg=self._on_fill("accent"), relief="flat",
                   font=("Segoe UI", 9, "bold"), cursor="hand2"
                   ).pack(side="right", ipadx=6, ipady=2)
+        # Quiet, in the warning's words, as the editor's Delete: the note
+        # goes to the Trash. The dark red fill is kept for what cannot be undone.
         tk.Button(top, text="🗑 Delete",
                   command=lambda: self._delete_note_from_calendar(base_note, date_str),
-                  bg=self.colors["danger"], fg=self._on_fill("danger"), relief="flat",
+                  bg=self.colors["card"], fg=self.colors["danger_text"], relief="flat",
                   font=("Segoe UI", 9, "bold"), cursor="hand2"
                   ).pack(side="right", padx=(0, 6), ipadx=6, ipady=2)
 

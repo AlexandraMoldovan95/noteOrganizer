@@ -8599,14 +8599,46 @@ for _pl_w, _pl_map in app.themed_widgets:
         _pl_txt = str(_pl_w.cget('text'))
     except Exception:
         continue
-    if _pl_txt in ('💾 Save', '🗑 Delete', '+ New Note', '+ Add file'):
+    if _pl_txt in ('💾 Save', '🗑 Delete', '+ New Note', '+ Add file', '🗑 Trash'):
         _pl_reg[_pl_txt] = (_pl_map.get('bg'), _pl_map.get('fg'))
+# The selection bar's Trash, like the editor's Delete, moves notes to the
+# Trash: quiet, in the warning's words.
 check(f'palette: the filled buttons built once name their words for the theme '
-      f'switch, not a colour written down ({_pl_reg})',
+      f'switch, not a colour written down; the moves to the Trash are quiet '
+      f'({_pl_reg})',
       _pl_reg == {'💾 Save': ('success', 'on_success'),
                   '🗑 Delete': ('sidebar', 'danger_text'),
                   '+ New Note': ('accent', 'on_accent'),
-                  '+ Add file': ('accent', 'on_accent')})
+                  '+ Add file': ('accent', 'on_accent'),
+                  '🗑 Trash': ('card', 'danger_text')})
+
+# The row reads Save, Generate code, Delete -- Save no longer beside Delete --
+# and Tab walks it in that order; each button names its pressed colours,
+# which Tk otherwise drew in the system's grey with black words.
+_pl_press = {}
+for _pl_w, _pl_map in app.themed_widgets:
+    try:
+        _pl_txt = str(_pl_w.cget('text'))
+    except Exception:
+        continue
+    if _pl_txt in ('💾 Save', '📋 Generate code', '🗑 Delete', '📄 Duplicate'):
+        _pl_press[_pl_txt] = (_pl_map.get('activebackground'),
+                              _pl_map.get('activeforeground'))
+check(f'palette: the editor\'s buttons name their pressed colours ({_pl_press})',
+      _pl_press == {'💾 Save': ('success', 'on_success'),
+                    '📋 Generate code': ('card', 'text'),
+                    '🗑 Delete': ('card', 'danger_text'),
+                    '📄 Duplicate': ('card', 'text')})
+if None in (_pl_save, _pl_del, _pl_gen):
+    check('palette fixture: the editor\'s row was found', False)
+else:
+    _pl_cells = [(int(b.grid_info().get('row', -1)), int(b.grid_info().get('column', -1)))
+                 for b in (_pl_save, _pl_gen, _pl_del)]
+    check(f'palette: the row reads Save, Generate code, Delete, and Tab walks it '
+          f'so ({_pl_cells})',
+          _pl_cells == [(0, 0), (0, 1), (0, 2)]
+          and str(_pl_save.tk_focusNext()) == str(_pl_gen)
+          and str(_pl_gen.tk_focusNext()) == str(_pl_del))
 
 # Words on an ordinary surface take the role's text shade, not its fill.
 _pl_dark = _pl_dark or 'dark'
@@ -8639,7 +8671,7 @@ def _pl_card_reads(how):
         _pl_v = app._card_view(_pl_n['id'])
         _pl_want = app.get_note_color(_pl_n).lower()
         if (_pl_v is None or str(_pl_v['stripe']).lower() != _pl_want
-                or _pl_ratio(_pl_hex(_pl_v['tags_fill']), app.colors['card']) < 4.5):
+                or _pl_ratio(_pl_hex(_pl_v['tags_fill']), app.colors['card']) < 4.6):
             _pl_words[(app.theme_name, how, _pl_n['title'])] = (
                 _pl_v and (_pl_v['stripe'], _pl_v['tags_fill']))
 
@@ -8653,7 +8685,7 @@ app.notes = [n for n in app.notes if n['id'] not in (7701, 7702)]
 app.set_theme(_pl_theme)
 app.refresh_note_list(); app.update()
 check(f'palette: a picked colour stays whole on the card\'s stripe and its tags '
-      f'row reads at 4.5:1, drawn and recoloured ({_pl_words})', not _pl_words)
+      f'row reads at 4.6:1, drawn and recoloured ({_pl_words})', not _pl_words)
 
 # Switching notes clears the model so no navigation runs on stale indices.
 app.new_note()
