@@ -4694,6 +4694,12 @@ line or three and points here, by name, for what happened.*
   the strip rather than by building tabs for several notes. What was never dead is the snapshot
   it refreshed on the way: the dirty comparison and the restore after a bulk delete both read it,
   so it is kept under the name of what it actually does.
+- **`_tab_ring_if_tabbed_to`** — Bound first on `<Tab>` in the `all` tag, it never ran: Tk walks
+  the keyboard on the virtual events `<<NextWindow>>` and `<<PrevWindow>>`, and with both bound
+  on one tag the virtual binding won, so traversal carried on and the handler stayed silent. A
+  probe that printed what the tag held is what showed it. It now joins Tk's own script there with
+  `add="+"`, after the traversal, which it must never replace — and it asks `tk_focusNext` where
+  the key is going rather than `focus_get` where it went.
 
 ### From `core/model.py`
 
