@@ -101,6 +101,13 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
   *text* arrives through the normal PDF paragraph-rejoin — and anyone who wants it structured can
   drop it into a table made from the toolbar. Tables pasted from Excel, Word or web pages (which
   *do* carry structure) arrive as real grids and stay fully supported.
+- A language selector for the interface — decided against (2026-10-03); the app stays in
+  English. Counted at the time: about 470 distinct interface texts with no translation layer to
+  hold them, some 390 places where the qa suite reads the English wording, and layouts tuned to
+  English widths (German runs about 30% longer). The deciding reason was the owner's: nobody
+  available to check six or seven languages for correct writing, and badly written translations
+  would be worse than none. If it ever returns, the order is a text catalogue first, tested with a
+  fake language that stretches every text, and then one real language.
 - Routing template deletion through the Trash — decided against (2026-10-09). Deleting a
   template already asks first and says plainly that it skips the Trash and cannot be undone
   (see [Settings redesign](#settings-redesign)). Making templates restorable would put a second
