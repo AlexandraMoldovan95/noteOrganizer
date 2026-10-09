@@ -8,7 +8,8 @@ the agent's work, so that nothing rests on its say-so.
 
 This page is the one place that explains that process. The rules the agent works under are in
 [CLAUDE.md](../CLAUDE.md); the stories of what went wrong and what changed are in the
-[Issues Log](ISSUES_LOG.md).
+[Issues Log](ISSUES_LOG.md); and how the owner sees the work, in her own words, is in
+[In my words](IN_MY_WORDS.md).
 
 ## Contents
 

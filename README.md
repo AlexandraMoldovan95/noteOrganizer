@@ -95,6 +95,12 @@ the agent made carry a `Co-Authored-By` line naming the model — 721 of the
 convention, and a few dozen after it were made without one. How the work
 is divided and checked: [built with an AI agent](docs/AI_WORKFLOW.md).
 
+> Everyone takes notes, whatever they do. I spent years in support — three
+> of them at HP, documenting processes for teams who had to follow them —
+> and I saw how much time is lost when notes are short or scattered. I
+> wanted a simple, dependable place for them, that works offline and keeps
+> your data on your computer. — Alexandra, [in my words](docs/IN_MY_WORDS.md)
+
 ## How it is tested
 
 Every pull request that changes more than the documentation runs the whole
@@ -125,7 +131,8 @@ for when you need it:
 - **How the code works:** [architecture](docs/ARCHITECTURE.md) — how it is
   organised, and why — and the [code tour](docs/CODE_TOUR.md), a walk
   through the files.
-- **How it was made:** [built with an AI agent](docs/AI_WORKFLOW.md), the
+- **How it was made:** [in my words](docs/IN_MY_WORDS.md),
+  [built with an AI agent](docs/AI_WORKFLOW.md), the
   [issues log](docs/ISSUES_LOG.md), the [changelog](CHANGELOG.md) and the
   [roadmap](docs/ROADMAP.md), with the decisions it records.
 - **How it is tested:** the [test map](qa/README.md) and the
