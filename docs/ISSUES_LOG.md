@@ -4085,13 +4085,15 @@ pin.
 
 **Root cause:** the qa scripts were never running in a world of their
 own. Each starts beside an empty data folder — and the app's own
-first-run migration, which executes at `import note_organizer` time,
+first-run migration, which runs as soon as a script builds the app,
 helpfully adopted the developer's REAL notebook from
 `%APPDATA%\NoteOrganizer` into every test run. The checks were being
 graded against whatever the owner had done in her app that day; the
 morning failure appeared because she had field-tested the `.exe` the
 evening before, changing the very data the tests were unknowingly
-inheriting.
+inheriting. *(Corrected 2026-10-09: this paragraph first said the
+migration ran at import time. It had moved into `initialise()`, which
+building the app calls, on 2026-08-20 — nine days before this story.)*
 
 **Fix:** a hermetic seed at the top of all nine qa scripts, ABOVE the
 `note_organizer` import: write an empty `notes_data.json` plus the

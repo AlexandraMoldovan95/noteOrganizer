@@ -91,8 +91,8 @@ balanced product.
 As the app grew, I added more rules: to be organised; to work with review agents, imagining people
 who examine the app and try to break it while it repairs it, so the app is solid from every side;
 and to work in a loop until something is done properly. I made sure it knows who it works with and
-what my background is, so it adapts to how I work. It always asks before committing, so I can test
-the app before anything reaches GitHub. And from the beginning I made sure I could learn from what
+what my background is, so it adapts to how I work. It always asks before pushing anything to
+GitHub, so I can test the app first. And from the beginning I made sure I could learn from what
 it does, to communicate with it better and to keep the experience myself.
 
 After going through all this, I'm sure the next app I make will be even more organised than this
@@ -116,7 +116,7 @@ one.
   described to the agent how it should look, made a separate mock-up in HTML of what it could be,
   and then we built it into the app.
 
-These and the other ideas we decided against are listed in the roadmap, under
+The first two, and the other ideas we decided against, are listed in the roadmap, under
 [Explicitly not planned](ROADMAP.md#explicitly-not-planned-right-now).
 
 ## How I test

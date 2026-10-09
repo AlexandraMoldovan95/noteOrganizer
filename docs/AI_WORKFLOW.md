@@ -34,6 +34,13 @@ This page is the one place that explains that process. The rules the agent works
 | Is it right? | Walks the [test plan](../qa/NoteOrganizer_TestPlan.xlsx) on the packaged `.exe`; judges what no script can see | Proves the fix with a check that fails without it, a mutant, and photographs of the real app | `tools/mutate.py`, `qa/story_*.py`, the contrast gate |
 | GitHub | Opens and merges every pull request; files the issues | Writes the PR and issue texts for her to review | — |
 
+Between sessions the agent also keeps a private memory: short notes it writes for itself — a
+correction the owner made, a decision she took, where a piece of work stopped — and reads back at
+the start of the next session. It lives on the owner's machine, outside the repository, so it is
+not part of the record here. A lesson meant to bind every session belongs in
+[CLAUDE.md](../CLAUDE.md), where it can be read and reviewed; the memory is the agent's working
+notebook.
+
 ## One change, start to finish
 
 1. **Investigate, then plan.** For anything beyond a trivial fix the agent explains the approach
@@ -82,9 +89,9 @@ something that does not depend on the agent remembering:
 
 | Rule | How it is held |
 |---|---|
-| Tests never run where they could wipe real notes | **Enforced.** The agent's deny list blocks the destructive scripts in the project folder; `tools/run_tests.py` runs everything in a fresh scratch copy; the qa scripts' hermetic seed refuses to start outside one, or beside a notebook that holds notes. |
+| Tests never run where they could wipe real notes | **Enforced.** The agent's deny list refuses any shell command that would start a destructive script in the project folder; `tools/run_tests.py` runs everything in a fresh scratch copy; the qa scripts' hermetic seed refuses to start outside one, or beside a notebook that holds notes. |
 | Every destructive script has a deny rule | **Enforced** in CI by `tools/check_agent_rules.py`, which finds the scripts itself. |
-| English throughout the repository; comments short and about *why* | **Enforced** in CI (`check_english.py`, `check_comments.py`). |
+| English throughout the repository; comments short and about *why* | **Enforced** in CI (`check_english.py`, `check_comments.py`) whenever code, tests or tools change. A change to the documentation alone skips CI to save minutes; for those, the English check runs in `tools/pre_push_check.py` before the push — a step the agent is asked to take, not one CI repeats. |
 | One definition per judgement (no hand-copied field lists) | **Enforced** in CI (`check_one_definition.py`). |
 | Text readable in every theme | **Enforced** in CI (`check_contrast.py`, WCAG AA). |
 | `core/` never imports the interface | **Enforced** by a unit check. |
