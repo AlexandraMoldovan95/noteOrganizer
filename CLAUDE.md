@@ -1,5 +1,26 @@
 # NoteOrganizer — Claude Code Instructions
 
+> **For human readers.** This file is written to the AI agent the project is built with (Claude
+> Code), which reads it at the start of every session. It is public on purpose: it is the working
+> agreement between the owner and the agent. Most rules carry a date and a reason because they were
+> agreed right after something went wrong — the stories are in the
+> [Issues Log](docs/ISSUES_LOG.md). Which rules are enforced by tools and which are only asked of
+> the agent is set out in
+> [How Note Organizer is built with an AI agent](docs/AI_WORKFLOW.md#what-is-enforced-and-what-is-only-asked).
+
+**Contents:** [Project overview](#project-overview) ·
+[Project focus](#project-focus) ·
+[Working rules](#working-rules) — [Testing](#testing),
+[Cross-feature verification](#cross-feature-verification-standing-rule-2026-08-28-extended-2026-09-05-with-the-interaction-pass),
+[QA testing safety](#qa-testing-safety-hard-rule--real-data-has-been-lost-to-this-three-times),
+[What runs without asking](#what-runs-without-asking-permission-policy-2026-09-25),
+[Versioning](#versioning) ·
+[Git & GitHub workflow](#git--github-workflow) ·
+[Full lifecycle](#full-lifecycle-for-an-issue-or-enhancement) ·
+[Code quality bar](#code-quality-bar) ·
+[Documentation standards](#documentation-standards-standing-rule-2026-09-04) ·
+[Agent protocol](#agent-protocol-standing-rule-2026-09-05)
+
 ## Project overview
 
 Note Organizer is a fully offline desktop notes app: Python + Tkinter, one
@@ -55,7 +76,7 @@ calls, no accounts, no database.
   no GUI; `test_entry_module_identity.py` builds a window. `qa/qa1.py`–`qa9.py` are
   headless GUI tests, each starting from a clean data directory. All of them
   run automatically via `.github/workflows/tests.yml` on every pull request
-  and on every push to `main` — on
+  and every push to `main` that changes more than the documentation — on
   **both** Windows and Linux (the Linux job supplies the display via Xvfb;
   Windows runs through native win32). There's also a manual test plan
   spreadsheet (`qa/NoteOrganizer_TestPlan.xlsx`) for scenarios not worth

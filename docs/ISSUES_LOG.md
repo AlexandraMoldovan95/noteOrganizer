@@ -8,6 +8,12 @@ the releases they shipped in are in the [Changelog](../CHANGELOG.md). See also t
 repository's [Issues](https://github.com/AlexandraMoldovan95/noteOrganizer/issues) for
 day-to-day tracking.
 
+**Who is speaking.** The stories are written by the AI agent the project is built with (Claude
+Code), so a first person ("one of my own renames") is the agent. **The owner** or **she** is
+Alexandra; a **field test** or **field report** is her, testing the packaged `.exe`; and
+*reviewers*, *agents* or *waves* are Claude subagents unless a person is named. How the work is
+divided and checked is in [How Note Organizer is built with an AI agent](AI_WORKFLOW.md).
+
 ## Start here: five stories
 
 New to this log? Between them, these five show most of what the rest of it teaches; each
@@ -255,7 +261,7 @@ been reset to defaults. The trash, templates and attachments were untouched.
 so unlike the other unit tests it deletes and rewrites `notes_data.json` in
 its own directory (`os.remove(NO.DATA_FILE)` near the top, fixtures after).
 Its docstring says plainly that it must be run from a throwaway copy — but
-during a routine pre-commit sweep the whole unit suite was run from the
+during a routine pre-commit sweep the agent ran the whole unit suite from the
 project root, where `NO.DATA_FILE` resolves to the real notebook. The
 CLAUDE.md hard rule that exists for exactly this class of accident named
 only the `qa*.py` scripts; the unit tests were mentally filed as safe
@@ -3388,11 +3394,12 @@ call returns" depends on whether the call blocks, which differs by platform.
 
 ### Save and Delete, the same khaki
 
-*([0.89.365](../CHANGELOG.md#089365--2026-10-08) · found by a panel of reviewers and a colour-blindness simulation)*
+*([0.89.365](../CHANGELOG.md#089365--2026-10-08) · found by a panel of AI reviewer personas and a colour-blindness simulation)*
 
 **Symptom:** none reported, which was the point. The contrast gate had listed 71 pairs below
 WCAG AA for weeks — every use of the accent, the warning red and the confirming green, Save's
-white words on mint at 1.8:1 — each waiting on a design decision. A design reviewer, looking at
+white words on mint at 1.8:1 — each waiting on a design decision. An AI reviewer playing a
+senior designer (one of five Claude subagent personas), looking at
 the editor's row of three filled buttons, wrote: "colour no longer means anything".
 
 **Root cause:** two, and only the first had been seen. Each role colour did two jobs, words on a
@@ -3439,12 +3446,14 @@ each one to the function it calls before writing it down.
 
 ### Two answers to one question
 
-*([0.89.371](../CHANGELOG.md#089371--2026-10-08) · found by showing the app to simulated colour-blind readers)*
+*([0.89.371](../CHANGELOG.md#089371--2026-10-08) · found by AI reviewers reading colour-blindness simulations)*
 
 **Symptom:** none reported. Photographs of the running app were simulated for protanopia,
-deuteranopia and tritanopia (Machado 2009, full severity) and given to three reviewers who saw
-only those, with a fourth seeing the originals as the control. None was blocked. All four
-hesitated over the find bar's current match, and two over which tab was open.
+deuteranopia and tritanopia (Machado 2009, full severity) and given to three AI reviewers
+(Claude subagents) who saw only those, with a fourth seeing the originals as the control. A
+model reading a simulation is an approximation, not a colour-blind person; the test plan's case
+625 asks a real one. None was blocked. All four hesitated over the find bar's current match,
+and two over which tab was open.
 
 **Root cause:** three, none of them a colour. The current match differed from the others by its
 fill alone — the match inside a table cell was already boxed. The open tab was drawn smaller
@@ -3886,8 +3895,8 @@ writing down.
 The photograph taken to study it showed every box empty — because the
 script had called `_toggle_note_selected`, which updates the set of
 selected ids, rather than invoking the widget, which is what moves a
-checkbox. **The fixture ticked nothing.** On that picture a whole
-diagnosis was built: pixel measurements, a table of candidate colours, a
+checkbox. **The fixture ticked nothing.** On that picture the agent built a
+whole diagnosis: pixel measurements, a table of candidate colours, a
 conclusion of "use the accent", and a change to twelve call sites.
 
 Ticking the boxes properly showed the accent making an EMPTY box look
