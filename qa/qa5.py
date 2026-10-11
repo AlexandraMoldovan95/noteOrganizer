@@ -1,9 +1,9 @@
-# HERMETIC SEED -- BEFORE the note_organizer import below: the module
-# resolves its data directory and runs the data MIGRATIONS at import
-# time, so this script's data directory must be its own before that
-# happens. hermetic_seed (qa/_qa_support.py) seeds it -- or refuses to
-# run at all outside a scratch run, or beside a notebook it cannot
-# prove is empty.
+# HERMETIC SEED -- BEFORE the note_organizer import below. Building the
+# app calls initialise(), which resolves the data directory and runs the
+# data MIGRATIONS, so this script's data directory must be its own by
+# then; seeding it before the import leaves no step in between.
+# hermetic_seed (qa/_qa_support.py) seeds it -- or refuses to run at all
+# outside a scratch run, or beside a notebook it cannot prove is empty.
 from _qa_support import hermetic_seed as _qa_seed
 _qa_seed()
 
@@ -443,7 +443,8 @@ app5f.destroy()
 # shows the app, deletable, and offered again from Settings -> About. Only
 # a notebook with no notes file at this start is greeted -- this folder's
 # was seeded, so it is taken away first, as on a first install (the
-# migrations ran once, at import, so nothing can be adopted here).
+# migrations ran once, when the app was first built -- initialise() does
+# nothing the second time -- so nothing can be adopted here).
 import os as _os5w
 def _w5_reset_settings():
     _s5w = NO.load_settings()
