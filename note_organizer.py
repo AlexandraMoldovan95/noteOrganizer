@@ -16476,9 +16476,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # with neither a question nor a way back, while the button
             # beside it had both -- and the categories it overwrote were
             # gone from the file the moment it ran.
-            self._show_toast(
-                f"Moved {count} {noun} to \u201c{cat}\u201d",
-                action=lambda: self._undo_bulk_category(marks, cat))
+            self._offer_category_undo({"marks": marks, "applied": cat})
 
         for cat in CATEGORY_COLORS.keys():
             row = tk.Frame(frame, bg=self.colors["card"], cursor="hand2")
@@ -18712,6 +18710,46 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             var = getattr(self, "filter_var", None)
             if var is not None and var.get() == old_name:
                 var.set(new_name)
+        # The Undo on offer for a category move names categories too. Left
+        # out, a rename while it was up made it look for the old name and say
+        # "Nothing left to put back" over notes that were still moved. A
+        # rename carries it along; deleting the category the notes went into
+        # withdraws it, since that deletion has just decided where they go.
+        # A category they came from, deleted, stays the Undo's own case: it
+        # says those notes could not go back.
+        offer = getattr(self, "_category_undo_offer", None)
+        if offer is not None:
+            on_screen = getattr(self, "_toast_action", None) is offer["action"]
+            if renamed:
+                if offer["applied"] == old_name:
+                    offer["applied"] = new_name
+                offer["marks"] = [
+                    (mark[0], new_name if mark[1] == old_name else mark[1]) + tuple(mark[2:])
+                    for mark in offer["marks"]]
+                if on_screen:
+                    self._offer_category_undo(offer)
+            elif offer["applied"] == old_name:
+                self._category_undo_offer = None
+                if on_screen:
+                    self._toast_action = None
+                    self._hide_toast()
+
+    def _offer_category_undo(self, offer):
+        """Show the banner offering to undo a category move.
+
+        *offer* is one record -- ``marks`` (one per note: id, the category it
+        left, its old stamp, its uid) and ``applied``, the category it went
+        into -- and the Undo reads it when clicked, so a rename made while
+        the banner is up carries it along (_refile_category_everywhere)."""
+        if "action" not in offer:
+            offer["action"] = lambda: self._undo_bulk_category(
+                offer["marks"], offer["applied"])
+        self._category_undo_offer = offer
+        count = len(offer["marks"])
+        self._show_toast(
+            f"Moved {count} {'note' if count == 1 else 'notes'} to "
+            f"“{offer['applied']}”",
+            action=offer["action"])
 
     def refresh_category_widgets(self):
         """Push the current category set into the editor dropdown and the
@@ -19894,11 +19932,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 note["id"] for note in notes if note is not None}) is False:
             # Cancel on a day's save question means stay -- and the offer
             # stays with it: where each note came from is kept nowhere else.
-            count = len(marks)
-            self._show_toast(
-                f"Moved {count} {'note' if count == 1 else 'notes'} to "
-                f"\u201c{applied}\u201d",
-                action=lambda: self._undo_bulk_category(marks, applied))
+            self._offer_category_undo({"marks": marks, "applied": applied})
             return
         restored = []
         homeless = 0

@@ -430,6 +430,7 @@
   "_note_to_duplicate": "(self, note)",
   "_note_typing_key": "(self, event=None)",
   "_notes_on_the_list": "(self)",
+  "_offer_category_undo": "(self, offer)",
   "_offset_indices": "(text_widget, offsets)",
   "_on_app_activated": "(self, event)",
   "_on_app_deactivated": "(self, event)",

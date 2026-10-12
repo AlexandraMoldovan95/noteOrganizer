@@ -2656,5 +2656,48 @@
     "must_fail": ["...and the first letter typed on the line the menu added rebuilds nothing"],
     "suites": ["qa1"],
     "expect": "killed"
+  },
+  {
+    "id": "CU01",
+    "about": "a rename while a category move's Undo is on offer leaves the Undo looking for the category's old name",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                if offer[\"applied\"] == old_name:\n                    offer[\"applied\"] = new_name\n",
+        "replace": "                pass\n"
+      }
+    ],
+    "must_fail": ["bulk category: a rename while the Undo is on offer puts the new name on its banner",
+                  "bulk category: ...and the Undo still puts the notes back, into a renamed category too"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "CU02",
+    "about": "the Undo of a category move forgets that a category the notes came from was renamed",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                    (mark[0], new_name if mark[1] == old_name else mark[1]) + tuple(mark[2:])\n",
+        "replace": "                    (mark[0], mark[1]) + tuple(mark[2:])\n"
+      }
+    ],
+    "must_fail": ["bulk category: ...and the Undo still puts the notes back, into a renamed category too"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "CU03",
+    "about": "deleting the category the notes were moved into leaves the move's Undo on offer",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            elif offer[\"applied\"] == old_name:\n                self._category_undo_offer = None\n",
+        "replace": "            elif False:\n                self._category_undo_offer = None\n"
+      }
+    ],
+    "must_fail": ["bulk category: deleting the category the notes went into withdraws its Undo"],
+    "suites": ["qa1"],
+    "expect": "killed"
   }
 ]

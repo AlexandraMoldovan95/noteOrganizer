@@ -516,10 +516,11 @@ here. None is a bug being chased; each has a reason.
 - *Note ids* — an id freed by a delete can be given to the next new note (ids are max + 1). Every
   holder of an id across a delete was checked and acts on the note it means; the one left is a
   keyboard ring that can land on the new note, which is a cursor, not an action.
-- *A category move's Undo after a rename* — renaming the category the notes were moved into, or
-  deleting the one they came from, while the Undo is on offer makes the Undo say "Nothing left
-  to put back" with the notes still moved. Nothing is lost; whether the Undo should follow the
-  rename or be withdrawn with it is a product decision, on the owner's list.
+- *A category move's Undo after a rename* — **settled 2026-10-12, the owner's call: the Undo
+  follows the rename.** A rename while it is on offer carries it along, the categories the notes
+  came from included, and its banner says the new name; deleting the category they went into
+  withdraws it. Deleting one they came from still gets the Undo's own answer, that those notes
+  could not go back to a category that no longer exists.
 - *Formatting edges seen and not chased* — picking the default size with nothing selected
   inside a 20 pt run types 20 pt while the status line says the size is back to the default;
   Ctrl+B on the whole of a note of 8,000 styled words takes 0.6–0.8 s (the toolbar's reading of

@@ -11420,6 +11420,64 @@ check('bulk category: a second Undo says so instead of claiming success',
       any('Nothing left to put back' in _bc_t and _bc_k == 'info'
           for _bc_t, _bc_k in _bc_toasts))
 
+# A category renamed while the Undo is still on offer. The rename does not
+# change what was done, so the Undo puts the notes back all the same -- into
+# a renamed category they came from as well -- and its banner says the new
+# name. It looked for the old name and said "Nothing left to put back".
+# Renamed as Settings renames (its handler is a closure in the row): the
+# colours in place first, then every holder of the name.
+
+
+def _bc_rename(old, new):
+    _bc_order = [(new if _bc_k == old else _bc_k, _bc_c)
+                 for _bc_k, _bc_c in NO.CATEGORY_COLORS.items()]
+    NO.CATEGORY_COLORS.clear()
+    NO.CATEGORY_COLORS.update(_bc_order)
+    app.rename_category_everywhere(old, new)
+    app.save_notes()
+    app.update()
+
+
+NO.CATEGORY_COLORS.setdefault('BcDest', '#3388aa')
+_bc_seed([(8130, 'BcRen1', 'Alpha', None), (8131, 'BcRen2', 'Beta', None)])
+app.selection_mode = True
+app.selected_note_ids = {8130, 8131}
+_bc_pick('BcDest')
+check('fixture: the move offers its Undo',
+      app._toast_action is not None and _bc_cats() == {8130: 'BcDest', 8131: 'BcDest'})
+_bc_rename('BcDest', 'BcDest2')
+_bc_rename('Alpha', 'Alpha2')
+check('bulk category: a rename while the Undo is on offer puts the new name on its banner',
+      '“BcDest2”' in str(app.toast_lbl.cget('text'))
+      and app._toast_action is not None)
+app._run_toast_action()
+app.update()
+check('bulk category: ...and the Undo still puts the notes back, into a renamed category too',
+      _bc_cats() == {8130: 'Alpha2', 8131: 'Beta'})
+_bc_rename('Alpha2', 'Alpha')
+NO.CATEGORY_COLORS.pop('BcDest2', None)
+
+# The category the notes went into, deleted while its Undo is on offer, the
+# way Settings deletes one: the deletion has just decided where they go, so
+# the offer goes with it rather than staying up to say "Nothing left".
+NO.CATEGORY_COLORS.setdefault('BcGone', '#aa5533')
+_bc_seed([(8132, 'BcDel', 'Alpha', None)])
+app.selection_mode = True
+app.selected_note_ids = {8132}
+_bc_pick('BcGone')
+check('fixture: the move into the category to delete offers its Undo',
+      app._toast_action is not None and _bc_cats() == {8132: 'BcGone'})
+_bc_real_deletion_ask = app._ask_category_deletion
+app._ask_category_deletion = lambda *a, **k: 'move'
+try:
+    app._delete_category('BcGone', lambda: None)
+finally:
+    app._ask_category_deletion = _bc_real_deletion_ask
+app.update()
+check('bulk category: deleting the category the notes went into withdraws its Undo',
+      app._toast_action is None and not app.toast_frame.winfo_ismapped()
+      and _bc_cats() == {8132: 'General'})
+
 # The editor holding one of the ticked notes, and that note ending in a
 # table -- the shape that once made every table-ending note read as
 # permanently unsaved. Both directions, and nothing but the category may

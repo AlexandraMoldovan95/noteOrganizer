@@ -97,6 +97,15 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+### Fixed
+
+- **A category move's Undo survives a rename.** Move a batch of notes to a category, rename that
+  category in Settings while the Undo is still on offer, and the Undo said "Nothing left to put
+  back" over notes that were still moved: it was looking for the old name. It now follows the
+  rename — the categories the notes came from too — and its banner says the new name. Deleting
+  the category the notes went into ends the offer instead, because that deletion has just moved
+  them to General.
+
 ### Changed
 
 - **Pushing a table down rebuilds the tables once.** In a note that begins with a table, the
@@ -117,6 +126,8 @@ How the numbers themselves are counted is the
   Enter, none on the first letter typed after "Add a line above the table". Mutants TP01–TP02,
   each killed. The burst scene named for the push-down (`tools/visual_scenes.py`) now stages
   one: its note opened with a caption line, so it had been timing an ordinary Enter.
+- The category move's Undo through a rename and a deletion, in qa1: the destination renamed, a
+  source renamed, the destination deleted through Settings. Mutants CU01–CU03, each killed.
 
 ---
 

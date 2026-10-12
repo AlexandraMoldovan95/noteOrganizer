@@ -554,8 +554,10 @@ flips to **Unselect all** once everything on screen is ticked.
 The bar below then acts on what you ticked: **🗑 Trash**, **🗂 Category ▾**, **Export ▾**, and
 **📌 Pin** — which reads **📌 Unpin** when everything you ticked is already pinned, so one button
 covers both directions. Moving a batch to another category asks first and offers a way back, each
-note to the category it actually came from; trashing a batch is undoable from the banner, and the
-notes sit in the Trash besides.
+note to the category it actually came from — still so if you rename a category while the offer
+is up; deleting the category the notes went into ends the offer, since the deletion has just
+moved them to General. Trashing a batch is undoable from the banner, and the notes sit in the
+Trash besides.
 
 ### Templates
 
