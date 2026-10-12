@@ -97,6 +97,20 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+### Added
+
+- **Days off the schedule, found.** A day saved "only this occurrence" keeps its edit under its
+  date, so moving the series' start or changing its rule could leave it on a date the series no
+  longer has: kept in the file, counted on the line above the note as a day keeping its own
+  edits, and shown on no calendar. The line now counts such days apart — "✎ 2 days' own edits
+  are off the schedule — Show them" — and **Show them** goes through them one at a time: **Make
+  it a note** turns the day into an ordinary note on its own date, with that day's title, text,
+  comments, category and colour; **Move to the Trash** does the same into Recently deleted;
+  **Leave it** changes nothing. The calendar History marks them "off the schedule" and opens the
+  same walk, where it used to open a day no calendar showed; a series with an end lists them
+  too, where it listed none. Nothing is moved or dropped by itself: put the rule back and they
+  are days of the series again.
+
 ### Fixed
 
 - **A category move's Undo survives a rename.** Move a batch of notes to a category, rename that
@@ -105,6 +119,10 @@ How the numbers themselves are counted is the
   rename — the categories the notes came from too — and its banner says the new name. Deleting
   the category the notes went into ends the offer instead, because that deletion has just moved
   them to General.
+- **The line above a repeating note keeps all its words.** It ran long — the rule, then the days
+  that keep their own edits — and, centred in one line wider than the editor, lost its first and
+  last words at an ordinary window size: at 1200 px the 🔁 and the "(✎)" were gone. It now wraps
+  to the width it has.
 
 ### Changed
 
@@ -128,6 +146,14 @@ How the numbers themselves are counted is the
   one: its note opened with a caption line, so it had been timing an ordinary Enter.
 - The category move's Undo through a rename and a deletion, in qa1: the destination renamed, a
   source renamed, the destination deleted through Settings. Mutants CU01–CU03, each killed.
+- Days off the schedule: nine unit checks of `off_schedule_days` (a rule changed, a start moved
+  later, past a count, past an end, a deleted day, a month's 31st clamped and skipped) and two of
+  History's marks; in qa5 the series line's count, the walk answered both ways with what each
+  answer leaves behind, typed text saved first, the calendar, a restore from the Trash, the
+  theme, the smallest window, a waiting turn-off, History's rows and click, and the line
+  wrapping. Mutants OS01–OS09, each killed — OS09 only after its check was corrected: it had
+  failed with the mutant for a reason of its own (the line was never drawn again), so its
+  first "killed" proved nothing.
 
 ---
 

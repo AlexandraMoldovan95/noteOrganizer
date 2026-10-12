@@ -2699,5 +2699,132 @@
     "must_fail": ["bulk category: deleting the category the notes went into withdraws its Undo"],
     "suites": ["qa1"],
     "expect": "killed"
+  },
+  {
+    "id": "OS01",
+    "about": "no day a repeating note keeps its own edits for is ever found off its schedule",
+    "edits": [
+      {
+        "file": "noteorganizer/core/recurrence.py",
+        "find": "        if expand_occurrences(schedule, when, when) != [day]:\n            off.append(day)\n",
+        "replace": "        if False:\n            off.append(day)\n"
+      }
+    ],
+    "must_fail": ["a day the rule no longer lands on is off the schedule"],
+    "suites": ["test_recurrence"],
+    "expect": "killed"
+  },
+  {
+    "id": "OS02",
+    "about": "a day deleted from a series counts as a day off its schedule",
+    "edits": [
+      {
+        "file": "noteorganizer/core/recurrence.py",
+        "find": "        if when is None or day in exceptions:\n            continue\n        if expand_occurrences(schedule, when, when)",
+        "replace": "        if when is None:\n            continue\n        if expand_occurrences(schedule, when, when)"
+      }
+    ],
+    "must_fail": ["a day deleted from the series is not counted as off it"],
+    "suites": ["test_recurrence"],
+    "expect": "killed"
+  },
+  {
+    "id": "OS03",
+    "about": "the line above a series counts the days off its schedule as days that keep their own edits",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                n_over = len(note.get(\"overrides\") or {}) - len(off)\n",
+        "replace": "                n_over = len(note.get(\"overrides\") or {})\n"
+      }
+    ],
+    "must_fail": ["the line above a series counts only the days still on its schedule"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "OS04",
+    "about": "a day made a note of its own takes the series' formatting onto text it was never measured on",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            \"formatting\": copy.deepcopy(note.get(\"formatting\") or []) if same_body else [],\n",
+        "replace": "            \"formatting\": copy.deepcopy(note.get(\"formatting\") or []),\n"
+      }
+    ],
+    "must_fail": ["...without the series' formatting, which belongs to other text"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "OS05",
+    "about": "the walk through the days off the schedule does not save the editor first, and loses what was typed",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if not days or self._flush_autosave() is False:\n",
+        "replace": "        if not days:\n"
+      }
+    ],
+    "must_fail": ["...and what was typed before the question is in the series, not lost"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "OS06",
+    "about": "History opens a day off the series' schedule as a day of it, one no calendar shows",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/calendar_view.py",
+        "find": "                        if child.get(\"off_schedule\"):\n",
+        "replace": "                        if False:\n"
+      }
+    ],
+    "must_fail": ["History marks the 2 days off the schedule",
+                  "...and a click on one opens the way in"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "OS07",
+    "about": "the way in to the days off the schedule keeps its hover colour from the theme it was made in",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                         activebackground=\"bg\", activeforeground=\"accent_text\",\n                         highlightbackground=\"bg\", highlightcolor=\"accent\")\n",
+        "replace": "                         activeforeground=\"accent_text\",\n                         highlightbackground=\"bg\")\n"
+      }
+    ],
+    "must_fail": ["the way in takes every colour of a new theme"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "OS08",
+    "about": "the way in to the days off the schedule is offered while a turn-off of the repeat waits",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                if not self._repeat_off_waits():\n                    off = off_schedule_days(note)\n",
+        "replace": "                off = off_schedule_days(note)\n"
+      }
+    ],
+    "must_fail": ["while a turn-off of the repeat waits, the way in is not offered"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "OS09",
+    "about": "the series line above a note is cut at both ends instead of wrapping to the width it has",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        for line in (self.occurrence_banner, self.offschedule_btn):\n            line.bind(",
+        "replace": "        for line in ():\n            line.bind("
+      }
+    ],
+    "must_fail": ["the series line wraps within its width rather than cutting its words"],
+    "suites": ["qa5"],
+    "expect": "killed"
   }
 ]

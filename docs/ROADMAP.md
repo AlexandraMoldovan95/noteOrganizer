@@ -508,11 +508,11 @@ here. None is a bug being chased; each has a reason.
   cut off by 41 px; the code itself can still be selected and copied.
 - *X11 only* — Meta+D, Meta+BackSpace and Meta+Delete (Tk's word deletes, which Windows does not
   have) are not held at a table's edge.
-- *A day's own text on a day the series no longer has* — changing a series' start date or its
-  rule can leave a day's own text (saved "only this occurrence") on a date the new schedule never
-  reaches. It stays in the file, so nothing is lost, but the calendar no longer shows it. Older
-  than the rounds; whether to move it, ask, or keep it findable is a product decision, on the
-  owner's list.
+- *A day's own text on a day the series no longer has* — **settled 2026-10-12, the owner's call:
+  kept, and findable.** The series line counts such days apart and offers to go through them —
+  each made a note of its own, moved to the Trash, or left — and the calendar History marks them
+  instead of opening them as days of the series (see
+  [the recurrence model](ARCHITECTURE.md#recurrence-model)).
 - *Note ids* — an id freed by a delete can be given to the next new note (ids are max + 1). Every
   holder of an id across a delete was checked and acts on the note it means; the one left is a
   keyboard ring that can land on the new note, which is a cursor, not an action.

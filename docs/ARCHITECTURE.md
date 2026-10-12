@@ -190,6 +190,15 @@ actual dates — everything else (calendar rendering, list previews) asks it for
 within a window rather than re-deriving the logic. Editing "just this occurrence" writes an
 override; editing "this and all future" (or the whole series) edits the base note directly.
 
+An override is keyed by its date and nothing moves it, so changing the start or the rule can
+leave one on a date the series no longer has. Such overrides are **kept**, not moved and not
+dropped — the owner's call (2026-10-12): moving guesses which new day an edit meant, and
+dropping loses text, while kept they come back by themselves if the rule is put back.
+`off_schedule_days(note)` names them, asking `expand_occurrences` about each date, so it
+cannot disagree with the calendar; the series line counts them apart and offers the walk that
+turns each into a note of its own or a Trash entry (`_show_off_schedule_days`), and the
+calendar History marks them rather than opening them as days of the series.
+
 ### An import asks first, and acts after
 
 An import that meets notes this device already has (a share code or a backup) asks every

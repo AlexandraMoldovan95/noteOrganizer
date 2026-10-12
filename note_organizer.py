@@ -402,6 +402,7 @@ from noteorganizer.core.recurrence import (
     expand_occurrences,
     next_occurrence_on_or_after,
     effective_note,
+    off_schedule_days,
     describe_recurrence,
 )
 
@@ -13637,6 +13638,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             anchor="center"
         )
         self.track_theme(self.occurrence_banner, bg="bg", fg="accent_text")
+        # Under the series line, only while a day's own edit sits on a date
+        # the series no longer has (_update_occurrence_banner): the one way
+        # to them. Long-lived, so every colour it has follows the theme --
+        # hover and the keyboard's ring as well as its words.
+        self.offschedule_btn = tk.Button(
+            self.editor, text="", relief="flat", cursor="hand2", bd=0,
+            font=("Segoe UI", 9, "bold"), command=self._show_off_schedule_days)
+        self.track_theme(self.offschedule_btn, bg="bg", fg="accent_text",
+                         activebackground="bg", activeforeground="accent_text",
+                         highlightbackground="bg", highlightcolor="accent")
+        # Both wrap to the width they have instead of being cut at both
+        # ends: the series line runs long ("Every week on Mon, Tue, Wed,
+        # until ...", then the days that keep their own edits), and centred
+        # wider than the editor it lost its first and last words -- seen at
+        # 1200 px, the 🔁 and the "(✎)" gone (2026-10-12).
+        for line in (self.occurrence_banner, self.offschedule_btn):
+            line.bind("<Configure>", lambda e, w=line: w.configure(
+                wraplength=max(120, e.width - 8)), add="+")
 
         top_row = tk.Frame(self.editor)
         self.track_theme(top_row, bg="bg")
@@ -14678,6 +14697,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         occ = getattr(self, "current_occurrence_date", None)
         text = ""
+        off = []
         if occ:
             day = parse_date(occ)
             pretty = show_day(day) if day else occ
@@ -14692,10 +14712,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if note is not None and is_recurring(note):
                 text = (f"🔁 This note repeats ({describe_recurrence(note)}) "
                         "— edits here apply to every day")
-                n_over = len(note.get("overrides") or {})
+                # A day the schedule no longer reaches is counted apart, and
+                # shown with its own way in below: counted here as a day that
+                # keeps its edits, it was a day no calendar could show. Not
+                # while a turn-off of the repeat waits: every day goes then.
+                if not self._repeat_off_waits():
+                    off = off_schedule_days(note)
+                n_over = len(note.get("overrides") or {}) - len(off)
                 if n_over == 1:
                     text += " · 1 day keeps its own edits (✎)"
-                elif n_over:
+                elif n_over > 1:
                     text += f" · {n_over} days keep their own edits (✎)"
         if text:
             self.occurrence_banner.config(text=text)
@@ -14704,6 +14730,112 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                             before=self.editor_top_row)
         else:
             self.occurrence_banner.pack_forget()
+        if off:
+            self.offschedule_btn.config(text=(
+                "✎ 1 day's own edits are off the schedule — Show it"
+                if len(off) == 1 else
+                f"✎ {len(off)} days' own edits are off the schedule — Show them"))
+            if not self._is_placed(self.offschedule_btn):
+                self.offschedule_btn.pack(fill="x", padx=30, pady=(2, 0),
+                                          before=self.editor_top_row)
+        else:
+            self.offschedule_btn.pack_forget()
+
+    def _show_off_schedule_days(self, note=None):
+        """Walk the days a repeating note keeps its own edits for that its
+        schedule no longer reaches (off_schedule_days), one question each:
+        make the day a note of its own, move it to the Trash, or leave it.
+
+        One day at a time, in the app's own question box: its keyboard, its
+        theme and its Escape-gives-the-safe-answer are why it exists, and a
+        list window would have had to earn all three again. Leaving a day
+        changes nothing; it stays where it was, and so does the way in."""
+        if note is None:
+            note = self.find_note(self.selected_note_id)
+        if note is None:
+            return
+        days = off_schedule_days(note)
+        # What the editor holds is saved first, as every route that writes a
+        # note behind the editor saves it (_editor_follows_external_change).
+        if not days or self._flush_autosave() is False:
+            self._update_occurrence_banner()
+            return
+        made = trashed = 0
+        for index, day in enumerate(days, start=1):
+            # Asked again each time: the question waits, and a timer's save
+            # can have changed the note under it.
+            if not any(n is note for n in self.notes) or \
+                    day not in (note.get("overrides") or {}):
+                continue
+            shown = effective_note(note, day)
+            when = parse_date(day)
+            title = (shown.get("title") or "").strip() or "Untitled"
+            text, _tables = core_tables.preview_text(shown.get("body") or "")
+            text = " ".join(text.split())
+            if len(text) > 160:
+                text = text[:160].rstrip() + "…"
+            choice = self._themed_dialog(
+                f"Day {index} of {len(days)} off the schedule",
+                f"{show_day(when) if when else day} — “{title}”"
+                + (f"\n{text}" if text else "")
+                + f"\n\nThis day keeps its own edits, but the repeat "
+                f"({describe_recurrence(note)}) no longer lands on it, so the "
+                "calendar does not show it.\n\nA note of its own puts it back "
+                "on the calendar, on its day. The Trash keeps it "
+                f"{trash_retention_days()} days.",
+                kind="question",
+                buttons=[("Leave it", "keep"), ("Move to the Trash", "trash"),
+                         ("Make it a note", "note")],
+                default="Make it a note")
+            if choice in ("note", "trash"):
+                self._settle_off_schedule_day(note, day, choice)
+                made += choice == "note"
+                trashed += choice == "trash"
+        if made or trashed:
+            note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            self.save_notes()
+            self._editor_follows_external_change({note.get("id")})
+            self.refresh_note_list()
+            self.render_calendar()
+            said = []
+            if made:
+                said.append(f"{made} made a note of its own" if made == 1
+                            else f"{made} made notes of their own")
+            if trashed:
+                said.append(f"{trashed} moved to the Trash")
+            self.set_status("Days off the schedule: " + ", ".join(said))
+        self._update_occurrence_banner()
+
+    def _settle_off_schedule_day(self, note, day, how):
+        """One day off *note*'s schedule made a note of its own (*how* is
+        "note") or moved to the Trash as one ("trash"), and taken out of the
+        series. The new note holds what that day showed: its title, text,
+        comments, category and colour, on its date. The series' formatting
+        comes along only where the day's text is the series' own -- the day
+        view applies it on no other text, its offsets would land on the
+        wrong characters. The checklist and the files stay with the series:
+        they were never the day's."""
+        shown = effective_note(note, day)
+        same_body = shown.get("body") == note.get("body")
+        stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        fresh = normalize_note({
+            "id": max([n["id"] for n in self.notes], default=0) + 1,
+            "title": shown.get("title") or "",
+            "body": shown.get("body") or "",
+            "formatting": copy.deepcopy(note.get("formatting") or []) if same_body else [],
+            "paragraphs": copy.deepcopy(note.get("paragraphs") or []),
+            "comments": shown.get("comments") or "",
+            "category": shown.get("category") or note.get("category"),
+            "color": shown.get("color") or "",
+            "date": day,
+            "created": stamp,
+            "updated": stamp,
+        })
+        note["overrides"].pop(day, None)
+        if how == "trash":
+            self._move_notes_to_trash([fresh])
+        else:
+            self.notes.append(fresh)
 
 
 

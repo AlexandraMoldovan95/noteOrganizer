@@ -99,6 +99,7 @@ __all__ = [
     "next_occurrence_on_or_after",
     "history_entries",
     "effective_note",
+    "off_schedule_days",
     "describe_recurrence",
 ]
 
@@ -811,6 +812,13 @@ def history_entries(notes, query="", year_bucket="All", today=None, memo=None):
                 known = memo[key] = {"occ_days": occ_days,
                                      "freq_label": describe_recurrence(note)}
             occ_days = known["occ_days"]
+            # The days whose own edits the schedule no longer reaches, worked
+            # out once per set of edited days as well (off_schedule_days).
+            off_key = ("off", key, tuple(sorted(
+                d for d in overrides if isinstance(d, str))))
+            off = memo.get(off_key)
+            if off is None:
+                off = memo[off_key] = frozenset(off_schedule_days(note))
 
             children = []
             any_child_match = False
@@ -833,7 +841,29 @@ def history_entries(notes, query="", year_bucket="All", today=None, memo=None):
                         "date": day,
                         "title": (ov.get("title") or title),
                         "edited": edited,
+                        "off_schedule": False,
                     })
+                # A bounded series lists its days from its rule, so a day it
+                # no longer has was in no row at all: listed here too, marked.
+                for day in off:
+                    if not bucket_ok(day):
+                        continue
+                    ov = overrides.get(day)
+                    ov = ov if isinstance(ov, dict) else {}
+                    child_match = _history_match(
+                        query, ov.get("title"), ov.get("body"),
+                        ov.get("comments"))
+                    if not (child_match or base_matches):
+                        continue
+                    if query and child_match:
+                        any_child_match = True
+                    children.append({
+                        "date": day,
+                        "title": (ov.get("title") or title),
+                        "edited": True,
+                        "off_schedule": True,
+                    })
+                children.sort(key=lambda c: c["date"], reverse=True)
             else:
                 children_kind = "edited"
                 for day, override in sorted(overrides.items(), reverse=True):
@@ -856,6 +886,9 @@ def history_entries(notes, query="", year_bucket="All", today=None, memo=None):
                         "date": day,
                         "title": (override.get("title") or title),
                         "edited": True,
+                        # Listed as a day of the series, and opened as one: a
+                        # day the calendar does not have.
+                        "off_schedule": day in off,
                     })
 
             base_in_bucket = bucket_ok(note.get("date") or "")
@@ -872,7 +905,9 @@ def history_entries(notes, query="", year_bucket="All", today=None, memo=None):
                     "children_kind": children_kind,
                     "n_occurrences": (len(occ_days) if occ_days is not None
                                       else None),
-                    "n_edited": sum(1 for c in children if c["edited"]),
+                    "n_edited": sum(1 for c in children
+                                    if c["edited"] and not c["off_schedule"]),
+                    "n_off": sum(1 for c in children if c["off_schedule"]),
                     "auto_expand": any_child_match,
                     "_sort": sort_date,
                 }
@@ -947,6 +982,44 @@ def effective_note(note, occurrence_date):
         if field in override:
             merged[field] = override[field]
     return merged
+
+
+def off_schedule_days(note):
+    """The days a repeating note keeps its own edits for that its schedule
+    no longer reaches, oldest first.
+
+    A day saved "only this occurrence" keeps its edit under its date. Change
+    the series' start date or its rule afterwards and the edit stays in the
+    note, on a date the series no longer lands on: the calendar does not
+    show it, and nothing else said it was there. The answer comes from
+    :func:`expand_occurrences` itself, asked about that one day, so it
+    cannot disagree with the calendar. A day deleted from the series (its
+    date in ``exceptions``) is not counted: it was taken out on purpose.
+
+    Args:
+        note: The note dict. Any note is accepted; one that does not repeat
+            has no schedule to fall off, and gets an empty list.
+
+    Returns:
+        A sorted list of ``"YYYY-MM-DD"`` strings.
+    """
+    if not is_recurring(note):
+        return []
+    overrides = note.get("overrides")
+    if not isinstance(overrides, dict) or not overrides:
+        return []
+    exceptions = set(note.get("exceptions") or [])
+    # Asked with no day skipped, so a skipped day reads as on the schedule
+    # here -- and is left out above, as a deletion rather than a fall.
+    schedule = dict(note, exceptions=[])
+    off = []
+    for day in sorted(d for d in overrides if isinstance(d, str)):
+        when = parse_date(day)
+        if when is None or day in exceptions:
+            continue
+        if expand_occurrences(schedule, when, when) != [day]:
+            off.append(day)
+    return off
 
 
 def describe_recurrence(note):

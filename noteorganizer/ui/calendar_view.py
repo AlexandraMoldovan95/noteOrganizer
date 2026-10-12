@@ -1647,6 +1647,8 @@ class CalendarViewMixin:
                     suffix = (f" · {n_kids} edited day"
                               f"{'s' if n_kids != 1 else ''} (✎)"
                               if n_kids else "")
+                if entry.get("n_off"):
+                    suffix += f" · {entry['n_off']} off the schedule"
                 if expandable:
                     glyph = "▾" if expanded else "▸"
                     row_cmd = (lambda i=entry["note_id"]:
@@ -1670,6 +1672,22 @@ class CalendarViewMixin:
                 if expanded:
                     for child in entry["children"]:
                         mark = "✎" if child.get("edited") else "•"
+                        if child.get("off_schedule"):
+                            # A day the series no longer lands on: opened as
+                            # one, it was a day no calendar could show, and
+                            # its menu offered to delete a day that was not
+                            # there. It opens the walk through such days.
+                            one_row(
+                                self._history_rows,
+                                (f"{mark} {show_date(child['date'])}   ",
+                                 child['title'] or '(untitled)',
+                                 "  · off the schedule"),
+                                self.colors["subtext"],
+                                lambda n=note: self._history_off_schedule(n),
+                                context_cmd=lambda e, n=note:
+                                    self.show_note_context_menu(e, n),
+                                indent=26)
+                            continue
                         one_row(
                             self._history_rows,
                             (f"{mark} {show_date(child['date'])}   ",
@@ -1715,6 +1733,13 @@ class CalendarViewMixin:
             self._history_expanded.discard(note_id)
         else:
             self._history_expanded.add(note_id)
+        self._render_calendar_history()
+
+    def _history_off_schedule(self, note):
+        """A History row for a day the series no longer lands on: the walk
+        through such days (_show_off_schedule_days), then the register
+        drawn again for what it changed. It writes nothing itself."""
+        self._show_off_schedule_days(note)
         self._render_calendar_history()
 
     def _history_show_more(self):

@@ -3251,6 +3251,189 @@ check(f'Restore previous right after a big delete brings the deleted words '
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
 
+# ---- DAYS OFF THE SCHEDULE: KEPT, AND FOUND ----
+# A day saved "only this occurrence" keeps its edit under its date. Moving the
+# series' start or changing its rule afterwards left that edit on a date the
+# series no longer has: counted on the line above the note as a day keeping
+# its edits, on no calendar. The owner's call (2026-10-12): kept, and findable.
+from noteorganizer.ui import calendar_view as _os_cv
+NO.CATEGORY_COLORS.setdefault('Work', '#4cc9f0')
+
+
+def _os_seed():
+    app.new_note(); app.update()
+    app.notes = [
+        NO.normalize_note({
+            'id': 1, 'title': 'Stand-up', 'body': 'series text', 'category': 'General',
+            # Weekly, now on Tuesdays: the Monday edits are off its schedule.
+            'date': '2026-09-08', 'recurrence': {'freq': 'weekly', 'weekdays': [1]},
+            'formatting': [{'start': 0, 'end': 6, 'style': 'bold'}],
+            'checklist': [{'text': 'agenda', 'done': False}],
+            'overrides': {
+                '2026-09-15': {'title': 'Stand-up (room 2)'},
+                '2026-09-14': {'title': 'Stand-up 10:00', 'body': 'moved to Monday',
+                               'category': 'Work'},
+                '2026-09-21': {'body': 'series text', 'comments': 'kept'}}}),
+        NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'x'})]
+    app.save_notes()
+    app.trash = []
+    NO.save_trash(app.trash)
+    app.open_note_in_tab(app.find_note(1)); app.update()
+    app._cancel_pending_autosave()
+
+
+def _os_walk(answers):
+    """Press the way in, answering each day's question in turn; returns the
+    questions' titles and messages."""
+    asked, queue = [], list(answers)
+    real = app._themed_dialog
+    app._themed_dialog = lambda title, message, *a, **k: (
+        asked.append((title, message)), queue.pop(0) if queue else 'keep')[1]
+    try:
+        app.offschedule_btn.invoke(); app.update()
+    finally:
+        app._themed_dialog = real
+    return asked
+
+
+_os_seed()
+_os_btn = app.offschedule_btn
+check(f'the line above a series counts only the days still on its schedule ({_rn_banner()!r})',
+      _rn_banner().endswith(' · 1 day keeps its own edits (✎)'))
+check(f'...and gives the 2 days off it a way in of their own ({_os_btn.cget("text")!r})',
+      bool(_os_btn.winfo_ismapped())
+      and str(_os_btn.cget('text')).startswith("✎ 2 days' own edits are off the schedule"))
+
+_os_asked = _os_walk(['note', 'trash'])
+check(f'the way in asks about each day in turn ({[t for t, _ in _os_asked]})',
+      [t for t, _ in _os_asked] == ['Day 1 of 2 off the schedule', 'Day 2 of 2 off the schedule'])
+check('...naming the day, its title and its own text',
+      'Monday, 14 September 2026' in _os_asked[0][1]
+      and '“Stand-up 10:00”' in _os_asked[0][1]
+      and 'moved to Monday' in _os_asked[0][1])
+_os_new = next((n for n in app.notes if n.get('title') == 'Stand-up 10:00'), None)
+check("a day made a note of its own holds that day's title, text, category and date",
+      _os_new is not None and _os_new.get('date') == '2026-09-14'
+      and _os_new.get('body') == 'moved to Monday' and _os_new.get('category') == 'Work'
+      and not (_os_new.get('recurrence') or {}).get('freq'))
+check("...without the series' formatting, which belongs to other text, nor its checklist",
+      _os_new is not None and _os_new.get('formatting') == []
+      and _os_new.get('checklist') == [] and _os_new.get('uid') != app.find_note(1).get('uid'))
+_os_tr = next((e for e in app.trash if e.get('date') == '2026-09-21'), None)
+check("a day moved to the Trash goes as a note, with the series' formatting where its text is the series' own",
+      _os_tr is not None and _os_tr.get('title') == 'Stand-up'
+      and _os_tr.get('comments') == 'kept'
+      and _os_tr.get('formatting') == [{'start': 0, 'end': 6, 'style': 'bold'}])
+_os_s = app.find_note(1)
+check('the series keeps the day still on its schedule, and its checklist',
+      sorted(_os_s.get('overrides') or {}) == ['2026-09-15']
+      and [i['text'] for i in _os_s.get('checklist') or []] == ['agenda'])
+check('...and the way in is gone with the days',
+      not _os_btn.winfo_ismapped()
+      and _rn_banner().endswith(' · 1 day keeps its own edits (✎)'))
+app.cal_year, app.cal_month = 2026, 9
+app.render_calendar(); app.update()
+check('the new note is on the calendar, on its day',
+      _os_new is not None
+      and _os_new['id'] in [n.get('id') for n in _os_cv._notes_on_day(app, '2026-09-14')])
+check("the editor still holds the series, as saved",
+      app.selected_note_id == 1
+      and app.editor_state_matches_saved(app.capture_editor_state()))
+if _os_tr is not None:
+    app._restore_from_trash(_os_tr); app.update()
+check('the day moved to the Trash comes back from it as a note on its day',
+      any(n.get('date') == '2026-09-21' and n.get('title') == 'Stand-up'
+          and n is not app.find_note(1) for n in app.notes))
+
+# Leaving a day changes nothing, and keeps its way in. And text typed and not
+# yet saved goes into the series first, as on every route that writes behind
+# the editor: the editor is filled from the note again once a day is made a
+# note, and that refill saves nothing (_editor_follows_external_change).
+_os_seed()
+app.body_text.insert('end', ' typed before')
+_os_asked = _os_walk(['note', 'keep'])
+check('"Leave it" keeps a day where it was, and its way in',
+      len(_os_asked) == 2
+      and sorted(app.find_note(1).get('overrides') or {}) == ['2026-09-15', '2026-09-21']
+      and bool(app.offschedule_btn.winfo_ismapped())
+      and str(app.offschedule_btn.cget('text')).startswith("✎ 1 day's own edits"))
+check('...and what was typed before the question is in the series, not lost',
+      app.find_note(1).get('body', '').endswith('typed before')
+      and app.body_text.get('1.0', 'end-1c').endswith('typed before'))
+
+# The way in is a long-lived widget: every colour it has follows the theme.
+_os_seed()
+app.set_theme('light'); app.update()
+_os_colors = (str(_os_btn.cget('bg')), str(_os_btn.cget('activebackground')),
+              str(_os_btn.cget('highlightcolor')), str(_os_btn.cget('fg')))
+check(f'the way in takes every colour of a new theme ({_os_colors})',
+      _os_colors == (app.colors['bg'], app.colors['bg'], app.colors['accent'],
+                     app.colors['accent_text']))
+app.set_theme('dark'); app.update()
+
+# At the smallest window the way in wraps within the line it has. (The window
+# then scrolls the whole editor sideways, as it always has; this asks only
+# that the line itself is not wider than the room it is given.)
+_os_geo = app.geometry()
+app.geometry('640x600'); app.update()
+check(f'at the smallest window the way in wraps within its line '
+      f'({_os_btn.winfo_reqwidth()} of {_os_btn.winfo_width()})',
+      _os_btn.winfo_reqwidth() <= _os_btn.winfo_width() + 1)
+app.geometry(_os_geo); app.update()
+
+# The series line runs long with a long rule; centred and unwrapped it lost
+# its first and last words at an ordinary window size (seen at 1200 px).
+app.find_note(1)['recurrence'] = NO.normalize_recurrence(
+    {'freq': 'weekly', 'weekdays': [0, 1, 2, 3, 4], 'end': '2026-12-31'})
+app.save_notes()
+# The note is open already, so opening it again draws nothing anew: the line
+# is asked for again, as every route that changes a series asks for it.
+app._update_occurrence_banner(); app.update()
+_os_line = app.occurrence_banner
+check(f'the series line wraps within its width rather than cutting its words '
+      f'({_os_line.winfo_reqwidth()} of {_os_line.winfo_width()})',
+      'Mon, Tue, Wed, Thu, Fri' in _rn_banner()
+      and _os_line.winfo_reqwidth() <= _os_line.winfo_width() + 1)
+
+# While a turn-off of the repeat waits, every day goes with it: no way in.
+_os_ok = _rn_pick(NO.FREQ_LABELS[''])
+app._update_occurrence_banner(); app.update()
+check('while a turn-off of the repeat waits, the way in is not offered',
+      _os_ok and not _os_btn.winfo_ismapped())
+_rn_pick(NO.FREQ_LABELS['weekly'])
+app._cancel_pending_autosave()
+
+# History: a day the series no longer has was listed as one of its days, and
+# opened as a day no calendar shows. It is marked, and opens the way in.
+_os_seed()
+app.notebook.select(app.TAB_CALENDAR); app.update()
+app._toggle_calendar_history(); app.update()
+app._history_toggle_group(1); app.update()
+_os_labels = [str(w.cget('text')) for w in _rn_walk(app._history_rows)
+              if isinstance(w, tk.Label)]
+# The day rows, not the series row, which counts them ("· 2 off the schedule").
+_os_rows = [w for w in _rn_walk(app._history_rows)
+            if isinstance(w, tk.Label) and str(w.cget('text')).startswith('✎')
+            and 'off the schedule' in str(w.cget('text'))]
+check(f'History marks the 2 days off the schedule ({len(_os_rows)})', len(_os_rows) == 2)
+check('...and the series row counts them',
+      any('🔁' in t and '· 2 off the schedule' in t for t in _os_labels))
+_os_asked = []
+_os_real = app._themed_dialog
+app._themed_dialog = lambda title, message, *a, **k: (_os_asked.append(title), 'keep')[1]
+try:
+    if _os_rows:
+        _qa_click(_os_rows[0]); app.update()
+finally:
+    app._themed_dialog = _os_real
+check(f'...and a click on one opens the way in, not a day the calendar lacks ({_os_asked})',
+      _os_asked[:1] == ['Day 1 of 2 off the schedule'])
+app._toggle_calendar_history(); app.update()
+app.notebook.select(app.TAB_NOTES); app.update()
+app.new_note(); app.update()
+app.notes = []; app.save_notes()
+app.trash = []; NO.save_trash(app.trash)
+
 print(f"=== QA5 FAILURES: {fails if fails else 'NONE'} ===")
 
 sys.exit(1 if fails else 0)

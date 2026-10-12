@@ -148,6 +148,10 @@ RULES = [
             "save_current_note": "builds the note being saved",
             "do_save": "builds the template being saved",
             "collect": "builds the template the settings editor is editing",
+            "_settle_off_schedule_day":
+                "builds the note a day off its series' schedule becomes; its "
+                "one comparison asks whether the day shows the series' own "
+                "text, the rule load_note applies the formatting by",
             "editor_state_matches_saved":
                 "the OCCURRENCE branch compares only OVERRIDABLE_FIELDS, "
                 "because an override carries exactly those -- comparing "

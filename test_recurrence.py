@@ -241,6 +241,59 @@ check('"Older" catches everything before two years ago',
 check('"2 years ago" is its own bucket, not part of Older',
       _hist(_h_notes, year_bucket='2 years ago', today=_H_TODAY) == [])
 
+# ---- off_schedule_days: a day's own edit the schedule no longer reaches ----
+# A day saved "only this occurrence" keeps its edit under its date; change
+# the start or the rule afterwards and the edit stays, on a date the series
+# no longer has -- shown nowhere, and nothing said so.
+from noteorganizer.core.recurrence import off_schedule_days as _off
+_ov = {'title': 'Own', 'body': 'own text', 'comments': '', 'category': 'General', 'color': ''}
+
+
+def _series(rule, date='2026-09-07', overrides=('2026-09-14',), exceptions=()):
+    return {'id': 1, 'title': 'S', 'body': 'b', 'date': date, 'recurrence': rule,
+            'overrides': {d: dict(_ov) for d in overrides},
+            'exceptions': list(exceptions)}
+
+
+check('a day still on the schedule is not off it',
+      _off(_series({'freq': 'weekly', 'weekdays': [0]})) == [])
+check('a day the rule no longer lands on is off the schedule (Monday -> Tuesday)',
+      _off(_series({'freq': 'weekly', 'weekdays': [1]})) == ['2026-09-14'])
+check('a day before a start date moved later is off the schedule',
+      _off(_series({'freq': 'weekly', 'weekdays': [0]}, date='2026-09-21')) == ['2026-09-14'])
+check('a day past the count is off the schedule',
+      _off(_series({'freq': 'weekly', 'weekdays': [0], 'count': 1})) == ['2026-09-14'])
+check('a day past the end date is off the schedule',
+      _off(_series({'freq': 'weekly', 'weekdays': [0], 'end': '2026-09-10'})) == ['2026-09-14'])
+check('a day deleted from the series is not counted as off it',
+      _off(_series({'freq': 'weekly', 'weekdays': [1]}, exceptions=['2026-09-14'])) == [])
+check('a note that does not repeat has no schedule to fall off',
+      _off(_series({})) == [])
+check('the days come back sorted, and a key that is no date is ignored',
+      _off(_series({'freq': 'weekly', 'weekdays': [2]},
+                   overrides=('2026-09-21', 'not a date', '2026-09-14')))
+      == ['2026-09-14', '2026-09-21'])
+check("a month's 31st clamped to the 30th is on the schedule; skipped, it is off",
+      _off(_series({'freq': 'monthly', 'month_days': [31]}, date='2026-08-31',
+                   overrides=('2026-09-30',))) == []
+      and _off(_series({'freq': 'monthly', 'month_days': [31], 'month_day_policy': 'skip'},
+                       date='2026-08-31', overrides=('2026-09-30',))) == ['2026-09-30'])
+
+# ...and the History says so: an unbounded series listed such a day as one of
+# its days, and a bounded one did not list it at all.
+_oh = _hist([_series({'freq': 'weekly', 'weekdays': [1]},
+                     overrides=('2026-09-14', '2026-09-15'))], today=_H_TODAY)[0]
+check('History marks an unbounded series\' day that is off the schedule',
+      [(c['date'], c['off_schedule']) for c in _oh['children']]
+      == [('2026-09-15', False), ('2026-09-14', True)]
+      and _oh['n_off'] == 1 and _oh['n_edited'] == 1)
+_ob = _hist([_series({'freq': 'weekly', 'weekdays': [0], 'count': 2},
+                     overrides=('2026-09-14', '2026-09-28'))], today=_H_TODAY)[0]
+check('History lists a bounded series\' day that is off the schedule, marked, in date order',
+      [(c['date'], c['off_schedule']) for c in _ob['children']]
+      == [('2026-09-28', True), ('2026-09-14', False), ('2026-09-07', False)]
+      and _ob['n_off'] == 1 and _ob['n_edited'] == 1 and _ob['n_occurrences'] == 2)
+
 # ---------------------------------------------------------------------
 # is_recurring on a note that never went through normalize_note.
 #
