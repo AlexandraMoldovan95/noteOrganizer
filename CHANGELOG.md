@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.90.373](#090373--2026-10-12) | 2026-10-12 | Days a repeating note keeps its own edits for, left off its schedule, found and turned into notes of their own; a category move's Undo that survives a rename; the line above a repeating note keeping all its words. |
 | [0.89.371](#089371--2026-10-08) | 2026-10-08 | What AI reviewers of colour-blindness simulations hesitated over: a boxed find match, a raised open tab with no dotted box after a click, letters that read on every colour you pick — and every icon the app uses in the emoji picker. |
 | [0.89.365](#089365--2026-10-08) | 2026-10-08 | Every coloured word and button readable in every theme, Save and Delete told apart without colour, and a dark red fill kept for what cannot be undone. |
 | [0.89.362](#089362--2026-10-08) | 2026-10-08 | A welcome note that greets a first start and shows each part of the app, and emoji from the app's own pickers that leave no gap after them. |
@@ -96,6 +97,10 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+---
+
+## [0.90.373] — 2026-10-12
 
 ### Added
 
