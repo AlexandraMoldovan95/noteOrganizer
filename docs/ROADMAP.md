@@ -20,9 +20,8 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
 
 - **Follow-ups the audit programme scoped out** (see
   [Known limitations](#known-limitations) for the full residuals list): fonts inside table
-  cells (the phase deliberately deferred in the 0.64.95 cycle); an end-to-end GUI check for
-  re-importing an overlapping backup; a pixel-level investigation of the post-push-down second
-  grid rebuild before any de-flicker fix is trusted.
+  cells (the phase deliberately deferred in the 0.64.95 cycle); a pixel-level investigation of
+  the post-push-down second grid rebuild before any de-flicker fix is trusted.
 
 - **Small candidates from the 2026-08-31 idea pass** (put aside deliberately, in rough order of
   appeal; two candidates from that pass have since shipped — see
@@ -480,9 +479,9 @@ bug being chased.
   commit. Declared during the audit and recorded here because, unlike its siblings, it had no
   home in the repo at all — it lived only in a conversation. Cosmetic, and it needs the same
   pixel-level look as the push-down rebuild above before any fix is trusted.
-- *Zip-import overlap has no end-to-end test* — the re-import-your-own-backup attachment remap
-  is unit-covered through its shared helper and review-verified end to end; a full GUI round-trip
-  check remains worth writing.
+- *Zip-import overlap has no end-to-end test* — **settled 2026-10-12.** qa3 now walks re-importing
+  your own backup with a file attached through the real export and import, every answer and a
+  delete for good included (mutants RB01–RB03).
 
 **Break-it residuals (2026-10)** — nineteen rounds of agents tried to break the app (see the
 [Changelog](../CHANGELOG.md)); what they measured and the fixes deliberately left is recorded

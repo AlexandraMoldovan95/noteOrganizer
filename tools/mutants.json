@@ -2580,5 +2580,53 @@
     "must_fail": ["every calendar day marker is one the emoji picker offers too"],
     "suites": ["test_data_safety"],
     "expect": "killed"
+  },
+  {
+    "id": "RB01",
+    "about": "a note added again from your own backup shares the original's file instead of getting its own",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            for a in note.get(\"attachments\", []):\n                if not isinstance(a, dict):\n                    continue\n                name = a.get(\"stored_as\")\n                if name in claimed:\n",
+        "replace": "            for a in note.get(\"attachments\", []):\n                if not isinstance(a, dict):\n                    continue\n                name = a.get(\"stored_as\")\n                if False and name in claimed:\n"
+      }
+    ],
+    "must_fail": ["...\"Add a copy anyway\" gives the copy a file of its own",
+                  "deleting the copy for good removes its file"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "RB02",
+    "about": "updating a note from your own backup attaches the file it already has a second time (both guards gone: the list of files to adopt and the adoption itself)",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                if att.get(\"stored_as\") and att.get(\"stored_as\") not in have]\n",
+        "replace": "                if att.get(\"stored_as\")]\n"
+      },
+      {
+        "file": "note_organizer.py",
+        "find": "            if name in have:\n                continue\n",
+        "replace": "            if False and name in have:\n                continue\n"
+      }
+    ],
+    "must_fail": ["...\"Update\" attaches the shared file once, and leaves no file behind"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "RB03",
+    "about": "a backup listing one new file twice gets it attached twice: the adoption's own guard is gone",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if name in have:\n                continue\n",
+        "replace": "            if False and name in have:\n                continue\n"
+      }
+    ],
+    "must_fail": ["...and a backup listing one new file twice attaches it once"],
+    "suites": ["qa3"],
+    "expect": "killed"
   }
 ]

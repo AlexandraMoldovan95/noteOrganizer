@@ -97,6 +97,15 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+### Testing
+
+- Re-importing your own backup with a file attached, walked end to end in qa3 — the real export
+  and import, the worker thread and Recently deleted: "Skip it" leaves no file nobody owns, "Add
+  a copy anyway" gives the copy a file of its own that deleting it for good takes without the
+  original's, "Update" attaches the shared file once, and a backup listing one new file twice
+  attaches it once. Mutants RB01–RB03, each killed; the second needs both of the update's guards
+  gone, because each covers the other.
+
 ---
 
 ## [0.89.371] — 2026-10-08

@@ -2652,6 +2652,159 @@ check(f'"Add copies anyway" adds the note again as its own note '
       and any('Added 1 note' in s for s in _ie_info))
 if os.path.exists(_iezip):
     os.remove(_iezip)
+
+# ---- YOUR OWN BACKUP AGAIN, WITH A FILE: EVERY ANSWER, END TO END ----
+# The overlap the import's claimed-file rule exists for: the backup's note
+# is the note already here, and its file is the file already here. Each
+# answer must leave every note owning a file of its own and no file owned
+# by nobody -- or deleting one note for good takes the other's file with
+# it. The rule was covered through its helper and by review; this walks the
+# real export and import, worker thread and Recently deleted included.
+app.open_blank_tab(); app.update()
+app.trash = []; NO.save_trash(app.trash)
+os.makedirs(NO.ATTACHMENTS_DIR, exist_ok=True)
+_ra_file = 'qa3_reimport_receipt.txt'
+with open(os.path.join(NO.ATTACHMENTS_DIR, _ra_file), 'w', encoding='utf-8') as _fh:
+    _fh.write('the receipt')
+app.notes = [NO.normalize_note({
+    'id': 1, 'title': 'Receipts', 'body': 'March',
+    'attachments': [{'filename': 'receipt.txt', 'stored_as': _ra_file}]})]
+app.save_notes()
+_ra_uid = app.notes[0]['uid']
+_ra_zip = os.path.join(tempfile.gettempdir(), 'qa3_reimport_attached.zip')
+if os.path.exists(_ra_zip):
+    os.remove(_ra_zip)
+fd.asksaveasfilename = lambda **k: _ra_zip
+app.export_data()
+t0 = time.time()
+while app._export_state is not None and time.time() - t0 < 5:
+    app.update()
+check('fixture: the backup holding the note and its file is written',
+      os.path.isfile(_ra_zip))
+
+
+def _ra_files():
+    return sorted(os.listdir(NO.ATTACHMENTS_DIR))
+
+
+def _ra_import(answer):
+    """Import the backup, answering every question with *answer*; returns
+    the questions' titles."""
+    asked = []
+    real_dlg, real_info = app._themed_dialog, app.show_info
+    app._themed_dialog = lambda *a, **k: (asked.append(a[0]), answer)[1]
+    app.show_info = lambda *a, **k: None
+    fd.askopenfilename = lambda **k: _ra_zip
+    try:
+        app.import_data()
+        t0 = time.time()
+        while app._import_state is not None and time.time() - t0 < 8:
+            app.update()
+    finally:
+        app._themed_dialog, app.show_info = real_dlg, real_info
+    return asked
+
+
+def _ra_owned(note):
+    return [a.get('stored_as') for a in note.get('attachments') or []]
+
+
+_ra_before = _ra_files()
+_ra_asked = _ra_import('skip')
+check(f'your own backup with a file again asks only "already here" ({_ra_asked})',
+      _ra_asked == ['Already here, unchanged'])
+check('..."Skip it" leaves one note, its file, and no file nobody owns',
+      len(app.notes) == 1 and _ra_owned(app.notes[0]) == [_ra_file]
+      and _ra_files() == _ra_before)
+
+_ra_import('copies')
+_ra_copy = next((n for n in app.notes if n.get('uid') != _ra_uid), None)
+_ra_copy_file = (_ra_owned(_ra_copy) or [None])[0] if _ra_copy else None
+check('..."Add a copy anyway" gives the copy a file of its own',
+      len(app.notes) == 2 and _ra_copy_file and _ra_copy_file != _ra_file
+      and os.path.isfile(os.path.join(NO.ATTACHMENTS_DIR, _ra_copy_file)))
+with open(os.path.join(NO.ATTACHMENTS_DIR, _ra_copy_file or _ra_file),
+          encoding='utf-8') as _fh:
+    _ra_copy_text = _fh.read()
+check("...holding the backup's file as it was", _ra_copy_text == 'the receipt')
+check('...and no file owned by nobody',
+      sorted(set(_ra_before) | {_ra_copy_file}) == _ra_files())
+
+# The copy deleted for good, from Settings -> Recently deleted, the way a
+# person does it: the original's file must survive.
+app._delete_note(_ra_copy, None)
+app.update()
+app.show_settings_page(); app.update()
+app.toggle_settings_panel('trash'); app.update()
+
+
+def _ra_delete_button(w):
+    for c in w.winfo_children():
+        if isinstance(c, tk.Button) and str(c.cget('text')) == 'Delete':
+            return c
+        found = _ra_delete_button(c)
+        if found is not None:
+            return found
+    return None
+
+
+_ra_del = _ra_delete_button(app.settings_trash_panel)
+check('fixture: the trashed copy has its Delete button', _ra_del is not None)
+if _ra_del is not None:
+    _ra_del.invoke()
+    app.update()
+app.hide_settings_page(); app.update()
+check('deleting the copy for good removes its file',
+      _ra_copy_file and not os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _ra_copy_file)))
+check("...and leaves the original's file where it was",
+      os.path.isfile(os.path.join(NO.ATTACHMENTS_DIR, _ra_file))
+      and _ra_owned(app.find_note(1) or {}) == [_ra_file])
+
+# Edited here since the backup, then updated from it: the backup's file is
+# the one the note already has, so nothing is attached twice and nothing is
+# left behind.
+_ra_note = app.find_note(1)
+_ra_note['body'] = 'March, paid'
+_ra_note['updated'] = '2099-01-01 00:00:00'
+app.save_notes()
+_ra_before = _ra_files()
+_ra_asked = _ra_import('update')
+_ra_note = next((n for n in app.notes if n.get('uid') == _ra_uid), {})
+check(f'an edited note offers Update ({_ra_asked})',
+      _ra_asked == ['1 note you already have'])
+check('..."Update" attaches the shared file once, and leaves no file behind',
+      len(app.notes) == 1 and _ra_owned(_ra_note) == [_ra_file]
+      and _ra_files() == _ra_before)
+os.remove(_ra_zip)
+
+# A backup whose copy of the note lists one new file twice -- hand-edited,
+# or written by a build that had that slip. Loading a note keeps a repeated
+# attachment as it is, so the update itself must attach the file once.
+_ra_scan = 'qa3_reimport_scan.txt'
+_ra_note = next((n for n in app.notes if n.get('uid') == _ra_uid), {})
+_ra_note['updated'] = '2099-01-01 00:00:00'
+app.save_notes()
+with zipfile.ZipFile(_ra_zip, 'w') as _zf:
+    _zf.writestr('notes_data.json', json.dumps([{
+        'id': 1, 'uid': _ra_uid, 'title': 'Receipts', 'body': 'March, scanned',
+        'updated': '2026-01-01 00:00:00',
+        'attachments': [{'filename': 'receipt.txt', 'stored_as': _ra_file},
+                        {'filename': 'scan.txt', 'stored_as': _ra_scan},
+                        {'filename': 'scan.txt', 'stored_as': _ra_scan}]}]))
+    _zf.writestr('attachments/' + _ra_scan, 'the scan')
+_ra_import('update')
+_ra_note = next((n for n in app.notes if n.get('uid') == _ra_uid), {})
+check('...and a backup listing one new file twice attaches it once',
+      _ra_owned(_ra_note) == [_ra_file, _ra_scan])
+os.remove(_ra_zip)
+if os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _ra_scan)):
+    os.remove(os.path.join(NO.ATTACHMENTS_DIR, _ra_scan))
+app.notes = []; app.save_notes()
+app.trash = []; NO.save_trash(app.trash)
+for _ra_name in (_ra_file,):
+    if os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _ra_name)):
+        os.remove(os.path.join(NO.ATTACHMENTS_DIR, _ra_name))
+
 # The one colour kept raw: "Reset to category" on a day of a COLOURED
 # series. The stored form cannot hold it, and written as a load shapes it
 # the editor's empty colour never matched the day's again -- an unsaved
