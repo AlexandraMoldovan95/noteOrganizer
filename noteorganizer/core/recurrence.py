@@ -99,6 +99,7 @@ __all__ = [
     "next_occurrence_on_or_after",
     "history_entries",
     "effective_note",
+    "day_matches_series",
     "off_schedule_days",
     "describe_recurrence",
 ]
@@ -982,6 +983,37 @@ def effective_note(note, occurrence_date):
         if field in override:
             merged[field] = override[field]
     return merged
+
+
+def day_matches_series(note, patch):
+    """Whether one day's own edit says exactly what the series says.
+
+    A day saved with an edit of its own keeps a copy of every field it may
+    override, and stops following the series: a later edit of the series
+    no longer reaches it. A day saves itself as it is typed, so a letter
+    typed and taken back would leave such a copy behind, the same as the
+    series and cut off from it for good. When this is true, the day keeps
+    no copy of its own.
+
+    Args:
+        note: The repeating note (the series).
+        patch: The day's fields as the save shapes them (``clean_override``):
+            a field it does not hold counts as empty, as the editor shows it.
+
+    Returns:
+        True when every field in :data:`OVERRIDABLE_FIELDS` matches. Titles
+        compare without the spaces around them, as they are stored.
+    """
+    for field in OVERRIDABLE_FIELDS:
+        mine = patch.get(field) or ""
+        theirs = note.get(field) or ""
+        if not isinstance(mine, str) or not isinstance(theirs, str):
+            return False
+        if field == "title":
+            mine, theirs = mine.strip(), theirs.strip()
+        if mine != theirs:
+            return False
+    return True
 
 
 def off_schedule_days(note):

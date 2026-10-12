@@ -187,8 +187,17 @@ interval, specific weekdays/month-days, an end condition) plus two small maps:
 
 `expand_occurrences(note, range_start, range_end)` is the only place that turns a rule into
 actual dates — everything else (calendar rendering, list previews) asks it for occurrences
-within a window rather than re-deriving the logic. Editing "just this occurrence" writes an
-override; editing "this and all future" (or the whole series) edits the base note directly.
+within a window rather than re-deriving the logic. The series view edits the base note
+directly; one day opened on its own from the calendar (day mode, `_day_mode`) writes an override.
+
+A day saves to itself, asking nothing: every overridable field goes to the day, a series-owned
+one (checklist, attachments) to the series, and the date and the repeat nowhere —
+`_show_day_mode` keeps them in their fields, out of sight, so the save finds them unchanged, and
+puts them back if anything reached them. A day whose edit ends equal to the series
+(`day_matches_series`) keeps no override: kept, a copy of the series' own text would cut that
+day off from every later edit of the series. Until 2026-10-12 a day's edits waited instead for
+a question — "this occurrence or the whole series?" — asked only on leaving, and nothing on
+screen said they waited ([Issues Log](ISSUES_LOG.md#the-day-that-waited-for-a-question)).
 
 An override is keyed by its date and nothing moves it, so changing the start or the rule can
 leave one on a date the series no longer has. Such overrides are **kept**, not moved and not

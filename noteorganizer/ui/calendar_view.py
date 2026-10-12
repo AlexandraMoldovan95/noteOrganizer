@@ -1291,11 +1291,29 @@ class CalendarViewMixin:
                   bg=self.colors["card"], fg=self.colors["text"], relief="flat",
                   font=("Segoe UI", 9, "bold"), cursor="hand2"
                   ).pack(side="left", ipadx=6, ipady=2)
-        tk.Button(top, text="✏ Open in editor",
-                  command=lambda: self._open_note_from_calendar(base_note, date_str),
-                  bg=self.colors["accent"], fg=self._on_fill("accent"), relief="flat",
-                  font=("Segoe UI", 9, "bold"), cursor="hand2"
-                  ).pack(side="right", ipadx=6, ipady=2)
+        # A repeating note opens two ways, and the panel names both: this
+        # day on its own, or the whole series. One "Open in editor" opened
+        # the day, under the series' date and repeat as fields to change,
+        # and a field test could not find how to edit just one day
+        # (2026-10-12). The right-click menu says the same two things.
+        if is_recurring(base_note):
+            tk.Button(top, text="✏ Edit this day",
+                      command=lambda: self._open_note_from_calendar(base_note, date_str),
+                      bg=self.colors["accent"], fg=self._on_fill("accent"), relief="flat",
+                      font=("Segoe UI", 9, "bold"), cursor="hand2"
+                      ).pack(side="right", ipadx=6, ipady=2)
+            tk.Button(top, text="🔁 Edit the whole series",
+                      command=lambda: self._open_note_from_calendar(
+                          base_note, date_str, whole_series=True),
+                      bg=self.colors["card"], fg=self.colors["text"], relief="flat",
+                      font=("Segoe UI", 9, "bold"), cursor="hand2"
+                      ).pack(side="right", padx=(0, 6), ipadx=6, ipady=2)
+        else:
+            tk.Button(top, text="✏ Open in editor",
+                      command=lambda: self._open_note_from_calendar(base_note, date_str),
+                      bg=self.colors["accent"], fg=self._on_fill("accent"), relief="flat",
+                      font=("Segoe UI", 9, "bold"), cursor="hand2"
+                      ).pack(side="right", ipadx=6, ipady=2)
         # Quiet, in the warning's words, as the editor's Delete: the note
         # goes to the Trash. The dark red fill is kept for what cannot be undone.
         tk.Button(top, text="🗑 Delete",
@@ -1380,18 +1398,21 @@ class CalendarViewMixin:
         txt.insert("1.0", text_only or "(empty note)")
         txt.config(state="disabled")
 
-    def _open_note_from_calendar(self, base_note, date_str):
-        """Open an EXISTING note (not a new one) from the calendar day panel.
+    def _open_note_from_calendar(self, base_note, date_str, whole_series=False):
+        """Open an EXISTING note (not a new one) from the calendar day panel:
+        that day of it, or with *whole_series* the series itself.
         Same 'remember where we came from' treatment as creating a note there —
         open_note_in_tab clears any pending return first (it's meant to, for
         the normal case of switching between notes), so we set it again right
-        after, once that's done."""
+        after, once that's done. Either way the way back is to this day."""
         remembered = {"year": self.cal_year, "month": self.cal_month,
                       "date_str": date_str, "origin": "edit"}
         self.notebook.select(self.TAB_NOTES)
-        # Cancel on the day still in the editor means this note was not
-        # opened, and the way back must not be re-pointed at it.
-        if not self.open_note_in_tab(base_note, occurrence_date=date_str):
+        # Going back to the note still in the editor -- to fix a date it
+        # could not save -- means this note was not opened, and the way
+        # back must not be re-pointed at it.
+        if not self.open_note_in_tab(
+                base_note, occurrence_date=None if whole_series else date_str):
             return
         self._pending_calendar_return = remembered
         self._update_calendar_return_button()
@@ -1403,8 +1424,8 @@ class CalendarViewMixin:
         the exact same month/day — it shouldn't feel like being sent away."""
         # Flush before clearing, like every other route into an empty
         # editor — this path once discarded pending edits silently. And
-        # Cancel on a repeating day's save question means stay, here as
-        # on every route that would replace the editor.
+        # going back to fix a date the save could not store means stay,
+        # here as on every route that would replace the editor.
         if self._flush_autosave() is False:
             return
         self.notebook.select(self.TAB_NOTES)

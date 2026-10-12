@@ -97,11 +97,8 @@ Closing the app works the same way:
 anything still unsaved is saved on the way out, silently — no "unsaved changes" question, because
 there is nothing to lose.
 
-The one exception is editing a single day of a repeating note (opened from the calendar): saving
-that needs an answer — "this occurrence or the whole series?" — and the app never asks questions
-on its own while you type. Your edits wait in the editor, and the question comes when *you* act:
-pressing Save, switching notes, or closing the app. Answer it and the edit is saved where you
-chose; cancel it and the edit stays only as long as you stay on that view.
+One day of a repeating note, opened on its own from the calendar, saves the same way — to that
+day, as you type (see [One day, or the whole series](#one-day-or-the-whole-series)).
 
 A field the app cannot read never costs you the rest of the note. A date it cannot read (see
 [Writing a date](#writing-a-date) for every way it can — what is left is a day that does not
@@ -633,27 +630,36 @@ specific date.
 
 ![Recurrence setup](screenshots/recurrence-setup.png)
 
-Editing or deleting one specific occurrence (rather than the whole series) is always offered as a
-separate choice — your edit only applies where you meant it to. Leaving a day you have edited —
-opening another note, starting a new one, or closing the window — asks where the edit belongs
-first, and **Cancel** keeps you on that day with the edit still on screen, unsaved.
+### One day, or the whole series
 
-A day you edited with **"only this occurrence"** keeps its own content from then on: later edits
-to the series deliberately do not touch it (that day is *yours*), which can look surprising — a
-series edit appears everywhere except there. The app now says this out loud wherever it matters:
-the editor shows a line above the title — "🔁 This note repeats — edits here apply to every day ·
-1 day keeps its own edits (✎)" — and in the calendar, such a day carries a ✎ mark in the day list
-and an "✎ edited for this day" chip in the preview. To make a day follow the series again,
-right-click it in the calendar and choose **↺ Reset this day to the series content**. It does
-what its question says: the day's own edits go, and so does a date or repeat changed there and
-not saved yet. Only a value the app cannot read stays on screen, to be fixed.
+A repeating note opens two ways. From the note list you edit the **whole series**: what you change
+reaches every day. From the calendar, click the note on a day and choose **✏ Edit this day** — or
+**🔁 Edit the whole series**, beside it (the right-click menu offers the same two).
+
+A day opened on its own says so. A strip at the top reads "📅 Only this day: Monday, 12 October
+2026 — what you change here stays on this day", the date shown is that day's, and the repeat is a
+line describing it rather than settings to change. **This day:** stands beside the category: a
+category or colour picked there is the day's — the calendar draws that day in it — while the
+note's card in the list keeps the series' own. What you change saves itself to that day as you
+type, like any note: there is no question to answer. The strip's **🔁 Edit the whole series**
+saves the day and takes you to the series.
 
 Files you attach and items you tick while looking at one day belong to the whole series — a day
-has nowhere else to keep them — so they are saved to the series even when you answer **This
-occurrence only**; only the day's title, text, comments, category and colour stay the day's.
-The date and the repeat belong to the series too, but a day saved on its own never moves it:
-with **This occurrence only** they stay as they were (the question says so when you changed
-them), and **The entire series** is the answer that moves the series.
+has nowhere else to keep them — and the editor says so: **☑ Checklist · whole series**, **📎
+Attachments · whole series**. A day's text is plain: formatting made there is not kept. Deleting
+still asks — **Only this day** or **The whole series** — since a delete is worth a moment's
+thought.
+
+A day you edited keeps its own content from then on: later edits to the series deliberately do
+not touch it (that day is *yours*), which can look surprising — a series edit appears everywhere
+except there. The app says this out loud wherever it matters: the series shows a line above the
+title — "🔁 This note repeats — edits here apply to every day · 1 day keeps its own edits (✎)" —
+and in the calendar, such a day carries a ✎ mark in the day list and an "✎ edited for this day"
+chip in the preview. To make a day follow the series again, right-click it in the calendar and
+choose **↺ Reset this day to the series content**: the day's own edits go. A day whose edits come
+back to exactly what the series says follows the series again by itself.
+
+### Moving or ending a series
 
 Moving the series afterwards can leave a day's own edits behind: change the start date or the
 rule, and a day you edited may no longer be one the series lands on. Its text is kept — nothing
@@ -665,12 +671,14 @@ attached files stay with the series, which they belong to); **Move to the Trash*
 but straight into Recently deleted, from where it can be restored; and **Leave it** changes
 nothing. Put the rule back the way it was and those days are simply part of the series again.
 
-Turning the repeat off ("Does not repeat") ends every day's own edits along with the series —
-but none of their text is lost. When any day had text of its own, the note as it was, repeat and
-days included, becomes its rescue copy, and **↩ Restore previous** brings the repeating note back
-whole. On such a series the turn-off itself is saved when you leave the note or press Save: until
-then everything else you change goes on saving, the status line says the turn-off waits, and
-picking the repeat again puts the series back as it was.
+Turning the repeat off ("Does not repeat", in the whole series) ends every day's own edits along
+with the series — but none of their text is lost. When any day had text of its own, the note as
+it was, repeat and days included, becomes its rescue copy, and **↩ Restore previous** brings the
+repeating note back whole. On such a series the turn-off itself is saved when you leave the note
+or press Save: until then everything else you change goes on saving, the status line says the
+turn-off waits, and picking the repeat again puts the series back as it was.
+
+### Repeating notes in the list
 
 The small symbols on a repeating note's card in the list mean: `✎N` — N days edited separately,
 `✕N` — N occurrences deleted individually. The sidebar's filter dropdown also offers
@@ -697,16 +705,14 @@ the *day* (colour, markers, add a note here), so the two are never confused.
 Clicking a note in the day panel opens a **quick-look preview** — the note's plain text, plus a
 line of small flags saying what else it carries (▦ a table, ☑ a checklist, 💬 comments). Like the
 note-list cards, the preview does not draw the table or spell out the checklist and comments;
-those show when you open the note in the editor (**✏ Open in editor**).
+those show when you open the note in the editor (**✏ Open in editor** — for a repeating note,
+**✏ Edit this day** or **🔁 Edit the whole series**: see
+[One day, or the whole series](#one-day-or-the-whole-series)).
 
-Opening a note from the calendar — the panel's Edit button or any right-click edit entry —
-remembers where you came from: a **← Back to Calendar** link appears at the top of the editor and
-returns you to that exact month and day, saving your edits on the way (for one day of a repeating
-note, it asks the usual "this occurrence or the whole series?" first — cancel that question and
-you simply stay in the editor, nothing lost). While you're editing one
-day of a repeating note, a line above the title names that day — the date field always shows the
-series' start date, so this is what tells you *which* day you opened. Saving stays in the editor;
-only the quick "Add note for this day" flow returns you to the calendar on Save.
+Opening a note from the calendar — the panel's buttons or any right-click edit entry — remembers
+where you came from: a **← Back to Calendar** link appears at the top of the editor and returns you
+to that exact month and day, saving your edits on the way. Saving stays in the editor; only the
+quick "Add note for this day" flow returns you to the calendar on Save.
 
 ![Calendar view](screenshots/calendar-view.png)
 

@@ -300,7 +300,7 @@ try:
     # to be given the menu at all: it is opened ON a day, so the menu
     # must offer that day rather than act on the series behind it.
     check('a repeating note offers its per-day actions in the menu',
-          any('only this occurrence' in _l for _l in _lbl2))
+          any('Edit this day' in _l for _l in _lbl2))
     if _cal_posted2 and any('Delete' in _l for _l in _lbl2):
         _cal_posted2[-1].invoke(
             [_i for _i, _l in enumerate(_lbl2) if 'Delete' in _l][0])
@@ -530,7 +530,7 @@ try:
     # occurrence date the menu would quietly offer to edit every
     # occurrence while the panel shows one.
     check('...and it knows which DAY the preview is showing',
-          any('only this occurrence' in _l for _l in _pm_labels))
+          any('Edit this day' in _l for _l in _pm_labels))
 finally:
     NO.tk.Menu.tk_popup = _pm_real
 app.close_day_panel(); app.update()
@@ -1451,22 +1451,23 @@ check('ctx-open from a calendar day sets the way back (origin edit)',
       and (app._pending_calendar_return or {}).get('origin') == 'edit')
 check('the Back to Calendar button is mapped on the ctx route',
       bool(app.calendar_return_btn.winfo_ismapped()))
-check('the banner names the day being edited',
-      bool(app.occurrence_banner.winfo_ismapped())
-      and '15 July 2026' in app.occurrence_banner.cget('text'))
+check('the day strip names the day being edited',
+      bool(app.day_strip.winfo_ismapped())
+      and '15 July 2026' in app.day_strip_lbl.cget('text'))
 # Written out day first, the day without a leading nought, the names the
 # app's own whatever language Windows speaks: "Monday, 6 July 2026".
 app._ctx_open(app.find_note(60), '2026-07-06', return_day='2026-07-06')
 app.update()
-check(f'the banner writes the day out, day first '
-      f'({app.occurrence_banner.cget("text")!r})',
-      app.occurrence_banner.cget('text').endswith('Monday, 6 July 2026'))
+check(f'the day strip writes the day out, day first '
+      f'({app.day_strip_lbl.cget("text")!r})',
+      'Only this day: Monday, 6 July 2026 —' in app.day_strip_lbl.cget('text'))
 app._ctx_open(app.find_note(60), '2026-07-15', return_day='2026-07-15')
 app.update()
 
 app.load_note(app.find_note(61)); app.update()
-check('the banner hides on a plain note',
-      not app.occurrence_banner.winfo_ismapped())
+check('the banner and the day strip hide on a plain note',
+      not app.occurrence_banner.winfo_ismapped()
+      and not app.day_strip.winfo_ismapped())
 app.load_note(app.find_note(60)); app.update()
 check('the banner switches to the series text on the series view',
       bool(app.occurrence_banner.winfo_ismapped())
@@ -1500,27 +1501,28 @@ check('an explicit Save on an add-origin visit returns to the calendar',
       and not app._pending_calendar_return)
 app.close_day_panel(); app.update()
 
-# Back to Calendar saves the pending occurrence edit, asking once.
+# Back to Calendar saves the pending edit of a day, to that day, asking
+# nothing (a day opened on its own saves to itself).
 app._open_note_from_calendar(app.find_note(60), '2026-07-16'); app.update()
 scope_ux = []
 app.ask_occurrence_scope = lambda *a, **k: (scope_ux.append(1), 'occurrence')[1]
 app.body_text.insert('end', ' flushed-on-return')
 app._return_to_calendar(); app.update()
-check('Back to Calendar saves the pending edit, asking exactly once',
-      len(scope_ux) == 1
+check('Back to Calendar saves the pending edit to the day, asking nothing',
+      scope_ux == []
       and 'flushed-on-return'
       in app.find_note(60)['overrides'].get('2026-07-16', {}).get('body', ''))
-# The half the field found missing: answering the question must also
-# NAVIGATE. A just-saved occurrence used to still read as dirty (the
-# base note's formatting never matches an override body), so the
-# cancel guard blocked the trip and every further click re-asked.
-check('answering the question actually lands on the calendar',
+# The half the field found missing: the save must also NAVIGATE. A
+# just-saved day used to still read as dirty (the base note's formatting
+# never matches an override body), so the cancel guard blocked the trip
+# and every further click re-asked.
+check('...and actually lands on the calendar',
       app.notebook.index(app.notebook.select()) == app.TAB_CALENDAR
       and app._day_panel_mode != 'empty')
 app._open_note_from_calendar(app.find_note(60), '2026-07-16'); app.update()
 app._return_to_calendar(); app.update()
-check('a clean occurrence returns without asking again',
-      len(scope_ux) == 1
+check('a clean day returns without asking either',
+      scope_ux == []
       and app.notebook.index(app.notebook.select()) == app.TAB_CALENDAR)
 # Settle any still-deferred edit while the mock is armed — under the
 # no-flush mutant the editor stays dirty here, and a later section's
@@ -1554,10 +1556,11 @@ finally:
     tk.Menu.tk_popup = _orig_pop
 _rec_labels = [l for l, _ in _rec_items]
 _plain_labels = [l for l, _ in _plain_items]
-check('the calendar menu drops generic Open/Edit for a recurring note',
+check('the calendar menu drops generic Open/Edit for a recurring note, and '
+      'names its two doors in the day panel\'s words',
       not any('Open / Edit' in l for l in _rec_labels)
-      and any('only this occurrence' in l for l in _rec_labels)
-      and any('Edit whole series' in l for l in _rec_labels))
+      and any('Edit this day' in l for l in _rec_labels)
+      and any('Edit the whole series' in l for l in _rec_labels))
 check('a plain dated note keeps Open/Edit in the calendar menu',
       any('Open / Edit' in l for l in _plain_labels))
 
@@ -1945,11 +1948,11 @@ app.update()
 # The captured commands are the REAL menu lambdas — invoke them, so the
 # return_day plumbing one frame above _ctx_open is exercised too (the
 # same frame class a hijack once hid in for deletes).
-# "Edit whole series", named in full: the Delete entry says "Delete the
+# "Edit the whole series", named in full: the Delete entry says "Delete the
 # whole series" on the surfaces that open this menu without a date, and a
 # substring match on "whole series" alone would one day pick up the wrong
 # lambda -- an edit check that silently exercises a delete.
-_series_cmd = next((c for l, c in _rec_items if 'Edit whole series' in l), None)
+_series_cmd = next((c for l, c in _rec_items if 'Edit the whole series' in l), None)
 if _series_cmd is not None:
     _series_cmd(); app.update()
 check("the menu's Edit-whole-series lambda arms the way back",
@@ -1964,39 +1967,31 @@ check('Make-this-repeat from a calendar day arms the way back too',
       _repeat_cmd is not None
       and (app._pending_calendar_return or {}).get('origin') == 'edit')
 
-# The banner follows an occurrence-to-occurrence switch — the text must
-# update even when the label is already packed.
+# The day strip follows a day-to-day switch — the text must update even
+# when the strip is already packed.
 app._ctx_open(app.find_note(60), '2026-07-15', return_day='2026-07-15')
 app.update()
 app._ctx_open(app.find_note(60), '2026-07-16', return_day='2026-07-16')
 app.update()
-check('the banner follows an occurrence-to-occurrence switch',
-      '16 July 2026' in app.occurrence_banner.cget('text'))
+check('the day strip follows a day-to-day switch',
+      '16 July 2026' in app.day_strip_lbl.cget('text'))
 
-# Cancelling the save question ABORTS the trip back — navigating anyway
-# would show the day panel's old content while the edit sits only in
-# the editor.
+# Back to Calendar from an edited day: the day is saved to the day, asking
+# nothing, and the trip completes. It once asked "this occurrence or the
+# whole series?" here, and its Cancel aborted the trip; a day now saves to
+# itself (save_current_note).
 app._ctx_open(app.find_note(60), '2026-07-17', return_day='2026-07-17')
 app.update()
-app.body_text.insert('end', ' cancel-me')
+app.body_text.insert('end', ' kept-on-the-day')
 _scopeN = []
 app.ask_occurrence_scope = lambda *a, **k: (_scopeN.append(1), None)[1]
 app._return_to_calendar(); app.update()
-check('cancelling the save question aborts the trip back',
-      len(_scopeN) == 1
-      and app.notebook.index(app.notebook.select()) == app.TAB_NOTES
-      and bool(app._pending_calendar_return)
-      and bool(app.calendar_return_btn.winfo_ismapped())
-      and 'cancel-me' in app.body_text.get('1.0', 'end-1c'))
-check('nothing reached the store on cancel',
-      'cancel-me' not in
-      app.find_note(60)['overrides'].get('2026-07-17', {}).get('body', ''))
-del app.ask_occurrence_scope
-app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
-app._return_to_calendar(); app.update()
-check('answering the question completes the trip',
-      app.notebook.index(app.notebook.select()) == app.TAB_CALENDAR
-      and 'cancel-me' in app.find_note(60)['overrides']['2026-07-17']['body'])
+check('Back to Calendar from an edited day saves it to the day, asking nothing, '
+      'and completes the trip',
+      _scopeN == []
+      and app.notebook.index(app.notebook.select()) == app.TAB_CALENDAR
+      and 'kept-on-the-day' in app.find_note(60)['overrides']['2026-07-17']['body']
+      and 'kept-on-the-day' not in app.find_note(60).get('body', ''))
 del app.ask_occurrence_scope
 app.close_day_panel(); app.update()
 
@@ -2029,24 +2024,24 @@ check('deleting another note leaves the open day and its way back alone',
       and bool(app._pending_calendar_return)
       and app._is_placed(app.calendar_return_btn))
 
-# Un-repeating via a series save retires the day banner — an occurrence
-# view of a note that no longer repeats would be a lying label.
+# A repeat turned off behind a day's back -- a day shows no repeat to change
+# -- is put back by its save: the series goes on repeating, and the day
+# stays a day, its strip and its words true. (When a day could end its
+# series, the save retired the day's line instead, a day view of a note
+# that no longer repeated being a lying label.)
 app._ctx_open(app.find_note(60), '2026-07-19', return_day='2026-07-19')
 app.update()
 app.write_recurrence_to_ui({})
 _scopeF = []
 app.ask_occurrence_scope = lambda *a, **k: (_scopeF.append(1), 'series')[1]
 app.save_current_note(auto=False); app.update()
-# The scope question is NOT asked any more, and that is the fix, not a
-# loss: an override carries five text fields, so "this day" has no
-# meaning for un-repeating -- the edit belongs to the series by
-# construction. What the check is really about, the day banner retiring,
-# is asserted exactly as before.
-check('un-repeating asks no scope question it could not act on',
+check('a repeat turned off behind a day\'s back asks nothing',
       _scopeF == [])
-check('un-repeating via a series save retires the day banner',
-      app.current_occurrence_date is None
-      and not app.occurrence_banner.winfo_ismapped())
+check('...and is put back: the series still repeats, and the day stays a day',
+      app.find_note(60)['recurrence']['freq'] == 'daily'
+      and app.current_occurrence_date == '2026-07-19'
+      and bool(app.day_strip.winfo_ismapped())
+      and app.selected_freq_key() == 'daily')
 del app.ask_occurrence_scope
 
 # ============================================================
@@ -2945,13 +2940,13 @@ def _hr_open_from_the_list(note_id, date_str):
 
 def _hr_open_one_day_of_the_walk():
     """One day of the series, opened as a person opens it: its title in the
-    month, then the panel's "Open in editor"."""
+    month, then the panel's "Edit this day"."""
     app.notebook.select(app.TAB_CALENDAR); app.update()
     app.cal_year, app.cal_month = 2026, 7
     app.render_calendar(); app.update()
     _hr_at = _cd_point('2026-07-10', chip=0)
     _qa_click(app.cal_canvas, x=_hr_at[0], y=_hr_at[1]); app.update()
-    _hr_btn = find_widget(app.day_panel, tk.Button, 'Open in editor')
+    _hr_btn = find_widget(app.day_panel, tk.Button, 'Edit this day')
     if _hr_btn is not None:
         _hr_btn.invoke(); app.update()
     return (app.selected_note_id == 122
@@ -4477,10 +4472,14 @@ del app.ask_occurrence_scope
 # ============================================================
 # CANCEL MEANS STAY -- ON EVERY ROUTE THAT WOULD REPLACE THE EDITOR
 # ============================================================
-# Leaving an edited day of a repeating note asks what Save applies to, and
-# Cancel was a silent "discard": save_current_note returned without saving,
-# the flush never said so, and the caller loaded what came next anyway.
-# Cancel means "take me back" in every other dialog, and now in this one.
+# Leaving a note whose date its save could not store asks about it, and
+# going back must mean staying. It was found with a day of a repeating note,
+# whose way out once asked what Save applied to: Cancel was a silent
+# "discard" -- save_current_note returned without saving, the flush never
+# said so, and the caller loaded what came next anyway. A day now saves to
+# itself, asking nothing; the question that remains on the way out is the
+# date's ("Part of this note isn't saved"), and "Go back and fix it" means
+# "take me back", as in every other dialog.
 _cs_notes = [
     {'id': 90, 'title': 'Weekly sync', 'body': 'agenda', 'category': 'General',
      'date': '2026-09-07', 'recurrence': {'freq': 'weekly', 'weekdays': [0]},
@@ -4499,18 +4498,21 @@ def _cs_reset():
 
 
 def _cs_on_the_edited_day():
-    app.open_note_in_tab(app.find_note(90), '2026-09-21', flush=False)
+    """The series on screen, typed into, with a date its save cannot
+    store."""
+    app.open_note_in_tab(app.find_note(90), flush=False)
     app.update()
     app.body_text.insert('end-1c', ' EDITED')
+    app.date_entry.delete(0, 'end')
+    app.date_entry.insert(0, '31/09/2026')
     app.update()
 
 
 def _cs_still_there():
-    base = app.find_note(90) or {}
     return (app.selected_note_id == 90
-            and app.current_occurrence_date == '2026-09-21'
+            and app.current_occurrence_date is None
             and 'EDITED' in app.body_text.get('1.0', 'end-1c')
-            and not (base.get('overrides') or {}))
+            and app._typed_date() == '31/09/2026')
 
 
 def _cs_other():
@@ -4532,20 +4534,22 @@ def _cs_back_on_the_day():
 
 _cs_reset()
 _cs_on_the_edited_day()
-app.ask_occurrence_scope = lambda *a, **k: None          # Cancel
+_cs_asked = []
+_cs_real_dialog = app._themed_dialog
+app._themed_dialog = lambda title, *a, **k: (_cs_asked.append(title), False)[1]
 app.open_note_in_tab(_cs_other()); app.update()
-check('Cancel on the day\'s question keeps the day when opening another note',
-      _cs_still_there())
+check(f'going back on the way-out question keeps the note when opening another '
+      f'note ({_cs_asked[:1]})',
+      _cs_still_there() and _cs_asked[:1] == ["Part of this note isn't saved"])
 _cs_back_on_the_day()
 app._shortcut_new_note(); app.update()
 check('...and when pressing Ctrl+N', _cs_still_there())
 _cs_back_on_the_day()
 app.open_blank_tab(); app.update()
 check('...and on the + New Note button', _cs_still_there())
-_cs_back_on_the_day()
-app._context_delete_note(_cs_other()); app.update()
-check('...and on another note\'s Delete, which deletes nothing',
-      _cs_still_there() and app.find_note(91) is not None)
+# (Another note's Delete keeps the editor where it is, and so asks no
+# way-out question at all: qa5, "A ROUTE THAT KEEPS THE EDITOR DOES NOT ASK
+# THE LEAVING QUESTION".)
 _cs_back_on_the_day()
 _cs_way_back = {"year": 2026, "month": 9, "date_str": "2026-09-21",
                 "origin": "edit"}
@@ -4565,26 +4569,28 @@ try:
     app.on_app_close(); app.update()
 finally:
     del app.destroy
-check('...and closing the window, which stays open on the edited day',
+check('...and closing the window, which stays open on the edited note',
       not _cs_closed and _cs_still_there())
-# THE CONTROL: the other answer still saves the day and moves on.
+# THE CONTROL: the other answer saves what it can and moves on.
 _cs_back_on_the_day()
-app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
+app._themed_dialog = lambda title, *a, **k: True        # "Continue without it"
 app.open_note_in_tab(_cs_other()); app.update()
-check('answering "This occurrence only" still saves the day and moves on',
+check('answering "Continue without it" saves the rest and moves on',
       app.selected_note_id == 91
-      and 'EDITED' in ((app.find_note(90).get('overrides') or {})
-                       .get('2026-09-21', {}).get('body') or ''))
-del app.ask_occurrence_scope
+      and 'EDITED' in (app.find_note(90).get('body') or '')
+      and app.find_note(90).get('date') == '2026-09-07')
+app._themed_dialog = _cs_real_dialog
 
 # ============================================================
 # A QUESTION ON SCREEN HOLDS THE GLOBAL SHORTCUTS
 # ============================================================
 # The dialog's grab confines the POINTER; keys bound with bind_all still
 # ran underneath it. Ctrl+S pressed twice stacked the same question on
-# itself, and Ctrl+N under it cleared the editor, so the answer wrote the
-# edit under a day of None. The shortcuts are asked here from inside the
-# question's own wait -- where a person's keypress would land.
+# itself, and Ctrl+N under it cleared the editor -- found under a day's own
+# question, whose answer then wrote the edit under a day of None. The
+# question here is the one Ctrl+S raises over a date it could not store. The
+# shortcuts are asked from inside the question's own wait -- where a
+# person's keypress would land.
 def _cs_press(label):
     app.update()
     for frame in app.place_slaves():
@@ -4613,20 +4619,28 @@ def _cs_answer(_var):
     # underneath) is answered the way a person clicking through would,
     # which is what lets Ctrl+N go on to clear the editor -- the damage
     # the checks below are about.
-    _cs_press('This occurrence only')
+    _cs_press('OK')
 
 
+# This file answers every warning for itself (its top); this one must ask.
+_cs_warn_stub = app.__dict__.pop('show_warning', None)
 app.wait_variable = _cs_answer
 try:
     app._shortcut_save_now(); app.update()
 finally:
     del app.wait_variable
-check('a shortcut pressed under the question does not stack a second one',
+    if _cs_warn_stub is not None:
+        app.show_warning = _cs_warn_stub
+check(f'a shortcut pressed under the question does not stack a second one '
+      f'({len(_cs_questions)} asked)',
       len(_cs_questions) == 1)
 check('...nor clear the editor underneath it',
-      app.selected_note_id == 90 and app.current_occurrence_date == '2026-09-21')
-check('...and the answer is written under the day it was asked about',
-      set((app.find_note(90).get('overrides') or {}).keys()) == {'2026-09-21'})
+      app.selected_note_id == 90 and _cs_still_there())
+check('...and the save the question followed is the note\'s own',
+      'EDITED' in (app.find_note(90).get('body') or '')
+      and app.find_note(90).get('date') == '2026-09-07')
+app._put_back_stored_date_and_repeat()
+app._cancel_pending_autosave()
 
 # ============================================================
 # THE KEYBOARD GOES BACK WHERE IT WAS AFTER A QUESTION

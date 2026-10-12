@@ -290,10 +290,12 @@ check('import resolves (not stuck forever) on an unexpected error type',
 # The occurrence-scope prompt used to fire from the 500ms debounce while
 # editing one day of a repeating series — every pause in typing raised a
 # modal question, and one stacked on a manual save's own prompt became a
-# frozen "ghost" save (see ISSUES_LOG). The timer path now defers that
-# save to the next explicit gesture (Save / note switch / close), which
-# asks exactly once. Same contract for the "Empty note" warning on a
-# comments-only note.
+# frozen "ghost" save (see ISSUES_LOG). The timer then deferred a day's
+# save to the next explicit gesture, which asked once -- and nothing said
+# the edit waited (field report, 2026-10-12). A day now saves to itself,
+# asking nothing, so the timer saves it like any note: still mute, never a
+# question. Same contract for the "Empty note" warning on a comments-only
+# note.
 app13 = NO.NoteOrganizer(); app13._poll_active_dirty = lambda: None
 app13.show_info = lambda *a, **k: True
 app13.geometry('1100x850'); app13.update()
@@ -314,27 +316,26 @@ app13.body_text.insert('end', ' edited-for-the-day')
 app13._autosave_now()  # the debounce timer's exact target
 app13.update()
 check('the background timer asks no occurrence-scope question', len(scope_calls) == 0)
-check('the deferred edit is not yet in the store',
+check("the timer saves a day's edit to that day, the series untouched",
       'edited-for-the-day' not in app13.notes[0]['body']
-      and 'edited-for-the-day' not in
+      and 'edited-for-the-day' in
       app13.notes[0].get('overrides', {}).get('2026-07-09', {}).get('body', ''))
-check('the edit survives in the editor, waiting for a gesture',
+check('the edit stays in the editor as typed',
       'edited-for-the-day' in app13.body_text.get('1.0', 'end-1c'))
 
+app13.body_text.insert('end', ' saved-on-purpose')
 app13.save_current_note(auto=False)  # the explicit gesture
 app13.update()
-check('the explicit save asks exactly once', len(scope_calls) == 1)
-check("the deferred edit lands as that day's override",
-      'edited-for-the-day' in
+check('the explicit save asks nothing either', len(scope_calls) == 0)
+check("...and lands as that day's own edit",
+      'saved-on-purpose' in
       app13.notes[0].get('overrides', {}).get('2026-07-09', {}).get('body', ''))
 
-# The flush gesture (note switch / close) also asks and saves.
+# The flush gesture (note switch / close) saves too, asking nothing.
 app13.body_text.insert('end', ' second-round')
-app13._autosave_now(); app13.update()
-check('the timer stays mute on the second round too', len(scope_calls) == 1)
 app13._flush_autosave(); app13.update()
-check('the flush gesture asks and saves the pending edit',
-      len(scope_calls) == 2
+check('the flush gesture saves the pending edit, asking nothing',
+      len(scope_calls) == 0
       and 'second-round' in app13.notes[0]['overrides']['2026-07-09']['body'])
 
 # Ordinary notes keep the silent background autosave untouched.
@@ -346,25 +347,25 @@ app13.load_note(app13.find_note(2)); app13.update()
 app13.body_text.insert('end', ' still-autosaves')
 app13._autosave_now(); app13.update()
 check('a plain note still autosaves silently from the timer',
-      'still-autosaves' in app13.find_note(2)['body'] and len(scope_calls) == 2)
+      'still-autosaves' in app13.find_note(2)['body'] and len(scope_calls) == 0)
 
 # A recurring note opened as the SERIES (no occurrence date) too.
 app13.load_note(app13.find_note(1)); app13.update()
 app13.body_text.insert('end', ' series-edit')
 app13._autosave_now(); app13.update()
 check('a series view still autosaves silently from the timer',
-      'series-edit' in app13.find_note(1)['body'] and len(scope_calls) == 2)
+      'series-edit' in app13.find_note(1)['body'] and len(scope_calls) == 0)
 
 # Every gesture that empties the editor flushes first — Ctrl+N and the
 # calendar's "Add note for this day" once skipped that, silently
-# discarding whatever the debounce hadn't caught (and a deferred
-# occurrence session in full).
+# discarding whatever the debounce hadn't caught (and, when a day waited
+# for a question, that day's session in full).
 app13.load_note(app13.find_note(1), occurrence_date='2026-07-10'); app13.update()
 app13.body_text.insert('end', ' ctrl-n-pending')
 app13._shortcut_new_note()
 app13.update()
-check('Ctrl+N asks and saves the deferred edit before clearing',
-      len(scope_calls) == 3
+check('Ctrl+N saves the pending edit of a day before clearing, asking nothing',
+      len(scope_calls) == 0
       and 'ctrl-n-pending' in app13.notes[0]['overrides']['2026-07-10']['body'])
 check('Ctrl+N then really starts fresh', app13.selected_note_id is None)
 
@@ -373,8 +374,9 @@ app13.load_note(app13.find_note(1), occurrence_date='2026-07-11'); app13.update(
 app13.body_text.insert('end', ' cal-add-pending')
 app13._add_note_for_date('2026-08-15')
 app13.update()
-check('calendar add-note asks and saves the deferred edit before clearing',
-      len(scope_calls) == 4
+check('calendar add-note saves the pending edit of a day before clearing, '
+      'asking nothing',
+      len(scope_calls) == 0
       and 'cal-add-pending' in app13.notes[0]['overrides']['2026-07-11']['body'])
 _ca_ok = False
 for _ in range(60):  # settle: a late timer tick may still be landing

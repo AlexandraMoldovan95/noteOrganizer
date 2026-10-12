@@ -294,6 +294,35 @@ check('History lists a bounded series\' day that is off the schedule, marked, in
       == [('2026-09-28', True), ('2026-09-14', False), ('2026-09-07', False)]
       and _ob['n_off'] == 1 and _ob['n_edited'] == 1 and _ob['n_occurrences'] == 2)
 
+# ---- day_matches_series: a day that says what the series says ----
+# A day saves itself as it is typed, so a letter typed and taken back would
+# leave a copy of the series behind, cutting the day off from every later
+# edit of the series. When the day says exactly what the series says, it
+# keeps no copy of its own.
+from noteorganizer.core.recurrence import day_matches_series as _same_day
+_sd_series = {'title': 'Stand-up', 'body': 'b\n', 'comments': 'c',
+              'category': 'Work', 'color': '#ff0000'}
+_sd_day = dict(_sd_series)
+check('a day with the series\' own five fields says what the series says',
+      _same_day(_sd_series, _sd_day))
+for _sd_field, _sd_other in (('title', 'Stand-up!'), ('body', 'b2\n'),
+                             ('comments', ''), ('category', 'Personal'),
+                             ('color', '#00ff00')):
+    check(f'...and one differing in its {_sd_field} does not',
+          not _same_day(_sd_series, dict(_sd_day, **{_sd_field: _sd_other})))
+check('a title differs by its words, not the spaces around them, as stored',
+      _same_day(_sd_series, dict(_sd_day, title='  Stand-up ')))
+check('a colour cleared on a day of a coloured series is a difference',
+      not _same_day(_sd_series, dict(_sd_day, color='')))
+check('a field the day does not hold counts as empty, as the editor shows it',
+      _same_day(dict(_sd_series, color=''), {k: v for k, v in _sd_day.items()
+                                              if k != 'color'})
+      and not _same_day(_sd_series, {k: v for k, v in _sd_day.items()
+                                     if k != 'color'}))
+check('a field that is not text is never a match',
+      not _same_day(_sd_series, dict(_sd_day, title=5))
+      and not _same_day(dict(_sd_series, comments=['c']), _sd_day))
+
 # ---------------------------------------------------------------------
 # is_recurring on a note that never went through normalize_note.
 #

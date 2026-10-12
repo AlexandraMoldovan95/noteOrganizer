@@ -101,6 +101,7 @@ is in the table below as well.
 | [The date field that either lost your edit, or wouldn't let you finish typing it](#the-date-field-that-either-lost-your-edit-or-wouldnt-let-you-finish-typing-it) | Reusing Save's validation in silent autosave turns a helpful warning into an interruption. | 0.28.38 |
 | [The autosave that could interrupt you over a note that was already gone](#the-autosave-that-could-interrupt-you-over-a-note-that-was-already-gone) | A guard added to one path doesn't cover other routes into the same code. | 0.28.38 |
 | [The autosave that asked questions](#the-autosave-that-asked-questions) | A background timer must never ask the user anything; dialogs happen at gestures. | 0.66.102 |
+| [The day that waited for a question](#the-day-that-waited-for-a-question) | An edit that waits must be seen waiting; when where the person came from answers a question, ask it at the door, not at the exit. | — |
 | [The username cap that took three tries](#the-username-cap-that-took-three-tries) | Never trust one validation mechanism against fast input — layer cheap redundant checks. | 0.28.38 |
 | [The focus fix that broke the thing it wasn't touching](#the-focus-fix-that-broke-the-thing-it-wasnt-touching) | A fix scoped to the reported widgets can break already-working behaviour; re-test the working case. | 0.28.38 |
 | [The fast-typing fix that took three tries to land safely](#the-fast-typing-fix-that-took-three-tries-to-land-safely) | Decide from what the widget contains, not event internals; boring-safe beats precise-dangerous. | 0.31.39 |
@@ -2431,6 +2432,49 @@ dialog is a conversation, and conversations happen at gestures. And when
 one guard in a function carries an `if not auto:` with a good comment,
 every dialog below it in the same function deserves the same audit; the
 two that lacked it were the two that bit.
+
+### The day that waited for a question
+
+*(2026-10-12)*
+
+**Symptom:** A field report on the packaged app, in the owner's words: how to change just one
+day of a repeating note could not be found — opening a day offered only the series' date and its
+repeat, as fields to change. And a category changed on a note "seemed to do nothing": picked
+from the editor's corner, it stayed the old one.
+
+**Root cause:** Two halves of one design. A day opened from the calendar was the series' editor
+with one line above it: the date field showed the series' start, the repeat its rule, and only
+that line said which day this was. And a day never saved by itself. Its save asked "This
+occurrence only, or the entire series?", a question a timer must never raise
+([The autosave that asked questions](#the-autosave-that-asked-questions)), so its edits waited
+in the editor for a gesture — Save, a note switch, closing — and nothing on screen said they
+waited. Measured on the real app: the corner said Work, the file said General, the status line
+said only the day's date, and the series' card in the list, which a day never changes, kept the
+old category.
+
+**Fix:** The owner chose a clear day mode, of three options put to her. The calendar offers two
+doors for a repeating note, **✏ Edit this day** and **🔁 Edit the whole series**. A day's
+editor shows a strip naming the day and saying that what changes there stays on it, with the
+way to the series; its date as words and its repeat as a line, the series' own values kept out
+of sight in their fields; "This day:" beside the category; and the checklist and the files
+marked as the whole series'. The person chose the day before typing, so the question went: a
+day saves to itself as it is typed, like any note, and the timer's mute promise holds with
+nothing deferred.
+
+Removing the question exposed two things. A day saving itself as it is typed would leave a copy
+of the series behind whenever a letter was typed and taken back, and that copy cuts the day off
+from every later edit of the series: a day whose edit ends equal to the series now keeps none
+(`day_matches_series`). And the save's routes that served only the answer "The entire series",
+given on a day, could no longer be reached; they went, rather than staying as code nothing can
+run. 52 checks in five suites failed on the old promise. They were rewritten to say what the app
+does now — a few merged or dropped along with the route they described — and where one guarded a
+mechanism that still exists (going back on the way out keeps you where you are), it was wired to
+the question that still asks it: a date the save cannot store.
+
+**Lesson:** an edit that waits must be seen waiting. Deferring for a good reason — no question
+from a timer — still owes the screen a sign that something was deferred; without one, the wait
+reads as "nothing happened". And when where the person came from can answer a question, ask it
+at the door, not at the exit.
 
 ### The username cap that took three tries
 

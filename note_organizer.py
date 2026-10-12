@@ -402,6 +402,7 @@ from noteorganizer.core.recurrence import (
     expand_occurrences,
     next_occurrence_on_or_after,
     effective_note,
+    day_matches_series,
     off_schedule_days,
     describe_recurrence,
 )
@@ -1378,8 +1379,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # uses for the same reason.
         if self.selected_note_id is not None and self.find_note(self.selected_note_id) is None:
             return
-        # Before any early return below -- a day of a series never saves
-        # here, and an editor that matches the note has nothing to save.
+        # Before any early return below: an editor that matches the note has
+        # nothing to save.
         self._say_nothing_is_left_out()
         # Catch the word count up now, in case rapid edits (e.g. inserting
         # several emojis in a row) skipped recomputing it on every click.
@@ -1387,17 +1388,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.update_word_count()
         except Exception:
             self._log_swallowed("autosave: catch-up word count")
-        # An occurrence view can't be saved without asking "this occurrence
-        # or the whole series?", and a silent background timer must never
-        # open a dialog — every pause in typing used to raise the question,
-        # and one such prompt stacked on a manual save's own produced a
-        # frozen "ghost" save (see ISSUES_LOG). Leave the edits in the
-        # editor; the next explicit gesture — Save, a note switch, closing —
-        # asks exactly once and saves then.
-        if self.selected_note_id is not None and self.current_occurrence_date:
-            note = self.find_note(self.selected_note_id)
-            if note is not None and is_recurring(note):
-                return
+        # A day of a series saves here like any note: to that day, asking
+        # nothing (save_current_note). It used to wait, because its save
+        # asked "this occurrence or the whole series?" and a silent timer
+        # must never open a dialog -- every pause in typing raised the
+        # question, and one stacked on a manual save's own produced a frozen
+        # "ghost" save (see ISSUES_LOG). The wait was invisible: a category
+        # picked for one day seemed to do nothing (field report, 2026-10-12).
         try:
             st = self.capture_editor_state()
         except Exception:
@@ -9809,9 +9806,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if choice == "update":
             # Same order as the single-note route, for the same reason:
             # the editor's unsaved work is saved before anything replaces
-            # it. Cancel on the day's save question cancels the import:
-            # going on would replace the very edit the person just
-            # declined to let go of.
+            # it. Going back to fix a date the save could not store cancels
+            # the import: going on would replace the very edit the person
+            # just declined to let go of.
             if self._flush_autosave(leaving=self.selected_note_id in {
                     mine.get("id") for mine, _theirs in known}) is False:
                 return False, [], [], unchanged, []
@@ -10070,8 +10067,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # claiming it shipped.
             if self._open_imported_note_in_editor(
                     incoming, trimmed=bool(oversized)) is False:
-                # Cancel on a repeating day's save question: that day stays
-                # in the editor, and the code stays in the box to try again.
+                # The person went back to the note in the editor, to fix a
+                # date it could not save: the code stays in the box to try
+                # again.
                 return
             self.import_box.delete("1.0", "end")
             self.toggle_import_panel()
@@ -11411,7 +11409,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if self._checklist_open:
             self.checklist_section.pack_forget()
             self._checklist_open = False
-            self.checklist_btn.config(text="☑ Checklist")
+            # Through the one writer of the button's words: written here by
+            # hand, closing the list dropped its count, and in day mode that
+            # it is the whole series'.
+            self._update_checklist_progress()
         else:
             # Pack right after the checklist button. No padx here — the
             # button and section both live inside a column Frame (see
@@ -11422,7 +11423,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.checklist_section.pack(fill="x", pady=(0, 8),
                                         after=self.checklist_btn)
             self._checklist_open = True
-            self.checklist_btn.config(text="☑ Checklist  ▲")
+            self._update_checklist_progress()
             # The rows are built on opening (see _render_checklist_items);
             # rows already drawn from this very list need no rebuild.
             if _checklist_rows_current(getattr(self, "_checklist_drawn", None),
@@ -11914,18 +11915,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return None
 
     def _update_checklist_progress(self):
+        """The checklist's count on its button and its header -- and, in day
+        mode, that it is the whole series' (_series_owned_mark). The one
+        writer of both, so the toggle that opens and closes the list says
+        the same as a tick does."""
         if not hasattr(self, "checklist_progress_lbl"):
             return
         items = self._get_checklist()
+        whole = self._series_owned_mark()
         if not items:
-            self.checklist_progress_lbl.config(text="Checklist")
+            self.checklist_progress_lbl.config(text="Checklist" + whole)
             self.checklist_btn.config(
-                text=("☑ Checklist  ▲" if self._checklist_open else "☑ Checklist"))
+                text="☑ Checklist" + whole
+                + ("  ▲" if self._checklist_open else ""))
             return
         done = sum(1 for it in items if it.get("done"))
-        self.checklist_progress_lbl.config(text=f"Checklist — {done}/{len(items)} done")
+        self.checklist_progress_lbl.config(
+            text=f"Checklist — {done}/{len(items)} done{whole}")
         # Reflect the count on the toggle button too, so it's visible when closed.
-        badge = f"☑ Checklist ({done}/{len(items)})"
+        badge = f"☑ Checklist ({done}/{len(items)}){whole}"
         self.checklist_btn.config(text=badge + ("  ▲" if self._checklist_open else ""))
 
     def _sync_checklist_open_state(self):
@@ -13657,6 +13665,36 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             line.bind("<Configure>", lambda e, w=line: w.configure(
                 wraplength=max(120, e.width - 8)), add="+")
 
+        # One day of a series, opened on its own from the calendar (day mode,
+        # _show_day_mode): the strip says which day, that what changes here
+        # stays on it, and holds the one way to the whole series. A small
+        # line used to name the day, above the series' own date and repeat
+        # as fields to change, and a field test could not find how to edit
+        # one day (2026-10-12). Long-lived, so every colour follows the theme.
+        self.day_strip = tk.Frame(self.editor)
+        self.track_theme(self.day_strip, bg="card")
+        day_strip_bar = tk.Frame(self.day_strip, width=4)
+        self.track_theme(day_strip_bar, bg="accent")
+        day_strip_bar.pack(side="left", fill="y")
+        self.day_series_btn = tk.Button(
+            self.day_strip, text="🔁 Edit the whole series",
+            command=self._edit_whole_series, relief="flat", cursor="hand2",
+            font=("Segoe UI", 9, "bold"))
+        self.track_theme(self.day_series_btn, bg="accent", fg="on_accent",
+                         activebackground="accent_hover",
+                         activeforeground="on_accent",
+                         highlightbackground="card", highlightcolor="accent")
+        self.day_series_btn.pack(side="right", padx=(8, 10), pady=8,
+                                 ipadx=6, ipady=2)
+        self.day_strip_lbl = tk.Label(
+            self.day_strip, text="", font=("Segoe UI", 10, "bold"),
+            anchor="w", justify="left")
+        self.track_theme(self.day_strip_lbl, bg="card", fg="text")
+        self.day_strip_lbl.pack(side="left", fill="x", expand=True,
+                                padx=(10, 0), pady=8)
+        self.day_strip_lbl.bind("<Configure>", lambda e: self.day_strip_lbl.configure(
+            wraplength=max(120, e.width - 8)), add="+")
+
         top_row = tk.Frame(self.editor)
         self.track_theme(top_row, bg="bg")
         top_row.pack(fill="x", padx=30, pady=(25, 5))
@@ -13722,6 +13760,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             w.configure(cursor="hand2")
             w.bind("<Button-1>", lambda e: self._open_category_dropdown())
         self._refresh_category_button()
+        # Beside the category in day mode (_show_day_mode): the category a day
+        # is given is that day's, and the series' card keeps its own.
+        self.day_cat_lbl = tk.Label(top_row, text="This day:",
+                                    font=("Segoe UI", 9, "bold"))
+        self.track_theme(self.day_cat_lbl, bg="bg", fg="accent_text")
 
         # --- Metadata row 1: Date + Note color, side by side ---
         # These are short controls, so pairing them on one line keeps the
@@ -13792,11 +13835,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         )
         self.track_theme(clear_date_btn, bg="sidebar", fg="subtext")
         clear_date_btn.pack(side="left", padx=(0, 20))
+        # Day mode puts these back exactly as packed here (_show_day_mode).
+        self._date_field_packing = [
+            (self.date_entry, dict(side="left", padx=(6, 4), ipady=3)),
+            (pick_date_btn, dict(side="left", padx=(0, 2), ipadx=2)),
+            (clear_date_btn, dict(side="left", padx=(0, 20)))]
+        # In day mode, in their place: the day's own date, as words. The
+        # field holds the series' start, which is no day's to change.
+        self.day_date_lbl = tk.Label(meta_row, text="", font=("Segoe UI", 10))
+        self.track_theme(self.day_date_lbl, bg="bg", fg="text")
 
         # Note color, on the same row, pushed a bit right of the date controls.
         color_label = tk.Label(meta_row, text="🎨 Color:", font=("Segoe UI", 9, "bold"))
         self.track_theme(color_label, bg="bg", fg="subtext")
         color_label.pack(side="left")
+        self._color_label = color_label
 
         self.current_note_color = ""  # "" means "use the category's default color"
 
@@ -14349,6 +14402,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         attach_label = tk.Label(attach_header, text="📎 Attachments", font=("Segoe UI", 9, "bold"), anchor="w")
         self.track_theme(attach_label, bg="bg", fg="subtext")
         attach_label.pack(side="left")
+        # Its words change in day mode (_show_day_mode).
+        self.attach_label = attach_label
 
         add_attach_btn = tk.Button(
             attach_header, text="+ Add file", command=self.add_attachment,
@@ -14629,17 +14684,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _return_to_calendar(self):
         """Jump back to the exact month/day the user was viewing before they
         started creating a note from the calendar."""
-        # Save first — leaving a dirty occurrence behind rendered the day
-        # panel from the store, which still held the OLD content: the
-        # edit looked lost. The scope question, if one is pending, rides
-        # this click like every other explicit gesture.
+        # Save first — leaving a dirty day behind rendered the day panel
+        # from the store, which still held the OLD content: the edit
+        # looked lost.
         self._flush_autosave()
         # If the editor is STILL dirty, the flush did not finish — the
-        # user cancelled the scope prompt, or the date field is mid-edit.
-        # Navigating anyway would land them on a day panel showing the
-        # old content while their edit sits only in the editor (and the
-        # panel's "Open in editor" would then load disk content over it).
-        # Stay put instead; the way back stays armed.
+        # person went back to fix a date the save could not store, or the
+        # date field is mid-edit. Navigating anyway would land them on a
+        # day panel showing the old content while their edit sits only in
+        # the editor (and the panel's way to the editor would then load
+        # disk content over it). Stay put instead; the way back stays armed.
         try:
             st = self.capture_editor_state()
             # An emptied SAVED note whose flush was cancelled counts as
@@ -14659,8 +14713,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                if k != "recurrence"}))
             if _blockable and not self.editor_state_matches_saved(st):
                 self.set_status(
-                    "Not saved yet — answer the save question (or fix the "
-                    "date) to go back to the calendar")
+                    "Not saved yet — fix the date to go back to the calendar")
                 return
         except Exception:
             pass
@@ -14699,9 +14752,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         text = ""
         off = []
         if occ:
-            day = parse_date(occ)
-            pretty = show_day(day) if day else occ
-            text = f"📅 Editing this day of the series: {pretty}"
+            # The day strip says which day (_show_day_mode, below).
+            pass
         elif self.selected_note_id is not None:
             # The series view of a repeating note gets its own line: edits
             # here reach every day — EXCEPT days that were edited with
@@ -14740,6 +14792,97 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                           before=self.editor_top_row)
         else:
             self.offschedule_btn.pack_forget()
+        self._show_day_mode()
+
+    def _day_mode(self):
+        """Whether the editor holds one day of a repeating series, opened on
+        its own (from the calendar): what it saves is that day's."""
+        if not getattr(self, "current_occurrence_date", None) \
+                or self.selected_note_id is None:
+            return False
+        note = self.find_note(self.selected_note_id)
+        return note is not None and is_recurring(note)
+
+    def _series_owned_mark(self):
+        """What the checklist and the attachments add to their names in day
+        mode: they are the series', whichever day shows them, and a tick or a
+        file added on one day is there on every day."""
+        return " · whole series" if self._day_mode() else ""
+
+    def _show_day_mode(self):
+        """Lay the editor out for one day of a series (_day_mode), or back.
+
+        A day shows its own date as words, its repeat as a line, a strip
+        saying that what changes here stays on this day -- with the one way
+        to the whole series -- and "This day:" beside its category. The
+        date field and the repeat's boxes stay filled with the series' own
+        values, out of sight: the save reads them and finds nothing changed,
+        so a day can never move the series or stop it. Called wherever the
+        editor's day changes, through _update_occurrence_banner; every step
+        is idempotent, so it costs nothing called again."""
+        if not hasattr(self, "day_strip"):
+            return
+        on = self._day_mode()
+        note = self.find_note(self.selected_note_id) if on else None
+        day = self.current_occurrence_date if on else None
+        when = parse_date(day) if day else None
+        if on:
+            self.day_strip_lbl.config(text=(
+                f"📅 Only this day: {show_day(when) if when else day}"
+                " — what you change here stays on this day"))
+            if not self._is_placed(self.day_strip):
+                self.day_strip.pack(fill="x", padx=30, pady=(12, 0),
+                                    before=self.editor_top_row)
+            for widget, _packing in self._date_field_packing:
+                widget.pack_forget()
+            self.day_date_lbl.config(text=f"{show_date(day)} (this day)")
+            if not self._is_placed(self.day_date_lbl):
+                self.day_date_lbl.pack(side="left", padx=(6, 20),
+                                       before=self._color_label)
+            for widget, _packing in self._repeat_field_packing:
+                widget.pack_forget()
+            self.rec_details.pack_forget()
+            start = show_date(note.get("date") or "")
+            self.day_repeat_lbl.config(text=(
+                describe_recurrence(note)
+                + (f", starting {start}" if start else "")
+                + " — change it in the whole series"))
+            if not self._is_placed(self.day_repeat_lbl):
+                self.day_repeat_lbl.pack(side="left", padx=(8, 0))
+            if not self._is_placed(self.day_cat_lbl):
+                self.day_cat_lbl.pack(side="right", padx=(10, 0),
+                                      after=self.category_menu)
+        else:
+            self.day_strip.pack_forget()
+            self.day_cat_lbl.pack_forget()
+            if self._is_placed(self.day_date_lbl):
+                self.day_date_lbl.pack_forget()
+                for widget, packing in self._date_field_packing:
+                    widget.pack(before=self._color_label, **packing)
+            if self._is_placed(self.day_repeat_lbl):
+                self.day_repeat_lbl.pack_forget()
+                for widget, packing in self._repeat_field_packing:
+                    widget.pack(**packing)
+                # The repeat's own rows come back with its frequency.
+                self.on_recurrence_changed()
+        self.attach_label.config(text="📎 Attachments" + self._series_owned_mark())
+        self._update_checklist_progress()
+
+    def _edit_whole_series(self):
+        """The day strip's way to the whole series: the day is saved to the
+        day first, as leaving it saves it, then the series opens in its
+        place. The way back to the calendar stays as it was -- it is the way
+        back to that day."""
+        note = self.find_note(self.selected_note_id) \
+            if self.selected_note_id is not None else None
+        if note is None:
+            return
+        pending = getattr(self, "_pending_calendar_return", None)
+        if not self.open_note_in_tab(note):
+            return
+        if pending is not None:
+            self._pending_calendar_return = pending
+            self._update_calendar_return_button()
 
     def _show_off_schedule_days(self, note=None):
         """Walk the days a repeating note keeps its own edits for that its
@@ -15155,6 +15298,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                         justify="left")
         self.track_theme(self.rec_summary_lbl, bg="bg", fg="accent_text")
         self.rec_summary_lbl.pack(side="left")
+        # Day mode puts these two back exactly as packed here, and shows the
+        # repeat as words in their place: a day does not change the series'
+        # repeat (_show_day_mode).
+        self._repeat_field_packing = [
+            (freq_menu, dict(side="left", padx=(8, 10))),
+            (self.rec_summary_lbl, dict(side="left"))]
+        self.day_repeat_lbl = tk.Label(freq_row, text="", font=("Segoe UI", 9),
+                                       justify="left", anchor="w")
+        self.track_theme(self.day_repeat_lbl, bg="bg", fg="text")
 
         def _wrap_summary(_event=None):
             # The summary wraps inside what its row leaves it rather than
@@ -15170,6 +15322,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 room = (freq_row.winfo_width() - freq_label.winfo_reqwidth()
                         - freq_menu.winfo_reqwidth() - 18 - inner)
                 lbl.configure(wraplength=max(room, 120))
+                # The day's line has the room the dropdown leaves, less its
+                # own 8 px of padding.
+                self.day_repeat_lbl.configure(wraplength=max(
+                    freq_row.winfo_width() - freq_label.winfo_reqwidth()
+                    - 8 - inner, 120))
             except (tk.TclError, ValueError):
                 pass
         freq_row.bind("<Configure>", _wrap_summary, add="+")
@@ -15426,6 +15583,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.rec_details.pack_forget()
             self.rec_summary_lbl.config(text="")
             return
+        if self._day_mode():
+            # One day of a series shows its repeat as words, not as boxes to
+            # change: the repeat is the whole series' (_show_day_mode).
+            self.rec_details.pack_forget()
+            return
 
         # Show the details block, positioned just above the Note body section
         # (where the Tags section used to sit, before it was removed).
@@ -15581,24 +15743,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._schedule_autosave(skip_word_count=True)
 
     # ---------- Occurrence scope prompt ----------
-    def ask_occurrence_scope(self, action_word, occurrence_date,
-                             keeps_schedule=False):
+    def ask_occurrence_scope(self, action_word, occurrence_date):
         """Google-Calendar-style prompt. Returns 'occurrence', 'series' or None.
         Uses the in-app themed dialog overlay (not a separate window).
 
-        *keeps_schedule*: the date or the repeat was changed too. They are
-        the series' own, and the question says what "This occurrence only"
-        does with them."""
-        extra = ("\n\nThe date and the repeat belong to the whole series: "
-                 "'This occurrence only' keeps them as they are."
-                 if keeps_schedule else "")
+        Asked by Delete alone. A save once asked it too, on the way out of a
+        day; a day opened on its own now saves to that day without asking
+        (save_current_note). A delete keeps the question: it destroys, and
+        the question is the moment to choose how much. Its words are the
+        day strip's -- "day", not "occurrence"."""
         return self._themed_dialog(
             f"{action_word} repeating note",
             f"This note repeats. What should '{action_word}' apply to?\n"
-            f"Currently open occurrence: {show_date(occurrence_date)}{extra}",
+            f"The day: {show_date(occurrence_date)}",
             kind="question",
-            buttons=[("Cancel", None), ("The entire series", "series"),
-                     ("This occurrence only", "occurrence")]
+            buttons=[("Cancel", None), ("The whole series", "series"),
+                     ("Only this day", "occurrence")]
         )
 
     def _reset_text_undo(self):
@@ -16458,8 +16618,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # note's menu does: the note on screen may be one of the ticked
         # ones, and its unsaved typing belongs in the Trash copy (and in
         # what Undo brings back), not in an editor about to be cleared.
-        # Cancel on a day's save question stops the delete here. A repeat's
-        # turn-off is held back for the question (see _context_delete_note).
+        # Going back to fix a date the save could not store stops the delete
+        # here. A repeat's turn-off is held back for the question (see
+        # _context_delete_note).
         if self._flush_autosave(
                 leaving=self.selected_note_id in self.selected_note_ids,
                 hold_repeat_off=True) is False:
@@ -16564,7 +16725,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # Leaving only if the note on screen is one of those moving.
             if self._flush_autosave(
                     leaving=self.selected_note_id in touched) is False:
-                return  # Cancel on a day's save question: nothing moves
+                return  # gone back to fix a date: nothing moves
             to_move = [n for n in self.notes if n["id"] in touched]
             if not to_move:
                 # The ticked notes are gone. A dialog naming a count it
@@ -17029,9 +17190,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._update_calendar_return_button()
         self._catch_up_deferred_refresh()
         # Save whatever is currently in the editor before switching away.
-        # Cancel on a repeating day's save question means stay: the edited
-        # day remains in the editor, unsaved, and the way back to the
-        # calendar is armed again as it was.
+        # Going back to fix a date the save could not store means stay: the
+        # note remains in the editor, and the way back to the calendar is
+        # armed again as it was.
         if flush and self._flush_autosave() is False:
             self._pending_calendar_return = pending_return
             self._update_calendar_return_button()
@@ -17055,8 +17216,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Start a brand-new empty note, replacing whatever was open (after
         auto-saving any unsaved work in it).
 
-        Returns False when the person chose to stay (Cancel on a repeating
-        day's question), True otherwise -- as open_note_in_tab does. A
+        Returns False when the person chose to stay (to fix a date the save
+        could not store), True otherwise -- as open_note_in_tab does. A
         caller that goes on to fill the editor must stop on False: the
         import did not, and loaded a recipe into the repeating note still
         on screen, whose next save wrote it over the whole series."""
@@ -17068,7 +17229,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._update_calendar_return_button()
         self._catch_up_deferred_refresh()
         if self._flush_autosave() is False:
-            # Cancel means stay, exactly as in open_note_in_tab.
+            # Going back means stay, exactly as in open_note_in_tab.
             self._pending_calendar_return = pending_return
             self._update_calendar_return_button()
             return False
@@ -17087,13 +17248,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         real unsaved changes, save them right now. Called before switching notes
         or closing so a late timer can't fire into the wrong note.
 
-        Returns False when the person pressed Cancel on the question a
-        repeating note's day asks ("What should Save apply to?"), and True
-        otherwise. Every caller about to replace the editor -- another note,
-        a new one, closing the window -- stops on False, because Cancel
-        means "take me back", in this dialog as in every other. They used
-        to carry on regardless, and Cancel quietly threw the day's edit
-        away.
+        Returns False when the person chose to go back -- "Go back and fix
+        it", asked about a date or repeat the save could not store -- and
+        True otherwise. Every caller about to replace the editor -- another
+        note, a new one, closing the window -- stops on False, because going
+        back means "take me back", in this dialog as in every other. The
+        question a repeating note's day once asked on the way out ("What
+        should Save apply to?") was the first to need it: callers carried on
+        regardless, and its Cancel quietly threw the day's edit away.
 
         ``leaving`` says whether the caller is about to replace the editor.
         A route that saves on its way to changing something ELSE -- deleting
@@ -17162,8 +17324,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._holding_repeat_off = held or (
                     not leaving if hold_repeat_off is None else hold_repeat_off)
                 try:
-                    if self.save_current_note(auto=True) is self._SAVE_CANCELLED:
-                        return False
+                    self.save_current_note(auto=True)
                 finally:
                     self._holding_repeat_off = held
         except Exception:
@@ -17320,8 +17481,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.notebook.select(self.TAB_NOTES)
         # Flush before clearing, like every other route into an empty
         # editor — without it the shortcut silently discarded whatever
-        # the debounce hadn't caught yet (and a deferred occurrence
-        # session in full). Cancel on the day's question keeps the day.
+        # the debounce hadn't caught yet (and, when a day of a series
+        # waited for a question on the way out, that day's session in
+        # full). Going back to fix a date keeps the note.
         if self._flush_autosave() is False:
             return "break"
         self.new_note()
@@ -18048,9 +18210,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         if self.current_occurrence_date:
             has_override = self.current_occurrence_date in (note.get("overrides") or {})
-            suffix = " (edited separately)" if has_override else ""
+            suffix = " — it keeps edits of its own" if has_override else ""
             self.set_status(
-                f"Occurrence {show_date(self.current_occurrence_date)}{suffix}")
+                f"Only this day: {show_date(self.current_occurrence_date)}{suffix}")
         else:
             created = note.get("created", "")
             if created:
@@ -18240,13 +18402,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if occurrence_date is not None:
             if is_recurring(note):
                 menu.add_separator()
+                # The day panel's own two buttons, in the same words.
                 menu.add_command(
-                    label="✏  Edit only this occurrence",
+                    label="✏  Edit this day",
                     command=lambda: self._ctx_open(note, occurrence_date,
                                                    return_day=occurrence_date)
                 )
                 menu.add_command(
-                    label="✏  Edit whole series",
+                    label="🔁  Edit the whole series",
                     command=lambda: self._ctx_open(note, None,
                                                    return_day=occurrence_date)
                 )
@@ -18349,7 +18512,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # its own unreadable date is no question for this move to ask.
         if self._flush_autosave(
                 leaving=real["id"] == self.selected_note_id) is False:
-            return  # Cancel on a day's save question: nothing moves
+            return  # gone back to fix a date: nothing moves
         # Re-read after the flush: the note object above was fetched before
         # anything the editor was holding reached the store.
         real = self.find_note(note["id"])
@@ -18413,8 +18576,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         keeps an explicit Save from yanking the user out of the editor.
         """
         self.notebook.select(self.TAB_NOTES)
-        # Not opened -- Cancel on the day still in the editor -- means no
-        # way back to arm either: it would point at a note never opened.
+        # Not opened -- the person went back to the note still in the
+        # editor, to fix a date -- means no way back to arm either: it would
+        # point at a note never opened.
         if not self.open_note_in_tab(note, occurrence_date=occurrence_date):
             return
         if return_day is not None:
@@ -18429,7 +18593,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         the user can turn it into a recurring series."""
         self.notebook.select(self.TAB_NOTES)
         if not self.open_note_in_tab(note):
-            return  # Cancel on the day still in the editor: see _ctx_open
+            return  # gone back to the note still in the editor: see _ctx_open
         if return_day is not None:
             # Raised on a calendar day — same way-back memory as _ctx_open.
             self._pending_calendar_return = {
@@ -18498,8 +18662,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         delete logic so recurring-series scope prompts still apply."""
         # Flush whatever's genuinely open in the editor FIRST, under its real
         # selected_note_id, so the list re-render after the delete shows the
-        # editor's latest content rather than a stale preview. Cancel on a
-        # day's save question stops the delete before it asks anything.
+        # editor's latest content rather than a stale preview. Going back to
+        # fix a date the save could not store stops the delete before it
+        # asks anything.
         # Only deleting the note on screen -- or the very day it shows --
         # replaces the editor; one other day of it leaves the editor be. A
         # repeat's turn-off waiting there is not made for the delete either
@@ -18760,10 +18925,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if choice is None:
             return None
         if choice:
-            # Cancel on a repeating day's save question means stay:
-            # nothing saved, so nothing duplicated either.
-            if self.save_current_note() is self._SAVE_CANCELLED:
-                return None
+            self.save_current_note()
             # The note the question was about, saved: not whichever one
             # the editor holds after the answer.
             return self.find_note(note["id"])
@@ -19018,8 +19180,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.comments_text.insert("1.0", prev.get("comments", ""))
         # Written straight onto the NOTE, not routed through the editor's
         # save. The rescue copy belongs to the note, and the save path
-        # asks a scope question on a repeating note: answering "this
-        # occurrence" put the recovered text into a per-day override,
+        # writes a repeating note's day to that day. When it still asked a
+        # scope question, answering "this occurrence" put the recovered
+        # text into a per-day override,
         # which carries only plain text — so the formatting came back
         # stripped, the SERIES stayed shortened, and the rescue copy was
         # spent anyway under a success message. The other answer had its
@@ -19364,11 +19527,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Back to Calendar) cancels.
         self._say_nothing_is_left_out()
 
-    # What save_current_note returns when the person pressed Cancel on the
-    # occurrence-scope question -- the one outcome a caller that is about
-    # to replace the editor must not carry on past.
-    _SAVE_CANCELLED = object()
-
     # Said wherever a save turns a repeat off and the rescue copy takes the
     # days' own text.
     _REPEAT_OFF_KEPT = (" — the repeat is off; ↩ Restore previous brings it "
@@ -19608,27 +19766,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             stored_before = (_stored_signature(note), note.get("updated"))
 
             scope = "series"
-            # Read once, before any question is asked. The question runs a
-            # nested event loop, and whatever else happens while it waits
-            # must not decide which day this save writes to: a Ctrl+N
-            # pressed under the question used to clear the day, and the
-            # answer then wrote the edit under a key of None.
+            # Read once, at the start: nothing that runs while this save
+            # works may decide which day it writes to.
             occurrence_date = self.current_occurrence_date
-            # Whether "The entire series" was the person's answer or the
-            # save's own conclusion: they mean different writes below.
-            asked = False
             schedule_changed = False
             if is_recurring(note) and occurrence_date:
-                # Only ask when the answer could actually change anything.
-                # An override carries OVERRIDABLE_FIELDS and nothing else,
-                # so when the edit is in a SERIES-owned field — a ticked
-                # checklist item above all — "this day" has nowhere to put
-                # it: the old code wrote an override duplicating the
-                # series' own text, threw the tick away, and left the
-                # editor still dirty, so the question came back on every
-                # switch. If nothing overridable differs from what this
-                # day shows, the edit belongs to the series by
-                # construction; save it there without asking.
+                # A day opened on its own is edited on its own, and saved to
+                # that day without a question. Its edits used to wait for
+                # one -- "This occurrence only, or the entire series?" -- asked
+                # only on leaving, with nothing on screen saying they waited:
+                # a category picked for one day seemed to do nothing (field
+                # report, 2026-10-12). The whole series has its own view, one
+                # click away on the day's strip (_update_occurrence_banner).
+                #
+                # An override carries OVERRIDABLE_FIELDS and nothing else, so
+                # an edit in a SERIES-owned field -- a ticked checklist item
+                # above all -- has nowhere to go on the day: when nothing
+                # overridable differs from what this day shows, it belongs to
+                # the series, and is saved there (below).
                 shown_now = effective_note(note, occurrence_date)
                 overridable_changed = (
                     title.strip() != (shown_now.get("title") or "").strip()
@@ -19637,31 +19792,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     or category != shown_now.get("category")
                     or self.current_note_color != (shown_now.get("color") or ""))
                 # The date and the repeat are the series' own, and a day
-                # saved on its own leaves them as they are: the question
-                # says so when this visit changed either -- a date typed in
-                # a form the app cannot read among them, which is left out
-                # and so never differs from the stored one by value.
+                # leaves them as they are. The day shows neither as a field
+                # to change, but whatever reached the fields behind it --
+                # a date typed in a form the app cannot read among them,
+                # which is left out and so never differs from the stored one
+                # by value -- is the day's to put back, never the series' to
+                # take: saved here, it moved the series, or stopped it.
                 schedule_changed = bool(
                     left_out
                     or date_value != (note.get("date") or "")
                     or normalize_recurrence(recurrence)
                     != normalize_recurrence(note.get("recurrence")))
-                if overridable_changed:
-                    scope = self.ask_occurrence_scope(
-                        "Save", occurrence_date,
-                        keeps_schedule=schedule_changed)
-                    if scope is None:
-                        # Said out loud, because Cancel means "take me
-                        # back": a caller about to leave this note (another
-                        # note, Ctrl+N, closing the window) has to know the
-                        # edit was NOT saved, or it replaces the editor and
-                        # the edit is gone without a word.
-                        return self._SAVE_CANCELLED
-                    asked = True
-            # The day on screen has text of its own: the editor's words are
-            # that day's, not the series'.
-            own_day = (occurrence_date is not None and is_recurring(note)
-                       and occurrence_date in (note.get("overrides") or {}))
+                if overridable_changed or schedule_changed:
+                    scope = "occurrence"
+            # The editor holds one day of the series: whatever it saves, the
+            # series' text, formatting, date and repeat are not its to write.
+            on_a_day = occurrence_date is not None and is_recurring(note)
             # Announced once it is known that something was stored.
             announce = False
 
@@ -19696,46 +19842,57 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 })
                 if not self.current_note_color and note.get("color"):
                     patch["color"] = ""
-                note.setdefault("overrides", {})[occurrence_date] = patch
+                # A day that says what the series says keeps no copy of its
+                # own, and follows the series again (day_matches_series): a
+                # letter typed and taken back left one, and cut the day off
+                # from every later edit of the series.
+                follows_again = day_matches_series(note, patch)
+                if follows_again:
+                    follows_again = occurrence_date in (note.get("overrides") or {})
+                    (note.get("overrides") or {}).pop(occurrence_date, None)
+                else:
+                    note.setdefault("overrides", {})[occurrence_date] = patch
                 note["updated"] = now
                 # A file or a tick from this visit is the series': a day
                 # has nowhere to keep either. They were dropped here -- an
                 # attached file left in the folder with no note, a removed
                 # one still listed with its file gone, a tick undone -- and
                 # the editor's snapshot then called the drop saved. The date
-                # and the repeat stay the series' as they were (the question
-                # said so); the editor shows them again below.
+                # and the repeat stay the series' as they were; the editor
+                # shows them again below.
                 self._write_series_owned(note, date_value, recurrence,
                                          schedule=False)
                 put_back_schedule = schedule_changed
                 # Nothing of the schedule is stored by this save, so
-                # nothing of it was left out: the question said the date
-                # and the repeat stay the series', and the editor shows
-                # the series' again below. Kept on screen as a field "to
-                # fix", a changed date or repeat made the editor differ
-                # from the note, and the next save -- asking nothing,
-                # since the day's text was already saved -- wrote it to
-                # the whole series: the series moved, or stopped repeating.
+                # nothing of it was left out: the date and the repeat stay
+                # the series', and the editor shows the series' again below.
+                # Kept on screen as a field "to fix", a changed date or
+                # repeat made the editor differ from the note, and the next
+                # save wrote it to the whole series: the series moved, or
+                # stopped repeating.
                 left_out = []
-                self.set_status(("Auto-saved " if auto else "Saved ")
-                                + f"{show_date(occurrence_date)} only"
-                                + (" — the date and the repeat stay the "
-                                   "whole series'" if schedule_changed else ""))
+                self.set_status(
+                    ("Auto-saved" if auto else "Saved")
+                    + (f" — {show_date(occurrence_date)} follows the series again"
+                       if follows_again else f" {show_date(occurrence_date)} only")
+                    + (" — the date and the repeat stay the whole series'"
+                       if schedule_changed else ""))
                 announce = auto
-            elif own_day and not asked:
+            elif on_a_day:
                 # Only a series-owned field changed -- a ticked checklist
-                # item, an attachment, the repeat rule -- while looking at a
-                # day with text of its own, so nobody was asked. The whole
-                # editor used to be written to the series here: one day's
-                # words replaced every day's, and the series' formatting was
-                # wiped, since a day's own text carries none. Only what
-                # belongs to the series is written; its text, and this
-                # day's, stay as they were.
-                rescued = repeat_off_kept = self._write_series_owned(
-                    note, date_value, recurrence)
+                # item, an attachment -- while looking at one day. The whole
+                # editor used to be written to the series here: on a day
+                # with text of its own, one day's words replaced every
+                # day's, and the series' formatting was wiped, since a day's
+                # own text carries none; on any day, a word made bold there
+                # went to every day with the tick beside it. Only what
+                # belongs to the series is written; its text and this day's
+                # stay as they were, and so do its date and its repeat,
+                # which a day never changes.
+                self._write_series_owned(note, date_value, recurrence,
+                                         schedule=False)
                 note["updated"] = now
-                self.set_status(("Auto-saved " if auto else "Saved at ") + show_stamp(now)
-                                + (self._REPEAT_OFF_KEPT if rescued else ""))
+                self.set_status(("Auto-saved " if auto else "Saved at ") + show_stamp(now))
                 announce = auto
             else:
                 # Before overwriting, keep a one-step backup of the OLD version
@@ -19758,14 +19915,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # reset by the note switch that persisted it. The case
                 # that most needs the safety net had none.
                 emptied = old_len > 0 and new_len == 0
-                # A day with text of its own, saved to "The entire series"
-                # by the person's own answer: that day's words become every
-                # day's words. The series' own text is replaced wholesale by
-                # something typed on one day, so it keeps a rescue copy
-                # whatever the lengths say.
-                series_text_replaced = own_day and (
-                    title.strip() != (note.get("title") or "").strip()
-                    or body != (note.get("body") or ""))
                 # The repeat going off takes every day's own text with it
                 # (below): kept whole, with the repeat and the days, so
                 # Restore previous brings the series back as it was.
@@ -19773,7 +19922,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     note, recurrence)
                 if days_lost:
                     note["_prev"] = self._turn_off_rescue_copy(note)
-                elif (emptied or series_text_replaced
+                elif (emptied
                         or (removed > 40 and (big_fraction or big_absolute))):
                     note["_prev"] = {
                         "title": note.get("title", ""),
@@ -19787,13 +19936,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     if (getattr(self, "_holding_repeat_off", False)
                             and self._repeat_off_waits()):
                         self._held_text_rescue = note["_prev"]
-                if own_day:
-                    # ...and the day's own copy goes: it now says what the
-                    # series says. Kept, it made the day read as unsaved
-                    # forever -- the editor showed the series' new text,
-                    # the day still held its old one -- so every way out
-                    # of the note asked the same question again.
-                    note["overrides"].pop(occurrence_date, None)
                 note["title"] = title
                 note["body"] = body
                 note["formatting"] = formatting
@@ -20062,8 +20204,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # onto the result -- the same order the change itself uses.
         if self._flush_autosave(leaving=self.selected_note_id in {
                 note["id"] for note in notes if note is not None}) is False:
-            # Cancel on a day's save question means stay -- and the offer
-            # stays with it: where each note came from is kept nowhere else.
+            # Going back to fix a date means stay -- and the offer stays
+            # with it: where each note came from is kept nowhere else.
             self._offer_category_undo({"marks": marks, "applied": applied})
             return
         restored = []
@@ -20210,14 +20352,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # (_editor_follows_external_change), and the day is opened
             # without a second save below. Saved after the day went back,
             # the editor's view of that very day -- a repeat picked anew
-            # shows the series' text on it -- read as an edit and asked
-            # "What should Save apply to?", and every answer but Cancel wrote
-            # the series' text over the day's own.
+            # shows the series' text on it -- read as an edit of the day,
+            # and its save wrote the series' text over the day's own. (It
+            # once asked first, "What should Save apply to?", and every
+            # answer but Cancel did the same.)
             if self._flush_autosave() is False:
-                # Cancel means stay -- and the offer stays with it: the day's
-                # own text is kept nowhere else.
+                # Going back means stay -- and the offer stays with it: the
+                # day's own text is kept nowhere else.
                 self._show_toast(
-                    "Occurrence removed",
+                    "Day removed",
                     action=lambda: self._undo_occurrence_delete(
                         note_id, date_str, own_edit, uid))
                 return
@@ -20432,7 +20575,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     self.new_note()
                 self.refresh_note_list()
                 self.render_calendar()
-                self.set_status("Removed that one occurrence")
+                self.set_status("Removed that one day")
                 # This one had no way back at all: the date goes into the
                 # note's exceptions and no screen in the app takes it out
                 # again. The toast is not a convenience here.
@@ -20441,7 +20584,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 undo = (lambda nid=note["id"], day=occurrence_date,
                         edit=own_edit, uid=note.get("uid"):
                         self._undo_occurrence_delete(nid, day, edit, uid))
-                self._show_toast("Occurrence removed", action=undo)
+                self._show_toast("Day removed", action=undo)
                 if self.selected_note_id == note["id"]:
                     self._update_occurrence_banner()
                 return
@@ -20529,12 +20672,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         ever 'protect' the last half-second of typing (anything older was
         already autosaved), so it read as the app doubting its own
         autosave. Whatever is still unsaved is saved, silently, and the
-        window closes. One exception is no longer silent: a dirty
-        occurrence view (whose background autosave defers rather than
-        ask -- see _autosave_now) raises its occurrence-scope question
-        here, at the gesture. Cancelling it keeps the window open, on the
-        edited day: it used to close anyway and discard the edit, which
-        is the opposite of what Cancel means anywhere else.
+        window closes. One exception is no longer silent: a date or repeat
+        the save could not store raises its question here, at the gesture,
+        and "Go back and fix it" keeps the window open. (A day of a
+        repeating series once asked its scope question here too; its
+        Cancel used to close anyway and discard the edit, the opposite of
+        what Cancel means anywhere else. A day now saves to itself, asking
+        nothing -- see save_current_note.)
 
         Two things come before any of that. A question on screen owns the
         window until it is answered, as a modal question does on Windows:
