@@ -315,10 +315,28 @@ def run_bursts():
     app.set_theme('dark')
     pump()
 
-    stage_table_note()
-    app.body_text.mark_set('insert', '1.end')
-    burst('b02_pushdown_enter_above_table',
-          lambda: app._on_body_return(type('E', (), {})()))
+    # A push-down needs a note that STARTS with a table and the caret at the
+    # start of the line under it. The table note above opens with a caption,
+    # so this scene used to time an ordinary Enter under the caption, which
+    # pushes nothing. And a real key, press and release: the release is
+    # where a second rebuild once came from (ISSUES_LOG, smaller lessons).
+    app.new_note()
+    app.body_text.insert('1.0', core_tables.align(
+        '| Day | Lunch | Dinner |\n| --- | --- | --- |\n'
+        '| Monday | Soup | Pasta |\n| Tuesday | Salad | Tacos |')[0] + '\nbelow the table')
+    app._render_table_grids()
+    pump()
+    below = app._table_block_at(1)[1] + 1
+    app.body_text.mark_set('insert', f'{below}.0')
+    app._last_caret_line = below
+    app.body_text.focus_force()
+    pump()
+
+    def press_enter():
+        app.body_text.event_generate('<KeyPress-Return>', keysym='Return', when='now')
+        app.body_text.event_generate('<KeyRelease-Return>', keysym='Return', when='now')
+
+    burst('b02_pushdown_enter_above_table', press_enter)
 
     stage_long_list()
     burst('b03_list_scroll', lambda: app.canvas.yview_scroll(5, 'units'))

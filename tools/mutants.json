@@ -2580,5 +2580,251 @@
     "must_fail": ["every calendar day marker is one the emoji picker offers too"],
     "suites": ["test_data_safety"],
     "expect": "killed"
+  },
+  {
+    "id": "RB01",
+    "about": "a note added again from your own backup shares the original's file instead of getting its own",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            for a in note.get(\"attachments\", []):\n                if not isinstance(a, dict):\n                    continue\n                name = a.get(\"stored_as\")\n                if name in claimed:\n",
+        "replace": "            for a in note.get(\"attachments\", []):\n                if not isinstance(a, dict):\n                    continue\n                name = a.get(\"stored_as\")\n                if False and name in claimed:\n"
+      }
+    ],
+    "must_fail": ["...\"Add a copy anyway\" gives the copy a file of its own",
+                  "deleting the copy for good removes its file"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "RB02",
+    "about": "updating a note from your own backup attaches the file it already has a second time (both guards gone: the list of files to adopt and the adoption itself)",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                if att.get(\"stored_as\") and att.get(\"stored_as\") not in have]\n",
+        "replace": "                if att.get(\"stored_as\")]\n"
+      },
+      {
+        "file": "note_organizer.py",
+        "find": "            if name in have:\n                continue\n",
+        "replace": "            if False and name in have:\n                continue\n"
+      }
+    ],
+    "must_fail": ["...\"Update\" attaches the shared file once, and leaves no file behind"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "RB03",
+    "about": "a backup listing one new file twice gets it attached twice: the adoption's own guard is gone",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if name in have:\n                continue\n",
+        "replace": "            if False and name in have:\n                continue\n"
+      }
+    ],
+    "must_fail": ["...and a backup listing one new file twice attaches it once"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "TP01",
+    "about": "the push-down does not note where it put the caret, so the Enter's own release rebuilds every table a second time",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self._last_caret_line = 1\n            self._resync_list_tags()\n",
+        "replace": "            self._resync_list_tags()\n"
+      }
+    ],
+    "must_fail": ["one Enter that pushes a table down rebuilds the tables once"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "TP02",
+    "about": "\"Add a line above the table\" does not note where it put the caret, so the first letter typed after it rebuilds every table",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._last_caret_line = first\n        self._resync_list_tags()\n",
+        "replace": "        self._resync_list_tags()\n"
+      }
+    ],
+    "must_fail": ["...and the first letter typed on the line the menu added rebuilds nothing"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "CU01",
+    "about": "a rename while a category move's Undo is on offer leaves the Undo looking for the category's old name",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                if offer[\"applied\"] == old_name:\n                    offer[\"applied\"] = new_name\n",
+        "replace": "                pass\n"
+      }
+    ],
+    "must_fail": ["bulk category: a rename while the Undo is on offer puts the new name on its banner",
+                  "bulk category: ...and the Undo still puts the notes back, into a renamed category too"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "CU02",
+    "about": "the Undo of a category move forgets that a category the notes came from was renamed",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                    (mark[0], new_name if mark[1] == old_name else mark[1]) + tuple(mark[2:])\n",
+        "replace": "                    (mark[0], mark[1]) + tuple(mark[2:])\n"
+      }
+    ],
+    "must_fail": ["bulk category: ...and the Undo still puts the notes back, into a renamed category too"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "CU03",
+    "about": "deleting the category the notes were moved into leaves the move's Undo on offer",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            elif offer[\"applied\"] == old_name:\n                self._category_undo_offer = None\n",
+        "replace": "            elif False:\n                self._category_undo_offer = None\n"
+      }
+    ],
+    "must_fail": ["bulk category: deleting the category the notes went into withdraws its Undo"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "OS01",
+    "about": "no day a repeating note keeps its own edits for is ever found off its schedule",
+    "edits": [
+      {
+        "file": "noteorganizer/core/recurrence.py",
+        "find": "        if expand_occurrences(schedule, when, when) != [day]:\n            off.append(day)\n",
+        "replace": "        if False:\n            off.append(day)\n"
+      }
+    ],
+    "must_fail": ["a day the rule no longer lands on is off the schedule"],
+    "suites": ["test_recurrence"],
+    "expect": "killed"
+  },
+  {
+    "id": "OS02",
+    "about": "a day deleted from a series counts as a day off its schedule",
+    "edits": [
+      {
+        "file": "noteorganizer/core/recurrence.py",
+        "find": "        if when is None or day in exceptions:\n            continue\n        if expand_occurrences(schedule, when, when)",
+        "replace": "        if when is None:\n            continue\n        if expand_occurrences(schedule, when, when)"
+      }
+    ],
+    "must_fail": ["a day deleted from the series is not counted as off it"],
+    "suites": ["test_recurrence"],
+    "expect": "killed"
+  },
+  {
+    "id": "OS03",
+    "about": "the line above a series counts the days off its schedule as days that keep their own edits",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                n_over = len(note.get(\"overrides\") or {}) - len(off)\n",
+        "replace": "                n_over = len(note.get(\"overrides\") or {})\n"
+      }
+    ],
+    "must_fail": ["the line above a series counts only the days still on its schedule"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "OS04",
+    "about": "a day made a note of its own takes the series' formatting onto text it was never measured on",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            \"formatting\": copy.deepcopy(note.get(\"formatting\") or []) if same_body else [],\n",
+        "replace": "            \"formatting\": copy.deepcopy(note.get(\"formatting\") or []),\n"
+      }
+    ],
+    "must_fail": ["...without the series' formatting, which belongs to other text"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "OS05",
+    "about": "the walk through the days off the schedule does not save the editor first, and loses what was typed",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if not days or self._flush_autosave() is False:\n",
+        "replace": "        if not days:\n"
+      }
+    ],
+    "must_fail": ["...and what was typed before the question is in the series, not lost"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "OS06",
+    "about": "History opens a day off the series' schedule as a day of it, one no calendar shows",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/calendar_view.py",
+        "find": "                        if child.get(\"off_schedule\"):\n",
+        "replace": "                        if False:\n"
+      }
+    ],
+    "must_fail": ["History marks the 2 days off the schedule",
+                  "...and a click on one opens the way in"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "OS07",
+    "about": "the way in to the days off the schedule keeps its hover colour from the theme it was made in",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                         activebackground=\"bg\", activeforeground=\"accent_text\",\n                         highlightbackground=\"bg\", highlightcolor=\"accent\")\n",
+        "replace": "                         activeforeground=\"accent_text\",\n                         highlightbackground=\"bg\")\n"
+      }
+    ],
+    "must_fail": ["the way in takes every colour of a new theme"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "OS08",
+    "about": "the way in to the days off the schedule is offered while a turn-off of the repeat waits",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                if not self._repeat_off_waits():\n                    off = off_schedule_days(note)\n",
+        "replace": "                off = off_schedule_days(note)\n"
+      }
+    ],
+    "must_fail": ["while a turn-off of the repeat waits, the way in is not offered"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "OS09",
+    "about": "the series line above a note is cut at both ends instead of wrapping to the width it has",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        for line in (self.occurrence_banner, self.offschedule_btn):\n            line.bind(",
+        "replace": "        for line in ():\n            line.bind("
+      }
+    ],
+    "must_fail": ["the series line wraps within its width rather than cutting its words"],
+    "suites": ["qa5"],
+    "expect": "killed"
   }
 ]

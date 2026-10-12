@@ -4636,6 +4636,57 @@ check('the table menu adds a blank first line above a leading table',
       and app._grid_at_line(2) is not None
       and str(app.body_text.index('insert')) == '1.0')
 
+# ---- ...AND THE TABLES ARE REBUILT ONCE, NOT AGAIN ON THE NEXT KEY ----
+# Both gestures move the table under the caret; the caret does not leave
+# it. The release of the Enter that pushed it, and the first letter typed
+# on the line the menu added, read as leaving the table and rebuilt every
+# table in the note a second time (measured 2026-10-12: two rebuilds per
+# Enter). Counted on real key events, press AND release: the release is
+# where the second rebuild came from, and a direct call has none.
+_rbCalls = []
+_rbReal = app._render_table_grids
+app._render_table_grids = lambda *a, **k: (_rbCalls.append(1), _rbReal(*a, **k))[1]
+try:
+    set_body('| A | B |\n| x | y |\nbelow')
+    _rbReal()
+    app.update()
+    app.body_text.mark_set('insert', '3.0')
+    app._last_caret_line = 3
+    take_focus(app.body_text)
+    _rbCalls.clear()
+    app.body_text.event_generate('<KeyPress-Return>', keysym='Return', when='now')
+    app.body_text.event_generate('<KeyRelease-Return>', keysym='Return', when='now')
+    for _ in range(4):
+        app.update()
+    _rbEnter = len(_rbCalls)
+    _rbPushed = (app.body_text.get('1.0', '1.end') == ''
+                 and app._grid_at_line(2) is not None)
+    set_body('| M | N |\n| p | q |')
+    _rbReal()
+    app.update()
+    app.body_text.mark_set('insert', '2.2')
+    app._last_caret_line = 2
+    app._grid_add_line_above(app._grid_at_line(1))
+    app.update()
+    take_focus(app.body_text)
+    _rbCalls.clear()
+    app.body_text.event_generate('<KeyPress-a>', keysym='a', when='now')
+    app.body_text.event_generate('<KeyRelease-a>', keysym='a', when='now')
+    for _ in range(4):
+        app.update()
+    _rbTyped = len(_rbCalls)
+    _rbLine1 = app.body_text.get('1.0', '1.end')
+finally:
+    app._render_table_grids = _rbReal
+print('  table rebuilds: %d on the Enter, %d on the letter after the menu'
+      % (_rbEnter, _rbTyped))
+check('fixture: a real Enter under a leading table pushes it down', _rbPushed)
+check('one Enter that pushes a table down rebuilds the tables once', _rbEnter == 1)
+check('fixture: the letter lands on the line the menu added', _rbLine1 == 'a')
+check('...and the first letter typed on the line the menu added rebuilds nothing',
+      _rbTyped == 0)
+set_body('')
+
 # ---- PASTE FOLLOWS THE CARET ----
 # The body kept its old view, leaving the freshly pasted end below the
 # fold -- the user read that as the scroll jumping away from the text.
@@ -11368,6 +11419,64 @@ check('bulk category: a second Undo does not clobber a category set by hand',
 check('bulk category: a second Undo says so instead of claiming success',
       any('Nothing left to put back' in _bc_t and _bc_k == 'info'
           for _bc_t, _bc_k in _bc_toasts))
+
+# A category renamed while the Undo is still on offer. The rename does not
+# change what was done, so the Undo puts the notes back all the same -- into
+# a renamed category they came from as well -- and its banner says the new
+# name. It looked for the old name and said "Nothing left to put back".
+# Renamed as Settings renames (its handler is a closure in the row): the
+# colours in place first, then every holder of the name.
+
+
+def _bc_rename(old, new):
+    _bc_order = [(new if _bc_k == old else _bc_k, _bc_c)
+                 for _bc_k, _bc_c in NO.CATEGORY_COLORS.items()]
+    NO.CATEGORY_COLORS.clear()
+    NO.CATEGORY_COLORS.update(_bc_order)
+    app.rename_category_everywhere(old, new)
+    app.save_notes()
+    app.update()
+
+
+NO.CATEGORY_COLORS.setdefault('BcDest', '#3388aa')
+_bc_seed([(8130, 'BcRen1', 'Alpha', None), (8131, 'BcRen2', 'Beta', None)])
+app.selection_mode = True
+app.selected_note_ids = {8130, 8131}
+_bc_pick('BcDest')
+check('fixture: the move offers its Undo',
+      app._toast_action is not None and _bc_cats() == {8130: 'BcDest', 8131: 'BcDest'})
+_bc_rename('BcDest', 'BcDest2')
+_bc_rename('Alpha', 'Alpha2')
+check('bulk category: a rename while the Undo is on offer puts the new name on its banner',
+      '“BcDest2”' in str(app.toast_lbl.cget('text'))
+      and app._toast_action is not None)
+app._run_toast_action()
+app.update()
+check('bulk category: ...and the Undo still puts the notes back, into a renamed category too',
+      _bc_cats() == {8130: 'Alpha2', 8131: 'Beta'})
+_bc_rename('Alpha2', 'Alpha')
+NO.CATEGORY_COLORS.pop('BcDest2', None)
+
+# The category the notes went into, deleted while its Undo is on offer, the
+# way Settings deletes one: the deletion has just decided where they go, so
+# the offer goes with it rather than staying up to say "Nothing left".
+NO.CATEGORY_COLORS.setdefault('BcGone', '#aa5533')
+_bc_seed([(8132, 'BcDel', 'Alpha', None)])
+app.selection_mode = True
+app.selected_note_ids = {8132}
+_bc_pick('BcGone')
+check('fixture: the move into the category to delete offers its Undo',
+      app._toast_action is not None and _bc_cats() == {8132: 'BcGone'})
+_bc_real_deletion_ask = app._ask_category_deletion
+app._ask_category_deletion = lambda *a, **k: 'move'
+try:
+    app._delete_category('BcGone', lambda: None)
+finally:
+    app._ask_category_deletion = _bc_real_deletion_ask
+app.update()
+check('bulk category: deleting the category the notes went into withdraws its Undo',
+      app._toast_action is None and not app.toast_frame.winfo_ismapped()
+      and _bc_cats() == {8132: 'General'})
 
 # The editor holding one of the ticked notes, and that note ending in a
 # table -- the shape that once made every table-ending note read as

@@ -16,7 +16,7 @@ dependency (Pillow, for images).
   — who decides, and how the agent's work is checked.
 - **What went wrong, and what changed:** the
   [five stories](docs/ISSUES_LOG.md#start-here-five-stories) the issues log starts with.
-- **How it is tested:** [thirteen cases from the manual test plan](docs/TEST_PLAN_EXCERPT.md),
+- **How it is tested:** [four cases from the manual test plan](docs/TEST_PLAN_EXCERPT.md),
   and [how we test, in one page](qa/README.md#how-we-test-in-one-page).
 
 ## What it is

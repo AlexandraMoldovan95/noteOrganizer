@@ -554,8 +554,10 @@ flips to **Unselect all** once everything on screen is ticked.
 The bar below then acts on what you ticked: **🗑 Trash**, **🗂 Category ▾**, **Export ▾**, and
 **📌 Pin** — which reads **📌 Unpin** when everything you ticked is already pinned, so one button
 covers both directions. Moving a batch to another category asks first and offers a way back, each
-note to the category it actually came from; trashing a batch is undoable from the banner, and the
-notes sit in the Trash besides.
+note to the category it actually came from — still so if you rename a category while the offer
+is up; deleting the category the notes went into ends the offer, since the deletion has just
+moved them to General. Trashing a batch is undoable from the banner, and the notes sit in the
+Trash besides.
 
 ### Templates
 
@@ -653,6 +655,16 @@ The date and the repeat belong to the series too, but a day saved on its own nev
 with **This occurrence only** they stay as they were (the question says so when you changed
 them), and **The entire series** is the answer that moves the series.
 
+Moving the series afterwards can leave a day's own edits behind: change the start date or the
+rule, and a day you edited may no longer be one the series lands on. Its text is kept — nothing
+is deleted — but the calendar has no such day to show it on. The line above the note then says
+so separately — "✎ 2 days' own edits are off the schedule — Show them" — and **Show them** goes
+through those days one at a time. For each, **Make it a note** turns it into an ordinary note on
+its own date, with that day's title, text, comments, category and colour (the checklist and the
+attached files stay with the series, which they belong to); **Move to the Trash** does the same
+but straight into Recently deleted, from where it can be restored; and **Leave it** changes
+nothing. Put the rule back the way it was and those days are simply part of the series again.
+
 Turning the repeat off ("Does not repeat") ends every day's own edits along with the series —
 but none of their text is lost. When any day had text of its own, the note as it was, repeat and
 days included, becomes its rescue copy, and **↩ Restore previous** brings the repeating note back
@@ -710,7 +722,9 @@ the calendar grid. A
 short series ("10 times", or one that ends soon) opens to **all** its days, with ✎ marking the
 ones edited separately; an endless one lists just its ✎ days (every other day shows the series
 content — a note in the group says so), and a series with nothing to unfold shows a → and takes
-you straight to its day on the calendar. It has its own search — one that also looks *inside* what you
+you straight to its day on the calendar. A day whose own edits the series no longer reaches is
+listed too, greyed and marked "off the schedule"; clicking it goes through those days the way
+**Show them** above the note does. It has its own search — one that also looks *inside* what you
 wrote on those individual days, which the sidebar search cannot see — and year buttons
 (All / This year / Last year / 2 years ago / Older) for digging through the archive. Click any entry
 and you land back on that exact day's preview; right-click gives the usual day menu, including

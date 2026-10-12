@@ -20,9 +20,7 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
 
 - **Follow-ups the audit programme scoped out** (see
   [Known limitations](#known-limitations) for the full residuals list): fonts inside table
-  cells (the phase deliberately deferred in the 0.64.95 cycle); an end-to-end GUI check for
-  re-importing an overlapping backup; a pixel-level investigation of the post-push-down second
-  grid rebuild before any de-flicker fix is trusted.
+  cells (the phase deliberately deferred in the 0.64.95 cycle).
 
 - **Small candidates from the 2026-08-31 idea pass** (put aside deliberately, in rough order of
   appeal; two candidates from that pass have since shipped — see
@@ -342,6 +340,7 @@ counting notes record what counted, what didn't, and why. The features themselve
 | `0.89.362` | 2026-10-08 | 89 | 362 | One `Added` and one `Fixed`, on two stacked branches released as one. The `Added`: a welcome note on the first start — the owner's request, her words over three drafts — counted once with the Settings → About row that brings it back. The `Fixed`: emoji from the app's own pickers, three day markers and two icons written with U+FE0F, which Tk draws as a gap — shipped since the emoji picker, so it counts; the same character in the welcome note's headings was introduced and removed inside this work, not counted. Not counted, `Testing`: the qa5, qa3, test_data_safety and test_richtext checks, the source scan for the character and mutants Y01–Y09 and I01–I04. Known limitation recorded, not fixed: text that already carries the character keeps its gap. |
 | `0.89.365` | 2026-10-08 | 89 | 365 | **Three** `Fixed`, no `Added`: the palette chosen by the owner from proposals by a panel of AI reviewer personas (Claude subagents), over five rounds on the running app. All three shipped in `0.89.362` or earlier, so all count, one entry per mechanism: (1) the accent, the warning red and the confirming green each doing two jobs, 71 pairs below WCAG AA (as old as the themes) -- the fill and text shades, the words picked per fill, the dark warning fill and the light confirming one are one entry; (2) find's current match in the note's own text colour on the full accent (since `0.66.97`); (3) a card's tags line in a colour picked for its look, often unreadable (as old as the tags line). NOT counted -- `Changed`: Save the one filled button, the editor row's order and pressed colours, the moves to the Trash in red words, Generate code and the selection bar's Category quiet, the attachment question no warning, and the source-run notebook location (PR #258); introduced and repaired inside this work: the card shades going khaki, the docs naming two moves to the Trash as final and then claiming "every", Midnight Purple's violet changed twice. The contrast gate's 208 pairs and icon checks, the qa checks and mutants PC01-PC21 are `Testing`. |
 | `0.89.371` | 2026-10-08 | 89 | 371 | **Six** `Fixed`, no `Added`: what AI reviewers (Claude subagents) reading colour-blindness simulations hesitated over, and two things the owner found on the same run. All six shipped in `0.89.365` or earlier, so all count, one entry per mechanism: (1) find's current match told apart by its fill alone (boxed now); (2) the open tab drawn smaller than the closed one, clam's selected padding beating the app's; (3) `contrasting_fg`'s own brightness threshold putting white on 9 of the 20 day colours (now `letters_on`); (4) the colour picker's tick a literal white; (5) a clicked tab keeping its dotted focus ring; (6) icons the app uses missing from the emoji picker — the welcome note's six and the calendar's nine day markers are one entry, one promise. NOT counted: the screenshot tools opening notes by a person's route and the retaken screenshots (docs); introduced and repaired inside this work: a check that crashed on a colour name instead of failing (CB04 first ran nothing), a Tab handler bound where it never ran, and an icon check that missed ℹ because Unicode files it as a letter. The qa and unit checks and mutants CB01-CB10 are `Testing`. |
+| `0.90.373` | 2026-10-12 | 90 | 373 | One `Added` and **two** `Fixed`, on four stacked branches released as one, as they land before one rebuild — the owner's pick of two roadmap groups, the two product decisions on her list and two follow-ups the audit scoped out. The `Added`: days a repeating note keeps its own edits for that its schedule no longer reaches, found (the series line, a walk through them, the calendar History), the owner's call between moving, asking and keeping them findable. The two `Fixed`, both as old as what they fix: a category move's Undo that said "Nothing left to put back" after a rename, and the series line that lost its first and last words at 1200 px. Not counted: the push-down's second rebuild of every table, removed under `Changed` (measured, and nothing on screen differed), and the tests — the own-backup re-import end to end, and seventeen mutants (RB01–RB03, TP01–TP02, CU01–CU03, OS01–OS09). |
 | `0.88.361` | 2026-10-08 | 88 | 361 | **Four** `Added` and **four** `Fixed`, from the owner's two re-tests of `0.84.357`, on five stacked branches released as one, as they land before one rebuild. The `Added`, each counted once with everything it grew while unreleased: the table that moves with its caption (and the dialog that says how a table moves when every cell is aligned); "📎 With files" in the Show filter; checklist items moved with ▲ ▼ and Alt+↑/↓ — the arrows' place, the ring, the keyboard after a press and the template editor's list are one feature; search and order in the Share panel, its live following of a new sort included. The `Fixed`, all shipped in `0.84.357` or earlier, so all count: an open checkbox cell showing its brackets; a long checklist item's bin squeezed out at 1024 pixels and below; the find bar's accent border going grey while typed in (since `0.66.97`); the find box unreadable on a light theme when nothing is found (as old). NOT counted: the find bar closing when the note is left (`Changed`); introduced and repaired inside this unreleased work — the checklist's ring drawn grey (seen on a photograph), the Share panel 14 pixels over its room at 1150×860 (seen in the Linux image), the banner that went before it was read, and the not-found tint adjusted twice by eye. The qa checks, `ring_mismatches`, the contrast gate's `DERIVED` surfaces, `check_mutant_targets` and 53 new mutants (H, L, F, O, V, X, Z) are `Testing`. |
 | `0.82.232` | 2026-09-30 | 82 | 232 | **Two** `Fixed`, no `Added`, on a branch stacked straight after `0.82.230` and landing before the same rebuild — a bump of its own because `0.82.230` had already been cut in the branch before it, so the `.exe` built after both goes out as `0.82.232`. (1) The calendar as one drawing: counted, because the month's widgets are a mechanism of their own — the list's drawing did not touch them, and either fix would have shipped without the other, the rule `0.82.230` applied to the list and its on-demand drawing. Field-reported: the freeze of `0.82.230` kept the edge with the pointer but left the month standing still until the drag ended. (2) A day's markers drawn black on every theme — shipped since the markers did, found while drawing them, so it counts. NOT counted: the test harness pinning the mouse button (a check-strategy repair; the story's red it explains was the harness's, not the app's), the two new story chapters, the re-aimed mutant and the 28 mutants — all `Testing`. |
 | `0.82.230` | 2026-09-30 | 82 | 230 | One `Added` and **seventeen** `Fixed`: three stacked branches released as one, because they land back to back before one rebuild. The `Added` is Custom order — the list arranged by hand, by dragging a card or with Alt+↑/↓ — counted **once**, as each formatting phase was: the drag, the keys and the sort are one feature. The `Fixed`, all shipped in `0.81.213` or earlier, so all count: **eight** from the keyboard-and-dialogs branch (Cancel on a repeating day's save question keeps you there; a question holds the app-wide shortcuts; the keyboard goes back after a question; formatting after a table cell; Ctrl+N and Ctrl+F leave Settings; a popup's button closes it on a second click; the smallest window shows a note; a cancelled backup import cleans up), **five** from the speed branch (the autosave that rebuilt the list; the list drawn on demand; window handlers run once per widget; a picture opens at once; the notes file written in one piece), and **four** from the list branch (the list as one drawing — the field-reported tearing and slow return; a click handing the list the keyboard; the Ends radio's dot on dark themes; the window's edge following the mouse). One entry per mechanism: the drawing and the on-demand drawing are two, because either would have shipped without the other. NOT counted — introduced and repaired inside this unreleased work: the drawing's extent read from Tk's `bbox` (8.6.15 and 8.6.16 pad a rectangle differently, and the Linux image read the list's top as 1); the Select-mode tick column guessed at 17 pixels; the drop line that promised a place across the pinned line or into another group; the dragged card leaving the list's view; the drag's edge scrolling at one fixed, slow step; and the travel story's Romanian failure message. The qa checks, the two new story chapters and the 71 mutants are `Testing`. The window's-edge entry grew inside this work — a second field test called the freeze alone heavy, and Tk's whole-window repaint styles came off too — and stays one entry: one complaint, one mechanism seen from two sides. |
@@ -450,9 +449,12 @@ bug being chased.
   as both Midnight Purple's Save colour and a note colour) can be swapped on widgets outside the
   note cards (which re-fix themselves afterwards, deliberately). Whitelisting data colours would
   be architectural; the exposure is cosmetic and theme-pair-specific.
-- *A second full grid rebuild after a push-down* — a diagnostic-confidence finding about
-  `_align_table_on_leaving` re-rendering redundantly (a late echo/flicker); needs a pixel-level
-  investigation before any fix is trusted.
+- *A second full grid rebuild after a push-down* — **settled 2026-10-12.** Measured on a real
+  press and release: the Enter's own release read as leaving the table and rebuilt every table
+  again, invisible in frames 45 ms apart; the menu twin did the same on the next letter. Both now
+  note where they put the caret (see
+  [the lesson](ISSUES_LOG.md#smaller-lessons-moved-out-of-the-code), "The push-down's caret
+  line").
 - *Three "same note" definitions* — **settled after the 2026-09-29 audit.** Recorded here as
   internal drift with "no user-visible wrong answer known"; the audit found one — the startup
   collapse, on the looser signature, merged away a copy of a routine edited on a single day. Every
@@ -480,9 +482,9 @@ bug being chased.
   commit. Declared during the audit and recorded here because, unlike its siblings, it had no
   home in the repo at all — it lived only in a conversation. Cosmetic, and it needs the same
   pixel-level look as the push-down rebuild above before any fix is trusted.
-- *Zip-import overlap has no end-to-end test* — the re-import-your-own-backup attachment remap
-  is unit-covered through its shared helper and review-verified end to end; a full GUI round-trip
-  check remains worth writing.
+- *Zip-import overlap has no end-to-end test* — **settled 2026-10-12.** qa3 now walks re-importing
+  your own backup with a file attached through the real export and import, every answer and a
+  delete for good included (mutants RB01–RB03).
 
 **Break-it residuals (2026-10)** — nineteen rounds of agents tried to break the app (see the
 [Changelog](../CHANGELOG.md)); what they measured and the fixes deliberately left is recorded
@@ -507,18 +509,19 @@ here. None is a bug being chased; each has a reason.
   cut off by 41 px; the code itself can still be selected and copied.
 - *X11 only* — Meta+D, Meta+BackSpace and Meta+Delete (Tk's word deletes, which Windows does not
   have) are not held at a table's edge.
-- *A day's own text on a day the series no longer has* — changing a series' start date or its
-  rule can leave a day's own text (saved "only this occurrence") on a date the new schedule never
-  reaches. It stays in the file, so nothing is lost, but the calendar no longer shows it. Older
-  than the rounds; whether to move it, ask, or keep it findable is a product decision, on the
-  owner's list.
+- *A day's own text on a day the series no longer has* — **settled 2026-10-12, the owner's call:
+  kept, and findable.** The series line counts such days apart and offers to go through them —
+  each made a note of its own, moved to the Trash, or left — and the calendar History marks them
+  instead of opening them as days of the series (see
+  [the recurrence model](ARCHITECTURE.md#recurrence-model)).
 - *Note ids* — an id freed by a delete can be given to the next new note (ids are max + 1). Every
   holder of an id across a delete was checked and acts on the note it means; the one left is a
   keyboard ring that can land on the new note, which is a cursor, not an action.
-- *A category move's Undo after a rename* — renaming the category the notes were moved into, or
-  deleting the one they came from, while the Undo is on offer makes the Undo say "Nothing left
-  to put back" with the notes still moved. Nothing is lost; whether the Undo should follow the
-  rename or be withdrawn with it is a product decision, on the owner's list.
+- *A category move's Undo after a rename* — **settled 2026-10-12, the owner's call: the Undo
+  follows the rename.** A rename while it is on offer carries it along, the categories the notes
+  came from included, and its banner says the new name; deleting the category they went into
+  withdraws it. Deleting one they came from still gets the Undo's own answer, that those notes
+  could not go back to a category that no longer exists.
 - *Formatting edges seen and not chased* — picking the default size with nothing selected
   inside a 20 pt run types 20 pt while the status line says the size is back to the default;
   Ctrl+B on the whole of a note of 8,000 styled words takes 0.6–0.8 s (the toolbar's reading of

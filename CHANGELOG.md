@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.90.373](#090373--2026-10-12) | 2026-10-12 | Days a repeating note keeps its own edits for, left off its schedule, found and turned into notes of their own; a category move's Undo that survives a rename; the line above a repeating note keeping all its words. |
 | [0.89.371](#089371--2026-10-08) | 2026-10-08 | What AI reviewers of colour-blindness simulations hesitated over: a boxed find match, a raised open tab with no dotted box after a click, letters that read on every colour you pick — and every icon the app uses in the emoji picker. |
 | [0.89.365](#089365--2026-10-08) | 2026-10-08 | Every coloured word and button readable in every theme, Save and Delete told apart without colour, and a dark red fill kept for what cannot be undone. |
 | [0.89.362](#089362--2026-10-08) | 2026-10-08 | A welcome note that greets a first start and shows each part of the app, and emoji from the app's own pickers that leave no gap after them. |
@@ -96,6 +97,68 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+---
+
+## [0.90.373] — 2026-10-12
+
+### Added
+
+- **Days off the schedule, found.** A day saved "only this occurrence" keeps its edit under its
+  date, so moving the series' start or changing its rule could leave it on a date the series no
+  longer has: kept in the file, counted on the line above the note as a day keeping its own
+  edits, and shown on no calendar. The line now counts such days apart — "✎ 2 days' own edits
+  are off the schedule — Show them" — and **Show them** goes through them one at a time: **Make
+  it a note** turns the day into an ordinary note on its own date, with that day's title, text,
+  comments, category and colour; **Move to the Trash** does the same into Recently deleted;
+  **Leave it** changes nothing. The calendar History marks them "off the schedule" and opens the
+  same walk, where it used to open a day no calendar showed; a series with an end lists them
+  too, where it listed none. Nothing is moved or dropped by itself: put the rule back and they
+  are days of the series again.
+
+### Fixed
+
+- **A category move's Undo survives a rename.** Move a batch of notes to a category, rename that
+  category in Settings while the Undo is still on offer, and the Undo said "Nothing left to put
+  back" over notes that were still moved: it was looking for the old name. It now follows the
+  rename — the categories the notes came from too — and its banner says the new name. Deleting
+  the category the notes went into ends the offer instead, because that deletion has just moved
+  them to General.
+- **The line above a repeating note keeps all its words.** It ran long — the rule, then the days
+  that keep their own edits — and, centred in one line wider than the editor, lost its first and
+  last words at an ordinary window size: at 1200 px the 🔁 and the "(✎)" were gone. It now wraps
+  to the width it has.
+
+### Changed
+
+- **Pushing a table down rebuilds the tables once.** In a note that begins with a table, the
+  Enter that pushes it down a line rebuilt every table in the note twice — the second time on the
+  key's own release, which read as leaving the table — and "Add a line above the table" did the
+  same on the first letter typed after it. Nothing on screen changed, which is why it waited for
+  a measurement; the work is saved now, which matters most on a slow machine with many tables.
+
+### Testing
+
+- Re-importing your own backup with a file attached, walked end to end in qa3 — the real export
+  and import, the worker thread and Recently deleted: "Skip it" leaves no file nobody owns, "Add
+  a copy anyway" gives the copy a file of its own that deleting it for good takes without the
+  original's, "Update" attaches the shared file once, and a backup listing one new file twice
+  attaches it once. Mutants RB01–RB03, each killed; the second needs both of the update's guards
+  gone, because each covers the other.
+- The table rebuilds counted on real key events, press and release, in qa1: one per push-down
+  Enter, none on the first letter typed after "Add a line above the table". Mutants TP01–TP02,
+  each killed. The burst scene named for the push-down (`tools/visual_scenes.py`) now stages
+  one: its note opened with a caption line, so it had been timing an ordinary Enter.
+- The category move's Undo through a rename and a deletion, in qa1: the destination renamed, a
+  source renamed, the destination deleted through Settings. Mutants CU01–CU03, each killed.
+- Days off the schedule: nine unit checks of `off_schedule_days` (a rule changed, a start moved
+  later, past a count, past an end, a deleted day, a month's 31st clamped and skipped) and two of
+  History's marks; in qa5 the series line's count, the walk answered both ways with what each
+  answer leaves behind, typed text saved first, the calendar, a restore from the Trash, the
+  theme, the smallest window, a waiting turn-off, History's rows and click, and the line
+  wrapping. Mutants OS01–OS09, each killed — OS09 only after its check was corrected: it had
+  failed with the mutant for a reason of its own (the line was never drawn again), so its
+  first "killed" proved nothing.
 
 ---
 
