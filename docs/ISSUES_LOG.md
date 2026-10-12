@@ -4711,6 +4711,16 @@ line or three and points here, by name, for what happened.*
   probe that printed what the tag held is what showed it. It now joins Tk's own script there with
   `add="+"`, after the traversal, which it must never replace — and it asks `tk_focusNext` where
   the key is going rather than `focus_get` where it went.
+- **The push-down's caret line** — The Enter that pushes a leading table down moves the caret by
+  code, and did not say so: the release of that same key then read as the caret leaving a table,
+  and every table in the note was tidied and rebuilt a second time. Its menu twin, "Add a line
+  above the table", paid the same rebuild on the first letter typed after it. The 2026-09 audit
+  could only call this a diagnostic-confidence finding, and two things kept it unmeasured: the
+  frames a burst capture takes are about 45 ms apart, and the second rebuild changed no pixel in
+  them — and the burst scene named for it opened with a caption line, so it had timed an ordinary
+  Enter all along. Counted on a real press and release (2026-10-12): two rebuilds per Enter,
+  about 8 ms and 12 ms for a note of ten tables on a fast machine, and one with the fix. Code that
+  moves the caret notes the line it left it on (`_last_caret_line`), as paste already did.
 
 ### From `core/model.py`
 

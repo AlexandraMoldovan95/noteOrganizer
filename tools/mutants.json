@@ -2628,5 +2628,33 @@
     "must_fail": ["...and a backup listing one new file twice attaches it once"],
     "suites": ["qa3"],
     "expect": "killed"
+  },
+  {
+    "id": "TP01",
+    "about": "the push-down does not note where it put the caret, so the Enter's own release rebuilds every table a second time",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self._last_caret_line = 1\n            self._resync_list_tags()\n",
+        "replace": "            self._resync_list_tags()\n"
+      }
+    ],
+    "must_fail": ["one Enter that pushes a table down rebuilds the tables once"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "TP02",
+    "about": "\"Add a line above the table\" does not note where it put the caret, so the first letter typed after it rebuilds every table",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._last_caret_line = first\n        self._resync_list_tags()\n",
+        "replace": "        self._resync_list_tags()\n"
+      }
+    ],
+    "must_fail": ["...and the first letter typed on the line the menu added rebuilds nothing"],
+    "suites": ["qa1"],
+    "expect": "killed"
   }
 ]

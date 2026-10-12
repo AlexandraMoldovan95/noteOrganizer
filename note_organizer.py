@@ -5517,6 +5517,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._teardown_table_grids()
         self.body_text.insert(f"{first}.0", "\n")
         self.body_text.mark_set("insert", f"{first}.0")
+        # Noted for the same reason as the Enter gesture: unnoted, the
+        # first letter typed on the new line read as leaving the table and
+        # rebuilt every table again.
+        self._last_caret_line = first
         self._resync_list_tags()
         self._render_table_grids()
         self._schedule_autosave()
@@ -8218,6 +8222,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._teardown_table_grids()
             self.body_text.insert("1.0", "\n")
             self.body_text.mark_set("insert", "1.0")
+            # The table moved under the caret; the caret did not leave it.
+            # Unnoted, this Enter's own release read as leaving the table
+            # and tidied and rebuilt every table in the note a second time
+            # (measured: two rebuilds per Enter, one with this line) -- the
+            # paste's rule (_on_body_paste).
+            self._last_caret_line = 1
             self._resync_list_tags()
             self._render_table_grids()
             self._schedule_autosave()

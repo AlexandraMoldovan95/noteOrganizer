@@ -20,8 +20,7 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
 
 - **Follow-ups the audit programme scoped out** (see
   [Known limitations](#known-limitations) for the full residuals list): fonts inside table
-  cells (the phase deliberately deferred in the 0.64.95 cycle); a pixel-level investigation of
-  the post-push-down second grid rebuild before any de-flicker fix is trusted.
+  cells (the phase deliberately deferred in the 0.64.95 cycle).
 
 - **Small candidates from the 2026-08-31 idea pass** (put aside deliberately, in rough order of
   appeal; two candidates from that pass have since shipped — see
@@ -449,9 +448,12 @@ bug being chased.
   as both Midnight Purple's Save colour and a note colour) can be swapped on widgets outside the
   note cards (which re-fix themselves afterwards, deliberately). Whitelisting data colours would
   be architectural; the exposure is cosmetic and theme-pair-specific.
-- *A second full grid rebuild after a push-down* — a diagnostic-confidence finding about
-  `_align_table_on_leaving` re-rendering redundantly (a late echo/flicker); needs a pixel-level
-  investigation before any fix is trusted.
+- *A second full grid rebuild after a push-down* — **settled 2026-10-12.** Measured on a real
+  press and release: the Enter's own release read as leaving the table and rebuilt every table
+  again, invisible in frames 45 ms apart; the menu twin did the same on the next letter. Both now
+  note where they put the caret (see
+  [the lesson](ISSUES_LOG.md#smaller-lessons-moved-out-of-the-code), "The push-down's caret
+  line").
 - *Three "same note" definitions* — **settled after the 2026-09-29 audit.** Recorded here as
   internal drift with "no user-visible wrong answer known"; the audit found one — the startup
   collapse, on the looser signature, merged away a copy of a routine edited on a single day. Every

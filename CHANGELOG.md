@@ -97,6 +97,14 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+### Changed
+
+- **Pushing a table down rebuilds the tables once.** In a note that begins with a table, the
+  Enter that pushes it down a line rebuilt every table in the note twice — the second time on the
+  key's own release, which read as leaving the table — and "Add a line above the table" did the
+  same on the first letter typed after it. Nothing on screen changed, which is why it waited for
+  a measurement; the work is saved now, which matters most on a slow machine with many tables.
+
 ### Testing
 
 - Re-importing your own backup with a file attached, walked end to end in qa3 — the real export
@@ -105,6 +113,10 @@ How the numbers themselves are counted is the
   original's, "Update" attaches the shared file once, and a backup listing one new file twice
   attaches it once. Mutants RB01–RB03, each killed; the second needs both of the update's guards
   gone, because each covers the other.
+- The table rebuilds counted on real key events, press and release, in qa1: one per push-down
+  Enter, none on the first letter typed after "Add a line above the table". Mutants TP01–TP02,
+  each killed. The burst scene named for the push-down (`tools/visual_scenes.py`) now stages
+  one: its note opened with a caption line, so it had been timing an ordinary Enter.
 
 ---
 

@@ -4636,6 +4636,57 @@ check('the table menu adds a blank first line above a leading table',
       and app._grid_at_line(2) is not None
       and str(app.body_text.index('insert')) == '1.0')
 
+# ---- ...AND THE TABLES ARE REBUILT ONCE, NOT AGAIN ON THE NEXT KEY ----
+# Both gestures move the table under the caret; the caret does not leave
+# it. The release of the Enter that pushed it, and the first letter typed
+# on the line the menu added, read as leaving the table and rebuilt every
+# table in the note a second time (measured 2026-10-12: two rebuilds per
+# Enter). Counted on real key events, press AND release: the release is
+# where the second rebuild came from, and a direct call has none.
+_rbCalls = []
+_rbReal = app._render_table_grids
+app._render_table_grids = lambda *a, **k: (_rbCalls.append(1), _rbReal(*a, **k))[1]
+try:
+    set_body('| A | B |\n| x | y |\nbelow')
+    _rbReal()
+    app.update()
+    app.body_text.mark_set('insert', '3.0')
+    app._last_caret_line = 3
+    take_focus(app.body_text)
+    _rbCalls.clear()
+    app.body_text.event_generate('<KeyPress-Return>', keysym='Return', when='now')
+    app.body_text.event_generate('<KeyRelease-Return>', keysym='Return', when='now')
+    for _ in range(4):
+        app.update()
+    _rbEnter = len(_rbCalls)
+    _rbPushed = (app.body_text.get('1.0', '1.end') == ''
+                 and app._grid_at_line(2) is not None)
+    set_body('| M | N |\n| p | q |')
+    _rbReal()
+    app.update()
+    app.body_text.mark_set('insert', '2.2')
+    app._last_caret_line = 2
+    app._grid_add_line_above(app._grid_at_line(1))
+    app.update()
+    take_focus(app.body_text)
+    _rbCalls.clear()
+    app.body_text.event_generate('<KeyPress-a>', keysym='a', when='now')
+    app.body_text.event_generate('<KeyRelease-a>', keysym='a', when='now')
+    for _ in range(4):
+        app.update()
+    _rbTyped = len(_rbCalls)
+    _rbLine1 = app.body_text.get('1.0', '1.end')
+finally:
+    app._render_table_grids = _rbReal
+print('  table rebuilds: %d on the Enter, %d on the letter after the menu'
+      % (_rbEnter, _rbTyped))
+check('fixture: a real Enter under a leading table pushes it down', _rbPushed)
+check('one Enter that pushes a table down rebuilds the tables once', _rbEnter == 1)
+check('fixture: the letter lands on the line the menu added', _rbLine1 == 'a')
+check('...and the first letter typed on the line the menu added rebuilds nothing',
+      _rbTyped == 0)
+set_body('')
+
 # ---- PASTE FOLLOWS THE CARET ----
 # The body kept its old view, leaving the freshly pasted end below the
 # fold -- the user read that as the scroll jumping away from the text.
