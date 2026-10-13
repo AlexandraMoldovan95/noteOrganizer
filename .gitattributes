@@ -1,0 +1,4 @@
+# The website (site/) is web content, and it keeps the line endings it was
+# written with -- LF -- whatever the checking-out machine's setting: Netlify
+# reads site/src/_headers line by line, as the build publishes it.
+site/** text eol=lf

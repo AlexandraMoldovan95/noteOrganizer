@@ -34,6 +34,13 @@ dist/
 *.spec
 !NoteOrganizer.spec
 
+# --- The website (site/): what its build makes ---
+# site/build.py writes the finished site into site/public/, staged in
+# site/public.building/ first. That is what goes to Netlify, and it is made
+# again from site/src/ and this repository whenever it is needed.
+site/public/
+site/public.building/
+
 # --- Editor / OS cruft ---
 .vscode/
 .idea/

@@ -1,0 +1,7 @@
+# For a deploy connected to a Git repository. The site is built on this
+# computer with `py build.py`, so Netlify has nothing to build: it only
+# publishes the public/ folder. (A drag-and-drop deploy ignores this file;
+# there you drag public/ itself.)
+[build]
+  publish = "public"
+  command = ""

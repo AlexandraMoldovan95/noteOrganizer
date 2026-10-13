@@ -1,0 +1,501 @@
+/* Note Organizer site. The palette is the app's own: Soft Lavender for
+   light, Midnight Purple for dark (noteorganizer/core/themes.py), and the
+   category colours stripe the cards the way they stripe the app's list. */
+
+:root {
+  --bg: #f5f5fa;
+  --surface: #ffffff;
+  --sidebar: #e9e9f5;
+  --text: #22223a;
+  --subtext: #5d5d75;
+  --accent: #6a49e6;
+  --accent-text: #5b2dd2;
+  --on-accent: #ffffff;
+  --line: #dcdcea;
+  --shadow: 0 1px 2px rgba(34, 34, 58, .06), 0 8px 24px rgba(34, 34, 58, .08);
+  --cat-general: #7c5cff;
+  --cat-work: #4cc9f0;
+  --cat-personal: #f9c74f;
+  --cat-ideas: #f77f00;
+  --cat-urgent: #ff5c7c;
+  --label-general: #5b2dd2;
+  --label-work: #00708f;
+  --label-personal: #8a5a00;
+  --label-ideas: #a24f00;
+  --label-urgent: #b4183c;
+  --radius: 10px;
+  --font: "Segoe UI", "Segoe UI Variable", system-ui, -apple-system, "Helvetica Neue",
+          Roboto, Arial, sans-serif;
+  --mono: Consolas, "Cascadia Mono", "SF Mono", Menlo, monospace;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1e1e2f;
+    --surface: #2e2e48;
+    --sidebar: #26263f;
+    --text: #f2f2f7;
+    --subtext: #a0a0c0;
+    --accent: #a48fff;
+    --accent-text: #aba4ff;
+    --on-accent: #1a1a1a;
+    --line: #3b3b5a;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 30px rgba(0, 0, 0, .35);
+    --label-general: #b9a8ff;
+    --label-work: #4cc9f0;
+    --label-personal: #f9c74f;
+    --label-ideas: #ffa64d;
+    --label-urgent: #ff8da3;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #1e1e2f;
+  --surface: #2e2e48;
+  --sidebar: #26263f;
+  --text: #f2f2f7;
+  --subtext: #a0a0c0;
+  --accent: #a48fff;
+  --accent-text: #aba4ff;
+  --on-accent: #1a1a1a;
+  --line: #3b3b5a;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 30px rgba(0, 0, 0, .35);
+  --label-general: #b9a8ff;
+  --label-work: #4cc9f0;
+  --label-personal: #f9c74f;
+  --label-ideas: #ffa64d;
+  --label-urgent: #ff8da3;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.6 var(--font);
+  overflow-x: hidden;
+}
+
+img { max-width: 100%; height: auto; display: block; }
+
+a { color: var(--accent-text); text-underline-offset: 2px; }
+a:hover { text-decoration-thickness: 2px; }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+.skip {
+  position: absolute; left: -999px; top: 8px;
+  background: var(--accent); color: var(--on-accent);
+  padding: 8px 12px; border-radius: 6px; z-index: 10;
+}
+.skip:focus { left: 16px; }
+
+.wrap {
+  width: 100%;
+  max-width: 1120px;
+  margin-inline: auto;
+  padding-inline: 20px;
+}
+
+/* ---- Header ---- */
+
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+}
+
+.site-header .wrap {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 60px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  color: var(--text);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.brand img { width: 28px; height: 28px; }
+
+.site-nav {
+  display: flex;
+  gap: 4px 18px;
+  flex-wrap: wrap;
+  margin-left: auto;
+  font-size: 15px;
+}
+.site-nav a { color: var(--subtext); text-decoration: none; padding: 4px 0; }
+.site-nav a:hover { color: var(--text); }
+.site-nav a[aria-current="page"] { color: var(--text); font-weight: 600; box-shadow: inset 0 -2px var(--accent); }
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 38px; height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.menu-toggle { display: none; }
+
+@media (max-width: 760px) {
+  .site-header .wrap { flex-wrap: wrap; gap: 8px 12px; padding-block: 8px; }
+  .menu-toggle {
+    display: inline-flex; align-items: center; justify-content: center;
+    margin-left: auto;
+    width: 38px; height: 38px;
+    border: 1px solid var(--line); border-radius: 8px;
+    background: var(--surface); color: var(--text); font-size: 18px; cursor: pointer;
+  }
+  .site-nav { display: none; order: 3; width: 100%; flex-direction: column; margin: 0; padding-bottom: 6px; }
+  .site-nav.open { display: flex; }
+  .site-nav a { padding: 8px 2px; border-top: 1px solid var(--line); }
+  .site-nav a[aria-current="page"] { box-shadow: inset 3px 0 var(--accent); padding-left: 10px; }
+}
+
+/* ---- Buttons ---- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font: 600 16px/1.2 var(--font);
+  text-decoration: none;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+}
+.btn:hover { border-color: var(--accent); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn-primary:hover { filter: brightness(1.06); }
+
+/* ---- Hero ---- */
+
+.hero { padding-block: 56px 40px; }
+.hero .wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 48px;
+  align-items: center;
+}
+.eyebrow {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--accent-text);
+}
+.hero h1 {
+  margin: 0 0 16px;
+  font-size: clamp(36px, 6vw, 56px);
+  line-height: 1.05;
+  letter-spacing: -.02em;
+  text-wrap: balance;
+}
+.lede { margin: 0 0 18px; font-size: 19px; color: var(--text); }
+.byline { margin: 0 0 26px; color: var(--subtext); font-size: 15px; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; }
+
+.window {
+  margin: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  background: var(--surface);
+}
+.window figcaption, .shot figcaption {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--subtext);
+  border-top: 1px solid var(--line);
+}
+
+@media (max-width: 900px) {
+  .hero { padding-block: 32px 24px; }
+  .hero .wrap { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+  .lede { font-size: 17px; }
+}
+
+/* ---- Sections ---- */
+
+section { padding-block: 44px; }
+.section-head { margin-bottom: 26px; }
+.section-head h2 {
+  margin: 0 0 8px;
+  font-size: clamp(26px, 3.4vw, 34px);
+  line-height: 1.15;
+  letter-spacing: -.01em;
+  text-wrap: balance;
+}
+.section-head p { margin: 0; color: var(--subtext); }
+
+.band { background: var(--sidebar); border-block: 1px solid var(--line); }
+
+/* Feature cards, drawn like the app's note cards: a category stripe on
+   the left, the title, a line of text, the category label in its colour. */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 18px;
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--stripe, var(--cat-general));
+  border-radius: 8px;
+  overflow: hidden;
+}
+.card img { border-bottom: 1px solid var(--line); aspect-ratio: 16 / 10; object-fit: cover; object-position: top left; width: 100%; }
+.card-body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+.card h3 { margin: 0; font-size: 18px; line-height: 1.3; }
+.card p { margin: 0; color: var(--subtext); font-size: 15px; }
+.card .label { margin-top: auto; padding-top: 6px; font-size: 13px; font-weight: 600; color: var(--label, var(--label-general)); }
+
+.cards.spaced { margin-top: 22px; }
+
+/* The hero shows the window in the theme the page is in. */
+.for-light { display: none; }
+:root[data-theme="light"] .for-light { display: block; }
+:root[data-theme="light"] .for-dark { display: none; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .for-light { display: block; }
+  :root:not([data-theme="dark"]) .for-dark { display: none; }
+}
+
+.cat-general { --stripe: var(--cat-general); --label: var(--label-general); }
+.cat-work { --stripe: var(--cat-work); --label: var(--label-work); }
+.cat-personal { --stripe: var(--cat-personal); --label: var(--label-personal); }
+.cat-ideas { --stripe: var(--cat-ideas); --label: var(--label-ideas); }
+.cat-urgent { --stripe: var(--cat-urgent); --label: var(--label-urgent); }
+
+a.card { color: inherit; text-decoration: none; }
+a.card:hover { border-color: var(--accent); border-left-color: var(--stripe, var(--cat-general)); }
+a.card:hover h3 { color: var(--accent-text); }
+
+.pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.shot { margin: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+@media (max-width: 700px) { .pair { grid-template-columns: minmax(0, 1fr); } }
+
+/* The figures strip. */
+.figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.figures li {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+.figures b {
+  display: block;
+  font-size: 28px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-text);
+}
+.figures span { font-size: 14px; color: var(--subtext); }
+
+.honest {
+  border-left: 4px solid var(--accent);
+  background: var(--surface);
+  border-radius: 0 8px 8px 0;
+  padding: 14px 18px;
+  max-width: 46em;
+  color: var(--text);
+}
+.honest p { margin: 0; }
+
+.cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.cta h2 { margin: 0 0 6px; font-size: clamp(24px, 3vw, 30px); }
+.cta p { margin: 0; color: var(--subtext); max-width: 38em; }
+
+/* ---- Document pages ---- */
+
+.doc { padding-block: 36px 56px; counter-reset: section; }
+.doc .wrap { max-width: 820px; }
+.doc h1 { font-size: clamp(30px, 5vw, 42px); line-height: 1.1; margin: 0 0 18px; letter-spacing: -.01em; text-wrap: balance; }
+/* The intro paragraph right under the title reads like the homepage lede. */
+.doc h1 + p { font-size: 19px; color: var(--text); margin: 0 0 26px; }
+.doc h2 { font-size: 26px; line-height: 1.2; margin: 56px 0 14px; text-wrap: balance; }
+/* Sections are numbered, matching the Contents index above them -- "Contents"
+   itself is left out of the count. */
+.doc h2:not(#contents)::before {
+  counter-increment: section;
+  content: counter(section, decimal-leading-zero);
+  margin-right: 12px;
+  font-family: var(--mono);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--accent-text);
+}
+.doc h3 {
+  font-size: 20px;
+  margin: 40px 0 10px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.doc h2 + h3, .doc h1 + h3 { border-top: 0; padding-top: 0; margin-top: 20px; }
+.doc h4, .doc h5, .doc h6 { font-size: 17px; margin: 24px 0 6px; }
+/* paragraphs and list items fill the same width as the tables below them */
+.doc p:not(.source-note) { margin: 0 0 16px; line-height: 1.7; }
+.doc li { line-height: 1.6; }
+.doc li + li { margin-top: 4px; }
+/* The small Area / Priority / Status line right under a case heading,
+   read as pills rather than a plain bullet list. */
+.doc h3 + ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  margin: 2px 0 18px;
+  padding: 0;
+}
+.doc h3 + ul li {
+  margin: 0;
+  background: var(--sidebar);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 14px;
+  font-size: 13px;
+}
+.doc code {
+  font-family: var(--mono);
+  font-size: .9em;
+  background: var(--sidebar);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 4px;
+  overflow-wrap: anywhere;
+}
+.doc pre {
+  overflow-x: auto;
+  background: var(--sidebar);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 14px;
+}
+.doc pre code { background: none; border: 0; padding: 0; }
+.doc blockquote { margin: 16px 0; padding: 4px 16px; border-left: 4px solid var(--accent); color: var(--subtext); }
+.doc hr { border: 0; border-top: 1px solid var(--line); margin: 32px 0; }
+.doc .offsite { border-bottom: 1px dotted var(--subtext); }
+
+.table-wrap { overflow-x: auto; margin: 16px 0; border: 1px solid var(--line); border-radius: 8px; }
+.table-wrap table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+.table-wrap th, .table-wrap td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); min-width: 120px; }
+.table-wrap th { background: var(--sidebar); font-weight: 600; }
+.table-wrap tr:last-child td { border-bottom: 0; }
+
+.source-note {
+  margin: 48px 0 0;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--subtext);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+/* The "## Contents" list is the first list right after that heading --
+   markdown gives it no class of its own, so this is matched structurally.
+   A numbered index, one entry per line, with a sliding accent on hover. */
+.doc h2#contents { margin-bottom: 10px; }
+.doc h2#contents + ul {
+  counter-reset: toc;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 8px;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+.doc h2#contents + ul li { margin: 0; counter-increment: toc; }
+.doc h2#contents + ul li + li { margin-top: 0; }
+.doc h2#contents + ul a {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 11px 6px;
+  border-bottom: 1px solid var(--line);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 15px;
+}
+.doc h2#contents + ul a::before {
+  content: counter(toc, decimal-leading-zero);
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--accent-text);
+}
+.doc h2#contents + ul a:hover {
+  padding-left: 14px;
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+
+/* ---- Footer ---- */
+
+.site-footer { border-top: 1px solid var(--line); padding-block: 28px 40px; color: var(--subtext); font-size: 14px; }
+.site-footer .wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; }
+.site-footer p { margin: 0; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .btn, .card, .theme-toggle { transition: border-color .15s, filter .15s, color .15s; }
+  .doc h2#contents + ul a { transition: padding-left .15s, color .15s, border-color .15s; }
+  /* Each top-level block on a doc page (heading, paragraph, list, table,
+     code block...) fades and lifts in as it is scrolled into view.
+     site.js adds .reveal up front and .in-view once it has been seen;
+     with JS off or motion reduced, nothing is ever hidden. */
+  .doc .wrap > .reveal {
+    opacity: 0;
+    transform: translateY(16px);
+    transition: opacity .6s ease, transform .6s ease;
+  }
+  .doc .wrap > .reveal.in-view { opacity: 1; transform: none; }
+}

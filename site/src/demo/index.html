@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Web demo · Note Organizer</title>
+<meta name="description" content="Try Note Organizer's interface in your browser: an interactive re-creation of the Windows app. Nothing you type leaves your browser.">
+<link rel="icon" href="../favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="../img/apple-touch-icon.png">
+<link rel="stylesheet" href="demo.css">
+</head>
+<body>
+<div class="demo-banner" role="note">
+  <a class="db-home" href="../index.html" aria-label="Back to the Note Organizer site">&#9664; Site</a>
+  <p><b>Web demo.</b> <span class="db-long">A re-creation of the Windows app's interface, so you
+    can try it without installing anything. </span>Your notes stay in this browser.</p>
+  <button type="button" id="reset-demo" class="db-reset">Reset demo</button>
+</div>
+
+<div class="app" id="app">
+  <div class="tabs" role="tablist" aria-label="Views">
+    <button type="button" role="tab" id="tab-notes" aria-controls="view-notes" aria-selected="true">&#x1F4DD; Notes</button>
+    <button type="button" role="tab" id="tab-cal" aria-controls="view-cal" aria-selected="false">&#x1F4C5; Calendar</button>
+  </div>
+
+  <section class="view notes-view" id="view-notes" role="tabpanel" aria-labelledby="tab-notes">
+    <aside class="sidebar" aria-label="Notes">
+      <h1 class="sb-title">&#x1F4DD; My Notes</h1>
+      <div class="search">
+        <input type="search" id="search" placeholder="Search notes..." aria-label="Search notes" autocomplete="off">
+        <button type="button" id="search-clear" class="search-clear" aria-label="Clear the search" hidden>&#x2715;</button>
+      </div>
+      <div class="sb-row sb-labels"><span>Sort</span><span>Show</span></div>
+      <div class="sb-row">
+        <select id="sort" aria-label="Sort"></select>
+        <select id="show" aria-label="Show"></select>
+      </div>
+      <label class="sb-check"><input type="checkbox" id="group"> Group by category</label>
+      <div class="note-list" id="note-list" role="list" aria-label="Your notes"></div>
+      <div class="sb-buttons">
+        <button type="button" id="new-note" class="btn-accent big">+ New Note</button>
+        <button type="button" id="import-code" class="btn-quiet">&#x1F4E5; Import code</button>
+        <button type="button" id="open-settings" class="btn-quiet">&#x2699; Settings</button>
+      </div>
+    </aside>
+    <main class="editor" id="editor" aria-label="Editor"></main>
+  </section>
+
+  <section class="view cal-view" id="view-cal" role="tabpanel" aria-labelledby="tab-cal" hidden>
+    <div class="cal-head">
+      <div class="cal-nav">
+        <button type="button" id="cal-prev-year" class="btn-quiet" aria-label="Previous year">&#9664;&#9664;</button>
+        <button type="button" id="cal-prev" class="btn-quiet" aria-label="Previous month">&#9664;</button>
+        <h2 id="cal-title" aria-live="polite"></h2>
+        <button type="button" id="cal-next" class="btn-quiet" aria-label="Next month">&#9654;</button>
+        <button type="button" id="cal-next-year" class="btn-quiet" aria-label="Next year">&#9654;&#9654;</button>
+      </div>
+      <button type="button" id="cal-today" class="btn-quiet">Today</button>
+    </div>
+    <div class="cal-grid" id="cal-grid" role="grid" aria-labelledby="cal-title"></div>
+    <p class="cal-hint">Click a day to see it; right-click (or long-press) to mark it.</p>
+    <div class="day-panel" id="day-panel" hidden></div>
+  </section>
+
+  <section class="view settings-view" id="view-settings" aria-label="Settings" hidden>
+    <nav class="set-nav" aria-label="Settings sections">
+      <div class="set-brand"><span class="set-logo">&#x1F4DD;</span><span><b>Note Organizer</b><small>Settings</small></span></div>
+      <button type="button" class="set-back" id="set-back">&#8592; Back to Notes</button>
+      <p class="set-group">General</p>
+      <button type="button" data-section="appearance">&#x25D0; Appearance</button>
+      <p class="set-group">Content</p>
+      <button type="button" data-section="categories">&#x1F5C2; Categories</button>
+      <p class="set-group">Data</p>
+      <button type="button" data-section="trash">&#x1F5D1; Recently deleted</button>
+      <p class="set-group">More</p>
+      <button type="button" data-section="shortcuts">&#x2328; Keyboard shortcuts</button>
+      <button type="button" data-section="about">&#x24D8; About this demo</button>
+    </nav>
+    <div class="set-body" id="set-body"></div>
+  </section>
+</div>
+
+<div id="layer"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="app-data.js"></script>
+<script src="demo.js"></script>
+</body>
+</html>

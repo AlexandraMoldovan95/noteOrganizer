@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Note Organizer</title>
+<meta name="description" content="An offline notes app for Windows: rich notes, tables, checklists, repeating notes and a calendar. Built by Alexandra Moldovan with an AI coding agent. Try the web demo in your browser.">
+{{og}}
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+<link rel="stylesheet" href="site.css">
+<script src="site.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to the content</a>
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html"><img src="img/icon-256.png" alt="" width="28" height="28">Note Organizer</a>
+    <button class="menu-toggle" id="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Menu">&#9776;</button>
+    <nav class="site-nav" id="site-nav" aria-label="Site">
+        {{nav}}
+    </nav>
+    <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Switch theme">&#9728;</button>
+  </div>
+</header>
+
+<main id="main">
+
+<section class="hero">
+  <div class="wrap">
+    <div>
+      <p class="eyebrow">Windows desktop app · Python + Tkinter · offline</p>
+      <h1>Note Organizer</h1>
+      <p class="lede">A notes app that keeps everything on your own computer: rich notes with
+        tables and checklists, notes that repeat, and a calendar that shows them. No account,
+        no cloud, no network calls.</p>
+      <p class="byline">Built by me, Alexandra Moldovan, with Claude Code, an AI coding agent. I
+        decide what the app does, test it by hand and approve every change; the agent writes
+        most of the code.</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="demo/index.html">Try it in your browser</a>
+      </div>
+    </div>
+    <figure class="window">
+      <img class="for-dark" src="img/main-window.webp" width="{{w_main_window}}" height="{{h_main_window}}"
+           alt="The Note Organizer window: the note list on the left, a note with a meal-plan table open on the right.">
+      <img class="for-light" src="img/main-window-light.webp" width="{{w_main_window_light}}" height="{{h_main_window_light}}" loading="lazy"
+           alt="The Note Organizer window: the note list on the left, a note with a meal-plan table open on the right.">
+      <figcaption>The real app, version {{version}}. Every picture on this site is a capture of it.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="band" aria-labelledby="features">
+  <div class="wrap">
+    <div class="section-head">
+      <h2 id="features">What it does</h2>
+      <p>The everyday parts of a notebook, done carefully. The labels are the headings of the
+        welcome note the app opens with.</p>
+    </div>
+    <div class="cards">
+      <article class="card cat-general">
+        <img src="img/tables.webp" width="{{w_tables}}" height="{{h_tables}}" loading="lazy"
+             alt="A table inside a note, with a header row and four rows of meals.">
+        <div class="card-body">
+          <h3>Rich notes and tables</h3>
+          <p>Bold, italic, colours, highlights, headings and lists, and tables you edit in place,
+            the way a spreadsheet taught your hands to expect.</p>
+          <span class="label">Write</span>
+        </div>
+      </article>
+      <article class="card cat-personal">
+        <img src="img/checklist.webp" width="{{w_checklist}}" height="{{h_checklist}}" loading="lazy"
+             alt="A checklist with four items, two of them ticked and struck through.">
+        <div class="card-body">
+          <h3>A checklist under every note</h3>
+          <p>With a count of what is done. The arrows that reorder items sit beside the boxes,
+            away from the bin, so a slip of the mouse moves an item instead of deleting it.</p>
+          <span class="label">Write</span>
+        </div>
+      </article>
+      <article class="card cat-work">
+        <img src="img/calendar-view.webp" width="{{w_calendar_view}}" height="{{h_calendar_view}}" loading="lazy"
+             alt="The calendar for September 2026, with a weekly stand-up on every Monday and three other notes.">
+        <div class="card-body">
+          <h3>A calendar that shows your notes</h3>
+          <p>Give a note a date and it appears on its day. Mark a day with a colour or an emoji,
+            and open any day to see what is on it.</p>
+          <span class="label">Plan</span>
+        </div>
+      </article>
+      <article class="card cat-work">
+        <img src="img/recurrence-setup.webp" width="{{w_recurrence_setup}}" height="{{h_recurrence_setup}}" loading="lazy"
+             alt="A note set to repeat every week on Monday, never ending.">
+        <div class="card-body">
+          <h3>Notes that repeat</h3>
+          <p>Daily, weekly, monthly or yearly, on the weekdays you choose, ending never, on a date
+            or after a number of times. Any single day can still be edited on its own.</p>
+          <span class="label">Plan</span>
+        </div>
+      </article>
+      <article class="card cat-ideas">
+        <img src="img/search-and-sort.webp" width="{{w_search_and_sort}}" height="{{h_search_and_sort}}" loading="lazy"
+             alt="The note list narrowed by a search for the word team, sorted by calendar date.">
+        <div class="card-body">
+          <h3>Search, sort and group</h3>
+          <p>One search box looks through every note at once. Sort, show a single category, group
+            by category, or arrange the list by hand.</p>
+          <span class="label">Organise</span>
+        </div>
+      </article>
+      <article class="card cat-urgent">
+        <img src="img/trash-panel.webp" width="{{w_trash_panel}}" height="{{h_trash_panel}}" loading="lazy"
+             alt="Settings, Recently deleted: three deleted notes, each with Restore and Delete.">
+        <div class="card-body">
+          <h3>Nothing lost to a slip</h3>
+          <p>Deleted notes wait in Recently deleted. Backups move the whole notebook to another
+            computer, and a share code copies a note as text into another copy of the app.</p>
+          <span class="label">Keep safe</span>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="themes">
+  <div class="wrap">
+    <div class="section-head">
+      <h2 id="themes">{{theme_count}} themes, light and dark, all readable</h2>
+      <p>{{theme_names}}. Every coloured word and button meets the WCAG AA contrast level in all
+        of them, and the project's automated checks fail on any pair that does not. Meaning is
+        carried by shape as well as colour: Save is the one filled button, the open tab stands
+        taller.</p>
+    </div>
+    <div class="pair">
+      <figure class="shot">
+        <img src="img/main-window.webp" width="{{w_main_window}}" height="{{h_main_window}}" loading="lazy"
+             alt="The main window in the Midnight Purple theme.">
+        <figcaption>Midnight Purple</figcaption>
+      </figure>
+      <figure class="shot">
+        <img src="img/main-window-light.webp" width="{{w_main_window_light}}" height="{{h_main_window_light}}" loading="lazy"
+             alt="The same window in the Soft Lavender theme.">
+        <figcaption>Soft Lavender</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section class="band" aria-labelledby="made">
+  <div class="wrap">
+    <div class="section-head">
+      <h2 id="made">Built with an AI agent, checked by tools and by hand</h2>
+      <p>The agent writes most of the code. Nothing rests on its word: tests, mutation tests and
+        photographs of the running app check its work, and I walk the test plan on the
+        packaged app before a release.</p>
+    </div>
+    <ul class="figures" aria-label="The project in figures">
+      <li><b>~{{checks}}</b><span>automated checks, on Windows and Linux</span></li>
+      <li><b>{{qa_suites}} + {{unit_suites}}</b><span>GUI test suites and unit suites</span></li>
+      <li><b>{{mutants}}</b><span>mutants: fixes taken out again to prove a check fails without them</span></li>
+      <li><b>{{test_cases}}</b><span>manual test cases, walked on the packaged app</span></li>
+    </ul>
+    <div class="cards spaced">
+      <a class="card cat-general" href="how-its-built.html">
+        <div class="card-body">
+          <h3>How it's built</h3>
+          <p>Who decides what, one change from start to finish, and which rules are enforced by
+            tools rather than only asked of the agent.</p>
+          <span class="label">The process</span>
+        </div>
+      </a>
+      <a class="card cat-personal" href="in-my-words.html">
+        <div class="card-body">
+          <h3>In my words</h3>
+          <p>Why a notes app, what came from years of technical support, the rules I set, the
+            decisions I made, and what I learned.</p>
+          <span class="label">My take</span>
+        </div>
+      </a>
+      <a class="card cat-work" href="testing.html">
+        <div class="card-body">
+          <h3>How it's tested</h3>
+          <p>The standard test case template, filled out four times with simple,
+            easy-to-picture cases.</p>
+          <span class="label">The proof</span>
+        </div>
+      </a>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="try">
+  <div class="wrap cta">
+    <div>
+      <h2 id="try">Try it, without installing anything</h2>
+      <p>The demo is a re-creation of the app's interface in HTML and JavaScript, so you can click
+        through the everyday parts in a browser, on a computer or a phone. The real app is a
+        Windows program in Python and Tkinter. What you type in the demo stays in your browser.</p>
+    </div>
+    <a class="btn btn-primary" href="demo/index.html">Open the demo</a>
+  </div>
+</section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <p>Note Organizer {{version}}</p>
+    <p>&copy; 2026 Alexandra Moldovan &middot; MIT License</p>
+  </div>
+</footer>
+</body>
+</html>
