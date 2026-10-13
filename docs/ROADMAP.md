@@ -18,6 +18,12 @@ being done about it — lives in its own register, now archived:
 
 Genuinely open ideas, roughly ordered by how soon they're likely to happen.
 
+- **Sharp text on a scaled display — next (the owner's call, 2026-10-14).** The app declares no
+  DPI awareness, so on a screen scaled to 150% Windows enlarges it as a picture: the layout is the
+  100% one, and a little soft. Declared aware, the fonts grow with the scaling while every width
+  set in pixels stays put, so each one has to be measured against what it holds first — the ones
+  already seen running short are listed in
+  ["Not answered yet: a display scaled to 150%"](ARCHITECTURE.md#not-answered-yet-a-display-scaled-to-150).
 - **The website, its demo, and where the app is published.** The site — a page presenting the
   app, a web demo that re-creates its interface in a browser, and the key documents as pages —
   lives in this repository under [`site/`](../site/README.md) since 2026-10-14. It is built from
@@ -25,9 +31,9 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
   every deploy counts against the account's credits. What is planned for it, nearest first:
   - **The demo closer to the app.** Its formatting bar has the app's font and size lists and its
     indent buttons since 2026-10-14, taken from the app's own source and carried in share codes
-    both ways. Still missing: the calculator under a note, and opening or moving one day of a
-    repeating series — the demo names these among the things the desktop app does that it does
-    not.
+    both ways. It stays as it is now (the owner's call, 2026-10-14): the calculator under a note,
+    and opening or moving one day of a repeating series, remain among the things the demo names
+    as the desktop app's alone.
   - **One site for both apps.** When an Android version exists, the same site presents it too,
     with its own presentation and demo. Its code stays in its own repository, and the site's build
     reads it the way it reads this one — no third repository for the site.
@@ -36,10 +42,6 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
     app (an unsigned `.exe` from a website meets Windows' unknown-publisher warning), keeps it up
     to date, and is where people look for it. The Windows options are in
     [`docs/RELEASE_WINDOWS.md`](RELEASE_WINDOWS.md).
-
-- **Follow-ups the audit programme scoped out** (see
-  [Known limitations](#known-limitations) for the full residuals list): fonts inside table
-  cells (the phase deliberately deferred in the 0.64.95 cycle).
 
 - **Small candidates from the 2026-08-31 idea pass** (put aside deliberately, in rough order of
   appeal; two candidates from that pass have since shipped — see
@@ -53,19 +55,28 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
     (the explicit/ambient contract exists because rebuilt windows map late). Rebuilding only the
     touched block would cut both the cost and that complexity. An architectural phase with its own
     design pass, not a patch; measured before, it must be measured after.
-- **Spell-check in the editor (desktop only).** A red wavy underline on misspelled words with
-  right-click suggestions — **not** silent auto-correct, which would mangle names, technical terms
-  and other-language words in a notes app without asking. This is a desktop-only feature: Tkinter
+- **Spell-check in the editor (desktop only).** A red underline on misspelled words (Tk 8.6
+  draws one: a text tag's `underlinefg`), with right-click suggestions, "Add to dictionary" and
+  "Ignore" — **not** silent auto-correct, which would mangle names, technical terms and
+  other-language words in a notes app without asking. This is a desktop-only feature: Tkinter
   draws its own text and gets no spell-check from the OS the way a browser textarea or a native
   field does, so it must be built; on a future Android build the on-screen keyboard's IME already
   provides spell-check and auto-correct in the user's language for free, so nothing would be built
   there. It is a scoped phase, not a quick win, and it must clear the project's bar before
-  shipping: **stays fully offline, stays fast on weak machines.** That means a dependency decision
-  (the least-bad fit is `pyspellchecker` — pure Python, bundled dictionaries, no system libraries,
-  works under PyInstaller — at the cost of a few MB per language in the `.exe`), picking the
-  language from `locale` at startup, checking only the visible/changed text on a debounce rather
-  than every word on every keystroke, and drawing the underline through the existing rich-text tag
-  system without disturbing it. Decide deliberately, with the dependency approved, when picked.
+  shipping: **stays fully offline, stays fast on weak machines.**
+
+  **The approach, chosen 2026-10-14: Windows' own spell checker** (the Spell Checking API, the
+  one other Windows apps use), not dictionaries shipped in the app. It follows the languages
+  installed in Windows — a word is right if any of them knows it, which suits notes that mix
+  languages — adds nothing to the `.exe`, works offline, and a word added goes into the user's
+  own Windows dictionary. Romanian is checked once Romanian is added in Windows (Settings →
+  Time & language → Language & region); the owner's machine had only English then. Elsewhere
+  than Windows, nothing is checked. Still to decide when it is picked up: reaching the API
+  through a new dependency (`comtypes`, to be approved) or through `ctypes` written here; and,
+  as before, checking only the visible or changed text on a debounce rather than every word on
+  every keystroke, through the rich-text tags without disturbing them. The earlier pick,
+  `pyspellchecker` (pure Python, bundled dictionaries), was set aside: its twelve languages do not
+  include Romanian, and each language adds a few MB to the `.exe`.
 - **Note list virtualization.** Most of it is done: the main list draws a screenful and the
   rest as the view comes near it, a save redraws one card instead of the list, and the cards are
   drawn on one canvas rather than built from widgets, so a drawn card costs a handful of canvas
@@ -136,6 +147,9 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
   restore, the retention purge, Empty trash, the selection, backup and import — and so would
   every older version of the app that opens the file. The warning is the safeguard; a new class
   of Trash bugs is not worth one extra way back.
+- Fonts inside table cells — decided against by the owner (2026-10-14). It was the phase
+  deliberately deferred in the 0.64.95 cycle, the last follow-up the audit programme had scoped
+  out; a table's cells keep the note's own font.
 
 Three more features were tried and deliberately taken out again — the decision record, since
 "we had it and removed it" is a stronger ruling than "we never built it":
