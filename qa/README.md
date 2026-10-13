@@ -1061,8 +1061,8 @@ A new surface joins this list the moment it ships.
   against the fix taken out on the machine where the breakage was seen:
   there, the real pages failed exactly as the sweep had found them.
 - **Under the mutant it guards, a check fails; it never stops the
-  script.** The full catalogue, run on 2026-10-13 for the first time since
-  the 12th, came back with four NO-RUN verdicts whose checks had all
+  script.** The full catalogue, run whole on 2026-10-13, came back with
+  four NO-RUN verdicts, from checks written on 8 and 12 October, that had all
   caught their mutant, and then died before the footer. Three were qa3
   going on with a copy that the mutant had never let be made: sorting its
   missing file (`None`) among the file names, and then, once that was

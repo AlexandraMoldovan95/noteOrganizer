@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.92.374](#092374--2026-10-13) | 2026-10-13 | One day of a repeating note opened on its own and saved as you type, a day held on another date while it stays in its series, and a way back to the series from the day itself. |
 | [0.90.373](#090373--2026-10-12) | 2026-10-12 | Days a repeating note keeps its own edits for, left off its schedule, found and turned into notes of their own; a category move's Undo that survives a rename; the line above a repeating note keeping all its words. |
 | [0.89.371](#089371--2026-10-08) | 2026-10-08 | What AI reviewers of colour-blindness simulations hesitated over: a boxed find match, a raised open tab with no dotted box after a click, letters that read on every colour you pick — and every icon the app uses in the emoji picker. |
 | [0.89.365](#089365--2026-10-08) | 2026-10-08 | Every coloured word and button readable in every theme, Save and Delete told apart without colour, and a dark red fill kept for what cannot be undone. |
@@ -97,6 +98,76 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+---
+
+## [0.92.374] — 2026-10-13
+
+### Added
+
+- **One day of a series, opened on its own.** From the calendar, a repeating note's day opens two
+  ways: **✏ Edit this day** or **🔁 Edit the whole series** (the right-click menu offers the same
+  two); from the note list it is always the whole series. A day opened on its own says so — a
+  strip reads "📅 Only this day: Monday, 12 October 2026 — what you change here stays on this
+  day", with the one way to the series beside it — and shows that day's date and the repeat as
+  words, not the series' start and rule as fields to change. **This day:** stands beside the
+  category: a category or colour picked there is the day's, and the calendar draws the day in it,
+  while the note's card keeps the series' own. The checklist and the attachments, which belong to
+  the whole series, say so ("· whole series"); deleting still asks which.
+- **A day held on another date, still a day of its series.** **📅 Move this day…**, beside the
+  day's date (or under it, in a window too narrow for both), opens a calendar: pick a date and the
+  day moves there with its own text, and a banner offers Undo — the weekly meeting held on Tuesday
+  one week. The strip says where it came from, the calendar draws it on its new date only (↷), its
+  preview and History say "moved from …", and the series counts it above the note ("1 day moved
+  (↷)"). A date the series already has is refused. **↺ Reset this day…**, beside it whenever the
+  day has something of its own, and in the calendar's menu, puts a moved day back on its own date
+  — always — and asks whether its text goes back to the series' too. Deleting a moved day removes
+  it, and its Undo brings it back moved; turning the repeat off takes the moves with the days, and
+  Restore previous brings them back. A series keeps its moves in a new `moved` field; a notes file
+  from before has none, and a share code carries none (a series' days are this notebook's).
+
+### Fixed
+
+- **A day's edit saves itself.** Edits made to one day of a series waited in the editor for a
+  question — "This occurrence only, or the entire series?" — asked only on Save or on leaving the
+  note, and nothing on screen said they waited: a category picked for one day "seemed to do
+  nothing" (a field report). A day opened on its own now saves to that day as you type, like any
+  note; only deleting asks, now in words that say what each answer does ("Only this day", "The
+  whole series").
+
+### Changed
+
+- **A row that runs out of room keeps every control in it.** A row of controls given less width
+  than it asks for loses what was placed last, and says nothing; under the fonts CI has, the
+  editor's "Save as template" lost its words at both ends (168 px of 177), and Settings' dropdowns
+  were left what a setting's description did not take — the trash's "30 days" 18 px of 74, its
+  arrow gone. The editor's six action buttons are now three columns while there is room for three,
+  then two, then one, with Restore previous under them; a Settings row places its control first
+  and wraps its words beside it; and the title's box no longer claims room before a long title's
+  counter does. At the window sizes Windows gives the app, nothing looks different. Two rows of
+  this release's own day had the same fault and were mended before it shipped — not counted.
+
+### Testing
+
+- One day of a series, in qa5: the two doors, the strip, the date and repeat as words, the day's
+  category and colour, what belongs to the series, saving as you type, the theme and the smallest
+  window; old checks in qa2, qa3, qa7 and qa8 rewritten for the day that no longer asks. Mutants
+  DM01–DM15, each killed.
+- A day held on another date: unit checks of the dates a series lands on with a day moved (rule
+  and start changes, ends, counts, limits, History, the file's own checks), and in qa5 the button,
+  the picker, a restart, Undo, refusal, Reset both ways and from the day itself, delete and its
+  Undo, the repeat turned off and restored, and both rows at every width. Mutants MV01–MV25, each
+  killed.
+- Every control in sight, in qa6: every button, label and tick box on the notes page, the calendar
+  and every Settings section, at an ordinary window and the smallest; with both layout fixes taken
+  out it fails under CI's fonts exactly as a sweep had found. The helper (`out_of_sight`) serves
+  qa5 too. Mutants FIT01–FIT05, each killed.
+- The full mutant catalogue, run whole: 235 of 240 verdicts as expected. The other five were
+  checks written on 8 and 12 October, not the app: four caught their mutant and then stopped
+  the script before its footer (K01, K03, K05, O01), one could not fail after a step that changed
+  its fixture (OS08). Each check mended; all five killed.
+- The travels story photographs the app's own window, and nothing else on the screen.
+- The test plan records when each case was run and on which build; all 539 cases pass.
 
 ---
 
