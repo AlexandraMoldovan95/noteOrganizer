@@ -677,6 +677,30 @@ which control lands on a row boundary — and therefore whether the bug shows at
 it. Given numbers, the same inputs give the same answer everywhere, so the behaviour can be
 pinned down exactly. The widget side keeps only the measuring and the packing.
 
+### A packed row that runs out of room loses its last control
+
+Tk's packer gives each control the width it asks for, in the order they were packed. When the row
+is narrower than the sum, the last ones get what is left — squeezed, or not drawn at all — and
+nothing reports it. Two editor rows met this at the smallest window, under the fonts CI has: one
+day of a series showed its date row without the colour's swatch, and its title row without "This
+day:". On Windows, a long title's counter was squeezed to 8 px of its 46, and at 150% scaling the
+same date row asked for more than it had in a window 1000 px wide.
+
+There is one answer for each kind of row:
+
+- **A box that fills the row asks for almost nothing.** The title's box is `width=1`. Fill and
+  expand still give it everything the controls beside it leave, but it no longer claims twenty
+  characters before they are placed.
+- **Controls that cannot shrink get a line of their own.** A day's **Move this day…** and **Reset
+  this day…** sit beside its date while the row has room, and on a line under it when it has not
+  (`_place_day_buttons`). The decision is one sum of measured widths against the row's own, so
+  unlike the toolbar there is no arithmetic worth moving to core. Those widths do not change with
+  where the buttons go, so moving them cannot undo the decision that moved them.
+
+The qa5 check behind both asks every control of the two rows whether it is wholly in sight. It
+simulates a wider font in pixels rather than characters, so the line left above the buttons fits
+under every font.
+
 ### Paste from a PDF: lines are not paragraphs
 
 A PDF has no paragraphs — only lines placed on a page — so pasting from one hands over the

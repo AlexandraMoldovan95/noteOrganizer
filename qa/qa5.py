@@ -3552,7 +3552,7 @@ check(f'a day says which day it is, and that what changes stays on it ({_dm_stri
       and str(app.status_lbl.cget('text')) == 'Only this day: 12.10.2026')
 check("...shows its own date as words, not the series' start as a field to change",
       not app._is_placed(app.date_entry)
-      and str(app.day_date_lbl.cget('text')) == '12.10.2026 (this day)'
+      and str(app.day_date_lbl.cget('text')) == '12.10.2026'
       and bool(app.day_date_lbl.winfo_ismapped()))
 check(f'...and its repeat as a line, not as boxes to change '
       f'({app.day_repeat_lbl.cget("text")!r})',
@@ -3788,8 +3788,7 @@ check("...what was typed on the day before goes with it, and the editor follows 
 check(f"...the day says where it came from, and the move can be undone "
       f"({app.day_strip_lbl.cget('text')!r})",
       'moved from Monday, 12 October' in str(app.day_strip_lbl.cget('text'))
-      and str(app.day_date_lbl.cget('text'))
-      == '13.10.2026 (this day, moved from 12.10.2026)'
+      and str(app.day_date_lbl.cget('text')) == '13.10.2026'
       and app._toast_action is not None and _dm_asked == [])
 _mv_disk = NO.normalize_note(_mv_file_note())
 check('...and the file holds the move, so the day is there after a restart',
@@ -3821,10 +3820,15 @@ check('Undo puts the day back where it was, its own edit with it, the editor fol
 # Reset on a moved day with text of its own: the date always goes back; the
 # text is asked about.
 app._move_this_day('2026-10-14'); app.update()
+_mv_row = app.day_move_btn.master.pack_slaves()
+check("a moved day offers its Reset in the day itself, beside Move this day",
+      bool(app.day_reset_btn.winfo_ismapped())
+      and app.day_reset_btn in _mv_row and app.day_move_btn in _mv_row
+      and _mv_row.index(app.day_move_btn) + 1 == _mv_row.index(app.day_reset_btn))
 _mv_q = []
 app._themed_dialog = lambda title, message, *a, **k: (
     _mv_q.append((title, [b for b, _v in k.get('buttons', [])])), 'date')[1]
-app._reset_occurrence_override(app.find_note(1), '2026-10-14'); app.update()
+app.day_reset_btn.invoke(); app.update()
 _dm_record()
 _mv_s = app.find_note(1)
 check(f'Reset on a moved day with text of its own asks: only the date, or the date '
@@ -3846,6 +3850,38 @@ check('..."The date and the text" puts it back, following the series again',
       and app.current_occurrence_date == '2026-10-12'
       and app.body_text.get('1.0', 'end-1c').startswith('series text')
       and 'room 2' not in app.body_text.get('1.0', 'end-1c'))
+check('...and a day with nothing left to reset offers no Reset',
+      not app._is_placed(app.day_reset_btn) and bool(app.day_move_btn.winfo_ismapped()))
+
+# The button follows the day as it is edited, never moved: text of its own,
+# saved as it is typed, brings it; typed back to the series', it goes. And a
+# Reset pressed before the last typing saved asks the menu's question, and the
+# typing does not come back when its save comes due.
+_mv_title = app.title_entry.get()
+app.title_entry.insert('end', ' (typed)')
+app._autosave_now(); app.update()
+_mv_typed = app._is_placed(app.day_reset_btn)
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, _mv_title)
+app._autosave_now(); app.update()
+check("...a day's own text, saved as it is typed, brings its Reset; typed back to "
+      "the series', it goes",
+      _mv_typed and not app._is_placed(app.day_reset_btn)
+      and '2026-10-12' not in (app.find_note(1).get('overrides') or {}))
+app.title_entry.insert('end', ' (room 3)')
+app._autosave_now(); app.update()
+app.title_entry.insert('end', ' more')
+app._schedule_autosave()
+_mv_yn = []
+app.ask_yes_no = lambda title, message, *a, **k: (_mv_yn.append(message), True)[1]
+app.day_reset_btn.invoke(); app.update()
+app._autosave_now(); app.update()
+_dm_record()
+check(f"...Reset there, pressed mid-typing, asks the menu's question and the "
+      f"typing stays gone ({_mv_yn})",
+      [m.split('\n')[0] for m in _mv_yn] == ['Return 12.10.2026 to the series content?']
+      and '2026-10-12' not in (app.find_note(1).get('overrides') or {})
+      and app.title_entry.get() == _mv_title
+      and not app._is_placed(app.day_reset_btn))
 
 # Moved with no text of its own: the menu still offers its way back, and its
 # Reset only asks to put it back.
@@ -3914,17 +3950,124 @@ check('...and Restore previous brings the series back with its day moved',
       and _mv_s.get('moved') == {'2026-10-12': '2026-10-17'}
       and _mv_on('2026-10-17') == [1])
 
-# The button is long-lived: every colour it has follows the theme.
+# The buttons are long-lived: every colour they have follows the theme. And a
+# moved day with text of its own -- both buttons, the longest date line -- asks
+# the editor for no more width than its series at the smallest window.
 _dm_open_day()
+app._move_this_day('2026-10-13'); app.update()
+app.title_entry.insert('end', ' (room 2)')
+app._autosave_now(); app.update()
 app.set_theme('light'); app.update()
 _mv_c = app.colors
-_mv_got = tuple(str(app.day_move_btn.cget(o)).lower() for o in (
-    'bg', 'fg', 'activebackground', 'activeforeground', 'highlightbackground',
-    'highlightcolor'))
-check(f'every colour of "Move this day…" follows a new theme ({_mv_got})',
-      _mv_got == tuple(str(_mv_c[k]).lower() for k in (
-          'sidebar', 'text', 'card', 'text', 'bg', 'accent')))
+_mv_want = tuple(str(_mv_c[k]).lower() for k in (
+    'sidebar', 'text', 'card', 'text', 'bg', 'accent'))
+_mv_opts = ('bg', 'fg', 'activebackground', 'activeforeground',
+            'highlightbackground', 'highlightcolor')
+_mv_got = tuple(str(app.day_move_btn.cget(o)).lower() for o in _mv_opts)
+_mv_got_r = tuple(str(app.day_reset_btn.cget(o)).lower() for o in _mv_opts)
+check(f'every colour of "Move this day…" and "Reset this day…" follows a new '
+      f'theme ({_mv_got}; {_mv_got_r})',
+      _mv_got == _mv_want and _mv_got_r == _mv_want
+      and str(app.day_btns.cget('bg')).lower() == str(_mv_c['bg']).lower()
+      and bool(app.day_reset_btn.winfo_ismapped()))
 app.set_theme('dark'); app.update()
+
+# Every control of the day's title and date rows stays wholly in sight, at any
+# width and whatever the rows hold. A packed row given less than it asks for
+# drops what was packed last, in silence: a colour cut off in a photograph
+# first, then, under CI's fonts, the colour's swatch gone and "This day:" with
+# it, and on Windows a long title's counter squeezed to 8 px of its 46.
+def _mv_out_of_sight(row):
+    """*row*'s controls not wholly on screen: not mapped, cut at the row's
+    edge, or given less width than they ask -- all but the title's box,
+    which may shrink: it scrolls."""
+    lost = []
+    for w in row.pack_slaves():
+        if (not w.winfo_ismapped() or w.winfo_x() + w.winfo_width() > row.winfo_width() + 1
+                or (not isinstance(w, tk.Entry) and w.winfo_width() + 1 < w.winfo_reqwidth())):
+            lost.append(str(w.cget('text')) if 'text' in w.keys() else w.winfo_class())
+    return lost
+
+
+def _mv_in_sight(cap=3.0):
+    """Pump until both rows have every control in sight -- the state this
+    layout promises; mapping is asynchronous under Xvfb -- or *cap* seconds
+    pass, and say what is still out of sight."""
+    end = _t5f.time() + cap
+    while True:
+        app.update()
+        lost = _mv_out_of_sight(app.editor_top_row) + _mv_out_of_sight(app.day_btns.master)
+        if not lost or _t5f.time() > end:
+            return lost
+        _t5f.sleep(0.02)
+
+
+_mv_geo = app.geometry()
+_mv_title = app.title_entry.get()
+app.title_entry.insert('end', 'L' * (app.TITLE_MAX_LEN - len(_mv_title) - 5))
+app._refresh_title_count()
+app.geometry('1100x850')
+_mv_lost = _mv_in_sight()
+check(f'at an ordinary window Move and Reset sit beside the date, and a long title '
+      f'keeps its counter and "This day:" beside it ({_mv_lost})',
+      _mv_lost == [] and app._day_btns_wrapped is False
+      and app.day_btns.pack_info().get('side') == 'left'
+      and app._is_placed(app.title_count_lbl))
+app.geometry('640x600')
+_mv_lost = _mv_in_sight()
+_mv_meta = app.day_btns.master
+check(f"at the smallest window every control of the day's title and date rows stays "
+      f"in sight ({_mv_lost}; the date row {_mv_meta.winfo_reqwidth()} of "
+      f"{_mv_meta.winfo_width()})",
+      _mv_lost == [] and _mv_meta.winfo_reqwidth() <= _mv_meta.winfo_width() + 1)
+# A row that cannot hold the buttons beside the date puts them under it: a
+# wider font, as on a machine without this one, simulated by a date 120 px
+# wider -- in pixels, not characters, so that the line left above the buttons
+# fits under every font (40 characters more did not, under CI's).
+def _mv_under_the_date():
+    """Where the buttons' line is: (x, top) against the date's bottom -- a
+    line under the date starts at the row's left edge, below it."""
+    date = app._date_row_label
+    return (app.day_btns.winfo_x(), app.day_btns.winfo_y(),
+            date.winfo_y() + date.winfo_height())
+
+
+app.day_date_lbl.pack_configure(padx=(6, 128))
+app._show_day_mode()
+_mv_lost = _mv_in_sight()
+_mv_at = _mv_under_the_date()
+check(f'a date row with no room for Move and Reset puts them on a line under the '
+      f'date, every control in sight ({_mv_lost}; x, top, date bottom {_mv_at})',
+      _mv_lost == [] and app._day_btns_wrapped is True
+      and _mv_at[0] == 0 and _mv_at[1] >= _mv_at[2])
+app.day_date_lbl.pack_configure(padx=(6, 8))
+app.geometry('1100x850')
+_mv_lost = _mv_in_sight()
+check(f'...a window made wider puts them back beside the date ({_mv_lost})',
+      _mv_lost == [] and app._day_btns_wrapped is False)
+# Beside the date again however the step above went, so this step asks only
+# whether a narrower window moves them.
+app._show_day_mode(); app.update()
+_mv_was = app._day_btns_wrapped
+app.day_date_lbl.pack_configure(padx=(6, 128))
+app.geometry('640x600')
+_mv_lost = _mv_in_sight()
+_mv_at = _mv_under_the_date()
+check(f'...and one made narrower puts them under it again ({_mv_was}; {_mv_lost}; '
+      f'{_mv_at})',
+      _mv_was is False and _mv_lost == [] and app._day_btns_wrapped is True
+      and _mv_at[0] == 0 and _mv_at[1] >= _mv_at[2])
+app.day_date_lbl.pack_configure(padx=(6, 8))
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, _mv_title)
+app._refresh_title_count()
+app._show_day_mode()
+app.update()
+_mv_req_day = app.editor.winfo_reqwidth()
+app.open_note_in_tab(app.find_note(1)); app.update()
+check(f'...and the moved day asks the editor for no more width than its series '
+      f'({_mv_req_day} vs {app.editor.winfo_reqwidth()})',
+      _mv_req_day <= app.editor.winfo_reqwidth())
+app.geometry(_mv_geo); app.update()
 app._cancel_pending_autosave()
 
 app._themed_dialog = _dm_real_dialog

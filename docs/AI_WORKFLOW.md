@@ -63,7 +63,7 @@ can be reviewed; the memory is just the agent's working notebook.
 ## How the agent's work is checked
 
 - **Checks are tested too.** Every fix's check is mutation-tested; the mutants worth keeping
-  (225, and 2 that test the runner itself) live in [`tools/mutants.json`](../tools/mutants.json)
+  (233, and 2 that test the runner itself) live in [`tools/mutants.json`](../tools/mutants.json)
   and run on demand in CI. A verdict counts only if the suite reached its end - a mutant that
   crashes the import "survives nothing" by running nothing, and the runner refuses it.
 - **Findings are hypotheses.** When agents review the app, each finding is checked against the

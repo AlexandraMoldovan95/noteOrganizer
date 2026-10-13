@@ -3185,9 +3185,9 @@
     "id": "MV15",
     "about": "\"Move this day…\" keeps the old theme's colour around its keyboard ring",
     "edits": [{"file": "note_organizer.py",
-               "find": "                         activebackground=\"card\", activeforeground=\"text\",\n                         highlightbackground=\"bg\", highlightcolor=\"accent\")\n",
-               "replace": "                         activebackground=\"card\", activeforeground=\"text\",\n                         highlightcolor=\"accent\")\n"}],
-    "must_fail": ["every colour of \"Move this day…\" follows a new theme"],
+               "find": "        self.track_theme(self.day_move_btn, bg=\"sidebar\", fg=\"text\",\n                         activebackground=\"card\", activeforeground=\"text\",\n                         highlightbackground=\"bg\", highlightcolor=\"accent\")\n",
+               "replace": "        self.track_theme(self.day_move_btn, bg=\"sidebar\", fg=\"text\",\n                         activebackground=\"card\", activeforeground=\"text\",\n                         highlightcolor=\"accent\")\n"}],
+    "must_fail": ["every colour of \"Move this day…\" and \"Reset this day…\" follows a new theme"],
     "suites": ["qa5"],
     "expect": "killed"
   },
@@ -3208,6 +3208,87 @@
                "find": "            self.open_note_in_tab(note, occurrence_date=to, flush=False)\n",
                "replace": "            pass\n"}],
     "must_fail": ["...what was typed on the day before goes with it, and the editor follows it"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV18",
+    "about": "a moved day's Reset is in the calendar's right-click menu only, not in the day",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            resettable = bool(origin) or day in (note.get(\"overrides\") or {})\n",
+               "replace": "            resettable = False\n"}],
+    "must_fail": ["a moved day offers its Reset in the day itself, beside Move this day"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV19",
+    "about": "\"Reset this day…\" keeps the old theme's colour around its keyboard ring",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                                       command=self._reset_this_day)\n        self.track_theme(self.day_reset_btn, bg=\"sidebar\", fg=\"text\",\n                         activebackground=\"card\", activeforeground=\"text\",\n                         highlightbackground=\"bg\", highlightcolor=\"accent\")\n",
+               "replace": "                                       command=self._reset_this_day)\n        self.track_theme(self.day_reset_btn, bg=\"sidebar\", fg=\"text\",\n                         activebackground=\"card\", activeforeground=\"text\",\n                         highlightcolor=\"accent\")\n"}],
+    "must_fail": ["every colour of \"Move this day…\" and \"Reset this day…\" follows a new theme"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV20",
+    "about": "Move and Reset stay beside the date in a row with no room for them, and the colour's swatch drops off its end",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        wrap = room > 1 and need > room\n",
+               "replace": "        wrap = False\n"}],
+    "must_fail": ["a date row with no room for Move and Reset puts them on a line under the date, every control in sight"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV23",
+    "about": "the date row decides where Move and Reset go only when a day opens, not when the window is resized",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        meta_row.bind(\"<Configure>\", self._place_day_buttons, add=\"+\")\n",
+               "replace": ""}],
+    "must_fail": ["...a window made wider puts them back beside the date",
+                  "...and one made narrower puts them under it again"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV24",
+    "about": "the line for Move and Reset keeps their place in the packing order, and lands under the colour instead of under the date",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                               before=self._date_row_label)\n",
+               "replace": "                               )\n"}],
+    "must_fail": ["a date row with no room for Move and Reset puts them on a line under the date, every control in sight"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV25",
+    "about": "the title's box asks for its natural twenty characters first, and a long title's counter beside it is squeezed out",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            relief=\"flat\", font=(\"Segoe UI\", 20, \"bold\"), width=1,\n",
+               "replace": "            relief=\"flat\", font=(\"Segoe UI\", 20, \"bold\"),\n"}],
+    "must_fail": ["at the smallest window every control of the day's title and date rows stays in sight"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV21",
+    "about": "the day's Reset is offered for a move only, never for text of its own",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            resettable = bool(origin) or day in (note.get(\"overrides\") or {})\n",
+               "replace": "            resettable = bool(origin)\n"}],
+    "must_fail": ["...a day's own text, saved as it is typed, brings its Reset; typed back to the series', it goes"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV22",
+    "about": "a Reset on the day in the editor leaves the editor as it was, and its next save brings the day's own text back",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            self.load_note(note, home)\n",
+               "replace": "            pass\n"}],
+    "must_fail": ["...Reset there, pressed mid-typing, asks the menu's question and the typing stays gone"],
     "suites": ["qa5"],
     "expect": "killed"
   }

@@ -13702,9 +13702,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         top_row.pack(fill="x", padx=30, pady=(25, 5))
         self.editor_top_row = top_row
 
+        # width=1: the title asks for next to nothing, and fill and expand give
+        # it the rest of the row. Asking its natural twenty characters, it was
+        # given them first, and what is packed beside it later -- a long
+        # title's counter, a day's "This day:" -- got what was left: at the
+        # smallest window, nothing (measured: the counter 8 px of its 46).
         self.title_entry = tk.Entry(
             top_row, insertbackground=self.colors["text"],
-            relief="flat", font=("Segoe UI", 20, "bold"),
+            relief="flat", font=("Segoe UI", 20, "bold"), width=1,
             validate="key",
             validatecommand=(self.register(self._title_within_limit), "%P")
         )
@@ -13846,14 +13851,32 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # field holds the series' start, which is no day's to change.
         self.day_date_lbl = tk.Label(meta_row, text="", font=("Segoe UI", 10))
         self.track_theme(self.day_date_lbl, bg="bg", fg="text")
+        self._date_row_label = date_label
         # ...and beside it, the way to hold that one day on another date while
         # it stays a day of the series (_move_this_day). Long-lived, so every
-        # colour it has follows the theme.
-        self.day_move_btn = tk.Button(meta_row, text="📅 Move this day…",
+        # colour it has follows the theme. It shares a frame with Reset below,
+        # which goes under the date when the row has no room for the two
+        # (_place_day_buttons).
+        self.day_btns = tk.Frame(meta_row)
+        self.track_theme(self.day_btns, bg="bg")
+        self._day_btns_wrapped = None
+        meta_row.bind("<Configure>", self._place_day_buttons, add="+")
+        self.day_move_btn = tk.Button(self.day_btns, text="📅 Move this day…",
                                       relief="flat", cursor="hand2",
                                       font=("Segoe UI", 9))
         self._toggles_its_popup(self.day_move_btn, self._open_move_day_picker)
         self.track_theme(self.day_move_btn, bg="sidebar", fg="text",
+                         activebackground="card", activeforeground="text",
+                         highlightbackground="bg", highlightcolor="accent")
+        # ...and, while the day has something to reset -- a move, or text of
+        # its own -- the way back to the series, from the day itself: in the
+        # calendar's right-click menu alone, it was not found (field request,
+        # 2026-10-13). The menu's own Reset, with its questions.
+        self.day_reset_btn = tk.Button(self.day_btns, text="↺ Reset this day…",
+                                       relief="flat", cursor="hand2",
+                                       font=("Segoe UI", 9),
+                                       command=self._reset_this_day)
+        self.track_theme(self.day_reset_btn, bg="sidebar", fg="text",
                          activebackground="card", activeforeground="text",
                          highlightbackground="bg", highlightcolor="accent")
 
@@ -14860,15 +14883,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                     before=self.editor_top_row)
             for widget, _packing in self._date_field_packing:
                 widget.pack_forget()
-            self.day_date_lbl.config(text=(
-                f"{show_date(day)} (this day, moved from {show_date(origin)})"
-                if origin else f"{show_date(day)} (this day)"))
+            # The date alone: that it is this day only, and where a moved day
+            # came from, are the strip's to say. Written here as well, the
+            # row ran past the editor's width beside its two buttons, and the
+            # colour was cut off (measured: 690 px asked of 527).
+            self.day_date_lbl.config(text=show_date(day))
             if not self._is_placed(self.day_date_lbl):
                 self.day_date_lbl.pack(side="left", padx=(6, 8),
                                        before=self._color_label)
+            resettable = bool(origin) or day in (note.get("overrides") or {})
             if not self._is_placed(self.day_move_btn):
-                self.day_move_btn.pack(side="left", padx=(0, 20), ipadx=4,
-                                       before=self._color_label)
+                self.day_move_btn.pack(side="left", ipadx=4)
+            if resettable and not self._is_placed(self.day_reset_btn):
+                self.day_reset_btn.pack(side="left", padx=(6, 0), ipadx=4)
+            elif not resettable:
+                self.day_reset_btn.pack_forget()
+            self._place_day_buttons()
             for widget, _packing in self._repeat_field_packing:
                 widget.pack_forget()
             self.rec_details.pack_forget()
@@ -14885,7 +14915,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         else:
             self.day_strip.pack_forget()
             self.day_cat_lbl.pack_forget()
+            self.day_btns.pack_forget()
+            self._day_btns_wrapped = None
             self.day_move_btn.pack_forget()
+            self.day_reset_btn.pack_forget()
             if self._is_placed(self.day_date_lbl):
                 self.day_date_lbl.pack_forget()
                 for widget, packing in self._date_field_packing:
@@ -14914,6 +14947,53 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if pending is not None:
             self._pending_calendar_return = pending
             self._update_calendar_return_button()
+
+    def _place_day_buttons(self, event=None):
+        """Day mode's Move and Reset (day_btns): beside the day's date while
+        the row has room for them, on a line of their own under it when it
+        has not. A packed row given less than it asks for drops what was
+        packed last -- here the colour's swatch: gone at the smallest window
+        under the fonts CI has, and short of room at 150% scaling in a window
+        1000 px wide. Counted from the widths the row's labels and
+        buttons ask for, which are known at once and do not change with where
+        the buttons go, so moving them cannot undo what moved them. Called
+        by _show_day_mode, and by the row's <Configure> while they are on it."""
+        if event is not None and self._day_btns_wrapped is None:
+            return
+
+        def width(w):
+            kw = w.pack_info()
+            padx = kw.get("padx", 0)
+            pad = sum(padx) if isinstance(padx, (tuple, list)) else 2 * int(padx)
+            return w.winfo_reqwidth() + 2 * int(kw.get("ipadx", 0)) + pad
+
+        row = self.day_btns.master
+        try:
+            room = row.winfo_width()
+            # 20: the space the frame keeps before the colour, packed below.
+            need = 20 + sum(width(w) for w in self.day_btns.pack_slaves()) + sum(
+                width(w) for w in row.pack_slaves() if w is not self.day_btns)
+        except (tk.TclError, ValueError):
+            return
+        wrap = room > 1 and need > room
+        if wrap == self._day_btns_wrapped:
+            return
+        self._day_btns_wrapped = wrap
+        if wrap:
+            self.day_btns.pack(side="bottom", anchor="w", padx=0, pady=(6, 0),
+                               before=self._date_row_label)
+        else:
+            self.day_btns.pack(side="left", anchor="center", padx=(0, 20),
+                               pady=0, before=self._color_label)
+
+    def _reset_this_day(self):
+        """Day mode's "↺ Reset this day…": the calendar menu's Reset, for
+        the day on screen (_reset_occurrence_override)."""
+        if not self._day_mode():
+            return
+        note = self.find_note(self.selected_note_id)
+        if note is not None:
+            self._reset_occurrence_override(note, self.current_occurrence_date)
 
     def _open_move_day_picker(self):
         """Day mode's "📅 Move this day…": the date picker, opened on the
