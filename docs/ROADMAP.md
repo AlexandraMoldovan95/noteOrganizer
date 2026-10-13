@@ -18,6 +18,25 @@ being done about it — lives in its own register, now archived:
 
 Genuinely open ideas, roughly ordered by how soon they're likely to happen.
 
+- **The website, its demo, and where the app is published.** The site — a page presenting the
+  app, a web demo that re-creates its interface in a browser, and the key documents as pages —
+  lives in this repository under [`site/`](../site/README.md) since 2026-10-14. It is built from
+  this repository and published on Netlify by hand, with changes gathered into one upload because
+  every deploy counts against the account's credits. What is planned for it, nearest first:
+  - **The demo closer to the app.** Its formatting bar has the app's font and size lists and its
+    indent buttons since 2026-10-14, taken from the app's own source and carried in share codes
+    both ways. Still missing: the calculator under a note, and opening or moving one day of a
+    repeating series — the demo names these among the things the desktop app does that it does
+    not.
+  - **One site for both apps.** When an Android version exists, the same site presents it too,
+    with its own presentation and demo. Its code stays in its own repository, and the site's build
+    reads it the way it reads this one — no third repository for the site.
+  - **At the public launch, links to the stores** — the Microsoft Store for the desktop app,
+    Google Play for Android — rather than the built `dist/` folder to download. A store signs the
+    app (an unsigned `.exe` from a website meets Windows' unknown-publisher warning), keeps it up
+    to date, and is where people look for it. The Windows options are in
+    [`docs/RELEASE_WINDOWS.md`](RELEASE_WINDOWS.md).
+
 - **Follow-ups the audit programme scoped out** (see
   [Known limitations](#known-limitations) for the full residuals list): fonts inside table
   cells (the phase deliberately deferred in the 0.64.95 cycle).

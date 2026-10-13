@@ -137,6 +137,9 @@ for when you need it:
   [roadmap](docs/ROADMAP.md), with the decisions it records.
 - **How it is tested:** the [test map](qa/README.md) and the
   [test plan excerpt](docs/TEST_PLAN_EXCERPT.md).
+- **The website and web demo:** [`site/`](site/README.md) — the page that
+  presents the app, a demo to try it in a browser, and how both are built
+  and published.
 - **Releasing:** the [git workflow](docs/GIT_WORKFLOW.md) and the release
   guides for [Windows](docs/RELEASE_WINDOWS.md) and
   [Android](docs/RELEASE_ANDROID.md); the [archive](docs/archive/) holds two

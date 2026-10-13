@@ -32,7 +32,9 @@ name: QA Tests
 #     PR, for one set of commits. (To see a verdict before opening a PR,
 #     use the Run workflow button -- workflow_dispatch, below.)
 #   * Only when it could tell us something. A paragraph of documentation,
-#     a screenshot or a row in the test plan cannot turn a check red.
+#     a screenshot, a row in the test plan or the website (site/, which
+#     only reads this repository and has checks of its own) cannot turn a
+#     check red.
 #     Everything NOT listed under paths-ignore still triggers it --
 #     `noteorganizer/`, `note_organizer.py`, `test_*.py`, `qa/qa*.py`,
 #     `tools/`, the spec file and this workflow included.
@@ -50,6 +52,7 @@ on:
       - "**.md"
       - "docs/**"
       - "qa/*.xlsx"
+      - "site/**"
       - ".gitignore"
       - "LICENSE"
   pull_request:
@@ -57,6 +60,7 @@ on:
       - "**.md"
       - "docs/**"
       - "qa/*.xlsx"
+      - "site/**"
       - ".gitignore"
       - "LICENSE"
   workflow_dispatch:
