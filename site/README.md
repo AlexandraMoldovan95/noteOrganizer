@@ -9,23 +9,28 @@ Tkinter, which a browser cannot run. The demo imitates its interface in HTML
 and JavaScript, says so on every screen, and keeps what a visitor types in
 that visitor's own browser.
 
+The site lives in the app's repository, in this `site/` folder, so it has a
+history and builds from the same commit as the app it presents. The commands
+below are run from the repository's root. The test suite does not run for a
+change that only touches `site/`.
+
 ## What is in this folder
 
 | Path | What it is |
 |---|---|
-| `public/` | **The finished site — this is what goes to Netlify.** Never edit it by hand: the build replaces it. |
+| `public/` | **The finished site — this is what goes to Netlify.** Never edit it by hand: the build replaces it. Not in git: the build makes it again whenever it is needed. |
 | `src/` | The source: the overview page, the page template, the styles, the demo, the Netlify headers. |
 | `build.py` | Turns `src/` plus the app's repository into `public/`. |
 | `site.json` | Two settings: the site's address and, later, the repository's address. |
 | `tools/check_demo.mjs` | Walks the built site in a real browser (Edge), on a computer and on a phone, and photographs it. |
 | `tools/verify_share_codes.py` | Holds the demo's share codes to the app's own code, both ways. |
-| `netlify.toml` | Only for a deploy connected to Git, later. A drag-and-drop deploy ignores it. |
+| `netlify.toml` | Only for a deploy connected to Git, later (with `site` as the base directory). A drag-and-drop deploy ignores it. |
 
 ## Put it online the first time
 
 1. Sign in at [app.netlify.com](https://app.netlify.com).
 2. On the Projects page, open **Add new project → Deploy manually**.
-3. Drag the **`public`** folder (not the whole folder) onto the drop zone.
+3. Drag the **`site/public`** folder (not `site` itself) onto the drop zone.
 4. Netlify gives the site a random address. Change it in the project's
    configuration by renaming the project — the name becomes the address,
    for example `note-organizer-demo` → `note-organizer-demo.netlify.app`.
@@ -34,7 +39,7 @@ Then, so that a link shared on a social site shows a picture and a title:
 
 5. Put the address in `site.json`:
    `"site_url": "https://note-organizer-demo.netlify.app"`
-6. Rebuild (`py build.py`) and drag `public` again (next section).
+6. Rebuild (`py site/build.py`) and drag `site/public` again (next section).
 
 ## Update it
 
@@ -42,14 +47,14 @@ When the app changes — a new version, new screenshots, edited documents — or
 when you edit something in `src/`:
 
 ```
-py build.py
+py site/build.py
 ```
 
-Then on Netlify open the project's **Deploys** page and drag `public` onto the
-drop zone at the bottom. The address stays the same.
+Then on Netlify open the project's **Deploys** page and drag `site/public`
+onto the drop zone at the bottom. The address stays the same.
 
-The build reads the app's repository at `..\NoteOrganizer` (or the folder
-given with `--repo`) and only reads it: the documents, the screenshots, the
+The build reads the repository it sits in (or the folder given with
+`--repo`) and only reads it: the documents, the screenshots, the
 icon, the test plan's case count, and a few values from the source code (the
 themes, the emoji, the version), read as text — none of the app's code runs.
 It builds in `public.building/` first and only swaps that into `public/`
@@ -65,9 +70,9 @@ gather changes and upload them together rather than one at a time.
 ## Check it before uploading
 
 ```
-py tools/verify_share_codes.py <photos folder>
-node tools/check_demo.mjs <photos folder>
-py tools/verify_share_codes.py <photos folder>
+py site/tools/verify_share_codes.py <photos folder>
+node site/tools/check_demo.mjs <photos folder>
+py site/tools/verify_share_codes.py <photos folder>
 ```
 
 The browser walk serves `public/` with the same security headers Netlify will

@@ -1,6 +1,6 @@
 """Hold the demo's share codes to the app's own reader, and the other way.
 
-    py tools/verify_share_codes.py <photographs folder> [--repo ../NoteOrganizer]
+    py site/tools/verify_share_codes.py <photographs folder> [--repo <the app's repository>]
 
 1. Writes share_codes_from_app.json: codes made by the app's own
    encode_share_code -- its real welcome note, a table, a checklist,
@@ -32,7 +32,8 @@ def main():
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser()
     parser.add_argument("out")
-    parser.add_argument("--repo", default=os.path.join(HERE, "..", "..", "NoteOrganizer"))
+    # site/tools/ is two folders down from the app's repository.
+    parser.add_argument("--repo", default=os.path.dirname(os.path.dirname(HERE)))
     args = parser.parse_args()
     repo = os.path.abspath(args.repo)
     out = os.path.abspath(args.out)

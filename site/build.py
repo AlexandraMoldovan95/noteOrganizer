@@ -1,7 +1,7 @@
 """Build the Note Organizer site into public/.
 
-    py build.py                      # the app's repository is ../NoteOrganizer
-    py build.py --repo D:/path/to/NoteOrganizer
+    py site/build.py                 # the repository site/ sits in
+    py site/build.py --repo D:/path/to/NoteOrganizer
 
 What it does, in order:
 
@@ -640,7 +640,9 @@ def publish():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--repo", default=os.path.join(HERE, "..", "NoteOrganizer"),
+    # The site lives in the app's repository, under site/: by default the
+    # repository is the folder this one sits in.
+    parser.add_argument("--repo", default=os.path.dirname(HERE),
                         help="the app's repository (read only)")
     args = parser.parse_args()
     repo = os.path.abspath(args.repo)

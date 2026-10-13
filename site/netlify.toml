@@ -1,7 +1,9 @@
-# For a deploy connected to a Git repository. The site is built on this
-# computer with `py build.py`, so Netlify has nothing to build: it only
-# publishes the public/ folder. (A drag-and-drop deploy ignores this file;
-# there you drag public/ itself.)
+# For a deploy connected to a Git repository, later, with `site` as its
+# base directory. The site is built on this computer with
+# `py site/build.py`, and Netlify only publishes the public/ folder it
+# makes -- which is not in git today, so connecting a deploy to Git means
+# first deciding whether Netlify builds it or the built folder is committed.
+# (A drag-and-drop deploy ignores this file; there you drag site/public.)
 [build]
   publish = "public"
   command = ""
