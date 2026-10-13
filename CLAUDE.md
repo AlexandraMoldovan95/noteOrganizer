@@ -83,6 +83,13 @@ calls, no accounts, no database.
   automating.
 - **Build:** packaged via PyInstaller using `NoteOrganizer.spec`
   (`--windowed`, one-folder output to `dist/NoteOrganizer/`).
+- **Website:** `site/` holds the site that presents the app and its web
+  demo (a re-creation of the interface in HTML and JavaScript), published
+  on Netlify. It is edited only there; `py site/build.py` builds it into
+  `site/public/` (not in git), which is dragged onto Netlify by hand, with
+  changes gathered into one upload because every deploy costs credits. The
+  test workflow ignores `site/`; its own checks are in `site/tools/`.
+  See `site/README.md`.
 
 For anything non-trivial, `docs/ARCHITECTURE.md`, `docs/ISSUES_LOG.md`, and
 `docs/ROADMAP.md` contain real, hard-won context — read them before assuming
@@ -158,8 +165,9 @@ written afterwards caught all four when they were put back:
   exe". For a user-facing change that means walking it on the real app:
   `py qa/story_note_travels.py` and the stories beside it press the
   buttons a person presses, restart the process where a person would
-  close the app, and photograph the screen. The photographs are looked
-  at, not merely saved.
+  close the app, and photograph the app's window — never the whole
+  screen, which takes the owner's other open windows with it. The
+  photographs are looked at, not merely saved.
 - **The test plan still gets the row** (`qa/NoteOrganizer_TestPlan.xlsx`),
   because a second pair of eyes on the built `.exe` catches what a script
   was never told to look for. Its "Automation status (Claude)" column

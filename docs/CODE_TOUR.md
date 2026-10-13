@@ -307,7 +307,7 @@ and the rule editable — at the cost of the code in this module. **That
 trade, store the rule and compute the results, comes up constantly in real
 software.**
 
-Four fields carry it:
+Five fields carry it:
 
 | Field | Meaning |
 |---|---|
@@ -315,6 +315,7 @@ Four fields carry it:
 | `note["recurrence"]` | the rule itself |
 | `note["exceptions"]` | days the user deleted individually |
 | `note["overrides"]` | per-day content edits |
+| `note["moved"]` | days held on another date: the date the rule gives each, mapped to the date it is on |
 
 ### Normalising at the edge
 

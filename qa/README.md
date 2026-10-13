@@ -157,7 +157,9 @@ A story fixes that by walking one thing a person does, from end to end,
 pressing the buttons they press — the note card, `📋 Generate code`, the
 dialog's own buttons — with each chapter in **its own process**, so
 "close the app and open it again" is real rather than simulated. It
-photographs the screen as it goes, and the pictures are meant to be
+photographs the app's window as it goes (only the window: a picture of
+the whole screen took every other open window with it), and the pictures
+are meant to be
 looked at: two bugs in this project were invisible in the source and
 obvious in a photograph.
 
