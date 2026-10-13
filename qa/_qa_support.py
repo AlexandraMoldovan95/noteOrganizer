@@ -498,6 +498,69 @@ def ring_mismatches(top):
     return out
 
 
+# What a person reads or presses, at the width it asks for. Entries are not
+# here: a text box given less than it asks scrolls its text, as it should.
+_FIXED = (tk.Button, tk.Label, tk.Checkbutton, tk.Radiobutton, tk.Menubutton)
+
+
+def out_of_sight(top):
+    """The buttons, labels and tick boxes under *top* that are not wholly on
+    screen while what holds them is: not drawn at all, cut at the edge of
+    what holds them, or given less width than they ask -- all but a label
+    that wraps, which asks for its unwrapped width and is given its wrap.
+    A box (an Entry) counts as out of sight only when not drawn or cut.
+
+    A packed or gridded row given less than it asks drops what was placed
+    last, and says nothing: the colour's swatch, "This day:", a dropdown's
+    arrow and a button's words were lost so before a check asked. Each is
+    named by its text and class, and what holds it. Pumps nothing: the
+    caller waits for the state it was promised (mapping is asynchronous
+    under Xvfb)."""
+    out = []
+
+    def name(w):
+        text = str(w.cget("text"))[:30] if "text" in w.keys() else ""
+        return f"{w.winfo_class()} {text!r} in {w.master.winfo_class()}"
+
+    def first_control(w):
+        for c in w.winfo_children():
+            if isinstance(c, _FIXED):
+                return c
+            found = None if isinstance(c, tk.Toplevel) else first_control(c)
+            if found is not None:
+                return found
+        return None
+
+    def walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Toplevel):
+                continue
+            placed = c.winfo_manager() in ("pack", "grid", "place")
+            if (placed and w.winfo_ismapped() and not c.winfo_ismapped()
+                    and not isinstance(c, _FIXED + (tk.Entry,))):
+                # A frame squeezed to nothing takes everything in it along,
+                # and nothing in it is drawn to be asked: a Settings row's
+                # button was given 1 px of 81 this way.
+                held = first_control(c)
+                if held is not None:
+                    out.append(f"not drawn: {c.winfo_class()} holding " + name(held))
+                continue
+            if (isinstance(c, _FIXED + (tk.Entry,))
+                    and placed and w.winfo_ismapped()):
+                wraps = isinstance(c, tk.Label) and int(str(c.cget("wraplength")) or 0) > 0
+                if not c.winfo_ismapped():
+                    out.append("not drawn: " + name(c))
+                elif c.winfo_x() + c.winfo_width() > w.winfo_width() + 1:
+                    out.append("cut: " + name(c))
+                elif (isinstance(c, _FIXED) and not wraps
+                      and c.winfo_width() + 1 < c.winfo_reqwidth()):
+                    out.append(f"squeezed {c.winfo_width()} of {c.winfo_reqwidth()}: "
+                               + name(c))
+            walk(c)
+    walk(top)
+    return out
+
+
 def _waiting(app):
     """Each waiting Tcl timer's id and the command it will run."""
     for job in app.tk.splitlist(app.tk.call("after", "info")):

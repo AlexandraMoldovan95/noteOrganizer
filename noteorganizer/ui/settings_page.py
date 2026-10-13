@@ -2649,7 +2649,12 @@ class SettingsPageMixin:
             note.pack(fill="x", pady=(2, 0))
             self._wrap_to_own_width(note)
         control = tk.Frame(row, bg=self._surface())
-        control.pack(side="right", padx=(16, 0))
+        # First in the packing order, though built second: the packer gives
+        # each its width in that order, and the words first took theirs
+        # unwrapped -- their hint wraps only to the width it is given -- and
+        # left the control the rest: a dropdown 18 px of its 74, its arrow
+        # gone, under CI's fonts. The words have the rest now, and wrap.
+        control.pack(side="right", padx=(16, 0), before=text_col)
         return control
 
     # _add_row() stood here: an "+ Add category" affordance drawn as accent

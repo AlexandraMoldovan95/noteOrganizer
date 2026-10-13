@@ -681,25 +681,44 @@ pinned down exactly. The widget side keeps only the measuring and the packing.
 
 Tk's packer gives each control the width it asks for, in the order they were packed. When the row
 is narrower than the sum, the last ones get what is left — squeezed, or not drawn at all — and
-nothing reports it. Two editor rows met this at the smallest window, under the fonts CI has: one
-day of a series showed its date row without the colour's swatch, and its title row without "This
-day:". On Windows, a long title's counter was squeezed to 8 px of its 46, and at 150% scaling the
-same date row asked for more than it had in a window 1000 px wide.
+nothing reports it. A grid of equal columns does the same in its own way: every column is as wide
+as the widest control, and a row with no room for them all narrows every column alike.
+
+Under the fonts CI has, this cost four rows a control. One day of a series showed its date row
+without the colour's swatch, and its title row without "This day:". The editor's "Save as
+template" lost its words at both ends (168 px of 177). In Settings, the dropdowns and buttons beside
+a setting's description were left what the words did not take: the trash's "30 days" 18 px of 74,
+its arrow gone. On Windows the only one seen was a long title's counter, squeezed to 8 px of its 46.
 
 There is one answer for each kind of row:
 
 - **A box that fills the row asks for almost nothing.** The title's box is `width=1`. Fill and
   expand still give it everything the controls beside it leave, but it no longer claims twenty
   characters before they are placed.
+- **What cannot shrink is placed first.** A Settings row (`_card_row`) is built words first, but
+  packs its control first. The words get the rest, and their hint wraps to it.
 - **Controls that cannot shrink get a line of their own.** A day's **Move this day…** and **Reset
   this day…** sit beside its date while the row has room, and on a line under it when it has not
-  (`_place_day_buttons`). The decision is one sum of measured widths against the row's own, so
-  unlike the toolbar there is no arithmetic worth moving to core. Those widths do not change with
-  where the buttons go, so moving them cannot undo the decision that moved them.
+  (`_place_day_buttons`). The editor's six action buttons are three columns while there is room
+  for three of the widest, then two, then one (`_reflow_action_buttons`), and Restore previous
+  takes the row under them, wherever that now is. Each decision is one comparison of measured
+  widths against the row's own, so unlike the toolbar there is no arithmetic worth moving to core.
+  Those widths do not change with where the buttons go, so moving them cannot undo the decision.
 
-The qa5 check behind both asks every control of the two rows whether it is wholly in sight. It
-simulates a wider font in pixels rather than characters, so the line left above the buttons fits
-under every font.
+The qa5 and qa6 checks behind these ask every control whether it is wholly in sight
+(`out_of_sight` in `qa/_qa_support.py`). A wider font is simulated in pixels rather than
+characters, so the line left beside the moved controls fits under every font.
+
+#### Not answered yet: a display scaled to 150%
+
+The app does not declare itself DPI-aware — neither the built `.exe` nor `python.exe` does — so
+on a screen scaled to 150% Windows enlarges it as a picture. The layout is the 100% layout, and a
+little soft. Run DPI-aware (as the photographs for these checks are taken, to be sharp), the fonts
+grow by half while fixed pixel widths stay put. The Settings menu's 240 px column then squeezes
+"Keyboard shortcuts" by 5 px, and the statistics tiles' three fixed columns squeeze two captions.
+At the smallest window, three editor lines run short as well: the Created line, a day's checklist
+button, and the repeat's "times". None of these is reached today. They belong with a decision to make the app sharp on scaled screens,
+which would have to measure every fixed width against the font it holds.
 
 ### Paste from a PDF: lines are not paragraphs
 

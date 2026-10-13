@@ -15,6 +15,7 @@ import note_organizer as NO, tkinter as tk
 # qa/_qa_support.py; _qa_click refuses to click into the void.
 from _qa_support import click as _qa_click, pin_popup_visibility as _qa_pin
 from _qa_support import waiting_timers as _qa_waiting
+from _qa_support import out_of_sight as _qa_out_of_sight
 _qa_pin(NO)
 fails=[]
 def check(name, cond):
@@ -3977,18 +3978,6 @@ app.set_theme('dark'); app.update()
 # drops what was packed last, in silence: a colour cut off in a photograph
 # first, then, under CI's fonts, the colour's swatch gone and "This day:" with
 # it, and on Windows a long title's counter squeezed to 8 px of its 46.
-def _mv_out_of_sight(row):
-    """*row*'s controls not wholly on screen: not mapped, cut at the row's
-    edge, or given less width than they ask -- all but the title's box,
-    which may shrink: it scrolls."""
-    lost = []
-    for w in row.pack_slaves():
-        if (not w.winfo_ismapped() or w.winfo_x() + w.winfo_width() > row.winfo_width() + 1
-                or (not isinstance(w, tk.Entry) and w.winfo_width() + 1 < w.winfo_reqwidth())):
-            lost.append(str(w.cget('text')) if 'text' in w.keys() else w.winfo_class())
-    return lost
-
-
 def _mv_in_sight(cap=3.0):
     """Pump until both rows have every control in sight -- the state this
     layout promises; mapping is asynchronous under Xvfb -- or *cap* seconds
@@ -3996,7 +3985,7 @@ def _mv_in_sight(cap=3.0):
     end = _t5f.time() + cap
     while True:
         app.update()
-        lost = _mv_out_of_sight(app.editor_top_row) + _mv_out_of_sight(app.day_btns.master)
+        lost = _qa_out_of_sight(app.editor_top_row) + _qa_out_of_sight(app.day_btns.master)
         if not lost or _t5f.time() > end:
             return lost
         _t5f.sleep(0.02)

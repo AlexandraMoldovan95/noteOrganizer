@@ -14513,15 +14513,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Two rows of three in a neat grid. Columns share equal width and the
         # buttons fill their cell, so the two rows line up cleanly regardless of
         # each button's text length. Built in this order, so Tab walks them
-        # as they read.
+        # as they read. Equal columns are as wide as the widest button, so a
+        # row with no room for three narrows all three and the widest loses
+        # its words at both ends ("Save as template", 168 px of 177 under
+        # CI's fonts): then it is three rows of two, or one column
+        # (_reflow_action_buttons).
         grid_buttons = [save_btn, share_btn, delete_btn,
                         duplicate_btn, template_btn, use_template_btn]
-        for col in range(3):
-            action_row.grid_columnconfigure(col, weight=1, uniform="editbtn")
-        for i, btn in enumerate(grid_buttons):
-            r, c = divmod(i, 3)
+        self._action_row = action_row
+        self._action_buttons = grid_buttons
+        self._action_cols = None
+        for btn in grid_buttons:
             btn.configure(anchor="center")
-            btn.grid(row=r, column=c, sticky="ew", padx=(0, 8), pady=(0, 6), ipady=5)
+        self._grid_action_buttons(3)
+        action_row.bind("<Configure>", self._reflow_action_buttons, add="+")
 
         # Appears only when the current note has a recoverable previous version
         # (e.g. after text was accidentally deleted and auto-saved).
@@ -14952,9 +14957,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Day mode's Move and Reset (day_btns): beside the day's date while
         the row has room for them, on a line of their own under it when it
         has not. A packed row given less than it asks for drops what was
-        packed last -- here the colour's swatch: gone at the smallest window
-        under the fonts CI has, and short of room at 150% scaling in a window
-        1000 px wide. Counted from the widths the row's labels and
+        packed last -- here the colour's swatch, gone at the smallest window
+        under the fonts CI has. Counted from the widths the row's labels and
         buttons ask for, which are known at once and do not change with where
         the buttons go, so moving them cannot undo what moved them. Called
         by _show_day_mode, and by the row's <Configure> while they are on it."""
@@ -19355,16 +19359,56 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _update_restore_button(self):
         """Show the Restore-previous button only when the open note has a
-        recoverable previous version. Uses grid (row 2) to match the action row."""
+        recoverable previous version, on the action grid's row under its
+        buttons (_place_restore_button)."""
         if not hasattr(self, "restore_prev_btn"):
             return
         note = self.find_note(self.selected_note_id) if self.selected_note_id else None
         has_prev = bool(note and note.get("_prev"))
         if has_prev and not self._is_placed(self.restore_prev_btn):
-            self.restore_prev_btn.grid(row=2, column=0, columnspan=3, sticky="w",
-                                       padx=(0, 8), pady=(0, 6), ipadx=10, ipady=5)
+            self._place_restore_button()
         elif not has_prev and self._is_placed(self.restore_prev_btn):
             self.restore_prev_btn.grid_forget()
+
+    def _place_restore_button(self):
+        """Restore previous, on the first row under the action buttons and
+        across all their columns: the row it takes moves with how many
+        columns they are dealt into, or it lands on top of one."""
+        cols = self._action_cols or 3
+        self.restore_prev_btn.grid(
+            row=-(-len(self._action_buttons) // cols), column=0, columnspan=cols,
+            sticky="w", padx=(0, 8), pady=(0, 6), ipadx=10, ipady=5)
+
+    def _grid_action_buttons(self, cols):
+        """Deal the editor's six action buttons into *cols* equal columns,
+        in the order Tab walks them, and Restore previous, when it shows,
+        under them."""
+        row = self._action_row
+        for c in range(3):
+            row.grid_columnconfigure(c, weight=1 if c < cols else 0,
+                                     uniform="editbtn" if c < cols else "")
+        for i, btn in enumerate(self._action_buttons):
+            r, c = divmod(i, cols)
+            btn.grid(row=r, column=c, sticky="ew", padx=(0, 8), pady=(0, 6), ipady=5)
+        self._action_cols = cols
+        restore = getattr(self, "restore_prev_btn", None)
+        if restore is not None and self._is_placed(restore):
+            self._place_restore_button()
+
+    def _reflow_action_buttons(self, event=None):
+        """Three equal columns while the row has room for three of its widest
+        button, else two, else one (see where they are built). Counted from
+        the buttons' own widths, which do not change with the columns they
+        are in, so the dealing cannot undo itself."""
+        row = self._action_row
+        room = row.winfo_width()
+        if room <= 1:
+            return
+        # 8: each button's padding on its right, as gridded.
+        widest = max(b.winfo_reqwidth() for b in self._action_buttons) + 8
+        cols = 3 if 3 * widest <= room else 2 if 2 * widest <= room else 1
+        if cols != self._action_cols:
+            self._grid_action_buttons(cols)
 
     # What "↩ Restore previous" can bring back beyond the text, in the
     # words its question uses. The keys are exactly the fields an update

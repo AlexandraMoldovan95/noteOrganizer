@@ -35,7 +35,7 @@ says.
 | Unit suites | Seven `test_*.py`, no window for six of them | Every pull request | Dates, repeats, the calculator, tables, rich text, data safety, a note's identity |
 | The qa suite | Nine scripts, ~2,700 checks, driving the real app headlessly | Every pull request | What a person would notice: a note that must survive a restart, a share code or a backup; formatting and tables that must come back exactly; a question that must not lose what was typed |
 | Stories | Three scripts that press the buttons a person presses, restart the app and photograph it | On demand: by hand, or from the Actions tab | A screen that changed shape; a route nobody asked a check about |
-| Mutants | `tools/mutate.py` and its catalogue: the 233 worth re-running, and 2 that test the runner | On demand, the same way. Most mutants were one-off runs while a fix was made, named in its commit | A check that stays green with its fix taken away |
+| Mutants | `tools/mutate.py` and its catalogue: the 238 worth re-running, and 2 that test the runner | On demand, the same way. Most mutants were one-off runs while a fix was made, named in its commit | A check that stays green with its fix taken away |
 | Coverage | `tools/run_coverage.py` | Every pull request, with a floor of 80% | Code no test reaches |
 | The test plan | `NoteOrganizer_TestPlan.xlsx`, 539 cases ([an excerpt](../docs/TEST_PLAN_EXCERPT.md)) | By a person, on the built `.exe` | What needs a person: how a screen reads, the built `.exe`, real hardware — each row says whether a script already walks it |
 
@@ -63,7 +63,7 @@ suite has had, and what each one really was:
 | `qa3` | trash, sharing, import/export |
 | `qa4` | theming, stress tests, leak regression — and the note list drawn a screenful at a time, with a save redrawing one card |
 | `qa5` | corrupt data, edge cases |
-| `qa6` | grouping, settings, attachments, multi-feature combinations |
+| `qa6` | grouping, settings, attachments, multi-feature combinations — and every control in sight, on every page, at an ordinary and the smallest window |
 | `qa7` | calendar delete, the month drawn on one canvas, the calendar History register, multi-select, image preview, autosave & memory fixes |
 | `qa8` | search debounce, background-timer robustness |
 | `qa9` | the nested-dropdown-inside-popup fix |
@@ -1039,3 +1039,24 @@ A new surface joins this list the moment it ships.
   more, so the check could not fail. Data a check names is renamed
   across the whole file in one replacement whose count is known before
   it runs, and the check is then made to fail once on purpose.
+- **"Is every control in sight?" is asked by one helper, and it has two
+  blind spots to remember.** A row given less width than it asks loses
+  what was placed last, in silence, and under CI's fonts four rows did
+  (the colour's swatch, "This day:", "Save as template", Settings'
+  dropdowns). `out_of_sight` in `_qa_support.py` asks every button, label
+  and tick box under a widget, for qa5 and qa6 alike. The first sweep
+  written for it found nothing anywhere, because it walked only what pack
+  and grid place: the editor and Settings are canvas windows, and the walk
+  stopped at the canvas. It was believed only once it found the one case
+  already known. Its second blind spot was a frame squeezed to nothing,
+  which takes its button along with it, so nothing in it was drawn to be
+  asked. It now names such a frame by the first control it holds.
+
+  And a layout can be decided by the order of Tk's passes. A Settings row
+  built with its words packed first gave its button 1 px of 81 under
+  Linux, and its full width here, because here the words happened to wrap
+  before the row dealt out its width. A check that fails on one machine
+  only is completed by one that asks for the rule itself (the control
+  packed first), so the mutant dies everywhere. And it is still run
+  against the fix taken out on the machine where the breakage was seen:
+  there, the real pages failed exactly as the sweep had found them.

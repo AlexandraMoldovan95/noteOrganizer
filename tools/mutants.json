@@ -3273,6 +3273,56 @@
     "expect": "killed"
   },
   {
+    "id": "FIT01",
+    "about": "a Settings row packs its words before its control, and the words take the room the control needed",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "        control.pack(side=\"right\", padx=(16, 0), before=text_col)\n",
+               "replace": "        control.pack(side=\"right\", padx=(16, 0))\n"}],
+    "must_fail": ["a Settings row packs its control before its words, keeps the control's width and wraps its words beside it"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "FIT02",
+    "about": "the action buttons stay three equal columns in a row with no room for three, and the widest loses its words",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        cols = 3 if 3 * widest <= room else 2 if 2 * widest <= room else 1\n",
+               "replace": "        cols = 3\n"}],
+    "must_fail": ["a row with no room for three of its widest button deals them into fewer columns, all in sight, Restore previous under them"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "FIT03",
+    "about": "the action buttons are dealt only once, and a window made narrower leaves them squeezed",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        action_row.bind(\"<Configure>\", self._reflow_action_buttons, add=\"+\")\n",
+               "replace": ""}],
+    "must_fail": ["a row with no room for three of its widest button deals them into fewer columns, all in sight, Restore previous under them"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "FIT04",
+    "about": "Restore previous keeps row 2, and lands on the action buttons once they are three rows of two",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            row=-(-len(self._action_buttons) // cols), column=0, columnspan=cols,\n",
+               "replace": "            row=2, column=0, columnspan=cols,\n"}],
+    "must_fail": ["a row with no room for three of its widest button deals them into fewer columns, all in sight, Restore previous under them"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "FIT05",
+    "about": "the action buttons only ever lose columns, and stay two across in a window that has room for three again",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if cols != self._action_cols:\n            self._grid_action_buttons(cols)\n",
+               "replace": "        if cols < (self._action_cols or 4):\n            self._grid_action_buttons(cols)\n"}],
+    "must_fail": ["...and given room again, three columns"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
     "id": "MV21",
     "about": "the day's Reset is offered for a move only, never for text of its own",
     "edits": [{"file": "note_organizer.py",
