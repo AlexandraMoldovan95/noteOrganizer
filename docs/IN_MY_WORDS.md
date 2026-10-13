@@ -99,6 +99,9 @@ one.
 
 ## Decisions I made
 
+These are a few of my decisions, picked as examples - not the only ones. I made the rest the same
+way: the agent puts forward options, and I choose what the app does and how it behaves.
+
 - **No language selector.** This is the first app I've built end to end this way. A language
   selector would have been hard to build, and I don't have the people to check six or seven
   languages for correct writing. I didn't want to risk badly written translations in the app.

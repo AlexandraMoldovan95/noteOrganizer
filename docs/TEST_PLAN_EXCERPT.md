@@ -1,7 +1,7 @@
 # Test plan - an excerpt
 
 The manual test plan is a spreadsheet,
-[`qa/NoteOrganizer_TestPlan.xlsx`](../qa/NoteOrganizer_TestPlan.xlsx): **533 cases**. I walk it
+[`qa/NoteOrganizer_TestPlan.xlsx`](../qa/NoteOrganizer_TestPlan.xlsx): **535 cases**. I walk it
 by hand on the packaged `.exe` before a release - a case passes only when I've seen it pass.
 
 ## How the plan is used
@@ -20,9 +20,9 @@ by hand on the packaged `.exe` before a release - a case passes only when I've s
 
 | Priority | Cases |
 |---|---:|
-| High | 164 |
+| High | 165 |
 | Medium | 262 |
-| Low | 107 |
+| Low | 108 |
 
 #### The six largest areas
 
@@ -30,14 +30,14 @@ by hand on the packaged `.exe` before a release - a case passes only when I've s
 |---|---:|
 | Editor | 62 |
 | Notes | 60 |
-| Calendar | 48 |
 | Tables | 48 |
-| Recurrence | 40 |
+| Calendar | 46 |
+| Recurrence | 43 |
 | Backup & Sharing | 37 |
 
 ## The test case template, filled out four times
 
-Every one of the 533 cases uses the same template: area, priority, preconditions, numbered
+Every one of the 535 cases uses the same template: area, priority, preconditions, numbered
 steps, expected result, status, and what automation covers. **The four below are a small sample
 of that full list** - not the only ones, just quick to picture without seeing the app:
 
@@ -115,10 +115,12 @@ Step 2: the next batch appears, added to what's already shown.
 **Expected Result:** The checkbox background is white with a black check mark, not
 black-on-black.
 
-**Automation:** Manual only - exactly the kind of bug a script won't notice: nothing crashes,
-nothing throws, a checkbox is just invisible.
+**Automation:** Automated (`qa4`) - every tick box on screen, this one included, is judged on
+every theme: its well is not the surface it sits on, and its mark reads on the well. The case was
+written as manual first, when nothing crashed, nothing threw, and a checkbox was just invisible -
+a bug no script noticed until one was written for it.
 
 ---
 
-These four are a sample. The other 529 cases follow the same template and live in the full
+These four are a sample. The other 531 cases follow the same template and live in the full
 spreadsheet, walked by hand before every release.
