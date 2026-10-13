@@ -2739,12 +2739,18 @@ with open(os.path.join(NO.ATTACHMENTS_DIR, _ra_copy_file or _ra_file),
           encoding='utf-8') as _fh:
     _ra_copy_text = _fh.read()
 check("...holding the backup's file as it was", _ra_copy_text == 'the receipt')
+# A copy with no file of its own fails here rather than stops the script:
+# sorting None among the names raised, and three mutants that the checks
+# above had caught read as NO-RUN.
 check('...and no file owned by nobody',
-      sorted(set(_ra_before) | {_ra_copy_file}) == _ra_files())
+      _ra_copy_file is not None
+      and sorted(set(_ra_before) | {_ra_copy_file}) == _ra_files())
 
 # The copy deleted for good, from Settings -> Recently deleted, the way a
-# person does it: the original's file must survive.
-app._delete_note(_ra_copy, None)
+# person does it: the original's file must survive. With no copy made (as
+# under a mutant), there is nothing to delete, and the checks below fail.
+if _ra_copy is not None:
+    app._delete_note(_ra_copy, None)
 app.update()
 app.show_settings_page(); app.update()
 app.toggle_settings_panel('trash'); app.update()

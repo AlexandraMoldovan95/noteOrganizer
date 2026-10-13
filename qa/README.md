@@ -1060,3 +1060,25 @@ A new surface joins this list the moment it ships.
   packed first), so the mutant dies everywhere. And it is still run
   against the fix taken out on the machine where the breakage was seen:
   there, the real pages failed exactly as the sweep had found them.
+- **Under the mutant it guards, a check fails; it never stops the
+  script.** The full catalogue, run on 2026-10-13 for the first time since
+  the 12th, came back with four NO-RUN verdicts whose checks had all
+  caught their mutant, and then died before the footer. Three were qa3
+  going on with a copy that the mutant had never let be made: sorting its
+  missing file (`None`) among the file names, and then, once that was
+  mended, deleting it. A whole block that leans on a fixture is read
+  through for the fixture's absence, not just the line that broke first.
+  One was qa1 releasing the mouse on a checklist row that its own
+  press had destroyed: `fire` refused the release, the refusal escaped,
+  and the script ended. Each check now fails on what it finds. `fire`
+  skips exactly one kind of release: the one aimed at the widget its own
+  press destroyed, which in a person's hand lands on nothing too. Every
+  other undeliverable event is still refused.
+
+  The same run found the opposite case, a check that could not fail. "While
+  a turn-off of the repeat waits, the way in is not offered" ran after a
+  step that changed the series' rule. That step put every day back on the
+  schedule, so there was no way in left to withhold, and the mutant that
+  took the guard out survived. A check that asserts something is *not*
+  there re-asserts, right before it, that the thing would otherwise be
+  there (`fixture: ...`).

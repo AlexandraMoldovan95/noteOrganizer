@@ -3413,10 +3413,20 @@ check(f'the series line wraps within its width rather than cutting its words '
       and _os_line.winfo_reqwidth() <= _os_line.winfo_width() + 1)
 
 # While a turn-off of the repeat waits, every day goes with it: no way in.
+# Asked of the series as seeded -- Tuesdays, with Monday edits. The long rule
+# above takes the Mondays back onto the schedule, and with no day off it
+# there was no way in to withhold: the check passed with its guard taken
+# out (OS08 survived the full catalogue). Placement is asked, not mapping,
+# which comes later under Xvfb.
+_os_seed()
+_os_off = NO.off_schedule_days(app.find_note(1))
+check(f'fixture: the series has days off its schedule, and their way in shows '
+      f'({_os_off})',
+      len(_os_off) == 2 and app._is_placed(_os_btn))
 _os_ok = _rn_pick(NO.FREQ_LABELS[''])
 app._update_occurrence_banner(); app.update()
 check('while a turn-off of the repeat waits, the way in is not offered',
-      _os_ok and not _os_btn.winfo_ismapped())
+      _os_ok and not app._is_placed(_os_btn))
 _rn_pick(NO.FREQ_LABELS['weekly'])
 app._cancel_pending_autosave()
 

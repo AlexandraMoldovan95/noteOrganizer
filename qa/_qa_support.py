@@ -422,6 +422,11 @@ _WINDOW_DELIVERED = re.compile(
     r"(?:-[1-5])?>"
     r"|<<[^<>]+>>)$")
 
+# Which widget each mouse button was last pressed on, by its path: a release
+# may find that its own press destroyed it (fire, below).
+_BUTTON = re.compile(r"(ButtonPress|ButtonRelease|Button)-([1-5])>$")
+_PRESSED = {}
+
 
 def fire(widget, sequence, **kwargs):
     """Generate a pointer (or ``<<virtual>>``) *sequence* on *widget*,
@@ -443,15 +448,26 @@ def fire(widget, sequence, **kwargs):
             "event_generate (see qa/README.md). A pointer shorthand like "
             "<Double-1> needs its full spelling (<Double-Button-1>)."
             % (sequence,))
+    button = _BUTTON.search(sequence)
     try:
         # Not a query: this creates the native window if it has none, which
         # is the whole fix. Without it Tk throws the event away in silence.
         widget.winfo_id()
     except tk.TclError as exc:
+        # The one release with nowhere to land: on the widget its own press
+        # destroyed -- a checklist row rebuilt under the pointer. A person's
+        # release lands on nothing then, and so does this one; the check
+        # after it fails on what it finds. Raised, it killed the script
+        # before its footer, and the mutant behind it read as NO-RUN.
+        if (button and button.group(1) == "ButtonRelease"
+                and _PRESSED.get(button.group(2)) == str(widget)):
+            return
         raise EventNotDelivered(
             "%s has no window to receive %s (destroyed?): %s"
             % (widget, sequence, exc))
     widget.event_generate(sequence, **kwargs)
+    if button and button.group(1) != "ButtonRelease":
+        _PRESSED[button.group(2)] = str(widget)
 
 
 def click(widget, **kwargs):
