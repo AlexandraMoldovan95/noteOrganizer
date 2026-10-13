@@ -58,7 +58,8 @@ def main():
 def run(out):
     from noteorganizer.core.sharing import encode_share_code, decode_share_code
     from noteorganizer.core.model import normalize_note
-    from noteorganizer.core.formatting import normalize_formatting
+    from noteorganizer.core.formatting import (normalize_formatting, normalize_paragraphs,
+                                               parse_list_marker)
     from noteorganizer.core.recurrence import normalize_recurrence
     from noteorganizer.core.tables import is_table_row, is_separator_row
     from noteorganizer.core.welcome import build_welcome_note, TITLE
@@ -93,6 +94,19 @@ def run(out):
         ],
         "recurrence": {"freq": "monthly", "interval": 1}, "date": "2026-10-01",
     }
+    # The formatting bar's font, size and indent, and a line's alignment.
+    fonts = {
+        "uid": "fonts-from-the-app", "title": "Fonts and indents", "category": "Ideas",
+        "body": "A heading in Georgia\nPushed in twice, centred\n• A bullet, pushed in once",
+        "formatting": [
+            {"start": 0, "end": 20, "style": "font_family", "value": "Georgia"},
+            {"start": 0, "end": 20, "style": "font_size", "value": 16},
+        ],
+        "paragraphs": [
+            {"line": 1, "indent": 2, "align": "center"},
+            {"line": 2, "kind": "bullet", "indent": 1},
+        ],
+    }
     # What the demo must show bold: the welcome note's own bold runs, read
     # from its spans rather than retyped here.
     bold_runs = [welcome["body"][s["start"]:s["end"]] for s in welcome["formatting"] if s["style"] == "bold"]
@@ -103,6 +117,9 @@ def run(out):
                   "expect": {"title": "Packing", "rows": 3, "items": 2}},
         "styles": {"code": encode_share_code(styled),
                    "expect": {"title": "Colours and styles", "bold": ["Bold", "both"]}},
+        "fonts": {"code": encode_share_code(fonts),
+                  "expect": {"title": "Fonts and indents", "families": ["Georgia"], "sizes": ["16pt"],
+                             "indents": ["2", "1"], "aligns": ["center"]}},
     }
     with open(os.path.join(out, "share_codes_from_app.json"), "w", encoding="utf-8") as f:
         json.dump(app_codes, f, ensure_ascii=False, indent=1)
@@ -133,6 +150,20 @@ def run(out):
             if span["end"] > len(note["body"]):
                 check("  spans stay inside the text", False, repr(span))
                 break
+        sent = raw.get("paragraphs") or []
+        lines_of = note["body"].split("\n")
+        kept_lines = normalize_paragraphs(sent, len(lines_of))
+        check("  every line's entry survives the app's checks", len(kept_lines) == len(sent),
+              "%d sent, %d kept: %r" % (len(sent), len(kept_lines), sent))
+        # A list line's kind is the app's to draw only where the line
+        # starts with that kind's marker.
+        for entry in sent:
+            if entry.get("kind") and entry["line"] < len(lines_of):
+                marked = parse_list_marker(lines_of[entry["line"]])[0]
+                if marked != entry["kind"]:
+                    check("  a list line starts with its marker", False,
+                          "line %d %r is sent as %s" % (entry["line"], lines_of[entry["line"]], entry["kind"]))
+                    break
         check("  the checklist arrives whole", len(note["checklist"]) == len(raw.get("checklist") or []))
         if raw.get("recurrence", {}).get("freq"):
             check("  the repeat rule arrives as sent",
@@ -149,6 +180,14 @@ def run(out):
                   repr(note["recurrence"]))
         if title == "Plant the tulips":
             check("  bold came across", any(s["style"] == "bold" for s in note["formatting"]), repr(note["formatting"]))
+            # Set with the formatting bar in tools/check_demo.mjs.
+            check("  the font and size came across",
+                  any(s["style"] == "font_family" and s.get("value") == "Georgia" for s in note["formatting"])
+                  and any(s["style"] == "font_size" and s.get("value") == 16 for s in note["formatting"]),
+                  repr(note["formatting"]))
+            check("  the indent and the alignment came across",
+                  any(p.get("indent") == 2 and p.get("align") == "center" for p in note["paragraphs"]),
+                  repr(note["paragraphs"]))
     print("\n%s" % ("all checks passed" if not failures else "%d check(s) failed" % len(failures)))
     return 1 if failures else 0
 

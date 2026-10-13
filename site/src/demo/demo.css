@@ -276,6 +276,11 @@ input.ed-title:focus { background: var(--card); border-color: var(--accent); }
 .tb.s { text-decoration: line-through; }
 .tb .bar { display: block; height: 3px; margin: -2px auto 0; width: 16px; background: var(--bar, currentColor); }
 .tb svg { display: block; margin: 0 auto; }
+/* The font and size lists: what the text wears, and a caret, as the app's. */
+.tb-select { font-weight: 400; font-size: 13px; text-align: left; white-space: nowrap; }
+.tb-select .tb-label { display: inline-block; min-width: 52px; }
+#tb-family .tb-label { min-width: 92px; }
+.tb-select .tb-caret { margin-left: 6px; font-size: 10px; color: var(--subtext); }
 
 .ed-body {
   min-height: 260px;
@@ -297,6 +302,15 @@ input.ed-title:focus { background: var(--card); border-color: var(--accent); }
 .ed-body th { background: var(--inset); font-weight: 700; text-align: left; }
 .ed-body tr:first-child td { background: var(--inset); font-weight: 700; }
 .ed-body p, .ed-body div { margin: 0; }
+/* A line pushed in: the app's step per level (--indent-step, from its source). */
+.ed-body [data-indent="1"] { margin-left: calc(var(--indent-step, 24px) * 1); }
+.ed-body [data-indent="2"] { margin-left: calc(var(--indent-step, 24px) * 2); }
+.ed-body [data-indent="3"] { margin-left: calc(var(--indent-step, 24px) * 3); }
+.ed-body [data-indent="4"] { margin-left: calc(var(--indent-step, 24px) * 4); }
+.ed-body [data-indent="5"] { margin-left: calc(var(--indent-step, 24px) * 5); }
+.ed-body [data-indent="6"] { margin-left: calc(var(--indent-step, 24px) * 6); }
+.ed-body [data-indent="7"] { margin-left: calc(var(--indent-step, 24px) * 7); }
+.ed-body [data-indent="8"] { margin-left: calc(var(--indent-step, 24px) * 8); }
 
 .ed-section { background: var(--sidebar); }
 .ed-section > summary {

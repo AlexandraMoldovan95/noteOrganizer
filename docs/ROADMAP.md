@@ -23,10 +23,11 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
   lives in this repository under [`site/`](../site/README.md) since 2026-10-14. It is built from
   this repository and published on Netlify by hand, with changes gathered into one upload because
   every deploy counts against the account's credits. What is planned for it, nearest first:
-  - **The demo closer to the app.** Its formatting bar is getting what the app's has and it did
-    not: the font, the size and the indent buttons. Still missing after that: the calculator under
-    a note, and opening or moving one day of a repeating series — the demo names these among the
-    things the desktop app does that it does not.
+  - **The demo closer to the app.** Its formatting bar has the app's font and size lists and its
+    indent buttons since 2026-10-14, taken from the app's own source and carried in share codes
+    both ways. Still missing: the calculator under a note, and opening or moving one day of a
+    repeating series — the demo names these among the things the desktop app does that it does
+    not.
   - **One site for both apps.** When an Android version exists, the same site presents it too,
     with its own presentation and demo. Its code stays in its own repository, and the site's build
     reads it the way it reads this one — no third repository for the site.

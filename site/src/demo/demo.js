@@ -89,6 +89,9 @@
     center: "M2 3h12M4 6.5h8M2 10h12M4.5 13.5h7",
     right: "M2 3h12M6 6.5h8M2 10h12M7 13.5h7",
     table: "M2 2.5h12v11H2zM2 6.5h12M2 10h12M6.5 2.5v11M10.5 2.5v11",
+    // Indent less and more: the lines pushed in, and an arrow which way.
+    outdent: "M2 3h12M8 6.5h6M8 10h6M2 13.5h12M5.5 5.8L3 8.25l2.5 2.45",
+    indent: "M2 3h12M8 6.5h6M8 10h6M2 13.5h12M3 5.8l2.5 2.45L3 10.7",
     sun: "M8 5.2a2.8 2.8 0 1 0 0 5.6a2.8 2.8 0 1 0 0-5.6M8 1v1.6M8 13.4V15M1 8h1.6M13.4 8H15" +
          "M3 3l1.1 1.1M11.9 11.9L13 13M3 13l1.1-1.1M11.9 4.1L13 3",
     moon: "M13.5 9.6A5.6 5.6 0 0 1 6.4 2.5a5.6 5.6 0 1 0 7.1 7.1z"
@@ -381,23 +384,50 @@
   // Rich text: a whitelist for what is stored and shown
   // ------------------------------------------------------------------
 
+  // A style is kept on bold, italic and the rest as on a span: a browser
+  // asked to colour, or set a font on, text that is exactly one bold run
+  // puts the style on the <b> itself, and dropping it here lost the colour
+  // or the font the moment the note was saved.
   var ALLOWED = {
-    B: [], STRONG: [], I: [], EM: [], U: [], S: [], STRIKE: [], DEL: [],
-    SPAN: ["style"], FONT: ["color"], BR: [], DIV: ["style"], P: ["style"],
-    UL: [], OL: [], LI: [], TABLE: [], THEAD: [], TBODY: [], TR: [], TD: [], TH: []
+    B: ["style"], STRONG: ["style"], I: ["style"], EM: ["style"], U: ["style"], S: ["style"],
+    STRIKE: ["style"], DEL: ["style"],
+    SPAN: ["style"], FONT: ["color"], BR: [], DIV: ["style", "data-indent"], P: ["style", "data-indent"],
+    UL: [], OL: [], LI: ["style", "data-indent"], TABLE: [], THEAD: [], TBODY: [], TR: [], TD: [], TH: []
   };
   var DROPPED = ["SCRIPT", "STYLE", "IFRAME", "OBJECT", "EMBED", "TEMPLATE", "SVG",
                  "MATH", "IMG", "VIDEO", "AUDIO", "LINK", "META", "BUTTON", "INPUT",
                  "TEXTAREA", "SELECT", "FORM", "NOSCRIPT"];
+
+  // A font the app offers, by the name it stores, or "" -- a browser writes
+  // a family in quotes, and may list fallbacks after it.
+  function appFamily(css) {
+    var name = String(css || "").split(",")[0].trim().replace(/^["']|["']$/g, "");
+    return A.fontFamilies.indexOf(name) >= 0 ? name : "";
+  }
+  // A size the app offers, in points as it stores them, or 0.
+  function appSize(css) {
+    var m = /^(\d+)pt$/.exec(String(css || "").trim());
+    return m && A.fontSizes.indexOf(+m[1]) >= 0 ? +m[1] : 0;
+  }
+  // How far a line is pushed in, as the app counts it: 1 to its maximum.
+  function appIndent(value) {
+    var n = parseInt(value, 10);
+    return n >= 1 ? Math.min(n, A.maxIndent) : 0;
+  }
 
   function cleanStyle(style) {
     var keep = [];
     var colour = style.getPropertyValue("color");
     var ground = style.getPropertyValue("background-color");
     var align = style.getPropertyValue("text-align");
+    var family = appFamily(style.getPropertyValue("font-family"));
+    var size = appSize(style.getPropertyValue("font-size"));
     if (colour) keep.push("color: " + colour);
     if (ground) keep.push("background-color: " + ground);
     if (/^(left|center|right|justify)$/.test(align)) keep.push("text-align: " + align);
+    // Only the app's own fonts and sizes: a note keeps what it can carry.
+    if (family) keep.push('font-family: "' + family + '"');
+    if (size) keep.push("font-size: " + size + "pt");
     return keep.join("; ");
   }
 
@@ -416,6 +446,9 @@
             } else if (a === "color") {
               var c = node.getAttribute("color");
               if (c && /^#[0-9a-f]{3,6}$/i.test(c)) e.setAttribute("color", c);
+            } else if (a === "data-indent") {
+              var level = appIndent(node.getAttribute("data-indent"));
+              if (level) e.setAttribute("data-indent", String(level));
             }
           });
           copyClean(node, e);
@@ -502,7 +535,8 @@
         "kept in this browser only.</div><div><br></div>" +
         "<div><b>✍ Write</b></div><ul><li><b>+ New Note</b> starts a note. Give it a title " +
         "and write; it saves itself as you go.</li><li>The toolbar shapes your words: bold, " +
-        "colours, highlights, lists, alignment, emoji, and tables.</li><li>Under the text you'll " +
+        "fonts and sizes, colours, highlights, lists, indents, alignment, emoji, and tables." +
+        "</li><li>Under the text you'll " +
         "find a checklist for to-dos and a box for comments.</li></ul>" +
         "<div><b>\u{1F5C2} Organise</b></div><ul><li>The search box above the list looks through " +
         "all your notes at once.</li><li><b>Sort</b> and <b>Show</b> arrange the list, and " +
@@ -1084,7 +1118,7 @@
 
   function exec(cmd, value) {
     restoreRange();
-    var css = cmd === "hiliteColor" || cmd === "foreColor";
+    var css = cmd === "hiliteColor" || cmd === "foreColor" || cmd === "fontName";
     try { document.execCommand("styleWithCSS", false, css); } catch (e) { /* older engines */ }
     document.execCommand(cmd, false, value);
     rememberRange();
@@ -1101,20 +1135,138 @@
     var sel = window.getSelection(), body = $("#ed-body");
     if (!body || !sel.rangeCount) return;
     var range = sel.getRangeAt(0);
-    var nodes = Array.prototype.slice.call(body.querySelectorAll("span, font"));
+    // Any element wearing a style: a browser puts one on a <b> as readily
+    // as on a span (see ALLOWED).
+    var nodes = Array.prototype.slice.call(body.querySelectorAll("[style], font"));
     var start = range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement;
     for (var up = start; up && up !== body; up = up.parentElement) {
-      if (nodes.indexOf(up) < 0 && /^(SPAN|FONT)$/.test(up.tagName)) nodes.push(up);
+      if (nodes.indexOf(up) < 0 && (up.tagName === "FONT" || up.hasAttribute("style"))) nodes.push(up);
     }
     nodes.forEach(function (node) {
       if (!range.intersectsNode(node)) return;
       if (prop === "color" && node.tagName === "FONT") node.removeAttribute("color");
+      if (prop === "font-family" && node.tagName === "FONT") node.removeAttribute("face");
+      if (prop === "font-size" && node.tagName === "FONT") node.removeAttribute("size");
       node.style.removeProperty(prop);
       if (!node.getAttribute("style")) node.removeAttribute("style");
-      if (!node.attributes.length) node.replaceWith.apply(node, Array.prototype.slice.call(node.childNodes));
+      // Only a span or a font left with nothing to say is unwrapped: a <b>
+      // or a line without a style is still bold, still a line.
+      if (/^(SPAN|FONT)$/.test(node.tagName) && !node.attributes.length) {
+        node.replaceWith.apply(node, Array.prototype.slice.call(node.childNodes));
+      }
     });
     rememberRange();
     touched();
+  }
+
+  // The formatting bar's font and size: on the selection, or on whatever is
+  // typed next at the caret. "Default" (null) takes them off, so the text
+  // follows the editor's own font, as in the app.
+  var pendingSize = 0;
+  function applyFontFamily(name) {
+    if (!name) { clearInline("font-family"); updateToolbar(); return; }
+    exec("fontName", name);
+  }
+  // A browser sizes text in seven steps, not in points: the largest step is
+  // asked for, and every run it made is then given the size in points.
+  function applyFontSize(points) {
+    if (!points) { clearInline("font-size"); updateToolbar(); return; }
+    restoreRange();
+    pendingSize = points;
+    try { document.execCommand("styleWithCSS", false, true); } catch (e) { /* older engines */ }
+    document.execCommand("fontSize", false, "7");
+    fixSizeMarkers();
+    rememberRange();
+    updateToolbar();
+    touched();
+  }
+  // Runs still wearing the browser's step: text typed at a caret the size
+  // was chosen for arrives in it after the choice.
+  function fixSizeMarkers() {
+    var body = $("#ed-body");
+    if (!body || !pendingSize) return;
+    body.querySelectorAll("[style], font[size]").forEach(function (node) {
+      if (node.tagName === "FONT" && node.getAttribute("size") === "7") {
+        node.removeAttribute("size");
+        node.style.fontSize = pendingSize + "pt";
+      } else if (node.style && node.style.fontSize === "xxx-large") {
+        node.style.fontSize = pendingSize + "pt";
+      }
+    });
+  }
+
+  // Text sitting straight in the note -- its first line, typed before any
+  // Enter -- is put in a line of its own, as every other line is.
+  function wrapLooseLines(body) {
+    var loose = [];
+    Array.prototype.slice.call(body.childNodes).forEach(function (node) {
+      var inline = node.nodeType === 3 || (node.nodeType === 1 && !/^(DIV|P|UL|OL|TABLE)$/.test(node.tagName));
+      if (inline) loose.push(node);
+      else if (loose.length) { wrapLine(loose); loose = []; }
+    });
+    if (loose.length) wrapLine(loose);
+  }
+
+  // The lines the selection touches, each as the element that holds it: a
+  // list's items, any other line of the note.
+  function linesInRange(body, range) {
+    var out = [];
+    Array.prototype.forEach.call(body.children, function (child) {
+      if (!range.intersectsNode(child)) return;
+      if (child.tagName === "UL" || child.tagName === "OL") {
+        child.querySelectorAll("li").forEach(function (li) { if (range.intersectsNode(li)) out.push(li); });
+      } else if (child.tagName !== "TABLE") out.push(child);
+    });
+    return out;
+  }
+  function wrapLine(nodes) {
+    var line = document.createElement("div");
+    nodes[0].parentNode.insertBefore(line, nodes[0]);
+    nodes.forEach(function (n) { line.appendChild(n); });
+  }
+
+  // Indent less (-1) or more (+1): every line the selection touches, by one
+  // step, between none and the app's maximum.
+  function changeIndent(delta) {
+    restoreRange();
+    var sel = window.getSelection(), body = $("#ed-body");
+    if (!body || !sel.rangeCount) return;
+    var was = sel.getRangeAt(0);
+    if (!body.contains(was.startContainer)) return;
+    // Moving a text node into a line of its own collapses a selection held
+    // inside it, so its two ends are kept and set again: the same text
+    // nodes, at the same offsets, now inside the new line.
+    var ends = [was.startContainer, was.startOffset, was.endContainer, was.endOffset];
+    wrapLooseLines(body);
+    var range = document.createRange();
+    try {
+      range.setStart(ends[0], Math.min(ends[1], ends[0] === body ? body.childNodes.length : ends[1]));
+      range.setEnd(ends[2], Math.min(ends[3], ends[2] === body ? body.childNodes.length : ends[3]));
+    } catch (e) { range.selectNodeContents(body); }
+    sel.removeAllRanges();
+    sel.addRange(range);
+    linesInRange(body, range).forEach(function (line) {
+      var level = Math.max(0, Math.min(A.maxIndent, appIndent(line.getAttribute("data-indent")) + delta));
+      if (level) line.setAttribute("data-indent", String(level));
+      else line.removeAttribute("data-indent");
+    });
+    rememberRange();
+    updateToolbar();
+    touched();
+  }
+
+  // The font and size the text at the caret wears, or "" and 0 for the
+  // editor's own.
+  function fontAtCaret() {
+    var sel = window.getSelection(), body = $("#ed-body"), out = { family: "", size: 0 };
+    if (!body || !sel.rangeCount) return out;
+    var node = sel.getRangeAt(0).startContainer;
+    if (node.nodeType === 3) node = node.parentElement;
+    for (; node && node !== body && body.contains(node); node = node.parentElement) {
+      if (!out.family && node.style) out.family = appFamily(node.style.fontFamily);
+      if (!out.size && node.style) out.size = appSize(node.style.fontSize);
+    }
+    return out;
   }
 
   function insertTable() {
@@ -1136,6 +1288,10 @@
       try { on = document.queryCommandState(b.getAttribute("data-state")); } catch (e) { on = false; }
       b.setAttribute("aria-pressed", on ? "true" : "false");
     });
+    // The two lists show what the text at the caret wears, as the app's do.
+    var font = fontAtCaret(), family = $("#tb-family .tb-label"), size = $("#tb-size .tb-label");
+    if (family) family.textContent = font.family || "Default";
+    if (size) size.textContent = font.size ? String(font.size) : "Default";
   }
 
   function updateCount() {
@@ -1168,6 +1324,24 @@
       tool(t[1], t[2], function () { exec(t[0]); }, { class: "tb " + t[3], "data-state": t[0], "aria-pressed": "false" });
     });
     bar.appendChild(el("span", { class: "sep" }));
+    // Font and size, as the app's two lists: "Default" first, which is the
+    // editor's own and stores nothing.
+    function chooser(id, title, choices, show, pick) {
+      var btn = tool(el("span", null, el("span", { class: "tb-label", text: "Default" }), el("span", { class: "tb-caret", text: "▾" })),
+        title, function () {
+          rememberRange();
+          popup([menuItem("Default", function () { pick(null); })].concat(choices.map(function (c) {
+            var item = menuItem(String(c), function () { pick(c); });
+            show(item, c);
+            return item;
+          })), btn, { role: "menu" });
+        }, { id: id, class: "tb tb-select", "aria-haspopup": "menu" });
+      return btn;
+    }
+    chooser("tb-family", "Font", A.fontFamilies,
+      function (item, f) { item.style.fontFamily = '"' + f + '"'; }, applyFontFamily);
+    chooser("tb-size", "Font size", A.fontSizes, function () {}, applyFontSize);
+    bar.appendChild(el("span", { class: "sep" }));
     var colourBtn = tool(el("span", null, "A", el("span", { class: "bar", vars: { "--bar": "#e63946" } })), "Text colour", function () {
       rememberRange();
       popup(swatchGrid(A.noteColors, null, function (c) { exec("foreColor", c); },
@@ -1187,6 +1361,9 @@
     tool(icon("left"), "Align left", function () { exec("justifyLeft"); }, { "data-state": "justifyLeft", "aria-pressed": "false" });
     tool(icon("center"), "Centre", function () { exec("justifyCenter"); }, { "data-state": "justifyCenter", "aria-pressed": "false" });
     tool(icon("right"), "Align right", function () { exec("justifyRight"); }, { "data-state": "justifyRight", "aria-pressed": "false" });
+    bar.appendChild(el("span", { class: "sep" }));
+    tool(icon("outdent"), "Indent less", function () { changeIndent(-1); });
+    tool(icon("indent"), "Indent more", function () { changeIndent(1); });
     bar.appendChild(el("span", { class: "sep" }));
     tool(icon("table"), "Insert a table", insertTable);
     var emojiBtn = tool("\u{1F642}", "Insert emoji", function () { rememberRange(); emojiPicker(emojiBtn, "body"); });
@@ -1331,7 +1508,7 @@
     var body = el("div", { id: "ed-body", class: "ed-body", contenteditable: "true", role: "textbox",
       "aria-multiline": "true", "aria-label": "Note text", "data-placeholder": "Write your note here…", spellcheck: "true" });
     body.innerHTML = sanitizeHtml(n.html);
-    body.addEventListener("input", function () { updateCount(); touched(); });
+    body.addEventListener("input", function () { fixSizeMarkers(); updateCount(); touched(); });
     body.addEventListener("keyup", function () { rememberRange(); updateToolbar(); });
     body.addEventListener("mouseup", function () { rememberRange(); updateToolbar(); });
     body.addEventListener("focus", function () { lastField = null; });
@@ -1745,7 +1922,7 @@
       body.appendChild(el("h2", { text: "About this demo" }));
       body.appendChild(el("div", { class: "set-panel about" },
         el("p", { text: "Note Organizer is a desktop app for Windows, written in Python with Tkinter. A browser cannot run it, so this page is a re-creation of its interface in HTML and JavaScript, written to let you try the everyday parts without installing anything." }),
-        el("p", { text: "Where the app has an exact rule, the demo follows it, taken from the app's own code: the eight themes and the arithmetic that picks readable letters on every colour, how a repeating note lands on the calendar, the order of each sort, and the share-code format." }),
+        el("p", { text: "Where the app has an exact rule, the demo follows it, taken from the app's own code: the eight themes and the arithmetic that picks readable letters on every colour, how a repeating note lands on the calendar, the order of each sort, the share-code format, and the fonts, sizes and indent the formatting bar offers." }),
         el("p", { text: "Only in the desktop app: attachments, templates, backups to another computer, statistics, finding duplicates, editing a single day of a repeating note, a list you arrange by hand, find-in-note, and a calculator." }),
         el("p", null, "It mirrors version " + A.version + ". Everything you type is kept in this browser's storage, on this device, and nowhere else. ",
           el("a", { href: "../index.html", text: "Back to the site" }), " · ",
@@ -1919,12 +2096,17 @@
   }
 
   // The note's text as the app stores it: plain characters, with styling
-  // as spans of character offsets, and a table as lines of "| a | b |".
+  // as spans of character offsets, a table as lines of "| a | b |", and
+  // what belongs to a whole line -- its list, how far it is pushed in, its
+  // alignment -- as paragraph entries by line number.
   function htmlToBody(html) {
     var doc = new DOMParser().parseFromString("<body>" + sanitizeHtml(html) + "</body>", "text/html");
-    var chars = [], styles = [];
+    var chars = [], styles = [], line = 0, blocks = [];
     function emit(text, st) {
-      Array.from(text).forEach(function (ch) { chars.push(ch); styles.push(st); });
+      Array.from(text).forEach(function (ch) {
+        chars.push(ch); styles.push(st);
+        if (ch === "\n") line += 1;
+      });
     }
     function newline() { if (chars.length && chars[chars.length - 1] !== "\n") emit("\n", {}); }
     function styleOf(node, inherited) {
@@ -1936,12 +2118,30 @@
       if (tag === "FONT" && node.getAttribute("color")) st.text_color = toHexColour(node.getAttribute("color")) || st.text_color;
       if (node.style) {
         var c = toHexColour(node.style.color), g = toHexColour(node.style.backgroundColor);
+        var family = appFamily(node.style.fontFamily), size = appSize(node.style.fontSize);
         if (c) st.text_color = c;
         if (g) st.highlight = g;
+        if (family) st.font_family = family;
+        if (size) st.font_size = size;
         if (node.style.fontWeight === "bold" || +node.style.fontWeight >= 600) st.bold = true;
         if (node.style.fontStyle === "italic") st.italic = true;
       }
       return st;
+    }
+    // A line-holding element's own properties, for the lines it holds.
+    function lineProps(node, kind) {
+      var align = node.style ? node.style.textAlign : "";
+      return { kind: kind || null, indent: appIndent(node.getAttribute("data-indent")),
+               align: align === "center" || align === "right" ? align : "left" };
+    }
+    function block(node, kind, inner) {
+      newline();
+      var first = line;
+      inner();
+      newline();
+      // An inner line-holder ends before the one around it, so the first
+      // to claim a line is the innermost, which is the one it belongs to.
+      blocks.push({ first: first, last: line - 1, props: lineProps(node, kind) });
     }
     function walk(node, st, listState) {
       Array.prototype.forEach.call(node.childNodes, function (n) {
@@ -1952,13 +2152,13 @@
         if (tag === "TABLE") { newline(); table(n); return; }
         if (tag === "UL" || tag === "OL") { newline(); walk(n, st, { ordered: tag === "OL", n: 0 }); newline(); return; }
         if (tag === "LI") {
-          newline();
-          if (listState) { listState.n += 1; emit(listState.ordered ? listState.n + ". " : "• ", {}); }
-          walk(n, styleOf(n, st), null);
-          newline();
+          block(n, listState ? (listState.ordered ? "number" : "bullet") : null, function () {
+            if (listState) { listState.n += 1; emit(listState.ordered ? listState.n + ". " : "• ", {}); }
+            walk(n, styleOf(n, st), null);
+          });
           return;
         }
-        if (tag === "DIV" || tag === "P") { newline(); walk(n, styleOf(n, st), listState); newline(); return; }
+        if (tag === "DIV" || tag === "P") { block(n, null, function () { walk(n, styleOf(n, st), listState); }); return; }
         walk(n, styleOf(n, st), listState);
       });
     }
@@ -1994,16 +2194,34 @@
     runs(function (s) { return s.strike ? "strike" : null; }, function (a, b, v) { return { start: a, end: b, style: v }; });
     runs(function (s) { return s.text_color || null; }, function (a, b, v) { return { start: a, end: b, style: "text_color", value: v }; });
     runs(function (s) { return s.highlight || null; }, function (a, b, v) { return { start: a, end: b, style: "highlight", value: v }; });
+    runs(function (s) { return s.font_family || null; }, function (a, b, v) { return { start: a, end: b, style: "font_family", value: v }; });
+    runs(function (s) { return s.font_size || null; }, function (a, b, v) { return { start: a, end: b, style: "font_size", value: v }; });
     spans.sort(function (x, y) { return x.start - y.start || x.end - y.end; });
-    return { body: body, formatting: spans };
+    // One entry per line that is more than a plain left-aligned paragraph,
+    // as the app's normalize_paragraphs keeps them.
+    var lineCount = body ? body.split("\n").length : 0, owner = {};
+    blocks.forEach(function (b) {
+      for (var l = b.first; l <= b.last && l < lineCount; l++) if (!(l in owner)) owner[l] = b.props;
+    });
+    var paragraphs = Object.keys(owner).map(Number).sort(function (x, y) { return x - y; })
+      .map(function (l) {
+        var p = owner[l], entry = { line: l };
+        if (p.kind) entry.kind = p.kind;
+        if (p.indent) entry.indent = p.indent;
+        if (p.align !== "left") entry.align = p.align;
+        return entry;
+      })
+      .filter(function (e) { return e.kind || e.indent || e.align; });
+    return { body: body, formatting: spans, paragraphs: paragraphs };
   }
 
   function escapeHtml(s) {
     return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
-  // The reverse: a shared note's text and spans as the editor's markup.
-  function bodyToHtml(body, formatting) {
+  // The reverse: a shared note's text, spans and paragraph entries as the
+  // editor's markup.
+  function bodyToHtml(body, formatting, paragraphs) {
     var chars = Array.from(String(body || ""));
     var st = chars.map(function () { return {}; });
     (Array.isArray(formatting) ? formatting : []).forEach(function (sp) {
@@ -2012,6 +2230,9 @@
       if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b <= a) return;
       b = Math.min(b, chars.length);
       var style = sp.style, value = typeof sp.value === "string" && /^#[0-9a-f]{6}$/i.test(sp.value) ? sp.value : null;
+      // Only the fonts and sizes the app offers, as its own reader keeps them.
+      var family = style === "font_family" && A.fontFamilies.indexOf(sp.value) >= 0 ? sp.value : "";
+      var size = style === "font_size" && A.fontSizes.indexOf(sp.value) >= 0 ? sp.value : 0;
       for (var i = a; i < b; i++) {
         if (style === "bold" || style === "bold_italic") st[i].bold = true;
         if (style === "italic" || style === "bold_italic") st[i].italic = true;
@@ -2019,8 +2240,22 @@
         if (style === "strike") st[i].strike = true;
         if (style === "text_color" && value) st[i].text_color = value;
         if (style === "highlight" && value) st[i].highlight = value;
+        if (family) st[i].font_family = family;
+        if (size) st[i].font_size = size;
       }
     });
+    // What a line wears as a whole, by its number: pushed in, aligned.
+    var lineAttrs = {};
+    (Array.isArray(paragraphs) ? paragraphs : []).forEach(function (p) {
+      if (!p || typeof p !== "object" || !Number.isInteger(p.line) || p.line < 0) return;
+      var level = Number.isInteger(p.indent) ? appIndent(p.indent) : 0;
+      var align = p.align === "center" || p.align === "right" ? p.align : "";
+      var attrs = "";
+      if (level) attrs += ' data-indent="' + level + '"';
+      if (align) attrs += ' style="text-align: ' + align + '"';
+      if (attrs && !(p.line in lineAttrs)) lineAttrs[p.line] = attrs;
+    });
+    function attrsOf(k) { return lineAttrs[k] || ""; }
     function inline(from, to) {
       var out = "", i = from;
       while (i < to) {
@@ -2034,6 +2269,8 @@
         var css = [];
         if (s.text_color) css.push("color: " + s.text_color);
         if (s.highlight) css.push("background-color: " + s.highlight);
+        if (s.font_family) css.push('font-family: &quot;' + s.font_family + '&quot;');
+        if (s.font_size) css.push("font-size: " + s.font_size + "pt");
         if (css.length) text = '<span style="' + css.join("; ") + '">' + text + "</span>";
         out += text;
         i = j;
@@ -2071,13 +2308,13 @@
           var lt = lineText(lines[k]);
           var m = bullet ? /^[•◦▪] /.exec(lt) : /^\d+\. /.exec(lt);
           if (!m) break;
-          html += "<li>" + (inline(lines[k][0] + Array.from(m[0]).length, lines[k][1]) || "<br>") + "</li>";
+          html += "<li" + attrsOf(k) + ">" + (inline(lines[k][0] + Array.from(m[0]).length, lines[k][1]) || "<br>") + "</li>";
           k++;
         }
         html += "</" + tag + ">";
         continue;
       }
-      html += "<div>" + (inline(lines[k][0], lines[k][1]) || "<br>") + "</div>";
+      html += "<div" + attrsOf(k) + ">" + (inline(lines[k][0], lines[k][1]) || "<br>") + "</div>";
       k++;
     }
     return sanitizeHtml(html);
@@ -2123,7 +2360,7 @@
   function shareView(n) {
     var text = htmlToBody(n.html);
     var view = {
-      uid: n.uid, title: n.title, body: text.body, formatting: text.formatting,
+      uid: n.uid, title: n.title, body: text.body, formatting: text.formatting, paragraphs: text.paragraphs,
       comments: n.comments, category: n.category, date: n.date, color: n.color,
       recurrence: normRec(n.recurrence),
       checklist: n.checklist.map(function (c) { return { text: c.text, done: !!c.done }; })
@@ -2190,7 +2427,7 @@
       var date = readDate(str(sn.date, 40));
       var fields = {
         title: str(sn.title, 300),
-        html: bodyToHtml(str(sn.body), sn.formatting),
+        html: bodyToHtml(str(sn.body), sn.formatting, sn.paragraphs),
         comments: str(sn.comments),
         category: catName,
         date: date || "",
@@ -2304,6 +2541,8 @@
   function init() {
     load();
     applyTheme(S.theme);
+    // How far one level of indent pushes a line in, as the app draws it.
+    document.documentElement.style.setProperty("--indent-step", A.indentStep + "px");
 
     var sort = $("#sort");
     SORTS.forEach(function (o) { sort.appendChild(el("option", { value: o, text: o })); });

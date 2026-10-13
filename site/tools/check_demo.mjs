@@ -203,7 +203,7 @@ try {
                                              ["dark", 390, 844, true, "phone-dark"],
                                              ["light", 390, 844, true, "phone-light"]]) {
     await viewport(w, h, mobile, scheme);
-    for (const p of ["index.html", "how-its-built.html", "in-my-words.html", "testing.html", "stories.html", "nowhere"]) {
+    for (const p of ["index.html", "how-its-built.html", "in-my-words.html", "testing.html", "nowhere"]) {
       await go("/" + p);
       await noHorizontalScroll(`${p} ${tag}`);
       if (p === "index.html" || (mobile && p !== "nowhere")) await shot(`site-${p.replace(".html", "")}-${tag}`, true);
@@ -228,13 +228,16 @@ try {
     (await js("document.querySelectorAll('.note-card').length")) === 9, await js("location.href"));
   await follow(".db-home");
   check("from the folder, the demo's Site link comes back", await js("!!document.querySelector('.hero h1')"));
+  // The demo is reached from the overview's buttons: the menu and the
+  // pages' footer no longer carry it (the owner's call, 2026-10-14), so a
+  // page's menu leads back to the overview, and that opens it.
   await go(fileUrl("in-my-words.html"));
-  await follow(".site-footer a[href$='demo/index.html']");
-  check("from the folder, a page's footer opens the demo",
-    (await js("document.querySelectorAll('.note-card').length")) > 0, await js("location.href"));
-  await go(fileUrl("index.html"));
-  await follow(".site-nav a[href$='demo/index.html']");
-  check("from the folder, the menu opens the demo", (await js("document.querySelectorAll('.note-card').length")) > 0);
+  await follow(".site-nav a[href='index.html']");
+  check("from the folder, a page's menu leads back to the overview",
+    await js("!!document.querySelector('.hero h1')"), await js("location.href"));
+  await follow(".hero .btn-primary");
+  check("...and from there the demo opens", (await js("document.querySelectorAll('.note-card').length")) > 0,
+    await js("location.href"));
 
   // ---------------- The demo, desktop ----------------
   await viewport(1366, 860, false, "dark");
@@ -296,6 +299,43 @@ try {
   await sleep(900);
   check("bold applied", await js("!!document.querySelector('#ed-body b')"));
 
+  // The formatting bar's font and size lists, and indent, as the app's: on
+  // the same selection, pressed as a visitor presses them.
+  const press = (sel) => js(`(() => { const b = document.querySelector(${JSON.stringify(sel)});
+    b.dispatchEvent(new MouseEvent('mousedown', {bubbles: true})); b.click(); return true; })()`);
+  const pick = (label) => js(`(() => { const i = [...document.querySelectorAll('.popup .menu-item')]
+    .find(x => x.textContent === ${JSON.stringify(label)}); if (!i) return false; i.click(); return true; })()`);
+  await press("#tb-family"); await sleep(150);
+  await shot("demo-desktop-font-list");
+  check("the font list offers the app's fonts",
+    (await js("[...document.querySelectorAll('.popup .menu-item')].map(i => i.textContent).join('|')")) ===
+      ["Default", ...(await js("NO_APP.fontFamilies"))].join("|"));
+  check("Georgia chosen", await pick("Georgia")); await sleep(150);
+  await press("#tb-size"); await sleep(150);
+  check("16 chosen", await pick("16")); await sleep(150);
+  await press("[aria-label='Indent more']"); await sleep(100);
+  await press("[aria-label='Indent more']"); await sleep(100);
+  await press("[aria-label='Centre']"); await sleep(900);
+  // Any element may wear them: a browser puts a font on the <b> itself when
+  // the selection is exactly one bold run.
+  const wornNow = `(() => { const b = document.getElementById('ed-body'), s = [...b.querySelectorAll('[style]')];
+    return { family: s.some(x => /Georgia/.test(x.style.fontFamily)), size: s.some(x => x.style.fontSize === '16pt'),
+             indent: !!b.querySelector('[data-indent="2"]'), centre: [...b.querySelectorAll('div')].some(d => d.style.textAlign === 'center'),
+             labels: document.querySelector('#tb-family .tb-label').textContent + '/' + document.querySelector('#tb-size .tb-label').textContent,
+             html: b.innerHTML.slice(0, 300) }; })()`;
+  const worn = await js(wornNow);
+  check("font, size, indent and alignment applied", worn.family && worn.size && worn.indent && worn.centre, JSON.stringify(worn));
+  check("the two lists say what the text wears", worn.labels === "Georgia/16", worn.labels);
+  await shot("demo-desktop-fonts");
+  // Saved, and read back after a reload: what a note cannot carry is
+  // cleaned out on the way into storage, and a style on a <b> once was.
+  await go("/demo/");
+  await js("[...document.querySelectorAll('.nc-open')].find(b => b.textContent.includes('Plant the tulips')).click()");
+  await sleep(200);
+  const kept = await js(wornNow);
+  check("after a reload the note keeps its font, size, indent and alignment",
+    kept.family && kept.size && kept.indent && kept.centre, JSON.stringify(kept));
+
   // Share codes: made here, read back here, and kept for the app's decoder.
   const codes = await js(`(async () => {
     const S = __demo.state();
@@ -322,17 +362,36 @@ try {
     for (const [name, spec] of Object.entries(appCodes)) {
       const got = await js(`(async () => {
         const notes = await __demo.decodeShareCode(${JSON.stringify(spec.code)});
-        const html = __demo.bodyToHtml(notes[0].body, notes[0].formatting);
+        const html = __demo.bodyToHtml(notes[0].body, notes[0].formatting, notes[0].paragraphs);
         const box = document.createElement('div'); box.innerHTML = html;
+        const spans = [...box.querySelectorAll('span')];
         return { title: notes[0].title, bold: [...box.querySelectorAll('b')].map(b => b.textContent),
                  rows: box.querySelectorAll('tr').length, items: (notes[0].checklist || []).length,
+                 families: spans.map(s => s.style.fontFamily.replace(/["']/g, '')).filter(Boolean),
+                 sizes: spans.map(s => s.style.fontSize).filter(Boolean),
+                 indents: [...box.querySelectorAll('[data-indent]')].map(e => e.getAttribute('data-indent')),
+                 aligns: [...box.querySelectorAll('div, li')].map(e => e.style.textAlign).filter(Boolean),
                  text: box.textContent };
       })()`);
       const want = spec.expect;
+      const has = (list, wanted) => (wanted || []).every((w) => list.includes(w));
       check(`the app's code "${name}" reads in the demo`,
         got.title === want.title && (want.bold || []).every((b) => got.bold.includes(b))
-        && (want.rows === undefined || got.rows === want.rows) && (want.items === undefined || got.items === want.items),
+        && (want.rows === undefined || got.rows === want.rows) && (want.items === undefined || got.items === want.items)
+        && has(got.families, want.families) && has(got.sizes, want.sizes)
+        && has(got.indents, want.indents) && has(got.aligns, want.aligns),
         JSON.stringify({ got: { ...got, text: got.text.slice(0, 80) }, want }));
+      if (name === "fonts") {
+        // Through the Import code box's own step, into a stored note.
+        const stored = await js(`(async () => {
+          __demo.importShared(await __demo.decodeShareCode(${JSON.stringify(spec.code)}));
+          const n = __demo.state().notes.find(x => x.title === ${JSON.stringify(want.title)});
+          return n ? n.html : '';
+        })()`);
+        check("the app's fonts and indents are kept by Import code",
+          /data-indent="2"/.test(stored) && /text-align: center/.test(stored) && /Georgia/.test(stored) && /16pt/.test(stored),
+          stored.slice(0, 300));
+      }
     }
   } else {
     check("codes from the app were provided", false, "run tools/verify_share_codes.py first to write them");
