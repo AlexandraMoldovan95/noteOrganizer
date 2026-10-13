@@ -534,8 +534,8 @@ check('...no phantom override is written for that day',
       '2026-07-08' not in (_sq_after.get('overrides') or {}))
 check('...and the editor is clean afterwards, so it cannot ask again',
       app.editor_state_matches_saved(app.capture_editor_state()))
-# The question MUST still be asked when an override really could carry
-# the edit -- otherwise this fix would have quietly removed the feature.
+# A text edit, which an override can carry, is that day's own: saved to the
+# day, asking nothing either (a day opened on its own is edited on its own).
 app.body_text.delete('1.0', 'end')
 app.body_text.insert('1.0', 'only this day')
 app.update()
@@ -543,9 +543,11 @@ _sq_asked2 = []
 app.ask_occurrence_scope = lambda *a, **k: (_sq_asked2.append(1), 'occurrence')[1]
 app.save_current_note(auto=False)
 app.update()
-check('while a text edit on one day still asks, and still overrides',
-      _sq_asked2 == [1]
-      and '2026-07-08' in (app.find_note(4302).get('overrides') or {}))
+check('while a text edit on one day is saved to that day, asking nothing',
+      _sq_asked2 == []
+      and (app.find_note(4302).get('overrides') or {}).get('2026-07-08', {}).get('body')
+      == 'only this day'
+      and app.find_note(4302)['body'] == 'body')
 del app.ask_occurrence_scope
 app.notes = []
 app.save_notes()
@@ -1023,9 +1025,11 @@ check("...and the day keeps its own text",
       == 'class moved to 7pm')
 app.new_note(); app.update()
 
-# Answering "The entire series" on such a day makes its words the series'
-# -- and the day stops holding a copy of its own: it kept one, the editor
-# read as unsaved forever, and every way out asked the question again.
+# Words typed on such a day are that day's: they used to wait for "This
+# occurrence only, or the entire series?", whose second answer made them
+# every day's. A day opened on its own now saves to itself, asking nothing;
+# the whole series has its own view (the day strip's "Edit the whole
+# series").
 _od_note = _od_series()
 app.open_note_in_tab(_od_note, occurrence_date='2026-09-15'); app.update()
 app.body_text.insert('end', ', room B')
@@ -1034,14 +1038,14 @@ app.ask_occurrence_scope = lambda *a, **k: (_od_asked.append(a), 'series')[1]
 app._flush_autosave(); app.update()
 app.ask_occurrence_scope = _od_scope
 _od_back = app.find_note(1)
-check('"The entire series" on a day with its own text gives every day its words',
-      _od_back['body'].startswith('class moved to 7pm, room B')
-      and '2026-09-15' not in (_od_back.get('overrides') or {}))
-check("...keeping the series' own text as the rescue copy",
-      (_od_back.get('_prev') or {}).get('body') == 'stretch 20 min')
-check('...and the question is not asked again for an edit already saved',
-      app.editor_state_matches_saved(app.capture_editor_state())
-      and len(_od_asked) == 1)
+check('words typed on a day with its own text stay that day\'s, asking nothing',
+      _od_back['body'] == 'stretch 20 min'
+      and _od_back['formatting'] == [{'start': 0, 'end': 7, 'style': 'bold'}]
+      and (_od_back.get('overrides') or {}).get('2026-09-15', {}).get('body')
+      == 'class moved to 7pm, room B'
+      and _od_asked == [])
+check('...and the editor reads as saved afterwards',
+      app.editor_state_matches_saved(app.capture_editor_state()))
 app.ask_yes_no = _od_yes
 app.new_note(); app.update()
 app.notes = _od_saved

@@ -66,7 +66,7 @@ MAX_DECOMPRESSED_BYTES = 20_000_000   # cap zlib output — guards against zip b
 MAX_SHARED_NOTES = 200                # most notes one code may carry
 
 # Only these fields travel in a share code. Notably absent: id (assigned fresh
-# on import), attachments, updated, overrides/exceptions.
+# on import), attachments, updated, overrides/exceptions/moved days.
 # "paragraphs" carries list indents/alignment and a table's place on the
 # page -- without it a shared note arrived flush left with flat lists.
 SHAREABLE_FIELDS = [

@@ -16,6 +16,7 @@ import note_organizer as NO, tkinter as tk, tkinter.filedialog as fd, os, tempfi
 # qa/_qa_support.py; _qa_click refuses to click into the void.
 from _qa_support import (click as _qa_click, fire as _qa_fire,
                          leaves_nothing_behind as _qa_leaves_nothing_behind,
+                         out_of_sight as _qa_out_of_sight,
                          pin_popup_visibility as _qa_pin)
 _qa_pin(NO)
 fails=[]
@@ -3018,6 +3019,115 @@ NO.CATEGORY_COLORS.pop('Office6r', None); NO.CATEGORY_COLORS.pop('Home6d', None)
 NO.persist_categories()
 app.notes = []; app.trash = []
 app.save_notes(); NO.save_trash(app.trash)
+
+
+# ---- EVERY CONTROL IN SIGHT ----
+# A row given less width than it asks loses what was placed last, and says
+# nothing. Under CI's fonts the editor's "Save as template" lost its words
+# at both ends (168 px of 177), and Settings' dropdowns and buttons were left
+# what a setting's description did not take: the trash's "30 days" 18 px of
+# 74, its arrow gone. Asked of the real pages first -- these fail only under
+# a wider font than this machine's, and CI has one -- then of the two
+# layouts that answer it, with a wider font simulated in pixels, so they
+# fail here too when the answer is taken away.
+def _fit_wait(top, cap=3.0):
+    """Pump until every control under *top* is in sight -- the state the
+    layout promises; mapping is asynchronous under Xvfb -- or *cap* seconds
+    pass, and say what is still out of sight."""
+    end = time.time() + cap
+    while True:
+        app.update()
+        lost = _qa_out_of_sight(top)
+        if not lost or time.time() > end:
+            return lost
+        time.sleep(0.02)
+
+
+_fit_geo = app.geometry()
+app.notes = [NO.normalize_note({'id': 61, 'title': 'Fit', 'body': 'b',
+                                'category': 'General', 'comments': 'c'})]
+app.save_notes(); app.refresh_note_list()
+for _fit_size in ('1100x850', '640x600'):
+    app.geometry(_fit_size)
+    app.notebook.select(app.TAB_NOTES)
+    app.open_note_in_tab(app.find_note(61))
+    _fit_lost = _fit_wait(app)
+    app.notebook.select(app.TAB_CALENDAR)
+    _fit_lost += [f'calendar: {l}' for l in _fit_wait(app)]
+    app.show_settings_page()
+    for _fit_key, _fit_label, _fit_b, _fit_e in app.SETTINGS_SECTIONS:
+        app.toggle_settings_panel(_fit_key)
+        _fit_lost += [f'{_fit_key}: {l}' for l in _fit_wait(app)]
+    app.hide_settings_page()
+    app.notebook.select(app.TAB_NOTES); app.update()
+    check(f'at {_fit_size}, every button, label and tick box on the notes page, the '
+          f'calendar and every Settings section is wholly in sight ({_fit_lost})',
+          _fit_lost == [])
+
+# A Settings row places its control before its words: built narrow, with a
+# description long enough to need wrapping, its button keeps its width and
+# the words wrap beside it. That is seen failing under CI's fonts only: here
+# the words happen to wrap before the row deals out its width, whichever is
+# packed first. So the rule itself is asked as well -- the control comes
+# first in the row's packing order -- which fails on any machine.
+app.show_settings_page(); app.update()
+_fit_host = tk.Frame(app.settings_page, width=420, height=260)
+_fit_host.pack_propagate(False)
+_fit_host.place(x=0, y=0)
+_fit_ctl = app._card_row(
+    _fit_host, 'Keep deleted notes for',
+    'How long the trash holds a note before removing it for good -- and the '
+    'rest of a description long enough to need three lines in a card this '
+    'narrow, as a longer one or a wider font would.', first=True)
+_fit_btn = app._text_button(_fit_ctl, 'Export', lambda: None)
+_fit_btn.pack()
+_fit_lost = _fit_wait(_fit_host)
+_fit_order = _fit_ctl.master.pack_slaves()
+check(f"a Settings row packs its control before its words, keeps the control's "
+      f"width and wraps its words beside it ({_fit_lost}; {_fit_btn.winfo_width()} "
+      f"of {_fit_btn.winfo_reqwidth()}; first packed: {_fit_order[:1]})",
+      _fit_lost == [] and _fit_btn.winfo_width() + 1 >= _fit_btn.winfo_reqwidth()
+      and _fit_order[:1] == [_fit_ctl])
+_fit_host.destroy()
+app.hide_settings_page()
+app.notebook.select(app.TAB_NOTES); app.update()
+
+# The editor's action buttons: three columns while there is room for three of
+# the widest, else fewer -- and Restore previous under them, wherever that now
+# is. The widest made 60 px wider stands for a wider font.
+app.geometry('1100x850')
+app.open_note_in_tab(app.find_note(61))
+app.find_note(61)['_prev'] = {'body': 'older words'}
+app._update_restore_button()
+_fit_row = app._action_row
+_fit_lost = _fit_wait(_fit_row)
+check(f'at an ordinary window the six action buttons are two rows of three, all in '
+      f'sight ({app._action_cols}; {_fit_lost})',
+      _fit_lost == [] and app._action_cols == 3)
+_fit_wide = app._action_buttons[4]
+# As it was set, to put back: "3m" under Linux's Tk, a number here.
+_fit_padx = _fit_wide.cget('padx')
+_fit_wide.configure(padx=_fit_wide.winfo_pixels(_fit_padx) + 30)
+app.geometry('640x600')
+_fit_lost = _fit_wait(_fit_row)
+_fit_bottom = max(b.winfo_y() + b.winfo_height() for b in app._action_buttons)
+check(f'a row with no room for three of its widest button deals them into fewer '
+      f'columns, all in sight, Restore previous under them ({app._action_cols} '
+      f'columns; {_fit_lost}; Restore at {app.restore_prev_btn.winfo_y()}, the '
+      f'buttons end at {_fit_bottom})',
+      _fit_lost == [] and app._action_cols < 3
+      and app.restore_prev_btn.winfo_y() >= _fit_bottom)
+_fit_wide.configure(padx=_fit_padx)
+app.geometry('1100x850')
+_fit_lost = _fit_wait(_fit_row)
+check(f'...and given room again, three columns ({app._action_cols}; {_fit_lost})',
+      _fit_lost == [] and app._action_cols == 3)
+app.find_note(61).pop('_prev', None)
+app._update_restore_button()
+app.geometry(_fit_geo)
+app.new_note(); app.update()
+app.notes = []
+app.save_notes(); app.refresh_note_list(); app.update()
 
 
 print()

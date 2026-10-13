@@ -294,6 +294,133 @@ check('History lists a bounded series\' day that is off the schedule, marked, in
       == [('2026-09-28', True), ('2026-09-14', False), ('2026-09-07', False)]
       and _ob['n_off'] == 1 and _ob['n_edited'] == 1 and _ob['n_occurrences'] == 2)
 
+# ---- day_matches_series: a day that says what the series says ----
+# A day saves itself as it is typed, so a letter typed and taken back would
+# leave a copy of the series behind, cutting the day off from every later
+# edit of the series. When the day says exactly what the series says, it
+# keeps no copy of its own.
+from noteorganizer.core.recurrence import day_matches_series as _same_day
+_sd_series = {'title': 'Stand-up', 'body': 'b\n', 'comments': 'c',
+              'category': 'Work', 'color': '#ff0000'}
+_sd_day = dict(_sd_series)
+check('a day with the series\' own five fields says what the series says',
+      _same_day(_sd_series, _sd_day))
+for _sd_field, _sd_other in (('title', 'Stand-up!'), ('body', 'b2\n'),
+                             ('comments', ''), ('category', 'Personal'),
+                             ('color', '#00ff00')):
+    check(f'...and one differing in its {_sd_field} does not',
+          not _same_day(_sd_series, dict(_sd_day, **{_sd_field: _sd_other})))
+check('a title differs by its words, not the spaces around them, as stored',
+      _same_day(_sd_series, dict(_sd_day, title='  Stand-up ')))
+check('a colour cleared on a day of a coloured series is a difference',
+      not _same_day(_sd_series, dict(_sd_day, color='')))
+check('a field the day does not hold counts as empty, as the editor shows it',
+      _same_day(dict(_sd_series, color=''), {k: v for k, v in _sd_day.items()
+                                              if k != 'color'})
+      and not _same_day(_sd_series, {k: v for k, v in _sd_day.items()
+                                     if k != 'color'}))
+check('a field that is not text is never a match',
+      not _same_day(_sd_series, dict(_sd_day, title=5))
+      and not _same_day(dict(_sd_series, comments=['c']), _sd_day))
+
+# ---- a day of a series held on another date ("Move this day") ----
+# The weekly meeting moved to Tuesday one week: still a day of the series,
+# drawn on its new date and not on its old one, wherever days are asked for.
+from noteorganizer.core.recurrence import moved_from as _mf, move_day as _mv
+from noteorganizer.core.recurrence import next_occurrence_on_or_after as _nx
+
+
+def _weekly(**extra):
+    note = {'id': 1, 'title': 'Sync', 'body': 'b', 'date': '2026-10-05',
+            'recurrence': {'freq': 'weekly', 'weekdays': [0]}}
+    note.update(extra)
+    return note
+
+
+_OCT = (date(2026, 10, 1), date(2026, 10, 31))
+_mv_note = _weekly(moved={'2026-10-12': '2026-10-13'})
+check('a moved day is drawn on its new date and not on its old one',
+      NO.expand_occurrences(_mv_note, *_OCT)
+      == ['2026-10-05', '2026-10-13', '2026-10-19', '2026-10-26'])
+check('...and still counts as one of a "3 times" series\' three',
+      NO.expand_occurrences(_weekly(moved={'2026-10-12': '2026-10-13'},
+                                    recurrence={'freq': 'weekly', 'weekdays': [0],
+                                                'count': 3}), *_OCT)
+      == ['2026-10-05', '2026-10-13', '2026-10-19'])
+check('a window holding only the new date draws it; one holding only the old, nothing',
+      NO.expand_occurrences(_mv_note, date(2026, 10, 13), date(2026, 10, 13))
+      == ['2026-10-13']
+      and NO.expand_occurrences(_mv_note, date(2026, 10, 12), date(2026, 10, 12)) == [])
+check('a move outlives neither a deleted day nor a rule that no longer gives it',
+      NO.expand_occurrences(_weekly(moved={'2026-10-12': '2026-10-13'},
+                                    exceptions=['2026-10-12']), *_OCT)
+      == ['2026-10-05', '2026-10-19', '2026-10-26']
+      and '2026-10-13' not in NO.expand_occurrences(
+          _weekly(moved={'2026-10-12': '2026-10-13'},
+                  recurrence={'freq': 'weekly', 'weekdays': [2]}), *_OCT))
+check('a day may be moved past the series\' end, or before its start',
+      '2026-11-02' in NO.expand_occurrences(
+          _weekly(moved={'2026-10-12': '2026-11-02'},
+                  recurrence={'freq': 'weekly', 'weekdays': [0],
+                              'end': '2026-10-20'}),
+          date(2026, 10, 1), date(2026, 11, 30))
+      and NO.expand_occurrences(_weekly(moved={'2026-10-05': '2026-10-01'}),
+                                date(2026, 10, 1), date(2026, 10, 6))
+      == ['2026-10-01'])
+check('the first N days asked for are the first N, a moved one among them',
+      NO.expand_occurrences(_weekly(moved={'2026-10-19': '2026-10-06'}),
+                            *_OCT, limit=2) == ['2026-10-05', '2026-10-06'])
+check('the next day of a series is a moved one when it comes first',
+      _nx(_weekly(moved={'2026-10-12': '2026-10-10'}), '2026-10-06')
+      == '2026-10-10')
+_mvd = _weekly(overrides={'2026-10-12': {'title': 'Sync (room 2)'}})
+_mv_origin = _mv(_mvd, '2026-10-12', '2026-10-13')
+check("moving a day records where it came from, and carries its own edit with it",
+      _mv_origin == '2026-10-12' and _mvd['moved'] == {'2026-10-12': '2026-10-13'}
+      and list(_mvd['overrides']) == ['2026-10-13']
+      and _mf(_mvd, '2026-10-13') == '2026-10-12' and _mf(_mvd, '2026-10-12') is None)
+_mv(_mvd, '2026-10-13', '2026-10-15')
+check('...moved again, it still knows the day its rule gives it',
+      _mvd['moved'] == {'2026-10-12': '2026-10-15'}
+      and list(_mvd['overrides']) == ['2026-10-15'])
+_mv(_mvd, '2026-10-15', '2026-10-12')
+check('...and moved back to that day, it is home: no move left, its edit with it',
+      _mvd['moved'] == {} and list(_mvd['overrides']) == ['2026-10-12'])
+check("a note that does not repeat has no moved days",
+      _mf({'date': '2026-10-05', 'moved': {'2026-10-05': '2026-10-06'}},
+          '2026-10-06') is None)
+check("a moved day's own edit is on the schedule where it is now",
+      _off(_weekly(moved={'2026-10-12': '2026-10-13'},
+                   overrides={'2026-10-13': dict(_ov)})) == [])
+check("...and off it once the rule no longer gives the day it came from",
+      _off(_weekly(moved={'2026-10-12': '2026-10-13'},
+                   recurrence={'freq': 'weekly', 'weekdays': [2]},
+                   overrides={'2026-10-13': dict(_ov)})) == ['2026-10-13'])
+_mh = _hist([_weekly(moved={'2026-10-12': '2026-10-13'})], today=_H_TODAY)[0]
+check('History lists a moved day of an endless series, saying where it came from',
+      [(c['date'], c['moved_from']) for c in _mh['children']]
+      == [('2026-10-13', '2026-10-12')] and _mh['n_moved'] == 1)
+_mhb = _hist([_weekly(moved={'2026-10-12': '2026-10-13'},
+                      recurrence={'freq': 'weekly', 'weekdays': [0], 'count': 3})],
+             today=_H_TODAY)[0]
+check("...and among a bounded series' days, on its new date",
+      [c['date'] for c in _mhb['children']]
+      == ['2026-10-19', '2026-10-13', '2026-10-05']
+      and [c['moved_from'] for c in _mhb['children']] == [None, '2026-10-12', None])
+_mn = NO.normalize_note(_weekly(
+    exceptions=['2026-10-26'],
+    moved={'2026-10-12': '2026-10-13', '2026-10-19': '2026-10-13',
+           '2026-10-26': '2026-10-27', '2026-11-02': '2026-11-02',
+           'nope': '2026-11-10', '2026-11-09': 5}))
+check('a load keeps real moves only: two dates, not the same one, one day to a '
+      'date, and none of a deleted day',
+      _mn['moved'] == {'2026-10-12': '2026-10-13'})
+check('a note from before moves existed loads with none',
+      NO.normalize_note(_weekly())['moved'] == {})
+check('two series that differ only by a moved day are not the same note',
+      NO.content_signature(_weekly())
+      != NO.content_signature(_weekly(moved={'2026-10-12': '2026-10-13'})))
+
 # ---------------------------------------------------------------------
 # is_recurring on a note that never went through normalize_note.
 #

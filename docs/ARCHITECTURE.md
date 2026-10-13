@@ -184,11 +184,21 @@ interval, specific weekdays/month-days, an end condition) plus two small maps:
 
 - `exceptions`: dates removed from the series entirely
 - `overrides`: date → partial note, for edits that apply to one occurrence only
+- `moved`: the date the rule gives a day → the date it is held on instead ("Move this day")
 
 `expand_occurrences(note, range_start, range_end)` is the only place that turns a rule into
 actual dates — everything else (calendar rendering, list previews) asks it for occurrences
-within a window rather than re-deriving the logic. Editing "just this occurrence" writes an
-override; editing "this and all future" (or the whole series) edits the base note directly.
+within a window rather than re-deriving the logic. The series view edits the base note
+directly; one day opened on its own from the calendar (day mode, `_day_mode`) writes an override.
+
+A day saves to itself, asking nothing: every overridable field goes to the day, a series-owned
+one (checklist, attachments) to the series, and the date and the repeat nowhere —
+`_show_day_mode` keeps them in their fields, out of sight, so the save finds them unchanged, and
+puts them back if anything reached them. A day whose edit ends equal to the series
+(`day_matches_series`) keeps no override: kept, a copy of the series' own text would cut that
+day off from every later edit of the series. Until 2026-10-12 a day's edits waited instead for
+a question — "this occurrence or the whole series?" — asked only on leaving, and nothing on
+screen said they waited ([Issues Log](ISSUES_LOG.md#the-day-that-waited-for-a-question)).
 
 An override is keyed by its date and nothing moves it, so changing the start or the rule can
 leave one on a date the series no longer has. Such overrides are **kept**, not moved and not
@@ -198,6 +208,17 @@ dropping loses text, while kept they come back by themselves if the rule is put 
 cannot disagree with the calendar; the series line counts them apart and offers the walk that
 turns each into a note of its own or a Trash entry (`_show_off_schedule_days`), and the
 calendar History marks them rather than opening them as days of the series.
+
+A moved day (2026-10-13) is the same idea from the other side: the person, not a rule change,
+puts one day on another date. `moved` maps the date the rule gives the day to the date it is held
+on, and the day's own edit is kept under the date it is held on, so every surface that opens a
+day by its date opens this one unchanged. `expand_occurrences` skips the rule's date and draws the
+new one — while the rule still gives the original date and it was not deleted, so a move
+outlives neither — and the moved day still counts as one of a "N times" series' N. A move whose
+original date the rule no longer gives leaves its edit off the schedule, where the walk above
+finds it. `move_day` re-keys the edit and drops the move when a day goes home; deleting a moved
+day skips its original date and takes the move with it. Share codes carry no moves, as they carry
+no exceptions or overrides; a backup carries all three.
 
 ### An import asks first, and acts after
 
@@ -655,6 +676,49 @@ is testing whatever font the machine has: the same bar is 577px here and 827px u
 which control lands on a row boundary — and therefore whether the bug shows at all — moves with
 it. Given numbers, the same inputs give the same answer everywhere, so the behaviour can be
 pinned down exactly. The widget side keeps only the measuring and the packing.
+
+### A packed row that runs out of room loses its last control
+
+Tk's packer gives each control the width it asks for, in the order they were packed. When the row
+is narrower than the sum, the last ones get what is left — squeezed, or not drawn at all — and
+nothing reports it. A grid of equal columns does the same in its own way: every column is as wide
+as the widest control, and a row with no room for them all narrows every column alike.
+
+Under the fonts CI has, this cost four rows a control. One day of a series showed its date row
+without the colour's swatch, and its title row without "This day:". The editor's "Save as
+template" lost its words at both ends (168 px of 177). In Settings, the dropdowns and buttons beside
+a setting's description were left what the words did not take: the trash's "30 days" 18 px of 74,
+its arrow gone. On Windows the only one seen was a long title's counter, squeezed to 8 px of its 46.
+
+There is one answer for each kind of row:
+
+- **A box that fills the row asks for almost nothing.** The title's box is `width=1`. Fill and
+  expand still give it everything the controls beside it leave, but it no longer claims twenty
+  characters before they are placed.
+- **What cannot shrink is placed first.** A Settings row (`_card_row`) is built words first, but
+  packs its control first. The words get the rest, and their hint wraps to it.
+- **Controls that cannot shrink get a line of their own.** A day's **Move this day…** and **Reset
+  this day…** sit beside its date while the row has room, and on a line under it when it has not
+  (`_place_day_buttons`). The editor's six action buttons are three columns while there is room
+  for three of the widest, then two, then one (`_reflow_action_buttons`), and Restore previous
+  takes the row under them, wherever that now is. Each decision is one comparison of measured
+  widths against the row's own, so unlike the toolbar there is no arithmetic worth moving to core.
+  Those widths do not change with where the buttons go, so moving them cannot undo the decision.
+
+The qa5 and qa6 checks behind these ask every control whether it is wholly in sight
+(`out_of_sight` in `qa/_qa_support.py`). A wider font is simulated in pixels rather than
+characters, so the line left beside the moved controls fits under every font.
+
+#### Not answered yet: a display scaled to 150%
+
+The app does not declare itself DPI-aware — neither the built `.exe` nor `python.exe` does — so
+on a screen scaled to 150% Windows enlarges it as a picture. The layout is the 100% layout, and a
+little soft. Run DPI-aware (as the photographs for these checks are taken, to be sharp), the fonts
+grow by half while fixed pixel widths stay put. The Settings menu's 240 px column then squeezes
+"Keyboard shortcuts" by 5 px, and the statistics tiles' three fixed columns squeeze two captions.
+At the smallest window, three editor lines run short as well: the Created line, a day's checklist
+button, and the repeat's "times". None of these is reached today. They belong with a decision to make the app sharp on scaled screens,
+which would have to measure every fixed width against the font it holds.
 
 ### Paste from a PDF: lines are not paragraphs
 

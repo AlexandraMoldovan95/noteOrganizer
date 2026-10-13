@@ -422,6 +422,11 @@ _WINDOW_DELIVERED = re.compile(
     r"(?:-[1-5])?>"
     r"|<<[^<>]+>>)$")
 
+# Which widget each mouse button was last pressed on, by its path: a release
+# may find that its own press destroyed it (fire, below).
+_BUTTON = re.compile(r"(ButtonPress|ButtonRelease|Button)-([1-5])>$")
+_PRESSED = {}
+
 
 def fire(widget, sequence, **kwargs):
     """Generate a pointer (or ``<<virtual>>``) *sequence* on *widget*,
@@ -443,15 +448,26 @@ def fire(widget, sequence, **kwargs):
             "event_generate (see qa/README.md). A pointer shorthand like "
             "<Double-1> needs its full spelling (<Double-Button-1>)."
             % (sequence,))
+    button = _BUTTON.search(sequence)
     try:
         # Not a query: this creates the native window if it has none, which
         # is the whole fix. Without it Tk throws the event away in silence.
         widget.winfo_id()
     except tk.TclError as exc:
+        # The one release with nowhere to land: on the widget its own press
+        # destroyed -- a checklist row rebuilt under the pointer. A person's
+        # release lands on nothing then, and so does this one; the check
+        # after it fails on what it finds. Raised, it killed the script
+        # before its footer, and the mutant behind it read as NO-RUN.
+        if (button and button.group(1) == "ButtonRelease"
+                and _PRESSED.get(button.group(2)) == str(widget)):
+            return
         raise EventNotDelivered(
             "%s has no window to receive %s (destroyed?): %s"
             % (widget, sequence, exc))
     widget.event_generate(sequence, **kwargs)
+    if button and button.group(1) != "ButtonRelease":
+        _PRESSED[button.group(2)] = str(widget)
 
 
 def click(widget, **kwargs):
@@ -493,6 +509,69 @@ def ring_mismatches(top):
                     != str(c.cget("highlightbackground")).lower()
                     and holds_keys(c)):
                 out.append(str(c))
+            walk(c)
+    walk(top)
+    return out
+
+
+# What a person reads or presses, at the width it asks for. Entries are not
+# here: a text box given less than it asks scrolls its text, as it should.
+_FIXED = (tk.Button, tk.Label, tk.Checkbutton, tk.Radiobutton, tk.Menubutton)
+
+
+def out_of_sight(top):
+    """The buttons, labels and tick boxes under *top* that are not wholly on
+    screen while what holds them is: not drawn at all, cut at the edge of
+    what holds them, or given less width than they ask -- all but a label
+    that wraps, which asks for its unwrapped width and is given its wrap.
+    A box (an Entry) counts as out of sight only when not drawn or cut.
+
+    A packed or gridded row given less than it asks drops what was placed
+    last, and says nothing: the colour's swatch, "This day:", a dropdown's
+    arrow and a button's words were lost so before a check asked. Each is
+    named by its text and class, and what holds it. Pumps nothing: the
+    caller waits for the state it was promised (mapping is asynchronous
+    under Xvfb)."""
+    out = []
+
+    def name(w):
+        text = str(w.cget("text"))[:30] if "text" in w.keys() else ""
+        return f"{w.winfo_class()} {text!r} in {w.master.winfo_class()}"
+
+    def first_control(w):
+        for c in w.winfo_children():
+            if isinstance(c, _FIXED):
+                return c
+            found = None if isinstance(c, tk.Toplevel) else first_control(c)
+            if found is not None:
+                return found
+        return None
+
+    def walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Toplevel):
+                continue
+            placed = c.winfo_manager() in ("pack", "grid", "place")
+            if (placed and w.winfo_ismapped() and not c.winfo_ismapped()
+                    and not isinstance(c, _FIXED + (tk.Entry,))):
+                # A frame squeezed to nothing takes everything in it along,
+                # and nothing in it is drawn to be asked: a Settings row's
+                # button was given 1 px of 81 this way.
+                held = first_control(c)
+                if held is not None:
+                    out.append(f"not drawn: {c.winfo_class()} holding " + name(held))
+                continue
+            if (isinstance(c, _FIXED + (tk.Entry,))
+                    and placed and w.winfo_ismapped()):
+                wraps = isinstance(c, tk.Label) and int(str(c.cget("wraplength")) or 0) > 0
+                if not c.winfo_ismapped():
+                    out.append("not drawn: " + name(c))
+                elif c.winfo_x() + c.winfo_width() > w.winfo_width() + 1:
+                    out.append("cut: " + name(c))
+                elif (isinstance(c, _FIXED) and not wraps
+                      and c.winfo_width() + 1 < c.winfo_reqwidth()):
+                    out.append(f"squeezed {c.winfo_width()} of {c.winfo_reqwidth()}: "
+                               + name(c))
             walk(c)
     walk(top)
     return out

@@ -2826,5 +2826,520 @@
     "must_fail": ["the series line wraps within its width rather than cutting its words"],
     "suites": ["qa5"],
     "expect": "killed"
+  },
+  {
+    "id": "DM01",
+    "about": "a day of a series waits for a gesture again instead of saving itself: a category picked for it does nothing until the day is left",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        # picked for one day seemed to do nothing (field report, 2026-10-12).\n        try:\n            st = self.capture_editor_state()",
+        "replace": "        # picked for one day seemed to do nothing (field report, 2026-10-12).\n        if self.current_occurrence_date:\n            return\n        try:\n            st = self.capture_editor_state()"
+      }
+    ],
+    "must_fail": ["a category picked for one day is saved to that day, asking nothing"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "DM02",
+    "about": "a day's save asks \"this occurrence or the whole series?\" again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                if overridable_changed or schedule_changed:\n                    scope = \"occurrence\"\n",
+        "replace": "                if overridable_changed or schedule_changed:\n                    scope = self.ask_occurrence_scope(\"Save\", occurrence_date) or \"occurrence\"\n"
+      }
+    ],
+    "must_fail": ["a category picked for one day is saved to that day, asking nothing"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "DM03",
+    "about": "a day saying exactly what the series says keeps a copy of its own anyway, cut off from every later edit of the series",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                follows_again = day_matches_series(note, patch)\n",
+        "replace": "                follows_again = False\n"
+      }
+    ],
+    "must_fail": [
+      "a day put back to what the series says keeps no copy of its own",
+      "...nor does a letter typed and taken back"
+    ],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "DM04",
+    "about": "a tick on a day with no text of its own writes the whole editor to the series, a word made bold there with it",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            elif on_a_day:\n",
+        "replace": "            elif on_a_day and occurrence_date in (note.get(\"overrides\") or {}):\n"
+      }
+    ],
+    "must_fail": ["a tick on a day goes to the series, and a word made bold beside it does not"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "DM05",
+    "about": "a date reaching a day's hidden field, with no text changed, moves the whole series",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                if overridable_changed or schedule_changed:\n",
+        "replace": "                if overridable_changed:\n"
+      }
+    ],
+    "must_fail": ["a date reaching a day's hidden field never moves the series"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "DM06",
+    "about": "the editor is never laid out for a day: no strip, the series' date and repeat as fields to change",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self.offschedule_btn.pack_forget()\n        self._show_day_mode()\n",
+        "replace": "            self.offschedule_btn.pack_forget()\n"
+      }
+    ],
+    "must_fail": ["a day says which day it is, and that what changes stays on it"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "DM07",
+    "about": "the repeat's boxes come back on a day when its save puts the series' repeat back",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if self._day_mode():\n            # One day of a series shows its repeat as words, not as boxes to\n            # change: the repeat is the whole series' (_show_day_mode).\n            self.rec_details.pack_forget()\n            return\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["...and the repeat's boxes stay out of sight once it is put back"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "DM08",
+    "about": "a repeating note in a calendar day offers one \"Open in editor\" again, not its two doors",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/calendar_view.py",
+        "find": "        if is_recurring(base_note):\n            tk.Button(top, text=",
+        "replace": "        if False:\n            tk.Button(top, text="
+      }
+    ],
+    "must_fail": ["a repeating note in a calendar day offers two doors"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "DM09",
+    "about": "the day strip's way to the series forgets the way back to the calendar",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if not self.open_note_in_tab(note):\n            return\n        if pending is not None:\n",
+        "replace": "        if not self.open_note_in_tab(note):\n            return\n        if False:\n"
+      }
+    ],
+    "must_fail": ["...and the way back to the calendar still leads to that day"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "DM10",
+    "about": "leaving a day does not put the date field back: the series opens with no date to change",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                for widget, packing in self._date_field_packing:\n                    widget.pack(before=self._color_label, **packing)\n",
+        "replace": "                pass\n"
+      }
+    ],
+    "must_fail": ["...the series with its date and repeat to change, in their places"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "DM11",
+    "about": "the day strip's button keeps the old theme's colour around its keyboard ring",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                         highlightbackground=\"card\", highlightcolor=\"accent\")\n        self.day_series_btn.pack(",
+        "replace": "                         highlightcolor=\"accent\")\n        self.day_series_btn.pack("
+      }
+    ],
+    "must_fail": ["every colour of the day's strip and words follows a new theme"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "DM12",
+    "about": "a day's checklist and files no longer say they are the whole series'",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        return \" · whole series\" if self._day_mode() else \"\"",
+        "replace": "        return \"\""
+      }
+    ],
+    "must_fail": ["the checklist and the files marked as the whole series'"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "DM13",
+    "about": "the day strip stays on screen over the series once the day is left",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        else:\n            self.day_strip.pack_forget()\n            self.day_cat_lbl.pack_forget()\n",
+        "replace": "        else:\n            self.day_cat_lbl.pack_forget()\n"
+      }
+    ],
+    "must_fail": ["...the series with its date and repeat to change, in their places"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "DM14",
+    "about": "a day whose title differs from the series' only by spaces around it is taken for a different day",
+    "edits": [
+      {
+        "file": "noteorganizer/core/recurrence.py",
+        "find": "            mine, theirs = mine.strip(), theirs.strip()\n",
+        "replace": "            pass\n"
+      }
+    ],
+    "must_fail": ["a title differs by its words, not the spaces around them, as stored"],
+    "suites": ["test_recurrence"],
+    "expect": "killed"
+  },
+  {
+    "id": "DM15",
+    "about": "a day's save throws away the undo history, so Ctrl+Z cannot take back what was typed before it",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                put_back_schedule = schedule_changed\n",
+        "replace": "                put_back_schedule = schedule_changed\n                self._reset_text_undo()\n"
+      }
+    ],
+    "must_fail": ["Ctrl+Z after a day saved itself takes the typing back"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV01",
+    "about": "a moved day is drawn on its old date as well as its new one",
+    "edits": [{"file": "noteorganizer/core/recurrence.py",
+               "find": "    dates = _expand_rule(note, range_start, range_end, limit, set(moved))\n",
+               "replace": "    dates = _expand_rule(note, range_start, range_end, limit, set())\n"}],
+    "must_fail": ["a moved day is drawn on its new date and not on its old one"],
+    "suites": ["test_recurrence"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV02",
+    "about": "a moved day is drawn nowhere: the calendar loses it",
+    "edits": [{"file": "noteorganizer/core/recurrence.py",
+               "find": "        dates.append(new)\n        drawn.add(new)\n",
+               "replace": "        drawn.add(new)\n"}],
+    "must_fail": ["a moved day is drawn on its new date and not on its old one"],
+    "suites": ["test_recurrence"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV03",
+    "about": "a moved day leaves its own edit behind on the date it left",
+    "edits": [{"file": "noteorganizer/core/recurrence.py",
+               "find": "        overrides[to] = overrides.pop(day)\n",
+               "replace": "        pass\n"}],
+    "must_fail": ["moving a day records where it came from, and carries its own edit with it"],
+    "suites": ["test_recurrence"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV04",
+    "about": "a load forgets every move: the day is back on its old date after a restart",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "    clean[\"moved\"] = moved\n",
+               "replace": "    clean[\"moved\"] = {}\n"}],
+    "must_fail": ["a load keeps real moves only"],
+    "suites": ["test_recurrence"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV05",
+    "about": "a move does not save what was typed on the day first, and the typing stays behind",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if self._flush_autosave(leaving=False) is False:\n            return\n        note = self.find_note(note[\"id\"])\n        if (note is None or not is_recurring(note)\n",
+               "replace": "        if False:\n            return\n        note = self.find_note(note[\"id\"])\n        if (note is None or not is_recurring(note)\n"}],
+    "must_fail": ["...what was typed on the day before goes with it, and the editor follows it"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV06",
+    "about": "a day can be moved onto another day of its series, and the two become one",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        return target is not None and (\n            to == (moved_from(note, day) or day)\n            or expand_occurrences(note, target, target) != [to])\n",
+               "replace": "        return target is not None\n"}],
+    "must_fail": ["a date the series already has is refused, saying why, and nothing moves"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV07",
+    "about": "deleting a moved day leaves its move behind, outliving the day",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                if origin is not None:\n                    note[\"moved\"].pop(origin, None)\n                exceptions = set(note.get(\"exceptions\") or [])\n",
+               "replace": "                exceptions = set(note.get(\"exceptions\") or [])\n"}],
+    "must_fail": ["deleting a moved day skips the date its rule gives it, and takes the move with it"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV08",
+    "about": "the Undo of a deleted moved day looks for it on the wrong date, and cannot bring it back",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        skipped = came_from or date_str\n",
+               "replace": "        skipped = date_str\n"}],
+    "must_fail": ["...and its Undo brings it back moved, with its own text"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV09",
+    "about": "Reset's \"Only the date\" throws the day's own text away as well",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if choice == \"date\":\n            # Only the date:",
+               "replace": "        if choice == \"never\":\n            # Only the date:"}],
+    "must_fail": ["...\"Only the date\" puts the day back and keeps its text"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV10",
+    "about": "turning a repeat off leaves its moves behind in the note",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                    note[\"overrides\"] = {}\n                    note[\"moved\"] = {}\n",
+               "replace": "                    note[\"overrides\"] = {}\n"}],
+    "must_fail": ["turning the repeat off takes the moves with the days, into the rescue copy"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV11",
+    "about": "the rescue copy a repeat's turn-off makes forgets the moved days",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        for key in (\"date\", \"recurrence\", \"exceptions\", \"overrides\", \"moved\"):\n",
+               "replace": "        for key in (\"date\", \"recurrence\", \"exceptions\", \"overrides\"):\n"}],
+    "must_fail": ["turning the repeat off takes the moves with the days, into the rescue copy",
+                  "...and Restore previous brings the series back with its day moved"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV12",
+    "about": "two series differing only by a moved day count as one note, for the clean-ups that collapse copies",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "        _stable(note.get(\"moved\")),\n",
+               "replace": ""}],
+    "must_fail": ["two series that differ only by a moved day are not the same note"],
+    "suites": ["test_recurrence"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV13",
+    "about": "History leaves out a moved day of an endless series",
+    "edits": [{"file": "noteorganizer/core/recurrence.py",
+               "find": "                    if (new in overrides or not is_date(new) or not bucket_ok(new)\n",
+               "replace": "                    if (True or new in overrides or not is_date(new) or not bucket_ok(new)\n"}],
+    "must_fail": ["History lists a moved day of an endless series, saying where it came from"],
+    "suites": ["test_recurrence"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV14",
+    "about": "a moved day with no text of its own has no way back in its menu",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                if moved_from(note, occurrence_date) is not None:\n                    menu.add_command(\n",
+               "replace": "                if False:\n                    menu.add_command(\n"}],
+    "must_fail": ["a moved day with no text of its own still offers its way back in its menu"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV15",
+    "about": "\"Move this day…\" keeps the old theme's colour around its keyboard ring",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self.track_theme(self.day_move_btn, bg=\"sidebar\", fg=\"text\",\n                         activebackground=\"card\", activeforeground=\"text\",\n                         highlightbackground=\"bg\", highlightcolor=\"accent\")\n",
+               "replace": "        self.track_theme(self.day_move_btn, bg=\"sidebar\", fg=\"text\",\n                         activebackground=\"card\", activeforeground=\"text\",\n                         highlightcolor=\"accent\")\n"}],
+    "must_fail": ["every colour of \"Move this day…\" and \"Reset this day…\" follows a new theme"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV16",
+    "about": "the Undo a move offers says it moved the day back, and does not",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self._relocate_day(note, now_on, back_to)\n",
+               "replace": ""}],
+    "must_fail": ["Undo puts the day back where it was, its own edit with it, the editor following"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV17",
+    "about": "the editor stays on the date a day left, showing a day the calendar no longer has",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            self.open_note_in_tab(note, occurrence_date=to, flush=False)\n",
+               "replace": "            pass\n"}],
+    "must_fail": ["...what was typed on the day before goes with it, and the editor follows it"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV18",
+    "about": "a moved day's Reset is in the calendar's right-click menu only, not in the day",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            resettable = bool(origin) or day in (note.get(\"overrides\") or {})\n",
+               "replace": "            resettable = False\n"}],
+    "must_fail": ["a moved day offers its Reset in the day itself, beside Move this day"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV19",
+    "about": "\"Reset this day…\" keeps the old theme's colour around its keyboard ring",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                                       command=self._reset_this_day)\n        self.track_theme(self.day_reset_btn, bg=\"sidebar\", fg=\"text\",\n                         activebackground=\"card\", activeforeground=\"text\",\n                         highlightbackground=\"bg\", highlightcolor=\"accent\")\n",
+               "replace": "                                       command=self._reset_this_day)\n        self.track_theme(self.day_reset_btn, bg=\"sidebar\", fg=\"text\",\n                         activebackground=\"card\", activeforeground=\"text\",\n                         highlightcolor=\"accent\")\n"}],
+    "must_fail": ["every colour of \"Move this day…\" and \"Reset this day…\" follows a new theme"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV20",
+    "about": "Move and Reset stay beside the date in a row with no room for them, and the colour's swatch drops off its end",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        wrap = room > 1 and need > room\n",
+               "replace": "        wrap = False\n"}],
+    "must_fail": ["a date row with no room for Move and Reset puts them on a line under the date, every control in sight"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV23",
+    "about": "the date row decides where Move and Reset go only when a day opens, not when the window is resized",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        meta_row.bind(\"<Configure>\", self._place_day_buttons, add=\"+\")\n",
+               "replace": ""}],
+    "must_fail": ["...a window made wider puts them back beside the date",
+                  "...and one made narrower puts them under it again"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV24",
+    "about": "the line for Move and Reset keeps their place in the packing order, and lands under the colour instead of under the date",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                               before=self._date_row_label)\n",
+               "replace": "                               )\n"}],
+    "must_fail": ["a date row with no room for Move and Reset puts them on a line under the date, every control in sight"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV25",
+    "about": "the title's box asks for its natural twenty characters first, and a long title's counter beside it is squeezed out",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            relief=\"flat\", font=(\"Segoe UI\", 20, \"bold\"), width=1,\n",
+               "replace": "            relief=\"flat\", font=(\"Segoe UI\", 20, \"bold\"),\n"}],
+    "must_fail": ["at the smallest window every control of the day's title and date rows stays in sight"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "FIT01",
+    "about": "a Settings row packs its words before its control, and the words take the room the control needed",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "        control.pack(side=\"right\", padx=(16, 0), before=text_col)\n",
+               "replace": "        control.pack(side=\"right\", padx=(16, 0))\n"}],
+    "must_fail": ["a Settings row packs its control before its words, keeps the control's width and wraps its words beside it"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "FIT02",
+    "about": "the action buttons stay three equal columns in a row with no room for three, and the widest loses its words",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        cols = 3 if 3 * widest <= room else 2 if 2 * widest <= room else 1\n",
+               "replace": "        cols = 3\n"}],
+    "must_fail": ["a row with no room for three of its widest button deals them into fewer columns, all in sight, Restore previous under them"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "FIT03",
+    "about": "the action buttons are dealt only once, and a window made narrower leaves them squeezed",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        action_row.bind(\"<Configure>\", self._reflow_action_buttons, add=\"+\")\n",
+               "replace": ""}],
+    "must_fail": ["a row with no room for three of its widest button deals them into fewer columns, all in sight, Restore previous under them"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "FIT04",
+    "about": "Restore previous keeps row 2, and lands on the action buttons once they are three rows of two",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            row=-(-len(self._action_buttons) // cols), column=0, columnspan=cols,\n",
+               "replace": "            row=2, column=0, columnspan=cols,\n"}],
+    "must_fail": ["a row with no room for three of its widest button deals them into fewer columns, all in sight, Restore previous under them"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "FIT05",
+    "about": "the action buttons only ever lose columns, and stay two across in a window that has room for three again",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if cols != self._action_cols:\n            self._grid_action_buttons(cols)\n",
+               "replace": "        if cols < (self._action_cols or 4):\n            self._grid_action_buttons(cols)\n"}],
+    "must_fail": ["...and given room again, three columns"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV21",
+    "about": "the day's Reset is offered for a move only, never for text of its own",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            resettable = bool(origin) or day in (note.get(\"overrides\") or {})\n",
+               "replace": "            resettable = bool(origin)\n"}],
+    "must_fail": ["...a day's own text, saved as it is typed, brings its Reset; typed back to the series', it goes"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV22",
+    "about": "a Reset on the day in the editor leaves the editor as it was, and its next save brings the day's own text back",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            self.load_note(note, home)\n",
+               "replace": "            pass\n"}],
+    "must_fail": ["...Reset there, pressed mid-typing, asks the menu's question and the typing stays gone"],
+    "suites": ["qa5"],
+    "expect": "killed"
   }
 ]

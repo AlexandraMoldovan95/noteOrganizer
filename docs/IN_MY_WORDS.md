@@ -17,7 +17,7 @@ the AI agent I build it with. This page is mine.*
 
 ## Why a notes app
 
-Everyone takes notes — students, office workers, doctors, lawyers. Reading and writing are among
+Everyone takes notes - students, office workers, doctors, lawyers. Reading and writing are among
 the first things we learn at school, and we keep using them to learn for the rest of our lives.
 We write things down so we don't forget them, so we can study, or so we can pass an idea on. I
 wanted to make a simple app that does that well, for anyone.
@@ -51,7 +51,7 @@ the people around me don't have to search for answers. It is also why the docume
 project matters so much to me.
 
 I am a serious, organised person. I like to work on something until every detail is right, and I
-can't leave a thing broken or half-done — it stays on my mind until I fix it.
+can't leave a thing broken or half-done - it stays on my mind until I fix it.
 
 ## How I work with the agent
 
@@ -63,20 +63,19 @@ points of view, and the agent repairs what they find.
    to bring its own, then we agree on a plan.
 2. **We build in parts.** One feature or a few small ones at a time, never several big changes at
    once. Doing too much at once is how things break, and then the bugs have to be found again
-   through audits and test cases, which is more work for both of us. Being proactive pays off —
-   I learned that at HP.
+   through audits and test cases, which is more work for both of us. Being proactive pays off - I learned that at HP.
 3. **The agent writes the code**, guided by my prompts, by audits, and by those review agents.
 4. **I run the app and test it**, and say what still needs adjusting.
 5. **The agent writes the pull request and, when there is a bug, the issue.** I read the texts,
    open them on GitHub, watch the CI checks, and merge when everything is green. We always work on
-   branches, never on `main`, so the main code — and the app — stays safe.
+   branches, never on `main`, so the main code - and the app - stays safe.
 
 We set up CI to make the work easier: one more safety net, one more filter the code goes through,
 which also finds bugs that can slip past the editor. How much we cover in a day depends on how many
 bugs we find and how much needs adjusting.
 
 And because I try to think ahead, I agreed with the agent that every change goes through the list
-of features it touches, to prevent bugs before they happen — and that when a bug does happen,
+of features it touches, to prevent bugs before they happen - and that when a bug does happen,
 fixing it is not enough: we find its root cause, so the same conditions can't produce another one.
 
 ## The rules I set
@@ -99,6 +98,9 @@ After going through all this, I'm sure the next app I make will be even more org
 one.
 
 ## Decisions I made
+
+These are a few of my decisions, picked as examples - not the only ones. I made the rest the same
+way: the agent puts forward options, and I choose what the app does and how it behaves.
 
 - **No language selector.** This is the first app I've built end to end this way. A language
   selector would have been hard to build, and I don't have the people to check six or seven
@@ -134,16 +136,16 @@ check really works. I still find some by hand, fewer than before, and sometimes 
 checks missed them and had to be reworked. So manual testing can never leave the picture. Even
 when no technical bug is left, there are visual ones, and things no script can judge: whether a
 feature feels right to a person. A test can pass and still not meet what the user expects. And as
-one of the principles of testing says, finding no more bugs doesn't mean there are none — maybe I
+one of the principles of testing says, finding no more bugs doesn't mean there are none - maybe I
 just haven't imagined the scenario that finds them yet.
 
 **Two bugs I found.** I was testing the Share panel, selecting several notes to make one share
 code, and the notes wouldn't select. I switched to a light theme and there was no problem. On the
-dark themes the tick simply didn't show — the notes were selected, but nothing on screen said so.
+dark themes the tick simply didn't show - the notes were selected, but nothing on screen said so.
 I reported it in detail, so the agent would know exactly where to look. Another time I noticed
 that every theme change showed a "Note updated" message, although no note had changed. Small bugs
-like these — a message with no reason, a flicker that took long sessions to get rid of, a cursor
-that stayed in a search box after I clicked elsewhere — can be found all along the way. Explained
+like these - a message with no reason, a flicker that took long sessions to get rid of, a cursor
+that stayed in a search box after I clicked elsewhere - can be found all along the way. Explained
 well and in detail, they can all be solved; and if not, we adapt and change things until they
 work.
 
@@ -163,17 +165,16 @@ lost.
 
 ## What I would do differently
 
-I would make a more detailed work plan at the start, get to know the AI before giving it work —
-so it knows who it is working with — and set clearer working rules from the beginning.
+I would make a more detailed work plan at the start, get to know the AI before giving it work - so it knows who it is working with - and set clearer working rules from the beginning.
 
 ## What comes next
 
 It is hard to judge my own app objectively. What bothers me is that it is still a first version,
 when other apps are so far ahead. I plan to keep improving it as I gain experience; I don't intend
-to leave it. There are always details to consider — some I can't see yet, but I'm sure I will.
+to leave it. There are always details to consider - some I can't see yet, but I'm sure I will.
 After the desktop app, an Android version will follow, so your notes can come with you.
 
 ---
 
 *Everything here comes from me: what I lived, what I decided and why. The agent helped me put it
-into a page, and I checked every sentence. — Alexandra Moldovan, October 2026*
+into a page, and I checked every sentence. - Alexandra Moldovan, October 2026*

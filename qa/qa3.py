@@ -2193,17 +2193,21 @@ app._flush_autosave(); app.update()
 check('...so the next save cannot put the older version back',
       app.find_note(1)['body'] == 'second version')
 
-# An import the person would not let replace a day's edit. Cancel on the
-# repeating day's question means stay -- but the import went on, loaded
-# the note it carried into the day still on screen (whose next save wrote
-# it over the whole series), and had already cleared the code.
+# An import the person would not let replace the note on screen. Going back
+# to fix a date its save could not store means stay -- but the import went
+# on, loaded the note it carried into the repeating note still on screen
+# (whose next save wrote it over the whole series), and had already cleared
+# the code. (Found with a day's own question, "this occurrence or the whole
+# series?", whose Cancel did the same; a day now saves to itself.)
 app.new_note(); app.update()
 app.notes = [NO.normalize_note({'id': 1, 'title': 'Yoga', 'body': 'stretch',
                                 'date': '2026-09-01',
                                 'recurrence': {'freq': 'weekly'}})]
 app.save_notes()
-app.open_note_in_tab(app.notes[0], occurrence_date='2026-09-08'); app.update()
+app.open_note_in_tab(app.notes[0]); app.update()
 app.body_text.insert('end', '\nbring the mat')
+app.date_entry.delete(0, 'end')
+app.date_entry.insert(0, '31/09/2026')
 _nt_code = NO.encode_share_code([{'title': 'Lasagne', 'body': 'layers',
                                   'category': 'General'}])
 if not app._is_placed(app.import_panel):
@@ -2211,20 +2215,28 @@ if not app._is_placed(app.import_panel):
 app.update()
 app.import_box.delete('1.0', 'end')
 app.import_box.insert('1.0', _nt_code)
-_nt_real_scope = app.ask_occurrence_scope
-app.ask_occurrence_scope = lambda *a, **k: None
-app._do_inline_import()
-app.ask_occurrence_scope = _nt_real_scope
+_nt_asked = []
+_nt_real_dialog = app._themed_dialog
+app._themed_dialog = lambda title, *a, **k: (_nt_asked.append(title), False)[1]
+try:
+    app._do_inline_import()
+finally:
+    app._themed_dialog = _nt_real_dialog
 app.update()
-check("Cancel on a day's question keeps the day in the editor, not the import",
-      app.title_entry.get() == 'Yoga' and app.selected_note_id == 1
-      and 'bring the mat' in app.body_text.get('1.0', 'end-1c'))
+check(f"going back to fix a date keeps the note in the editor, not the import "
+      f"({_nt_asked})",
+      _nt_asked == ["Part of this note isn't saved"]
+      and app.title_entry.get() == 'Yoga' and app.selected_note_id == 1
+      and 'bring the mat' in app.body_text.get('1.0', 'end-1c')
+      and app._typed_date() == '31/09/2026')
 check('...the code stays in the box, to try again',
       app.import_box.get('1.0', 'end').strip() == _nt_code.strip())
 check('...and the series is untouched',
       [n['title'] for n in app.notes] == ['Yoga']
       and app.notes[0]['recurrence']['freq'] == 'weekly')
-app.new_note(); app.update()   # leave the day without its question
+app._put_back_stored_date_and_repeat()
+app._cancel_pending_autosave()
+app.new_note(); app.update()
 if app._is_placed(app.import_panel):
     app.toggle_import_panel()
 
@@ -2727,12 +2739,18 @@ with open(os.path.join(NO.ATTACHMENTS_DIR, _ra_copy_file or _ra_file),
           encoding='utf-8') as _fh:
     _ra_copy_text = _fh.read()
 check("...holding the backup's file as it was", _ra_copy_text == 'the receipt')
+# A copy with no file of its own fails here rather than stops the script:
+# sorting None among the names raised, and three mutants that the checks
+# above had caught read as NO-RUN.
 check('...and no file owned by nobody',
-      sorted(set(_ra_before) | {_ra_copy_file}) == _ra_files())
+      _ra_copy_file is not None
+      and sorted(set(_ra_before) | {_ra_copy_file}) == _ra_files())
 
 # The copy deleted for good, from Settings -> Recently deleted, the way a
-# person does it: the original's file must survive.
-app._delete_note(_ra_copy, None)
+# person does it: the original's file must survive. With no copy made (as
+# under a mutant), there is nothing to delete, and the checks below fail.
+if _ra_copy is not None:
+    app._delete_note(_ra_copy, None)
 app.update()
 app.show_settings_page(); app.update()
 app.toggle_settings_panel('trash'); app.update()

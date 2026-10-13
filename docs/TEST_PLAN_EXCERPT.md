@@ -1,14 +1,12 @@
-# Test plan — an excerpt
+# Test plan - an excerpt
 
 The manual test plan is a spreadsheet,
-[`qa/NoteOrganizer_TestPlan.xlsx`](../qa/NoteOrganizer_TestPlan.xlsx): **533 cases**, each with
-its steps, the expected result and a status. The owner walks it by hand on the packaged `.exe`
-before a release, and a case passes only when she has seen it pass. This excerpt was taken at
-version 0.89.371.
+[`qa/NoteOrganizer_TestPlan.xlsx`](../qa/NoteOrganizer_TestPlan.xlsx): **539 cases**. I walk it
+by hand on the packaged `.exe` before a release - a case passes only when I've seen it pass.
 
 ## How the plan is used
 
-- **Every case says what automation already covers.** A hand check is a choice, not a duty — the
+- **Every case says what automation already covers.** A hand check is a choice, not a duty - the
   *Automation status* column names the script that walks the case end to end, or says plainly
   that nothing can judge it.
 - **What only a person can judge is marked.** Some cases ask whether something reads well or
@@ -18,22 +16,41 @@ version 0.89.371.
 
 ## The plan in numbers
 
-| | |
+#### By priority
+
+| Priority | Cases |
 |---|---:|
-| Cases | 533 |
-| Priority High / Medium / Low | 164 / 262 / 107 |
-| Largest areas | Editor 62 · Notes 60 · Calendar 48 · Tables 48 · Recurrence 40 · Backup & Sharing 37 |
+| High | 166 |
+| Medium | 265 |
+| Low | 108 |
 
-## The template, filled out four times
+#### The six largest areas
 
-Every one of the 533 cases uses the same fields: area, priority, preconditions, numbered steps,
-expected result, status, and what automation covers. Four are shown below, picked because they
-are quick to picture without seeing the app: a safety check, an everyday action, a performance
-check at scale, and a check only a real person can make.
+| Area | Cases |
+|---|---:|
+| Editor | 62 |
+| Notes | 60 |
+| Tables | 48 |
+| Recurrence | 47 |
+| Calendar | 46 |
+| Backup & Sharing | 37 |
 
-### Case 9 — Cancel a delete
+## The test case template, filled out four times
 
-**Area / Sub-feature:** Notes · Delete · **Priority:** High · **Status:** Pass
+Every one of the 539 cases uses the same template: area, priority, preconditions, numbered
+steps, expected result, status, and what automation covers. **The four below are a small sample
+of that full list** - not the only ones, just quick to picture without seeing the app:
+
+- **A safety check** - Case 9, cancelling a delete.
+- **An everyday action** - Case 38, marking a checklist item done.
+- **A performance check at scale** - Case 15, the Trash panel with 100+ deleted notes.
+- **A manual visual check** - Case 43, a checkbox's contrast in Light mode.
+
+### Case 9 - Cancel a delete
+
+- **Area / Sub-feature:** Notes · Delete
+- **Priority:** High
+- **Status:** Pass
 
 **Preconditions:** At least one note exists.
 
@@ -45,12 +62,14 @@ check at scale, and a check only a real person can make.
 
 **Expected Result:** The note is NOT deleted and remains in the list.
 
-**Automation:** Automated (`qa1`) — answers No to the confirmation, then checks both the note
+**Automation:** Automated (`qa1`) - answers No to the confirmation, then checks both the note
 list and the Trash. A mutant that ignored the confirmation was caught by this check.
 
-### Case 38 — Mark a checklist item done
+### Case 38 - Mark a checklist item done
 
-**Area / Sub-feature:** Checklist · Check item · **Priority:** Medium · **Status:** Pass
+- **Area / Sub-feature:** Checklist · Check item
+- **Priority:** Medium
+- **Status:** Pass
 
 **Preconditions:** A note is open with a checklist holding at least one unchecked item.
 
@@ -62,9 +81,11 @@ list and the Trash. A mutant that ignored the confirmation was caught by this ch
 
 **Automation:** Automated (`qa1`).
 
-### Case 15 — Trash panel opens quickly with 100+ deleted notes
+### Case 15 - Trash panel opens quickly with 100+ deleted notes
 
-**Area / Sub-feature:** Notes · Trash scale · **Priority:** High · **Status:** Pass
+- **Area / Sub-feature:** Notes · Trash scale
+- **Priority:** High
+- **Status:** Pass
 
 **Preconditions:** Recently deleted holds 100 or more notes.
 
@@ -78,24 +99,28 @@ Step 2: the next batch appears, added to what's already shown.
 
 **Automation:** Automated (`qa3`).
 
-### Case 625 — NEEDS A REAL READER: can someone with red-green colour blindness tell the buttons apart?
+### Case 43 - 'Group by category' checkbox in Light mode
 
-**Area / Sub-feature:** Settings · Appearance · **Priority:** Low · **Status:** Pass
+- **Area / Sub-feature:** Themes · Checkbox styling
+- **Priority:** High
+- **Status:** Pass
 
-**Preconditions:** Someone who has protanopia or deuteranopia (red-green colour blindness),
-willing to look for two minutes. Fresh Mint is the theme to try first.
+**Preconditions:** The app is open.
 
 **Test Steps:**
 
-1. Open a note in Fresh Mint, then in Warm Cream.
-2. Ask: which button saves, which deletes, and which one is red?
-3. Open Settings → Recently deleted and ask the same about Restore and Delete.
+1. Switch to Light mode.
+2. Look at the 'Group by category' checkbox in the sidebar.
 
-**Expected Result:** A judgement call by a real reader: they find Save and Delete without
-hesitating. Save is the one filled button; Delete is quiet, with red words — for a protanope those
-words are close to ordinary text in Fresh Mint, so the word "Delete" and the bin icon have to carry
-it. In the Trash, the filled Delete should stand out from Restore.
+**Expected Result:** The checkbox background is white with a black check mark, not
+black-on-black.
 
-**Automation:** Not automatable. Simulated, Save and Delete differ by at least ΔE2000 20.7 in every
-theme, but the quiet Delete's red words are only 6.8 from ordinary words for a protanope in Fresh
-Mint. A simulation is not a person: this case asks one.
+**Automation:** Automated (`qa4`) - every tick box on screen, this one included, is judged on
+every theme: its well is not the surface it sits on, and its mark reads on the well. The case was
+written as manual first, when nothing crashed, nothing threw, and a checkbox was just invisible -
+a bug no script noticed until one was written for it.
+
+---
+
+These four are a sample. The other 535 cases follow the same template and live in the full
+spreadsheet, walked by hand before every release.

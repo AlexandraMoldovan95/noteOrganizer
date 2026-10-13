@@ -262,6 +262,7 @@ def _chapter_setup():
     app.ask_yes_no = lambda *a, **k: True
     app.geometry("1150x860+40+40")
     app.update()
+    _SHOOTING["app"] = app
     return tk, NO, app
 
 
@@ -365,26 +366,62 @@ def _let_it_paint(app, seconds=0.6):
         time.sleep(0.03)
 
 
+# The app each chapter built (_chapter_setup), for _photograph to frame.
+_SHOOTING = {}
+
+# Only the app's own window, and only the part of it on the screen's working
+# area. The whole screen was photographed here once -- every other window
+# open on the owner's machine with it. Tk's geometry is in its own pixels,
+# PowerShell's in its own; the script measures their ratio from the two
+# screen widths rather than assuming 1 (see story_look.py), and saves
+# nothing when no part of the window is on the screen. PowerShell declares
+# itself DPI-aware first: unaware, it read the screen's size scaled down
+# while it copied pixels at full size, the ratio came out 1, and the first
+# pictures taken this way still carried a strip of the desktop.
+_SHOT_PS1 = (
+    "param([string]$Out, [int]$X, [int]$Y, [int]$W, [int]$H, [int]$ScreenW,"
+    " [int]$Delay = 1)\n"
+    "Add-Type -TypeDefinition 'using System.Runtime.InteropServices; public"
+    " static class Dpi { [DllImport(\"user32.dll\")] public static extern bool"
+    " SetProcessDPIAware(); }'\n"
+    "[Dpi]::SetProcessDPIAware() | Out-Null\n"
+    "Add-Type -AssemblyName System.Windows.Forms, System.Drawing\n"
+    "Start-Sleep -Seconds $Delay\n"
+    "$scr = [System.Windows.Forms.Screen]::PrimaryScreen\n"
+    "$s = $scr.Bounds.Width / $ScreenW\n"
+    "$box = New-Object System.Drawing.Rectangle([int]($X * $s), [int]($Y * $s),"
+    " [int]($W * $s), [int]($H * $s))\n"
+    "$box.Intersect($scr.WorkingArea)\n"
+    "if ($box.Width -le 0 -or $box.Height -le 0) { exit 3 }\n"
+    "$bmp = New-Object System.Drawing.Bitmap($box.Width, $box.Height)\n"
+    "$g = [System.Drawing.Graphics]::FromImage($bmp)\n"
+    "$g.CopyFromScreen($box.Location, [System.Drawing.Point]::Empty, $box.Size)\n"
+    "$bmp.Save($Out, [System.Drawing.Imaging.ImageFormat]::Png)\n"
+    "$g.Dispose(); $bmp.Dispose()\n")
+
+
 def _photograph(name):
-    """Photograph the screen. Best effort: a missing picture is not a
-    failed story, it is a missing picture."""
+    """Photograph the app's window -- nothing else on the screen. Best
+    effort: a missing picture is not a failed story, it is a missing
+    picture."""
+    app = _SHOOTING.get("app")
+    if app is None:
+        return
     here = os.path.abspath(".")
     out = os.path.join(here, "shots", name + ".png")
     script = os.path.join(here, "shot.ps1")
-    if not os.path.exists(script):
-        io.open(script, "w", encoding="utf-8").write(
-            "param([string]$Out, [int]$Delay = 1)\n"
-            "Add-Type -AssemblyName System.Windows.Forms, System.Drawing\n"
-            "Start-Sleep -Seconds $Delay\n"
-            "$b = [System.Windows.Forms.SystemInformation]::VirtualScreen\n"
-            "$bmp = New-Object System.Drawing.Bitmap($b.Width, $b.Height)\n"
-            "$g = [System.Drawing.Graphics]::FromImage($bmp)\n"
-            "$g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)\n"
-            "$bmp.Save($Out, [System.Drawing.Imaging.ImageFormat]::Png)\n"
-            "$g.Dispose(); $bmp.Dispose()\n")
+    io.open(script, "w", encoding="utf-8").write(_SHOT_PS1)
     try:
+        # In front, so what lies over the window's box is the window.
+        app.lift()
+        app.attributes("-topmost", True)
+        app.update()
+        box = [app.winfo_rootx(), app.winfo_rooty(),
+               app.winfo_width(), app.winfo_height(), app.winfo_screenwidth()]
         subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
-                        "-File", script, "-Out", out, "-Delay", "1"],
+                        "-File", script, "-Out", out,
+                        "-X", str(box[0]), "-Y", str(box[1]), "-W", str(box[2]),
+                        "-H", str(box[3]), "-ScreenW", str(box[4]), "-Delay", "1"],
                        capture_output=True, timeout=60)
     except Exception:
         pass
@@ -662,6 +699,9 @@ def chapter_6():
     said = []
     app = NO.NoteOrganizer()
     app._poll_active_dirty = lambda: None
+    # Built here rather than by _chapter_setup: framed for its photographs
+    # the same way.
+    _SHOOTING["app"] = app
 
     # The startup notice is scheduled a moment after the window appears,
     # and it blocks until answered -- so it is read, photographed and

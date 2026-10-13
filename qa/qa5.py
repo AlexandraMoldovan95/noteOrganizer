@@ -15,6 +15,7 @@ import note_organizer as NO, tkinter as tk
 # qa/_qa_support.py; _qa_click refuses to click into the void.
 from _qa_support import click as _qa_click, pin_popup_visibility as _qa_pin
 from _qa_support import waiting_timers as _qa_waiting
+from _qa_support import out_of_sight as _qa_out_of_sight
 _qa_pin(NO)
 fails=[]
 def check(name, cond):
@@ -1014,9 +1015,8 @@ check(f'the repeat\'s summary reads a start date typed day first as the date '
       _w_summary == 'Every week')
 
 # A series and one of its days, named day first wherever the app names
-# them: the status line on opening each, the question Save asks on a day,
-# Reset this day's question, and what a save leaves out when the start
-# date is cleared.
+# them: the status line on opening each, what a day's Save says, Reset this
+# day's question, and what a save leaves out when the start date is cleared.
 _w_note(date='2026-09-07', recurrence={'freq': 'weekly'},
         created='2026-09-01 08:15:00', updated='2026-09-02 10:45:00')
 _w_said_series = str(app.status_lbl.cget('text'))
@@ -1027,6 +1027,7 @@ _w_msgs = []
 app._themed_dialog = lambda *a, **k: (
     _w_msgs.append((a[0], a[1] if len(a) > 1 else '')), 'occurrence')[1]
 app.save_current_note(); app.update()
+_w_said_save = str(app.status_lbl.cget('text'))
 _w_reset_msgs = []
 _w_real_yes = app.ask_yes_no
 app.ask_yes_no = lambda *a, **k: (
@@ -1043,10 +1044,10 @@ check(f'a series and its day are named day first in the status line '
       f'({_w_said_series!r}; {_w_said_day!r})',
       'Created: 01.09.2026 08:15:00' in _w_said_series
       and 'Last updated: 02.09.2026 10:45:00' in _w_said_series
-      and _w_said_day.startswith('Occurrence 14.09.2026'))
-check(f'...in the question a day\'s Save asks, and in Reset this day\'s '
-      f'({[m for _t, m in _w_msgs][:1]}; {_w_reset_msgs[:1]})',
-      any('Currently open occurrence: 14.09.2026' in m for _t, m in _w_msgs)
+      and _w_said_day == 'Only this day: 14.09.2026')
+check(f'...in what a day\'s Save says, asking nothing, and in Reset this day\'s '
+      f'question ({_w_said_save!r}; {_w_msgs}; {_w_reset_msgs[:1]})',
+      _w_said_save == 'Saved 14.09.2026 only' and _w_msgs == []
       and any(m.startswith('Return 14.09.2026 to the series content?')
               for m in _w_reset_msgs))
 check(f'...and in what a save leaves out when the start date is cleared '
@@ -1432,39 +1433,36 @@ app.open_note_in_tab(app.find_note(1), occurrence_date='2026-09-14'); app.update
 check('fixture: the day on screen shows its own text',
       app.body_text.get('1.0', 'end-1c') == 'DAY TEXT: room 9'
       and app.current_occurrence_date == '2026-09-14')
+# A day shows no repeat to change -- the series has its own view -- and a
+# turn-off reaching its hidden boxes is put back: the series still repeats,
+# and every day keeps its own text. (Turned off on a day, it once ended the
+# series from there; the rescue copy below kept the days, and is now kept for
+# the series view alone.)
 _ro_asked, _ = _ro_off('2026-09-14')
 _ro = app.find_note(1)
-check(f'fixture: only the repeat changed, so nothing was asked ({_ro_asked}), '
-      'and the note no longer repeats, keeping the series\' text',
-      _ro_asked == [] and not _ro['recurrence']['freq']
-      and _ro['body'].rstrip('\n') == 'SERIES TEXT' and _ro['overrides'] == {})
-check("turning the repeat off on a day keeps the note as it was -- its repeat "
-      "and every day's own text -- as the rescue copy "
-      f"({sorted(((_ro.get('_prev') or {}).get('overrides') or {}))})",
-      ((_ro.get('_prev') or {}).get('recurrence') or {}).get('freq') == 'weekly'
-      and sorted(((_ro.get('_prev') or {}).get('overrides') or {}))
-      == ['2026-09-14', '2026-09-21'])
-_ro_back = _ro_restored()
-check(f'...which Restore previous brings back whole: the series, its bold and '
-      f'each day\'s own text ({_ro_back})', _ro_back == _RO_WHOLE)
-# Saved first, then left: the editor shows the note it saved.
+check(f"a repeat turned off behind a day's back is put back: the series still "
+      f"repeats, nothing was asked ({_ro_asked}), and every day keeps its own text",
+      _ro_asked == [] and _ro['recurrence']['freq'] == 'weekly'
+      and _ro['body'].rstrip('\n') == 'SERIES TEXT'
+      and sorted(_ro.get('overrides') or {}) == ['2026-09-14', '2026-09-21']
+      and _ro.get('_prev') is None)
+# Saved first, then left: the editor stays on the day it saved.
 _ro_fixture()
 _ro_asked, _ro_seen = _ro_off('2026-09-14', save_first=True)
-check(f'Save on a day whose repeat was just turned off shows the note it '
-      f'saved, reading as saved, and says where the days went ({_ro_seen})',
-      _ro_seen is not None and _ro_seen[0] == 'SERIES TEXT'
-      and _ro_seen[1] is None and _ro_seen[2]
-      and 'Restore previous' in _ro_seen[3])
+check(f"...and Save there keeps the day on screen, reading as saved, and says "
+      f"the repeat stays the series' ({_ro_seen})",
+      _ro_seen is not None and _ro_seen[0] == 'DAY TEXT: room 9'
+      and _ro_seen[1] == '2026-09-14' and _ro_seen[2]
+      and "stay the whole series'" in _ro_seen[3]
+      and app.find_note(1)['recurrence']['freq'] == 'weekly')
 import json as _json5r
 with open('notes_data.json', encoding='utf-8') as _f5r:
     _ro_disk = [n for n in _json5r.load(_f5r) if n.get('id') == 1]
-check(f'...and leaving it keeps the series\' text and its bold on disk '
+check(f'...and leaving it keeps the series\' text, its bold and its days on disk '
       f'({[(n.get("body"), n.get("formatting")) for n in _ro_disk]})',
       len(_ro_disk) == 1 and _ro_disk[0]['body'].rstrip('\n') == 'SERIES TEXT'
-      and [f.get('style') for f in _ro_disk[0].get('formatting') or []] == ['bold'])
-_ro_back = _ro_restored()
-check(f'...and Restore previous brings the series back whole ({_ro_back})',
-      _ro_back == _RO_WHOLE)
+      and [f.get('style') for f in _ro_disk[0].get('formatting') or []] == ['bold']
+      and sorted(_ro_disk[0].get('overrides') or {}) == ['2026-09-14', '2026-09-21'])
 # Turned off from the series view: the days' own text is kept too.
 _ro_fixture()
 app.open_note_in_tab(app.find_note(1)); app.update()
@@ -1501,8 +1499,8 @@ app._themed_dialog = lambda *a, **k: (_ro_asked.append(a[0]), True)[1]
 app.open_note_in_tab(app.find_note(2)); app.update()
 app._themed_dialog = _ro_real_dlg
 check(f'...while a day differing only in its colour keeps the rescue copy '
-      f'the note had ({_ro_asked})',
-      _ro_asked == [] and not app.find_note(1)['recurrence']['freq']
+      f'the note had, its series still repeating ({_ro_asked})',
+      _ro_asked == [] and app.find_note(1)['recurrence']['freq'] == 'weekly'
       and (app.find_note(1).get('_prev') or {}).get('body') == 'AN OLDER VERSION')
 
 # ---- "THIS OCCURRENCE ONLY" KEEPS WHAT A DAY CANNOT HOLD ----
@@ -1549,8 +1547,9 @@ check(f'...and the tick made in the same visit ({_oc.get("checklist")})',
 # ...but not a date or a repeat changed in that visit: they are the
 # series', and written for one day they moved the whole series -- every
 # day's own text, the one just saved among them, then sat on a day the
-# series no longer had. They stay as they were, the question says so, and
-# the editor shows them again.
+# series no longer had. A day shows neither as a field to change now; what
+# reaches them anyway stays as it was, the status line says so, and the
+# editor shows them again.
 import datetime as _dt5m
 app.new_note(); app.update()
 app.notes = [
@@ -1578,15 +1577,16 @@ check(f'"This occurrence only" with the date changed too keeps the series '
       and '2026-09-14' in _mv_days and '2026-09-21' in _mv_days
       and 'moved to Tuesday' in ((_mv.get('overrides') or {})
                                  .get('2026-09-21', {}).get('body') or ''))
-check(f'...the question says so, and the editor shows the series\' date again '
-      f'(date field {app.date_entry.get()!r}; status {app.status_lbl.cget("text")!r})',
-      len(_mv_said) == 1 and 'keeps them as they are' in _mv_said[0]
-      and app.date_entry.get() == '07.09.2026'
+check(f'...asking nothing, the status line says so, and the editor shows the '
+      f'series\' date again ({_mv_said}; date field {app.date_entry.get()!r}; '
+      f'status {app.status_lbl.cget("text")!r})',
+      _mv_said == [] and app.date_entry.get() == '07.09.2026'
       and "stay the whole series'" in str(app.status_lbl.cget('text')))
-# The repeat turned off on a day, and a date typed the app cannot read:
-# the save fills the editor from the note it left (above), and that wrote
-# the stored date over the typed one -- leaving then asked nothing, and
-# the typed date was gone.
+# The repeat turned off on a day, and a date typed the app cannot read: both
+# are the series', and a day puts both back on its way out, asking nothing.
+# (When a day could end the series, the save filled the editor from the note
+# it left and wrote the stored date over the typed one; then leaving asked,
+# and Go back kept the typed date.)
 app.new_note(); app.update()
 app.notes = [
     NO.normalize_note({'id': 1, 'title': 'Weekly', 'body': 'series',
@@ -1602,15 +1602,12 @@ _lr_asked = []
 app._themed_dialog = lambda *a, **k: (_lr_asked.append(a[0]), False)[1]
 _lr_left = app.open_note_in_tab(app.find_note(2)); app.update()
 app._themed_dialog = _mv_real_dlg
-check(f'turning the repeat off on a day with a date the app cannot read '
-      f'still asks before leaving, and Go back keeps the typed date (asked '
-      f'{_lr_asked}; left: {_lr_left}; date field {app.date_entry.get()!r})',
-      "Part of this note isn't saved" in _lr_asked and _lr_left is False
-      and app.date_entry.get() == '31/09/2026'
-      and app.selected_note_id == 1)
-# "Continue without it", as the person would answer at last: the editor
-# agrees with the note again, and nothing below is asked about it.
-app._put_back_stored_date_and_repeat()
+check(f'a repeat turned off and a date the app cannot read, on a day, are put '
+      f'back on the way out, asking nothing (asked {_lr_asked}; left: {_lr_left}; '
+      f'series {app.find_note(1)["date"]}, {app.find_note(1)["recurrence"]["freq"]})',
+      _lr_asked == [] and _lr_left is True and app.selected_note_id == 2
+      and app.find_note(1)['date'] == '2026-09-07'
+      and app.find_note(1)['recurrence']['freq'] == 'weekly')
 app._cancel_pending_autosave()
 
 
@@ -1676,12 +1673,12 @@ try:
     app.open_note_in_tab(app.find_note(2)); app.update()
 finally:
     app._themed_dialog = _mv_real_dlg
-check(f'"This occurrence only" with the repeat off and a date the app cannot '
-      f'read keeps the series, asks only the one question -- no warning that '
-      f'something was not saved -- and shows the series\' date and repeat '
-      f'again (asked {[q[0] for q in _lo_asked]}; saved {_lo_saved}; shown '
+check(f'a day saved with the repeat off and a date the app cannot read keeps '
+      f'the series, asks nothing -- no warning that something was not saved '
+      f'-- and shows the series\' date and repeat again (asked '
+      f'{[q[0] for q in _lo_asked]}; saved {_lo_saved}; shown '
       f'{_lo_shown}; status {_lo_said!r})',
-      len(_lo_asked) == 1 and 'keeps them as they are' in _lo_asked[0][1]
+      _lo_asked == []
       and _lo_saved == ('2026-09-07', 'weekly', True, True)
       and _lo_shown == ('07.09.2026', NO.FREQ_LABELS['weekly'])
       and "stay the whole series'" in _lo_said and 'except' not in _lo_said)
@@ -1697,17 +1694,17 @@ def _lo_bad_date_only():
 
 _lo_asked = _lo_day(_lo_bad_date_only)
 check(f'...also when the only change to the schedule is a date the app cannot '
-      f'read: the question says the date stays the series\', and the field '
+      f'read: the date stays the series\', asking nothing, and the field '
       f'shows it again (asked {_lo_asked}; field {app.date_entry.get()!r})',
-      len(_lo_asked) == 1 and 'keeps them as they are' in _lo_asked[0][1]
+      _lo_asked == []
       and app.date_entry.get() == '07.09.2026'
       and _lo_series() == ('2026-09-07', 'weekly', True, True))
 
-# The reload after a day turned its repeat off, with a date it had to leave
-# out: loading the note wrote the repeat's fields, whose traces asked for an
-# autosave; the typed date carried back kept the editor unsaved, so half a
-# second later that autosave saved again and its status line dropped the
-# words saying where the days went.
+# A day's save that puts the series' date and repeat back: writing the
+# repeat's fields again asks for an autosave through their traces, and one
+# left waiting saved again half a second later, over the save's own words.
+# (It was found when a day could end its series: the reload after it dropped
+# the words saying where the days went.)
 app.new_note(); app.update()
 app.notes = [
     NO.normalize_note({'id': 1, 'title': 'Standup', 'body': 'series',
@@ -1717,20 +1714,23 @@ app.notes = [
 app.save_notes()
 app.open_note_in_tab(app.find_note(1), occurrence_date='2026-09-14'); app.update()
 _lo_repeat_off_and_bad_date()
-app._themed_dialog = lambda *a, **k: True
+# Recorded and answered safely through the pause as well: no question is the
+# promise, and a broken save asks from the timer too.
+_lo_q = []
+app._themed_dialog = lambda title, *a, **k: (_lo_q.append(title), None)[1]
 try:
     app.save_current_note()
+    _lo_said = str(app.status_lbl.cget('text'))
+    _lo_waiting = _qa_waiting(app, '_autosave_now')
+    app.update(); import time as _t5lo; _t5lo.sleep(0.7); app.update()
 finally:
     app._themed_dialog = _mv_real_dlg
-_lo_said = str(app.status_lbl.cget('text'))
-_lo_waiting = _qa_waiting(app, '_autosave_now')
-app.update(); import time as _t5lo; _t5lo.sleep(0.7); app.update()
-check(f'a day that turned its repeat off with a date left out keeps both '
-      f'notices in the status line: no autosave is left to say it again '
+check(f'a day saved with its repeat off and a date the app cannot read keeps '
+      f'its words in the status line: no autosave is left to say otherwise '
       f'(waiting {_lo_waiting}; then {_lo_said!r}; after a pause '
-      f'{app.status_lbl.cget("text")!r})',
-      not _lo_waiting and 'Restore previous' in _lo_said
-      and 'except the date' in _lo_said
+      f'{app.status_lbl.cget("text")!r}; asked {_lo_q})',
+      not _lo_waiting and "stay the whole series'" in _lo_said
+      and 'except' not in _lo_said and _lo_q == []
       and str(app.status_lbl.cget('text')) == _lo_said)
 app._put_back_stored_date_and_repeat()
 app._cancel_pending_autosave()
@@ -2064,16 +2064,23 @@ check(f'...and so does "Reset this day" (Every box {_rn_box!r}; left out '
       f'{_rn_left})',
       _rn_box == '3x' and bool(_rn_left)
       and '2026-09-14' not in (app.find_note(1).get('overrides') or {}))
-# Not only what a save leaves out: a day of a series never autosaves, and a
-# readable "Every 3" typed there went with Restore previous's reload -- or
-# stayed, when an unreadable box happened to sit beside it. Reset this day
-# discards it, as its question says the day's own edits go: kept, a start
-# date typed there moved the whole series on leaving, without a question.
+# Not only what a save leaves out: a readable "Every 3" reaching a day's
+# hidden repeat is the series', never the day's, and neither route keeps it.
+# Reset this day discards it, as its question says the day's own edits go;
+# Restore previous saves the day first, which puts the series' repeat back.
+# (When a day did not save itself, the 3 stayed through Restore previous to
+# be saved -- and a start date typed there moved the whole series on
+# leaving, without a question.)
 _rn_kept_ok = []
+# Each route's own question is answered Yes; any other is recorded and
+# answered safely -- the day's save asks none.
+_rn_kept_q = []
+_rn_kept_dialog = app._themed_dialog
 for _rn_route in ('reset', 'restore'):
     _rr_day()
     app.rec_interval_var.set('3'); app.update()
     app.ask_yes_no = lambda *a, **k: True
+    app._themed_dialog = lambda title, *a, **k: (_rn_kept_q.append(title), None)[1]
     try:
         if _rn_route == 'reset':
             app._reset_occurrence_override(app.find_note(1), '2026-09-14')
@@ -2082,14 +2089,17 @@ for _rn_route in ('reset', 'restore'):
         app.update()
     finally:
         app.ask_yes_no = _ro_yes
+        app._themed_dialog = _rn_kept_dialog
     _rn_kept_ok.append((_rn_route, app.rec_interval_var.get(),
                         app._date_and_repeat_to_store()[1].get('interval')))
     app._put_back_stored_date_and_repeat()
     app._cancel_pending_autosave()
-check(f'...and a readable change typed on a day, not saved yet, stays on '
-      f'screen through Restore previous, to be saved, while Reset this day '
-      f'discards it ({_rn_kept_ok})',
-      _rn_kept_ok == [('reset', '1', 1), ('restore', '3', 3)])
+check(f'...and a readable repeat change reaching a day survives neither Reset '
+      f'this day nor Restore previous: the series keeps its own ({_rn_kept_ok}; '
+      f'asked {_rn_kept_q})',
+      _rn_kept_q == []
+      and _rn_kept_ok == [('reset', '1', 1), ('restore', '1', 1)]
+      and app.find_note(1)['recurrence']['interval'] == 1)
 _rr_day()
 app.date_entry.delete(0, 'end')
 app.date_entry.insert(0, '2026-09-23')
@@ -2294,30 +2304,37 @@ _rn_said_after = str(app.status_lbl.cget('text'))
 check(f'putting the stored date back puts the status line right at once '
       f'({_rn_said_before!r} -> {_rn_said_after!r})',
       'except the date' in _rn_said_before and 'except' not in _rn_said_after)
-# ...and only while that line is still on screen. A day saved "This
-# occurrence only" puts the series' date back too, and the put-right wrote
-# an EARLIER save's words -- its time, the one that left the date out --
-# over the occurrence save's own.
+# ...and a day of a series never leaves its date out at all: the date is the
+# series', a day puts it back, and its save says so in its own words. (Saved
+# to the series from a day, it once left the date out, and a put-right wrote
+# that earlier save's words over the day's own; a day no longer saves to the
+# series.)
 _rr_day()
 app.date_entry.delete(0, 'end')
 app.date_entry.insert(0, '31/09/2026')
-_rn_warn_real = app.show_warning
-app.show_warning = lambda *a, **k: True
-app.ask_occurrence_scope = lambda *a, **k: 'series'
+# Every question and warning recorded and answered safely: none is the
+# promise (a warning is a question with one answer, asked the same way).
+_rn_dialog_real = app._themed_dialog
+_rn_warned = []
+app._themed_dialog = lambda title, *a, **k: (_rn_warned.append(title), None)[1]
 try:
     app.save_current_note(); app.update()
     _rn_first = str(app.status_lbl.cget('text'))
+    _rn_first_field = app._typed_date()
     app.body_text.insert('end', ' more')
-    app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
     app.save_current_note(); app.update()
     _rn_second = str(app.status_lbl.cget('text'))
 finally:
-    app.show_warning = _rn_warn_real
-    app.ask_occurrence_scope = _oc_real_scope
+    app._themed_dialog = _rn_dialog_real
 app._cancel_pending_autosave()
-check(f'a day saved on its own keeps its own words in the status line '
-      f'({_rn_first!r} -> {_rn_second!r})',
-      'except' in _rn_first and '14.09.2026 only' in _rn_second)
+check(f'a date the app cannot read, typed on a day, is put back rather than left '
+      f'out, and each save of the day says so in its own words, asking nothing '
+      f'({_rn_first!r}; {_rn_first_field!r} -> {_rn_second!r}; {_rn_warned})',
+      'except' not in _rn_first and '14.09.2026 only' in _rn_first
+      and "stay the whole series'" in _rn_first
+      and _rn_first_field == '07.09.2026' and _rn_warned == []
+      and _rn_second == 'Saved 14.09.2026 only'
+      and app.find_note(1)['date'] == '2026-09-07')
 
 # Every key in the date field redraws the repeat's summary beside the
 # field's own autosave, and each key read the whole body for its word count
@@ -3078,40 +3095,42 @@ _rn_op = (_rn_asked, app.current_occurrence_date,
 check(f'the Undo of a day clicked with that very day open asks nothing and '
       f'shows the day\'s own text ({_rn_op})',
       _rn_ok and _rn_op == ([], '2026-09-14', 'DAY 14', 'DAY 14'))
-# Cancel on the question that save asks -- the day typed into -- means stay,
-# and the Undo stays on offer: the day's own text is kept nowhere else.
+# Going back on the question the save asks on the way -- a date typed into
+# the series that it cannot store -- means stay, and the Undo stays on offer:
+# the day's own text is kept nowhere else. (A day typed into once asked a
+# question of its own here, whose Cancel did the same; a day now saves to
+# itself, asking nothing.)
+_rn_real_dialog = app._themed_dialog
 _rn_day_fresh()
 _rn_ok = _rn_pick(NO.FREQ_LABELS[''])
 _rn_day_delete()
 app.save_current_note(); app.update()
 _rn_ok = _rn_pick(NO.FREQ_LABELS['weekly']) and _rn_ok
 app.save_current_note(); app.update()
-app.open_note_in_tab(app.find_note(1), occurrence_date='2026-09-14')
-app.update()
-app.body_text.delete('1.0', 'end')
-app.body_text.insert('1.0', 'TYPED')
+app.date_entry.delete(0, 'end')
+app.date_entry.insert(0, '31/09/2026')
 app._cancel_pending_autosave()
-app.ask_occurrence_scope = lambda *a, **k: None
+app._themed_dialog = lambda *a, **k: False          # "Go back and fix it"
 try:
     app._run_toast_action(); app.update()
 finally:
-    app.ask_occurrence_scope = _oc_real_scope
+    app._themed_dialog = _rn_real_dialog
 app._cancel_pending_autosave()
-_rn_stay = (app._toast_action is not None, app.body_text.get('1.0', 'end-1c'),
+_rn_stay = (app._toast_action is not None, app._typed_date(),
             sorted(app.find_note(1).get('overrides') or {}))
-app.ask_occurrence_scope = lambda *a, **k: 'series'
+app._themed_dialog = lambda *a, **k: True           # "Continue without it"
 try:
     app._run_toast_action(); app.update()
 finally:
-    app.ask_occurrence_scope = _oc_real_scope
+    app._themed_dialog = _rn_real_dialog
 app._cancel_pending_autosave()
-_rn_then = (app.find_note(1)['body'],
+_rn_then = (app.find_note(1)['date'],
             ((app.find_note(1).get('overrides') or {}).get('2026-09-14')
              or {}).get('body'))
-check(f'Cancel on the question a day\'s Undo asks first keeps the Undo on '
+check(f'going back on the question a day\'s Undo asks first keeps the Undo on '
       f'offer ({_rn_stay}; then {_rn_then})',
-      _rn_ok and _rn_stay == (True, 'TYPED', [])
-      and _rn_then == ('TYPED', 'DAY 14'))
+      _rn_ok and _rn_stay == (True, '31/09/2026', [])
+      and _rn_then == ('2026-09-07', 'DAY 14'))
 # ...and the category move's Undo the same: where each note came from is kept
 # nowhere else.
 NO.CATEGORY_COLORS['TempMove5'] = '#336699'
@@ -3121,27 +3140,25 @@ app.save_notes()
 # Brought along, as the move itself does: left showing the old category, the
 # editor's next save would put it back.
 app._editor_follows_external_change({1})
-app.open_note_in_tab(app.find_note(1), occurrence_date='2026-09-14')
-app.update()
-app.body_text.delete('1.0', 'end')
-app.body_text.insert('1.0', 'TYPED')
+app.date_entry.delete(0, 'end')
+app.date_entry.insert(0, '31/09/2026')
 app._cancel_pending_autosave()
 _rn_mark = [(1, 'General', '2026-09-01 08:00:00', app.find_note(1).get('uid'))]
-app.ask_occurrence_scope = lambda *a, **k: None
+app._themed_dialog = lambda *a, **k: False          # "Go back and fix it"
 try:
     app._undo_bulk_category(_rn_mark, 'TempMove5'); app.update()
 finally:
-    app.ask_occurrence_scope = _oc_real_scope
+    app._themed_dialog = _rn_real_dialog
 _rn_cstay = (app._toast_action is not None, app.find_note(1)['category'])
-app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
+app._themed_dialog = lambda *a, **k: True           # "Continue without it"
 try:
     app._run_toast_action(); app.update()
 finally:
-    app.ask_occurrence_scope = _oc_real_scope
+    app._themed_dialog = _rn_real_dialog
 app._cancel_pending_autosave()
 _rn_cthen = app.find_note(1)['category']
 NO.CATEGORY_COLORS.pop('TempMove5', None)
-check(f'Cancel on the question a category move\'s Undo asks first keeps the '
+check(f'going back on the question a category move\'s Undo asks first keeps the '
       f'Undo on offer ({_rn_cstay}; then {_rn_cthen})',
       _rn_cstay == (True, 'TempMove5') and _rn_cthen == 'General')
 # The calendar is asked whether the series has the day whatever the branch:
@@ -3396,10 +3413,20 @@ check(f'the series line wraps within its width rather than cutting its words '
       and _os_line.winfo_reqwidth() <= _os_line.winfo_width() + 1)
 
 # While a turn-off of the repeat waits, every day goes with it: no way in.
+# Asked of the series as seeded -- Tuesdays, with Monday edits. The long rule
+# above takes the Mondays back onto the schedule, and with no day off it
+# there was no way in to withhold: the check passed with its guard taken
+# out (OS08 survived the full catalogue). Placement is asked, not mapping,
+# which comes later under Xvfb.
+_os_seed()
+_os_off = NO.off_schedule_days(app.find_note(1))
+check(f'fixture: the series has days off its schedule, and their way in shows '
+      f'({_os_off})',
+      len(_os_off) == 2 and app._is_placed(_os_btn))
 _os_ok = _rn_pick(NO.FREQ_LABELS[''])
 app._update_occurrence_banner(); app.update()
 check('while a turn-off of the repeat waits, the way in is not offered',
-      _os_ok and not _os_btn.winfo_ismapped())
+      _os_ok and not app._is_placed(_os_btn))
 _rn_pick(NO.FREQ_LABELS['weekly'])
 app._cancel_pending_autosave()
 
@@ -3433,6 +3460,621 @@ app.notebook.select(app.TAB_NOTES); app.update()
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
 app.trash = []; NO.save_trash(app.trash)
+
+# ---- ONE DAY OF A SERIES, OPENED ON ITS OWN ----
+# Field report (2026-10-12): how to edit just one day of a series could not be
+# found -- a day opened under the series' own date and repeat as fields to
+# change -- and a category picked for one day seemed to do nothing: a day held
+# every edit for a question asked only on leaving, and nothing said it waited.
+# The owner's call: a day opened from the calendar is edited on its own and
+# saves to itself like any note; the whole series is one click away. Every
+# question is recorded and answered safely here: the promise is that none is
+# asked, and a broken app must show up as a red check, not a wait.
+_dm_asked = []
+_dm_real_dialog = app._themed_dialog
+_dm_real_scope = app.ask_occurrence_scope
+_dm_real_yes = app.ask_yes_no
+
+
+def _dm_record():
+    app._themed_dialog = lambda title, *a, **k: (_dm_asked.append(title), None)[1]
+    app.ask_occurrence_scope = lambda *a, **k: (_dm_asked.append('scope'), None)[1]
+    app.ask_yes_no = lambda title, *a, **k: (_dm_asked.append(title), False)[1]
+
+
+_dm_record()
+
+
+def _dm_seed(body='series text', formatting=None):
+    app.new_note(); app.update()
+    app.notes = [
+        NO.normalize_note({
+            'id': 1, 'title': 'Stand-up', 'body': body, 'category': 'General',
+            'date': '2026-10-05', 'recurrence': {'freq': 'weekly', 'weekdays': [0]},
+            'formatting': ([{'start': 0, 'end': 6, 'style': 'bold'}]
+                           if formatting is None else formatting),
+            'checklist': [{'text': 'agenda', 'done': False}]}),
+        NO.normalize_note({'id': 2, 'title': 'Dentist', 'body': '10:30',
+                           'category': 'Personal', 'date': '2026-10-12'})]
+    app.save_notes()
+    app.refresh_note_list()
+    app.notebook.select(app.TAB_CALENDAR)
+    app.cal_year, app.cal_month = 2026, 10
+    app.render_calendar(); app.update()
+    app.open_day_popup('2026-10-12'); app.update()
+
+
+def _dm_button(text):
+    return next((w for w in _rn_walk(app.day_panel)
+                 if isinstance(w, tk.Button) and text in str(w.cget('text'))), None)
+
+
+def _dm_open_day(**seed):
+    """Open 12.10.2026 of the series the way a person does: its note in the
+    day's panel, then the panel's "Edit this day"."""
+    _dm_seed(**seed)
+    app.show_day_note(app.find_note(1), '2026-10-12'); app.update()
+    door = _dm_button('Edit this day')
+    if door is not None:
+        door.invoke(); app.update()
+    else:
+        # A panel without its door is its own red check (the two doors);
+        # the day is opened as the door would open it, so every check after
+        # it still runs to the footer.
+        app._open_note_from_calendar(app.find_note(1), '2026-10-12'); app.update()
+    app._cancel_pending_autosave()
+    del _dm_asked[:]
+
+
+def _dm_day():
+    return (app.find_note(1).get('overrides') or {}).get('2026-10-12')
+
+
+def _dm_pick_category(name):
+    app._open_category_dropdown(); app.update()
+    rows = ([w for w in _rn_walk(app._mini_popup) if isinstance(w, tk.Label)
+             and str(w.cget('text')).strip() == name]
+            if app._mini_popup is not None else [])
+    if rows:
+        _qa_click(rows[0]); app.update()
+    return bool(rows)
+
+
+_dm_seed()
+app.show_day_note(app.find_note(1), '2026-10-12'); app.update()
+_dm_doors = (_dm_button('Edit this day'), _dm_button('Edit the whole series'),
+             _dm_button('Open in editor'))
+check('a repeating note in a calendar day offers two doors: this day, or the whole series',
+      _dm_doors[0] is not None and _dm_doors[1] is not None and _dm_doors[2] is None)
+app.show_day_note(app.find_note(2), '2026-10-12'); app.update()
+check('...and a note that does not repeat keeps its one "Open in editor"',
+      _dm_button('Open in editor') is not None and _dm_button('Edit this day') is None)
+
+_dm_open_day()
+_dm_back = getattr(app, '_pending_calendar_return', None) or {}
+check('"Edit this day" opens that day on its own, with the way back to the calendar armed',
+      app.selected_note_id == 1 and app.current_occurrence_date == '2026-10-12'
+      and app._day_mode() and _dm_back.get('date_str') == '2026-10-12')
+_dm_strip = str(app.day_strip_lbl.cget('text'))
+check(f'a day says which day it is, and that what changes stays on it ({_dm_strip!r})',
+      bool(app.day_strip.winfo_ismapped())
+      and 'Only this day: Monday, 12 October 2026' in _dm_strip
+      and 'stays on this day' in _dm_strip
+      and str(app.status_lbl.cget('text')) == 'Only this day: 12.10.2026')
+check("...shows its own date as words, not the series' start as a field to change",
+      not app._is_placed(app.date_entry)
+      and str(app.day_date_lbl.cget('text')) == '12.10.2026'
+      and bool(app.day_date_lbl.winfo_ismapped()))
+check(f'...and its repeat as a line, not as boxes to change '
+      f'({app.day_repeat_lbl.cget("text")!r})',
+      not app._is_placed(app.rec_freq_menu) and not app._is_placed(app.rec_details)
+      and str(app.day_repeat_lbl.cget('text')).startswith(
+          'Every week on Mon, starting 05.10.2026'))
+check("...with \"This day:\" beside its category, and the checklist and the files "
+      "marked as the whole series'",
+      bool(app.day_cat_lbl.winfo_ismapped())
+      and str(app.checklist_btn.cget('text')).endswith('· whole series')
+      and str(app.attach_label.cget('text')) == '📎 Attachments · whole series')
+
+# The field report's own route: a category from the editor's corner.
+_dm_picked = _dm_pick_category('Work')
+_dm_waits = bool(_qa_waiting(app, '_autosave_now'))
+app._autosave_now(); app.update()
+check(f'a category picked for one day is saved to that day, asking nothing '
+      f'({_dm_picked}; waits {_dm_waits}; day {_dm_day()}; asked {_dm_asked})',
+      _dm_picked and _dm_waits
+      and app.find_note(1)['category'] == 'General'
+      and (_dm_day() or {}).get('category') == 'Work' and _dm_asked == [])
+check(f'...and the status line says so ({app.status_lbl.cget("text")!r})',
+      str(app.status_lbl.cget('text')) == 'Auto-saved 12.10.2026 only')
+check("the calendar draws that day in its own category, every other day in the series'",
+      _os_cv._day_row_parts(app, app.find_note(1), '2026-10-12')[2]
+      == NO.CATEGORY_COLORS['Work']
+      and _os_cv._day_row_parts(app, app.find_note(1), '2026-10-19')[2]
+      == NO.CATEGORY_COLORS['General'])
+
+_dm_pick_category('General')
+app._autosave_now(); app.update()
+check(f'a day put back to what the series says keeps no copy of its own, and '
+      f'follows the series again ({app.find_note(1).get("overrides")}; '
+      f'{app.status_lbl.cget("text")!r})',
+      '2026-10-12' not in (app.find_note(1).get('overrides') or {})
+      and 'follows the series again' in str(app.status_lbl.cget('text')))
+app.title_entry.insert('end', 'x'); app._autosave_now(); app.update()
+_dm_typed = dict(_dm_day() or {})
+app.title_entry.delete(len(app.title_entry.get()) - 1, 'end')
+app._autosave_now(); app.update()
+check(f'...nor does a letter typed and taken back ({_dm_typed.get("title")!r}; {_dm_day()})',
+      _dm_typed.get('title') == 'Stand-upx' and _dm_day() is None)
+
+app.body_text.insert('end', ' (room 2)')
+app.open_note_in_tab(app.find_note(2)); app.update()
+check(f'leaving a day saves what was typed to that day, asking nothing '
+      f'({_dm_day()}; {_dm_asked})',
+      (_dm_day() or {}).get('body') == 'series text (room 2)'
+      and app.find_note(1)['body'] == 'series text' and _dm_asked == [])
+
+# Ctrl+Z still reaches what was typed after the day saved itself: the save
+# does not reload the editor, so the undo history it holds stays.
+_dm_open_day()
+app.body_text.insert('end-1c', ' undo-me')
+app.body_text.edit_separator()
+app._autosave_now(); app.update()
+_dm_typed_body = (_dm_day() or {}).get('body') or ''
+app._body_undo_redo('undo'); app.update()
+app._autosave_now(); app.update()
+check(f'Ctrl+Z after a day saved itself takes the typing back, and the day '
+      f'follows the series again ({_dm_typed_body!r}; {_dm_day()})',
+      _dm_typed_body.endswith('undo-me')
+      and 'undo-me' not in app.body_text.get('1.0', 'end-1c')
+      and _dm_day() is None and _dm_asked == [])
+
+# A tick is the series', and a word made bold beside it is not: a day keeps no
+# formatting of its own, and its save no longer writes the editor's to every
+# day (it did, on a day with no text of its own, whenever a tick came along).
+_dm_open_day()
+app.body_text.tag_add('bold', '1.7', '1.11')
+for _dm_item in app._working_checklist[:1]:     # the series' one item
+    _dm_item['done'] = True
+app._autosave_now(); app.update()
+_dm_s = app.find_note(1)
+check(f'a tick on a day goes to the series, and a word made bold beside it does not '
+      f'({_dm_s.get("checklist")}; {_dm_s.get("formatting")}; {_dm_day()})',
+      [i['done'] for i in _dm_s.get('checklist') or []] == [True]
+      and _dm_s.get('formatting') == [{'start': 0, 'end': 6, 'style': 'bold'}]
+      and _dm_day() is None and _dm_asked == [])
+
+# The series' date and repeat are out of sight on a day, still in their
+# fields: whatever reaches them is put back, and never moves the series.
+_dm_open_day()
+app._show_date_in_field('2026-10-19')
+app._autosave_now(); app.update()
+check(f"a date reaching a day's hidden field never moves the series, and the field "
+      f"shows the series' start again ({app.find_note(1)['date']}; {app._typed_date()!r})",
+      app.find_note(1)['date'] == '2026-10-05' and app._typed_date() == '05.10.2026'
+      and _dm_asked == [])
+check("...and the repeat's boxes stay out of sight once it is put back",
+      not app._is_placed(app.rec_details) and not app._is_placed(app.rec_freq_menu)
+      and app._day_mode())
+
+# The strip's way to the whole series: the day first, then the series.
+_dm_open_day()
+app.body_text.insert('end', ' (day)')
+app.day_series_btn.invoke(); app.update()
+app._cancel_pending_autosave()
+_dm_back = getattr(app, '_pending_calendar_return', None) or {}
+check(f'"Edit the whole series" saves the day to the day, then opens the series, '
+      f'asking nothing ({_dm_day()}; {_dm_asked})',
+      (_dm_day() or {}).get('body') == 'series text (day)'
+      and app.selected_note_id == 1 and app.current_occurrence_date is None
+      and _dm_asked == [])
+_dm_row = app.date_entry.master.pack_slaves()
+check("...the series with its date and repeat to change, in their places, and "
+      "nothing of the day's marks",
+      app._is_placed(app.date_entry) and app._is_placed(app.rec_freq_menu)
+      and app._is_placed(app.rec_details) and not app._is_placed(app.day_strip)
+      and not app._is_placed(app.day_cat_lbl) and not app._is_placed(app.day_date_lbl)
+      and not app._is_placed(app.day_repeat_lbl)
+      and app.date_entry in _dm_row and app._color_label in _dm_row
+      and _dm_row.index(app.date_entry) < _dm_row.index(app._color_label)
+      and not str(app.checklist_btn.cget('text')).endswith('· whole series')
+      and str(app.attach_label.cget('text')) == '📎 Attachments'
+      and _rn_banner().startswith('🔁 This note repeats'))
+check(f'...and the way back to the calendar still leads to that day ({_dm_back})',
+      _dm_back.get('date_str') == '2026-10-12')
+
+# A day kept in the editor's state comes back as a day.
+_dm_open_day()
+_dm_state = app.capture_editor_state()
+app.new_note(); app.update()
+_dm_off = (app._day_mode(), app._is_placed(app.day_strip), app._is_placed(app.date_entry))
+app.restore_editor_state(_dm_state); app.update()
+check(f'a day restored from the editor\'s state comes back as a day, and a new note '
+      f'is no day ({_dm_off})',
+      _dm_off == (False, False, True)
+      and app._day_mode() and app._is_placed(app.day_strip)
+      and not app._is_placed(app.date_entry))
+
+# Delete keeps its question: it destroys, and how much is the person's to say.
+_dm_open_day()
+_dm_q = []
+app.ask_occurrence_scope = _dm_real_scope
+app._themed_dialog = lambda title, message, *a, **k: (
+    _dm_q.append((title, message, [b for b, _v in k.get('buttons', [])])), None)[1]
+try:
+    app._delete_note(app.find_note(1), '2026-10-12'); app.update()
+finally:
+    _dm_record()
+check(f"Delete on a day still asks, in the day's words ({_dm_q})",
+      bool(_dm_q) and 'The day: 12.10.2026' in _dm_q[0][1]
+      and _dm_q[0][2] == ['Cancel', 'The whole series', 'Only this day']
+      and app.find_note(1) is not None)
+
+# A day whose text ends in a table is saved, and then reads as saved.
+_dm_open_day(body='intro\n| a | b |\n| --- | --- |\n| 1 | 2 |', formatting=[])
+app.title_entry.insert('end', ' (moved)')
+app._autosave_now(); app.update()
+check(f'a day ending in a table is saved to the day, and then reads as saved '
+      f'({(_dm_day() or {}).get("title")!r})',
+      (_dm_day() or {}).get('title') == 'Stand-up (moved)'
+      and app.editor_state_matches_saved(app.capture_editor_state()))
+
+# Long-lived widgets: every colour they have follows the theme.
+_dm_open_day()
+app.set_theme('light'); app.update()
+_dm_c = app.colors
+_dm_got = tuple(str(v).lower() for v in (
+    app.day_strip.cget('bg'), app.day_strip.winfo_children()[0].cget('bg'),
+    app.day_strip_lbl.cget('bg'), app.day_strip_lbl.cget('fg'),
+    app.day_series_btn.cget('bg'), app.day_series_btn.cget('fg'),
+    app.day_series_btn.cget('activebackground'),
+    app.day_series_btn.cget('highlightbackground'),
+    app.day_cat_lbl.cget('fg'), app.day_date_lbl.cget('fg'),
+    app.day_repeat_lbl.cget('fg')))
+_dm_want = tuple(str(v).lower() for v in (
+    _dm_c['card'], _dm_c['accent'], _dm_c['card'], _dm_c['text'], _dm_c['accent'],
+    app._on_fill('accent'), _dm_c['accent_hover'], _dm_c['card'],
+    _dm_c['accent_text'], _dm_c['text'], _dm_c['text']))
+check(f"every colour of the day's strip and words follows a new theme ({_dm_got})",
+      _dm_got == _dm_want)
+app.set_theme('dark'); app.update()
+
+# The smallest window: the window scrolls the editor sideways as it always
+# has; the day's own lines wrap within the room they are given, and a day
+# asks the editor for no more width than its series does.
+_dm_geo = app.geometry()
+app.geometry('640x600'); app.update(); app.update()
+_dm_req_day = app.editor.winfo_reqwidth()
+_dm_fits = (app.day_strip_lbl.winfo_reqwidth(), app.day_strip_lbl.winfo_width(),
+            app.day_repeat_lbl.winfo_reqwidth(), app.day_repeat_lbl.winfo_width())
+check(f"at the smallest window the day's strip and repeat line wrap within their "
+      f"room ({_dm_fits})",
+      _dm_fits[0] <= _dm_fits[1] + 1 and _dm_fits[2] <= _dm_fits[3] + 1)
+app.open_note_in_tab(app.find_note(1)); app.update()
+check(f'...and a day asks the editor for no more width than its series '
+      f'({_dm_req_day} vs {app.editor.winfo_reqwidth()})',
+      _dm_req_day <= app.editor.winfo_reqwidth())
+app.geometry(_dm_geo); app.update()
+app._cancel_pending_autosave()
+
+# ---- ONE DAY OF A SERIES, HELD ON ANOTHER DATE ----
+# Field request (2026-10-13): one day of a series held on another date -- the
+# weekly meeting moved to Tuesday one week -- while it stays a day of the
+# series. "📅 Move this day…" beside the day's date, an Undo, and a Reset that
+# puts it back and asks about its text. One field in the file: `moved`.
+import json as _json5mv
+
+
+def _mv_file_note():
+    with open('notes_data.json', encoding='utf-8') as _fmv:
+        _data = _json5mv.load(_fmv)
+    _rows = _data.get('notes', _data) if isinstance(_data, dict) else _data
+    return next((n for n in _rows if n.get('id') == 1), {})
+
+
+def _mv_on(day):
+    return [n['id'] for n in app.notes_on_date(day)]
+
+
+_dm_open_day()
+check('a day offers "Move this day…" beside its date',
+      bool(app.day_move_btn.winfo_ismapped()) and _dm_asked == [])
+app.body_text.insert('end-1c', ' (room 2)')          # typed, not saved yet
+app.day_move_btn.invoke(); app.update()
+_mv_pick = (next((w for w in _rn_walk(app._mini_popup) if isinstance(w, tk.Button)
+                  and str(w.cget('text')) == '13'), None)
+            if app._mini_popup is not None else None)
+if _mv_pick is not None:
+    _mv_pick.invoke(); app.update()
+_mv_s = app.find_note(1)
+check(f"a date picked there holds the day on it: drawn there, not on its own date "
+      f"({_mv_s.get('moved')}; 12th {_mv_on('2026-10-12')}; 13th {_mv_on('2026-10-13')})",
+      _mv_pick is not None and _mv_s.get('moved') == {'2026-10-12': '2026-10-13'}
+      and _mv_on('2026-10-12') == [2] and _mv_on('2026-10-13') == [1])
+check("...what was typed on the day before goes with it, and the editor follows it",
+      (_mv_s.get('overrides') or {}).get('2026-10-13', {}).get('body')
+      == 'series text (room 2)'
+      and '2026-10-12' not in (_mv_s.get('overrides') or {})
+      and app.current_occurrence_date == '2026-10-13' and app._day_mode())
+check(f"...the day says where it came from, and the move can be undone "
+      f"({app.day_strip_lbl.cget('text')!r})",
+      'moved from Monday, 12 October' in str(app.day_strip_lbl.cget('text'))
+      and str(app.day_date_lbl.cget('text')) == '13.10.2026'
+      and app._toast_action is not None and _dm_asked == [])
+_mv_disk = NO.normalize_note(_mv_file_note())
+check('...and the file holds the move, so the day is there after a restart',
+      _mv_disk.get('moved') == {'2026-10-12': '2026-10-13'}
+      and NO.expand_occurrences(_mv_disk, NO.parse_date('2026-10-12'),
+                                NO.parse_date('2026-10-13')) == ['2026-10-13'])
+check("a share code does not carry it -- a series' days are this notebook's",
+      'moved' not in _msharing._shareable_view(_mv_s))
+
+# (This file answers every notice for itself, from its top: this one is read.)
+_mv_info = []
+_mv_real_info = app.show_info
+app.show_info = lambda title, message, **k: (_mv_info.append(title), True)[1]
+try:
+    app._move_this_day('2026-10-19'); app.update()
+finally:
+    app.show_info = _mv_real_info
+check(f'a date the series already has is refused, saying why, and nothing moves '
+      f'({_mv_info}; {_dm_asked})',
+      _mv_info == ['That day is taken'] and _dm_asked == []
+      and app.find_note(1)['moved'] == {'2026-10-12': '2026-10-13'})
+
+app._run_toast_action(); app.update()
+_mv_s = app.find_note(1)
+check('Undo puts the day back where it was, its own edit with it, the editor following',
+      _mv_s['moved'] == {} and '2026-10-12' in (_mv_s.get('overrides') or {})
+      and app.current_occurrence_date == '2026-10-12' and _dm_asked == [])
+
+# Reset on a moved day with text of its own: the date always goes back; the
+# text is asked about.
+app._move_this_day('2026-10-14'); app.update()
+_mv_row = app.day_move_btn.master.pack_slaves()
+check("a moved day offers its Reset in the day itself, beside Move this day",
+      bool(app.day_reset_btn.winfo_ismapped())
+      and app.day_reset_btn in _mv_row and app.day_move_btn in _mv_row
+      and _mv_row.index(app.day_move_btn) + 1 == _mv_row.index(app.day_reset_btn))
+_mv_q = []
+app._themed_dialog = lambda title, message, *a, **k: (
+    _mv_q.append((title, [b for b, _v in k.get('buttons', [])])), 'date')[1]
+app.day_reset_btn.invoke(); app.update()
+_dm_record()
+_mv_s = app.find_note(1)
+check(f'Reset on a moved day with text of its own asks: only the date, or the date '
+      f'and the text ({_mv_q})',
+      _mv_q[:1] == [('Reset this day',
+                     ['Cancel', 'Only the date', 'The date and the text'])])
+check('..."Only the date" puts the day back and keeps its text',
+      _mv_s['moved'] == {}
+      and (_mv_s.get('overrides') or {}).get('2026-10-12', {}).get('body')
+      == 'series text (room 2)'
+      and app.current_occurrence_date == '2026-10-12')
+app._move_this_day('2026-10-15'); app.update()
+app._themed_dialog = lambda *a, **k: 'text'
+app._reset_occurrence_override(app.find_note(1), '2026-10-15'); app.update()
+_dm_record()
+_mv_s = app.find_note(1)
+check('..."The date and the text" puts it back, following the series again',
+      _mv_s['moved'] == {} and '2026-10-12' not in (_mv_s.get('overrides') or {})
+      and app.current_occurrence_date == '2026-10-12'
+      and app.body_text.get('1.0', 'end-1c').startswith('series text')
+      and 'room 2' not in app.body_text.get('1.0', 'end-1c'))
+check('...and a day with nothing left to reset offers no Reset',
+      not app._is_placed(app.day_reset_btn) and bool(app.day_move_btn.winfo_ismapped()))
+
+# The button follows the day as it is edited, never moved: text of its own,
+# saved as it is typed, brings it; typed back to the series', it goes. And a
+# Reset pressed before the last typing saved asks the menu's question, and the
+# typing does not come back when its save comes due.
+_mv_title = app.title_entry.get()
+app.title_entry.insert('end', ' (typed)')
+app._autosave_now(); app.update()
+_mv_typed = app._is_placed(app.day_reset_btn)
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, _mv_title)
+app._autosave_now(); app.update()
+check("...a day's own text, saved as it is typed, brings its Reset; typed back to "
+      "the series', it goes",
+      _mv_typed and not app._is_placed(app.day_reset_btn)
+      and '2026-10-12' not in (app.find_note(1).get('overrides') or {}))
+app.title_entry.insert('end', ' (room 3)')
+app._autosave_now(); app.update()
+app.title_entry.insert('end', ' more')
+app._schedule_autosave()
+_mv_yn = []
+app.ask_yes_no = lambda title, message, *a, **k: (_mv_yn.append(message), True)[1]
+app.day_reset_btn.invoke(); app.update()
+app._autosave_now(); app.update()
+_dm_record()
+check(f"...Reset there, pressed mid-typing, asks the menu's question and the "
+      f"typing stays gone ({_mv_yn})",
+      [m.split('\n')[0] for m in _mv_yn] == ['Return 12.10.2026 to the series content?']
+      and '2026-10-12' not in (app.find_note(1).get('overrides') or {})
+      and app.title_entry.get() == _mv_title
+      and not app._is_placed(app.day_reset_btn))
+
+# Moved with no text of its own: the menu still offers its way back, and its
+# Reset only asks to put it back.
+app._move_this_day('2026-10-16'); app.update()
+_mv_labels = []
+_mv_add, _mv_pop = tk.Menu.add_command, tk.Menu.tk_popup
+tk.Menu.add_command = lambda _m, **kw: (_mv_labels.append(kw.get('label', '')),
+                                        _mv_add(_m, **kw))[1]
+tk.Menu.tk_popup = lambda _m, *a, **k: None
+try:
+    app.show_note_context_menu(type('E', (), {'x_root': 0, 'y_root': 0})(),
+                               app.find_note(1), occurrence_date='2026-10-16')
+finally:
+    tk.Menu.add_command, tk.Menu.tk_popup = _mv_add, _mv_pop
+check(f'a moved day with no text of its own still offers its way back in its menu '
+      f'({[l for l in _mv_labels if "Reset" in l]})',
+      any('Reset this day to the series…' in l for l in _mv_labels))
+_mv_yn = []
+app.ask_yes_no = lambda title, message, *a, **k: (_mv_yn.append(message), True)[1]
+app._reset_occurrence_override(app.find_note(1), '2026-10-16'); app.update()
+_dm_record()
+check(f'...and its Reset only asks to put it back, and does ({_mv_yn})',
+      _mv_yn == ['Put this day back on Monday, 12 October 2026?']
+      and app.find_note(1)['moved'] == {})
+
+# Delete a moved day, with text of its own, and its Undo.
+app._move_this_day('2026-10-17'); app.update()
+app.title_entry.insert('end', ' (Sat)')
+app._autosave_now(); app.update()
+app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
+app._delete_note(app.find_note(1), '2026-10-17'); app.update()
+_mv_s = app.find_note(1)
+_mv_gone = (_mv_s['moved'], _mv_s['exceptions'], sorted(_mv_s.get('overrides') or {}),
+            _mv_on('2026-10-17'), _mv_on('2026-10-12'))
+app._run_toast_action(); app.update()
+_dm_record()
+_mv_s = app.find_note(1)
+check(f'deleting a moved day skips the date its rule gives it, and takes the move '
+      f'with it ({_mv_gone})',
+      _mv_gone == ({}, ['2026-10-12'], [], [], [2]))
+check('...and its Undo brings it back moved, with its own text',
+      _mv_s['moved'] == {'2026-10-12': '2026-10-17'} and _mv_s['exceptions'] == []
+      and ((_mv_s.get('overrides') or {}).get('2026-10-17', {}).get('title') or '')
+      .endswith('(Sat)')
+      and _mv_on('2026-10-17') == [1])
+
+# The series counts its moved days; a repeat turned off takes them along into
+# the rescue copy, and Restore previous brings them back.
+app.open_note_in_tab(app.find_note(1)); app.update()
+check(f'the series counts its moved days above the note ({_rn_banner()!r})',
+      '· 1 day moved (↷)' in _rn_banner())
+app.rec_freq_var.set(NO.FREQ_LABELS['']); app.on_recurrence_changed(); app.update()
+app.save_current_note(); app.update()
+_mv_s = app.find_note(1)
+_mv_off = (_mv_s['recurrence']['freq'], _mv_s.get('moved'),
+           (_mv_s.get('_prev') or {}).get('moved'))
+app.ask_yes_no = lambda *a, **k: True
+app.restore_previous_version(); app.update()
+_dm_record()
+_mv_s = app.find_note(1)
+check(f"turning the repeat off takes the moves with the days, into the rescue copy "
+      f"({_mv_off})",
+      _mv_off == ('', {}, {'2026-10-12': '2026-10-17'}))
+check('...and Restore previous brings the series back with its day moved',
+      _mv_s['recurrence']['freq'] == 'weekly'
+      and _mv_s.get('moved') == {'2026-10-12': '2026-10-17'}
+      and _mv_on('2026-10-17') == [1])
+
+# The buttons are long-lived: every colour they have follows the theme. And a
+# moved day with text of its own -- both buttons, the longest date line -- asks
+# the editor for no more width than its series at the smallest window.
+_dm_open_day()
+app._move_this_day('2026-10-13'); app.update()
+app.title_entry.insert('end', ' (room 2)')
+app._autosave_now(); app.update()
+app.set_theme('light'); app.update()
+_mv_c = app.colors
+_mv_want = tuple(str(_mv_c[k]).lower() for k in (
+    'sidebar', 'text', 'card', 'text', 'bg', 'accent'))
+_mv_opts = ('bg', 'fg', 'activebackground', 'activeforeground',
+            'highlightbackground', 'highlightcolor')
+_mv_got = tuple(str(app.day_move_btn.cget(o)).lower() for o in _mv_opts)
+_mv_got_r = tuple(str(app.day_reset_btn.cget(o)).lower() for o in _mv_opts)
+check(f'every colour of "Move this day…" and "Reset this day…" follows a new '
+      f'theme ({_mv_got}; {_mv_got_r})',
+      _mv_got == _mv_want and _mv_got_r == _mv_want
+      and str(app.day_btns.cget('bg')).lower() == str(_mv_c['bg']).lower()
+      and bool(app.day_reset_btn.winfo_ismapped()))
+app.set_theme('dark'); app.update()
+
+# Every control of the day's title and date rows stays wholly in sight, at any
+# width and whatever the rows hold. A packed row given less than it asks for
+# drops what was packed last, in silence: a colour cut off in a photograph
+# first, then, under CI's fonts, the colour's swatch gone and "This day:" with
+# it, and on Windows a long title's counter squeezed to 8 px of its 46.
+def _mv_in_sight(cap=3.0):
+    """Pump until both rows have every control in sight -- the state this
+    layout promises; mapping is asynchronous under Xvfb -- or *cap* seconds
+    pass, and say what is still out of sight."""
+    end = _t5f.time() + cap
+    while True:
+        app.update()
+        lost = _qa_out_of_sight(app.editor_top_row) + _qa_out_of_sight(app.day_btns.master)
+        if not lost or _t5f.time() > end:
+            return lost
+        _t5f.sleep(0.02)
+
+
+_mv_geo = app.geometry()
+_mv_title = app.title_entry.get()
+app.title_entry.insert('end', 'L' * (app.TITLE_MAX_LEN - len(_mv_title) - 5))
+app._refresh_title_count()
+app.geometry('1100x850')
+_mv_lost = _mv_in_sight()
+check(f'at an ordinary window Move and Reset sit beside the date, and a long title '
+      f'keeps its counter and "This day:" beside it ({_mv_lost})',
+      _mv_lost == [] and app._day_btns_wrapped is False
+      and app.day_btns.pack_info().get('side') == 'left'
+      and app._is_placed(app.title_count_lbl))
+app.geometry('640x600')
+_mv_lost = _mv_in_sight()
+_mv_meta = app.day_btns.master
+check(f"at the smallest window every control of the day's title and date rows stays "
+      f"in sight ({_mv_lost}; the date row {_mv_meta.winfo_reqwidth()} of "
+      f"{_mv_meta.winfo_width()})",
+      _mv_lost == [] and _mv_meta.winfo_reqwidth() <= _mv_meta.winfo_width() + 1)
+# A row that cannot hold the buttons beside the date puts them under it: a
+# wider font, as on a machine without this one, simulated by a date 120 px
+# wider -- in pixels, not characters, so that the line left above the buttons
+# fits under every font (40 characters more did not, under CI's).
+def _mv_under_the_date():
+    """Where the buttons' line is: (x, top) against the date's bottom -- a
+    line under the date starts at the row's left edge, below it."""
+    date = app._date_row_label
+    return (app.day_btns.winfo_x(), app.day_btns.winfo_y(),
+            date.winfo_y() + date.winfo_height())
+
+
+app.day_date_lbl.pack_configure(padx=(6, 128))
+app._show_day_mode()
+_mv_lost = _mv_in_sight()
+_mv_at = _mv_under_the_date()
+check(f'a date row with no room for Move and Reset puts them on a line under the '
+      f'date, every control in sight ({_mv_lost}; x, top, date bottom {_mv_at})',
+      _mv_lost == [] and app._day_btns_wrapped is True
+      and _mv_at[0] == 0 and _mv_at[1] >= _mv_at[2])
+app.day_date_lbl.pack_configure(padx=(6, 8))
+app.geometry('1100x850')
+_mv_lost = _mv_in_sight()
+check(f'...a window made wider puts them back beside the date ({_mv_lost})',
+      _mv_lost == [] and app._day_btns_wrapped is False)
+# Beside the date again however the step above went, so this step asks only
+# whether a narrower window moves them.
+app._show_day_mode(); app.update()
+_mv_was = app._day_btns_wrapped
+app.day_date_lbl.pack_configure(padx=(6, 128))
+app.geometry('640x600')
+_mv_lost = _mv_in_sight()
+_mv_at = _mv_under_the_date()
+check(f'...and one made narrower puts them under it again ({_mv_was}; {_mv_lost}; '
+      f'{_mv_at})',
+      _mv_was is False and _mv_lost == [] and app._day_btns_wrapped is True
+      and _mv_at[0] == 0 and _mv_at[1] >= _mv_at[2])
+app.day_date_lbl.pack_configure(padx=(6, 8))
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, _mv_title)
+app._refresh_title_count()
+app._show_day_mode()
+app.update()
+_mv_req_day = app.editor.winfo_reqwidth()
+app.open_note_in_tab(app.find_note(1)); app.update()
+check(f'...and the moved day asks the editor for no more width than its series '
+      f'({_mv_req_day} vs {app.editor.winfo_reqwidth()})',
+      _mv_req_day <= app.editor.winfo_reqwidth())
+app.geometry(_mv_geo); app.update()
+app._cancel_pending_autosave()
+
+app._themed_dialog = _dm_real_dialog
+app.ask_occurrence_scope = _dm_real_scope
+app.ask_yes_no = _dm_real_yes
+app.notebook.select(app.TAB_NOTES); app.update()
+app.new_note(); app.update()
+app.notes = []; app.save_notes()
 
 print(f"=== QA5 FAILURES: {fails if fails else 'NONE'} ===")
 

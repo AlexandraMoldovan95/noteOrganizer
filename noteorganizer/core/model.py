@@ -28,6 +28,7 @@ from .recurrence import (
     read_date,
     expand_occurrences,
     OVERRIDABLE_FIELDS,
+    MAX_OCCURRENCES,
 )
 
 # ---- Note schema + one-time cleanup ----
@@ -61,6 +62,7 @@ NOTE_DEFAULTS = {
     "recurrence": {},   # empty dict = one-off note (see the recurrence engine)
     "exceptions": [],   # dates removed from a series
     "overrides": {},    # date -> partial note, for per-occurrence edits
+    "moved": {},        # date the rule gives a day -> the date it is held on
     "pinned": False,    # pinned notes float to the top of the list
     "checklist": [],    # list of {"text": str, "done": bool} items
     "paragraphs": [],       # list lines: {"line": int, "kind": "bullet"|"number"}
@@ -161,7 +163,7 @@ def find_by_uid(notes, uid):
 
 # The fields an incoming copy replaces. The rest is this device's: its id and
 # place, its attachment files (a share code carries none), and the per-day
-# exceptions and overrides, a timeline the sender's copy may not share.
+# exceptions, overrides and moves, a timeline the sender's copy may not share.
 UPDATABLE_FROM_SHARED = [
     "title", "body", "formatting", "paragraphs",
     "comments", "category", "date", "color", "recurrence", "checklist",
@@ -171,7 +173,7 @@ UPDATABLE_FROM_SHARED = [
 # pin (its attachment files are the caller's to add). ISSUES_LOG: "Eleven
 # decisions about your notes, made from half the evidence".
 UPDATABLE_FROM_BACKUP = UPDATABLE_FROM_SHARED + [
-    "exceptions", "overrides", "pinned",
+    "exceptions", "overrides", "moved", "pinned",
 ]
 
 # The text half of a rescue copy: what a drastic shrink keeps, and the
@@ -368,6 +370,20 @@ def normalize_note(note):
     clean["exceptions"] = sorted({
         d for d in clean["exceptions"] if isinstance(d, str) and parse_date(d)
     })
+
+    # A day held on another date ("Move this day"): both real dates, never
+    # the same one, no two days on one date, and no move of a deleted day.
+    # Capped as a rule's days are: each is worked out on every calendar draw.
+    moved, held_on = {}, set()
+    for orig, new in sorted((k, v) for k, v in clean["moved"].items()
+                            if isinstance(k, str) and isinstance(v, str)):
+        if (parse_date(orig) and parse_date(new) and orig != new
+                and new not in held_on and orig not in clean["exceptions"]):
+            moved[orig] = new
+            held_on.add(new)
+            if len(moved) >= MAX_OCCURRENCES:
+                break
+    clean["moved"] = moved
 
     # The line the editor guarantees under a trailing table, carried into
     # the stored form so the two can never disagree. See with_caret_line.
@@ -581,6 +597,7 @@ def content_signature(note):
         _stable(note.get("paragraphs")),
         _stable(note.get("overrides")),
         _stable(note.get("exceptions")),
+        _stable(note.get("moved")),
         bool(note.get("pinned")),
         _text(note.get("color")),
     )

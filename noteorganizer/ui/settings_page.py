@@ -2649,7 +2649,12 @@ class SettingsPageMixin:
             note.pack(fill="x", pady=(2, 0))
             self._wrap_to_own_width(note)
         control = tk.Frame(row, bg=self._surface())
-        control.pack(side="right", padx=(16, 0))
+        # First in the packing order, though built second: the packer gives
+        # each its width in that order, and the words first took theirs
+        # unwrapped -- their hint wraps only to the width it is given -- and
+        # left the control the rest: a dropdown 18 px of its 74, its arrow
+        # gone, under CI's fonts. The words have the rest now, and wrap.
+        control.pack(side="right", padx=(16, 0), before=text_col)
         return control
 
     # _add_row() stood here: an "+ Add category" affordance drawn as accent
@@ -3132,8 +3137,8 @@ class SettingsPageMixin:
         # Notes exist. What the editor holds is saved first, as every delete
         # route does: the note on screen may be about to go to the Trash,
         # and its unsaved typing belongs in the Trash copy, not in an
-        # editor about to be cleared. Cancel on a day's question stops here.
-        # The question about a date the save could not store is asked only
+        # editor about to be cleared. Going back stops here: the question
+        # about a date the save could not store is asked only
         # when the note on screen is filed here -- the one case where the
         # editor may be cleared; any other note stays open, date and all.
         # A repeat's turn-off waiting there is held back for the question:
@@ -3263,8 +3268,8 @@ class SettingsPageMixin:
         # What the editor holds is saved first, as every delete route does:
         # the note on screen may be one of these copies, and its unsaved
         # typing belongs in the Trash copy, not in an editor about to be
-        # cleared. Cancel on a day's question stops here. A date the save
-        # could not store is asked about only when the editor is about to
+        # cleared. Going back stops here: a date the save could not store
+        # is asked about only when the editor is about to
         # be cleared or reloaded -- a copy going, or a kept copy gaining
         # files (see the end); any other note stays open, date and all.
         affected = ({n.get("id") for n in to_trash}

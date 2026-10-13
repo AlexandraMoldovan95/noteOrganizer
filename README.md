@@ -28,7 +28,7 @@ in one place they control.
 - Notes with bold, italic, colours, headings and lists; tables you edit in
   place; checklists.
 - Notes that repeat — daily, weekly, monthly, yearly — and a calendar that
-  shows them, with any one day editable on its own.
+  shows them, with any one day editable on its own, or moved to another date.
 - Search, sort, group by category, or arrange the list by hand.
 - A Trash to restore from (Settings → Recently deleted), and backups that
   move your notebook to another computer. A share code copies a note as
