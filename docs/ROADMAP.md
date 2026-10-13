@@ -74,14 +74,18 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
   What is left is true windowed rendering — recycling one screenful of cards, so that a list
   scrolled to its end does not hold every card it passed. At 1,000 notes scrolled to the end,
   coming back to the list measured 81 ms; only worth it if notebooks far beyond that turn up.
-- **An Android version.** Nothing decided yet on approach — a full rewrite with a mobile-first
-  toolkit, or a port of the existing logic onto something like Kivy or BeeWare, are both on the
-  table. This is a big enough undertaking that it needs its own scoping pass before any real work
-  starts.
-- **Whether to move off plain Tkinter entirely**, decided together with the Android question above
-  rather than separately — the two are linked, since a cross-platform-friendly choice could mean
-  rewriting the UI layer once for both desktop and mobile instead of twice. Candidates worth
-  weighing when that scoping pass happens:
+- **An Android version.** An exploration is under way in a repository of its own
+  (`noteOrganizerForAndroid`, private), begun on 2026-09-13: a native Android app in Kotlin that
+  reads and writes the same notes file as this one, built to answer whether the data format
+  survives the trip and what a touch-sized version costs. It is not a product yet. Of the two
+  routes once weighed here, it took the first — a full rewrite with a mobile-first toolkit — rather
+  than a port of this code onto Kivy or BeeWare, and nothing in this repository is shaped for it
+  (CLAUDE.md's project focus).
+- **Whether to move off plain Tkinter entirely.** This was to be decided together with the Android
+  question, since a cross-platform choice could have meant rewriting the UI layer once for both
+  desktop and mobile instead of twice. With Android explored natively in its own repository, the
+  two are no longer linked, and the desktop app stays on Tkinter for now. The candidates, kept for
+  when the question comes up again:
   - **PyQt / PySide (Qt for Python)** — far more capable widgets out of the box (native rich text
     editing, real tables, more polished look), at the cost of a much steeper learning curve, a
     heavier package, and (for PyQt specifically) a more restrictive license than this project has
@@ -89,9 +93,9 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
   - **CustomTkinter** — a modern-looking skin built on top of Tkinter itself, meaning the bulk of
     the current codebase would still apply; the smallest migration cost of the options here, but
     also the smallest capability jump.
-  - **Kivy** — built with touch/mobile in mind, so it's already on the table for the Android
-    question specifically; would mean rebuilding the desktop UI too if adopted, not just extending
-    it.
+  - **Kivy** — built with touch/mobile in mind, which is why it was weighed for Android before the
+    native route was taken; adopted here, it would mean rebuilding the desktop UI too, not just
+    extending it.
   - Doing nothing and staying on plain Tkinter remains a legitimate option — noted here so the
     decision is made deliberately, not by default.
 
