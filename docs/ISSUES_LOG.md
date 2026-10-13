@@ -238,18 +238,43 @@ Smaller lessons, each once a long comment in the code, are collected
 
 *([0.30.39](../CHANGELOG.md#03039--2026-08-18) · 2026-08-18)*
 
-**Symptom:** After rebuilding and testing the `.exe`, the notes it showed were completely different from — and far fewer than — the notes visible when running `python note_organizer.py` from the project folder. It looked as if the `.exe`'s notebook had simply reset itself.
+**Symptom:** After rebuilding and testing the `.exe`, it showed far fewer notes than
+`python note_organizer.py` did from the project folder - as if the `.exe`'s notebook had reset
+itself.
 
-**Root cause:** Two pieces of migration logic, both run automatically at import time (`MIGRATION_INFO = run_migrations(APP_DIR)` / `PURGED_DIRS = purge_stale_copies(APP_DIR)`), combined into a real data-loss bug. `run_migrations()`'s job is to pull old notes forward from `%APPDATA%\NoteOrganizer` into whatever directory the app is currently running from in script mode (dev checkout, or literally any script that does `import note_organizer`) — reasonable on its own, and non-destructive, since it only *copies*. But `purge_stale_copies()` then runs right after, looking for "redundant leftover copies" to clean up — and the AppData folder it just copied *from* now looks perfectly redundant, since every note in it also exists in the copy that was just made. So it got deleted: `notes_data.json`, `settings.json`, and the whole `attachments/` folder, gone. This could be triggered by nothing more than running one of the project's own headless test scripts (`test_calculator.py`, `test_recurrence.py`, `test_data_safety.py`) from a fresh scratch directory — exactly the practice `CLAUDE.md`'s QA safety rule requires — since a brand-new directory never has the `reclaimed_from_appdata` flag that would otherwise skip the reclaim.
+**Root cause:** Two migration steps ran automatically on import, and together they destroyed data:
 
-**Fix:** `purge_stale_copies()` now permanently exempts `%APPDATA%\NoteOrganizer` from deletion, full stop — no redundancy check ever applies to it. It's the durable, cross-run store the distributed `.exe` actually reads from, never a disposable leftover, regardless of what directory happens to be running the code. Genuinely stale, non-AppData leftovers (like an old `dist\` copy from a previous build layout) are still cleaned up exactly as before — verified with a dedicated regression test alongside the ones proving AppData now survives even a maximally "redundant-looking" scenario.
+- `run_migrations()` copies old notes forward from `%APPDATA%\NoteOrganizer` into wherever the
+  app is currently running from (a dev checkout, or any script that does
+  `import note_organizer`). On its own this is safe - it only copies.
+- `purge_stale_copies()` then runs right after, looking for "redundant leftover copies" to
+  delete. The AppData folder it just copied *from* now looks redundant, since every note in it
+  also exists in the copy just made - so it got deleted: `notes_data.json`, `settings.json`, and
+  the whole `attachments/` folder.
 
-**Recovery:** the real notes weren't actually gone — they'd been copied into a directory before AppData was cleared. In this case a plain `python note_organizer.py` run at the project root held an intact copy, which was restored back into AppData by hand (a direct file copy, deliberately not routed through any app code, to stay isolated from the very bug being fixed).
+This could be triggered just by running one of the project's own headless test scripts
+(`test_calculator.py`, `test_recurrence.py`, `test_data_safety.py`) from a fresh scratch
+directory - exactly the practice `CLAUDE.md`'s QA safety rule requires, since a brand-new
+directory never has the flag that would otherwise skip the reclaim.
 
-**Follow-up (0.33.x):** the deeper cause — that any `import note_organizer` performed migrations at all — is now gone. Resolving the data folder, migrating, purging and writing settings moved into an explicit `initialise()`, called by `NoteOrganizer.__init__` and by `_main()`. Importing the module creates no files and touches no notes, verified by importing it into a directory holding a decoy notebook and confirming nothing was read, moved or deleted. The exemption below still stands as defence in depth; it is no longer the only thing standing between a stray import and someone's notes.
+**Fix:** `purge_stale_copies()` now permanently exempts `%APPDATA%\NoteOrganizer` from deletion,
+full stop. It's the durable store the distributed `.exe` actually reads from, never a disposable
+leftover. Genuinely stale leftovers (like an old `dist\` copy) are still cleaned up as before,
+verified with a dedicated regression test.
 
-**Takeaway:** "Copy it somewhere else, then delete the original because it's now redundant" is a dangerous pattern to apply to anything that's a *permanent* store rather than a genuinely disposable one — the logic has no way to tell those apart from the data alone. A cleanup routine should name its exemptions explicitly (as this fix now does) rather than relying on every possible caller happening to avoid the deletion condition. Also worth remembering: a safety practice designed to protect data from one specific script (`qa*.py`'s working-directory wipe) doesn't automatically protect against a completely different destructive path living inside the very code being tested.
+**Recovery:** The real notes weren't gone - they'd been copied into a directory before AppData
+was cleared. A plain `python note_organizer.py` run at the project root held an intact copy,
+restored back into AppData by hand (a direct file copy, not routed through any app code).
 
+**Follow-up (0.33.x):** The deeper cause - that any `import note_organizer` performed migrations
+at all - is now gone. Resolving the data folder, migrating, purging and writing settings moved
+into an explicit `initialise()`, called by `NoteOrganizer.__init__` and by `_main()`. Importing
+the module now creates no files and touches no notes.
+
+**Takeaway:** "Copy it somewhere else, then delete the original because it's now redundant" is
+dangerous for anything that's a *permanent* store rather than a disposable one - the logic can't
+tell those apart from the data alone. A cleanup routine should name its exemptions explicitly,
+rather than relying on every caller avoiding the deletion condition.
 ### The safety test that needed its own safety
 
 *([0.39.63](../CHANGELOG.md#03963--2026-08-28) · 2026-08-27)*
@@ -719,32 +744,27 @@ compares the body exactly as stored.
 
 *([0.71.154](../CHANGELOG.md#071154--2026-09-11) · 2026-09-11)*
 
-**Symptom:** A static gate was written specifically so that one class of
-omission — a question the app asks in several places, answered by a
-hand-rolled field list at each one — "cannot come back quietly". It
-reported the codebase clean. A review wave, running at the same time,
-found a live instance of exactly that class: the share-as-code guard,
-refusing a checklist-only note the app had just saved as real content.
+**Symptom:** A static gate was written so that one class of omission - a question the app asks
+in several places, answered by a hand-rolled field list at each one - "cannot come back
+quietly". It reported the codebase clean. A review wave, running at the same time, found a live
+instance of exactly that class: the share-as-code guard, refusing a checklist-only note the app
+had just saved as real content.
 
-**Root cause:** the gate's pattern required THREE content-field names in
-the same window of lines, because the three instances that prompted it
-all had at least three. The share guard enumerated two. A net woven from
-the shape of what it had already caught was blind, by construction, to
-the *under-inclusive* guards — which are precisely the ones that lose
-data, since an over-inclusive guard merely asks an unnecessary question.
+**Root cause:** The gate's pattern required three content-field names in the same window of
+lines, because the three instances that prompted it all had at least three. The share guard
+enumerated only two. A net woven from the shape of what it had already caught was blind, by
+construction, to the *under-inclusive* guards - precisely the ones that lose data, since an
+over-inclusive guard only asks an unnecessary question.
 
-**Fix:** the threshold is two, and the reason is written above the
-pattern rather than left implicit. With it widened, the gate found the
-share guard in its first second — the same defect a 9.9-million-token
-review wave had reported, for the cost of a grep.
+**Fix:** The threshold is now two, and the reason is written above the pattern rather than left
+implicit. With it widened, the gate found the share guard in its first second - the same defect
+a 9.9-million-token review wave had reported, for the cost of a grep.
 
-**Takeaway:** a detector built from the examples you already have will
-match the examples you already have. Ask what a WEAKER instance of the
-class would look like and make sure the pattern still catches it —
-before the clean report starts being used as evidence. And a gate that
-reports clean over a known-live instance is not merely incomplete: it
-actively certifies the gap, and the next reader believes it.
-
+**Takeaway:** A detector built from the examples you already have will match the examples you
+already have. Ask what a weaker instance of the class would look like, and make sure the pattern
+still catches it, before the clean report starts being used as evidence. A gate that reports
+clean over a known-live instance doesn't just miss it - it actively certifies the gap, and the
+next reader believes it.
 ### The same net, woven again — and the question it was answering
 
 *(2026-09-29, `Testing`)*
@@ -3900,73 +3920,57 @@ has not been tested — it has been lucky.
 
 *([0.75.173](../CHANGELOG.md#075173--2026-09-15) · 2026-09-15)*
 
-Two reports, one strip of sidebar, and two different ways for a thing to
-be on screen and not be seen.
+Two reports, one strip of sidebar, and two different ways for a thing to be on screen and not be
+seen.
 
-**The word against the edge.** "Export is very cramped, you can barely
-see the whole word." The bar laid five controls in one line across a
-sidebar of fixed width, and the packer hands out that width in order:
-each control takes what it asks for and the LAST one lives on the
-remainder. So everything before it is drawn perfectly and the failure
-lands entirely on whoever is last — which is why nothing looks wrong
-until the end of the row.
+**The word against the edge.** "Export is very cramped, you can barely see the whole word." The
+bar laid five controls in one line across a sidebar of fixed width. The packer hands out that
+width in order: each control takes what it asks for, and the *last* one lives on the remainder.
+So everything before it draws perfectly, and the failure lands entirely on whoever is last -
+which is why nothing looks wrong until the end of the row.
 
-Measured: Export asked 40px and was drawn at 27. Everything else got
-exactly what it asked for.
+- Measured: Export asked for 40px and was drawn at 27px. Everything else got exactly what it
+  asked for.
+- The comment being replaced had recorded the same fight, won by one pixel: *"four controls need
+  281px and the sidebar is a fixed 280 - the emoji alone is the overflow."*
+- On the Linux CI image, where the font is wider, the same four controls asked for 338px of the
+  250 available, and Export was drawn at one pixel. It had been that broken there the whole time.
 
-The comment being replaced had recorded the same fight, won by one pixel:
-*"four controls need 281px and the sidebar is a fixed 280 — the emoji
-alone is the overflow."* A layout that fits by one pixel is one font away
-from not fitting, and this one had already lost that bet somewhere nobody
-had looked: on the Linux CI image, where DejaVu is wider, the same four
-asked **338px of the 250 available and Export was drawn at one pixel**.
-It had been that broken there the whole time.
+A layout that fits by one pixel is one font away from not fitting.
 
-So the fix is not a smaller font, which would just move the margin. The
-count went to its own line and the four actions went two by two, which
-changes what has to be TRUE: the widest row now needs the two widest
-labels side by side — 180px on Linux, 105 on Windows — instead of all
-four. Room to spare on both, rather than a margin waiting for the next
-label.
+So the fix isn't a smaller font, which would just move the margin. The count moved to its own
+line, and the four actions went two by two - which changes what has to be true: the widest row
+now needs the two widest labels side by side (180px on Linux, 105 on Windows) instead of all
+four. Room to spare on both.
 
-**The tick that was the same colour as its box.** "The tick boxes are
-almost invisible in dark mode, being black. Maybe we can lighten the
-squares, so the black tick shows better in them."
+**The tick that was the same colour as its box.** "The tick boxes are almost invisible in dark
+mode, being black. Maybe we can lighten the squares, so the black tick shows better in them."
+She was right - but the first attempt at fixing it was wrong, in a way worth writing down.
 
-She was right, and the first attempt at it was wrong in a way worth
-writing down.
+- The photograph taken to study it showed every box empty, because the script had called
+  `_toggle_note_selected` (which updates the set of selected ids) rather than invoking the
+  widget (which is what actually moves a checkbox). The fixture ticked nothing.
+- On that empty picture, a whole diagnosis got built: pixel measurements, a table of candidate
+  colours, a conclusion of "use the accent", and a change to twelve call sites.
+- Ticking the boxes properly showed the accent making an *empty* box look filled - worse than
+  before. The change was reverted whole, and she was asked for a screenshot of her own machine
+  instead. Hers showed what the report had said all along: a ticked box, dark, with a dark mark
+  in it, barely distinguishable from an empty one.
 
-The photograph taken to study it showed every box empty — because the
-script had called `_toggle_note_selected`, which updates the set of
-selected ids, rather than invoking the widget, which is what moves a
-checkbox. **The fixture ticked nothing.** On that picture the agent built a
-whole diagnosis: pixel measurements, a table of candidate colours, a
-conclusion of "use the accent", and a change to twelve call sites.
+The mechanism, once the picture was honest: `selectcolor` is the well a check mark sits in, and
+every one of them in this app was set to `card` or `sidebar` - the very surface the box is drawn
+on. Tk draws the mark dark on Windows whatever the palette says, so a dark well hides a dark
+mark. Light themes never showed it, because their card is already white - that's what kept it
+alive.
 
-Ticking the boxes properly showed the accent making an EMPTY box look
-filled — worse than before. The change was reverted whole, and she was
-asked for a screenshot of her own machine instead. Hers showed what the
-report said all along: a ticked box dark, with a dark mark in it, barely
-distinguishable from an empty one.
-
-The mechanism, once the picture was honest: `selectcolor` is the well a
-check mark sits in, and every one of them in this app was set to `card`
-or `sidebar` — the very surface the box is drawn on. Tk draws the mark
-dark on Windows whatever the palette says. Dark mark, dark well.
-
-Light themes never showed it, because their card already is white. That
-is the trap that kept it alive: the well has to be light because the MARK
-is dark, not because the theme is one thing or the other. It is a named
-palette entry now, `check_well`, light in all eight, so a future theme
+It's a named palette entry now, `check_well`, light in all eight themes, so a future theme
 disagrees in one place instead of twelve.
 
-**Takeaway:** a layout whose last element absorbs every shortfall reports
-nothing and fails last, so measure what it ASKS against what it is GIVEN,
-on every font it will meet. And a fixture that does not do what its name
-says turns a measurement into a rumour — the tick boxes cost a full wrong
-diagnosis, and the only reason it shipped nothing was a screenshot asked
-for before the commit.
-
+**Takeaway:** A layout whose last element absorbs every shortfall reports nothing and fails last
+- measure what it *asks* against what it is *given*, on every font it will meet. And a fixture
+that doesn't do what its name says turns a measurement into a rumour: the tick boxes cost a full
+wrong diagnosis, and the only reason it shipped nothing was a screenshot asked for before the
+commit.
 ### The rule the app already had
 
 *([0.75.176](../CHANGELOG.md#075176--2026-09-25) · 2026-09-25)*
@@ -4248,114 +4252,95 @@ any palette pair that shares a hex: it can vouch for nothing.
 
 *([0.75.180](../CHANGELOG.md#075180--2026-09-25))*
 
-**The fix was the easy half.** Shortening the Trash retention window
-destroyed everything the new window had already outlived, at the next
-startup, with no dialog. Ten mutants were written for the ten mechanisms
-behind the fix. Four survived, and every one of them was right to.
+**The fix was the easy half.** Shortening the Trash retention window destroyed everything the
+new window had already outlived, at the next startup, with no dialog. Ten mutants were written
+for the ten mechanisms behind the fix. Four survived, and every one of them was right to.
 
-**Four checks satisfied by coincidence.** None was wrong about what it
-asserted; each was simply also true when the mechanism was broken.
+**Four checks satisfied by coincidence.** None was wrong about what it asserted; each was simply
+also true when the mechanism was broken.
 
-1. The lengthening fixture used a note deleted 40 days ago and lengthened
-   the window to 90. Removing the "is this shorter?" test changed nothing,
-   because 40 days is *inside* a 90-day window — the doomed list was empty
-   either way, so the test never had to hold. The fixture now uses a note
-   older than every window the dropdown offers, the only shape where
-   lengthening has something already expired and the test therefore
-   matters.
-2. The clamp check compared a previewed window of 0 days against 1, on a
-   note deleted a day ago. A day-old note sits exactly on that boundary
-   and reads as expired under both, so unclamping changed neither side.
-   Twelve hours tells them apart.
-3. The ceiling check compared 10000 days against the 365-day clamp on a
-   40-day-old note: inside both, zero twice. It needed a note older than
-   the ceiling itself.
-4. The "counts only what would go" check asserted the number 1. Inverting
-   the window comparison also yields 1 — the other note. A count is
-   satisfied by the wrong answer whenever the wrong answer is the same
-   size, so the check now names *which* entry.
+1. The lengthening fixture used a note deleted 40 days ago and lengthened the window to 90.
+   Removing the "is this shorter?" test changed nothing, because 40 days is *inside* a 90-day
+   window - the doomed list was empty either way, so the test never had to hold. The fixture now
+   uses a note older than every window the dropdown offers, the only shape where lengthening has
+   something already expired and the test therefore matters.
+2. The clamp check compared a previewed window of 0 days against 1, on a note deleted a day ago.
+   A day-old note sits exactly on that boundary and reads as expired under both, so unclamping
+   changed neither side. Twelve hours tells them apart.
+3. The ceiling check compared 10000 days against the 365-day clamp on a 40-day-old note: inside
+   both, zero twice. It needed a note older than the ceiling itself.
+4. The "counts only what would go" check asserted the number 1. Inverting the window comparison
+   also yields 1 - the other note. A count is satisfied by the wrong answer whenever the wrong
+   answer is the same size, so the check now names *which* entry.
 
-**And two of the four had not survived at all.** After the first three
-were repaired, two mutants still read as survivors with no explanation.
-`tools/run_tests.py` prints the first eight failing checks; those mutants
-broke nine and fourteen, so the names the runner was searching for were
-never printed. The checks had fired. The verdict was the tool's.
+**And two of the four had not survived at all.** After the first three were repaired, two
+mutants still read as survivors with no explanation. `tools/run_tests.py` prints the first eight
+failing checks; those mutants broke the ninth and fourteenth, so the names the runner was
+searching for were never printed. The checks had fired - the verdict was the tool's.
 
-That is the more dangerous of the two lessons, because it inverts the
-sign: a mutation runner exists to say "this check has teeth", and a
-silently truncated list makes it say the opposite of the truth. The runner
-now asks for `--all-failures`, refuses to trust a list it can see was cut,
-and `run_tests.py` says "… and N more" when it cuts one.
+That is the more dangerous lesson, because it inverts the sign: a mutation runner exists to say
+"this check has teeth", and a silently truncated list makes it say the opposite of the truth.
+The runner now asks for `--all-failures`, refuses to trust a list it can see was cut, and
+`run_tests.py` says "... and N more" when it cuts one.
 
 **The lessons.**
 
-1. A check that asserts a *count* is satisfied by any wrong answer of the
-   same size. Assert which, not how many, wherever identity is the point.
-2. A fixture chosen to look realistic is often chosen to sit inside every
-   boundary at once. Pick the value that can only be explained one way —
-   twelve hours, not one day; four hundred days, not forty.
-3. Never read a verdict out of output that can be truncated without saying
-   so. A tool that can be quietly wrong about whether a check works is
-   worse than no tool.
-4. Four of ten checks were satisfied by coincidence, and every one of them
-   passed against the real code. Mutation testing is not a formality that
-   confirms good checks; it is the only thing that finds this class at all.
-
+1. A check that asserts a *count* is satisfied by any wrong answer of the same size. Assert
+   which, not how many, wherever identity is the point.
+2. A fixture chosen to look realistic is often chosen to sit inside every boundary at once. Pick
+   the value that can only be explained one way - twelve hours, not one day; four hundred days,
+   not forty.
+3. Never read a verdict out of output that can be truncated without saying so. A tool that can
+   be quietly wrong about whether a check works is worse than no tool.
+4. Four of ten checks were satisfied by coincidence, and every one of them passed against the
+   real code. Mutation testing isn't a formality that confirms good checks - it's the only thing
+   that finds this class at all.
 ### The finding that described a dialog nobody had opened
 
-*(no version — the label change it produced is `Changed`, and the version
-counts `Added` and `Fixed` alone)*
+*(no version - the label change it produced is `Changed`, and the version counts `Added` and
+`Fixed` alone)*
 
-**Three findings in a row, and each one's reasoning was wrong.** The
-consistency survey recorded 25 asymmetries by reading the source. Working
-through its destructive rows in order, the first three all held as
-*findings* and all three were wrong about *why*:
+**Three findings in a row, and each one's reasoning was wrong.** The consistency survey recorded
+25 asymmetries by reading the source. Working through its destructive rows in order, the first
+three all held as *findings*, and all three were wrong about *why*:
 
-- **C-2** said the checklist item was the worse of the pair because the
-  attachment beside it is one "the file system still remembers".
-  `remove_attachment` deletes the stored copy. The comparison survived;
-  its reason did not, and the reason was what pointed at the wrong fix —
-  a dialog, where the answer was an undo.
-- **C-3** described the retention dropdown as destroying notes. It also
-  deletes their attached files from disk, which no sentence on that screen
-  had ever mentioned, and which the new confirmation now names.
-- **C-4** said a day row's Delete "removes only that day", with nothing
-  but the row you aimed at to distinguish it from deleting the series. It
-  raises a three-button question naming the day. Two more of its claims
-  were false: Enter answering the dialog, which no dialog on this Tk
-  accepts and which the same register records as T3-1 two sections above;
-  and a series being lost, when it goes to the Trash with an Undo.
+- **C-2** said the checklist item was the worse of the pair because the attachment beside it is
+  one "the file system still remembers". `remove_attachment` deletes the stored copy. The
+  comparison survived; its reason did not - and the reason was what pointed at the wrong fix (a
+  dialog, where the answer was an undo).
+- **C-3** described the retention dropdown as destroying notes. It also deletes their attached
+  files from disk, which no sentence on that screen had ever mentioned, and which the new
+  confirmation now names.
+- **C-4** said a day row's Delete "removes only that day", with nothing but the row you aimed at
+  to distinguish it from deleting the series. It raises a three-button question naming the day.
+  Two more of its claims were false: Enter answering the dialog (which no dialog on this Tk
+  accepts, and which the same register records as T3-1 two sections above), and a series being
+  lost (when it goes to the Trash with an Undo).
 
-**One cause, admitted in advance.** The survey's own coverage confession
-said no reader ran the app. Everything above is what that produces: the
-code says `if is_recurring(note) and occurrence_date:` and the reader
-follows the branch, but the *dialog inside it* is a call to a function two
-files away whose three buttons nobody saw. Reading gets the control flow
-right and the experience wrong, and a finding is a claim about the
+**One cause, admitted in advance.** The survey's own coverage confession said no reader ran the
+app. Everything above is what that produces: the code says
+`if is_recurring(note) and occurrence_date:`, and the reader follows the branch - but the
+*dialog inside it* is a call to a function two files away whose three buttons nobody saw.
+Reading gets the control flow right and the experience wrong, and a finding is a claim about the
 experience.
 
-**What the pattern is worth keeping for.** The survey was still the most
-productive thing in the cycle: C-1 was real and serious, C-2 and C-3 were
-real with the wrong reasons attached, and C-4's label was worth changing.
-A review that reads is cheap and finds where to look. It just cannot be
-the thing that decides, and the corrections belong in the register beside
-the claims rather than replacing them — otherwise the next reader inherits
-the confidence without the correction.
+**What the pattern is worth keeping for.** The survey was still the most productive thing in the
+cycle: C-1 was real and serious, C-2 and C-3 were real with the wrong reasons attached, and C-4's
+label was worth changing. A review that reads is cheap and finds where to look - it just can't be
+the thing that decides. The corrections belong in the register beside the claims rather than
+replacing them, otherwise the next reader inherits the confidence without the correction.
 
 **The lessons.**
 
-1. A finding is a claim about what a person meets. Confirm it by meeting
-   it: drive the real route and record which dialogs actually appear.
-2. Where a finding gives a reason, check the reason separately from the
-   finding. Three times running, the finding survived and the reason did
-   not — and the reason is what chooses the fix.
-3. A refuted finding is corrected in place, struck through rather than
-   deleted, with the measurement beside it. A register that quietly loses
-   its wrong rows teaches nothing about how it got them wrong.
-4. Cross-check a new finding against the register's own older rows. C-4's
-   "Yes ready for Enter" was contradicted by T3-1, already recorded on the
-   same page.
-
+1. A finding is a claim about what a person meets. Confirm it by meeting it: drive the real
+   route and record which dialogs actually appear.
+2. Where a finding gives a reason, check the reason separately from the finding. Three times
+   running, the finding survived and the reason did not - and the reason is what chooses the fix.
+3. A refuted finding is corrected in place, struck through rather than deleted, with the
+   measurement beside it. A register that quietly loses its wrong rows teaches nothing about how
+   it got them wrong.
+4. Cross-check a new finding against the register's own older rows. C-4's "Yes ready for Enter"
+   was contradicted by T3-1, already recorded on the same page.
 ### The guard that knew half the vocabulary
 
 *([0.76.198](../CHANGELOG.md#076198--2026-09-28))*
@@ -4409,95 +4394,75 @@ and both had been shipped for a long time.
 
 *([0.76.192](../CHANGELOG.md#076192--2026-09-28))*
 
-The consistency survey's cheapest seven — a search box with no paste menu,
-a box that forgot its size, two different plus signs — were picked precisely
-because each looked like one or two lines. The pre-flight that runs before
-any fix here changed the shape of **four of the seven** before a line was
-written, and that is the whole point of the story: the cheap batch was where
-it paid off most, because nobody was looking hard at it.
+The consistency survey's cheapest seven - a search box with no paste menu, a box that forgot its
+size, two different plus signs - were picked because each looked like one or two lines. The
+pre-flight that runs before any fix changed the shape of **four of the seven** before a line was
+written. That's the whole point of the story: the cheap batch was where it paid off most,
+because nobody was looking hard at it.
 
-**C-11 grew a constant.** The row asked for `_add_paste_menu(search_entry)`
-and an ✕. The ✕ needs to know whether the box holds a real query or only its
-grey hint — and that judgement was already written out **three times**: once
-where the box is built, and twice, lowercased, inside the two functions that
-read the query (`if query == "search notes...": query = ""`). Nothing
-connected them, so rewording the hint would have left the app quietly
-filtering every list by it. The ✕ would have been a fourth. There is one
-`SEARCH_PLACEHOLDER` and one `_search_query()` now. The gate that polices
-this class, `tools/check_one_definition.py`, says of itself that it gains a
-rule when a duplicate costs the project something; this one had not, so it
-was consolidated without adding one.
+**C-11 grew a constant.** The row asked for `_add_paste_menu(search_entry)` and an ✕. The ✕
+needs to know whether the box holds a real query or only its grey hint - and that judgement was
+already written out three times: once where the box is built, and twice (lowercased) inside the
+two functions that read the query (`if query == "search notes...": query = ""`). Nothing
+connected them, so rewording the hint would have left the app quietly filtering every list by it;
+the ✕ would have been a fourth. There is one `SEARCH_PLACEHOLDER` and one `_search_query()` now.
 
-**C-12 grew from one field to six, and from a menu to a save.** The row said
-"the date entry at minimum; the recurrence number boxes are a weaker case,
-since they hold single digits". There are four Repeat boxes, and two are not
-digits: the end-date is a date, the same shape as the field the row *did*
-want fixed, and the day list holds "1,15". They are also free, because each
-one's variable traces to `update_recurrence_summary`, which schedules the
-autosave. The date field is **not** free: it autosaves on `<KeyRelease>`
-alone, and a paste fires none — measured, a pasted date scheduled no save
-while a typed character did. That is the silent loss the field's own comment
-says was repaired once for typing, and the new menu would have re-opened it
-on a new route. The check is now an invariant over the whole editor rather
-than a list of four fields, so the next box added without a menu fails it.
+**C-12 grew from one field to six, and from a menu to a save.** The row said "the date entry at
+minimum; the recurrence number boxes are a weaker case, since they hold single digits." There
+are four Repeat boxes, and two are not digits: the end-date is a date (the same shape the row
+did want fixed), and the day list holds "1,15". Those two are free, because each one's variable
+traces to `update_recurrence_summary`, which schedules the autosave. The date field is *not*
+free: it autosaves on `<KeyRelease>` alone, and a paste fires none - measured, a pasted date
+scheduled no save while a typed character did. That's the silent loss the field's own comment
+says was repaired once for typing; the new menu would have re-opened it on a new route. The
+check is now an invariant over the whole editor rather than a list of four fields.
 
-**C-19's premise was different from the row's.** The row offered two
-branches: persist it, or say in a comment that the omission is deliberate.
-The code had something in between — a line at the **body's** call site
-noting that the comments box did not remember. That states the difference
+**C-19's premise was different from the row's.** The row offered two branches: persist it, or
+say in a comment that the omission is deliberate. The code had something in between - a line at
+the body's call site noting that the comments box did not remember. That states the difference
 without giving a reason, so the row's condition was never met.
 
-**C-24 needed a different mechanism from its twin, and hid a third
-divergence.** The row asked for one sentence and an ✕ "to match the
-editor's". The editor's ✕ calls `pack_forget()` on its own area; the
-sidebar's frame is packed once when the Share panel is built and is part of
-that panel's layout, so forgetting it would take the panel's space with it —
-it clears the frame's children instead. And the two surfaces disagreed in a
-**third** way the row never mentioned: their titles ("Code for 3 notes (412
-chars)" against "Share code (412 characters)"). Left alone deliberately: the
-sidebar's note count is information the editor cannot carry, and its "chars"
-is a width accommodation in the 250px panel this project has already lost
-time to clipping fights over.
+**C-24 needed a different mechanism from its twin, and hid a third divergence.** The row asked
+for one sentence and an ✕ "to match the editor's". The editor's ✕ calls `pack_forget()` on its
+own area; the sidebar's frame is packed once when the Share panel is built and is part of that
+panel's layout, so forgetting it would take the panel's space with it - it clears the frame's
+children instead. The two surfaces also disagreed in a third way the row never mentioned: their
+titles ("Code for 3 notes (412 chars)" against "Share code (412 characters)"). Left alone
+deliberately: the sidebar's note count is information the editor can't carry, and its "chars" is
+a width accommodation in the 250px panel this project has already lost time to clipping fights
+over.
 
-**Two checks were wrong in instructive ways, and mutants found both.**
+**Two checks were wrong in instructive ways, and mutants found both.** A new one asserted the
+date reached the store after calling `_flush_autosave()` - a forcing call that saves whatever
+the editor holds whether anything asked it to. It survived the mutant that removed the paste's
+save binding outright; that rule was already written down in `qa/README`, six rules above where
+the same mistake was made.
 
-A new one asserted the date reached the store *after calling
-`_flush_autosave()`* — a forcing call, which saves whatever the editor holds
-whether anything asked it to. It survived the mutant that removed the paste's
-save binding outright. That rule was already written down in `qa/README`,
-six rules above where the same mistake was made.
+An old one could never have failed:
+`check('the comments box is deliberately not persisted', 'comments_expanded' not in
+load_settings())`. The key the helper would write is `editor_comments_expanded`;
+`comments_expanded` was never a candidate, so the check asserted the absence of a name nothing
+would ever create. It stayed green through the change that made the box persist - found only
+because a change that should have broken it did not.
 
-An **old** one could never have failed:
-`check('the comments box is deliberately not persisted', 'comments_expanded'
-not in load_settings())`. The key the helper would write is
-`editor_comments_expanded`; `comments_expanded` was never a candidate, so the
-check asserted the absence of a name nothing would ever create. It stayed
-green through the change that made the box persist, which is how it was
-found — by a change that should have broken it, not by anyone reading it.
-
-**And one platform difference, caught by the Linux image and not by
-Windows:** Tk's Entry paste deletes the selected text only on non-X11. A
-check that selected a field's contents and pasted over them passed here and
-failed there with the field holding both values. The app ships on Windows, so
-that is the test's problem rather than the product's — but it is the third
-time the Linux image has found something invisible on Windows.
+**One platform difference was caught by the Linux image and not by Windows:** Tk's Entry paste
+deletes the selected text only on non-X11. A check that selected a field's contents and pasted
+over them passed here and failed there, with the field holding both values. The app ships on
+Windows, so that's the test's problem rather than the product's - but it's the third time the
+Linux image has found something invisible on Windows.
 
 **The lessons.**
 
-1. A row's own suggested fix is a hypothesis about the code, and it is
-   cheaper to check than to unpick. Four of seven were wrong about scope,
-   premise or mechanism, and every one of those was found by a grep.
-2. Where a new reader of a judgement is being added, count the existing
-   readers first. The fourth copy is the one that makes the first three a
-   bug.
-3. A check about an absence has to name the thing that would actually be
-   there. Asserting `not in` against a name the code would never write is a
-   check that cannot fail.
-4. Reading a rule is not following it. The forcing-call mistake was made
-   again on the same page it is documented on, so the mutant is what caught
-   it — which is the argument for running mutants on checks that look
-   obviously right.
-
+1. A row's own suggested fix is a hypothesis about the code, and it's cheaper to check than to
+   unpick. Four of seven were wrong about scope, premise or mechanism, and every one of those was
+   found by a grep.
+2. Where a new reader of a judgement is being added, count the existing readers first. The
+   fourth copy is the one that makes the first three a bug.
+3. A check about an absence has to name the thing that would actually be there. Asserting
+   `not in` against a name the code would never write is a check that cannot fail.
+4. Reading a rule is not following it. The forcing-call mistake was made again on the same page
+   it is documented on, so the mutant is what caught it - which is the argument for running
+   mutants on checks that look obviously right.
 ### The safety guard that read a broken notebook as empty
 
 *([0.83.335](../CHANGELOG.md#083335--2026-10-02))*
