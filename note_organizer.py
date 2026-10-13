@@ -403,6 +403,8 @@ from noteorganizer.core.recurrence import (
     next_occurrence_on_or_after,
     effective_note,
     day_matches_series,
+    moved_from,
+    move_day,
     off_schedule_days,
     describe_recurrence,
 )
@@ -13844,6 +13846,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # field holds the series' start, which is no day's to change.
         self.day_date_lbl = tk.Label(meta_row, text="", font=("Segoe UI", 10))
         self.track_theme(self.day_date_lbl, bg="bg", fg="text")
+        # ...and beside it, the way to hold that one day on another date while
+        # it stays a day of the series (_move_this_day). Long-lived, so every
+        # colour it has follows the theme.
+        self.day_move_btn = tk.Button(meta_row, text="📅 Move this day…",
+                                      relief="flat", cursor="hand2",
+                                      font=("Segoe UI", 9))
+        self._toggles_its_popup(self.day_move_btn, self._open_move_day_picker)
+        self.track_theme(self.day_move_btn, bg="sidebar", fg="text",
+                         activebackground="card", activeforeground="text",
+                         highlightbackground="bg", highlightcolor="accent")
 
         # Note color, on the same row, pushed a bit right of the date controls.
         color_label = tk.Label(meta_row, text="🎨 Color:", font=("Segoe UI", 9, "bold"))
@@ -14775,6 +14787,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     text += " · 1 day keeps its own edits (✎)"
                 elif n_over > 1:
                     text += f" · {n_over} days keep their own edits (✎)"
+                # Days held on another date, where the calendar draws them.
+                n_moved = sum(
+                    1 for new in (note.get("moved") or {}).values()
+                    if parse_date(new) and expand_occurrences(
+                        note, parse_date(new), parse_date(new)) == [new])
+                if n_moved == 1:
+                    text += " · 1 day moved (↷)"
+                elif n_moved > 1:
+                    text += f" · {n_moved} days moved (↷)"
         if text:
             self.occurrence_banner.config(text=text)
             if not self._is_placed(self.occurrence_banner):
@@ -14827,17 +14848,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         day = self.current_occurrence_date if on else None
         when = parse_date(day) if day else None
         if on:
+            origin = moved_from(note, day)
+            origin_day = parse_date(origin) if origin else None
             self.day_strip_lbl.config(text=(
                 f"📅 Only this day: {show_day(when) if when else day}"
-                " — what you change here stays on this day"))
+                + (f" — moved from {show_day(origin_day, year=False)}"
+                   if origin_day else "")
+                + " — what you change here stays on this day"))
             if not self._is_placed(self.day_strip):
                 self.day_strip.pack(fill="x", padx=30, pady=(12, 0),
                                     before=self.editor_top_row)
             for widget, _packing in self._date_field_packing:
                 widget.pack_forget()
-            self.day_date_lbl.config(text=f"{show_date(day)} (this day)")
+            self.day_date_lbl.config(text=(
+                f"{show_date(day)} (this day, moved from {show_date(origin)})"
+                if origin else f"{show_date(day)} (this day)"))
             if not self._is_placed(self.day_date_lbl):
-                self.day_date_lbl.pack(side="left", padx=(6, 20),
+                self.day_date_lbl.pack(side="left", padx=(6, 8),
+                                       before=self._color_label)
+            if not self._is_placed(self.day_move_btn):
+                self.day_move_btn.pack(side="left", padx=(0, 20), ipadx=4,
                                        before=self._color_label)
             for widget, _packing in self._repeat_field_packing:
                 widget.pack_forget()
@@ -14855,6 +14885,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         else:
             self.day_strip.pack_forget()
             self.day_cat_lbl.pack_forget()
+            self.day_move_btn.pack_forget()
             if self._is_placed(self.day_date_lbl):
                 self.day_date_lbl.pack_forget()
                 for widget, packing in self._date_field_packing:
@@ -14883,6 +14914,108 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if pending is not None:
             self._pending_calendar_return = pending
             self._update_calendar_return_button()
+
+    def _open_move_day_picker(self):
+        """Day mode's "📅 Move this day…": the date picker, opened on the
+        day, whose pick moves it (_move_this_day)."""
+        if not self._day_mode():
+            return
+        self.open_date_picker(anchor_widget=self.day_move_btn,
+                              on_pick=self._move_this_day,
+                              marked=self.current_occurrence_date)
+
+    def _day_is_free(self, note, day, to):
+        """Whether *note*'s day now on *day* may be held on *to*: its own
+        date, or one no other day of the series is on -- two days on one
+        date would be one."""
+        target = parse_date(to)
+        return target is not None and (
+            to == (moved_from(note, day) or day)
+            or expand_occurrences(note, target, target) != [to])
+
+    def _move_this_day(self, to):
+        """Hold the day on screen on *to*, still one day of its series
+        ("📅 Move this day…", field request 2026-10-13: a weekly meeting held
+        on another day one week). What was typed is saved to the day first,
+        and its own edit goes with it; the editor opens the day where it is
+        now, and an Undo puts it back."""
+        note = self.find_note(self.selected_note_id) if self._day_mode() else None
+        day = self.current_occurrence_date
+        if note is None or not day or parse_date(to) is None or to == day:
+            return
+        if not self._day_is_free(note, day, to):
+            self.show_info(
+                "That day is taken",
+                f"This series already has a day on {show_day(parse_date(to))}. "
+                "A day can move only to a date the series does not have.")
+            return
+        # Saved to the day first, as leaving it saves it: the typing goes
+        # with the day.
+        if self._flush_autosave(leaving=False) is False:
+            return
+        note = self.find_note(note["id"])
+        if (note is None or not is_recurring(note)
+                or self.current_occurrence_date != day):
+            return
+        origin = self._relocate_day(note, day, to)
+        self.set_status(f"Moved to {show_day(parse_date(to))}")
+        self._show_toast("Day moved", action=(
+            lambda nid=note["id"], uid=note.get("uid"):
+            self._undo_day_move(nid, uid, origin, to, day)))
+
+    def _relocate_day(self, note, day, to):
+        """Hold *note*'s day now on *day* on *to* (move_day), and bring every
+        surface along: the file, the list, the calendar and its day panel,
+        and the editor -- which, holding that day, opens it where it is now,
+        the way back to the calendar following it there. Returns the date
+        the rule gives the day."""
+        origin = move_day(note, day, to)
+        note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.save_notes()
+        if (self.selected_note_id == note["id"]
+                and self.current_occurrence_date == day):
+            pending = getattr(self, "_pending_calendar_return", None)
+            self.open_note_in_tab(note, occurrence_date=to, flush=False)
+            when = parse_date(to)
+            if pending is not None and when is not None:
+                self._pending_calendar_return = dict(
+                    pending, date_str=to, year=when.year, month=when.month)
+                self._update_calendar_return_button()
+        elif self.selected_note_id == note["id"]:
+            self._update_occurrence_banner()
+        self.refresh_note_list()
+        self.render_calendar()
+        self.refresh_day_panel()
+        return origin
+
+    def _undo_day_move(self, note_id, uid, origin, now_on, back_to):
+        """The Undo a move offers: the day back on *back_to* -- if it is
+        still the day of *origin*, still on *now_on*, and *back_to* is free.
+        The editor holding it saves first, as for the move itself."""
+        note = self._note_for_undo(note_id, uid)
+        if note is None:
+            self._show_toast("That note is no longer here", kind="info")
+            return
+        on = parse_date(now_on)
+        if (not is_recurring(note) or on is None
+                or (moved_from(note, now_on) or now_on) != origin
+                or expand_occurrences(note, on, on) != [now_on]):
+            self._show_toast("That day has moved on since, so it stays where "
+                             "it is", kind="info")
+            return
+        if not self._day_is_free(note, now_on, back_to):
+            self._show_toast("Another day of this series is there now, so "
+                             "this one stays where it is", kind="info")
+            return
+        if (self.selected_note_id == note["id"]
+                and self.current_occurrence_date == now_on
+                and self._flush_autosave(leaving=False) is False):
+            return
+        note = self.find_note(note["id"])
+        if note is None:
+            return
+        self._relocate_day(note, now_on, back_to)
+        self.set_status(f"Moved back to {show_day(parse_date(back_to))}")
 
     def _show_off_schedule_days(self, note=None):
         """Walk the days a repeating note keeps its own edits for that its
@@ -14975,6 +15108,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "updated": stamp,
         })
         note["overrides"].pop(day, None)
+        # A day moved here whose own day the rule no longer gives: the move
+        # goes with it, or it would draw the day again if the rule came back.
+        origin = moved_from(note, day)
+        if origin is not None:
+            note["moved"].pop(origin, None)
         if how == "trash":
             self._move_notes_to_trash([fresh])
         else:
@@ -15166,18 +15304,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if entry is not None and getattr(event, "widget", None) is not entry:
             self._settle_date_fields(redraw=True)
 
-    def open_date_picker(self, target_entry=None, anchor_widget=None):
+    def open_date_picker(self, target_entry=None, anchor_widget=None,
+                         on_pick=None, marked=None):
         """Small calendar dropdown for picking a date, anchored to whichever
         button opened it — not a separate window. Reusable: pass a different
         target_entry/anchor_widget to use this for any date field (e.g. the
         recurrence 'Ends: On date' field), or call with no args for the main
-        note Date field."""
+        note Date field.
+
+        With *on_pick* the date goes to that callback, as 'YYYY-MM-DD', once
+        the picker has closed, and no field is written; *marked* is the day
+        it opens on and marks (one day's "Move this day")."""
         target_entry = target_entry or self.date_entry
         anchor_widget = anchor_widget or self.pick_date_btn
 
         # Read as the field would be once left: the picker opens on the date
         # typed there, in whatever form it was typed, and marks that day.
-        current_day = read_date(target_entry.get(), settled=True)
+        current_day = (parse_date(marked) if on_pick is not None
+                       else read_date(target_entry.get(), settled=True))
         start_date = current_day or datetime.now().date()
 
         self._dismiss_mini_popup()
@@ -15211,6 +15355,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         grid_frame.pack(padx=10, pady=(0, 10))
 
         def _pick(date_str):
+            if on_pick is not None:
+                # Closed first: what the callback does may ask a question,
+                # which must not open under a picker still on screen.
+                self._dismiss_mini_popup()
+                on_pick(date_str)
+                return
             target_entry.delete(0, "end")
             target_entry.insert(0, show_date(date_str))
             target_entry.config(fg=self.colors["text"])
@@ -18413,7 +18563,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     command=lambda: self._ctx_open(note, None,
                                                    return_day=occurrence_date)
                 )
-                if occurrence_date in (note.get("overrides") or {}):
+                # A moved day has a way back too, with or without text of its
+                # own: its reset puts it on its date and asks about the text.
+                if moved_from(note, occurrence_date) is not None:
+                    menu.add_command(
+                        label="↺  Reset this day to the series…",
+                        command=lambda: self._reset_occurrence_override(
+                            note, occurrence_date)
+                    )
+                elif occurrence_date in (note.get("overrides") or {}):
                     menu.add_command(
                         label="↺  Reset this day to the series content",
                         command=lambda: self._reset_occurrence_override(
@@ -18618,15 +18776,54 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         An override is the only way a day stops tracking series edits —
         and until this entry existed there was no way back: the day kept
         its own content forever, invisibly (a field report: a series edit
-        that seemed to skip one day out of three)."""
+        that seemed to skip one day out of three).
+
+        A day moved to another date goes back to the date its rule gives
+        it -- always, the owner's call (2026-10-13) -- and whether its own
+        text goes too is asked: it may have been brought up to date, with
+        only the date to undo."""
         note = self.find_note(note["id"])
-        if note is None or occurrence_date not in (note.get("overrides") or {}):
+        if note is None:
             return
-        if not self.ask_yes_no(
-                "Reset this day",
-                f"Return {show_date(occurrence_date)} to the series content?\n\n"
-                "The separate edits made for this day will be discarded.",
-                icon="warning", default="no"):
+        origin = moved_from(note, occurrence_date)
+        own_text = occurrence_date in (note.get("overrides") or {})
+        if origin is None and not own_text:
+            return
+        if origin is None:
+            if not self.ask_yes_no(
+                    "Reset this day",
+                    f"Return {show_date(occurrence_date)} to the series content?\n\n"
+                    "The separate edits made for this day will be discarded.",
+                    icon="warning", default="no"):
+                return
+            choice = "text"
+        else:
+            back = show_day(parse_date(origin))
+            if own_text:
+                choice = self._themed_dialog(
+                    "Reset this day",
+                    f"Put this day back on {back}?\n\nIts own text can go "
+                    "back to the series' content as well, or stay as it is.",
+                    kind="question",
+                    buttons=[("Cancel", None), ("Only the date", "date"),
+                             ("The date and the text", "text")])
+            else:
+                choice = "date" if self.ask_yes_no(
+                    "Reset this day", f"Put this day back on {back}?") else None
+            if choice is None:
+                return
+        if choice == "date":
+            # Only the date: the day's text stays its own, and what was typed
+            # on it is saved to it first, as a move saves it.
+            if (self.selected_note_id == note["id"]
+                    and self.current_occurrence_date == occurrence_date
+                    and self._flush_autosave(leaving=False) is False):
+                return
+            note = self.find_note(note["id"])
+            if note is None or moved_from(note, occurrence_date) != origin:
+                return
+            self._relocate_day(note, occurrence_date, origin)
+            self.set_status(f"This day is back on {back}")
             return
         showing = (self.selected_note_id == note["id"]
                    and self.current_occurrence_date == occurrence_date)
@@ -18641,13 +18838,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # question says (see _schedule_to_carry).
             carried = self._schedule_to_carry(unsaved=False)
         note["overrides"].pop(occurrence_date, None)
+        if origin is not None:
+            # ...and the date goes back with the text: the day is home.
+            note["moved"].pop(origin, None)
+        home = origin or occurrence_date
         note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.save_notes()
         # If the editor is showing exactly this day, reload it so the
-        # series content replaces the dropped override on screen too.
+        # series content replaces the dropped override on screen too --
+        # where the day is now, the way back to the calendar following it.
         if showing:
-            self.load_note(note, occurrence_date)
+            self.load_note(note, home)
             self._put_back_schedule(carried)
+            pending = getattr(self, "_pending_calendar_return", None)
+            when = parse_date(home)
+            if origin is not None and pending is not None and when is not None:
+                self._pending_calendar_return = dict(
+                    pending, date_str=home, year=when.year, month=when.month)
+                self._update_calendar_return_button()
         elif self.selected_note_id == note["id"]:
             # The series on screen counts its days' own edits in its
             # banner, which went on counting this one.
@@ -18655,7 +18863,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.refresh_note_list()
         self.render_calendar()
         self.refresh_day_panel()
-        self.set_status("This day follows the series again")
+        self.set_status(f"This day is back on {back} and follows the series again"
+                        if origin is not None else
+                        "This day follows the series again")
 
     def _context_delete_note(self, note, occurrence_date=None):
         """Delete triggered from the right-click menu. Routes through the normal
@@ -19085,7 +19295,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         ("checklist", "checklist"), ("date", "date"),
         ("recurrence", "repeat rule"), ("color", "colour"),
         ("category", "category"), ("overrides", "per-day edits"),
-        ("exceptions", "skipped days"), ("pinned", "pin"),
+        ("exceptions", "skipped days"), ("moved", "moved days"),
+        ("pinned", "pin"),
     )
 
     def restore_previous_version(self):
@@ -19565,7 +19776,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "paragraphs": copy.deepcopy(note.get("paragraphs") or []),
             "comments": note.get("comments") or "",
         }
-        for key in ("date", "recurrence", "exceptions", "overrides"):
+        for key in ("date", "recurrence", "exceptions", "overrides", "moved"):
             prev[key] = copy.deepcopy(note.get(key))
         return prev
 
@@ -19615,6 +19826,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if not recurrence["freq"]:
                 note["exceptions"] = []
                 note["overrides"] = {}
+                note["moved"] = {}
             note["date"] = date_value
             note["recurrence"] = recurrence
         # A copy, as the checklist beside it: the editor's own list stored
@@ -19956,6 +20168,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     # only once the rescue copy above holds it.
                     note["exceptions"] = []
                     note["overrides"] = {}
+                    note["moved"] = {}
                 self.set_status(("Auto-saved " if auto else "Saved at ") + show_stamp(now)
                                 + (self._REPEAT_OFF_KEPT if days_lost else ""))
                 announce = auto
@@ -20313,8 +20526,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.set_status("Checklist item put back")
 
     def _undo_occurrence_delete(self, note_id, date_str, own_edit=None,
-                                uid=None):
+                                uid=None, came_from=None):
         """Put back the one day a repeating note was removed from.
+
+        *came_from*: the day was a moved one, held on *date_str* while its
+        rule gives it *came_from* -- the date the delete skipped. It comes
+        back moved, where it was.
 
         This half has no other way home. Deleting a single occurrence
         writes the date into the note's `exceptions`, and nothing in the
@@ -20362,13 +20579,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._show_toast(
                     "Day removed",
                     action=lambda: self._undo_occurrence_delete(
-                        note_id, date_str, own_edit, uid))
+                        note_id, date_str, own_edit, uid, came_from))
                 return
         exceptions = set(note.get("exceptions") or [])
         if not is_recurring(note):
             self._show_toast("This note no longer repeats, so that day "
                              "can't come back", kind="info")
             return
+        # The date the delete skipped: a moved day's is the one its rule
+        # gives it, and the day comes back held where it was.
+        skipped = came_from or date_str
+        moves = dict(note.get("moved") or {})
+        if came_from:
+            moves[came_from] = date_str
         # Asked of the calendar, the day as if it were not skipped: a repeat
         # picked anew, or one whose rule, start or end was changed since, may
         # not have that day at all. Asked only of a day no longer skipped,
@@ -20376,19 +20599,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # calendar showed.
         day = parse_date(date_str)
         if day is None or expand_occurrences(
-                dict(note, exceptions=sorted(exceptions - {date_str})),
+                dict(note, exceptions=sorted(exceptions - {skipped}),
+                     moved=moves),
                 day, day) != [date_str]:
             self._show_toast("This note's repeat no longer has that day, "
                              "so it can't come back", kind="info")
             return
-        if date_str not in exceptions and (
+        if skipped not in exceptions and (
+                not came_from
+                or (note.get("moved") or {}).get(came_from) == date_str) and (
                 not own_edit or date_str in (note.get("overrides") or {})):
             self._show_toast("That day is already back", kind="info")
             return
         # Otherwise the day is skipped, or the repeat was picked anew and has
         # it again without the text it had of its own: both go back below.
-        exceptions.discard(date_str)
+        exceptions.discard(skipped)
         note["exceptions"] = sorted(exceptions)
+        if came_from:
+            note["moved"] = moves
         # Its own edit goes back with it -- unless the day somehow has one
         # again already, which is newer than the one this Undo remembers.
         if own_edit and date_str not in (note.get("overrides") or {}):
@@ -20558,8 +20786,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if scope is None:
                 return
             if scope == "occurrence":
+                # A moved day is skipped by the date its rule gives it, and
+                # its move goes with it: kept, the move would outlive the
+                # day, and an Undo of it would have nothing to bring back.
+                origin = moved_from(note, occurrence_date)
+                if origin is not None:
+                    note["moved"].pop(origin, None)
                 exceptions = set(note.get("exceptions") or [])
-                exceptions.add(occurrence_date)
+                exceptions.add(origin or occurrence_date)
                 note["exceptions"] = sorted(exceptions)
                 # Kept for the Undo below: the day's own title and text
                 # went with it, and the Undo used to bring back the day
@@ -20582,8 +20816,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # With the note's identity: an id freed by a delete goes to
                 # the next new note, and the Undo must not act on that one.
                 undo = (lambda nid=note["id"], day=occurrence_date,
-                        edit=own_edit, uid=note.get("uid"):
-                        self._undo_occurrence_delete(nid, day, edit, uid))
+                        edit=own_edit, uid=note.get("uid"), came=origin:
+                        self._undo_occurrence_delete(nid, day, edit, uid,
+                                                     came_from=came))
                 self._show_toast("Day removed", action=undo)
                 if self.selected_note_id == note["id"]:
                     self._update_occurrence_banner()

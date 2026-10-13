@@ -53,6 +53,7 @@ from ..core.recurrence import (
     expand_occurrences,
     history_entries,
     is_recurring,
+    moved_from,
     parse_date,
     show_date,
     show_day,
@@ -85,6 +86,9 @@ def _day_row_parts(app, base_note, date_str):
         # This day was edited with "only this occurrence" — it
         # keeps its own content and series edits don't reach it.
         icons += "  ✎"
+    if moved_from(base_note, date_str) is not None:
+        # A day of the series held here from another date.
+        icons += "  ↷"
     if note.get("comments"):
         icons += "  💬"
     if note.get("attachments"):
@@ -110,7 +114,8 @@ def _day_note_key(base_note, date_str):
     return (base_note.get("id"), _note_str(note, "title"), _note_str(note, "body"),
             _note_str(note, "comments"), repr(note.get("checklist")),
             len(note.get("attachments") or []),
-            date_str in (base_note.get("overrides") or {}))
+            date_str in (base_note.get("overrides") or {}),
+            moved_from(base_note, date_str))
 
 
 def _notes_on_day(app, date_str):
@@ -1368,6 +1373,9 @@ class CalendarViewMixin:
         chips = []
         if date_str in (base_note.get("overrides") or {}):
             chips.append("✎ edited for this day")
+        came = moved_from(base_note, date_str)
+        if came is not None:
+            chips.append(f"↷ moved from {show_date(came)}")
         if table_count:
             chips.append("▦ 1 table" if table_count == 1
                          else f"▦ {table_count} tables")
@@ -1670,6 +1678,8 @@ class CalendarViewMixin:
                               if n_kids else "")
                 if entry.get("n_off"):
                     suffix += f" · {entry['n_off']} off the schedule"
+                if entry.get("n_moved"):
+                    suffix += f" · {entry['n_moved']} moved (↷)"
                 if expandable:
                     glyph = "▾" if expanded else "▸"
                     row_cmd = (lambda i=entry["note_id"]:
@@ -1692,7 +1702,8 @@ class CalendarViewMixin:
                     bold=True)
                 if expanded:
                     for child in entry["children"]:
-                        mark = "✎" if child.get("edited") else "•"
+                        mark = ("✎" if child.get("edited")
+                                else "↷" if child.get("moved_from") else "•")
                         if child.get("off_schedule"):
                             # A day the series no longer lands on: opened as
                             # one, it was a day no calendar could show, and
@@ -1709,10 +1720,14 @@ class CalendarViewMixin:
                                     self.show_note_context_menu(e, n),
                                 indent=26)
                             continue
+                        # A moved day says where it came from: on its new
+                        # date alone it reads as a day the rule gives.
+                        came = child.get("moved_from")
                         one_row(
                             self._history_rows,
                             (f"{mark} {show_date(child['date'])}   ",
-                             child['title'] or '(untitled)', ""),
+                             child['title'] or '(untitled)',
+                             f"  · moved from {show_date(came)}" if came else ""),
                             self.colors["text"],
                             lambda n=note, d=child["date"]:
                                 self._history_open_day(n, d),

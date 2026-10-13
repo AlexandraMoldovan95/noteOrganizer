@@ -659,6 +659,21 @@ chip in the preview. To make a day follow the series again, right-click it in th
 choose **↺ Reset this day to the series content**: the day's own edits go. A day whose edits come
 back to exactly what the series says follows the series again by itself.
 
+### Moving one day
+
+A day can be held on another date and stay a day of the series - the weekly meeting moved to
+Tuesday one week. Beside the day's date, **📅 Move this day…** opens a small calendar: pick the new
+date and the day moves there with its own text, and a banner offers **Undo**. The strip then says
+where it came from ("moved from Monday, 12 October"); the calendar draws it on its new date only,
+History lists it with "moved from …", and the series counts it above the note ("1 day moved
+(↷)"). A date that already has a day of the series is refused - two days on one date would be one.
+
+To put it back, move it to its own date, or right-click it in the calendar and choose **↺ Reset
+this day to the series…**. The date always goes back; when the day has text of its own, you choose
+whether the text goes back to the series' too, or stays. Deleting a moved day removes it, and its
+Undo brings it back moved. Turning the repeat off takes the moves with the days, and **↩ Restore
+previous** brings them back.
+
 ### Moving or ending a series
 
 Moving the series afterwards can leave a day's own edits behind: change the start date or the

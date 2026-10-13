@@ -3039,5 +3039,176 @@
     "must_fail": ["Ctrl+Z after a day saved itself takes the typing back"],
     "suites": ["qa5"],
     "expect": "killed"
+  },
+  {
+    "id": "MV01",
+    "about": "a moved day is drawn on its old date as well as its new one",
+    "edits": [{"file": "noteorganizer/core/recurrence.py",
+               "find": "    dates = _expand_rule(note, range_start, range_end, limit, set(moved))\n",
+               "replace": "    dates = _expand_rule(note, range_start, range_end, limit, set())\n"}],
+    "must_fail": ["a moved day is drawn on its new date and not on its old one"],
+    "suites": ["test_recurrence"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV02",
+    "about": "a moved day is drawn nowhere: the calendar loses it",
+    "edits": [{"file": "noteorganizer/core/recurrence.py",
+               "find": "        dates.append(new)\n        drawn.add(new)\n",
+               "replace": "        drawn.add(new)\n"}],
+    "must_fail": ["a moved day is drawn on its new date and not on its old one"],
+    "suites": ["test_recurrence"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV03",
+    "about": "a moved day leaves its own edit behind on the date it left",
+    "edits": [{"file": "noteorganizer/core/recurrence.py",
+               "find": "        overrides[to] = overrides.pop(day)\n",
+               "replace": "        pass\n"}],
+    "must_fail": ["moving a day records where it came from, and carries its own edit with it"],
+    "suites": ["test_recurrence"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV04",
+    "about": "a load forgets every move: the day is back on its old date after a restart",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "    clean[\"moved\"] = moved\n",
+               "replace": "    clean[\"moved\"] = {}\n"}],
+    "must_fail": ["a load keeps real moves only"],
+    "suites": ["test_recurrence"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV05",
+    "about": "a move does not save what was typed on the day first, and the typing stays behind",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if self._flush_autosave(leaving=False) is False:\n            return\n        note = self.find_note(note[\"id\"])\n        if (note is None or not is_recurring(note)\n",
+               "replace": "        if False:\n            return\n        note = self.find_note(note[\"id\"])\n        if (note is None or not is_recurring(note)\n"}],
+    "must_fail": ["...what was typed on the day before goes with it, and the editor follows it"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV06",
+    "about": "a day can be moved onto another day of its series, and the two become one",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        return target is not None and (\n            to == (moved_from(note, day) or day)\n            or expand_occurrences(note, target, target) != [to])\n",
+               "replace": "        return target is not None\n"}],
+    "must_fail": ["a date the series already has is refused, saying why, and nothing moves"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV07",
+    "about": "deleting a moved day leaves its move behind, outliving the day",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                if origin is not None:\n                    note[\"moved\"].pop(origin, None)\n                exceptions = set(note.get(\"exceptions\") or [])\n",
+               "replace": "                exceptions = set(note.get(\"exceptions\") or [])\n"}],
+    "must_fail": ["deleting a moved day skips the date its rule gives it, and takes the move with it"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV08",
+    "about": "the Undo of a deleted moved day looks for it on the wrong date, and cannot bring it back",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        skipped = came_from or date_str\n",
+               "replace": "        skipped = date_str\n"}],
+    "must_fail": ["...and its Undo brings it back moved, with its own text"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV09",
+    "about": "Reset's \"Only the date\" throws the day's own text away as well",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if choice == \"date\":\n            # Only the date:",
+               "replace": "        if choice == \"never\":\n            # Only the date:"}],
+    "must_fail": ["...\"Only the date\" puts the day back and keeps its text"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV10",
+    "about": "turning a repeat off leaves its moves behind in the note",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                    note[\"overrides\"] = {}\n                    note[\"moved\"] = {}\n",
+               "replace": "                    note[\"overrides\"] = {}\n"}],
+    "must_fail": ["turning the repeat off takes the moves with the days, into the rescue copy"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV11",
+    "about": "the rescue copy a repeat's turn-off makes forgets the moved days",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        for key in (\"date\", \"recurrence\", \"exceptions\", \"overrides\", \"moved\"):\n",
+               "replace": "        for key in (\"date\", \"recurrence\", \"exceptions\", \"overrides\"):\n"}],
+    "must_fail": ["turning the repeat off takes the moves with the days, into the rescue copy",
+                  "...and Restore previous brings the series back with its day moved"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV12",
+    "about": "two series differing only by a moved day count as one note, for the clean-ups that collapse copies",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "        _stable(note.get(\"moved\")),\n",
+               "replace": ""}],
+    "must_fail": ["two series that differ only by a moved day are not the same note"],
+    "suites": ["test_recurrence"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV13",
+    "about": "History leaves out a moved day of an endless series",
+    "edits": [{"file": "noteorganizer/core/recurrence.py",
+               "find": "                    if (new in overrides or not is_date(new) or not bucket_ok(new)\n",
+               "replace": "                    if (True or new in overrides or not is_date(new) or not bucket_ok(new)\n"}],
+    "must_fail": ["History lists a moved day of an endless series, saying where it came from"],
+    "suites": ["test_recurrence"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV14",
+    "about": "a moved day with no text of its own has no way back in its menu",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                if moved_from(note, occurrence_date) is not None:\n                    menu.add_command(\n",
+               "replace": "                if False:\n                    menu.add_command(\n"}],
+    "must_fail": ["a moved day with no text of its own still offers its way back in its menu"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV15",
+    "about": "\"Move this day…\" keeps the old theme's colour around its keyboard ring",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                         activebackground=\"card\", activeforeground=\"text\",\n                         highlightbackground=\"bg\", highlightcolor=\"accent\")\n",
+               "replace": "                         activebackground=\"card\", activeforeground=\"text\",\n                         highlightcolor=\"accent\")\n"}],
+    "must_fail": ["every colour of \"Move this day…\" follows a new theme"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV16",
+    "about": "the Undo a move offers says it moved the day back, and does not",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self._relocate_day(note, now_on, back_to)\n",
+               "replace": ""}],
+    "must_fail": ["Undo puts the day back where it was, its own edit with it, the editor following"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "MV17",
+    "about": "the editor stays on the date a day left, showing a day the calendar no longer has",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            self.open_note_in_tab(note, occurrence_date=to, flush=False)\n",
+               "replace": "            pass\n"}],
+    "must_fail": ["...what was typed on the day before goes with it, and the editor follows it"],
+    "suites": ["qa5"],
+    "expect": "killed"
   }
 ]

@@ -184,6 +184,7 @@ interval, specific weekdays/month-days, an end condition) plus two small maps:
 
 - `exceptions`: dates removed from the series entirely
 - `overrides`: date → partial note, for edits that apply to one occurrence only
+- `moved`: the date the rule gives a day → the date it is held on instead ("Move this day")
 
 `expand_occurrences(note, range_start, range_end)` is the only place that turns a rule into
 actual dates — everything else (calendar rendering, list previews) asks it for occurrences
@@ -207,6 +208,17 @@ dropping loses text, while kept they come back by themselves if the rule is put 
 cannot disagree with the calendar; the series line counts them apart and offers the walk that
 turns each into a note of its own or a Trash entry (`_show_off_schedule_days`), and the
 calendar History marks them rather than opening them as days of the series.
+
+A moved day (2026-10-13) is the same idea from the other side: the person, not a rule change,
+puts one day on another date. `moved` maps the date the rule gives the day to the date it is held
+on, and the day's own edit is kept under the date it is held on, so every surface that opens a
+day by its date opens this one unchanged. `expand_occurrences` skips the rule's date and draws the
+new one — while the rule still gives the original date and it was not deleted, so a move
+outlives neither — and the moved day still counts as one of a "N times" series' N. A move whose
+original date the rule no longer gives leaves its edit off the schedule, where the walk above
+finds it. `move_day` re-keys the edit and drops the move when a day goes home; deleting a moved
+day skips its original date and takes the move with it. Share codes carry no moves, as they carry
+no exceptions or overrides; a backup carries all three.
 
 ### An import asks first, and acts after
 

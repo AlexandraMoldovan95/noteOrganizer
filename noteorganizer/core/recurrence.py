@@ -100,6 +100,8 @@ __all__ = [
     "history_entries",
     "effective_note",
     "day_matches_series",
+    "moved_from",
+    "move_day",
     "off_schedule_days",
     "describe_recurrence",
 ]
@@ -501,16 +503,24 @@ def _day_in_month(year, month, wanted_day, policy):
     return None  # "skip"
 
 
+def _moves(note):
+    """A repeating note's days held on other dates, as stored: the date the
+    rule gives each one, mapped to the date it is on ("Move this day")."""
+    moved = note.get("moved") if is_recurring(note) else None
+    return moved if isinstance(moved, dict) else {}
+
+
 def expand_occurrences(note, range_start, range_end, limit=None):
     """Every date this note lands on between range_start and range_end
-    (inclusive), as 'YYYY-MM-DD' strings. Exceptions are already removed.
+    (inclusive), as 'YYYY-MM-DD' strings. Exceptions are already removed,
+    and a day moved to another date is drawn there instead.
 
-    This is the heart of the module. One branch per frequency, each
-    walking forward from the anchor and calling the shared ``take()``
-    below to record a hit and decide whether to keep going.
+    This is the heart of the module, and the one place a series' days are
+    worked out: the calendar, the History, the sort by next day and the
+    days off the schedule all ask it, so a moved day is moved everywhere.
 
     Args:
-        note: The note dict, providing its date, rule and exceptions.
+        note: The note dict, providing its date, rule, exceptions and moves.
         range_start: First date of interest (a ``date`` object).
         range_end: Last date of interest, inclusive.
         limit: Stop once this many dates are found -- the first ones, in
@@ -521,12 +531,80 @@ def expand_occurrences(note, range_start, range_end, limit=None):
         A sorted list of date strings. Empty if the note has no valid
         anchor date, or simply doesn't occur in this range.
     """
+    moved = _moves(note)
+    # The rule's own days, less the ones moved away: each still counts as
+    # one of a "10 times" series' ten, wherever it is held.
+    dates = _expand_rule(note, range_start, range_end, limit, set(moved))
+    if not moved:
+        return dates
+    # ...and each moved day on its new date, while the day it was moved from
+    # is still one the rule gives and was not deleted: a move outlives
+    # neither. The new date may lie past the rule's end or before its start;
+    # the person chose it.
+    drawn = set(dates)
+    exceptions = set(note.get("exceptions") or [])
+    for orig, new in moved.items():
+        day = parse_date(new) if isinstance(new, str) else None
+        if (day is None or new in drawn or orig in exceptions
+                or not range_start <= day <= range_end):
+            continue
+        origin = parse_date(orig) if isinstance(orig, str) else None
+        if origin is None or _expand_rule(note, origin, origin) != [orig]:
+            continue
+        dates.append(new)
+        drawn.add(new)
+    dates.sort()
+    return dates[:limit] if limit is not None else dates
+
+
+def moved_from(note, day):
+    """The date the series' day now on *day* was moved from, or None when
+    *day* holds no moved day of *note*."""
+    for orig, new in _moves(note).items():
+        if new == day:
+            return orig
+    return None
+
+
+def move_day(note, day, to):
+    """Hold the series' day that is drawn on *day* on *to* instead.
+
+    The move is recorded against the date the rule gives the day -- and
+    dropped, when *to* is that date: the day is home again. The day's own
+    edit goes with it, kept under the date it is drawn on, so everything
+    that opens a day by its date opens this one. The caller has made sure
+    *to* holds no other day of the series (:func:`expand_occurrences`).
+
+    Returns:
+        The date the rule gives the day.
+    """
+    moved = note.get("moved")
+    if not isinstance(moved, dict):
+        moved = note["moved"] = {}
+    orig = moved_from(note, day) or day
+    if to == orig:
+        moved.pop(orig, None)
+    else:
+        moved[orig] = to
+    overrides = note.get("overrides")
+    if isinstance(overrides, dict) and day in overrides and to != day:
+        overrides[to] = overrides.pop(day)
+    return orig
+
+
+def _expand_rule(note, range_start, range_end, limit=None, skip=()):
+    """The dates *note*'s rule gives between range_start and range_end, less
+    its exceptions and the dates in *skip* -- which still count towards a
+    "stop after N times". One branch per frequency, each walking forward
+    from the anchor and calling the shared ``take()`` below to record a hit
+    and decide whether to keep going. See :func:`expand_occurrences`, which
+    adds the moved days."""
     anchor = parse_date(note.get("date", ""))
     if anchor is None:
         return []
 
     rec = normalize_recurrence(note.get("recurrence"))
-    exceptions = set(note.get("exceptions") or [])
+    exceptions = set(note.get("exceptions") or []) | set(skip)
 
     if not rec["freq"]:
         one_off = format_date(anchor)
@@ -777,7 +855,8 @@ def history_entries(notes, query="", year_bucket="All", today=None, memo=None):
             # worked out from (see `memo`).
             key = ("series", note.get("date") or "",
                    repr(note.get("recurrence")),
-                   tuple(note.get("exceptions") or ()), today)
+                   tuple(note.get("exceptions") or ()),
+                   tuple(sorted(_moves(note).items())), today)
             known = memo.get(key)
             if known is None:
                 # A BOUNDED, small series lists ALL its occurrences — the
@@ -843,6 +922,7 @@ def history_entries(notes, query="", year_bucket="All", today=None, memo=None):
                         "title": (ov.get("title") or title),
                         "edited": edited,
                         "off_schedule": False,
+                        "moved_from": moved_from(note, day),
                     })
                 # A bounded series lists its days from its rule, so a day it
                 # no longer has was in no row at all: listed here too, marked.
@@ -863,6 +943,7 @@ def history_entries(notes, query="", year_bucket="All", today=None, memo=None):
                         "title": (ov.get("title") or title),
                         "edited": True,
                         "off_schedule": True,
+                        "moved_from": None,
                     })
                 children.sort(key=lambda c: c["date"], reverse=True)
             else:
@@ -890,7 +971,26 @@ def history_entries(notes, query="", year_bucket="All", today=None, memo=None):
                         # Listed as a day of the series, and opened as one: a
                         # day the calendar does not have.
                         "off_schedule": day in off,
+                        "moved_from": None if day in off else moved_from(note, day),
                     })
+                # A day moved to another date is listed as well, edits of its
+                # own or not: where it went is worth finding. Only while the
+                # calendar draws it there (expand_occurrences).
+                for orig, new in _moves(note).items():
+                    if (new in overrides or not is_date(new) or not bucket_ok(new)
+                            or not base_matches):
+                        continue
+                    day = parse_date(new)
+                    if expand_occurrences(note, day, day) != [new]:
+                        continue
+                    children.append({
+                        "date": new,
+                        "title": title,
+                        "edited": False,
+                        "off_schedule": False,
+                        "moved_from": orig,
+                    })
+                children.sort(key=lambda c: c["date"], reverse=True)
 
             base_in_bucket = bucket_ok(note.get("date") or "")
             if children or (base_matches and (base_in_bucket
@@ -909,6 +1009,7 @@ def history_entries(notes, query="", year_bucket="All", today=None, memo=None):
                     "n_edited": sum(1 for c in children
                                     if c["edited"] and not c["off_schedule"]),
                     "n_off": sum(1 for c in children if c["off_schedule"]),
+                    "n_moved": sum(1 for c in children if c["moved_from"]),
                     "auto_expand": any_child_match,
                     "_sort": sort_date,
                 }

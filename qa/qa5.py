@@ -3745,6 +3745,188 @@ check(f'...and a day asks the editor for no more width than its series '
       _dm_req_day <= app.editor.winfo_reqwidth())
 app.geometry(_dm_geo); app.update()
 app._cancel_pending_autosave()
+
+# ---- ONE DAY OF A SERIES, HELD ON ANOTHER DATE ----
+# Field request (2026-10-13): one day of a series held on another date -- the
+# weekly meeting moved to Tuesday one week -- while it stays a day of the
+# series. "📅 Move this day…" beside the day's date, an Undo, and a Reset that
+# puts it back and asks about its text. One field in the file: `moved`.
+import json as _json5mv
+
+
+def _mv_file_note():
+    with open('notes_data.json', encoding='utf-8') as _fmv:
+        _data = _json5mv.load(_fmv)
+    _rows = _data.get('notes', _data) if isinstance(_data, dict) else _data
+    return next((n for n in _rows if n.get('id') == 1), {})
+
+
+def _mv_on(day):
+    return [n['id'] for n in app.notes_on_date(day)]
+
+
+_dm_open_day()
+check('a day offers "Move this day…" beside its date',
+      bool(app.day_move_btn.winfo_ismapped()) and _dm_asked == [])
+app.body_text.insert('end-1c', ' (room 2)')          # typed, not saved yet
+app.day_move_btn.invoke(); app.update()
+_mv_pick = (next((w for w in _rn_walk(app._mini_popup) if isinstance(w, tk.Button)
+                  and str(w.cget('text')) == '13'), None)
+            if app._mini_popup is not None else None)
+if _mv_pick is not None:
+    _mv_pick.invoke(); app.update()
+_mv_s = app.find_note(1)
+check(f"a date picked there holds the day on it: drawn there, not on its own date "
+      f"({_mv_s.get('moved')}; 12th {_mv_on('2026-10-12')}; 13th {_mv_on('2026-10-13')})",
+      _mv_pick is not None and _mv_s.get('moved') == {'2026-10-12': '2026-10-13'}
+      and _mv_on('2026-10-12') == [2] and _mv_on('2026-10-13') == [1])
+check("...what was typed on the day before goes with it, and the editor follows it",
+      (_mv_s.get('overrides') or {}).get('2026-10-13', {}).get('body')
+      == 'series text (room 2)'
+      and '2026-10-12' not in (_mv_s.get('overrides') or {})
+      and app.current_occurrence_date == '2026-10-13' and app._day_mode())
+check(f"...the day says where it came from, and the move can be undone "
+      f"({app.day_strip_lbl.cget('text')!r})",
+      'moved from Monday, 12 October' in str(app.day_strip_lbl.cget('text'))
+      and str(app.day_date_lbl.cget('text'))
+      == '13.10.2026 (this day, moved from 12.10.2026)'
+      and app._toast_action is not None and _dm_asked == [])
+_mv_disk = NO.normalize_note(_mv_file_note())
+check('...and the file holds the move, so the day is there after a restart',
+      _mv_disk.get('moved') == {'2026-10-12': '2026-10-13'}
+      and NO.expand_occurrences(_mv_disk, NO.parse_date('2026-10-12'),
+                                NO.parse_date('2026-10-13')) == ['2026-10-13'])
+check("a share code does not carry it -- a series' days are this notebook's",
+      'moved' not in _msharing._shareable_view(_mv_s))
+
+# (This file answers every notice for itself, from its top: this one is read.)
+_mv_info = []
+_mv_real_info = app.show_info
+app.show_info = lambda title, message, **k: (_mv_info.append(title), True)[1]
+try:
+    app._move_this_day('2026-10-19'); app.update()
+finally:
+    app.show_info = _mv_real_info
+check(f'a date the series already has is refused, saying why, and nothing moves '
+      f'({_mv_info}; {_dm_asked})',
+      _mv_info == ['That day is taken'] and _dm_asked == []
+      and app.find_note(1)['moved'] == {'2026-10-12': '2026-10-13'})
+
+app._run_toast_action(); app.update()
+_mv_s = app.find_note(1)
+check('Undo puts the day back where it was, its own edit with it, the editor following',
+      _mv_s['moved'] == {} and '2026-10-12' in (_mv_s.get('overrides') or {})
+      and app.current_occurrence_date == '2026-10-12' and _dm_asked == [])
+
+# Reset on a moved day with text of its own: the date always goes back; the
+# text is asked about.
+app._move_this_day('2026-10-14'); app.update()
+_mv_q = []
+app._themed_dialog = lambda title, message, *a, **k: (
+    _mv_q.append((title, [b for b, _v in k.get('buttons', [])])), 'date')[1]
+app._reset_occurrence_override(app.find_note(1), '2026-10-14'); app.update()
+_dm_record()
+_mv_s = app.find_note(1)
+check(f'Reset on a moved day with text of its own asks: only the date, or the date '
+      f'and the text ({_mv_q})',
+      _mv_q[:1] == [('Reset this day',
+                     ['Cancel', 'Only the date', 'The date and the text'])])
+check('..."Only the date" puts the day back and keeps its text',
+      _mv_s['moved'] == {}
+      and (_mv_s.get('overrides') or {}).get('2026-10-12', {}).get('body')
+      == 'series text (room 2)'
+      and app.current_occurrence_date == '2026-10-12')
+app._move_this_day('2026-10-15'); app.update()
+app._themed_dialog = lambda *a, **k: 'text'
+app._reset_occurrence_override(app.find_note(1), '2026-10-15'); app.update()
+_dm_record()
+_mv_s = app.find_note(1)
+check('..."The date and the text" puts it back, following the series again',
+      _mv_s['moved'] == {} and '2026-10-12' not in (_mv_s.get('overrides') or {})
+      and app.current_occurrence_date == '2026-10-12'
+      and app.body_text.get('1.0', 'end-1c').startswith('series text')
+      and 'room 2' not in app.body_text.get('1.0', 'end-1c'))
+
+# Moved with no text of its own: the menu still offers its way back, and its
+# Reset only asks to put it back.
+app._move_this_day('2026-10-16'); app.update()
+_mv_labels = []
+_mv_add, _mv_pop = tk.Menu.add_command, tk.Menu.tk_popup
+tk.Menu.add_command = lambda _m, **kw: (_mv_labels.append(kw.get('label', '')),
+                                        _mv_add(_m, **kw))[1]
+tk.Menu.tk_popup = lambda _m, *a, **k: None
+try:
+    app.show_note_context_menu(type('E', (), {'x_root': 0, 'y_root': 0})(),
+                               app.find_note(1), occurrence_date='2026-10-16')
+finally:
+    tk.Menu.add_command, tk.Menu.tk_popup = _mv_add, _mv_pop
+check(f'a moved day with no text of its own still offers its way back in its menu '
+      f'({[l for l in _mv_labels if "Reset" in l]})',
+      any('Reset this day to the series…' in l for l in _mv_labels))
+_mv_yn = []
+app.ask_yes_no = lambda title, message, *a, **k: (_mv_yn.append(message), True)[1]
+app._reset_occurrence_override(app.find_note(1), '2026-10-16'); app.update()
+_dm_record()
+check(f'...and its Reset only asks to put it back, and does ({_mv_yn})',
+      _mv_yn == ['Put this day back on Monday, 12 October 2026?']
+      and app.find_note(1)['moved'] == {})
+
+# Delete a moved day, with text of its own, and its Undo.
+app._move_this_day('2026-10-17'); app.update()
+app.title_entry.insert('end', ' (Sat)')
+app._autosave_now(); app.update()
+app.ask_occurrence_scope = lambda *a, **k: 'occurrence'
+app._delete_note(app.find_note(1), '2026-10-17'); app.update()
+_mv_s = app.find_note(1)
+_mv_gone = (_mv_s['moved'], _mv_s['exceptions'], sorted(_mv_s.get('overrides') or {}),
+            _mv_on('2026-10-17'), _mv_on('2026-10-12'))
+app._run_toast_action(); app.update()
+_dm_record()
+_mv_s = app.find_note(1)
+check(f'deleting a moved day skips the date its rule gives it, and takes the move '
+      f'with it ({_mv_gone})',
+      _mv_gone == ({}, ['2026-10-12'], [], [], [2]))
+check('...and its Undo brings it back moved, with its own text',
+      _mv_s['moved'] == {'2026-10-12': '2026-10-17'} and _mv_s['exceptions'] == []
+      and ((_mv_s.get('overrides') or {}).get('2026-10-17', {}).get('title') or '')
+      .endswith('(Sat)')
+      and _mv_on('2026-10-17') == [1])
+
+# The series counts its moved days; a repeat turned off takes them along into
+# the rescue copy, and Restore previous brings them back.
+app.open_note_in_tab(app.find_note(1)); app.update()
+check(f'the series counts its moved days above the note ({_rn_banner()!r})',
+      '· 1 day moved (↷)' in _rn_banner())
+app.rec_freq_var.set(NO.FREQ_LABELS['']); app.on_recurrence_changed(); app.update()
+app.save_current_note(); app.update()
+_mv_s = app.find_note(1)
+_mv_off = (_mv_s['recurrence']['freq'], _mv_s.get('moved'),
+           (_mv_s.get('_prev') or {}).get('moved'))
+app.ask_yes_no = lambda *a, **k: True
+app.restore_previous_version(); app.update()
+_dm_record()
+_mv_s = app.find_note(1)
+check(f"turning the repeat off takes the moves with the days, into the rescue copy "
+      f"({_mv_off})",
+      _mv_off == ('', {}, {'2026-10-12': '2026-10-17'}))
+check('...and Restore previous brings the series back with its day moved',
+      _mv_s['recurrence']['freq'] == 'weekly'
+      and _mv_s.get('moved') == {'2026-10-12': '2026-10-17'}
+      and _mv_on('2026-10-17') == [1])
+
+# The button is long-lived: every colour it has follows the theme.
+_dm_open_day()
+app.set_theme('light'); app.update()
+_mv_c = app.colors
+_mv_got = tuple(str(app.day_move_btn.cget(o)).lower() for o in (
+    'bg', 'fg', 'activebackground', 'activeforeground', 'highlightbackground',
+    'highlightcolor'))
+check(f'every colour of "Move this day…" follows a new theme ({_mv_got})',
+      _mv_got == tuple(str(_mv_c[k]).lower() for k in (
+          'sidebar', 'text', 'card', 'text', 'bg', 'accent')))
+app.set_theme('dark'); app.update()
+app._cancel_pending_autosave()
+
 app._themed_dialog = _dm_real_dialog
 app.ask_occurrence_scope = _dm_real_scope
 app.ask_yes_no = _dm_real_yes
