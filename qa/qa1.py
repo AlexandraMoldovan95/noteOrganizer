@@ -9231,6 +9231,27 @@ check(f'Show more in Share after a delete gives every note one box '
       and sorted(_sm_titles) == sorted(n['title'] for n in app.notes))
 app.toggle_share_panel(); app.update()
 
+# More notes ticked than one code may carry: the panel says so, rather than
+# make a code its own import then refuses.
+_many_kept = app.notes
+app.notes = [NO.normalize_note({'id': 90000 + _i, 'title': 'Over %d' % _i, 'body': 'x'})
+             for _i in range(NO.MAX_SHARED_NOTES + 1)]
+app.toggle_share_panel(); app.update()
+try:
+    for _n in app.notes:
+        app._share_vars[_n['id']] = tk.BooleanVar(value=True)
+    app._generate_inline_share(); app.update()
+    _many_lbls = [str(l.cget('text')) for l in _walk_widgets(app.share_code_area, tk.Label)]
+    _many_texts = [str(w.get('1.0', 'end-1c'))
+                   for w in _walk_widgets(app.share_code_area, tk.Text)]
+finally:
+    app.toggle_share_panel(); app.update()
+    app.notes = _many_kept
+check(f'more notes ticked than one code carries: a message, not a code the import '
+      f'would refuse ({[l[:40] for l in _many_lbls]})',
+      not any(t.startswith('NOTE1:') for t in _many_texts)
+      and any('at most %d notes' % NO.MAX_SHARED_NOTES in l for l in _many_lbls))
+
 # ---- THE SHARE PANEL: THE LIST'S ORDER, AND A SEARCH OF ITS OWN ----
 # The owner's re-test of 0.84.357 (case 343). The notes came in the order
 # they entered the notebook; they come in the order the list shows them

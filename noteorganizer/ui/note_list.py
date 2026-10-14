@@ -819,7 +819,8 @@ class NoteListMixin:
         for place, each in enumerate(everything):
             each["order"] = place
         self.save_notes()
-        self.refresh_note_list()
+        # A drop and Alt+Up/Down put the ring on the moved card next.
+        self._show_note_moved(note["id"], keep_ring=True)
         if replaced is not None:
             # Kept beyond the toast, for _on_sort_chosen: the newest arrangement
             # made by hand, judged by the order it left, not by the moves made.
@@ -2175,6 +2176,21 @@ class NoteListMixin:
         # A delete can leave the editor empty, and no card is open then.
         self._update_open_highlight()
         return True
+
+    def _show_note_moved(self, note_id, keep_ring=False):
+        """The list after ONE note's place or look changed (a pin, a new
+        category, a move in Custom order): its card alone is redrawn, as a
+        save's is, or the whole list when that is not enough or the ring
+        must be followed. *keep_ring*: the caller puts the ring on this card
+        and brings it into view itself (Alt+Up/Down). ARCHITECTURE: "Large
+        lists", one note changed."""
+        if ((getattr(self, "_keyboard_on_card", False) and not keep_ring)
+                or not self._redraw_saved_card(note_id)
+                or (keep_ring and note_id not in (getattr(self, "_note_cards", None) or {}))):
+            self.refresh_note_list()
+            return
+        # What refresh_note_list does on its way past that the one card does not.
+        self._share_panel_follows()
 
     def _redraw_saved_card(self, note_id):
         """Bring the list up to date after ONE note was saved, redrawing only

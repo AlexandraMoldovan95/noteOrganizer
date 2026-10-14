@@ -35,9 +35,9 @@ says.
 | Unit suites | Seven `test_*.py`, no window for six of them | Every pull request | Dates, repeats, the calculator, tables, rich text, data safety, a note's identity |
 | The qa suite | Nine scripts, ~2,700 checks, driving the real app headlessly | Every pull request | What a person would notice: a note that must survive a restart, a share code or a backup; formatting and tables that must come back exactly; a question that must not lose what was typed |
 | Stories | Three scripts that press the buttons a person presses, restart the app and photograph it | On demand: by hand, or from the Actions tab | A screen that changed shape; a route nobody asked a check about |
-| Mutants | `tools/mutate.py` and its catalogue: the 281 worth re-running, and 2 that test the runner | On demand, the same way. Most mutants were one-off runs while a fix was made, named in its commit | A check that stays green with its fix taken away |
+| Mutants | `tools/mutate.py` and its catalogue: the 298 worth re-running, and 2 that test the runner | On demand, the same way. Most mutants were one-off runs while a fix was made, named in its commit | A check that stays green with its fix taken away |
 | Coverage | `tools/run_coverage.py` | Every pull request, with a floor of 80% | Code no test reaches |
-| The test plan | `NoteOrganizer_TestPlan.xlsx`, 552 cases ([an excerpt](../docs/TEST_PLAN_EXCERPT.md)) | By a person, on the built `.exe` | What needs a person: how a screen reads, the built `.exe`, real hardware — each row says whether a script already walks it |
+| The test plan | `NoteOrganizer_TestPlan.xlsx`, 555 cases ([an excerpt](../docs/TEST_PLAN_EXCERPT.md)) | By a person, on the built `.exe` | What needs a person: how a screen reads, the built `.exe`, real hardware — each row says whether a script already walks it |
 
 A fix lands with a check that fails when the fix is taken away, and a
 flaky check is treated as a bug in the check, never re-run until green
@@ -497,6 +497,13 @@ A new surface joins this list the moment it ships.
   happened once. **Parent a floating window to `winfo_toplevel()`**, and
   when a check looks for one, find it by being NEW rather than by being a
   child of the thing it describes.
+- **On a desktop the pointer moves, and a hover preview listens to it.**
+  The calendar's previews hide on `<Motion>` and `<Leave>`, and qa2 opens
+  one by call and then reads it back. With the owner's mouse moving over
+  the window while the suite ran, the preview was gone before it was read
+  in two runs of five; a generated `<Leave>` takes it down every time. A
+  check that opens a preview by call first takes the widget's pointer
+  bindings away with `ignore_pointer`, and gives them back after.
 
   The second half is the part worth carrying: *"it passes on my machine
   and on my own Linux image"* is not the same claim as *"it passes"*. The

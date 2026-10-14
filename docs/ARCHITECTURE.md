@@ -1054,6 +1054,14 @@ rendering stays on the [ROADMAP](ROADMAP.md) for notebooks far larger than the t
 this was measured with. See
 [The list that was drawn whole, for every pause in typing](ISSUES_LOG.md#the-list-that-was-drawn-whole-for-every-pause-in-typing).
 
+That depth is also what makes a rebuild cost more the further down the view is: it draws every
+row above it. So a change to ONE note goes through the one-card path, as a save does
+(`_redraw_saved_card`): a pin, a new category from the note's menu, a move in Custom order
+(`_show_note_moved`). The whole list is drawn again only when the one card cannot be known to
+be enough, and while the keyboard's ring is on the list: following the ring to its card's new
+place is the rebuild's (`_ring_follow`). A move by Alt+↑/↓ is the exception to the exception,
+since it puts the ring on the moved card and brings it into view itself.
+
 ### Measured, at 1,000 and 5,000 notes
 
 `py tools/bench.py` reproduces these: each number is a fresh process in a throwaway folder,
@@ -1072,6 +1080,23 @@ list was drawn:
 The guards in CI are structural rather than these timings: qa4 checks that a rebuild draws one
 screenful and holds the rest, which fails when the list goes back to drawing everything, and a
 check that fired on a slower runner would be a flaky one.
+
+Measured again on 14–15 October 2026 at up to 10,000 notes, with every note wearing styled
+words (`--rich`) and the list scrolled to its very end (`--deep`). One run each, the development
+machine:
+
+| | 1,000 | 5,000 | 10,000 |
+|---|---|---|---|
+| a rebuild at the top of the list | 5 ms | 8 ms | 12 ms |
+| one note's automatic save | 22 ms | 84 ms | 174 ms |
+| a rebuild with the view at the list's end | 0.11 s | 0.56 s | 1.2 s |
+| pinning the note at the list's end, until 2026-10-15 | 0.14 s | 0.63 s | 1.3 s |
+| an import matching a backup of every note again, until 2026-10-15 | 18 ms | 0.44 s | 1.8 s |
+
+The last two rows were the work fixed on 2026-10-15 (one card redrawn; one walk through the
+notebook to match an import). The rows above them are what is left: the save rewrites the whole notes
+file, and a deep rebuild draws every row above the view. Both are recorded on the
+[ROADMAP](ROADMAP.md#under-consideration) with the size at which they become worth changing.
 
 ### Custom order: a place is written only by a move
 

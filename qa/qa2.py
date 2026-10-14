@@ -14,6 +14,7 @@ import note_organizer as NO, tkinter as tk
 # Windows foreground -- which a test process never owns. See
 # qa/_qa_support.py; _qa_click refuses to click into the void.
 from _qa_support import (click as _qa_click, fire as _qa_fire,
+                         ignore_pointer as _qa_ignore_pointer,
                          pin_popup_visibility as _qa_pin)
 _qa_pin(NO)
 from datetime import date
@@ -150,6 +151,9 @@ def _tip_labels():
     return out
 
 _D13 = '2026-08-14'
+# The previews below are opened by call and read back; a real mouse moving
+# over the window would take them down first (_qa_support.ignore_pointer).
+_qa2_hear_pointer = _qa_ignore_pointer(app.cal_canvas)
 app.notes = [{'id': 300 + i, 'title': f'ZiNota{i}', 'body': 'b',
               'category': 'General', 'date': _D13,
               'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
@@ -197,6 +201,7 @@ check('the note hover preview carries title, body, and the icon row',
 check('a repeating note is flagged in its preview title',
       any('\U0001F501' in t for t in _lbls))
 app.hide_day_tooltip(); app.update()
+_qa2_hear_pointer()
 
 # ============================================================
 # THE CHIP IS THE NOTE, AND BEHAVES LIKE ONE (C-8)

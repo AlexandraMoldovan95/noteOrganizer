@@ -832,6 +832,40 @@ check('and leaves no .tmp litter behind',
 if os.path.exists(_atomic_zip):
     os.remove(_atomic_zip)
 
+# A backup the import would refuse is not put in place: the export asks what
+# it wrote by the import's own rules. Here, an attachment shaped like a zip
+# bomb, with the threshold brought down to a size a test can write.
+from noteorganizer.core import sharing as _qa3_sharing
+_self_zip = os.path.join(tempfile.gettempdir(), 'qa3_selfcheck.zip')
+with open(_self_zip, 'wb') as f:
+    f.write(b'OLD-BACKUP-BYTES')
+os.makedirs(NO.ATTACHMENTS_DIR, exist_ok=True)
+_zeros = os.path.join(NO.ATTACHMENTS_DIR, 'qa3_zeros.bin')
+with open(_zeros, 'wb') as f:
+    f.write(b'\0' * 3_000_000)
+_self_errors = []
+_kept_show_error = app.show_error
+app.show_error = lambda *a, **k: (_self_errors.append(' '.join(map(str, a))), True)[1]
+_kept_min = _qa3_sharing.BOMB_MIN_BYTES
+fd.asksaveasfilename = lambda **k: _self_zip
+try:
+    _qa3_sharing.BOMB_MIN_BYTES = 1_000_000
+    app.export_data()
+    t0 = time.time()
+    while app._export_state is not None and time.time() - t0 < 5:
+        app.update()
+finally:
+    _qa3_sharing.BOMB_MIN_BYTES = _kept_min
+    app.show_error = _kept_show_error
+    os.remove(_zeros)
+check(f'a backup its own import would refuse is not put in place, and the '
+      f'export says why ({[e[:90] for e in _self_errors]})',
+      open(_self_zip, 'rb').read() == b'OLD-BACKUP-BYTES'
+      and not os.path.exists(_self_zip + '.tmp')
+      and any('would not import back' in e and 'qa3_zeros.bin' in e
+              for e in _self_errors))
+os.remove(_self_zip)
+
 # The single-note export is the same class (it wrote straight onto the
 # chosen file): a write failure must leave the existing file intact.
 _se_path = os.path.join(tempfile.gettempdir(), 'qa3_single.txt')

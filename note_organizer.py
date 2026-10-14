@@ -47,7 +47,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.94.374"
+APP_VERSION = "0.94.379"
 
 
 def parse_version(v):
@@ -434,6 +434,8 @@ from noteorganizer.core.sharing import (
     MAX_DECOMPRESSED_BYTES,
     MAX_SHARED_NOTES,
     SHAREABLE_FIELDS,
+    ShareCodeTooLarge,
+    backup_entries_problem,
     encode_share_code,
     decode_share_code,
     _safe_extract_zip,
@@ -1938,6 +1940,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     for i, (src, arcname) in enumerate(entries, start=1):
                         zf.write(src, arcname=arcname)
                         state["current"] = i
+                # Asked of what was written, by the import's own rules: a
+                # backup that cannot be restored is not put in place.
+                with zipfile.ZipFile(tmp_path, "r") as written:
+                    problem = backup_entries_problem(written.infolist())
+                if problem:
+                    raise ValueError("This backup would not import back. " + problem)
                 os.replace(tmp_path, save_path)
             except Exception as e:
                 # Deliberately broad: this runs in a background thread, where
@@ -10578,7 +10586,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                      fg=self.colors["danger_text"]).pack(anchor="w")
             return
         had_attachments = any(n.get("attachments") for n in chosen)
-        code = encode_share_code(chosen)
+        try:
+            code = encode_share_code(chosen)
+        except ShareCodeTooLarge as exc:
+            tk.Label(self.share_code_area, text=str(exc), font=("Segoe UI", 8),
+                     bg=self.colors["sidebar"], fg=self.colors["danger_text"],
+                     justify="left", wraplength=self.px(200)).pack(anchor="w")
+            self._fit_sidebar_panel()
+            return
         self._render_inline_code(self.share_code_area, code, len(chosen), had_attachments)
         # The code needs room of its own; in a short window it is made here.
         self._fit_sidebar_panel()
@@ -10814,7 +10829,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if open_note and str(open_note.get("uid") or "").strip():
             note["uid"] = open_note["uid"]
         had_attachments = bool(st["attachments"])
-        code = encode_share_code(note)
+        try:
+            code = encode_share_code(note)
+        except ShareCodeTooLarge as exc:
+            self.set_status(str(exc))
+            return
         # Render inline in the editor's code area.
         for w in self.editor_code_area.winfo_children():
             w.destroy()
@@ -11048,7 +11067,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 state["temp_dir"] = temp_dir
                 try:
                     with zipfile.ZipFile(zip_path, "r") as zf:
-                        _safe_extract_zip(zf, temp_dir)
+                        _safe_extract_zip(zf, temp_dir, ATTACHMENTS_DIR)
                 except (zipfile.BadZipFile, IOError, OSError, ValueError) as e:
                     state["error"] = f"That file couldn't be read as a backup:\n{e}"
                     state["done"] = True
@@ -14832,6 +14851,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def refresh_day_panel(self):
         """Re-render whatever the panel is currently showing (after edits/deletes)."""
+        # Off screen it waits, as render_calendar does, and for the same
+        # reason: every autosave with a day left open rebuilt its list,
+        # walking every note, on a tab nobody was looking at. The month's
+        # catch-up on the way back redraws the open day (_redraw_open_day).
+        if not self._calendar_is_showing():
+            self._calendar_needs_render = True
+            return
         if getattr(self, "_day_panel_mode", "empty") == "list":
             self.show_day_list()
         elif self._day_panel_mode == "note":
@@ -18845,7 +18871,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         real["pinned"] = not real.get("pinned", False)
         self.save_notes()
-        self.refresh_note_list()
+        self._show_note_moved(real["id"])
         self.set_status("Pinned to top" if real["pinned"] else "Unpinned")
 
     def _ctx_move_to_category(self, note, category):
@@ -18885,7 +18911,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         real["category"] = category
         self.save_notes()
         self._editor_follows_external_change({real["id"]})
-        self.refresh_note_list()
+        self._show_note_moved(real["id"])
         # A note with no colour of its own is drawn in its category's, as
         # a dot on its days and a stripe in an open day's list.
         self.render_calendar()

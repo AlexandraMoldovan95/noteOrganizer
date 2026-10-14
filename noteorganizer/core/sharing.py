@@ -35,15 +35,23 @@ stage assumes the worst:
   resolved path escapes the destination folder. Without this an archive
   containing ``../../something`` could write anywhere on disk. The attack
   has a name, "Zip Slip", and the defence is to resolve each path and
-  confirm it still sits under the destination.
+  confirm it still sits under the destination. It also refuses an entry
+  shaped like a zip bomb, and a backup the disk has no room for.
 
 The pattern worth taking away: when data comes from outside, enforce
 limits *during* processing instead of trusting it to be reasonable.
+
+The other half: every limit on reading is also a promise about writing.
+The app makes share codes and backups itself, and each is checked
+against the same limits it will meet coming back (encode_share_code,
+backup_entries_problem). A limit only on the reading side once made
+backups the app wrote that it then refused to restore.
 """
 
 import base64
 import json
 import os
+import shutil
 import zlib
 
 from .paths import JSON_UNREADABLE
@@ -86,11 +94,25 @@ def _shareable_view(note):
     return {k: note.get(k) for k in SHAREABLE_FIELDS if k in note}
 
 
+class ShareCodeTooLarge(ValueError):
+    """The notes asked for make a code that decode_share_code would refuse.
+    Its message is for the person sending them."""
+
+
 def encode_share_code(notes):
     """Turn one or more notes into a copy-paste share code. Accepts a single
-    note dict or a list of them."""
+    note dict or a list of them.
+
+    Raises ShareCodeTooLarge rather than return a code the import refuses:
+    the Share panel's Select all could pick more notes than one code may
+    carry, and a long note could make a code past the size limits."""
     if isinstance(notes, dict):
         notes = [notes]
+    if len(notes) > MAX_SHARED_NOTES:
+        raise ShareCodeTooLarge(
+            "A code can carry at most %d notes, and %d are ticked. Untick "
+            "some, or send a backup instead: Settings → Backup → Export."
+            % (MAX_SHARED_NOTES, len(notes)))
     payload = {"v": 1, "notes": [_shareable_view(n) for n in notes]}
     # In-memory notes can hold lone UTF-16 surrogates: Tk hands an astral
     # emoji over as a surrogate pair, and mend_surrogates only ran when
@@ -100,7 +122,12 @@ def encode_share_code(notes):
     raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     compressed = zlib.compress(raw, level=9)
     b64 = base64.urlsafe_b64encode(compressed).decode("ascii")
-    return SHARE_CODE_PREFIX + b64
+    code = SHARE_CODE_PREFIX + b64
+    if len(raw) > MAX_DECOMPRESSED_BYTES or len(code) > MAX_SHARE_CODE_CHARS:
+        raise ShareCodeTooLarge(
+            "That is too much for one code. Share fewer notes at a time, or "
+            "send a backup instead: Settings → Backup → Export.")
+    return code
 
 
 def _bounded_decompress(compressed, limit):
@@ -200,21 +227,100 @@ def decode_share_code(code):
     return [_shareable_view(n) if isinstance(n, dict) else {} for n in notes]
 
 
-def _safe_extract_zip(zf, dest_dir):
-    """Extract a zip safely: block path-traversal ('../' escapes) and refuse
-    archives that would expand past a sane size. extractall() does neither, so
-    a malicious backup zip could otherwise write files anywhere or fill the disk."""
-    MAX_TOTAL = 500_000_000   # 500 MB uncompressed ceiling for a whole backup
-    MAX_FILES = 10_000
-    dest_root = os.path.abspath(dest_dir)
+# ---- Backups (the .zip of Settings -> Backup) ----
+#
+# A backup the app wrote must be one it agrees to read back. The export
+# takes every attached file whatever its size, and the import used to
+# refuse anything over 500 MB or 10,000 files: one long video, or a few
+# hundred phone photos, made a backup that could not be restored. The
+# limits are now about what a HOSTILE archive could do, and the export
+# checks what it wrote against the same rules (backup_entries_problem).
+MAX_BACKUP_FILES = 100_000
+# Expanding to more than this many times its packed size, and to more than
+# BOMB_MIN_BYTES, is a zip bomb, not anything anyone attached: photos,
+# videos and documents pack to within a few times their size. Asked of
+# each entry and of the archive as a whole, or a thousand entries just
+# under the size each would pass one by one.
+BOMB_RATIO = 100
+BOMB_MIN_BYTES = 50_000_000
+# What an import leaves free on each disk it writes to. A size cap on the
+# backup stood in for this, and refused honest backups on empty disks.
+DISK_MARGIN = 200_000_000
 
-    infos = zf.infolist()
-    if len(infos) > MAX_FILES:
-        raise ValueError("This backup contains too many files to import safely.")
 
+def size_text(n):
+    """A byte count as people read it: 350 MB, 1.2 GB."""
+    if n >= 1_000_000_000:
+        return "%.1f GB" % (n / 1_000_000_000)
+    return "%d MB" % max(1, round(n / 1_000_000))
+
+
+def backup_entries_problem(infos):
+    """Why a backup's entries cannot be imported, whatever disk they land
+    on -- or None. *infos* are its ZipInfo entries. The import asks this
+    before unpacking, and the export asks it of what it has just written."""
+    if len(infos) > MAX_BACKUP_FILES:
+        return ("This backup holds %d files, more than an import takes (%d)."
+                % (len(infos), MAX_BACKUP_FILES))
+    sizes = [(info.filename, max(info.file_size, 0), max(info.compress_size, 0))
+             for info in infos]
+    sizes.append(("The backup", sum(s for _n, s, _p in sizes), sum(p for _n, _s, p in sizes)))
+    for name, size, packed in sizes:
+        if size > BOMB_MIN_BYTES and size > BOMB_RATIO * max(packed, 1):
+            return ("%s would expand to %s from %s packed, which is how a "
+                    "damaged or hostile backup looks."
+                    % (name, size_text(size), size_text(packed)))
+    return None
+
+
+def backup_space_problem(infos, free_unpack, free_attach=None):
+    """Why there is not room to import a backup, or None.
+
+    Everything is unpacked in one place, then the attachments are copied
+    into the app's folder: *free_unpack* is the free space where it is
+    unpacked, *free_attach* that of the attachments' disk when it is a
+    different one (None: the same disk, which then holds them twice)."""
     total = sum(max(i.file_size, 0) for i in infos)
-    if total > MAX_TOTAL:
-        raise ValueError("This backup is too large to import safely.")
+    attached = sum(max(i.file_size, 0) for i in infos
+                   if i.filename.replace("\\", "/").startswith("attachments/"))
+    needs = [(total + (attached if free_attach is None else 0), free_unpack)]
+    if free_attach is not None:
+        needs.append((attached, free_attach))
+    for need, free in needs:
+        if need + DISK_MARGIN > free:
+            return ("There isn't enough free space to import this backup: it "
+                    "needs about %s, and %s is free. Free up some space and "
+                    "try again." % (size_text(need + DISK_MARGIN), size_text(free)))
+    return None
+
+
+def _disk_of(path):
+    """(free bytes, device) of the disk *path* is on -- or would be on, for
+    a folder not made yet."""
+    path = os.path.abspath(path)
+    while not os.path.exists(path) and os.path.dirname(path) != path:
+        path = os.path.dirname(path)
+    return shutil.disk_usage(path).free, os.stat(path).st_dev
+
+
+def _safe_extract_zip(zf, dest_dir, attachments_dir=None):
+    """Extract a zip safely: block path-traversal ('../' escapes), zip bombs
+    and a full disk. extractall() guards against none of them, so a
+    malicious backup could otherwise write files anywhere or fill the disk.
+    *attachments_dir* is where the import copies the attachments next."""
+    dest_root = os.path.abspath(dest_dir)
+    infos = zf.infolist()
+    problem = backup_entries_problem(infos)
+    if problem is None:
+        free_unpack, unpack_disk = _disk_of(dest_root)
+        free_attach = None
+        if attachments_dir is not None:
+            attach_free, attach_disk = _disk_of(attachments_dir)
+            if attach_disk != unpack_disk:
+                free_attach = attach_free
+        problem = backup_space_problem(infos, free_unpack, free_attach)
+    if problem:
+        raise ValueError(problem)
 
     for info in infos:
         # Reject absolute paths and anything that escapes the destination.

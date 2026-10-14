@@ -1682,7 +1682,7 @@
     "edits": [
       {
         "file": "noteorganizer/ui/note_list.py",
-        "find": "        self._share_panel_follows()\n",
+        "find": "        # And an open Share panel keeps to the list's order.\n        self._share_panel_follows()\n",
         "replace": ""
       }
     ],
@@ -3781,6 +3781,179 @@
     "must_fail": ["...and underlining them changes nothing the note holds",
                   "...nor in what a copy puts on the clipboard"],
     "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "BK01",
+    "about": "the import's old ceilings come back: a backup over 500 MB or 10,000 files is refused though the app wrote it",
+    "edits": [{"file": "noteorganizer/core/sharing.py",
+               "find": "    if len(infos) > MAX_BACKUP_FILES:\n",
+               "replace": "    if sum(max(i.file_size, 0) for i in infos) > 500_000_000 or len(infos) > 10_000:\n"}],
+    "must_fail": ["a backup of 750 MB of photos imports when the disk has room for it",
+                  "...and so does one holding more than 10,000 attached files"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "BK02",
+    "about": "an import fills the disk: nothing asks whether the backup fits",
+    "edits": [{"file": "noteorganizer/core/sharing.py",
+               "find": "        if need + DISK_MARGIN > free:\n",
+               "replace": "        if False:\n"}],
+    "must_fail": ["a backup the disk has no room for is refused"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "BK03",
+    "about": "the attachments are counted once on one disk, though they are unpacked and then copied",
+    "edits": [{"file": "noteorganizer/core/sharing.py",
+               "find": "    needs = [(total + (attached if free_attach is None else 0), free_unpack)]\n",
+               "replace": "    needs = [(total, free_unpack)]\n"}],
+    "must_fail": ["a backup the disk has no room for is refused"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "BK04",
+    "about": "a zip bomb is unpacked: no entry's expansion is asked about",
+    "edits": [{"file": "noteorganizer/core/sharing.py",
+               "find": "        if size > BOMB_MIN_BYTES and size > BOMB_RATIO * max(packed, 1):\n",
+               "replace": "        if False:\n"}],
+    "must_fail": ["an entry expanding a thousand times past its packed size is refused as a zip bomb",
+                  "a real archive shaped like a zip bomb is refused before anything is written"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "BK06",
+    "about": "a zip bomb spread over many entries, each under the size one is asked about, is unpacked",
+    "edits": [{"file": "noteorganizer/core/sharing.py",
+               "find": "    sizes.append((\"The backup\", sum(s for _n, s, _p in sizes), sum(p for _n, _s, p in sizes)))\n",
+               "replace": ""}],
+    "must_fail": ["a bomb spread over many entries, each under the size one is asked about"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "BK05",
+    "about": "the export puts in place a backup its own import would refuse",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                if problem:\n                    raise ValueError(\"This backup would not import back. \" + problem)\n",
+               "replace": "                if False:\n                    pass\n"}],
+    "must_fail": ["a backup its own import would refuse is not put in place"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SH01",
+    "about": "the Share panel makes a code for more notes than one code may carry, which the import refuses",
+    "edits": [{"file": "noteorganizer/core/sharing.py",
+               "find": "    if len(notes) > MAX_SHARED_NOTES:\n        raise ShareCodeTooLarge(",
+               "replace": "    if False:\n        raise ShareCodeTooLarge("}],
+    "must_fail": ["no code is made for more notes than one code may carry",
+                  "more notes ticked than one code carries"],
+    "suites": ["test_data_safety", "qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "SH02",
+    "about": "a code is made past the import's decompressed-size limit",
+    "edits": [{"file": "noteorganizer/core/sharing.py",
+               "find": "    if len(raw) > MAX_DECOMPRESSED_BYTES or len(code) > MAX_SHARE_CODE_CHARS:\n",
+               "replace": "    if len(code) > MAX_SHARE_CODE_CHARS:\n"}],
+    "must_fail": ["no code is made past the import's MAX_DECOMPRESSED_BYTES either"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SH03",
+    "about": "a code is made longer than the import accepts",
+    "edits": [{"file": "noteorganizer/core/sharing.py",
+               "find": "    if len(raw) > MAX_DECOMPRESSED_BYTES or len(code) > MAX_SHARE_CODE_CHARS:\n",
+               "replace": "    if len(raw) > MAX_DECOMPRESSED_BYTES:\n"}],
+    "must_fail": ["no code is made past the import's MAX_SHARE_CODE_CHARS either"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "MN01",
+    "about": "an import walks the whole notebook again for every incoming note",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "        mine = mine_by_uid.get(_uid_wanted(note.get(\"uid\")))\n",
+               "replace": "        mine = find_by_uid(notes, note.get(\"uid\"))\n"}],
+    "must_fail": ["an import walks the notebook once, not once per incoming note"],
+    "suites": ["test_note_identity"],
+    "expect": "killed"
+  },
+  {
+    "id": "MN02",
+    "about": "of two notes sharing an identity, the import matches the last, not the first find_by_uid gives",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "            mine_by_uid.setdefault(note[\"uid\"], note)\n",
+               "replace": "            mine_by_uid[note[\"uid\"]] = note\n"}],
+    "must_fail": ["...and answers as find_by_uid does"],
+    "suites": ["test_note_identity"],
+    "expect": "killed"
+  },
+  {
+    "id": "MN03",
+    "about": "every save rebuilds the day left open on the Calendar, behind the Notes tab",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if not self._calendar_is_showing():\n            self._calendar_needs_render = True\n            return\n        if getattr(self, \"_day_panel_mode\", \"empty\") == \"list\":\n",
+               "replace": "        if getattr(self, \"_day_panel_mode\", \"empty\") == \"list\":\n"}],
+    "must_fail": ["a save made on the Notes tab does not rebuild the day left open"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "MN04",
+    "about": "pinning a note rebuilds the whole list, every row above a deep view",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self._show_note_moved(real[\"id\"])\n        self.set_status(\"Pinned to top\"",
+               "replace": "        self.refresh_note_list()\n        self.set_status(\"Pinned to top\""}],
+    "must_fail": ["pinning a note from the end of the list redraws its card alone"],
+    "suites": ["qa4"],
+    "expect": "killed"
+  },
+  {
+    "id": "MN05",
+    "about": "giving a note another category from its menu rebuilds the whole list",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self._editor_follows_external_change({real[\"id\"]})\n        self._show_note_moved(real[\"id\"])\n",
+               "replace": "        self._editor_follows_external_change({real[\"id\"]})\n        self.refresh_note_list()\n"}],
+    "must_fail": ["...and so does giving it another category"],
+    "suites": ["qa4"],
+    "expect": "killed"
+  },
+  {
+    "id": "MN06",
+    "about": "a move in Custom order rebuilds the whole list, at every Alt+Down",
+    "edits": [{"file": "noteorganizer/ui/note_list.py",
+               "find": "        self._show_note_moved(note[\"id\"], keep_ring=True)\n",
+               "replace": "        self.refresh_note_list()\n"}],
+    "must_fail": ["...and moving it a place in Custom order"],
+    "suites": ["qa4"],
+    "expect": "killed"
+  },
+  {
+    "id": "MN07",
+    "about": "a card pinned from the keyboard moves without the view following the ring",
+    "edits": [{"file": "noteorganizer/ui/note_list.py",
+               "find": "        if ((getattr(self, \"_keyboard_on_card\", False) and not keep_ring)\n",
+               "replace": "        if (False\n"}],
+    "must_fail": ["pinning the ringed card from its menu keeps the ring in sight"],
+    "suites": ["qa4"],
+    "expect": "killed"
+  },
+  {
+    "id": "MN08",
+    "about": "an open Share panel stays in the old order after a pin redrawn on its own",
+    "edits": [{"file": "noteorganizer/ui/note_list.py",
+               "find": "        # What refresh_note_list does on its way past that the one card does not.\n        self._share_panel_follows()\n",
+               "replace": ""}],
+    "must_fail": ["share: an open panel follows a new Sort and a pin at once"],
+    "suites": ["qa1"],
     "expect": "killed"
   }
 ]

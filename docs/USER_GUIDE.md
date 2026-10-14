@@ -819,6 +819,10 @@ notebook the list arrives a hundred at a time, and a button that silently ticked
 never seen would be the opposite of the control you asked for. Reveal more and press it again; its
 label reads **Unselect all** once everything on screen is ticked.
 
+One code carries at most 200 notes. Tick more than that, or notes too long for one code, and the
+panel says so instead of making a code no copy of the app would import: share them in parts, or
+send a full backup (below).
+
 The notes come in the same order as the note list (your **Sort** choice, pinned notes first),
 and keep to it while the panel is open: change the sort or pin a note and the panel follows at
 once, ticks kept. The
@@ -926,6 +930,13 @@ backup from last month, say), the question says so before you choose to update.
 Every question is asked before anything changes: **Cancel**, on any question that offers it,
 leaves your notes, files and Trash exactly as they were. The question about unchanged notes has
 no Cancel — skipping them already changes nothing — so the import goes on with the rest.
+
+Any backup the app made can be imported back, however large: the only limit is the free space on
+the disk, and the import checks it first and says how much it needs. (The attachments need room
+twice for a moment: the backup is unpacked, then its files are copied in.) What it refuses is an
+archive shaped like a damaged or hostile one, where a file, or the whole backup, would expand to
+hundreds of times its packed size; the export checks each backup it makes the same way before
+putting it in place.
 
 ![Import backup](screenshots/import-backup.png)
 

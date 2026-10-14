@@ -1005,6 +1005,60 @@ finally:
 check('deleting a drawn card closes the gap -- the list a full rebuild draws',
       _ls_gone not in app._note_cards and _ls_same_as_rebuild())
 
+# One note pinned, given another category, or moved in Custom order, from
+# far down the list: its card alone is redrawn, as a save's is. A full
+# rebuild drew every row above the view -- 1.3 s for one pin at 10,000
+# notes (tools/bench.py --deep). The keyboard's ring is off the list here:
+# with it on, the rebuild stays, since following the ring is the rebuild's
+# (the pinned-card check in section 5).
+_ls_rebuilds = []
+_ls_real_refresh = NO.NoteOrganizer.refresh_note_list
+
+
+def _ls_one_note_change(action):
+    """Do *action* with the list scrolled to its end; return how many full
+    rebuilds it made and whether the list is then what a rebuild draws."""
+    # The keyboard elsewhere, as <FocusOut> records it: a test process
+    # does not own the desktop's focus to make that happen (qa/README).
+    app.title_entry.focus_set(); app._keyboard_on_card = False
+    _ls_scroll_to_end(); _ls_settle()
+    del _ls_rebuilds[:]
+    app.refresh_note_list = lambda: (_ls_rebuilds.append(1), _ls_real_refresh(app))[1]
+    try:
+        action(); _ls_settle()
+    finally:
+        app.__dict__.pop('refresh_note_list', None)
+    return len(_ls_rebuilds), _ls_same_as_rebuild()
+
+
+_ls_scroll_to_end(); _ls_settle()
+_ls_deep = _ls_card_ids()[-1]
+_ls_n, _ls_same = _ls_one_note_change(lambda: app.toggle_pin(app.find_note(_ls_deep)))
+check(f'pinning a note from the end of the list redraws its card alone '
+      f'({_ls_n} rebuilds; first now {_ls_card_ids()[:1]}, pinned {_ls_deep})',
+      _ls_n == 0 and _ls_card_ids()[:1] == [_ls_deep] and _ls_same)
+app.toggle_pin(app.find_note(_ls_deep)); _ls_settle()
+NO.CATEGORY_COLORS.setdefault('Moved', '#7a7a7a')
+_ls_scroll_to_end(); _ls_settle()
+_ls_recat = _ls_card_ids()[-1]
+_ls_n, _ls_same = _ls_one_note_change(
+    lambda: app._ctx_move_to_category(app.find_note(_ls_recat), 'Moved'))
+check(f'...and so does giving it another category ({_ls_n} rebuilds)',
+      _ls_n == 0 and app.find_note(_ls_recat)['category'] == 'Moved' and _ls_same)
+app._ctx_move_to_category(app.find_note(_ls_recat), 'General'); _ls_settle()
+NO.CATEGORY_COLORS.pop('Moved', None)
+app.sort_var.set(app.SORT_CUSTOM)
+app.refresh_note_list(); _ls_settle()
+_ls_scroll_to_end(); _ls_settle()
+_ls_a, _ls_b = _ls_card_ids()[-2:]
+_ls_n, _ls_same = _ls_one_note_change(lambda: app._move_note(_ls_b, before_id=_ls_a))
+_ls_order = [r[1]['id'] for r in app._list_rows() if r[0] == 'note']
+check(f'...and moving it a place in Custom order ({_ls_n} rebuilds; {_ls_b} put '
+      f'before {_ls_a}: {_ls_order[-3:]}; as a rebuild draws: {_ls_same})',
+      _ls_n == 0 and _ls_order.index(_ls_b) + 1 == _ls_order.index(_ls_a) and _ls_same)
+app.sort_var.set('Recently updated')
+app.refresh_note_list(); _ls_settle()
+
 # ---------------------------------------------------------------------
 # 4. Custom order: the list arranged by hand.
 #

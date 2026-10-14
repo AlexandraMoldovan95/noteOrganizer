@@ -175,6 +175,37 @@ for _empty, _what in [("", "an empty string"), ("   ", "whitespace")]:
     check('%s does not match a note whose identity is blank' % _what,
           find_by_uid([_a, _hollow], _empty) is None)
 
+# ---- an import's matching, at the size of a whole backup ----
+# split_by_identity asked find_by_uid once per incoming note, each a walk
+# through the notebook: a backup of thousands into a notebook of thousands
+# froze the app for seconds. Counted, not timed: a busy machine makes any
+# timing check lie.
+
+
+class _Counted(list):
+    walks = 0
+
+    def __iter__(self):
+        type(self).walks += 1
+        return super().__iter__()
+
+
+_book = _Counted(normalize_note({"id": k, "title": "n%d" % k}) for k in range(50))
+_back = [dict(n) for n in _book] + [{"title": "new"}]
+_Counted.walks = 0
+_known, _fresh = split_by_identity(_book, _back)
+check('an import walks the notebook once, not once per incoming note (%d walks for %d)'
+      % (_Counted.walks, len(_back)),
+      _Counted.walks == 1 and len(_known) == 50 and len(_fresh) == 1
+      and all(mine is _book[k] for k, (mine, _theirs) in enumerate(_known)))
+_twin = dict(_a)
+_known, _fresh = split_by_identity(
+    [_a, _twin, "not a note", _hollow],
+    [{"uid": "  %s " % _a["uid"]}, {"uid": ""}, {"uid": "   "}, {"uid": 7}, "not a note"])
+check('...and answers as find_by_uid does: the first of two notes sharing an identity, '
+      'spaces ignored, and a blank or missing identity matching nothing',
+      len(_known) == 1 and _known[0][0] is _a and len(_fresh) == 3)
+
 # The pairing that matters: identity says yes exactly where resemblance
 # says no. An edited note is a different text and the same note.
 _edited = dict(_a, title="A, corrected", body="new text")

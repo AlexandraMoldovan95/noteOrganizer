@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.94.379](#094379--2026-10-15) | 2026-10-15 | A backup of any size comes back in, and a share code is never one its import refuses; a long notebook stays quick when one note moves, a big import no longer freezes, and a day left open on the Calendar waits instead of rebuilding at every save. |
 | [0.94.374](#094374--2026-10-14) | 2026-10-14 | Misspelled words underlined with Windows' own dictionaries, quiet on sentences in a language the computer cannot check — with suggestions, Ignore, Add to Windows dictionary and a switch to turn it off. |
 | [0.93.374](#093374--2026-10-14) | 2026-10-14 | Text and icons sharp on a screen Windows enlarges, with everything that holds text grown to match — and a setting to turn it off for a second screen that isn't enlarged. |
 | [0.92.374](#092374--2026-10-13) | 2026-10-13 | One day of a repeating note opened on its own and saved as you type, a day held on another date while it stays in its series, and a way back to the series from the day itself. |
@@ -100,6 +101,53 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+---
+
+## [0.94.379] — 2026-10-15
+
+### Fixed
+
+- **A backup the app made can always be imported back.** The import refused any backup over 500
+  MB or 10,000 files, while the export wrote every attached file whatever its size, so one long
+  video or a few hundred phone photos made a backup that could not be restored. The import now
+  asks only what protects you: whether the disk has room (and says how much it needs) and whether
+  a file, or the backup as a whole, is shaped like a zip bomb. The export checks each backup it
+  writes by the same rules before putting it in place.
+- **The Share panel no longer makes a code its own import refuses.** **Select all** could tick
+  more than the 200 notes one code may carry, and a long note could make a code past the import's
+  size limits; the far end then refused it. The panel and the editor now say so at once, and
+  suggest sharing in parts or a full backup.
+- **Importing a large backup into a large notebook no longer freezes the app.** Each incoming
+  note was matched by walking the whole notebook again: a backup of 10,000 notes into a notebook
+  of 10,000 took 1.8 s with the window frozen, and grew with the square of the size. One walk
+  now builds an index first.
+- **Pinning a note, giving it another category, or moving it in Custom order redraws its card,
+  not the whole list.** Each one rebuilt the list, and with the list scrolled far down a rebuild
+  draws every row above the view: 1.3 s for one pin at 10,000 notes, at every step of Alt+Down.
+  They now take the path a save takes. The whole list is still drawn again when the keyboard's
+  ring is on it, to follow the ring to the card's new place.
+- **A day left open on the Calendar is no longer rebuilt at every save.** Every pause in typing
+  rebuilt that day's list, walking every note, on a tab nobody was looking at. It now waits, as
+  the month already did, and is brought up to date when the Calendar is shown again.
+
+### Testing
+
+- The two limits above, held by the same rules on both sides: `test_data_safety` measures backups
+  of 750 MB and of 10,050 files, a disk without room (attachments counted twice on one disk, once
+  per disk on two), a zip bomb by its numbers, spread over many entries and as a real archive,
+  and a path that climbs out; share codes at 201 notes and past each size limit. qa1 ticks 201
+  notes in the Share panel, and qa3 has the export refuse to put in place a backup its own import
+  would refuse. These were the first checks of the backup's limits at all. Mutants BK01–BK06 and
+  SH01–SH03.
+- `tools/bench.py` measures a notebook at scale as it is really used: `--rich` gives every note
+  styled words, and `--deep` scrolls the list to its end, then rebuilds it and pins a note there.
+  It also times an import's matching on every run. The three fixes above are held structurally,
+  not by timing: `test_note_identity` counts the import's walks through the notebook (one, for
+  any number of notes); qa4 counts full rebuilds for a pin, a new category and a Custom-order
+  move at the list's end (none), and compares what they leave with what a rebuild draws; qa7
+  has a save on the Notes tab leave a day open on the Calendar untouched, and the day show the
+  change when the Calendar comes back. Mutants MN01–MN08.
 
 ---
 

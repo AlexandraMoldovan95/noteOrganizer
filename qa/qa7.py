@@ -14,6 +14,7 @@ import note_organizer as NO, tkinter as tk, tkinter.filedialog as fd, os, tempfi
 # Windows foreground -- which a test process never owns. See
 # qa/_qa_support.py; _qa_click refuses to click into the void.
 from _qa_support import (click as _qa_click, fire as _qa_fire,
+                         ignore_pointer as _qa_ignore_pointer,
                          leaves_nothing_behind as _qa_leaves_nothing_behind,
                          pin_popup_visibility as _qa_pin,
                          waiting_timers as _qa_waiting)
@@ -378,6 +379,9 @@ app.render_calendar()
 app.update()
 app.hide_day_tooltip()
 app._context_menu_open = False
+# Opened by call and read back: a real mouse moving over the window would
+# take the preview down first (_qa_support.ignore_pointer).
+_qa7_hear_pointer = _qa_ignore_pointer(app.cal_canvas)
 app.show_day_summary_tooltip('2026-07-20')
 app.update()
 check('hovering a day normally does show its preview',
@@ -398,6 +402,7 @@ app.update()
 check('...and the single-note preview stays away too',
       getattr(app, '_day_tooltip', None) is None)
 app._context_menu_open = False
+_qa7_hear_pointer()
 
 # The flag is only worth anything if it is actually up WHILE the menu is
 # posted. The stub stands exactly where the real, blocking tk_popup
@@ -465,9 +470,11 @@ def _all_text(widget):
 
 
 app.hide_day_tooltip()
+_qa7_hear_pointer = _qa_ignore_pointer(app.cal_canvas)
 app.show_note_hover_preview(app.notes[0], '2026-07-21')
 app.update()
 _hov = _all_text(app._day_tooltip) if getattr(app, '_day_tooltip', None) else ''
+_qa7_hear_pointer()
 check('the hover preview shows the note\'s words', 'real words here' in _hov)
 check('...and not one vertical bar of its tables', '|' not in _hov)
 check('...but does say a table is there', 'table' in _hov)
@@ -4702,6 +4709,40 @@ except Exception as _e:
     _cs_raised = _e
 check('...so Bold works on the next note instead of raising',
       _cs_raised is None and 'bold' in app.body_text.tag_names('1.2'))
+
+# ---- A day left open on the Calendar is not rebuilt behind the Notes tab ----
+# Every autosave rebuilt it, walking every note, on a tab nobody was looking
+# at. It is brought up to date when the Calendar is shown again, as the
+# month itself is (render_calendar).
+app.notes = [NO.normalize_note({'id': 501, 'title': 'DayPanelNote', 'body': 'x',
+                                'date': '2026-07-15'})]
+app.save_notes(); app.refresh_note_list()
+app.notebook.select(app.TAB_CALENDAR); app.update()
+app.cal_year, app.cal_month = 2026, 7
+app.render_calendar()
+app.open_day_popup('2026-07-15'); app.update()
+check('fixture: the day is open on the Calendar',
+      app._day_panel_mode == 'list'
+      and any('DayPanelNote' in t for t in find_all_labels(app.day_panel)))
+app.notebook.select(app.TAB_NOTES); app.update()
+app.open_note_in_tab(app.find_note(501)); app.update()
+_dp_rebuilt = []
+_dp_real = app.show_day_list
+app.show_day_list = lambda *a, **k: (_dp_rebuilt.append(1), _dp_real(*a, **k))[1]
+try:
+    app.title_entry.delete(0, 'end')
+    app.title_entry.insert(0, 'DayPanelRenamed')
+    app.save_current_note(auto=True); app.update()
+    _dp_behind = len(_dp_rebuilt)
+    app.notebook.select(app.TAB_CALENDAR); app.update()
+finally:
+    app.show_day_list = _dp_real
+check(f'a save made on the Notes tab does not rebuild the day left open on the '
+      f'Calendar ({_dp_behind} rebuilds)', _dp_behind == 0
+      and app.find_note(501)['title'] == 'DayPanelRenamed')
+check('...and the day shows the change when the Calendar is shown again',
+      len(_dp_rebuilt) >= 1
+      and any('DayPanelRenamed' in t for t in find_all_labels(app.day_panel)))
 
 print(f"=== QA7 FAILURES: {fails if fails else 'NONE'} ===")
 
