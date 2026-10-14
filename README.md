@@ -137,8 +137,9 @@ for when you need it:
   [built with an AI agent](docs/AI_WORKFLOW.md), the
   [issues log](docs/ISSUES_LOG.md), the [changelog](CHANGELOG.md) and the
   [roadmap](docs/ROADMAP.md), with the decisions it records.
-- **How it is tested:** the [test map](qa/README.md) and the
-  [test plan excerpt](docs/TEST_PLAN_EXCERPT.md).
+- **How it is tested:** the [test map](qa/README.md), the
+  [test plan excerpt](docs/TEST_PLAN_EXCERPT.md) and the
+  [bugs found by hand](docs/BUG_REPORTS.md).
 - **The website and web demo:** [`site/`](site/README.md) — the page that
   presents the app, a demo to try it in a browser, and how both are built
   and published.

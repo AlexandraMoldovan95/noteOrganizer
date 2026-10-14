@@ -3547,7 +3547,9 @@ each one to the function it calls before writing it down.
 deuteranopia and tritanopia (Machado 2009, full severity) and given to three AI reviewers
 (Claude subagents) who saw only those, with a fourth seeing the originals as the control. A
 model reading a simulation is an approximation, not a colour-blind person; the test plan's case
-625 asks a real one. None was blocked. All four hesitated over the find bar's current match,
+625 asks a real one. *(2026-10-14: no real reader has looked yet. Case 625 now records this
+simulated check, and a real reader waits for the feedback after the public launch.)* None was
+blocked. All four hesitated over the find bar's current match,
 and two over which tab was open.
 
 **Root cause:** three, none of them a colour. The current match differed from the others by its

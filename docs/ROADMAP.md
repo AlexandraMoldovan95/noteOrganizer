@@ -37,6 +37,12 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
     to date, and is where people look for it. The Windows options are in
     [`docs/RELEASE_WINDOWS.md`](RELEASE_WINDOWS.md).
 
+- **Feedback from real readers at the public launch, colour-blind readers among them.** The
+  colour-blind check so far is an AI simulation: photographs of the app simulated for
+  protanopia, deuteranopia and tritanopia, read by AI reviewers (the test plan's case 625). A
+  person with red-green colour blindness telling Save from Delete is the check still owed (the
+  owner's call, 2026-10-14).
+
 - **Small candidates from the 2026-08-31 idea pass** (put aside deliberately, in rough order of
   appeal; two candidates from that pass have since shipped — see
   [Global keyboard shortcuts](#global-keyboard-shortcuts) and, for the delete-toast Undo,
