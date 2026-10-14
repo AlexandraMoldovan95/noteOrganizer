@@ -61,7 +61,11 @@ calls, no accounts, no database.
   (`track_theme()` for persistent widgets vs. plain `.configure()` for
   widgets that get rebuilt on every refresh) — see `docs/ARCHITECTURE.md`
   before touching theming code; mixing these up has caused a real
-  perf regression before (see `docs/ISSUES_LOG.md`).
+  perf regression before (see `docs/ISSUES_LOG.md`). Every size in
+  pixels that holds text or a drawn mark is written as at 100% and grown
+  through `px()`, `_SIZES_AT_100` or `_scale_drawing()`. With Sharp text
+  on, fonts grow on a scaled screen while bare pixel sizes do not, and
+  the words get cut ("Sharp on a scaled screen" in `docs/ARCHITECTURE.md`).
 - **Background work:** export/import run on a `threading.Thread`; the
   worker thread must never touch a Tkinter widget directly — it only
   updates a shared dict that the main thread polls. This is a hard rule,

@@ -35,9 +35,9 @@ says.
 | Unit suites | Seven `test_*.py`, no window for six of them | Every pull request | Dates, repeats, the calculator, tables, rich text, data safety, a note's identity |
 | The qa suite | Nine scripts, ~2,700 checks, driving the real app headlessly | Every pull request | What a person would notice: a note that must survive a restart, a share code or a backup; formatting and tables that must come back exactly; a question that must not lose what was typed |
 | Stories | Three scripts that press the buttons a person presses, restart the app and photograph it | On demand: by hand, or from the Actions tab | A screen that changed shape; a route nobody asked a check about |
-| Mutants | `tools/mutate.py` and its catalogue: the 238 worth re-running, and 2 that test the runner | On demand, the same way. Most mutants were one-off runs while a fix was made, named in its commit | A check that stays green with its fix taken away |
+| Mutants | `tools/mutate.py` and its catalogue: the 254 worth re-running, and 2 that test the runner | On demand, the same way. Most mutants were one-off runs while a fix was made, named in its commit | A check that stays green with its fix taken away |
 | Coverage | `tools/run_coverage.py` | Every pull request, with a floor of 80% | Code no test reaches |
-| The test plan | `NoteOrganizer_TestPlan.xlsx`, 539 cases ([an excerpt](../docs/TEST_PLAN_EXCERPT.md)) | By a person, on the built `.exe` | What needs a person: how a screen reads, the built `.exe`, real hardware — each row says whether a script already walks it |
+| The test plan | `NoteOrganizer_TestPlan.xlsx`, 545 cases ([an excerpt](../docs/TEST_PLAN_EXCERPT.md)) | By a person, on the built `.exe` | What needs a person: how a screen reads, the built `.exe`, real hardware — each row says whether a script already walks it |
 
 A fix lands with a check that fails when the fix is taken away, and a
 flaky check is treated as a bug in the check, never re-run until green
@@ -63,7 +63,7 @@ suite has had, and what each one really was:
 | `qa3` | trash, sharing, import/export |
 | `qa4` | theming, stress tests, leak regression — and the note list drawn a screenful at a time, with a save redrawing one card |
 | `qa5` | corrupt data, edge cases |
-| `qa6` | grouping, settings, attachments, multi-feature combinations — and every control in sight, on every page, at an ordinary and the smallest window |
+| `qa6` | grouping, settings, attachments, multi-feature combinations — and every control in sight, on every page, at an ordinary and the smallest window, and on a screen scaled to 150% and 200% (Sharp text) |
 | `qa7` | calendar delete, the month drawn on one canvas, the calendar History register, multi-select, image preview, autosave & memory fixes |
 | `qa8` | search debounce, background-timer robustness |
 | `qa9` | the nested-dropdown-inside-popup fix |
@@ -252,7 +252,8 @@ A new surface joins this list the moment it ships.
 - **Shell:** theming (both patterns, canvas repaints) · popups & dialogs
   (positioning, multi-monitor) · the toast banner, plain and carrying an
   action (Undo) · keyboard shortcuts · Settings page · statistics ·
-  open-note tabs · window sizing
+  open-note tabs · window sizing · a scaled screen (Sharp text: sizes
+  given at 100%, drawn marks, the drawing mode chosen at start)
 - **Standing invariants:** plain text is the store · `core/` never
   imports tkinter · the worker thread never touches a widget · offsets
   counted in characters · any-script input · fast on weak machines ·
@@ -1062,6 +1063,28 @@ A new surface joins this list the moment it ships.
   packed first), so the mutant dies everywhere. And it is still run
   against the fix taken out on the machine where the breakage was seen:
   there, the real pages failed exactly as the sweep had found them.
+- **A scaled screen is simulated, not waited for.** With Sharp text on,
+  Windows gives the app fonts half as big again at 150% while its pixel
+  sizes stay, unless the app grows them (`px`, `_SIZES_AT_100`,
+  `_scale_drawing`; see ARCHITECTURE). No CI machine has such a screen,
+  so qa6 builds a second app with Tk's scaling set before anything is
+  built, which is exactly what Windows does to a program that declares
+  itself aware, and asks `out_of_sight` of it at 150% and 200%. Four
+  things learned doing it. The first push went red on CI's Windows
+  runner only: its screen is 1024x768, the app held its scaled window to
+  that screen as it should, and the sidebar's last buttons had no room —
+  a screen Windows never pairs with 150%. A check must not take its
+  verdict from the machine it runs on, so the scaled app is built with
+  room for its whole window, and holding a window to a small screen is
+  asked on its own, with the screen stood in for. It was reproduced first,
+  on a 1024x768 virtual display, and passes on both sizes now. A popup
+  opened at the same moment as a tab
+  switch is closed by that tab's own deferred redraw, so it opens once the
+  page has settled. A wait for a popup must ask whether it still exists,
+  or the check crashes instead of failing. And the real declaration cannot
+  be made inside the suite's process, which already has windows and could
+  change its own drawing halfway through. It is made in a process of its
+  own that opens none, and Windows is asked what it made of it.
 - **Under the mutant it guards, a check fails; it never stops the
   script.** The full catalogue, run whole on 2026-10-13, came back with
   four NO-RUN verdicts, from checks written on 8 and 12 October, that had all

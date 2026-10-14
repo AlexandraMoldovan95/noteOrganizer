@@ -90,6 +90,10 @@ stale copies, pointing `core.paths` at the result and recording the version all 
 `initialise()`, which `NoteOrganizer.__init__` and `_main()` both call (it's idempotent, so
 order doesn't matter).
 
+Between `initialise()` and the first window, `_main()` tells Windows how the app draws, if
+Settings → Appearance → Sharp text is on. That has to come before any window exists; see
+[Sharp on a scaled screen](#sharp-on-a-scaled-screen-every-size-is-given-at-100).
+
 This matters for more than tidiness: those steps move and delete files, and running them as a
 side effect of `import note_organizer` is how a real notebook was once destroyed — see
 [ISSUES_LOG.md](ISSUES_LOG.md). Anything that wants the data layer without building a window
@@ -709,16 +713,63 @@ The qa5 and qa6 checks behind these ask every control whether it is wholly in si
 (`out_of_sight` in `qa/_qa_support.py`). A wider font is simulated in pixels rather than
 characters, so the line left beside the moved controls fits under every font.
 
-#### Not answered yet: a display scaled to 150%
+### Sharp on a scaled screen: every size is given at 100%
 
-The app does not declare itself DPI-aware — neither the built `.exe` nor `python.exe` does — so
-on a screen scaled to 150% Windows enlarges it as a picture. The layout is the 100% layout, and a
-little soft. Run DPI-aware (as the photographs for these checks are taken, to be sharp), the fonts
-grow by half while fixed pixel widths stay put. The Settings menu's 240 px column then squeezes
-"Keyboard shortcuts" by 5 px, and the statistics tiles' three fixed columns squeeze two captions.
-At the smallest window, three editor lines run short as well: the Created line, a day's checklist
-button, and the repeat's "times". None of these is reached today. They belong with a decision to make the app sharp on scaled screens,
-which would have to measure every fixed width against the font it holds.
+Most laptops ship with Windows set to enlarge everything to 125% or 150%. Until the Sharp text
+setting arrived, Windows drew Note Organizer at 100% and stretched the picture, so every letter
+came out soft. The app now
+tells Windows it draws itself at the screen's own size, and its text and drawn icons are sharp.
+**Settings → Appearance → Sharp text** turns this off. It is on by default.
+
+#### The trade-off, measured
+
+Windows lets a program like this be sharp at one scale only: the main screen's, read when the
+person signs in. On a second screen at another scale, Windows resizes the app as a picture. It is
+a little soft there, though less so than an enlarged picture: shrinking costs less than
+stretching. The setting exists for someone who keeps the app on such a screen. It is read once,
+before the first window opens, because that is the only moment Windows listens. It stays on this
+computer; a backup carries only categories and the calendar's decorations.
+
+Three ways to get sharp text were measured on a 150% laptop, by how crisp the letters' edges are:
+
+| Mode | Edge sharpness | Verdict |
+|---|---|---|
+| As before (no declaration) | 1,992 | soft text and icons |
+| GDI scaling (Windows sharpens a program's text for it) | 2,177 | rejected: Tk draws text into an off-screen picture first, which Windows stretches anyway |
+| Declared aware of the main screen's scale | 4,264 | chosen |
+
+"Per monitor" awareness, sharp on every screen, would mean rebuilding every font and size when
+the window crosses screens. Tk does neither: told that the scale had changed, its text already on
+screen stayed the same size. The first attempt at this, in August, is in
+[ISSUES_LOG](ISSUES_LOG.md#sharp-text-measured-this-time), with what was different this time.
+
+#### How the sizes follow
+
+Fonts are given in points and grow with the scale by themselves. A size in pixels does not: before
+the change, a 150% screen cut "Keyboard shortcuts" in the Settings menu, two statistics captions
+and two theme names, and 200% cut thirteen things on every page. So every size that holds text or
+a drawn mark is written as it is at 100%, and grown at one of three doors:
+
+- **`px(n)`** for a size written where it is used: a wrap length, a canvas's box, a scroll
+  area's height.
+- **`_SIZES_AT_100`** for a size kept on a class (`LIST_DRAW_WIDTH`, `SETTINGS_NAV_WIDTH`,
+  `TICK_BOX`…). `__init__` sets each again on the app at the screen's scale, so its readers need
+  not know.
+- **`_scale_drawing(canvas)`** for a drawing made in 100% coordinates. Tk's own `scale()` moves
+  coordinates but leaves every line's thickness as it was; this grows both.
+
+The scale is Tk's reading of the screen, snapped to Windows' quarter steps, and never below 1.
+CI's virtual display reports 100 dots per inch rather than 96, and unsnapped that moved every
+pixel the suite measures by 4%. At 100% the scale is exactly 1, so every check written before
+stands as proof that nothing moved there. Padding is left in pixels: a gap a little tighter on a
+scaled screen reads fine, a word cut in half does not. The window's 900×600 and its 640×600 floor
+grow too, but never past what the screen can show.
+
+qa6 builds the app as a 150% and a 200% screen build it, by setting Tk's scaling before anything
+is built (which is what Windows does for a program that declares itself aware), and asks every
+control on the main pages and popups whether it is wholly in sight. On Windows it also declares
+for real, in a process of its own that opens no window, and asks Windows what it made of that.
+**A new size in pixels that holds text or a mark goes through one of the three doors.**
 
 ### Paste from a PDF: lines are not paragraphs
 

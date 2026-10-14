@@ -3341,5 +3341,166 @@
     "must_fail": ["...Reset there, pressed mid-typing, asks the menu's question and the typing stays gone"],
     "suites": ["qa5"],
     "expect": "killed"
+  },
+  {
+    "id": "DPI01",
+    "about": "the screen's scale is taken as Tk reports it, not snapped to Windows' quarter steps: CI's 100-dpi display moves every pixel by 4%",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self._ui_scale = max(1.0, round(self.winfo_fpixels(\"1i\") / 96 * 4) / 4)\n",
+               "replace": "        self._ui_scale = max(1.0, self.winfo_fpixels(\"1i\") / 96)\n"}],
+    "must_fail": ["a screen reporting 100 dots per inch is drawn at 100%"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "DPI02",
+    "about": "a screen reporting fewer than 96 dots per inch draws every pixel size smaller than it always was",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self._ui_scale = max(1.0, round(self.winfo_fpixels(\"1i\") / 96 * 4) / 4)\n",
+               "replace": "        self._ui_scale = round(self.winfo_fpixels(\"1i\") / 96 * 4) / 4\n"}],
+    "must_fail": ["a screen reporting 100 dots per inch is drawn at 100%"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "DPI03",
+    "about": "the class-level sizes kept at 100% are never set again at the screen's scale",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        for name in self._SIZES_AT_100:\n            setattr(self, name, self.px(getattr(type(self), name)))\n",
+               "replace": ""}],
+    "must_fail": ["at 150% the app reads its screen as 1.5, and every size it keeps at 100% is set again at that scale",
+                  "at 200% the app reads its screen as 2.0, and every size it keeps at 100% is set again at that scale"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "DPI04",
+    "about": "the note list's column stays 280 pixels wide whatever the screen's scale",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self.sidebar = tk.Frame(parent, width=self.px(SIDEBAR_WIDTH))\n",
+               "replace": "        self.sidebar = tk.Frame(parent, width=SIDEBAR_WIDTH)\n"}],
+    "must_fail": ["...the note list beside it is as wide again as its words"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "DPI05",
+    "about": "a drawing grows on a scaled screen but its lines keep their 100% thickness",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            if width:\n                canvas.itemconfigure(item, width=width * scale)\n",
+               "replace": "            pass\n"}],
+    "must_fail": ["...a drawing grows with its lines"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "DPI06",
+    "about": "the Settings glyphs are drawn at 100% inside boxes sized for the screen",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "        self._scale_drawing(canvas, \"glyph\")\n",
+               "replace": ""}],
+    "must_fail": ["...a drawing grows with its lines"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "DPI07",
+    "about": "the drawn tick box grows with the screen but its tick stays drawn at 100%, small in a corner",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                    x0, y0, x1, y1 = x0 * s, y0 * s, x1 * s, y1 * s\n",
+               "replace": "                    pass\n"}],
+    "must_fail": ["...a drawing grows with its lines"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "DPI08",
+    "about": "a window grown with the screen's scale is never held to what the screen can show",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        return (max(1, min(self.px(width), room_w)),\n                max(1, min(self.px(height), room_h)))\n",
+               "replace": "        return (self.px(width), self.px(height))\n"}],
+    "must_fail": ["...its window opens at 900x600 grown to"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "DPI09",
+    "about": "the app declares sharp drawing at start even with Sharp text turned off",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if get_setting(SHARP_TEXT_SETTING, True, expect=bool):\n            _draw_sharp_on_scaled_screens()\n",
+               "replace": "        _draw_sharp_on_scaled_screens()\n"}],
+    "must_fail": ["the app declares its drawing mode at start"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "DPI10",
+    "about": "a new notebook, with nothing stored, starts without sharp text",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if get_setting(SHARP_TEXT_SETTING, True, expect=bool):\n            _draw_sharp_on_scaled_screens()\n",
+               "replace": "        if get_setting(SHARP_TEXT_SETTING, False, expect=bool):\n            _draw_sharp_on_scaled_screens()\n"}],
+    "must_fail": ["the app declares its drawing mode at start"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "DPI11",
+    "about": "the calendar's wide-window step is measured in screen pixels, so a scaled screen jumps to the big titles in an ordinary window",
+    "edits": [{"file": "noteorganizer/ui/calendar_view.py",
+               "find": "        return 11 if w >= self.px(1150) else 9\n",
+               "replace": "        return 11 if w >= 1150 else 9\n"}],
+    "must_fail": ["...and the calendar's titles step up in a wide window"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "DPI12",
+    "about": "choosing Sharp text On or Off in Settings is never kept",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "        save_setting(SHARP_TEXT_SETTING, on)\n",
+               "replace": "        pass\n"}],
+    "must_fail": ["on Windows, Settings -> Appearance offers Sharp text"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "DPI13",
+    "about": "the emoji picker's rows keep their 100% width on a scaled screen, cutting the last emoji of each row",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        canvas.create_window((0, 0), window=inner, anchor=\"nw\", width=self.px(240))\n",
+               "replace": "        canvas.create_window((0, 0), window=inner, anchor=\"nw\", width=240)\n"}],
+    "must_fail": ["...and every button, label and tick box on the notes page, a series"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "DPI14",
+    "about": "the window opens at 900x600 pixels whatever the screen's scale",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self.geometry(\"%dx%d\" % self._fit_to_screen(900, 600))\n",
+               "replace": "        self.geometry(\"900x600\")\n"}],
+    "must_fail": ["...its window opens at 900x600 grown to"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "DPI15",
+    "about": "the smallest window stays 640x600 pixels whatever the screen's scale",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self.minsize(*self._fit_to_screen(640, 600))\n",
+               "replace": "        self.minsize(640, 600)\n"}],
+    "must_fail": ["...its window opens at 900x600 grown to"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "DPI16",
+    "about": "the declaration reports success without asking Windows",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            return ctypes.windll.shcore.SetProcessDpiAwareness(\n                process_system_dpi_aware) == 0\n",
+               "replace": "            return True\n"}],
+    "must_fail": ["...and a process that declares it is drawn at its screen's scale by Windows"],
+    "suites": ["qa6"],
+    "expect": "killed"
   }
 ]

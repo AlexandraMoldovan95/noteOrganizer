@@ -458,6 +458,14 @@ palette is known, the app can spot a widget still holding a colour from a
 *different* theme and remap it (`_recolor_stragglers`). You couldn't do
 that if themes were ad-hoc.
 
+The layout numbers here (`SIDEBAR_WIDTH`, `EDITOR_MIN_WIDTH`) are pixels
+as drawn at 100%. This module never sees a screen, since `core/` never
+imports tkinter, so the UI grows them: `self.px(SIDEBAR_WIDTH)` is the
+width on a 150% screen with Sharp text on, and exactly 280 at 100%.
+`SHARP_TEXT_SETTING` is that setting's key, read once before the first
+window opens. Why the sizes are written this way is in
+[ARCHITECTURE](ARCHITECTURE.md#sharp-on-a-scaled-screen-every-size-is-given-at-100).
+
 `CATEGORY_COLORS` — the *live* category map the user edits — is
 deliberately **not** here. It reads and writes `settings.json`, so it now
 lives in its own module,

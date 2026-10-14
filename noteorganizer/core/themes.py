@@ -15,7 +15,10 @@ app needs to know about how it should *look*, in one place.
   starting categories, and the one that can never be deleted.
 * :data:`PALETTE_COLORS`, :data:`PRESET_NOTE_COLORS`,
   :data:`HIGHLIGHT_COLOR_PALETTE` — swatches the user picks from.
-* :data:`SIDEBAR_WIDTH`, :data:`EDITOR_MIN_WIDTH` — fixed layout sizes.
+* :data:`SIDEBAR_WIDTH`, :data:`EDITOR_MIN_WIDTH` — fixed layout sizes, in
+  pixels as drawn at 100%; the UI multiplies them by the screen's scale.
+* :data:`SHARP_TEXT_SETTING` — the settings key that decides whether the
+  app draws itself at a scaled screen's own size.
 
 WHY THEMES ARE SHAPED THIS WAY
 ------------------------------
@@ -294,6 +297,11 @@ HIGHLIGHT_COLOR_PALETTE = [
 
 SIDEBAR_WIDTH = 280
 EDITOR_MIN_WIDTH = 620
+
+# Settings → Appearance → "Sharp text". Read once, before
+# the window exists, because that is the only moment Windows lets a program
+# say how it draws; the Settings row writes it for the next start.
+SHARP_TEXT_SETTING = "sharp_text"
 
 
 # ---- Colour arithmetic ----

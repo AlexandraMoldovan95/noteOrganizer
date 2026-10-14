@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.93.374](#093374--2026-10-14) | 2026-10-14 | Text and icons sharp on a screen Windows enlarges, with everything that holds text grown to match — and a setting to turn it off for a second screen that isn't enlarged. |
 | [0.92.374](#092374--2026-10-13) | 2026-10-13 | One day of a repeating note opened on its own and saved as you type, a day held on another date while it stays in its series, and a way back to the series from the day itself. |
 | [0.90.373](#090373--2026-10-12) | 2026-10-12 | Days a repeating note keeps its own edits for, left off its schedule, found and turned into notes of their own; a category move's Undo that survives a rename; the line above a repeating note keeping all its words. |
 | [0.89.371](#089371--2026-10-08) | 2026-10-08 | What AI reviewers of colour-blindness simulations hesitated over: a boxed find match, a raised open tab with no dotted box after a click, letters that read on every colour you pick — and every icon the app uses in the emoji picker. |
@@ -98,6 +99,33 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+---
+
+## [0.93.374] — 2026-10-14
+
+### Added
+
+- **Sharp text on a scaled screen.** On a screen Windows enlarges — 125% or 150%, as most laptops
+  ship — the app used to be drawn at 100% and stretched, and every letter came out soft. It now
+  tells Windows it draws itself at the screen's own size: text and the drawn icons are sharp, and
+  everything that holds text grows with it — the note list, the Settings menu and its tiles, the
+  calendar, the emoji picker, the tick boxes, the window itself (never past what the screen can
+  show). **Settings → Appearance → Sharp text** turns it off, for someone who keeps the app on a
+  second screen that is not enlarged, where Windows then shrinks it a little soft; it applies the
+  next time the app opens. At 100% nothing is drawn differently. A first try in August had been
+  taken back unmeasured; this one was measured on a 150% laptop and a 100% monitor first.
+
+### Testing
+
+- A screen at 150% and at 200%, in qa6: the app built as such a screen builds it (Tk's scaling set
+  first, on Windows and on Linux), every size kept at 100% set again at that scale, the window and
+  its smallest size grown but held to the screen, every control in sight on the notes page, a
+  series, one of its days, the selection bar, the calendar, the emoji picker and every Settings
+  section, drawings grown with their lines, and the calendar's wide-window step. A 100-dpi screen
+  (CI's) stays at 100%. The start declares the drawing mode only with Sharp text on or unset; on
+  Windows the Settings row keeps the choice, and a process of its own declares for real and asks
+  Windows what it made of it. Mutants DPI01–DPI16.
 
 ---
 

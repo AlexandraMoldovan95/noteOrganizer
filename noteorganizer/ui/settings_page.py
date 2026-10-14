@@ -38,6 +38,7 @@ nav plus a content pane.
 """
 
 import os
+import sys
 import tkinter as tk
 from tkinter import ttk
 import tkinter.font as tkfont
@@ -82,6 +83,7 @@ from ..core.themes import (
     THEME_LABELS,
     DEFAULT_CATEGORY_COLORS,
     PROTECTED_CATEGORY,
+    SHARP_TEXT_SETTING,
     inset_surface,
     hairline,
 )
@@ -215,9 +217,9 @@ class SettingsPageMixin:
                     rail.configure(bg=tint if selected else self.colors["sidebar"])
                     rail.delete("all")
                     if selected:
-                        h = max(rail.winfo_height(), 34)
-                        top = (h - 16) / 2
-                        rail.create_rectangle(0, top, 3, top + 16,
+                        h = max(rail.winfo_height(), self.px(34))
+                        top = (h - self.px(16)) / 2
+                        rail.create_rectangle(0, top, self.px(3), top + self.px(16),
                                               fill=self.colors["accent"],
                                               outline=self.colors["accent"])
                 icon = icons.get(key)
@@ -281,7 +283,7 @@ class SettingsPageMixin:
         pixels, so four is asked for and one is spare.
         """
         def fit(event):
-            want = max(160, event.width - inset)
+            want = max(self.px(160), event.width - inset)
             if int(label.cget("wraplength") or 0) != want:
                 label.configure(wraplength=want)
         label.bind("<Configure>", fit, add="+")
@@ -526,7 +528,7 @@ class SettingsPageMixin:
         SEGMENTS = ("this week", "this month", "this year", "older")
         table = tk.Frame(self.stats_frame, bg=self.colors["bg"])
         table.pack(fill="x", pady=(0, 4))
-        table.grid_columnconfigure(0, weight=0, minsize=76)
+        table.grid_columnconfigure(0, weight=0, minsize=self.px(76))
         for c in range(1, 5):
             table.grid_columnconfigure(c, weight=1, uniform="seg")
 
@@ -598,7 +600,7 @@ class SettingsPageMixin:
         self._settings_subtitle(
             parent,
             "Rename, recolor, or remove your categories. “General” is permanent.")
-        wrap = tk.Frame(parent, bg=self.colors["card"], height=220)
+        wrap = tk.Frame(parent, bg=self.colors["card"], height=self.px(220))
         wrap.pack(fill="x", padx=12, pady=(0, 0))
         wrap.pack_propagate(False)
         self._resize_handles_pending = getattr(self, "_resize_handles_pending", [])
@@ -675,7 +677,7 @@ class SettingsPageMixin:
             "“🧩 Save as template” on any note. Pick one with “📎 Use template”. "
             "Editing a template only affects notes you make from it afterwards — "
             "notes already created stay as they are.")
-        wrap = tk.Frame(parent, bg=self.colors["card"], height=240)
+        wrap = tk.Frame(parent, bg=self.colors["card"], height=self.px(240))
         wrap.pack(fill="x", padx=12, pady=(0, 0))
         wrap.pack_propagate(False)
         self._resize_handles_pending = getattr(self, "_resize_handles_pending", [])
@@ -709,7 +711,7 @@ class SettingsPageMixin:
                 tk.Label(rows, text="No templates yet. Create one below, or use "
                                     "“Save as template” on a note.",
                          bg=self.colors["card"], fg=self.colors["subtext"],
-                         font=("Segoe UI", 9), wraplength=460, justify="left"
+                         font=("Segoe UI", 9), wraplength=self.px(460), justify="left"
                          ).pack(pady=10, padx=6, anchor="w")
             else:
                 for i, tpl in enumerate(self.templates):
@@ -807,9 +809,9 @@ class SettingsPageMixin:
             return []
         lines = text.split("\n")
         font = tkfont.Font(family="Consolas", size=9)
-        pad_x, row_h, y = 6, 22, 2
+        pad_x, row_h, y = 6, self.px(22), 2
         rule = hairline(self.colors)
-        max_x = 100
+        max_x = self.px(100)
         for first, last in blocks:
             block = lines[first:last + 1]
             sep_at = core_tables.separator_index(block)
@@ -824,7 +826,7 @@ class SettingsPageMixin:
                 column = (sep_cols[c] if sep_cols and c < len(sep_cols)
                           else None)
                 if column and column.get("hidden"):
-                    widths.append(8)
+                    widths.append(self.px(8))
                     continue
                 longest = max((font.measure(seg) for r in rows
                                if c < len(r)
@@ -836,7 +838,7 @@ class SettingsPageMixin:
                 if column and column.get("width"):
                     longest = max(longest,
                                   font.measure("0") * column["width"])
-                widths.append(min(longest + 2 * pad_x, 160))
+                widths.append(min(longest + 2 * pad_x, self.px(160)))
             # A cell can hold <br> line breaks; its row grows to fit.
             row_lines = []
             for row in rows:
@@ -889,8 +891,8 @@ class SettingsPageMixin:
             y = row_ys[-1]
             max_x = max(max_x, x0 + sum(widths))
             y += 8
-        shown_h = min(y, 240)
-        shown_w = min(max_x + 6, 430)
+        shown_h = min(y, self.px(240))
+        shown_w = min(max_x + 6, self.px(430))
         canvas.configure(height=shown_h, width=shown_w,
                          bg=self.colors["card"], highlightthickness=0,
                          scrollregion=(0, 0, max_x, y))
@@ -1187,7 +1189,8 @@ class SettingsPageMixin:
                                   ).pack(side="right")
                 lbl = tk.Label(row, text=item.get("text", ""), bg=self.colors["sidebar"],
                                fg=self.colors["subtext"] if item.get("done") else self.colors["text"],
-                               font=("Segoe UI", 9), anchor="w", wraplength=320, justify="left")
+                               font=("Segoe UI", 9), anchor="w", wraplength=self.px(320),
+                               justify="left")
                 lbl.pack(side="left", fill="x", expand=True, padx=(2, 4))
                 # Wrapped at the width it is given, as in a note's checklist.
                 if lbl.winfo_reqwidth() > self.CHECKLIST_SHORT:
@@ -1564,7 +1567,7 @@ class SettingsPageMixin:
         # below still takes it anywhere from 100 to 800", which was wrong
         # about the gesture and about the range, and the helper's own
         # docstring has said "no dragging" the whole time.
-        wrap = tk.Frame(parent, bg=self.colors["card"], height=340)
+        wrap = tk.Frame(parent, bg=self.colors["card"], height=self.px(340))
         wrap.pack(fill="x", padx=12, pady=(0, 0))
         wrap.pack_propagate(False)
         self._resize_handles_pending = getattr(self, "_resize_handles_pending", [])
@@ -1773,22 +1776,22 @@ class SettingsPageMixin:
         if not groups:
             tk.Label(parent, text="No duplicates found — every note is unique. 🎉",
                      font=("Segoe UI", 10), bg=self.colors["card"], fg=self.colors["subtext"],
-                     wraplength=520, justify="left").pack(padx=12, pady=(0, 12), anchor="w")
+                     wraplength=self.px(520), justify="left").pack(padx=12, pady=(0, 12), anchor="w")
             return
 
         total_dupes = sum(len(g) - 1 for g in groups)
         tk.Label(parent, text=f"Found {len(groups)} group(s), up to {total_dupes} note(s) "
                               "could be removed.",
                  font=("Segoe UI", 9), bg=self.colors["card"], fg=self.colors["subtext"],
-                 wraplength=520, justify="left").pack(padx=12, pady=(0, 2), anchor="w")
+                 wraplength=self.px(520), justify="left").pack(padx=12, pady=(0, 2), anchor="w")
         tk.Label(parent, text="Tick the copies you want to remove. Keep as many as "
                               "you like — anything left unticked stays. Attachments "
                               "from removed copies are merged into a kept one.",
                  font=("Segoe UI", 8, "italic"), bg=self.colors["card"],
-                 fg=self.colors["accent_text"], wraplength=520, justify="left"
+                 fg=self.colors["accent_text"], wraplength=self.px(520), justify="left"
                  ).pack(padx=12, pady=(0, 8), anchor="w")
 
-        wrap = tk.Frame(parent, bg=self.colors["card"], height=260)
+        wrap = tk.Frame(parent, bg=self.colors["card"], height=self.px(260))
         wrap.pack(fill="x", padx=12, pady=(0, 0))
         wrap.pack_propagate(False)
         self._resize_handles_pending = getattr(self, "_resize_handles_pending", [])
@@ -1832,7 +1835,8 @@ class SettingsPageMixin:
                 tk.Label(box, text=f"↳ differing {' & '.join(hints)} will be merged "
                                    "into a kept copy",
                          font=("Segoe UI", 7, "italic"), bg=self.colors["sidebar"],
-                         fg=self.colors["accent_text"], anchor="w", wraplength=460,
+                         fg=self.colors["accent_text"], anchor="w",
+                         wraplength=self.px(460),
                          justify="left"
                          ).pack(fill="x", padx=14, pady=(0, 2))
 
@@ -1978,7 +1982,7 @@ class SettingsPageMixin:
         # How many fit depends on the column width; the reference shows four
         # and that is what a 640px column takes, but it re-wraps rather than
         # letting the last one hang off the edge.
-        CARD_W = 132
+        CARD_W = self.px(132)
         per_group = max(len(DARK_THEMES), len(LIGHT_THEMES))
         avail = parent.winfo_width()
         if avail <= 1:
@@ -2014,8 +2018,9 @@ class SettingsPageMixin:
             cell = tk.Frame(edge, bg=self._surface(), cursor="hand2")
             cell.pack(fill="both", expand=True, padx=2, pady=2)
 
-            W, H = 116, 46
-            sw = tk.Canvas(cell, width=W, height=H, highlightthickness=0, bd=0,
+            W, H = 116, 46                      # drawn at 100%, then scaled
+            sw = tk.Canvas(cell, width=self.px(W), height=self.px(H),
+                           highlightthickness=0, bd=0,
                            bg=self._surface(), cursor="hand2")
             sw.pack(padx=8, pady=(8, 6))
             # the theme's own page, its sidebar strip, and three text lines
@@ -2030,6 +2035,7 @@ class SettingsPageMixin:
                 y = 10 + idx * 9
                 sw.create_rectangle(x0, y, x0 + (W - x0 - 8) * frac, y + 4,
                                     fill=colour, outline=colour)
+            self._scale_drawing(sw)
 
             lbl = tk.Label(cell, text=THEME_LABELS.get(name, name),
                            bg=self._surface(), cursor="hand2",
@@ -2039,13 +2045,14 @@ class SettingsPageMixin:
             lbl.pack(pady=(0, 8))
 
             if active:
-                badge = tk.Canvas(cell, width=16, height=16, highlightthickness=0,
-                                  bd=0, bg=self._surface())
+                badge = tk.Canvas(cell, width=self.px(16), height=self.px(16),
+                                  highlightthickness=0, bd=0, bg=self._surface())
                 badge.place(relx=1.0, rely=0.0, x=-4, y=4, anchor="ne")
                 badge.create_oval(0, 0, 15, 15, fill=self.colors["accent"],
                                   outline=self.colors["accent"])
                 badge.create_line(4, 8, 6.5, 10.5, 11.5, 5,
                                   fill=self._on_fill("accent"), width=1.8)
+                self._scale_drawing(badge)
 
             for w in (edge, cell, sw, lbl):
                 w.bind("<Button-1>", lambda e, n=name: self.set_theme(n))
@@ -2187,9 +2194,11 @@ class SettingsPageMixin:
 
     # The nav is a fixed width. It does not need a narrow breakpoint: the app
     # holds its whole content area to at least SIDEBAR_WIDTH + EDITOR_MIN_WIDTH
-    # (900px) and scrolls horizontally below that rather than reflowing -- see
-    # _on_main_canvas_configure in note_organizer.py -- and Settings sits
-    # inside that same canvas, so its pane never gets narrower than ~890px.
+    # (900px at 100%) and scrolls horizontally below that rather than
+    # reflowing -- see _on_main_canvas_configure in note_organizer.py -- and
+    # Settings sits inside that same canvas, so its pane never gets narrower
+    # than ~890px. Both widths here are as at 100%; on a scaled screen the app
+    # sets them again at its scale (NoteOrganizer._SIZES_AT_100).
     SETTINGS_NAV_WIDTH = 240
     # How many trash rows are painted before "Show more". A tuning knob, not
     # a feature: see the note in _build_settings_trash_panel for the numbers.
@@ -2231,8 +2240,8 @@ class SettingsPageMixin:
         brand = tk.Frame(self.settings_nav)
         self.track_theme(brand, bg="sidebar")
         brand.pack(fill="x", padx=14, pady=(16, 14))
-        mark = tk.Canvas(brand, width=26, height=26, highlightthickness=0, bd=0,
-                         bg=self.colors["sidebar"])
+        mark = tk.Canvas(brand, width=self.px(26), height=self.px(26),
+                         highlightthickness=0, bd=0, bg=self.colors["sidebar"])
         mark.pack(side="left", padx=(0, 9))
         self._settings_brand_mark = mark
         self._paint_brand_mark()
@@ -2282,12 +2291,14 @@ class SettingsPageMixin:
         back_row = tk.Frame(self._settings_nav_body, cursor="hand2")
         self.track_theme(back_row, bg="sidebar")
         back_row.pack(fill="x", padx=8, pady=(0, 8))
-        back_ico = tk.Canvas(back_row, width=14, height=14, highlightthickness=0,
-                             bd=0, bg=self.colors["sidebar"], cursor="hand2")
+        back_ico = tk.Canvas(back_row, width=self.px(14), height=self.px(14),
+                             highlightthickness=0, bd=0,
+                             bg=self.colors["sidebar"], cursor="hand2")
         back_ico.pack(side="left", padx=(8, 6), pady=8)
         back_ico.create_line(12, 7, 3, 7, fill=self.colors["subtext"], width=1.6)
         back_ico.create_line(6.5, 3.5, 3, 7, 6.5, 10.5,
                              fill=self.colors["subtext"], width=1.6)
+        self._scale_drawing(back_ico)
         back_lbl = tk.Button(
             back_row, text="Back to Notes", anchor="w", relief="flat", bd=0,
             highlightthickness=0, font=("Segoe UI", 9, "bold"), cursor="hand2",
@@ -2443,11 +2454,12 @@ class SettingsPageMixin:
         # 3px wide, 16px tall, vertically centred -- not a rule running the
         # full height of the row. A canvas gives that without a nest of
         # spacer frames, and lets the ends be rounded on the outer edge.
-        rail = tk.Canvas(row, width=3, height=34, highlightthickness=0, bd=0,
-                         bg=self.colors["sidebar"])
+        rail = tk.Canvas(row, width=self.px(3), height=self.px(34),
+                         highlightthickness=0, bd=0, bg=self.colors["sidebar"])
         rail.pack(side="left", fill="y")
 
-        icon = tk.Canvas(row, width=self.NAV_ICON_SIZE, height=self.NAV_ICON_SIZE,
+        icon = tk.Canvas(row, width=self.px(self.NAV_ICON_SIZE),
+                         height=self.px(self.NAV_ICON_SIZE),
                          highlightthickness=0, bd=0, bg=self.colors["sidebar"],
                          cursor="hand2")
         icon.pack(side="left", padx=(9, 0))
@@ -2504,6 +2516,8 @@ class SettingsPageMixin:
 
         Shapes are laid out in a 16-unit box and scaled at the end, so one
         definition serves the 16px nav and the smaller row-action buttons.
+        ``size`` is the box as drawn at 100%; the screen's scale is applied
+        on top, with the canvas sized to match by its caller (px).
         """
         canvas.delete("glyph")
         o = {"tags": "glyph", "outline": color, "width": 1.6}
@@ -2578,6 +2592,7 @@ class SettingsPageMixin:
 
         if size and size != 16:
             canvas.scale("glyph", 0, 0, size / 16.0, size / 16.0)
+        self._scale_drawing(canvas, "glyph")
 
     # ---- the small design system the panels are built from --------------
     #
@@ -2675,7 +2690,8 @@ class SettingsPageMixin:
         bg = self._surface("inset")
         wrap = tk.Frame(parent, bg=bg)
         wrap.pack(fill="x", pady=(0, 12))
-        ico = tk.Canvas(wrap, width=16, height=16, highlightthickness=0, bd=0, bg=bg)
+        ico = tk.Canvas(wrap, width=self.px(16), height=self.px(16),
+                        highlightthickness=0, bd=0, bg=bg)
         ico.pack(side="left", padx=(12, 8), pady=11)
         self._draw_icon(ico, "about", self.colors["accent_text"], size=16)
         band = tk.Label(wrap, text=text, font=("Segoe UI", 9), bg=bg,
@@ -2791,7 +2807,8 @@ class SettingsPageMixin:
         # red warnings before anyone has reached for anything.
         base = self.colors["subtext"]
         pad = 6
-        c = tk.Canvas(parent, width=size + pad * 2, height=size + pad * 2,
+        c = tk.Canvas(parent, width=self.px(size + pad * 2),
+                      height=self.px(size + pad * 2),
                       highlightthickness=0, bd=0, bg=self.colors[bg_key],
                       cursor="hand2" if command else "")
         # A canvas has no text to search for the way a Button does, so record
@@ -2801,7 +2818,7 @@ class SettingsPageMixin:
         # The glyph is drawn from the top-left, so nudge it into the padding.
         def paint(color):
             self._draw_icon(c, kind, color, size=size)
-            c.move("glyph", pad, pad)
+            c.move("glyph", self.px(pad), self.px(pad))
 
         paint(base)
         if command is not None:
@@ -2881,6 +2898,7 @@ class SettingsPageMixin:
             c.create_rectangle(9, 7, 17, 19, fill="white", outline="white")
             c.create_line(11, 11, 15, 11, fill=self.colors["accent"], width=1.2)
             c.create_line(11, 14, 15, 14, fill=self.colors["accent"], width=1.2)
+            self._scale_drawing(c)
         except tk.TclError:
             pass
 
@@ -2904,7 +2922,8 @@ class SettingsPageMixin:
         inner.pack(padx=1, pady=1)
         self._settings_mode_buttons = {}
         for mode, glyph in (("dark", "moon"), ("light", "sun")):
-            b = tk.Canvas(inner, width=26, height=20, highlightthickness=0, bd=0,
+            b = tk.Canvas(inner, width=self.px(26), height=self.px(20),
+                          highlightthickness=0, bd=0,
                           bg=self.colors["sidebar"], cursor="hand2")
             b.pack(side="left")
             b.bind("<Button-1>", lambda _e, m=mode: self._pick_settings_mode(m))
@@ -2948,6 +2967,7 @@ class SettingsPageMixin:
                                            (7.5, 4.5, 9, 6), (17, 14, 18.5, 15.5),
                                            (7.5, 15.5, 9, 14), (17, 6, 18.5, 4.5)):
                         c.create_line(x1, y1, x2, y2, fill=fg, width=1.3)
+                self._scale_drawing(c)
             except tk.TclError:
                 pass
 
@@ -3514,6 +3534,41 @@ class SettingsPageMixin:
             lambda v: self._set_editor_font(size=int(v)), width_chars=8
         ).pack(side="right")
 
+        # Only Windows draws a program as a stretched picture when it does
+        # not say otherwise, so only there is there anything to choose. The
+        # words are for someone who has never heard of DPI: what they will
+        # see, when it is worth turning off, and when a change shows.
+        if sys.platform.startswith("win"):
+            row = self._card_row(
+                card, "Sharp text",
+                "Keeps text crisp when Windows makes everything bigger "
+                "(Scale above 100% in the Windows display settings), as most "
+                "laptops do. On a second screen that isn't enlarged, the app "
+                "may then look a little blurry — choose Off if that's "
+                "where you keep it. Takes effect the next time you open "
+                "Note Organizer.")
+            self.sharp_text_var = tk.StringVar(
+                value="On" if get_setting(SHARP_TEXT_SETTING, True, expect=bool)
+                else "Off")
+            self._build_themed_dropdown(
+                row, self.sharp_text_var, ["On", "Off"], self._set_sharp_text,
+                width_chars=8
+            ).pack(side="right")
+
+    def _set_sharp_text(self, value):
+        """Settings → Appearance → Sharp text, kept for the next start.
+
+        Windows lets a program say how it draws only before its first
+        window exists (_draw_sharp_on_scaled_screens), so nothing on screen
+        can change now; the row's own words say when it will, and the
+        banner says it again at the moment of choosing."""
+        on = value == "On"
+        if on == get_setting(SHARP_TEXT_SETTING, True, expect=bool):
+            return
+        save_setting(SHARP_TEXT_SETTING, on)
+        self._show_toast("Saved — you'll see it the next time you open "
+                         "Note Organizer")
+
     def _build_settings_backup_panel(self, parent):
         """Export everything to a file, or import from one."""
         self._settings_subtitle(
@@ -3663,14 +3718,15 @@ class SettingsPageMixin:
         head = tk.Frame(parent, bg=self.colors["bg"])
         self.track_theme(head, bg="bg")
         head.pack(fill="x", pady=(0, 14))
-        mark = tk.Canvas(head, width=44, height=44, highlightthickness=0, bd=0,
-                         bg=self.colors["bg"])
+        mark = tk.Canvas(head, width=self.px(44), height=self.px(44),
+                         highlightthickness=0, bd=0, bg=self.colors["bg"])
         mark.pack(side="left", padx=(2, 12))
         self._rounded_rect(mark, 0, 0, 44, 44, 12,
                            fill=self.colors["accent"], outline=self.colors["accent"])
         mark.create_rectangle(15, 11, 29, 33, fill="white", outline="white")
         for y in (17, 22, 27):
             mark.create_line(18, y, 26, y, fill=self.colors["accent"], width=1.6)
+        self._scale_drawing(mark)
         titles = tk.Frame(head, bg=self.colors["bg"])
         self.track_theme(titles, bg="bg")
         titles.pack(side="left", fill="x", expand=True)
