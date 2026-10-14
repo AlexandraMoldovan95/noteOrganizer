@@ -606,10 +606,11 @@ class NoteListMixin:
         items["bg"] = cv.create_rectangle(
             0, top, self.LIST_DRAW_WIDTH, bottom, fill=c["sidebar"],
             outline="", tags=tags)
-        items["dot"] = cv.create_oval(5, mid - 4, 13, mid + 4, fill=color,
-                                      outline=color, tags=tags)
+        items["dot"] = cv.create_oval(
+            self.px(5), mid - self.px(4), self.px(13), mid + self.px(4),
+            fill=color, outline=color, tags=tags)
         items["caret"] = cv.create_text(
-            23, mid, anchor="w", text=("▶" if collapsed else "▼"),
+            self.px(23), mid, anchor="w", text=("▶" if collapsed else "▼"),
             font=("Segoe UI", 8), fill=c["subtext"], tags=tags)
         caret_right = cv.bbox(items["caret"])[2]
         label_x = caret_right + 10
@@ -1918,13 +1919,13 @@ class NoteListMixin:
             # Leftmost, ahead of the stripe, where the Checkbutton stood: 6
             # pixels before it and 22 wide, measured on the widget card (17,
             # guessed first, put the stripe five pixels off in the photograph).
-            check_x = left + 8
-            left += 6 + 22
+            check_x = left + self.px(8)
+            left += self.px(6 + 22)
         stripe_x = left
         content_left = stripe_x + self.CARD_STRIPE + self.CARD_PAD[0]
         content_right = x1 - self.CARD_RING - self.CARD_PAD[0]
         text_x = content_left + 2
-        wrap = max(40, content_right - content_left - 4)
+        wrap = max(self.px(40), content_right - content_left - 4)
         inset = self.CARD_TEXT_INSET
         items = {}
         y = top + self.CARD_RING + self.CARD_PAD[1] + inset
@@ -1955,9 +1956,11 @@ class NoteListMixin:
             items["check"] = cv.create_rectangle(
                 check_x, mid - half, check_x + self.CARD_CHECK, mid + half + 1,
                 fill=c["check_well"], outline=c["subtext"], tags=tags)
+            px = self.px
             items["mark"] = cv.create_line(
-                check_x + 3, mid, check_x + 6, mid + 3, check_x + 10, mid - 3,
-                width=2, fill=self.CARD_CHECK_MARK, tags=tags,
+                check_x + px(3), mid, check_x + px(6), mid + px(3),
+                check_x + px(10), mid - px(3),
+                width=px(2), fill=self.CARD_CHECK_MARK, tags=tags,
                 state="normal" if nid in self.selected_note_ids else "hidden")
         items["ring"] = cv.create_rectangle(
             x0 + 1, top + 1, x1 - 1, bottom - 1, width=self.CARD_RING,

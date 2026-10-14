@@ -467,6 +467,7 @@ from noteorganizer.core.themes import (
     HIGHLIGHT_COLOR_PALETTE,
     SIDEBAR_WIDTH,
     EDITOR_MIN_WIDTH,
+    SHARP_TEXT_SETTING,
 )
 
 
@@ -736,6 +737,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # call repeatedly; _main() calls it too.
         initialise()
         super().__init__()
+        # How much bigger than 100% this screen draws, for the sizes this
+        # file gives in pixels (see px). Fonts are in points and grow by
+        # themselves; a width in pixels does not, so on a screen scaled to
+        # 150% a 240-pixel menu held text half as big again and cut it off.
+        # Snapped to Windows' own steps of a quarter: the Linux CI's virtual
+        # display reports 100 dots per inch, not 96, and an unsnapped 1.04
+        # moved every pixel the suite measures. Never below 1, so a screen
+        # that reports fewer dots than 96 keeps the sizes it always had.
+        self._ui_scale = max(1.0, round(self.winfo_fpixels("1i") / 96 * 4) / 4)
+        for name in self._SIZES_AT_100:
+            setattr(self, name, self.px(getattr(type(self), name)))
         self.title("Note Organizer")
         # Armed from day one, for EVERY popup path -- and for every WINDOW:
         # typing in a popup makes the popup the active window, so its
@@ -765,7 +777,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # every failure to crash_log.txt, callback or not.
         from noteorganizer.core import storage as _core_storage
         _core_storage.on_write_failure = self._on_data_write_failure
-        self.geometry("900x600")
+        self.geometry("%dx%d" % self._fit_to_screen(900, 600))
         # The smallest window that still looks like the app, measured and
         # photographed rather than guessed. The sidebar's fixed parts -- the
         # heading, search, sort and select row above the list, New Note,
@@ -776,7 +788,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # card. The width stays small enough for a half-screen snap on a
         # 1280-wide (150%-scaled) laptop; below 900 the page scrolls
         # sideways, which is the design choice the main canvas already makes.
-        self.minsize(640, 600)
+        # Both sizes are as drawn at 100%: on a scaled screen they grow with
+        # the text, but never past what the screen can show -- a 1920x1080
+        # laptop at 175% has about 1,000 pixels of height under its taskbar.
+        self.minsize(*self._fit_to_screen(640, 600))
         # On <Map>, not on after_idle. Measured: before the window is
         # mapped, wm_frame() names a DIFFERENT window from the one it
         # names afterwards -- and the compositor accepts a paint on that
@@ -965,6 +980,74 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if self._WINDOW_ONLY_TAG not in tags:
             self.bindtags((tags[0], self._WINDOW_ONLY_TAG) + tuple(tags[1:]))
         return self.bind_class(self._WINDOW_ONLY_TAG, sequence, func, add="+")
+
+    # Class-level sizes in pixels as drawn at 100%, each holding text or a
+    # drawn mark. __init__ sets every one again on the app at this screen's
+    # scale, so the code reading self.LIST_DRAW_WIDTH gets the size the
+    # screen needs without each of its dozen readers having to remember to
+    # ask. A size given as a literal where it is used goes through px().
+    _SIZES_AT_100 = (
+        "LIST_DRAW_WIDTH", "HEADER_HEIGHT", "CARD_CHECK",          # note list
+        "SETTINGS_NAV_WIDTH", "SETTINGS_CONTENT_MAX",              # Settings
+        "CAL_GRID_HEIGHT", "CAL_ROW_MIN", "CAL_CHIP_WRAP",         # calendar
+        "CHECKLIST_WRAP", "CHECKLIST_SHORT", "TICK_BOX",           # checklist
+        "INDENT_STEP",                                             # paragraphs
+    )
+
+    def px(self, n):
+        """*n* pixels as drawn at 100%, in this screen's pixels.
+
+        For the sizes that hold text or a drawn mark -- a column's width, a
+        line's wrap, an icon's box. Padding is left as it is: a gap a little
+        tighter on a scaled screen reads fine, a word cut in half does not.
+        At 100% this is *n* exactly, which is what lets every check written
+        before the app drew sharp on scaled screens stand as the proof that
+        nothing moved there."""
+        return int(round(n * self._ui_scale))
+
+    def _scale_drawing(self, canvas, tag="all"):
+        """Grow what was just drawn on *canvas*, in coordinates as at 100%,
+        to this screen's scale: every position and size, and the thickness
+        of every line, which Tk's own scale() leaves as it was. Nothing at
+        100%. Call it once per drawing -- after a delete and redraw, never
+        twice over the same items, or they grow again."""
+        scale = self._ui_scale
+        if scale == 1:
+            return
+        canvas.scale(tag, 0, 0, scale, scale)
+        for item in canvas.find_withtag(tag):
+            try:
+                width = float(canvas.itemcget(item, "width") or 0)
+            except (tk.TclError, ValueError):
+                continue                       # an image: it has no width
+            if width:
+                canvas.itemconfigure(item, width=width * scale)
+
+    def _screen_room(self):
+        """The width and height a window can take on the main screen: its
+        work area (the screen less the taskbar), less the window's own
+        frame and title bar."""
+        width, height = self.winfo_screenwidth(), self.winfo_screenheight()
+        if sys.platform.startswith("win"):
+            try:
+                import ctypes
+                import ctypes.wintypes
+                area = ctypes.wintypes.RECT()
+                spi_getworkarea = 0x0030
+                if ctypes.windll.user32.SystemParametersInfoW(
+                        spi_getworkarea, 0, ctypes.byref(area), 0):
+                    width = area.right - area.left
+                    height = area.bottom - area.top
+            except Exception:                         # noqa: BLE001
+                self._log_swallowed("screen work area")
+        return width - self.px(16), height - self.px(48)
+
+    def _fit_to_screen(self, width, height):
+        """A window size given at 100%, at this screen's scale, and never
+        bigger than the screen can show (see _screen_room)."""
+        room_w, room_h = self._screen_room()
+        return (max(1, min(self.px(width), room_w)),
+                max(1, min(self.px(height), room_h)))
 
     # The two window classes Tk registers on Windows, and the class styles
     # that make Windows repaint a window WHOLE whenever its size changes.
@@ -2140,7 +2223,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         so a fixed 42px lmargin2 that hangs correctly at the default size
         leaves a large-font item's second line 11px out of true.
         """
-        room = self._MARKER_ROOM[kind]
+        room = self.px(self._MARKER_ROOM[kind])
         current = self._editor_font_size()
         if current and current != self._MARKER_ROOM_AT:
             room = int(round(room * current / self._MARKER_ROOM_AT))
@@ -2680,7 +2763,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # marker characters, so it survives every save unchanged.
             ink = next((st["fg"] for st in styles if st.get("fg")), None) \
                 or self.colors["text"]
-            side = max(12, min(18, row_h - 14))
+            side = max(self.px(12), min(self.px(18), row_h - self.px(14)))
             cx = cell["x"] + cell["w"] / 2
             cy = cell["y"] + cell["h"] / 2
             items = [canvas.create_rectangle(
@@ -3819,7 +3902,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # A hidden column is a sliver, not an absence: wide enough
                 # to right-click for Unhide, too thin to read.
                 hidden_cols.add(c)
-                col_w[c] = 14
+                col_w[c] = self.px(14)
                 continue
             if column and column.get("width"):
                 # The dash count is the display width, exactly -- narrower
@@ -6666,8 +6749,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         left = indent * self.INDENT_STEP
         options = {}
         if kind:
-            options["lmargin1"] = 18 + left
-            options["lmargin2"] = 18 + left + self._marker_room(kind)
+            options["lmargin1"] = self.px(18) + left
+            options["lmargin2"] = self.px(18) + left + self._marker_room(kind)
         else:
             options["lmargin1"] = options["lmargin2"] = left
         text_widget.tag_configure(name, **options)
@@ -7736,8 +7819,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         font says "align right", and because canvas items can be recoloured
         on a theme switch.
         """
-        canvas = tk.Canvas(parent, width=24, height=20, highlightthickness=0,
-                           bd=0, cursor="hand2", relief="flat")
+        canvas = tk.Canvas(parent, width=self.px(24), height=self.px(20),
+                           highlightthickness=0, bd=0, cursor="hand2",
+                           relief="flat")
         for row, width in enumerate((15, 9, 15, 9)):
             y = 5 + row * 3.5
             if align == "left":
@@ -7747,6 +7831,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             else:
                 x0 = 12 - width / 2
             canvas.create_line(x0, y, x0 + width, y, width=2, tags="bar")
+        self._scale_drawing(canvas, "bar")
         canvas.bind("<Button-1>",
                     lambda e, a=align: self._set_paragraph_align(a))
         return canvas
@@ -8031,7 +8116,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # the picker never offers a shape that cannot exist.
         for r in range(1, self.TABLE_GRID_ROWS + 1):
             for c in range(2, self.TABLE_GRID_COLUMNS + 1):
-                cell = tk.Frame(grid, width=14, height=14, cursor="hand2",
+                cell = tk.Frame(grid, width=self.px(14), height=self.px(14),
+                                cursor="hand2",
                                 bg=inset_surface(self.colors))
                 cell.grid(row=r, column=c, padx=1, pady=1)
                 cell.bind("<Enter>", lambda e, r=r, c=c: highlight(r, c))
@@ -9458,14 +9544,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # Its own Escape closes just it, as a nested dropdown's does.
             pop.bind("<Escape>", lambda e: pop.destroy())
 
-        wrap = tk.Frame(outer, bg=self.colors["card"], height=220, width=260)
+        wrap = tk.Frame(outer, bg=self.colors["card"], height=self.px(220),
+                        width=self.px(260))
         wrap.pack()
         wrap.pack_propagate(False)
         canvas = tk.Canvas(wrap, bg=self.colors["card"], highlightthickness=0)
         sb = ttk.Scrollbar(wrap, orient="vertical", command=canvas.yview)
         inner = tk.Frame(canvas, bg=self.colors["card"])
         inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0, 0), window=inner, anchor="nw", width=240)
+        canvas.create_window((0, 0), window=inner, anchor="nw", width=self.px(240))
         canvas.configure(yscrollcommand=sb.set)
         sb.pack(side="right", fill="y")
         canvas.pack(side="left", fill="both", expand=True)
@@ -9559,7 +9646,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.import_box.pack(fill="x", padx=6)
         self._add_paste_menu(self.import_box)
         self.import_status = tk.Label(p, text="", font=("Segoe UI", 7), anchor="w",
-                                      wraplength=200, justify="left",
+                                      wraplength=self.px(200), justify="left",
                                       bg=self.colors["sidebar"], fg=self.colors["danger_text"])
         self.import_status.pack(fill="x", padx=6, pady=(2, 0))
         row = tk.Frame(p, bg=self.colors["sidebar"])
@@ -10323,7 +10410,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             made = []
             for text in lines:
                 line = tk.Label(inner, text=text, font=("Segoe UI", 8),
-                                anchor="w", justify="left", wraplength=200,
+                                anchor="w", justify="left",
+                                wraplength=self.px(200),
                                 bg=self.colors["sidebar"],
                                 fg=self.colors["subtext"])
                 line.pack(fill="x", pady=2)
@@ -10523,7 +10611,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                   cursor="hand2", bd=0).pack(side="right")
         if had_attachments:
             tk.Label(parent, text=self.SHARE_ATTACHMENT_WARNING,
-                     font=("Segoe UI", 7), anchor="w", wraplength=200, justify="left",
+                     font=("Segoe UI", 7), anchor="w", wraplength=self.px(200),
+                     justify="left",
                      bg=self.colors["sidebar"], fg=self.colors["danger_text"]
                      ).pack(fill="x", pady=(0, 2))
         box = tk.Text(parent, height=3, wrap="char", font=("Consolas", 7),
@@ -10777,7 +10866,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                   font=("Segoe UI", 10, "bold"), cursor="hand2").pack(side="right")
         if had_attachments:
             tk.Label(parent, text=self.SHARE_ATTACHMENT_WARNING,
-                     font=("Segoe UI", 8), anchor="w", wraplength=600, justify="left",
+                     font=("Segoe UI", 8), anchor="w", wraplength=self.px(600),
+                     justify="left",
                      bg=self.colors["bg"], fg=self.colors["danger_text"]
                      ).pack(fill="x", pady=(2, 2))
         box = tk.Text(parent, height=3, wrap="char", font=("Consolas", 9),
@@ -11777,7 +11867,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         edge = 2 * sum(int(str(label.cget(option)))
                        for option in ("bd", "padx", "highlightthickness"))
-        wrap = min(self.CHECKLIST_WRAP, max(40, width - edge))
+        wrap = min(self.CHECKLIST_WRAP, max(self.px(40), width - edge))
         now = int(str(label.cget("wraplength")))
         if now != wrap and (label.winfo_reqwidth() > width or now < wrap):
             label.configure(wraplength=wrap)
@@ -12194,14 +12284,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         per_row = 5
         for i, color in enumerate(PALETTE_COLORS):
             r, c = divmod(i, per_row)
-            cell = tk.Canvas(grid, width=26, height=26, highlightthickness=0,
-                             bg=self.colors["card"], cursor="hand2")
+            cell = tk.Canvas(grid, width=self.px(26), height=self.px(26),
+                             highlightthickness=0, bg=self.colors["card"],
+                             cursor="hand2")
             self._rounded_rect(cell, 2, 2, 24, 24, 7, fill=color, outline=color)
             if color == current:
                 # The tick is the only sign of the colour in use, and two
                 # swatches can look alike to a colour-blind eye: it must read.
                 cell.create_text(13, 13, text="✓", fill=letters_on(color),
                                  font=("Segoe UI", 11, "bold"), tags="tick")
+            self._scale_drawing(cell)
             cell.grid(row=r, column=c, padx=3, pady=3)
             # "break": the pick destroys this popup (see _show_inline_rename).
             cell.bind("<Button-1>", lambda e, col=color: (pick(col), "break")[1])
@@ -12349,20 +12441,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         images = getattr(self, "_tick_images", None)
         if images is None:
             images = self._tick_images = tuple(
-                tk.PhotoImage(master=self, width=self.TICK_BOX + 4,
+                tk.PhotoImage(master=self, width=self.TICK_BOX + self.px(4),
                               height=self.TICK_BOX) for _ in range(2))
-        size = self.TICK_BOX
+        # TICK_BOX is already this screen's size (_SIZES_AT_100); the mark
+        # inside it is drawn at 100% and stretched the same way.
+        size, rim, pen = self.TICK_BOX, self.px(1), self.px(2)
+        s = self._ui_scale
         for image, ticked in zip(images, (False, True)):
             image.blank()
             image.put(self.colors["subtext"], to=(0, 0, size, size))
-            image.put(self.colors["check_well"], to=(1, 1, size - 1, size - 1))
+            image.put(self.colors["check_well"], to=(rim, rim, size - rim, size - rim))
             if ticked:
                 for (x0, y0), (x1, y1) in (((2, 6), (5, 9)), ((5, 9), (10, 3))):
-                    steps = max(abs(x1 - x0), abs(y1 - y0))
+                    x0, y0, x1, y1 = x0 * s, y0 * s, x1 * s, y1 * s
+                    steps = max(1, round(max(abs(x1 - x0), abs(y1 - y0))))
                     for k in range(steps + 1):
                         x = round(x0 + (x1 - x0) * k / steps)
                         y = round(y0 + (y1 - y0) * k / steps)
-                        image.put(self.CARD_CHECK_MARK, to=(x, y, x + 2, y + 2))
+                        image.put(self.CARD_CHECK_MARK, to=(x, y, x + pen, y + pen))
         return images
 
     def _drawn_tick_box(self, box, bg, fg, track):
@@ -12968,7 +13064,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Read by _on_main_canvas_configure, which gives the content the
         # window's size -- at once, or when a drag of the edge settles.
         self._main_window_item = main_window
-        self._main_min_width = SIDEBAR_WIDTH + EDITOR_MIN_WIDTH
+        self._main_min_width = self.px(SIDEBAR_WIDTH + EDITOR_MIN_WIDTH)
 
         self.main_inner.bind("<Configure>", _on_inner_configure)
         self.main_canvas.bind("<Configure>", self._on_main_canvas_configure)
@@ -13137,7 +13233,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def build_notes_tab(self, parent):
         # --- Sidebar (note list) ---
-        self.sidebar = tk.Frame(parent, width=SIDEBAR_WIDTH)
+        self.sidebar = tk.Frame(parent, width=self.px(SIDEBAR_WIDTH))
         self.track_theme(self.sidebar, bg="sidebar")
         self.sidebar.pack(side="left", fill="y")
         self.sidebar.pack_propagate(False)
@@ -13151,7 +13247,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # Wraps instead of overflowing past the sidebar's fixed width —
             # a safety net independent of the username length cap, in case a
             # name ever ends up longer than expected some other way.
-            wraplength=SIDEBAR_WIDTH - 30, justify="left"
+            wraplength=self.px(SIDEBAR_WIDTH - 30), justify="left"
         )
         self.track_theme(self.greeting_lbl, bg="sidebar", fg="subtext")
         self.greeting_lbl.pack(pady=(2, 12), padx=15, anchor="w")
@@ -13560,7 +13656,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Stays visible whether the sidebar is shown or hidden, so the user can
         # always bring the note list back.
         self._sidebar_hidden = False
-        self.sidebar_toggle = tk.Frame(parent, width=16, cursor="hand2")
+        self.sidebar_toggle = tk.Frame(parent, width=self.px(16), cursor="hand2")
         self.track_theme(self.sidebar_toggle, bg="card")
         self.sidebar_toggle.pack(side="left", fill="y")
         self.sidebar_toggle.pack_propagate(False)
@@ -17008,8 +17104,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         for cat in CATEGORY_COLORS.keys():
             row = tk.Frame(frame, bg=self.colors["card"], cursor="hand2")
             row.pack(fill="x")
-            dot = tk.Canvas(row, width=10, height=10, highlightthickness=0, bg=self.colors["card"])
+            dot = tk.Canvas(row, width=self.px(10), height=self.px(10),
+                            highlightthickness=0, bg=self.colors["card"])
             dot.create_oval(1, 1, 9, 9, fill=CATEGORY_COLORS[cat], outline=CATEGORY_COLORS[cat])
+            self._scale_drawing(dot)
             dot.pack(side="left", padx=(8, 6), pady=5)
             lbl = tk.Label(row, text=cat, bg=self.colors["card"], fg=self.colors["text"],
                           font=("Segoe UI", 9), anchor="w")
@@ -20801,7 +20899,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 tk.Label(row, text=f"{label}: ", font=("Segoe UI", 8, "bold"),
                          bg=self.colors["card"], fg=self.colors["subtext"]).pack(side="left")
                 tk.Label(row, text=value, font=("Segoe UI", 8), bg=self.colors["card"],
-                         fg=self.colors["text"], wraplength=260, justify="left"
+                         fg=self.colors["text"], wraplength=self.px(260), justify="left"
                          ).pack(side="left")
 
             title = (note.get("title") or "").strip() or "(untitled)"
@@ -21197,17 +21295,48 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._toast_hide_job = self.after(8000 if action else 1800, hide)
 
 
+def _draw_sharp_on_scaled_screens():
+    """Tell Windows the app draws itself at the main screen's own scale.
+
+    Without it, on a screen set to 125% or 150% -- what most laptops ship
+    with -- Windows drew the whole app at 100% and stretched the picture,
+    and every letter came out soft. Declared, the app draws at the real
+    size and the text is sharp: measured on a 150% laptop, the edges of
+    the letters came out twice as crisp. Fonts are given in points and grow
+    by themselves; the sizes given in pixels grow through NoteOrganizer.px.
+
+    "System aware", not "per monitor": a window moved to a second screen
+    at another scale is resized by Windows as a picture, so it is a little
+    softer there. Per monitor would mean the app rebuilding every font and
+    size when it crosses screens, and Tk does neither -- measured: its text
+    stayed the same size when told the scale had changed. Settings →
+    Appearance → "Sharp text on a scaled screen" turns this off for someone
+    who keeps the app on such a second screen.
+
+    Must run before the first window exists; Windows decides a program's
+    drawing mode once. Any failure leaves the app as it always was.
+    ISSUES_LOG, "The DPI fix that made things worse": the first try, in
+    August, went out unmeasured, looked blurrier and was taken back."""
+    if not sys.platform.startswith("win"):
+        return False
+    try:
+        import ctypes
+        try:
+            process_system_dpi_aware = 1
+            return ctypes.windll.shcore.SetProcessDpiAwareness(
+                process_system_dpi_aware) == 0
+        except (AttributeError, OSError):
+            # Windows 7 and 8.0 have no shcore.dll; the older call says the
+            # same thing.
+            return bool(ctypes.windll.user32.SetProcessDPIAware())
+    except Exception:                                 # noqa: BLE001
+        return False
+
+
 def _main():
     """Launch the app with a top-level guard. In the --windowed .exe there's no
     console, so an unhandled exception would make the app vanish with no trace.
     This shows the error and, where possible, points the user at their data."""
-    # Tried declaring the process DPI-aware here, to fix two side-by-side
-    # Settings panels rendering at visibly different sizes despite Tk's
-    # own layout math treating them as pixel-identical — reverted. It
-    # made the whole app's rendering noticeably worse (blurrier) without
-    # actually fixing the size mismatch, on the machine that reported the
-    # original bug. Left unresolved rather than trading one visible
-    # problem for a worse one.
     try:
         # One notebook, one app. Two windows on the same data directory
         # each hold their own copy of the whole notebook and each save
@@ -21249,6 +21378,10 @@ def _main():
             root.destroy()
             return
         initialise(resolved=_resolved)
+        # After initialise, which puts settings.json where it is read from,
+        # and before the first window, which is when Windows stops listening.
+        if get_setting(SHARP_TEXT_SETTING, True, expect=bool):
+            _draw_sharp_on_scaled_screens()
         app = NoteOrganizer()
         app.protocol("WM_DELETE_WINDOW", app.on_app_close)
         app.mainloop()

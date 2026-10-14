@@ -165,7 +165,7 @@ class DialogsMixin:
                              highlightthickness=0, bd=0)
         msg_lbl = tk.Label(msg_view, text=message, bg=self.colors["card"],
                            fg=self.colors["subtext"], font=("Segoe UI", 10),
-                           wraplength=380, justify="left", anchor="w")
+                           wraplength=self.px(380), justify="left", anchor="w")
         msg_view.create_window(0, 0, window=msg_lbl, anchor="nw")
         msg_bar = ttk.Scrollbar(msg_box, orient="vertical",
                                 command=msg_view.yview)
@@ -335,7 +335,8 @@ class DialogsMixin:
                 room = win_h - 2 * margin
                 height = natural_h
                 if natural_h > room:
-                    msg_view.configure(height=max(48, lbl_h - (natural_h - room)))
+                    msg_view.configure(
+                        height=max(self.px(48), lbl_h - (natural_h - room)))
                     msg_bar.pack(side="right", fill="y", before=msg_view)
                     height = room
                     # Given, not asked for: if the arithmetic above is ever

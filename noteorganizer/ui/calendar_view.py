@@ -290,7 +290,7 @@ class CalendarViewMixin:
 
         # Day panel: appears only when a day is selected, at the bottom of the
         # scrollable area. Fixed height; comfortable, not half the page.
-        self.day_panel = tk.Frame(self.cal_scroll_inner, height=240)
+        self.day_panel = tk.Frame(self.cal_scroll_inner, height=self.px(240))
         self.track_theme(self.day_panel, bg="sidebar")
         self.day_panel.pack_propagate(False)
         self.selected_day = None          # "YYYY-MM-DD" currently shown
@@ -466,8 +466,8 @@ class CalendarViewMixin:
         try:
             w = self.winfo_width()
         except tk.TclError:
-            w = 900
-        return 11 if w >= 1150 else 9
+            w = self.px(900)
+        return 11 if w >= self.px(1150) else 9
 
     # The month grid's geometry, as the widget grid it replaces laid it out:
     # seven equal columns, a row of weekday names, and week rows all as tall
@@ -1138,7 +1138,7 @@ class CalendarViewMixin:
             title_text = "🔁 " + title_text
         tk.Label(inner, text=title_text, bg=self.colors["card"], fg=self.colors["text"],
                  font=("Segoe UI", 10, "bold"), anchor="w", justify="left",
-                 wraplength=260).pack(anchor="w")
+                 wraplength=self.px(260)).pack(anchor="w")
 
         if is_recurring(base_note):
             tk.Label(inner, text=describe_recurrence(base_note), bg=self.colors["card"],
@@ -1157,7 +1157,7 @@ class CalendarViewMixin:
                 preview = preview[:150].strip() + "…"
             tk.Label(inner, text=preview, bg=self.colors["card"], fg=self.colors["subtext"],
                      font=("Segoe UI", 8), anchor="w", justify="left",
-                     wraplength=260).pack(anchor="w", pady=(3, 0))
+                     wraplength=self.px(260)).pack(anchor="w", pady=(3, 0))
 
         icons = []
         if tables_here:
@@ -1331,7 +1331,7 @@ class CalendarViewMixin:
         title_lbl = tk.Label(self.day_panel, text=title,
                              font=("Segoe UI", 12, "bold"),
                              bg=self.colors["sidebar"], fg=self.colors["text"],
-                             anchor="w", wraplength=700, justify="left")
+                             anchor="w", wraplength=self.px(700), justify="left")
         title_lbl.pack(fill="x", padx=15, pady=(2, 4))
 
         # The actions menu, which this panel was the only note surface in
@@ -2081,7 +2081,7 @@ class CalendarViewMixin:
         # start so that reaching the cap does not shove the buttons down.
         cap_note = tk.Label(outer, text=" ", bg=self.colors["card"],
                             fg=self.colors["subtext"], font=("Segoe UI", 8),
-                            wraplength=230, justify="left", anchor="w")
+                            wraplength=self.px(230), justify="left", anchor="w")
         cap_note.pack(fill="x", pady=(4, 0))
         # Once, now that every chip and the note exist: a day that already
         # holds three opens with the others flat and the reason showing,

@@ -185,7 +185,8 @@ class CalculatorPanelMixin:
         self.calculator_history_section = tk.Frame(sec, bg=self.colors["card"])
         self.track_theme(self.calculator_history_section, bg="card")
         # Not packed yet — toggled open by the button above.
-        hist_wrap = tk.Frame(self.calculator_history_section, bg=self.colors["card"], height=90)
+        hist_wrap = tk.Frame(self.calculator_history_section, bg=self.colors["card"],
+                             height=self.px(90))
         hist_wrap.pack(fill="x", pady=(2, 8))
         hist_wrap.pack_propagate(False)
         hist_canvas = tk.Canvas(hist_wrap, bg=self.colors["card"], highlightthickness=0)

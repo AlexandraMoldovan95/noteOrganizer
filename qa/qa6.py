@@ -3130,6 +3130,265 @@ app.notes = []
 app.save_notes(); app.refresh_note_list(); app.update()
 
 
+# ---- A SCREEN SCALED TO 150% AND 200% ----
+# Declared to Windows as drawing at the screen's own scale -- the "Sharp text"
+# setting, on by default -- the app is given fonts half as big again at 150%,
+# while every size it writes in pixels stays as it was unless it grows that
+# size itself (NoteOrganizer.px). Before it did, a 150% screen cut "Keyboard
+# shortcuts" in the Settings menu, two statistics captions and two theme
+# names, and 200% cut thirteen things on every page. Simulated as Windows
+# sets it: Tk's own scaling, before anything is built -- which runs the same
+# under CI's virtual display as on a laptop.
+_sc_tk_init = tk.Tk.__init__
+
+
+def _sc_build(scale):
+    """A second app, built as a screen at *scale* builds it."""
+    def _scaled(self, *a, **k):
+        _sc_tk_init(self, *a, **k)
+        self.tk.call('tk', 'scaling', scale * 96 / 72)
+    tk.Tk.__init__ = _scaled
+    try:
+        sc = NO.NoteOrganizer()
+    finally:
+        tk.Tk.__init__ = _sc_tk_init
+    sc._poll_active_dirty = lambda: None
+    sc.show_info = lambda *a, **k: True
+    sc.show_warning = lambda *a, **k: True
+    sc.update()
+    return sc
+
+
+def _sc_fit_wait(sc, top, cap=3.0):
+    """_fit_wait for the scaled app: its own events, its own controls."""
+    end = time.time() + cap
+    while True:
+        sc.update()
+        if not top.winfo_exists():
+            return ['it closed before it could be looked at']
+        lost = _qa_out_of_sight(top)
+        if not lost or time.time() > end:
+            return lost
+        time.sleep(0.02)
+
+
+check(f'this app, at the size the suite runs it, is drawn at 100% exactly '
+      f'({app._ui_scale})', app._ui_scale == 1.0)
+# CI's virtual display reports 100 dots per inch, not 96: unsnapped, every
+# pixel the suite measures there moved by 4%. A screen reporting fewer than
+# 96 keeps the sizes it always had.
+_sc_app = _sc_build(100 / 96)
+_sc_odd = _sc_app._ui_scale
+_sc_app.destroy()
+_sc_app = _sc_build(0.75)
+_sc_low = _sc_app._ui_scale
+_sc_app.destroy()
+check(f'a screen reporting 100 dots per inch is drawn at 100% ({_sc_odd}), and one '
+      f'reporting 72 is not drawn smaller ({_sc_low})',
+      _sc_odd == 1.0 and _sc_low == 1.0)
+
+for _sc_scale in (1.5, 2.0):
+    _sc_pct = f'{round(_sc_scale * 100)}%'
+    _sc = _sc_build(_sc_scale)
+
+    def _sc_px(n, s=_sc_scale):
+        return int(round(n * s))
+
+    _sc_sizes = {n: (getattr(_sc, n), _sc_px(getattr(type(_sc), n)))
+                 for n in _sc._SIZES_AT_100}
+    check(f'at {_sc_pct} the app reads its screen as {_sc._ui_scale}, and every size '
+          f'it keeps at 100% is set again at that scale '
+          f'({ {n: v for n, v in _sc_sizes.items() if v[0] != v[1]} })',
+          _sc._ui_scale == _sc_scale
+          and all(got == want for got, want in _sc_sizes.values()))
+    check(f'...the note list beside it is as wide again as its words '
+          f'({_sc.sidebar.cget("width")}; the page holds at least '
+          f'{_sc._main_min_width})',
+          int(_sc.sidebar.cget('width')) == _sc_px(NO.SIDEBAR_WIDTH)
+          and _sc._main_min_width == _sc_px(NO.SIDEBAR_WIDTH + NO.EDITOR_MIN_WIDTH))
+
+    # The window: 900x600 and its 640x600 floor at this scale -- but never
+    # bigger than the screen can show, which a 1920x1080 laptop at 175% is.
+    _sc_roomy = _sc._fit_to_screen(900, 600)
+    _sc_opened = tuple(int(n) for n in _sc.geometry().split('+')[0].split('x'))
+    _sc._screen_room = lambda: (10000, 10000)
+    _sc_big = _sc._fit_to_screen(900, 600)
+    _sc._screen_room = lambda: (1000, 700)
+    _sc_small = _sc._fit_to_screen(900, 600)
+    del _sc._screen_room
+    check(f'...its window opens at 900x600 grown to {_sc_big}, never past the '
+          f'screen ({_sc_small} on a screen with room for 1000x700; {_sc_opened} on '
+          f'this one), with its smallest size grown the same way ({_sc.minsize()})',
+          _sc_big == (_sc_px(900), _sc_px(600)) and _sc_small == (1000, 700)
+          and _sc_opened == _sc_roomy
+          and _sc.minsize() == _sc._fit_to_screen(640, 600))
+
+    # Every control in sight, on the pages and popups that hold the sizes
+    # above. The checklist's long item wraps; the table holds a tick box.
+    _sc.notes = [
+        NO.normalize_note({
+            'id': 71, 'title': 'Scaled', 'category': 'General', 'date': '2026-10-16',
+            'body': 'Words.\n| Day | Done |\n| --- | --- |\n| Monday | [x] |',
+            'checklist': [{'text': 'An item long enough to need its own wrap in '
+                                   'a checklist row', 'done': True}],
+            'comments': 'c'}),
+        NO.normalize_note({'id': 72, 'title': 'Stand-up', 'category': 'Work',
+                           'date': '2026-10-05', 'body': 'agenda',
+                           'recurrence': {'freq': 'weekly', 'weekdays': [0]}}),
+    ]
+    _sc.save_notes(); _sc.refresh_note_list()
+    _sc_lost = []
+    for _sc_where, _sc_go in (
+            ('the note', lambda: _sc.open_note_in_tab(_sc.find_note(71))),
+            ('the series', lambda: _sc.open_note_in_tab(_sc.find_note(72))),
+            ('one day of it', lambda: _sc.open_note_in_tab(
+                _sc.find_note(72), occurrence_date='2026-10-12')),
+            ('selecting', _sc._toggle_selection_mode),
+            ('selecting done', _sc._toggle_selection_mode),
+            ('the calendar', lambda: _sc.notebook.select(_sc.TAB_CALENDAR))):
+        _sc_go()
+        _sc_lost += [f'{_sc_where}: {l}' for l in _sc_fit_wait(_sc, _sc)]
+    _sc.notebook.select(_sc.TAB_NOTES)
+    _sc.open_note_in_tab(_sc.find_note(71))
+    # The tab's own deferred redraw closes whatever popup is open -- as a
+    # person's click elsewhere would -- so the picker opens once it is done.
+    _sc_fit_wait(_sc, _sc, cap=1.0)
+    _sc._show_emoji_picker(_sc.body_text)
+    _sc_lost += [f'emoji: {l}' for l in _sc_fit_wait(_sc, _sc._mini_popup)]
+    _sc._dismiss_mini_popup()
+    _sc.show_settings_page()
+    for _sc_key, _l, _b, _e in _sc.SETTINGS_SECTIONS:
+        _sc.toggle_settings_panel(_sc_key)
+        _sc_lost += [f'{_sc_key}: {l}' for l in _sc_fit_wait(_sc, _sc)]
+    check(f'...and every button, label and tick box on the notes page, a series, '
+          f'one of its days, the selection bar, the calendar, the emoji picker and '
+          f'every Settings section is wholly in sight ({_sc_lost})', _sc_lost == [])
+
+    # What is drawn rather than written: Tk grows a canvas's coordinates on
+    # request, never its lines' thickness, and a box sized for the screen
+    # with its drawing left at 100% is a small mark in a large hole.
+    _sc_glyphs = [c.bbox('glyph') for c in _sc._settings_nav_icons.values()]
+    _sc_glyph_w = min(b[2] - b[0] for b in _sc_glyphs if b)
+    _sc_c = tk.Canvas(_sc)
+    _sc_line = _sc_c.create_line(0, 0, 10, 0, width=2)
+    _sc._scale_drawing(_sc_c)
+    _sc_moved = (_sc_c.coords(_sc_line), float(_sc_c.itemcget(_sc_line, 'width')))
+    _sc_c.destroy()
+    _sc_empty, _sc_ticked = _sc._paint_tick_images()
+    _sc_mark = [x for x in range(_sc_ticked.width()) for y in range(_sc_ticked.height())
+                if '#%02x%02x%02x' % tuple(_sc_ticked.get(x, y)) == _sc.CARD_CHECK_MARK]
+    check(f'...a drawing grows with its lines ({_sc_moved}), the Settings menu\'s '
+          f'glyphs fill their larger box (narrowest {_sc_glyph_w}), and the drawn '
+          f'tick box and its tick grow together ({_sc_ticked.width()} wide, the tick '
+          f'reaching {max(_sc_mark) if _sc_mark else None})',
+          _sc_moved[0] == [0.0, 0.0, 10 * _sc_scale, 0.0]
+          and _sc_moved[1] == 2 * _sc_scale
+          and _sc_glyph_w >= 10 * _sc_scale
+          and _sc_ticked.width() == _sc_px(13) + _sc_px(4)
+          and _sc_mark and max(_sc_mark) >= 9 * _sc_scale)
+
+    # The calendar's titles grow a step in a wide window. Wide is a width at
+    # 100%, so a 150% screen showing a 100%-sized window is not wide.
+    _sc.winfo_width = lambda s=_sc_scale: int(1000 * s)
+    _sc_narrow = _sc._cal_note_font_size()
+    _sc.winfo_width = lambda s=_sc_scale: int(1200 * s)
+    _sc_wide = _sc._cal_note_font_size()
+    del _sc.winfo_width
+    check(f'...and the calendar\'s titles step up in a wide window, as wide at '
+          f'this scale ({_sc_narrow} at 1000, {_sc_wide} at 1200)',
+          (_sc_narrow, _sc_wide) == (9, 11))
+    _sc.hide_settings_page()
+    _sc.notes = []
+    _sc.save_notes()
+    _sc._cancel_pending_autosave()
+    _sc.destroy()
+app.update()
+
+# The setting, and the one moment it is read. _main is run with the window
+# taken out: the app class, the folder's lock and the data's setup stood in
+# for, so what is asked is only whether it declares the drawing mode, before
+# the first window, exactly when Sharp text is on -- and when nothing, or
+# nonsense, is stored, since on is what it means to be new.
+_mg_calls = []
+
+
+class _MgApp:
+    def protocol(self, *a):
+        pass
+
+    def mainloop(self):
+        pass
+
+    def on_app_close(self):
+        pass
+
+
+import tkinter.messagebox as _mg_box
+_mg_kept = (NO.NoteOrganizer, NO._draw_sharp_on_scaled_screens, NO.initialise,
+            NO.single_instance.acquire, _mg_box.showerror)
+NO.NoteOrganizer = _MgApp
+NO._draw_sharp_on_scaled_screens = lambda: _mg_calls.append('declared') or True
+NO.initialise = lambda **k: None
+NO.single_instance.acquire = lambda path: True
+# _main's last resort is a blocking error box: a stand-in that went wrong
+# must fail this check, not hang the script waiting for a click.
+_mg_box.showerror = lambda *a, **k: _mg_calls.append('crashed')
+_mg_seen = {}
+try:
+    for _mg_stored in (True, False, None, 'yes'):
+        NO.save_setting(NO.SHARP_TEXT_SETTING, _mg_stored)
+        _mg_calls.clear()
+        NO._main()
+        _mg_seen[repr(_mg_stored)] = list(_mg_calls)
+finally:
+    (NO.NoteOrganizer, NO._draw_sharp_on_scaled_screens, NO.initialise,
+     NO.single_instance.acquire, _mg_box.showerror) = _mg_kept
+    NO.save_setting(NO.SHARP_TEXT_SETTING, True)
+check(f'the app declares its drawing mode at start when Sharp text is on, or '
+      f'when nothing usable is stored, and not when it is off ({_mg_seen})',
+      _mg_seen == {'True': ['declared'], 'False': [], 'None': ['declared'],
+                   "'yes'": ['declared']})
+
+# Settings -> Appearance carries the row on Windows only: nowhere else does
+# the system stretch a program's picture, so there is nothing to choose.
+app.show_settings_page(); app.toggle_settings_panel('appearance'); app.update()
+_st_rows = [w for w in find_all(app.settings_page, tk.Label)
+            if w.cget('text') == 'Sharp text']
+if sys.platform.startswith('win'):
+    app._set_sharp_text('Off')
+    _st_off = NO.get_setting(NO.SHARP_TEXT_SETTING, True, expect=bool)
+    _st_said = app.toast_lbl.cget('text')
+    app._set_sharp_text('On')
+    _st_on = NO.get_setting(NO.SHARP_TEXT_SETTING, False, expect=bool)
+    check(f'on Windows, Settings -> Appearance offers Sharp text, and choosing Off '
+          f'and On is kept for the next start and says when it shows '
+          f'({len(_st_rows)} row; {_st_off}, {_st_on}; "{_st_said}")',
+          len(_st_rows) == 1 and _st_off is False and _st_on is True
+          and 'next time you open' in _st_said)
+    # The real declaration, in a process of its own that opens no window:
+    # the one this suite runs in has windows already, and Windows decides a
+    # program's drawing mode only once.
+    import subprocess
+    _st_probe = subprocess.run(
+        [sys.executable, '-c',
+         'import ctypes, note_organizer as NO\n'
+         'ok = NO._draw_sharp_on_scaled_screens()\n'
+         'u = ctypes.windll.user32\n'
+         'u.GetThreadDpiAwarenessContext.restype = ctypes.c_void_p\n'
+         'u.GetAwarenessFromDpiAwarenessContext.argtypes = [ctypes.c_void_p]\n'
+         'print(ok, u.GetAwarenessFromDpiAwarenessContext('
+         'u.GetThreadDpiAwarenessContext()))'],
+        cwd=os.getcwd(), capture_output=True, text=True, timeout=120)
+    check(f'...and a process that declares it is drawn at its screen\'s scale by '
+          f'Windows ({_st_probe.stdout.strip()!r} {_st_probe.stderr.strip()[-200:]!r})',
+          _st_probe.stdout.split() == ['True', '1'])
+else:
+    check(f'off Windows there is no Sharp text row ({len(_st_rows)}), and the '
+          f'declaration does nothing and says so',
+          _st_rows == [] and NO._draw_sharp_on_scaled_screens() is False)
+app.hide_settings_page(); app.notebook.select(app.TAB_NOTES); app.update()
+
+
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")
 
