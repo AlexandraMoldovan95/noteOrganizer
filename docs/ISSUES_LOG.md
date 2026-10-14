@@ -73,7 +73,7 @@ is in the table below as well.
 | [The chip that looked clickable, and the fix that looked like it worked](#the-chip-that-looked-clickable-and-the-fix-that-looked-like-it-worked) | Tk doesn't update winfo_ismapped synchronously; when the work is cheap, skip the visibility optimization. | 0.28.38 |
 | [The button that woke up with its page](#the-button-that-woke-up-with-its-page) | "Is it placed?" is not "is it on the screen?" — they part exactly when a page is hidden; and a reference picture is a claim about what is right, so look at it as the thing its name says. | 0.82.233 |
 | [The DPI fix that made things worse](#the-dpi-fix-that-made-things-worse) | An unverifiable fix is a gamble — flag the uncertainty up front, revert without shame. | 0.30.38 |
-| [Sharp text, measured this time](#sharp-text-measured-this-time) | The fix that failed blind was right once measured on every screen the person uses — and the trade-off measuring found belonged to her. | Unreleased |
+| [Sharp text, measured this time](#sharp-text-measured-this-time) | The fix that failed blind was right once measured on every screen the person uses — and the trade-off measuring found belonged to her. | 0.93.374 |
 | [The module that existed twice](#the-module-that-existed-twice) | 'All tests pass' only reassures if the suite can represent the failing case. | 0.32.51 |
 | [The bullet that had no bullet in it](#the-bullet-that-had-no-bullet-in-it) | Text inserted between same-tagged characters inherits the tag; content, not presentation tags, decides state. | 0.34.51 |
 | [The text box that was always eighty characters wide](#the-text-box-that-was-always-eighty-characters-wide) | When a check passes, ask what it would take to make it fail. | 0.38.59 |
@@ -1893,7 +1893,7 @@ at it as the thing its name says, not only at whether it moved.
 
 ### Sharp text, measured this time
 
-*(Unreleased · 2026-10-14)*
+*([0.93.374](../CHANGELOG.md#093374--2026-10-14) · 2026-10-14)*
 
 **The ask:** The owner chose sharp text on a 150% screen as the next piece of work. The first attempt, above, had gone out unmeasured and come back blurrier, and its code had not been kept. So nothing was written until the question had been answered on her own machine.
 
