@@ -33,8 +33,9 @@ in one place they control.
 - A Trash to restore from (Settings → Recently deleted), and backups that
   move your notebook to another computer. A share code copies a note as
   text into another copy of the app.
-- Eight themes, light and dark; keyboard shortcuts for the common actions,
-  and a note list you can walk with the arrow keys.
+- Eight themes, light and dark, and text that stays sharp on a screen
+  Windows enlarges; keyboard shortcuts for the common actions, and a note
+  list you can walk with the arrow keys.
 
 | | | |
 |---|---|---|
@@ -158,6 +159,9 @@ feature added so far, the last every fix
   and window behaviour are tuned for Windows.
 - One computer at a time: notes move between computers by backup or share
   code, not by sync.
+- Sharp at one screen scale: the main screen's. On a second screen at
+  another scale, Windows resizes the app, a little soft there
+  ([why](docs/ARCHITECTURE.md#sharp-on-a-scaled-screen-every-size-is-given-at-100)).
 
 ## License
 

@@ -1008,6 +1008,17 @@ all eight variants, stays in **Settings → Appearance**.
 
 ![Theme picker](screenshots/theme-picker.png)
 
+#### Sharp text
+
+On a screen where Windows makes everything bigger (Scale above 100% in the Windows display
+settings, as most laptops are set), the app draws its text and icons at that size, so they are
+crisp instead of slightly blurry. It is on unless you turn it off, and it only appears on Windows.
+
+Windows can do this for one scale only: your main screen's. If you also use a second screen that
+isn't enlarged, the app looks a little softer there. Choose **Off** under **Settings → Appearance
+→ Sharp text** if that is where you keep it. Either way, the change shows the next time you open
+Note Organizer.
+
 ### About
 
 Settings → About shows which version you are running and **where your notes are stored** on this

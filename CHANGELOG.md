@@ -99,6 +99,29 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+### Added
+
+- **Sharp text on a scaled screen.** On a screen Windows enlarges — 125% or 150%, as most laptops
+  ship — the app used to be drawn at 100% and stretched, and every letter came out soft. It now
+  tells Windows it draws itself at the screen's own size: text and the drawn icons are sharp, and
+  everything that holds text grows with it — the note list, the Settings menu and its tiles, the
+  calendar, the emoji picker, the tick boxes, the window itself (never past what the screen can
+  show). **Settings → Appearance → Sharp text** turns it off, for someone who keeps the app on a
+  second screen that is not enlarged, where Windows then shrinks it a little soft; it applies the
+  next time the app opens. At 100% nothing is drawn differently. A first try in August had been
+  taken back unmeasured; this one was measured on a 150% laptop and a 100% monitor first.
+
+### Testing
+
+- A screen at 150% and at 200%, in qa6: the app built as such a screen builds it (Tk's scaling set
+  first, on Windows and on Linux), every size kept at 100% set again at that scale, the window and
+  its smallest size grown but held to the screen, every control in sight on the notes page, a
+  series, one of its days, the selection bar, the calendar, the emoji picker and every Settings
+  section, drawings grown with their lines, and the calendar's wide-window step. A 100-dpi screen
+  (CI's) stays at 100%. The start declares the drawing mode only with Sharp text on or unset; on
+  Windows the Settings row keeps the choice, and a process of its own declares for real and asks
+  Windows what it made of it. Mutants DPI01–DPI16.
+
 ---
 
 ## [0.92.374] — 2026-10-13

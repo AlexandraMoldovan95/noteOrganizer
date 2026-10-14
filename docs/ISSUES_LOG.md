@@ -73,6 +73,7 @@ is in the table below as well.
 | [The chip that looked clickable, and the fix that looked like it worked](#the-chip-that-looked-clickable-and-the-fix-that-looked-like-it-worked) | Tk doesn't update winfo_ismapped synchronously; when the work is cheap, skip the visibility optimization. | 0.28.38 |
 | [The button that woke up with its page](#the-button-that-woke-up-with-its-page) | "Is it placed?" is not "is it on the screen?" — they part exactly when a page is hidden; and a reference picture is a claim about what is right, so look at it as the thing its name says. | 0.82.233 |
 | [The DPI fix that made things worse](#the-dpi-fix-that-made-things-worse) | An unverifiable fix is a gamble — flag the uncertainty up front, revert without shame. | 0.30.38 |
+| [Sharp text, measured this time](#sharp-text-measured-this-time) | The fix that failed blind was right once measured on every screen the person uses — and the trade-off measuring found belonged to her. | Unreleased |
 | [The module that existed twice](#the-module-that-existed-twice) | 'All tests pass' only reassures if the suite can represent the failing case. | 0.32.51 |
 | [The bullet that had no bullet in it](#the-bullet-that-had-no-bullet-in-it) | Text inserted between same-tagged characters inherits the tag; content, not presentation tags, decides state. | 0.34.51 |
 | [The text box that was always eighty characters wide](#the-text-box-that-was-always-eighty-characters-wide) | When a check passes, ask what it would take to make it fail. | 0.38.59 |
@@ -1887,6 +1888,36 @@ at it as the thing its name says, not only at whether it moved.
 **Reverted:** On the actual 150%-scaled machine, the fix didn't resolve the column mismatch, and made the app's overall rendering visibly blurrier. Reverted in full rather than trading one visible cosmetic problem for a worse one.
 
 **Takeaway:** A fix that's well-understood in theory and impossible to verify locally is still a gamble — flagging that uncertainty explicitly up front made the revert a quick, low-friction call once real-machine testing disagreed, instead of a surprise. Sometimes the right outcome is to leave a minor cosmetic issue unresolved rather than layer an unverifiable fix on top of it.
+
+**Followed up** two months later, measured this time: [Sharp text, measured this time](#sharp-text-measured-this-time).
+
+### Sharp text, measured this time
+
+*(Unreleased · 2026-10-14)*
+
+**The ask:** The owner chose sharp text on a 150% screen as the next piece of work. The first attempt, above, had gone out unmeasured and come back blurrier, and its code had not been kept. So nothing was written until the question had been answered on her own machine.
+
+**What was measured:** The app was started three ways on her 150% laptop, on a made-up notebook, and photographed. The crispness of the letters' edges was compared on the same field each time:
+
+| Mode | Edge sharpness |
+|---|---|
+| As it was | 1,992 |
+| GDI scaling, where Windows sharpens a program's text for it | 2,177 |
+| Declared aware of the main screen's scale | 4,264 |
+
+GDI scaling looked like a one-line answer, and it was not one: Tk draws its text into an off-screen picture first, and Windows stretches that picture like any other.
+
+**What the first attempt never saw:** She has three screens: the laptop at 150% and two monitors at 100%. Windows lets a program like this be sharp at one scale only, the main screen's. So the same build was photographed on a 100% monitor, where Windows shrinks it. There it was softer than before. That is the likeliest reading of August's "blurrier", though it cannot be proved now. Sharp on every screen ("per monitor") was probed too, and Tk cannot do it: told that the scale had changed, the text already on screen kept its size.
+
+Shown the two copies side by side, she had not noticed the blur before: she keeps the app on a monitor. That made the choice hers rather than the code's. Sharp text is on by default, since most people who install it will have only a laptop, and there is a switch in **Settings → Appearance** for someone who keeps the app on a second screen. She asked for its words to say plainly what it does, for people who are not technical.
+
+**What it took:** Fonts grow with the scale and pixel sizes do not. At a simulated 150% the Settings menu, two statistics captions and two theme names were cut, and at 200% thirteen things on every page. Every size that holds text or a drawn mark now goes through one of three doors; see [Sharp on a scaled screen](ARCHITECTURE.md#sharp-on-a-scaled-screen-every-size-is-given-at-100). Afterwards, every page and popup was in sight at 150% and 200%, on Windows and on Linux.
+
+Two things were caught before they shipped:
+- **CI's virtual display reports 100 dots per inch, not 96.** That was found by asking it before writing the formula. Unsnapped, the scale would have read 1.04 there and moved every pixel the suite measures.
+- **A hint that pointed at the wrong Settings.** The first wording said "Settings → Display → Scale", meaning Windows. An old check, that every "Settings → X" the app shows names a real section, refused it. A person would have looked for Display in Note Organizer's own Settings, too.
+
+**Takeaway:** The fix that failed blind was right once measured, on every screen the person actually uses. Measuring found the trade-off the first attempt never knew it was making, and a trade-off belongs to the person who lives with it. A question about how a screen looks is not answered on one screen.
 
 ### The module that existed twice
 

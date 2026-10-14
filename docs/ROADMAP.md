@@ -18,12 +18,6 @@ being done about it — lives in its own register, now archived:
 
 Genuinely open ideas, roughly ordered by how soon they're likely to happen.
 
-- **Sharp text on a scaled display — next (the owner's call, 2026-10-14).** The app declares no
-  DPI awareness, so on a screen scaled to 150% Windows enlarges it as a picture: the layout is the
-  100% one, and a little soft. Declared aware, the fonts grow with the scaling while every width
-  set in pixels stays put, so each one has to be measured against what it holds first — the ones
-  already seen running short are listed in
-  ["Not answered yet: a display scaled to 150%"](ARCHITECTURE.md#not-answered-yet-a-display-scaled-to-150).
 - **The website, its demo, and where the app is published.** The site — a page presenting the
   app, a web demo that re-creates its interface in a browser, and the key documents as pages —
   lives in this repository under [`site/`](../site/README.md) since 2026-10-14. It is built from
@@ -171,6 +165,15 @@ Three more features were tried and deliberately taken out again — the decision
 Work that reached `main`, kept here as a decision record — the questions each piece settled, so
 they aren't reopened from scratch. The feature-by-feature detail lives in
 [CHANGELOG.md](../CHANGELOG.md).
+
+### Sharp text on a scaled screen (2026-10-14)
+
+The owner's call, measured on her own screens first: the app declares itself aware of the main
+screen's scale, sharp on a 150% laptop. **Settings → Appearance → Sharp text**, on by default,
+turns it off for someone who keeps the app on a second screen that isn't enlarged. Settled along
+the way: GDI scaling does not sharpen Tk's text, and Tk cannot follow a window across screens of
+different scales. The design is [Sharp on a scaled screen](ARCHITECTURE.md#sharp-on-a-scaled-screen-every-size-is-given-at-100);
+the story, with the first attempt's, is in [ISSUES_LOG](ISSUES_LOG.md#sharp-text-measured-this-time).
 
 ### The product review (2026-09-10)
 
@@ -468,6 +471,13 @@ The growth from ~26 ms to 37 ms is five months of features, not a regression: no
 rebuilds what it did not before. **Do not reach for a rendering trick here** — that is exactly what
 the three reverted attempts were. The only thing that removes this is not being Tkinter, which is a
 decision of a different size and lives under [Under consideration](#under-consideration).
+
+**Sharp on one screen's scale only** — with Sharp text on, the app is drawn for the main screen's
+scale, and Windows resizes it as a picture on a second screen at another scale, a little soft
+there. Being sharp on every screen would need the app to rebuild every font and size when its
+window crosses screens. Tk does not follow a change of scale, as measured on 2026-10-14: its text
+already on screen kept its size. See
+[Sharp on a scaled screen](ARCHITECTURE.md#sharp-on-a-scaled-screen-every-size-is-given-at-100).
 
 **The emoji variation selector** — U+FE0F asks for an emoji's colour form; Tk has no colour emoji
 and draws the character itself as a blank two letters wide after the emoji. The app writes none
