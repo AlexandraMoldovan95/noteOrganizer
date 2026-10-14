@@ -35,7 +35,7 @@ says.
 | Unit suites | Seven `test_*.py`, no window for six of them | Every pull request | Dates, repeats, the calculator, tables, rich text, data safety, a note's identity |
 | The qa suite | Nine scripts, ~2,700 checks, driving the real app headlessly | Every pull request | What a person would notice: a note that must survive a restart, a share code or a backup; formatting and tables that must come back exactly; a question that must not lose what was typed |
 | Stories | Three scripts that press the buttons a person presses, restart the app and photograph it | On demand: by hand, or from the Actions tab | A screen that changed shape; a route nobody asked a check about |
-| Mutants | `tools/mutate.py` and its catalogue: the 280 worth re-running, and 2 that test the runner | On demand, the same way. Most mutants were one-off runs while a fix was made, named in its commit | A check that stays green with its fix taken away |
+| Mutants | `tools/mutate.py` and its catalogue: the 281 worth re-running, and 2 that test the runner | On demand, the same way. Most mutants were one-off runs while a fix was made, named in its commit | A check that stays green with its fix taken away |
 | Coverage | `tools/run_coverage.py` | Every pull request, with a floor of 80% | Code no test reaches |
 | The test plan | `NoteOrganizer_TestPlan.xlsx`, 552 cases ([an excerpt](../docs/TEST_PLAN_EXCERPT.md)) | By a person, on the built `.exe` | What needs a person: how a screen reads, the built `.exe`, real hardware — each row says whether a script already walks it |
 
@@ -1099,7 +1099,10 @@ A new surface joins this list the moment it ships.
   spelling, without `add="+"`, and replaced it, so comments were never
   looked at as they were typed. The spelling binds on a tag of its own,
   put first among the box's tags, and no binding made later can replace or
-  stop it.
+  stop it. The clipboard is the machine's too: off Windows the app's writer
+  takes no HTML, so the check that a copy carries no red line read nothing
+  on Linux and failed there alone. A check on what a copy carries catches
+  it on its way to `clipboard.write`, as qa1's `_stub_clipboard` does.
 - **Under the mutant it guards, a check fails; it never stops the
   script.** The full catalogue, run whole on 2026-10-13, came back with
   four NO-RUN verdicts, from checks written on 8 and 12 October, that had all

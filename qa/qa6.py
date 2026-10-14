@@ -3408,7 +3408,6 @@ app.hide_settings_page(); app.notebook.select(app.TAB_NOTES); app.update()
 # goes, what it leaves alone, the menu, and that nothing of it is ever
 # stored, copied or taken for an edit.
 from noteorganizer.core import spelling as _sp_rules
-from _qa_support import CLIPBOARD as _sp_clip
 
 
 class _SpDictionary:
@@ -3485,11 +3484,18 @@ check(f'...and underlining them changes nothing the note holds: it does not read
       f'({sorted({s["style"] for s in app._extract_formatting(_sp_b)})})',
       app.editor_state_matches_saved(app.capture_editor_state())
       and [s['style'] for s in app._extract_formatting(_sp_b)] == ['bold'])
-_sp_b.tag_add('sel', '1.0', 'end-1c')
-_sp_clip['html'] = None
-app._copy_formatted()
-_sp_html = _sp_clip['html'] or ''
-_sp_b.tag_remove('sel', '1.0', 'end')
+# What the copy hands the clipboard, caught on the way: off Windows the real
+# writer takes no HTML and returns False, and this check read nothing on Linux.
+_sp_written = {}
+_sp_real_write = NO.clipboard.write
+NO.clipboard.write = lambda text, html=None: bool(_sp_written.update(html=html)) or True
+try:
+    _sp_b.tag_add('sel', '1.0', 'end-1c')
+    app._copy_formatted()
+finally:
+    NO.clipboard.write = _sp_real_write
+    _sp_b.tag_remove('sel', '1.0', 'end')
+_sp_html = _sp_written.get('html') or ''
 check(f'...nor in what a copy puts on the clipboard (underline in the copied HTML: '
       f'{"underline" in _sp_html.lower() or "<u>" in _sp_html.lower()})',
       bool(_sp_html) and 'underline' not in _sp_html.lower()

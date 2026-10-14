@@ -125,7 +125,7 @@ How the numbers themselves are counted is the
   in slices — and Windows' real checker asked once, on Windows. The machine's dictionaries are
   pinned away for every other qa script, so no check takes its verdict from the machine. Writing
   the typing check found a real gap first: the comments box's autosave binding replaced the
-  spelling's, and comments were never looked at as they were typed. Mutants SP01–SP26.
+  spelling's, and comments were never looked at as they were typed. Mutants SP01–SP27.
 
 ---
 

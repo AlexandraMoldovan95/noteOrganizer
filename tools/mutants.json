@@ -3771,5 +3771,16 @@
     "must_fail": ["a sentence too short to judge takes its paragraph's verdict"],
     "suites": ["test_spelling"],
     "expect": "killed"
+  },
+  {
+    "id": "SP27",
+    "about": "the red line is a formatting tag, so it is saved with the note and copied as an underline",
+    "edits": [{"file": "noteorganizer/ui/spelling.py",
+               "find": "    SPELL_TAG = \"spelling\"\n",
+               "replace": "    SPELL_TAG = \"underline\"\n"}],
+    "must_fail": ["...and underlining them changes nothing the note holds",
+                  "...nor in what a copy puts on the clipboard"],
+    "suites": ["qa6"],
+    "expect": "killed"
   }
 ]
