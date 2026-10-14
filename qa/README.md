@@ -1069,8 +1069,16 @@ A new surface joins this list the moment it ships.
   `_scale_drawing`; see ARCHITECTURE). No CI machine has such a screen,
   so qa6 builds a second app with Tk's scaling set before anything is
   built, which is exactly what Windows does to a program that declares
-  itself aware, and asks `out_of_sight` of it at 150% and 200%. Three
-  things learned doing it. A popup opened at the same moment as a tab
+  itself aware, and asks `out_of_sight` of it at 150% and 200%. Four
+  things learned doing it. The first push went red on CI's Windows
+  runner only: its screen is 1024x768, the app held its scaled window to
+  that screen as it should, and the sidebar's last buttons had no room —
+  a screen Windows never pairs with 150%. A check must not take its
+  verdict from the machine it runs on, so the scaled app is built with
+  room for its whole window, and holding a window to a small screen is
+  asked on its own, with the screen stood in for. It was reproduced first,
+  on a 1024x768 virtual display, and passes on both sizes now. A popup
+  opened at the same moment as a tab
   switch is closed by that tab's own deferred redraw, so it opens once the
   page has settled. A wait for a popup must ask whether it still exists,
   or the check crashes instead of failing. And the real declaration cannot

@@ -3143,15 +3143,27 @@ _sc_tk_init = tk.Tk.__init__
 
 
 def _sc_build(scale):
-    """A second app, built as a screen at *scale* builds it."""
+    """A second app, built as a screen at *scale* builds it.
+
+    Such a screen is a large one: Windows offers no 150% on a 1024x768
+    panel, which is what CI's Windows runner has. Held to that screen, the
+    window had no room for the sidebar's last buttons -- a verdict about the
+    runner, not the app. So the app is built with room for its whole window,
+    as on a screen that really runs at this scale, and Tk is let make it
+    bigger than the runner's (under X, Tk holds a window to the screen
+    itself). Holding the window to a small screen is asked on its own below."""
     def _scaled(self, *a, **k):
         _sc_tk_init(self, *a, **k)
         self.tk.call('tk', 'scaling', scale * 96 / 72)
+    kept_room = NO.NoteOrganizer._screen_room
     tk.Tk.__init__ = _scaled
+    NO.NoteOrganizer._screen_room = lambda self: (100000, 100000)
     try:
         sc = NO.NoteOrganizer()
     finally:
         tk.Tk.__init__ = _sc_tk_init
+        NO.NoteOrganizer._screen_room = kept_room
+    sc.maxsize(100000, 100000)
     sc._poll_active_dirty = lambda: None
     sc.show_info = lambda *a, **k: True
     sc.show_warning = lambda *a, **k: True
@@ -3209,19 +3221,16 @@ for _sc_scale in (1.5, 2.0):
 
     # The window: 900x600 and its 640x600 floor at this scale -- but never
     # bigger than the screen can show, which a 1920x1080 laptop at 175% is.
-    _sc_roomy = _sc._fit_to_screen(900, 600)
     _sc_opened = tuple(int(n) for n in _sc.geometry().split('+')[0].split('x'))
-    _sc._screen_room = lambda: (10000, 10000)
-    _sc_big = _sc._fit_to_screen(900, 600)
     _sc._screen_room = lambda: (1000, 700)
-    _sc_small = _sc._fit_to_screen(900, 600)
+    _sc_small = (_sc._fit_to_screen(900, 600), _sc._fit_to_screen(640, 600))
     del _sc._screen_room
-    check(f'...its window opens at 900x600 grown to {_sc_big}, never past the '
-          f'screen ({_sc_small} on a screen with room for 1000x700; {_sc_opened} on '
-          f'this one), with its smallest size grown the same way ({_sc.minsize()})',
-          _sc_big == (_sc_px(900), _sc_px(600)) and _sc_small == (1000, 700)
-          and _sc_opened == _sc_roomy
-          and _sc.minsize() == _sc._fit_to_screen(640, 600))
+    check(f'...its window opens at 900x600 grown to {_sc_opened}, with its smallest '
+          f'size grown the same way ({_sc.minsize()}), and never past the screen '
+          f'({_sc_small} on a screen with room for 1000x700)',
+          _sc_opened == (_sc_px(900), _sc_px(600))
+          and _sc.minsize() == (_sc_px(640), _sc_px(600))
+          and _sc_small == ((1000, 700), (min(_sc_px(640), 1000), 700)))
 
     # Every control in sight, on the pages and popups that hold the sizes
     # above. The checklist's long item wraps; the table holds a tick box.
