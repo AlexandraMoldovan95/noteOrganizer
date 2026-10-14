@@ -2578,6 +2578,123 @@ finally:
         os.environ[_qa_support.SCRATCH_MARKER] = _hs_marker
     shutil.rmtree(_hs_root, ignore_errors=True)
 
+# ======================================================================
+# What the app writes, it reads back (2026-10-15). The import refused a
+# backup over 500 MB or 10,000 files while the export wrote any size, so
+# one long video made a backup that could not be restored; and the Share
+# panel's Select all could tick more notes than one code may carry.
+# ======================================================================
+import zipfile as _zipfile
+from noteorganizer.core import sharing as _sh
+
+
+def _entry(name, size, packed):
+    info = _zipfile.ZipInfo(name)
+    info.file_size, info.compress_size = size, packed
+    return info
+
+
+_GB = 1_000_000_000
+_backup = [_entry("notes_data.json", 2_000_000, 300_000)] + [
+    _entry("attachments/p%d.jpg" % k, 3_000_000, 2_900_000) for k in range(250)]
+check("a backup of 750 MB of photos imports when the disk has room for it",
+      sum(i.file_size for i in _backup) > 500_000_000
+      and _sh.backup_entries_problem(_backup) is None
+      and _sh.backup_space_problem(_backup, 10 * _GB) is None)
+check("...and so does one holding more than 10,000 attached files",
+      _sh.backup_entries_problem(
+          [_entry("attachments/f%d.txt" % k, 10, 10) for k in range(10_050)]) is None)
+_no_room = _sh.backup_space_problem(_backup, 1 * _GB) or ""
+check("a backup the disk has no room for is refused, saying what it needs -- "
+      "on one disk the attachments count twice, unpacked and then copied",
+      "free space" in _no_room and _sh.backup_space_problem(_backup, 2 * _GB) is None)
+check("...and with the attachments on another disk, each disk is asked for its own share",
+      _sh.backup_space_problem(_backup, 1 * _GB, 1 * _GB) is None
+      and _sh.backup_space_problem(_backup, 1 * _GB, 500_000_000) is not None)
+check("an entry expanding a thousand times past its packed size is refused as a zip bomb",
+      "hostile" in (_sh.backup_entries_problem(
+          [_entry("attachments/x.bin", 3 * _GB, 3_000_000)]) or ""))
+check("...but not a big file that packs like real content, nor a small one that packs well",
+      _sh.backup_entries_problem([_entry("attachments/film.mp4", 3 * _GB, 2_900_000_000)]) is None
+      and _sh.backup_entries_problem([_entry("attachments/log.txt", 40_000_000, 10_000)]) is None)
+_saved_files = _sh.MAX_BACKUP_FILES
+try:
+    _sh.MAX_BACKUP_FILES = 5
+    _too_many = _sh.backup_entries_problem([_entry("attachments/f%d" % k, 1, 1) for k in range(6)])
+finally:
+    _sh.MAX_BACKUP_FILES = _saved_files
+check("more files than the limit are still refused", "files" in (_too_many or ""))
+
+_zroot = tempfile.mkdtemp(prefix="zip-limits-")
+try:
+    _zpath = os.path.join(_zroot, "b.zip")
+    with _zipfile.ZipFile(_zpath, "w", _zipfile.ZIP_DEFLATED) as _zf:
+        _zf.writestr("notes_data.json", "[]")
+        _zf.writestr("attachments/a.txt", "hello")
+    _out = os.path.join(_zroot, "out")
+    with _zipfile.ZipFile(_zpath) as _zf:
+        _sh._safe_extract_zip(_zf, _out, os.path.join(_zroot, "app", "attachments"))
+    check("an ordinary backup still unpacks, its attachments' folder not made yet",
+          os.path.isfile(os.path.join(_out, "attachments", "a.txt")))
+    _bpath = os.path.join(_zroot, "bomb.zip")
+    with _zipfile.ZipFile(_bpath, "w", _zipfile.ZIP_DEFLATED) as _zf:
+        _zf.writestr("notes_data.json", "[]")
+        _zf.writestr("attachments/zeros.bin", b"\0" * 3_000_000)
+    _bomb_out = os.path.join(_zroot, "bomb_out")
+    _saved_min = _sh.BOMB_MIN_BYTES
+    try:
+        _sh.BOMB_MIN_BYTES = 1_000_000
+        try:
+            with _zipfile.ZipFile(_bpath) as _zf:
+                _sh._safe_extract_zip(_zf, _bomb_out)
+            _bomb_answer = "extracted"
+        except ValueError as _exc:
+            _bomb_answer = str(_exc)
+    finally:
+        _sh.BOMB_MIN_BYTES = _saved_min
+    check("a real archive shaped like a zip bomb is refused before anything is written",
+          "hostile" in _bomb_answer and not os.path.exists(_bomb_out))
+    _spath = os.path.join(_zroot, "slip.zip")
+    with _zipfile.ZipFile(_spath, "w") as _zf:
+        _zf.writestr("../escaped.txt", "x")
+    try:
+        with _zipfile.ZipFile(_spath) as _zf:
+            _sh._safe_extract_zip(_zf, os.path.join(_zroot, "slip_out"))
+        _slip = "extracted"
+    except ValueError as _exc:
+        _slip = str(_exc)
+    check("a path that climbs out of the folder is still refused",
+          "unsafe file paths" in _slip and not os.path.exists(os.path.join(_zroot, "escaped.txt")))
+finally:
+    shutil.rmtree(_zroot, ignore_errors=True)
+
+
+def _encode_answer(notes):
+    try:
+        return _sh.encode_share_code(notes)
+    except _sh.ShareCodeTooLarge as _exc:
+        return "refused: " + str(_exc)
+
+
+_201 = [{"title": "n%d" % k, "body": "x"} for k in range(_sh.MAX_SHARED_NOTES + 1)]
+check("no code is made for more notes than one code may carry, and the answer says what to do",
+      "at most %d notes" % _sh.MAX_SHARED_NOTES in _encode_answer(_201)
+      and "Backup" in _encode_answer(_201))
+check("...while %d notes still make a code that imports back" % _sh.MAX_SHARED_NOTES,
+      len(_sh.decode_share_code(_encode_answer(_201[:-1]))) == _sh.MAX_SHARED_NOTES)
+import random as _random
+_rng = _random.Random(5)
+_letters = "".join(_rng.choice("abcdefghijklmnopqrstuvwxyz ") for _ in range(4000))
+for _limit, _small in (("MAX_DECOMPRESSED_BYTES", 1000), ("MAX_SHARE_CODE_CHARS", 500)):
+    _saved_limit = getattr(_sh, _limit)
+    try:
+        setattr(_sh, _limit, _small)
+        _answer = _encode_answer([{"title": "big", "body": _letters}])
+    finally:
+        setattr(_sh, _limit, _saved_limit)
+    check("no code is made past the import's %s either" % _limit,
+          _answer.startswith("refused: ") and "too much for one code" in _answer)
+
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
 

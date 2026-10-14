@@ -3782,5 +3782,88 @@
                   "...nor in what a copy puts on the clipboard"],
     "suites": ["qa6"],
     "expect": "killed"
+  },
+  {
+    "id": "BK01",
+    "about": "the import's old ceilings come back: a backup over 500 MB or 10,000 files is refused though the app wrote it",
+    "edits": [{"file": "noteorganizer/core/sharing.py",
+               "find": "    if len(infos) > MAX_BACKUP_FILES:\n",
+               "replace": "    if sum(max(i.file_size, 0) for i in infos) > 500_000_000 or len(infos) > 10_000:\n"}],
+    "must_fail": ["a backup of 750 MB of photos imports when the disk has room for it",
+                  "...and so does one holding more than 10,000 attached files"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "BK02",
+    "about": "an import fills the disk: nothing asks whether the backup fits",
+    "edits": [{"file": "noteorganizer/core/sharing.py",
+               "find": "        if need + DISK_MARGIN > free:\n",
+               "replace": "        if False:\n"}],
+    "must_fail": ["a backup the disk has no room for is refused"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "BK03",
+    "about": "the attachments are counted once on one disk, though they are unpacked and then copied",
+    "edits": [{"file": "noteorganizer/core/sharing.py",
+               "find": "    needs = [(total + (attached if free_attach is None else 0), free_unpack)]\n",
+               "replace": "    needs = [(total, free_unpack)]\n"}],
+    "must_fail": ["a backup the disk has no room for is refused"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "BK04",
+    "about": "a zip bomb is unpacked: no entry's expansion is asked about",
+    "edits": [{"file": "noteorganizer/core/sharing.py",
+               "find": "        if size > BOMB_MIN_BYTES and size > BOMB_RATIO * max(packed, 1):\n",
+               "replace": "        if False:\n"}],
+    "must_fail": ["an entry expanding a thousand times past its packed size is refused as a zip bomb",
+                  "a real archive shaped like a zip bomb is refused before anything is written"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "BK05",
+    "about": "the export puts in place a backup its own import would refuse",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                if problem:\n                    raise ValueError(\"This backup would not import back. \" + problem)\n",
+               "replace": "                if False:\n                    pass\n"}],
+    "must_fail": ["a backup its own import would refuse is not put in place"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SH01",
+    "about": "the Share panel makes a code for more notes than one code may carry, which the import refuses",
+    "edits": [{"file": "noteorganizer/core/sharing.py",
+               "find": "    if len(notes) > MAX_SHARED_NOTES:\n        raise ShareCodeTooLarge(",
+               "replace": "    if False:\n        raise ShareCodeTooLarge("}],
+    "must_fail": ["no code is made for more notes than one code may carry",
+                  "more notes ticked than one code carries"],
+    "suites": ["test_data_safety", "qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "SH02",
+    "about": "a code is made past the import's decompressed-size limit",
+    "edits": [{"file": "noteorganizer/core/sharing.py",
+               "find": "    if len(raw) > MAX_DECOMPRESSED_BYTES or len(code) > MAX_SHARE_CODE_CHARS:\n",
+               "replace": "    if len(code) > MAX_SHARE_CODE_CHARS:\n"}],
+    "must_fail": ["no code is made past the import's MAX_DECOMPRESSED_BYTES either"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SH03",
+    "about": "a code is made longer than the import accepts",
+    "edits": [{"file": "noteorganizer/core/sharing.py",
+               "find": "    if len(raw) > MAX_DECOMPRESSED_BYTES or len(code) > MAX_SHARE_CODE_CHARS:\n",
+               "replace": "    if len(raw) > MAX_DECOMPRESSED_BYTES:\n"}],
+    "must_fail": ["no code is made past the import's MAX_SHARE_CODE_CHARS either"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
   }
 ]
