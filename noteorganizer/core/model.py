@@ -152,13 +152,20 @@ def find_by_uid(notes, uid):
     Not :func:`~noteorganizer.core.duplicates._dup_key`, which asks from the
     text whether a note LOOKS like one we have, and so says no exactly when
     it was edited -- the only time anyone re-sends one. Asked first."""
-    if not isinstance(uid, str) or not uid.strip():
+    wanted = _uid_wanted(uid)
+    if wanted is None:
         return None
-    wanted = uid.strip()
     for note in notes:
         if isinstance(note, dict) and note.get("uid") == wanted:
             return note
     return None
+
+
+def _uid_wanted(uid):
+    """The identity a lookup asks for, or None when it names none."""
+    if not isinstance(uid, str) or not uid.strip():
+        return None
+    return uid.strip()
 
 
 # The fields an incoming copy replaces. The rest is this device's: its id and
@@ -228,11 +235,18 @@ def split_by_identity(notes, incoming):
     Both bulk imports -- a share code with several notes, a restored backup
     -- ask this one function: two hand-rolled copies of one judgement is how
     the search rules once drifted apart."""
+    # One walk through the notebook, not one per incoming note: a backup of
+    # 10,000 notes into a notebook of 10,000 took 1.8 s, frozen. The first
+    # note to carry an identity is the one find_by_uid would give.
+    mine_by_uid = {}
+    for note in notes:
+        if isinstance(note, dict) and isinstance(note.get("uid"), str):
+            mine_by_uid.setdefault(note["uid"], note)
     known, fresh = [], []
     for note in incoming:
         if not isinstance(note, dict):
             continue
-        mine = find_by_uid(notes, note.get("uid"))
+        mine = mine_by_uid.get(_uid_wanted(note.get("uid")))
         if mine is None:
             fresh.append(note)
         else:

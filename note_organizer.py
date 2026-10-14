@@ -14851,6 +14851,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def refresh_day_panel(self):
         """Re-render whatever the panel is currently showing (after edits/deletes)."""
+        # Off screen it waits, as render_calendar does, and for the same
+        # reason: every autosave with a day left open rebuilt its list,
+        # walking every note, on a tab nobody was looking at. The month's
+        # catch-up on the way back redraws the open day (_redraw_open_day).
+        if not self._calendar_is_showing():
+            self._calendar_needs_render = True
+            return
         if getattr(self, "_day_panel_mode", "empty") == "list":
             self.show_day_list()
         elif self._day_panel_mode == "note":
@@ -18864,7 +18871,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         real["pinned"] = not real.get("pinned", False)
         self.save_notes()
-        self.refresh_note_list()
+        self._show_note_moved(real["id"])
         self.set_status("Pinned to top" if real["pinned"] else "Unpinned")
 
     def _ctx_move_to_category(self, note, category):
@@ -18904,7 +18911,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         real["category"] = category
         self.save_notes()
         self._editor_follows_external_change({real["id"]})
-        self.refresh_note_list()
+        self._show_note_moved(real["id"])
         # A note with no colour of its own is drawn in its category's, as
         # a dot on its days and a stripe in an open day's list.
         self.render_calendar()

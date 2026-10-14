@@ -4703,6 +4703,40 @@ except Exception as _e:
 check('...so Bold works on the next note instead of raising',
       _cs_raised is None and 'bold' in app.body_text.tag_names('1.2'))
 
+# ---- A day left open on the Calendar is not rebuilt behind the Notes tab ----
+# Every autosave rebuilt it, walking every note, on a tab nobody was looking
+# at. It is brought up to date when the Calendar is shown again, as the
+# month itself is (render_calendar).
+app.notes = [NO.normalize_note({'id': 501, 'title': 'DayPanelNote', 'body': 'x',
+                                'date': '2026-07-15'})]
+app.save_notes(); app.refresh_note_list()
+app.notebook.select(app.TAB_CALENDAR); app.update()
+app.cal_year, app.cal_month = 2026, 7
+app.render_calendar()
+app.open_day_popup('2026-07-15'); app.update()
+check('fixture: the day is open on the Calendar',
+      app._day_panel_mode == 'list'
+      and any('DayPanelNote' in t for t in find_all_labels(app.day_panel)))
+app.notebook.select(app.TAB_NOTES); app.update()
+app.open_note_in_tab(app.find_note(501)); app.update()
+_dp_rebuilt = []
+_dp_real = app.show_day_list
+app.show_day_list = lambda *a, **k: (_dp_rebuilt.append(1), _dp_real(*a, **k))[1]
+try:
+    app.title_entry.delete(0, 'end')
+    app.title_entry.insert(0, 'DayPanelRenamed')
+    app.save_current_note(auto=True); app.update()
+    _dp_behind = len(_dp_rebuilt)
+    app.notebook.select(app.TAB_CALENDAR); app.update()
+finally:
+    app.show_day_list = _dp_real
+check(f'a save made on the Notes tab does not rebuild the day left open on the '
+      f'Calendar ({_dp_behind} rebuilds)', _dp_behind == 0
+      and app.find_note(501)['title'] == 'DayPanelRenamed')
+check('...and the day shows the change when the Calendar is shown again',
+      len(_dp_rebuilt) >= 1
+      and any('DayPanelRenamed' in t for t in find_all_labels(app.day_panel)))
+
 print(f"=== QA7 FAILURES: {fails if fails else 'NONE'} ===")
 
 sys.exit(1 if fails else 0)

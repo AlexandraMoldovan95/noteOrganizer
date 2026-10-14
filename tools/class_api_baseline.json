@@ -653,6 +653,7 @@
   "_show_emoji_picker": "(self, text_widget, anchor=None)",
   "_show_image_preview": "(self, path, filename)",
   "_show_inline_rename": "(self, anchor_widget, current, on_save)",
+  "_show_note_moved": "(self, note_id, keep_ring=False)",
   "_show_off_schedule_days": "(self, note=None)",
   "_show_page_scrollbar": "(self, needed)",
   "_show_toast": "(self, text, kind='success', action=None, action_text='Undo', yield_to_action=False)",
