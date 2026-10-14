@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.94.374](#094374--2026-10-14) | 2026-10-14 | Misspelled words underlined with Windows' own dictionaries, quiet on sentences in a language the computer cannot check — with suggestions, Ignore, Add to Windows dictionary and a switch to turn it off. |
 | [0.93.374](#093374--2026-10-14) | 2026-10-14 | Text and icons sharp on a screen Windows enlarges, with everything that holds text grown to match — and a setting to turn it off for a second screen that isn't enlarged. |
 | [0.92.374](#092374--2026-10-13) | 2026-10-13 | One day of a repeating note opened on its own and saved as you type, a day held on another date while it stays in its series, and a way back to the series from the day itself. |
 | [0.90.373](#090373--2026-10-12) | 2026-10-12 | Days a repeating note keeps its own edits for, left off its schedule, found and turned into notes of their own; a category move's Undo that survives a rename; the line above a repeating note keeping all its words. |
@@ -99,6 +100,10 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+---
+
+## [0.94.374] — 2026-10-14
 
 ### Added
 
