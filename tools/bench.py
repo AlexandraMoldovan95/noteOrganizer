@@ -3,6 +3,7 @@
     py tools/bench.py                       # this tree, 1,000 and 5,000 notes
     py tools/bench.py --notes 1000 --runs 5
     py tools/bench.py --against D:/old/copy # A/B: another copy, interleaved
+    py tools/bench.py --rich --deep         # styled notes; the list scrolled to its end
 
 Every number comes from a fresh process in a throwaway folder outside the
 project: a copy of the app, a notebook generated from a fixed seed (so A
@@ -18,6 +19,15 @@ What it measures, in milliseconds unless it says MB:
     rebuild    refresh_note_list() over the whole notebook, drawn
     save       one note's automatic save, the one a pause in typing makes
     memory     the process's memory once the window is up (MB)
+    match      an import's matching of a backup that holds every note again
+    deep       with --deep: refresh_note_list() with the list scrolled to its
+               end, where a rebuild draws every row above the view
+    pin        with --deep: pinning the note at the end of the list
+
+--rich gives every note styled words (bold, colours, highlights), which is
+what makes a real notebook's file, and so its save, heavier than plain text.
+--deep scrolls the list to its end a screen at a time, as a wheel does: at
+10,000 notes that alone takes most of a minute.
 
 These are wall-clock numbers from one machine and say nothing about
 another; the guards in CI are structural instead (qa4: a rebuild draws one
@@ -91,8 +101,24 @@ try:
         memory = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
 except Exception:
     pass
+import copy
+from noteorganizer.core import model
+twins = [copy.deepcopy(n) for n in app.notes]
+t = time.perf_counter()
+model.split_by_identity(app.notes, twins)
+match = (time.perf_counter() - t) * 1000
+
+deep = pin = None
+if os.environ.get("BENCH_DEEP"):
+    cv = app.canvas
+    while cv.yview()[1] < 0.999 or getattr(app, "_list_pending", None):
+        cv.yview_scroll(1, "pages"); app.update()
+    deep = ms(app.refresh_note_list)
+    last = app._list_drawn[-1]["note"]["id"]
+    pin = ms(lambda: app.toggle_pin(app.find_note(last)))
 print("BENCH " + json.dumps({"startup": startup, "rebuild": rebuild,
-                             "save": save_ms, "memory": memory}))
+                             "save": save_ms, "memory": memory, "match": match,
+                             "deep": deep, "pin": pin}))
 app.destroy()
 '''
 
@@ -101,13 +127,24 @@ WORDS = ("meeting notes budget review plan draft travel recipe shopping list "
          "weekly monthly reading book garden repair invoice ticket").split()
 
 
-def notebook(n, seed=7):
-    """n notes, the same every time for the same n and seed."""
+STYLES = [{"style": "bold"}, {"style": "italic"}, {"style": "underline"},
+          {"style": "text_color", "value": "#d32f2f"}, {"style": "highlight", "value": "#fff59d"}]
+
+
+def notebook(n, seed=7, rich=False):
+    """n notes, the same every time for the same n and seed. *rich*: each
+    also wears a dozen styled runs of words."""
     rnd = random.Random(seed)
     notes = []
     for i in range(n):
         words = [rnd.choice(WORDS) for _ in range(rnd.randint(20, 160))]
         body = " ".join(words)
+        spans = []
+        if rich:
+            for _ in range(12):
+                start = rnd.randint(0, max(0, len(body) - 30))
+                spans.append(dict(rnd.choice(STYLES), start=start,
+                                  end=start + rnd.randint(4, 30)))
         if i % 20 == 0:
             body += "\n| Item | Qty |\n| --- | --- |\n| tea | 2 |\n| milk | 1 |"
         note = {"id": i + 1, "title": "Note %d %s" % (i + 1, rnd.choice(WORDS)),
@@ -117,6 +154,8 @@ def notebook(n, seed=7):
                 "checklist": ([{"text": "step %d" % k, "done": k % 2 == 0} for k in range(5)]
                               if i % 10 == 0 else []),
                 "attachments": []}
+        if spans:
+            note["formatting"] = spans
         if i % 7 == 0:
             note["date"] = "2026-%02d-%02d" % (rnd.randint(1, 12), rnd.randint(1, 28))
         if i % 50 == 0:
@@ -126,13 +165,13 @@ def notebook(n, seed=7):
     return notes
 
 
-def make_run(tree, n):
+def make_run(tree, n, rich=False):
     run = tempfile.mkdtemp(prefix="notesorg-bench-")
     shutil.copy2(os.path.join(tree, "note_organizer.py"), run)
     shutil.copytree(os.path.join(tree, "noteorganizer"), os.path.join(run, "noteorganizer"),
                     ignore=shutil.ignore_patterns("__pycache__"))
     with io.open(os.path.join(run, "notes_data.json"), "w", encoding="utf-8") as fh:
-        json.dump(notebook(n), fh)
+        json.dump(notebook(n, rich=rich), fh)
     with io.open(os.path.join(run, "settings.json"), "w", encoding="utf-8") as fh:
         json.dump({"reclaimed_from_appdata": True}, fh)
     os.makedirs(os.path.join(run, "appdata_empty"))
@@ -141,12 +180,16 @@ def make_run(tree, n):
     return run
 
 
-def measure(tree, n):
-    run = make_run(tree, n)
+def measure(tree, n, rich=False, deep=False):
+    run = make_run(tree, n, rich)
     try:
         env = dict(os.environ, PYTHONIOENCODING="utf-8",
                    APPDATA=os.path.join(run, "appdata_empty"),
+                   LOCALAPPDATA=os.path.join(run, "appdata_empty"),
                    XDG_DATA_HOME=os.path.join(run, "appdata_empty"))
+        env.pop("BENCH_DEEP", None)
+        if deep:
+            env["BENCH_DEEP"] = "1"
         proc = subprocess.run([sys.executable, "bench_probe.py"], cwd=run, env=env,
                               capture_output=True, text=True, timeout=900,
                               encoding="utf-8", errors="replace")
@@ -163,28 +206,32 @@ def main():
     p.add_argument("--notes", type=int, nargs="*", default=[1000, 5000])
     p.add_argument("--runs", type=int, default=3)
     p.add_argument("--against", help="another copy of the app, for an A/B run")
+    p.add_argument("--rich", action="store_true", help="every note wears styled words")
+    p.add_argument("--deep", action="store_true", help="also measure at the list's end")
     args = p.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
     sides = [("this tree", ROOT)] + ([("against", args.against)] if args.against else [])
+    keys = ["startup", "rebuild", "save", "memory", "match"] + (["deep", "pin"] if args.deep else [])
     rows = []
     for n in args.notes:
         results = {label: [] for label, _ in sides}
         for _ in range(args.runs):
             for label, tree in sides:      # interleaved: A, B, A, B ...
-                results[label].append(measure(tree, n))
+                results[label].append(measure(tree, n, args.rich, args.deep))
         for label, _ in sides:
             got = results[label]
             med = {}
-            for k in ("startup", "rebuild", "save", "memory"):
-                values = [r[k] for r in got if r[k] is not None]
+            for k in keys:
+                values = [r.get(k) for r in got if r.get(k) is not None]
                 med[k] = statistics.median(values) if values else None
             rows.append((n, label, med))
-    print("%-7s %-10s %10s %10s %8s %10s" % ("notes", "", "start-up", "rebuild", "save", "memory"))
+    print("%-7s %-10s" % ("notes", "") + "".join("%10s" % k for k in keys))
     for n, label, m in rows:
-        memory = "%8.0fMB" % m["memory"] if m["memory"] is not None else "%10s" % "n/a"
-        print("%-7d %-10s %8.0fms %8.0fms %6.0fms %s"
-              % (n, label, m["startup"], m["rebuild"], m["save"], memory))
-    print("(medians of %d runs each%s)" % (args.runs, ", interleaved" if args.against else ""))
+        cells = ["%10s" % "n/a" if m[k] is None
+                 else "%8.0fMB" % m[k] if k == "memory" else "%8.0fms" % m[k] for k in keys]
+        print("%-7d %-10s" % (n, label) + "".join(cells))
+    print("(medians of %d runs each%s%s)" % (args.runs, ", interleaved" if args.against else "",
+                                             ", styled notes" if args.rich else ""))
 
 
 if __name__ == "__main__":
