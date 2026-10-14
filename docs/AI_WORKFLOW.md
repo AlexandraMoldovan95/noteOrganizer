@@ -133,8 +133,9 @@ at; they are not users and not experts.
 The colour-blind check is the clearest case. Photographs of the app were transformed to show
 what protanopia, deuteranopia and tritanopia take away (the Machado 2009 model), and AI
 reviewers that saw only those pictures tried to use the app. That is an approximation: a model
-reading a simulation is not a person who sees that way. The test plan keeps a case for a real
-colour-blind reader (case 625), and that case is the check that counts.
+reading a simulation is not a person who sees that way. The test plan's case 625 records this
+simulated check. No colour-blind reader has looked at the app yet: that is the check still owed,
+planned for the feedback after the public launch (see the [Roadmap](ROADMAP.md#under-consideration)).
 
 ## Cost
 

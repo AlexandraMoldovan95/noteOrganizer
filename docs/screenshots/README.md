@@ -56,7 +56,9 @@ Five things the script does that a careful hand cannot promise:
 Rules that keep the set reading as one app:
 
 - **The current app on screen** — window title **Note Organizer**, current UI
-  (the ☀/🌙 theme button visible where a capture includes the toolbar).
+  (the ☀/🌙 theme button visible where a capture includes the toolbar). One
+  picture is the exception, on purpose: see
+  [A picture of an earlier version](#a-picture-of-an-earlier-version).
 - **One theme throughout** — a partial refresh in another theme silently
   produces a mixed set.
 
@@ -96,3 +98,20 @@ nothing). Update this line whenever the set is recaptured.
 | `import-backup.png` | The Import notes file picker or its resulting confirmation |
 | `settings-overview.png` | The Settings page: the section list on the left and a section open on the right |
 | `theme-picker.png` | Settings → Appearance, with the theme variant cards visible |
+
+## A picture of an earlier version
+
+`settings-before-redesign.png` shows Settings as it was on 2026-08-20, the
+evening before its redesign: one long column, each section's title on the
+left and its buttons in the middle. It sits beside `settings-overview.png` in
+[In my words](../IN_MY_WORDS.md#decisions-i-made), and it is the one picture
+here that does not show today's app.
+
+It was taken on 2026-10-14 by running the code of that day, taken from git,
+in a scratch folder on a made-up notebook, with the same uncovered-window
+check as every other picture. That version did not yet know about the
+screen's scale, so Windows stretched it like a picture, and its frame let a
+pixel or two of the desktop in at the edges and the rounded corners. The
+photo is cropped to the inside of the window, title bar off.
+`tools/doc_screenshots.py` does not retake it: it photographs only the
+current app.

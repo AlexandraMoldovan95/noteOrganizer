@@ -55,6 +55,10 @@ PAGES = {
     "docs/TEST_PLAN_EXCERPT.md": ("testing.html", "How it's tested",
                                   "The standard test case template, filled out "
                                   "four times with simple, easy-to-picture cases."),
+    # Linked from In my words, not from the menu or the home page's cards.
+    "docs/BUG_REPORTS.md": ("bug-reports.html", "Bug reports",
+                            "The twenty bugs my manual testing found, three "
+                            "written out in a standard bug-report format."),
 }
 # Text that must never reach a published page. A build that finds one
 # stops; the page is not published with it.

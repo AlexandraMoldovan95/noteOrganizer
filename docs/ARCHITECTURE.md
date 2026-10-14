@@ -605,9 +605,9 @@ text colour on the full accent, below 4.5:1 in every theme. The match's words no
 Then the app was checked for colour-blind readers, as far as a model can check it: photographs
 of the running app simulated for protanopia, deuteranopia and tritanopia, each read by an AI
 reviewer (a Claude subagent) that saw only those pictures, and a fourth with the originals as
-the control. A model reading a simulation is an approximation, not a colour-blind person — the
-test plan's case 625 asks a real one. None was blocked; what they hesitated over was wherever
-colour carried a meaning alone. The find bar's current match is now **boxed** as well
+the control. A model reading a simulation is an approximation, not a colour-blind person — no
+real one has looked yet, and that waits for the feedback after the public launch. None was
+blocked; what they hesitated over was wherever colour carried a meaning alone. The find bar's current match is now **boxed** as well
 as filled (Tk draws a `solid` relief dark on any fill), as a table cell's match already was.
 The open Notes/Calendar tab is now the **taller** one: clam maps its own padding for a selected
 tab, which beat the app's and drew it smaller, so its shape said the opposite of its colour —

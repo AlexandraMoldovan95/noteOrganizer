@@ -94,6 +94,14 @@ what my background is, so it adapts to how I work. It always asks before pushing
 GitHub, so I can test the app first. And from the beginning I made sure I could learn from what
 it does, to communicate with it better and to keep the experience myself.
 
+The rule I care about most came from a check that failed now and then. The agent ran it again, it
+passed, and that was meant to settle it. I told it that isn't a fix. We always look for the root
+of a problem and fix it there, not on the spot, case by case. Patching each case only grows the
+work for no reason; fixing the cause stops the same problem from coming back, so we can move on to
+other tasks and cover more of the app. Working in a loop with review agents serves the same idea:
+they check for every kind of problem that can appear, and we keep going until all of them, or
+nearly all, are solved.
+
 After going through all this, I'm sure the next app I make will be even more organised than this
 one.
 
@@ -114,9 +122,18 @@ way: the agent puts forward options, and I choose what the app does and how it b
   to be reordered. At first the ▲ ▼ arrows were beside each item's bin. I moved them next to the
   checkboxes, because a slip of the mouse could delete an item instead of moving it.
 - **Settings was redesigned.** After a rework, Settings had the section names on one side and their
-  buttons in the middle of the page, and I was zig-zagging with my eyes to take it all in. I
-  described to the agent how it should look, made a separate mock-up in HTML of what it could be,
-  and then we built it into the app.
+  buttons in the middle of the page, and I was zig-zagging with my eyes to take it all in. The
+  sections weren't grouped either, so the page didn't feel clean or easy to use. I described to
+  the agent how it should look, made a separate mock-up in HTML of what it could be, and then we
+  built it into the app. Today I wouldn't change anything: for an app this simple, it has every
+  setting a user needs.
+
+| Settings before the redesign (20 August) | Settings now |
+|---|---|
+| ![Settings before the redesign: one long column, with each section's title on the left and its buttons in the middle](screenshots/settings-before-redesign.png) | ![Settings now: the sections grouped in a list on the left, one section open on the right](screenshots/settings-overview.png) |
+
+*Both pictures are of the app itself. The first is the code of 20 August, run again on a made-up
+notebook.*
 
 The first two, and the other ideas we decided against, are listed in the roadmap, under
 [Explicitly not planned](ROADMAP.md#explicitly-not-planned-right-now).
@@ -149,6 +166,26 @@ that stayed in a search box after I clicked elsewhere - can be found all along t
 well and in detail, they can all be solved; and if not, we adapt and change things until they
 work.
 
+**The first one, from the screen to the code.** I was following the test cases in the Excel file,
+testing each one on a light and a dark theme in turn, as I usually do. On the dark themes the
+ticks didn't appear, and at first I thought ticking didn't work at all - that is how I reported
+it. Then I ran the same tests on a light theme, and there the ticks appeared as they should. So I
+changed my report: on the dark themes the ticks are there, they just can't be seen. I had two
+ideas about the cause, a function that didn't work or a colour problem, and the light theme
+settled it: it was the colour. The cause in the code was simple: the tick was drawn in the same
+colour as its box, so it was invisible. I try to be this specific in every report, so the
+developer can isolate the problem and fix exactly that.
+
+After the fix comes retesting and regression testing. I checked every place in the app where a
+box can be ticked - Group by category, Settings → Duplicates, Recently deleted, Select mode in
+the note list, the Share panel - then did a short smoke test: buttons, tabs, exporting notes
+through the Share panel. I always test on a dark and a light theme, usually on one colour each,
+sometimes on the blue, green or brown ones too. What it taught me: colours and functions can
+overlap until something becomes invisible, so we always have to make sure they fit together.
+
+All twenty bugs my manual passes found are listed in [Bug reports](BUG_REPORTS.md), three of
+them written out in a standard bug-report format.
+
 **What surprised me most** was how long and careful testing can be. But that is how I learned to
 describe a problem clearly enough for a developer to know what to look at and fix. A small feature
 everyone knows can be hard to explain if you don't have the words for it. It was a challenge, and
@@ -163,16 +200,47 @@ to make sure everything works as it should. And working with AI connects all of 
 speak clearly, in detail and logically, to build something from start to finish without getting
 lost.
 
+Three moments taught me the most:
+
+- **Keep the notes apart from the code.** Early on, tests run from the wrong folder deleted my real
+  notes, and only the backup the app makes for itself brought them back. Since then my notes live
+  in a folder of their own, never where the code is written and tested.
+- **Test as the user, not only against my own definition of done.** I hadn't noticed that the text
+  was blurred on a screen enlarged to 150% until I saw a before-and-after picture, because I keep
+  the app on a monitor. I have to put myself in the users' place and imagine what would work for
+  them, because they are the ones who will use it.
+- **Edge cases can cause the biggest problems without anyone noticing.** Pasting a text of more
+  than 50,000 words froze the app. That is why I keep asking the agent to make the app run well on
+  the weakest and the strongest PCs it can run on, to avoid crashes, slow loading, flicker and
+  other problems.
+
 ## What I would do differently
 
 I would make a more detailed work plan at the start, get to know the AI before giving it work - so it knows who it is working with - and set clearer working rules from the beginning.
+
+More concretely:
+
+- I would write the documentation for readers outside the project, and file bugs in a standard
+  report format, from the start, so the history of the issues would be cleaner.
+- I would use audit rules and loops of review agents sooner and more often. They would have been
+  at hand much earlier if I had known how to use them.
+- Had I tested gradually instead of letting the test cases pile up, I wouldn't have spent so long
+  checking them all at once. But I chose to run them near the end, when the app was almost
+  finished and every case could be covered. Otherwise I would have run the same cases many times
+  over, as regression testing after every change to the code. So I'm half at peace with that
+  choice.
+- I might have built the app in HTML from the start instead of Python, to make it more modern and
+  nicer to look at. Python was still a good way to learn.
+
+Now I know how to organise my work better, and what approach to take for the next apps I build.
 
 ## What comes next
 
 It is hard to judge my own app objectively. What bothers me is that it is still a first version,
 when other apps are so far ahead. I plan to keep improving it as I gain experience; I don't intend
 to leave it. There are always details to consider - some I can't see yet, but I'm sure I will.
-After the desktop app, an Android version will follow, so your notes can come with you.
+After the desktop app, an Android version will follow, so your notes can come with you. When the
+app launches, I will ask for feedback - from colour-blind readers too - and improve it from there.
 
 ---
 
