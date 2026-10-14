@@ -134,6 +134,13 @@ different questions, and a check that wants the second asserts it itself
     left its timer scheduled with nothing tracking it, and the autosave's
     did that in a relay through a whole qa1 run.
 
+``ignore_pointer(widget)``
+    Take *widget*'s ``<Motion>`` and ``<Leave>`` bindings away, and return
+    the function that gives them back. For a check that opens a hover
+    preview by call and then reads it: the preview hides when the pointer
+    moves or leaves, and a person's real mouse over the window while the
+    suite runs did that to qa2's day preview in two runs of five.
+
 ``leaves_nothing_behind(app, redraw, times)``
     Whether calling *redraw* over and over leaves Tcl commands behind for
     good: one batch of *times* calls to absorb what is done only once,
@@ -596,6 +603,20 @@ def _waiting(app):
         except tk.TclError:
             continue
         yield str(job), str(script)
+
+
+def ignore_pointer(widget, sequences=("<Motion>", "<Leave>")):
+    """Deafen *widget* to the pointer's moves; return what restores them.
+    See the module docstring."""
+    saved = {seq: widget.bind(seq) for seq in sequences}
+    for seq in sequences:
+        widget.unbind(seq)
+
+    def restore():
+        for seq, script in saved.items():
+            if script:
+                widget.bind(seq, script)
+    return restore
 
 
 def waiting_timers(app, name):

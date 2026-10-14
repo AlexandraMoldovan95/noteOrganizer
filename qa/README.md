@@ -497,6 +497,13 @@ A new surface joins this list the moment it ships.
   happened once. **Parent a floating window to `winfo_toplevel()`**, and
   when a check looks for one, find it by being NEW rather than by being a
   child of the thing it describes.
+- **On a desktop the pointer moves, and a hover preview listens to it.**
+  The calendar's previews hide on `<Motion>` and `<Leave>`, and qa2 opens
+  one by call and then reads it back. With the owner's mouse moving over
+  the window while the suite ran, the preview was gone before it was read
+  in two runs of five; a generated `<Leave>` takes it down every time. A
+  check that opens a preview by call first takes the widget's pointer
+  bindings away with `ignore_pointer`, and gives them back after.
 
   The second half is the part worth carrying: *"it passes on my machine
   and on my own Linux image"* is not the same claim as *"it passes"*. The

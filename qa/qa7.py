@@ -14,6 +14,7 @@ import note_organizer as NO, tkinter as tk, tkinter.filedialog as fd, os, tempfi
 # Windows foreground -- which a test process never owns. See
 # qa/_qa_support.py; _qa_click refuses to click into the void.
 from _qa_support import (click as _qa_click, fire as _qa_fire,
+                         ignore_pointer as _qa_ignore_pointer,
                          leaves_nothing_behind as _qa_leaves_nothing_behind,
                          pin_popup_visibility as _qa_pin,
                          waiting_timers as _qa_waiting)
@@ -378,6 +379,9 @@ app.render_calendar()
 app.update()
 app.hide_day_tooltip()
 app._context_menu_open = False
+# Opened by call and read back: a real mouse moving over the window would
+# take the preview down first (_qa_support.ignore_pointer).
+_qa7_hear_pointer = _qa_ignore_pointer(app.cal_canvas)
 app.show_day_summary_tooltip('2026-07-20')
 app.update()
 check('hovering a day normally does show its preview',
@@ -398,6 +402,7 @@ app.update()
 check('...and the single-note preview stays away too',
       getattr(app, '_day_tooltip', None) is None)
 app._context_menu_open = False
+_qa7_hear_pointer()
 
 # The flag is only worth anything if it is actually up WHILE the menu is
 # posted. The stub stands exactly where the real, blocking tk_popup
@@ -465,9 +470,11 @@ def _all_text(widget):
 
 
 app.hide_day_tooltip()
+_qa7_hear_pointer = _qa_ignore_pointer(app.cal_canvas)
 app.show_note_hover_preview(app.notes[0], '2026-07-21')
 app.update()
 _hov = _all_text(app._day_tooltip) if getattr(app, '_day_tooltip', None) else ''
+_qa7_hear_pointer()
 check('the hover preview shows the note\'s words', 'real words here' in _hov)
 check('...and not one vertical bar of its tables', '|' not in _hov)
 check('...but does say a table is there', 'table' in _hov)
