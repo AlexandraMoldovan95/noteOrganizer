@@ -3398,6 +3398,263 @@ else:
 app.hide_settings_page(); app.notebook.select(app.TAB_NOTES); app.update()
 
 
+# ---- SPELLING ----
+# Misspelled words underlined in the note and its comments, judged by
+# Windows' own dictionaries (core/winspell.py), shown by the quiet rules of
+# core/spelling.py. The machine's dictionaries are pinned away for every
+# test (pin_the_desktop): here the app is given a stand-in that knows
+# exactly which words are wrong, so these checks answer the same on Windows,
+# on Linux and on CI. What they ask is the editor's side: where the line
+# goes, what it leaves alone, the menu, and that nothing of it is ever
+# stored, copied or taken for an edit.
+from noteorganizer.core import spelling as _sp_rules
+from _qa_support import CLIPBOARD as _sp_clip
+
+
+class _SpDictionary:
+    """A stand-in for one of Windows' dictionaries."""
+
+    def __init__(self, wrong, tag="en-US"):
+        self.tag = tag
+        self.wrong = set(wrong)
+        self.asked = []
+        self.added = []
+
+    def errors(self, text):
+        self.asked.append(text)
+        return [(_sp_rules.utf16_units(text[:m.start()]), _sp_rules.utf16_units(m.group()))
+                for m in re.finditer(r"[^\W\d_]+", text) if m.group() in self.wrong]
+
+    def suggest(self, word, limit=5):
+        return {"boldd": ["bold"], "recieve": ["receive"]}.get(word, [])[:limit]
+
+    def add(self, word):
+        self.added.append(word)
+        self.wrong.discard(word)
+        return True
+
+
+def _sp_settle(cap=4.0):
+    """Pump until no spelling look is still due -- the state the editor
+    promises after a pause -- or *cap* seconds pass."""
+    end = time.time() + cap
+    while time.time() < end:
+        app.update()
+        if all(getattr(w, "_spell_job", None) is None for w in app._spell_widgets):
+            app.update()
+            return True
+        time.sleep(0.02)
+    return False
+
+
+def _sp_lines(widget):
+    """The words underlined in *widget*, in order."""
+    r = widget.tag_ranges(app.SPELL_TAG)
+    return [widget.get(r[i], r[i + 1]) for i in range(0, len(r), 2)]
+
+
+# German stands for any language the computer has no dictionary for.
+_sp_de = ("Morgen früh gehen wir auf den Markt und kaufen frisches "
+          "Gemüse für die Suppe am Sonntag.")
+_sp_dict = _SpDictionary(
+    {"recieve", "teh", "tommorow", "boldd", "meetting", "Remmember", "recipt", "PDF",
+     "Anothr"} | set(re.findall(r"[^\W\d_]+", _sp_de)) - {"am", "die", "den", "Markt"})
+app._spellers_found = [_sp_dict]
+NO.save_setting(_sp_rules.SPELLING_SETTING, True)
+_sp_body = ("I recieve teh letters every Tuesday, and the PDF is on www.example.com at 10:30.\n"
+            "Party \U0001F389 tommorow at noon.\n" + _sp_de + "\n"
+            "| Day | Plan |\n| --- | --- |\n| Monday | meetting |\n"
+            "A boldd word here.")
+_sp_at = _sp_body.index("boldd")
+app.notes = [NO.normalize_note({
+    'id': 81, 'title': 'Spelling', 'category': 'General', 'body': _sp_body,
+    'formatting': [{'start': _sp_at, 'end': _sp_at + 5, 'style': 'bold'}],
+    'comments': 'Remmember the recipt.'})]
+app.save_notes(); app.refresh_note_list()
+app.open_note_in_tab(app.find_note(81))
+_sp_settle()
+_sp_b = app.body_text
+check(f'misspelled words in the note and its comments are underlined -- the one '
+      f'after an emoji exactly -- while an abbreviation, a link, a time, a paragraph '
+      f'in another language and a table row are left alone '
+      f'({_sp_lines(_sp_b)}; {_sp_lines(app.comments_text)})',
+      _sp_lines(_sp_b) == ['recieve', 'teh', 'tommorow', 'boldd']
+      and _sp_lines(app.comments_text) == ['Remmember', 'recipt'])
+check(f'...and underlining them changes nothing the note holds: it does not read '
+      f'as unsaved, and no spelling is among its formatting '
+      f'({sorted({s["style"] for s in app._extract_formatting(_sp_b)})})',
+      app.editor_state_matches_saved(app.capture_editor_state())
+      and [s['style'] for s in app._extract_formatting(_sp_b)] == ['bold'])
+_sp_b.tag_add('sel', '1.0', 'end-1c')
+_sp_clip['html'] = None
+app._copy_formatted()
+_sp_html = _sp_clip['html'] or ''
+_sp_b.tag_remove('sel', '1.0', 'end')
+check(f'...nor in what a copy puts on the clipboard (underline in the copied HTML: '
+      f'{"underline" in _sp_html.lower() or "<u>" in _sp_html.lower()})',
+      bool(_sp_html) and 'underline' not in _sp_html.lower()
+      and '<u>' not in _sp_html.lower())
+
+# The word being typed waits until the caret leaves it. A generated key goes
+# to the window that has the focus, so the note has it first.
+_take_focus(_sp_b)
+_sp_b.mark_set('insert', 'end-1c')
+for _sp_ch in ' Anothr':
+    _sp_b.insert('insert', _sp_ch)
+    _sp_b.event_generate('<KeyRelease>', keysym='space' if _sp_ch == ' ' else _sp_ch)
+_sp_settle()
+_sp_typing = 'Anothr' in _sp_lines(_sp_b)
+_sp_b.insert('insert', ' ')
+_sp_b.event_generate('<KeyRelease>', keysym='space')
+_sp_settle()
+_sp_left = 'Anothr' in _sp_lines(_sp_b)
+check(f'a word is not underlined while it is being typed, and is once the caret '
+      f'moves on ({_sp_typing}, then {_sp_left})', not _sp_typing and _sp_left)
+# The comments box's own autosave binding, made after the spelling's, once
+# replaced it there: comments were looked at only when a note opened.
+_sp_c = app.comments_text
+_take_focus(_sp_c)
+_sp_c.mark_set('insert', 'end-1c')
+# Words enough that three unknown ones in four do not read as another
+# language (core/spelling.is_foreign) -- which a short line would.
+for _sp_ch in ' Please buy Anothr soon ':
+    _sp_c.insert('insert', _sp_ch)
+    _sp_c.event_generate('<KeyRelease>', keysym='space' if _sp_ch == ' ' else _sp_ch)
+_sp_settle()
+check(f'...and the comments box is looked at as it is typed in, too '
+      f'({_sp_lines(_sp_c)})', 'Anothr' in _sp_lines(_sp_c))
+
+# The right-click menu: suggestions first, then Ignore and Add to dictionary,
+# and none of it when the menu opens anywhere else.
+_sp_menu = next(c for c in _sp_b.winfo_children() if c.winfo_class() == 'Menu')
+import types
+
+
+def _sp_menu_at(index):
+    _sp_b.see(index)
+    app.update()
+    x, y, _w, h = _sp_b.bbox(index)
+    event = types.SimpleNamespace(x=x + 2, y=y + h // 2)
+    app._spell_menu(_sp_b, _sp_menu, event)
+    return [('---' if _sp_menu.type(k) == 'separator' else _sp_menu.entrycget(k, 'label'))
+            for k in range(_sp_menu.index('end') + 1)]
+
+
+_sp_bold_at = _sp_b.search('boldd', '1.0')
+_sp_on_word = _sp_menu_at(_sp_bold_at)
+_sp_elsewhere = _sp_menu_at(_sp_b.search('letters', '1.0'))
+check(f'right-clicking an underlined word puts its suggestions, Ignore and Add to '
+      f'dictionary first ({_sp_on_word[:4]}), and right-clicking anywhere else '
+      f'shows the menu as it always was ({_sp_elsewhere[:2]})',
+      _sp_on_word[:4] == ['bold', 'Ignore “boldd”', 'Add to dictionary', '---']
+      and _sp_elsewhere[:2] == ['Cut', 'Copy'])
+_sp_menu_at(_sp_bold_at)
+_sp_menu.invoke(0)
+_sp_settle()
+_sp_line = _sp_b.get(f'{_sp_bold_at} linestart', f'{_sp_bold_at} lineend')
+_sp_bold = [s for s in app._extract_formatting(_sp_b) if s['style'] == 'bold']
+_sp_taken = (_sp_line, _sp_b.get('1.0', 'end-1c')[_sp_bold[0]['start']:_sp_bold[0]['end']]
+             if _sp_bold else None)
+app._body_undo_redo('undo')
+_sp_settle()
+_sp_bold = [s for s in app._extract_formatting(_sp_b) if s['style'] == 'bold']
+_sp_back = (_sp_b.get(f'{_sp_bold_at} linestart', f'{_sp_bold_at} lineend'),
+            _sp_b.get('1.0', 'end-1c')[_sp_bold[0]['start']:_sp_bold[0]['end']]
+            if _sp_bold else None)
+check(f'taking a suggestion replaces the word in its own formatting, and one '
+      f'Ctrl+Z puts the misspelling back, bold and all ({_sp_taken}; {_sp_back})',
+      _sp_taken == ('A bold word here. Anothr ', 'bold')
+      and _sp_back == ('A boldd word here. Anothr ', 'boldd'))
+
+# Ignore: kept on this computer, whatever case it was typed in.
+app._spell_ignore('Teh')
+_sp_settle()
+_sp_kept = NO.get_setting(_sp_rules.SPELLING_IGNORED_SETTING, [], expect=list)
+app._spell_ignored_words = None          # read back from settings.json
+app._spell_schedule_all()
+_sp_settle()
+check(f'Ignore stops underlining the word in any case, and is kept in settings for '
+      f'the next start ({_sp_kept}; {_sp_lines(_sp_b)})',
+      'teh' in _sp_kept and 'teh' not in _sp_lines(_sp_b))
+app._spell_add('tommorow')
+_sp_settle()
+check(f'Add to dictionary hands the word to the dictionary, and its line goes '
+      f'({_sp_dict.added}; {_sp_lines(_sp_b)}; "{app.toast_lbl.cget("text")}")',
+      _sp_dict.added == ['tommorow'] and 'tommorow' not in _sp_lines(_sp_b)
+      and 'Added' in app.toast_lbl.cget('text'))
+
+# The theme's red, and Settings' switch.
+_sp_theme = app.theme_name
+app.set_theme('light' if _sp_theme in NO.DARK_THEMES else 'dark')
+try:
+    _sp_red = _sp_b.tag_cget(app.SPELL_TAG, 'underlinefg')
+except tk.TclError:
+    _sp_red = app.colors['danger_text']   # a Tk without underline colours
+_sp_want = app.colors['danger_text']
+app.set_theme(_sp_theme)
+check(f'a theme switch gives the underline the new theme\'s red ({_sp_red} / {_sp_want})',
+      str(_sp_red).lower() == _sp_want.lower())
+app._set_spelling('Off')
+_sp_settle()
+_sp_off = (_sp_lines(_sp_b), _sp_lines(app.comments_text),
+           NO.get_setting(_sp_rules.SPELLING_SETTING, True, expect=bool))
+app._set_spelling('On')
+_sp_settle()
+check(f'Spelling turned Off in Settings takes every line away at once and is kept; '
+      f'On brings them back ({_sp_off}; {_sp_lines(_sp_b)})',
+      _sp_off == ([], [], False) and 'recieve' in _sp_lines(_sp_b))
+NO.save_setting(_sp_rules.SPELLING_SETTING, None)
+_sp_new = app._spell_on()
+NO.save_setting(_sp_rules.SPELLING_SETTING, True)
+check(f'...and someone new, with nothing stored, has it on ({_sp_new})', _sp_new is True)
+
+# A long note is read in slices, and a long line in pieces: the editor is
+# never held up for the whole of it at once.
+_sp_dict.asked.clear()
+_sp_long = "\n".join(f"Line {n} with a recieve in it" for n in range(300))
+_sp_b.delete('1.0', 'end')
+_sp_b.insert('1.0', _sp_long)
+app._spell_run(_sp_b)
+_sp_first = len(_sp_dict.asked)
+_sp_settle(cap=10)
+check(f'a long note is read a slice at a time ({_sp_first} lines in the first, '
+      f'{app.SPELL_SLICE} allowed), and all of it in the end '
+      f'({len(_sp_lines(_sp_b))} of 300 underlined)',
+      _sp_first <= app.SPELL_SLICE and len(_sp_lines(_sp_b)) == 300)
+_sp_dict.asked.clear()
+_sp_b.delete('1.0', 'end')
+_sp_b.insert('1.0', ('word ' * 2500) + 'recieve')
+app._spell_run(_sp_b)
+_sp_settle()
+check(f'a line longer than {_sp_rules.PIECE_UNITS} units is asked about in pieces '
+      f'no longer than that ({[len(a) for a in _sp_dict.asked]}), and its word at the '
+      f'end is still found ({_sp_lines(_sp_b)})',
+      len(_sp_dict.asked) > 1
+      and all(_sp_rules.utf16_units(a) <= _sp_rules.PIECE_UNITS for a in _sp_dict.asked)
+      and _sp_lines(_sp_b) == ['recieve'])
+
+# The real dictionaries, on Windows: off Windows there are none, and the
+# switch has nothing to underline with.
+from noteorganizer.core import winspell as _sp_win
+if sys.platform.startswith('win') and _sp_win.languages():
+    _sp_real = [s for s in (_sp_win.speller(t) for t in _sp_rules.pick_languages(
+        _sp_win.languages(), _sp_win.preferred_languages())) if s]
+    _sp_found = _sp_real[0].errors('I recieve it') if _sp_real else []
+    check(f"Windows' own dictionary is reached and finds a misspelling where it is "
+          f"({[s.tag for s in _sp_real]}; {_sp_found})", _sp_found == [(2, 7)])
+elif sys.platform.startswith('win'):
+    print("INFO this Windows has no spelling dictionary; the real one is asked on a machine that does")
+else:
+    check('off Windows there is no dictionary to reach, and nothing is underlined '
+          'with the real one', not _sp_win.available() and _sp_win.languages() == [])
+app._spellers_found = []
+app._spell_schedule_all()
+_sp_settle()
+app.new_note(); app.update()
+app.notes = []
+app.save_notes(); app.refresh_note_list(); app.update()
+
+
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")
 

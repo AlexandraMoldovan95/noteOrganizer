@@ -184,6 +184,9 @@ jobs:
       - name: Rich text tests -- HTML in, HTML out, the exported document
         run: python test_richtext.py
 
+      - name: Spelling tests -- what is underlined, and what is left alone
+        run: python test_spelling.py
+
       - name: Entry-module identity — Settings labels survive a real launch
         # Builds a window, so it needs a display. This one cannot be folded
         # into the QA scripts: they all do `import note_organizer`, which is

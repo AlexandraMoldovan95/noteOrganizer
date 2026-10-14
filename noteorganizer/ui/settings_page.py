@@ -48,6 +48,7 @@ from ..core import paths
 from ..core.categories import (CATEGORY_COLORS, category_name_refusal,
                                persist_categories)
 from ..core.formatting import FONT_FAMILIES, FONT_SIZES
+from ..core.spelling import SPELLING_SETTING
 from ..core.duplicates import find_duplicate_groups
 # The Trash is the one list in the app where deleting cannot be undone,
 # and it is the one that never said which of its rows is a whole
@@ -3552,6 +3553,27 @@ class SettingsPageMixin:
                 else "Off")
             self._build_themed_dropdown(
                 row, self.sharp_text_var, ["On", "Off"], self._set_sharp_text,
+                width_chars=8
+            ).pack(side="right")
+
+            # Spelling, judged by Windows' own dictionaries (ui/spelling.py).
+            # The row says which languages those are, because "why is my
+            # Romanian not checked" has its answer in Windows, not here.
+            languages = self._spell_languages_text()
+            checking = ("Checking: %s." % languages if languages else
+                        "Windows has no spelling dictionary on this computer yet.")
+            row = self._card_row(
+                card, "Spelling",
+                "Underlines misspelled words in red in your notes and their "
+                "comments; right-click one for suggestions. Text in a language "
+                "Windows has no dictionary for is left alone. " + checking +
+                " To check another language too, add it in the Windows "
+                "language settings.")
+            self.spelling_var = tk.StringVar(
+                value="On" if get_setting(SPELLING_SETTING, True, expect=bool)
+                else "Off")
+            self._build_themed_dropdown(
+                row, self.spelling_var, ["On", "Off"], self._set_spelling,
                 width_chars=8
             ).pack(side="right")
 
