@@ -105,25 +105,27 @@ How the numbers themselves are counted is the
 - **Spelling.** Misspelled words in a note and its comments are underlined in red, judged by the
   spell checker Windows already has for every language installed on the computer — no dictionary
   ships with the app. Right-click one for suggestions, **Ignore** (remembered on this computer) or
-  **Add to dictionary** (the Windows one, which other programs share); nothing is ever corrected
-  without being chosen, and a suggestion taken keeps the word's formatting, with one Ctrl+Z to
-  take it back. It is built to stay quiet: a paragraph — or a whole note — in a language with no
-  dictionary on the computer is left alone rather than turned red, a word is not underlined while
-  it is still being typed, and links, file names, numbers and abbreviations in capitals never are.
+  **Add to Windows dictionary** (which other programs that use Windows' checker share); nothing is
+  ever corrected without being chosen, and a suggestion taken keeps the word's formatting, with
+  one Ctrl+Z to take it back. It is built to stay quiet: a sentence in a language with no
+  dictionary on the computer is left alone rather than turned red, while an English sentence
+  beside it keeps its underlines; a word is not underlined while it is still being typed, and
+  links, file names, numbers and abbreviations in capitals never are.
   **Settings → Appearance → Spelling** turns it off, and says which languages are being checked.
   Nothing about it is saved in a note, copied or exported. Windows only.
 
 ### Testing
 
 - Spelling's rules in a new unit suite, `test_spelling.py` (positions counted the way Windows and
-  Tk count them, what is a word, the quiet rules, one dictionary per language, long lines in
-  pieces), and the editor's side in qa6 with a stand-in dictionary: the underline and what it
-  leaves alone, never saved, copied or taken for an edit, the word being typed, the menu, a
-  suggestion taken and undone, Ignore, Add to dictionary, the theme's red, the switch, a long note
+  Tk count them, what is a word, the quiet rules sentence by sentence, one dictionary per
+  language, long lines in pieces), and the editor's side in qa6 with a stand-in dictionary: the
+  underline and what it leaves alone, never saved, copied or taken for an edit, the word being
+  typed, the menu, a suggestion taken and undone, Ignore, Add to Windows dictionary and its
+  toast, the theme's red, the switch, a long note
   in slices — and Windows' real checker asked once, on Windows. The machine's dictionaries are
   pinned away for every other qa script, so no check takes its verdict from the machine. Writing
   the typing check found a real gap first: the comments box's autosave binding replaced the
-  spelling's, and comments were never looked at as they were typed. Mutants SP01–SP23.
+  spelling's, and comments were never looked at as they were typed. Mutants SP01–SP26.
 
 ---
 

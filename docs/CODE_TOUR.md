@@ -652,15 +652,17 @@ language the person installed — through COM, with `ctypes`, so no
 dictionary ships with the app and nothing new is installed. Every function
 returns an empty answer off Windows or on any failure. The one call that
 writes, `Speller.add`, puts a word in the person's own Windows dictionary,
-and runs only when they choose "Add to dictionary".
+and runs only when they choose "Add to Windows dictionary".
 
 `spelling.py` decides what to do with the answers, and most of it is about
 staying quiet:
 
-- `visible_errors()` leaves a paragraph alone when most of its words are
-  unknown — it is in a language the computer has no dictionary for — and
-  asks the same of the whole note, so a list of short lines in another
-  language is judged by all of its words.
+- `visible_errors()` leaves a sentence alone when most of its words are
+  unknown — it is in a language the computer has no dictionary for — so an
+  English sentence beside it keeps its underlines. A sentence too short to
+  judge takes its paragraph's verdict, and a short paragraph the whole
+  note's, so a list of short lines in another language is judged by all of
+  its words. `sentence_spans()` cuts a line into its sentences.
 - `line_errors()` keeps a range only when every installed language calls
   it wrong, and `pick_languages()` keeps one dictionary per language
   (Windows lists nineteen kinds of English).

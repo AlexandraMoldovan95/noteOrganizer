@@ -775,7 +775,9 @@ for real, in a process of its own that opens no window, and asks Windows what it
 ### Spelling: Windows' own dictionaries, built to stay quiet
 
 Misspelled words in a note and its comments are underlined in red. Right-click one for
-suggestions, Ignore, or Add to dictionary. Nothing is corrected unless the person picks it.
+suggestions, Ignore, or Add to Windows dictionary. Nothing is corrected unless the person picks
+it. The last entry names Windows because that is where the word goes: Ignore is kept by this app
+alone, while an added word stops being underlined in every program that asks Windows' checker.
 
 #### Why Windows' checker
 
@@ -794,9 +796,15 @@ the computer has no dictionary for comes out red from end to end. Measured on th
 English Windows, a Romanian paragraph had 17 of its 21 words flagged. So `core/spelling.py`
 decides what is shown:
 
-- **Another language is left alone.** A paragraph where more than half the words are unknown
-  shows nothing, and the same is asked of the whole note, so a list of short lines is judged
-  by all of its words rather than two at a time.
+- **Another language is left alone, sentence by sentence.** A sentence where more than half
+  the words are unknown shows nothing, while an English sentence beside it, in the same
+  paragraph, keeps its underlines. Each verdict is asked of the smallest text long enough to
+  give one: a sentence of four words or more is judged alone, a shorter one ("Yes.") takes its
+  paragraph's verdict, and a short paragraph takes the whole note's, so a list of short lines
+  is judged by all of its words rather than two at a time. The first version judged whole
+  paragraphs; trying it, the owner found an English sentence next to a Romanian one unchecked,
+  and sentences replaced paragraphs. Nothing finer is possible inside one sentence: without
+  that language's dictionary, its words and a misspelling look the same.
 - **Every installed language counts.** A word is underlined only if every dictionary calls it
   wrong. One dictionary per language: Windows lists nineteen kinds of English, and asking all
   of them gives the same answer slower.

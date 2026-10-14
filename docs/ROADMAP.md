@@ -144,14 +144,17 @@ Work that reached `main`, kept here as a decision record — the questions each 
 they aren't reopened from scratch. The feature-by-feature detail lives in
 [CHANGELOG.md](../CHANGELOG.md).
 
-### Spelling (2026-10-15)
+### Spelling (2026-10-14)
 
 Windows' own spell checker, reached with `ctypes` (no new dependency: `comtypes` was not
 needed), following the languages installed in Windows — a word right in any of them is right.
 The owner's worry decided its shape: text in a language the computer has no dictionary for must
-not turn red, so a paragraph or a whole note where most words are unknown is left alone, and the
-word being typed waits. Her decisions: **on by default**, **Ignore remembered on this computer**,
-and **no per-note "don't check this note"** for now. Not checked: titles and checklist items (Tk
+not turn red, so a sentence where most words are unknown is left alone, and the word being typed
+waits. Her decisions: **on by default**, **Ignore remembered on this computer**, and **no
+per-note "don't check this note"** for now. Trying it, she asked why an English sentence next to
+a Romanian one went unchecked: the first version judged whole paragraphs, and she chose
+**sentence by sentence** instead. She also chose the plainer **"Add to Windows dictionary"**,
+since the word goes to Windows and not to this app alone. Not checked: titles and checklist items (Tk
 cannot underline one word in a one-line box) and table cells (drawn on a canvas). The design is
 [Spelling](ARCHITECTURE.md#spelling-windows-own-dictionaries-built-to-stay-quiet).
 
@@ -263,7 +266,7 @@ Done, and stopped deliberately rather than out of steam. The data-and-rules laye
 fifteen modules under `noteorganizer/core/`, none importing tkinter — and six UI areas were moved
 into `noteorganizer/ui/` as mixins: the calculator panel, the Settings page, the dialogs and popups,
 the calendar, attachments, and — re-measured once it became one drawing — the note list. Spelling
-(2026-10-15) was written into both layers from the start: two `core/` modules and a seventh mixin. All the
+(2026-10-14) was written into both layers from the start: two `core/` modules and a seventh mixin. All the
 pure logic went down into `core/` first. `note_organizer.py` is about 20,500 lines — it dipped
 when the extractions landed and grew again through the rich-text, tables and field-testing work,
 but the pure logic behind all of that went into `core/` rather than into it, which is the point:

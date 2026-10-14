@@ -434,7 +434,7 @@ it for:
 |---|---|
 | a suggestion | puts that word in its place, keeping its bold, colour and size; Ctrl+Z takes it back |
 | **Ignore "word"** | stops underlining that word in Note Organizer, on this computer |
-| **Add to dictionary** | adds it to your Windows dictionary, which other programs that use Windows' spell checker share too |
+| **Add to Windows dictionary** | adds it to Windows' own dictionary, so other programs that use Windows' spell checker stop underlining it too |
 
 Nothing is ever corrected for you; a word changes only when you pick a suggestion.
 
@@ -443,9 +443,14 @@ them is right. A word you are still typing is left alone until you move on. Link
 numbers and abbreviations in capitals (PDF) are never underlined.
 
 **Writing in a language your Windows has no dictionary for** — Romanian on an English Windows,
-say — does not turn your note red: a paragraph where most words are unknown, or a whole note
-like that, is left alone. To have it checked too, add the language in Windows' language
-settings; the app picks it up the next time it starts.
+say — does not turn your note red. Each sentence is looked at on its own: one where most words
+are unknown is left alone, while an English sentence next to it keeps its red lines. A sentence
+of only a word or three goes by its paragraph, and a short paragraph by the whole note.
+
+Within a single sentence that mixes the two, Windows cannot tell a Romanian word from a
+misspelled English one. If most of the sentence is English, the Romanian words are underlined;
+if most of it is Romanian, nothing in it is. To have Romanian checked too, add the language in
+Windows' language settings; the app picks it up the next time it starts.
 
 To turn spelling off, or to see which languages are being checked, go to **Settings →
 Appearance → Spelling**.
