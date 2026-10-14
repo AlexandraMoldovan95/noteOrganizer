@@ -113,6 +113,18 @@ How the numbers themselves are counted is the
   more than the 200 notes one code may carry, and a long note could make a code past the import's
   size limits; the far end then refused it. The panel and the editor now say so at once, and
   suggest sharing in parts or a full backup.
+- **Importing a large backup into a large notebook no longer freezes the app.** Each incoming
+  note was matched by walking the whole notebook again: a backup of 10,000 notes into a notebook
+  of 10,000 took 1.8 s with the window frozen, and grew with the square of the size. One walk
+  now builds an index first.
+- **Pinning a note, giving it another category, or moving it in Custom order redraws its card,
+  not the whole list.** Each one rebuilt the list, and with the list scrolled far down a rebuild
+  draws every row above the view: 1.3 s for one pin at 10,000 notes, at every step of Alt+Down.
+  They now take the path a save takes. The whole list is still drawn again when the keyboard's
+  ring is on it, to follow the ring to the card's new place.
+- **A day left open on the Calendar is no longer rebuilt at every save.** Every pause in typing
+  rebuilt that day's list, walking every note, on a tab nobody was looking at. It now waits, as
+  the month already did, and is brought up to date when the Calendar is shown again.
 
 ### Testing
 
@@ -123,6 +135,14 @@ How the numbers themselves are counted is the
   notes in the Share panel, and qa3 has the export refuse to put in place a backup its own import
   would refuse. These were the first checks of the backup's limits at all. Mutants BK01–BK06 and
   SH01–SH03.
+- `tools/bench.py` measures a notebook at scale as it is really used: `--rich` gives every note
+  styled words, and `--deep` scrolls the list to its end, then rebuilds it and pins a note there.
+  It also times an import's matching on every run. The three fixes above are held structurally,
+  not by timing: `test_note_identity` counts the import's walks through the notebook (one, for
+  any number of notes); qa4 counts full rebuilds for a pin, a new category and a Custom-order
+  move at the list's end (none), and compares what they leave with what a rebuild draws; qa7
+  has a save on the Notes tab leave a day open on the Calendar untouched, and the day show the
+  change when the Calendar comes back. Mutants MN01–MN08.
 
 ---
 

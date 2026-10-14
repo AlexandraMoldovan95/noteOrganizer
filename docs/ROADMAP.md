@@ -49,20 +49,34 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
   [CHANGELOG](../CHANGELOG.md)):
   - **Rebuild only the table block an edit touched** — `_render_table_grids` deliberately tears
     down and rebuilds every grid in the note ("a grid is cheap to make, and tracking which of them
-    an arbitrary edit invalidated is not"). The 2026-09-02 senior audit measured the cost
-    honestly: ~130ms for a 10-table note per rebuild, run on commits/pastes/menu ops, never on
-    keystrokes — fine today, but it is also the root of the entire view-restore timer complexity
-    (the explicit/ambient contract exists because rebuilt windows map late). Rebuilding only the
-    touched block would cut both the cost and that complexity. An architectural phase with its own
-    design pass, not a patch; measured before, it must be measured after.
+    an arbitrary edit invalidated is not"). The 2026-09-02 senior audit measured ~130ms for a
+    10-table note per rebuild, run on commits/pastes/menu ops, never on keystrokes. Re-measured
+    on 2026-10-14, after the one-pass draw and width cache of 2026-10-01: **7 ms for 1 table, 34 ms
+    for 10, 65 ms for 30, 254 ms for 100** in one note. The cost depends on the tables in the
+    open note, never on how many notes the notebook holds. It is also the root of the
+    view-restore timer complexity (the explicit/ambient contract exists because rebuilt windows
+    map late), though an analysis that day doubts the work would remove it: a rebuilt block is
+    still a new window that maps late. **Decided 2026-10-14, the owner's question answered with
+    measurements and four reviewing agents: not needed now.** Worth doing if a real note of 30+
+    tables lags past ~100 ms, if another bug lands in the view-restore class, or if opening very
+    long notes needs tables drawn as they come into view. One small step comes first if it ever
+    lags: a lookup that walks every drawn grid for each cell (`_col_base`), quadratic in the
+    tables of one note, and answerable without the walk during a build. An architectural phase
+    with its own design pass, not a patch; measured before, it must be measured after.
 - **Note list virtualization.** Most of it is done: the main list draws a screenful and the
   rest as the view comes near it, a save redraws one card instead of the list, and the cards are
   drawn on one canvas rather than built from widgets, so a drawn card costs a handful of canvas
   items instead of six windows (see
   ["Large lists: draw what can be seen, the rest on demand"](ARCHITECTURE.md#large-lists-draw-what-can-be-seen-the-rest-on-demand)).
+  Since 2026-10-15 a pin, a new category or a move in Custom order also redraws one card.
   What is left is true windowed rendering — recycling one screenful of cards, so that a list
-  scrolled to its end does not hold every card it passed. At 1,000 notes scrolled to the end,
-  coming back to the list measured 81 ms; only worth it if notebooks far beyond that turn up.
+  scrolled to its end does not hold every card it passed. Measured on 2026-10-14
+  (`tools/bench.py --rich --deep`), with the list scrolled to its very end, a full rebuild
+  (Select mode, Undo, a restore) takes 0.11 s at 1,000 notes, 0.56 s at 5,000 and 1.2 s at
+  10,000; at the top of the list it stays under 15 ms at every size. **Decided 2026-10-14: not
+  needed now.** Worth it when a real notebook passes about 2,000–3,000 notes, or when a slow
+  computer shows a deep rebuild above ~0.3 s at 1,000. It is weeks of work: cards differ in
+  height, and placing one without drawing those above it needs every card's height known first.
 - **An Android version.** An exploration is under way in a repository of its own
   (`noteOrganizerForAndroid`, private), begun on 2026-09-13: a native Android app in Kotlin that
   reads and writes the same notes file as this one, built to answer whether the data format
@@ -86,7 +100,8 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
     native route was taken; adopted here, it would mean rebuilding the desktop UI too, not just
     extending it.
   - Doing nothing and staying on plain Tkinter remains a legitimate option — noted here so the
-    decision is made deliberately, not by default.
+    decision is made deliberately, not by default. **The owner's call, 2026-10-14: stay on
+    Tkinter.**
 
 ## Explicitly not planned right now
 
@@ -128,6 +143,9 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
 - Fonts inside table cells — decided against by the owner (2026-10-14). It was the phase
   deliberately deferred in the 0.64.95 cycle, the last follow-up the audit programme had scoped
   out; a table's cells keep the note's own font.
+- A visible cue that Settings' section list scrolls — decided against by the owner
+  (2026-10-14). In a short window, About sits below the list's foot and is reached with the
+  wheel; she judged the list fine as it is.
 
 Three more features were tried and deliberately taken out again — the decision record, since
 "we had it and removed it" is a stronger ruling than "we never built it":
@@ -540,8 +558,10 @@ bug being chased.
 here. None is a bug being chased; each has a reason.
 
 - *A view left deep in a very long list* — a rebuild still draws every row above the view
-  (about 1–1.3 s at 5,000 notes for Select mode, Undo or a restore), because the drawing is a
-  prefix of the rows by design. The keyboard coming back to the list joins it: when the ring's
+  (about 1–1.3 s at 5,000 notes for Select mode, Undo or a restore when measured here;
+  re-measured 2026-10-14 at 0.56 s at 5,000 and 1.2 s at 10,000 with the view at the list's
+  very end), because the drawing is a prefix of the rows by design. A pin, a new category and a
+  move in Custom order no longer do: since 2026-10-15 they redraw the one card. The keyboard coming back to the list joins it: when the ring's
   card was carried far below what the list had drawn (grouping turned on, the sort changed), Tab
   draws every row down to it — 0.5–0.7 s at 5,000 notes — so that Enter opens the note being
   edited, and later rebuilds stay that deep. Putting the ring on a card in view instead would be

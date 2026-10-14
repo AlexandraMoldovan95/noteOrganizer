@@ -118,7 +118,7 @@ tools/                    what CI runs, and the tools behind the docs' numbers
 ├── run_tests.py          the whole suite, safely, from a scratch copy
 ├── run_coverage.py       the whole suite again, measuring what it executes
 ├── mutate.py             takes each fix away and checks a check fails
-├── bench.py              start-up, save and memory at 1,000+ notes
+├── bench.py              start-up, save, memory, an import, the list's end, at 1,000+ notes
 ├── call_graph.py         which methods call which: the measure behind the split
 ├── doc_screenshots.py    retakes the documentation's screenshots
 ├── make_icon.py          draws the app icon, rather than storing one
