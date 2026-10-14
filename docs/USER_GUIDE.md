@@ -19,6 +19,7 @@ every major feature.
   - [Calculator](#calculator)
   - [Emoji](#emoji)
   - [How long a note takes to read](#how-long-a-note-takes-to-read)
+  - [Spelling](#spelling)
   - [Finding notes: search, sort, and grouping](#finding-notes-search-sort-and-grouping)
   - [Organizing](#organizing)
   - [Templates](#templates)
@@ -423,6 +424,31 @@ reading.
 
 *Why: finishing sooner than promised costs you nothing, whereas being told a note is shorter than
 it really is does.*
+
+### Spelling
+
+On Windows, a misspelled word in a note or its comments gets a red line under it. Right-click
+it for:
+
+| Choice | What it does |
+|---|---|
+| a suggestion | puts that word in its place, keeping its bold, colour and size; Ctrl+Z takes it back |
+| **Ignore "word"** | stops underlining that word in Note Organizer, on this computer |
+| **Add to dictionary** | adds it to your Windows dictionary, which other programs that use Windows' spell checker share too |
+
+Nothing is ever corrected for you; a word changes only when you pick a suggestion.
+
+The words are checked against the languages installed in Windows, so a word right in any of
+them is right. A word you are still typing is left alone until you move on. Links, file names,
+numbers and abbreviations in capitals (PDF) are never underlined.
+
+**Writing in a language your Windows has no dictionary for** — Romanian on an English Windows,
+say — does not turn your note red: a paragraph where most words are unknown, or a whole note
+like that, is left alone. To have it checked too, add the language in Windows' language
+settings; the app picks it up the next time it starts.
+
+To turn spelling off, or to see which languages are being checked, go to **Settings →
+Appearance → Spelling**.
 
 ### Finding notes: search, sort, and grouping
 
@@ -1018,6 +1044,12 @@ Windows can do this for one scale only: your main screen's. If you also use a se
 isn't enlarged, the app looks a little softer there. Choose **Off** under **Settings → Appearance
 → Sharp text** if that is where you keep it. Either way, the change shows the next time you open
 Note Organizer.
+
+#### Spelling
+
+**On** underlines misspelled words in your notes; **Off** stops it at once. The row says which
+languages Windows is checking. How it works, and how it stays quiet in other languages:
+[Spelling](#spelling).
 
 ### About
 

@@ -49,28 +49,6 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
     (the explicit/ambient contract exists because rebuilt windows map late). Rebuilding only the
     touched block would cut both the cost and that complexity. An architectural phase with its own
     design pass, not a patch; measured before, it must be measured after.
-- **Spell-check in the editor (desktop only).** A red underline on misspelled words (Tk 8.6
-  draws one: a text tag's `underlinefg`), with right-click suggestions, "Add to dictionary" and
-  "Ignore" — **not** silent auto-correct, which would mangle names, technical terms and
-  other-language words in a notes app without asking. This is a desktop-only feature: Tkinter
-  draws its own text and gets no spell-check from the OS the way a browser textarea or a native
-  field does, so it must be built; on a future Android build the on-screen keyboard's IME already
-  provides spell-check and auto-correct in the user's language for free, so nothing would be built
-  there. It is a scoped phase, not a quick win, and it must clear the project's bar before
-  shipping: **stays fully offline, stays fast on weak machines.**
-
-  **The approach, chosen 2026-10-14: Windows' own spell checker** (the Spell Checking API, the
-  one other Windows apps use), not dictionaries shipped in the app. It follows the languages
-  installed in Windows — a word is right if any of them knows it, which suits notes that mix
-  languages — adds nothing to the `.exe`, works offline, and a word added goes into the user's
-  own Windows dictionary. Romanian is checked once Romanian is added in Windows (Settings →
-  Time & language → Language & region); the owner's machine had only English then. Elsewhere
-  than Windows, nothing is checked. Still to decide when it is picked up: reaching the API
-  through a new dependency (`comtypes`, to be approved) or through `ctypes` written here; and,
-  as before, checking only the visible or changed text on a debounce rather than every word on
-  every keystroke, through the rich-text tags without disturbing them. The earlier pick,
-  `pyspellchecker` (pure Python, bundled dictionaries), was set aside: its twelve languages do not
-  include Romanian, and each language adds a few MB to the `.exe`.
 - **Note list virtualization.** Most of it is done: the main list draws a screenful and the
   rest as the view comes near it, a save redraws one card instead of the list, and the cards are
   drawn on one canvas rather than built from widgets, so a drawn card costs a handful of canvas
@@ -165,6 +143,17 @@ Three more features were tried and deliberately taken out again — the decision
 Work that reached `main`, kept here as a decision record — the questions each piece settled, so
 they aren't reopened from scratch. The feature-by-feature detail lives in
 [CHANGELOG.md](../CHANGELOG.md).
+
+### Spelling (2026-10-15)
+
+Windows' own spell checker, reached with `ctypes` (no new dependency: `comtypes` was not
+needed), following the languages installed in Windows — a word right in any of them is right.
+The owner's worry decided its shape: text in a language the computer has no dictionary for must
+not turn red, so a paragraph or a whole note where most words are unknown is left alone, and the
+word being typed waits. Her decisions: **on by default**, **Ignore remembered on this computer**,
+and **no per-note "don't check this note"** for now. Not checked: titles and checklist items (Tk
+cannot underline one word in a one-line box) and table cells (drawn on a canvas). The design is
+[Spelling](ARCHITECTURE.md#spelling-windows-own-dictionaries-built-to-stay-quiet).
 
 ### Sharp text on a scaled screen (2026-10-14)
 
@@ -271,9 +260,10 @@ bindings), and template deletion saying plainly that it skips the Trash and can'
 ### Splitting the UI into modules
 
 Done, and stopped deliberately rather than out of steam. The data-and-rules layer went first —
-fifteen modules under `noteorganizer/core/`, none importing tkinter — and six UI areas now live
-in `noteorganizer/ui/` as mixins: the calculator panel, the Settings page, the dialogs and popups,
-the calendar, attachments, and — re-measured once it became one drawing — the note list. All the
+fifteen modules under `noteorganizer/core/`, none importing tkinter — and six UI areas were moved
+into `noteorganizer/ui/` as mixins: the calculator panel, the Settings page, the dialogs and popups,
+the calendar, attachments, and — re-measured once it became one drawing — the note list. Spelling
+(2026-10-15) was written into both layers from the start: two `core/` modules and a seventh mixin. All the
 pure logic went down into `core/` first. `note_organizer.py` is about 20,500 lines — it dipped
 when the extractions landed and grew again through the rich-text, tables and field-testing work,
 but the pure logic behind all of that went into `core/` rather than into it, which is the point:
