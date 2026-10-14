@@ -934,8 +934,9 @@ no Cancel — skipping them already changes nothing — so the import goes on wi
 Any backup the app made can be imported back, however large: the only limit is the free space on
 the disk, and the import checks it first and says how much it needs. (The attachments need room
 twice for a moment: the backup is unpacked, then its files are copied in.) What it refuses is an
-archive shaped like a damaged or hostile one, where a file would expand to hundreds of times its
-packed size; the export checks each backup it makes the same way before putting it in place.
+archive shaped like a damaged or hostile one, where a file, or the whole backup, would expand to
+hundreds of times its packed size; the export checks each backup it makes the same way before
+putting it in place.
 
 ![Import backup](screenshots/import-backup.png)
 

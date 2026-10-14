@@ -2617,6 +2617,14 @@ check("an entry expanding a thousand times past its packed size is refused as a 
 check("...but not a big file that packs like real content, nor a small one that packs well",
       _sh.backup_entries_problem([_entry("attachments/film.mp4", 3 * _GB, 2_900_000_000)]) is None
       and _sh.backup_entries_problem([_entry("attachments/log.txt", 40_000_000, 10_000)]) is None)
+check("a bomb spread over many entries, each under the size one is asked about, is refused "
+      "as a whole",
+      "The backup would expand" in (_sh.backup_entries_problem(
+          [_entry("attachments/b%d.bin" % k, 49_000_000, 49_000) for k in range(100)]) or ""))
+check("...while a whole backup of text, which packs about ten times, imports",
+      _sh.backup_entries_problem(
+          [_entry("notes_data.json", 400_000_000, 40_000_000)]
+          + [_entry("attachments/n%d.txt" % k, 1_000_000, 100_000) for k in range(200)]) is None)
 _saved_files = _sh.MAX_BACKUP_FILES
 try:
     _sh.MAX_BACKUP_FILES = 5

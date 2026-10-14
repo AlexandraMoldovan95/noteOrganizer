@@ -3826,6 +3826,16 @@
     "expect": "killed"
   },
   {
+    "id": "BK06",
+    "about": "a zip bomb spread over many entries, each under the size one is asked about, is unpacked",
+    "edits": [{"file": "noteorganizer/core/sharing.py",
+               "find": "    sizes.append((\"The backup\", sum(s for _n, s, _p in sizes), sum(p for _n, _s, p in sizes)))\n",
+               "replace": ""}],
+    "must_fail": ["a bomb spread over many entries, each under the size one is asked about"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
     "id": "BK05",
     "about": "the export puts in place a backup its own import would refuse",
     "edits": [{"file": "note_organizer.py",

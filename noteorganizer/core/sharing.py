@@ -235,10 +235,12 @@ def decode_share_code(code):
 # hundred phone photos, made a backup that could not be restored. The
 # limits are now about what a HOSTILE archive could do, and the export
 # checks what it wrote against the same rules (backup_entries_problem).
-MAX_BACKUP_FILES = 1_000_000
-# An entry that expands to more than this many times its packed size, and
-# to more than BOMB_MIN_BYTES, is a zip bomb, not a file anyone attached:
-# photos, videos and documents pack to within a few times their size.
+MAX_BACKUP_FILES = 100_000
+# Expanding to more than this many times its packed size, and to more than
+# BOMB_MIN_BYTES, is a zip bomb, not anything anyone attached: photos,
+# videos and documents pack to within a few times their size. Asked of
+# each entry and of the archive as a whole, or a thousand entries just
+# under the size each would pass one by one.
 BOMB_RATIO = 100
 BOMB_MIN_BYTES = 50_000_000
 # What an import leaves free on each disk it writes to. A size cap on the
@@ -260,12 +262,14 @@ def backup_entries_problem(infos):
     if len(infos) > MAX_BACKUP_FILES:
         return ("This backup holds %d files, more than an import takes (%d)."
                 % (len(infos), MAX_BACKUP_FILES))
-    for info in infos:
-        size, packed = max(info.file_size, 0), max(info.compress_size, 0)
+    sizes = [(info.filename, max(info.file_size, 0), max(info.compress_size, 0))
+             for info in infos]
+    sizes.append(("The backup", sum(s for _n, s, _p in sizes), sum(p for _n, _s, p in sizes)))
+    for name, size, packed in sizes:
         if size > BOMB_MIN_BYTES and size > BOMB_RATIO * max(packed, 1):
             return ("%s would expand to %s from %s packed, which is how a "
                     "damaged or hostile backup looks."
-                    % (info.filename, size_text(size), size_text(packed)))
+                    % (name, size_text(size), size_text(packed)))
     return None
 
 

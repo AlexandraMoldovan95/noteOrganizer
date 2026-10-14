@@ -777,7 +777,7 @@ the codebase:
 | `MAX_SHARE_CODE_CHARS` | absurdly long input, rejected before any work |
 | `_bounded_decompress` | a **zip bomb** |
 | `MAX_SHARED_NOTES` | one code flooding the notebook |
-| `_safe_extract_zip` | a **Zip Slip** path-traversal attack, a zip-bomb-shaped entry (`backup_entries_problem`), a disk without room (`backup_space_problem`) |
+| `_safe_extract_zip` | a **Zip Slip** path-traversal attack, a zip-bomb-shaped entry or archive (`backup_entries_problem`), a disk without room (`backup_space_problem`) |
 
 Two of those deserve explanation.
 

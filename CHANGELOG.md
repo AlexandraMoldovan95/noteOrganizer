@@ -107,8 +107,8 @@ How the numbers themselves are counted is the
   MB or 10,000 files, while the export wrote every attached file whatever its size, so one long
   video or a few hundred phone photos made a backup that could not be restored. The import now
   asks only what protects you: whether the disk has room (and says how much it needs) and whether
-  a file is shaped like a zip bomb. The export checks each backup it writes by the same rules
-  before putting it in place.
+  a file, or the backup as a whole, is shaped like a zip bomb. The export checks each backup it
+  writes by the same rules before putting it in place.
 - **The Share panel no longer makes a code its own import refuses.** **Select all** could tick
   more than the 200 notes one code may carry, and a long note could make a code past the import's
   size limits; the far end then refused it. The panel and the editor now say so at once, and
@@ -118,10 +118,11 @@ How the numbers themselves are counted is the
 
 - The two limits above, held by the same rules on both sides: `test_data_safety` measures backups
   of 750 MB and of 10,050 files, a disk without room (attachments counted twice on one disk, once
-  per disk on two), a zip bomb by its numbers and as a real archive, and a path that climbs out;
-  share codes at 201 notes and past each size limit. qa1 ticks 201 notes in the Share panel, and
-  qa3 has the export refuse to put in place a backup its own import would refuse. These were the
-  first checks of the backup's limits at all. Mutants BK01–BK05 and SH01–SH03.
+  per disk on two), a zip bomb by its numbers, spread over many entries and as a real archive,
+  and a path that climbs out; share codes at 201 notes and past each size limit. qa1 ticks 201
+  notes in the Share panel, and qa3 has the export refuse to put in place a backup its own import
+  would refuse. These were the first checks of the backup's limits at all. Mutants BK01–BK06 and
+  SH01–SH03.
 
 ---
 

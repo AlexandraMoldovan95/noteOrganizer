@@ -1801,7 +1801,10 @@ tick more than the 200 notes one code may carry, and the receiving app refused t
 
 **Fix:** the import's limits now guard against what a hostile archive does, not against size.
 It checks that the disk has room (on one disk the attachments are counted twice: unpacked, then
-copied in), and refuses an entry shaped like a zip bomb. The writer asks the reader's question
+copied in), and refuses an entry, or an archive as a whole, shaped like a zip bomb. The first
+version asked only each entry on its own, and a security review of the commit found the way
+round it: a thousand entries, each just under the size one was asked about. The writer asks the
+reader's question
 too: the export runs the import's rules over the archive it has just written before putting it
 in place, and no share code is made past a limit its import enforces. Every other reading limit
 in the app was walked against what writes it. The one left out of step on purpose is the
