@@ -1,6 +1,7 @@
 [
   {
     "id": "S01",
+    "self_test": true,
     "about": "the runner's own check: a mutant that must be killed",
     "edits": [
       {
@@ -20,6 +21,7 @@
   },
   {
     "id": "S02",
+    "self_test": true,
     "about": "the runner's own check: an equivalent mutant that must survive",
     "edits": [
       {

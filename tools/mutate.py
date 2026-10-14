@@ -16,7 +16,9 @@ the suite's own throwaway data and are wiped between runs). Each entry:
 
 "expect" is "killed" for a real mutant and "survives" for an equivalent
 one -- a change that alters nothing, kept so the runner's own verdicts are
-tested: --self-test runs the two S entries, one of each kind.
+tested: --self-test runs the two entries marked "self_test": true, one of
+each kind. Marked, not told by their first letter: SP, the spelling's
+mutants, start with S too.
 
 HOW A VERDICT IS REACHED
 ------------------------
@@ -159,7 +161,11 @@ def main(argv):
     sys.stdout.reconfigure(encoding="utf-8")
     entries = load_catalogue()
     if "--self-test" in argv:
-        todo = [e for e in entries if e["id"].startswith("S")]
+        todo = [e for e in entries if e.get("self_test")]
+        if len(todo) != 2:
+            # None found would pass by running nothing.
+            sys.exit("--self-test expects the catalogue's two self_test entries, "
+                     "found %d" % len(todo))
     else:
         wanted = [a for a in argv[1:] if not a.startswith("--")]
         todo = [e for e in entries
