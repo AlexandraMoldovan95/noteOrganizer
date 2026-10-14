@@ -777,7 +777,7 @@ the codebase:
 | `MAX_SHARE_CODE_CHARS` | absurdly long input, rejected before any work |
 | `_bounded_decompress` | a **zip bomb** |
 | `MAX_SHARED_NOTES` | one code flooding the notebook |
-| `_safe_extract_zip` | a **Zip Slip** path-traversal attack |
+| `_safe_extract_zip` | a **Zip Slip** path-traversal attack, a zip-bomb-shaped entry (`backup_entries_problem`), a disk without room (`backup_space_problem`) |
 
 Two of those deserve explanation.
 
@@ -802,6 +802,14 @@ sit under the destination.
 The general lesson: **when data comes from outside, enforce limits during
 processing, not after.** Anything that checks "was that too big?" after
 the fact has already paid the cost.
+
+And its other half: **every limit on reading is a promise about writing.**
+The app makes share codes and backups itself, so `encode_share_code`
+refuses to make a code its decoder would refuse, and the export runs
+`backup_entries_problem` over the archive it has just written. A fixed
+500 MB ceiling on the reading side alone once made backups the app wrote
+and then refused to restore
+([the story](ISSUES_LOG.md#the-backup-the-app-could-not-restore)).
 
 ---
 

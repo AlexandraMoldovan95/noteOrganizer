@@ -62,6 +62,7 @@ is in the table below as well.
 | [The undo that guarded the wrong state](#the-undo-that-guarded-the-wrong-state) | An undo must test for the state its own action produced, not the one it means to restore; and sweep for what else reaches the same loss. | 0.75.181 |
 | [The binding that could never fire](#the-binding-that-could-never-fire) | A binding is not an answer to "does this key work" — ask where the key goes; and a probe whose finding is an absence needs a control that produces the presence. | 0.75.183 |
 | [Eleven decisions about your notes, made from half the evidence](#eleven-decisions-about-your-notes-made-from-half-the-evidence) | When two files must agree, rebuild the weaker from the stronger; an automatic removal asks the strictest question there is; a dialog's promise is part of the mechanism. | 0.81.213 |
+| [The backup the app could not restore](#the-backup-the-app-could-not-restore) | Every limit on reading is a promise about writing: when the app makes what it later reads, one definition checks both ends. | Unreleased |
 | [The Cancel that went ahead anyway](#the-cancel-that-went-ahead-anyway) | A function that can be told "no" must say so to its caller; a modal dialog holds the mouse only unless the keyboard is held too; bind the end of a widget-level record to the widget's own end. | 0.82.230 |
 | [The paste that landed on top of the placeholder](#the-paste-that-landed-on-top-of-the-placeholder) | `bind()` replaces where `add="+"` accumulates, so a widget's own binding silently displaces a shared helper's; and a virtual event outranks the physical one beside it in the same bindtag. | 0.75.185 |
 | [The sweep that stopped at the edge of the Settings page](#the-sweep-that-stopped-at-the-edge-of-the-settings-page) | A fix's sibling sweep must name the surfaces it did not visit; a cap in characters is not a width; and text that wraps for the first time inherits every multi-line default the widget was hiding. | 0.81.202 |
@@ -1783,6 +1784,32 @@ empty, say so at startup — so none of that changed; the two new kinds simply r
 guarded in many places, that list is a definition: write it once, and let a gate refuse a copy
 written by hand. Hand-written copies are how two readers learned about the encoding and twelve
 did not.
+
+### The backup the app could not restore
+
+*(Unreleased · 2026-10-15)*
+
+**Symptom:** none reported. The owner asked how the app would hold up at thousands of notes, and
+an analysis that read the backup's two ends side by side found it.
+
+**Root cause:** the import's guard against hostile archives refused anything over 500 MB or
+10,000 files. That sat below what the app's own export writes: every attached file, whatever its
+size. One long video, or a few hundred phone photos, made a backup the app refused with "too
+large to import safely", at the moment it is needed, on a new computer. Nothing had ever tested
+the guard. Share codes had the same gap on a smaller scale: the Share panel's Select all could
+tick more than the 200 notes one code may carry, and the receiving app refused the code.
+
+**Fix:** the import's limits now guard against what a hostile archive does, not against size.
+It checks that the disk has room (on one disk the attachments are counted twice: unpacked, then
+copied in), and refuses an entry shaped like a zip bomb. The writer asks the reader's question
+too: the export runs the import's rules over the archive it has just written before putting it
+in place, and no share code is made past a limit its import enforces. Every other reading limit
+in the app was walked against what writes it. The one left out of step on purpose is the
+formatting ceiling, an anti-bomb limit set above any real note and recorded where it is defined.
+
+**Takeaway:** every limit on reading is a promise about writing. When the app makes the thing it
+later reads, one definition must check both ends, or the guard that protects the import becomes
+the bug that loses the backup.
 
 
 ## Tk & platform gotchas
