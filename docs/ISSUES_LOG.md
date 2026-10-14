@@ -62,7 +62,7 @@ is in the table below as well.
 | [The undo that guarded the wrong state](#the-undo-that-guarded-the-wrong-state) | An undo must test for the state its own action produced, not the one it means to restore; and sweep for what else reaches the same loss. | 0.75.181 |
 | [The binding that could never fire](#the-binding-that-could-never-fire) | A binding is not an answer to "does this key work" — ask where the key goes; and a probe whose finding is an absence needs a control that produces the presence. | 0.75.183 |
 | [Eleven decisions about your notes, made from half the evidence](#eleven-decisions-about-your-notes-made-from-half-the-evidence) | When two files must agree, rebuild the weaker from the stronger; an automatic removal asks the strictest question there is; a dialog's promise is part of the mechanism. | 0.81.213 |
-| [The backup the app could not restore](#the-backup-the-app-could-not-restore) | Every limit on reading is a promise about writing: when the app makes what it later reads, one definition checks both ends. | Unreleased |
+| [The backup the app could not restore](#the-backup-the-app-could-not-restore) | Every limit on reading is a promise about writing: when the app makes what it later reads, one definition checks both ends. | 0.94.379 |
 | [The Cancel that went ahead anyway](#the-cancel-that-went-ahead-anyway) | A function that can be told "no" must say so to its caller; a modal dialog holds the mouse only unless the keyboard is held too; bind the end of a widget-level record to the widget's own end. | 0.82.230 |
 | [The paste that landed on top of the placeholder](#the-paste-that-landed-on-top-of-the-placeholder) | `bind()` replaces where `add="+"` accumulates, so a widget's own binding silently displaces a shared helper's; and a virtual event outranks the physical one beside it in the same bindtag. | 0.75.185 |
 | [The sweep that stopped at the edge of the Settings page](#the-sweep-that-stopped-at-the-edge-of-the-settings-page) | A fix's sibling sweep must name the surfaces it did not visit; a cap in characters is not a width; and text that wraps for the first time inherits every multi-line default the widget was hiding. | 0.81.202 |
@@ -1787,7 +1787,7 @@ did not.
 
 ### The backup the app could not restore
 
-*(Unreleased · 2026-10-15)*
+*([0.94.379](../CHANGELOG.md#094379--2026-10-15) · 2026-10-15)*
 
 **Symptom:** none reported. The owner asked how the app would hold up at thousands of notes, and
 an analysis that read the backup's two ends side by side found it.
