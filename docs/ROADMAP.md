@@ -49,28 +49,6 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
     (the explicit/ambient contract exists because rebuilt windows map late). Rebuilding only the
     touched block would cut both the cost and that complexity. An architectural phase with its own
     design pass, not a patch; measured before, it must be measured after.
-- **Spell-check in the editor (desktop only).** A red underline on misspelled words (Tk 8.6
-  draws one: a text tag's `underlinefg`), with right-click suggestions, "Add to dictionary" and
-  "Ignore" — **not** silent auto-correct, which would mangle names, technical terms and
-  other-language words in a notes app without asking. This is a desktop-only feature: Tkinter
-  draws its own text and gets no spell-check from the OS the way a browser textarea or a native
-  field does, so it must be built; on a future Android build the on-screen keyboard's IME already
-  provides spell-check and auto-correct in the user's language for free, so nothing would be built
-  there. It is a scoped phase, not a quick win, and it must clear the project's bar before
-  shipping: **stays fully offline, stays fast on weak machines.**
-
-  **The approach, chosen 2026-10-14: Windows' own spell checker** (the Spell Checking API, the
-  one other Windows apps use), not dictionaries shipped in the app. It follows the languages
-  installed in Windows — a word is right if any of them knows it, which suits notes that mix
-  languages — adds nothing to the `.exe`, works offline, and a word added goes into the user's
-  own Windows dictionary. Romanian is checked once Romanian is added in Windows (Settings →
-  Time & language → Language & region); the owner's machine had only English then. Elsewhere
-  than Windows, nothing is checked. Still to decide when it is picked up: reaching the API
-  through a new dependency (`comtypes`, to be approved) or through `ctypes` written here; and,
-  as before, checking only the visible or changed text on a debounce rather than every word on
-  every keystroke, through the rich-text tags without disturbing them. The earlier pick,
-  `pyspellchecker` (pure Python, bundled dictionaries), was set aside: its twelve languages do not
-  include Romanian, and each language adds a few MB to the `.exe`.
 - **Note list virtualization.** Most of it is done: the main list draws a screenful and the
   rest as the view comes near it, a save redraws one card instead of the list, and the cards are
   drawn on one canvas rather than built from widgets, so a drawn card costs a handful of canvas
@@ -165,6 +143,20 @@ Three more features were tried and deliberately taken out again — the decision
 Work that reached `main`, kept here as a decision record — the questions each piece settled, so
 they aren't reopened from scratch. The feature-by-feature detail lives in
 [CHANGELOG.md](../CHANGELOG.md).
+
+### Spelling (2026-10-14)
+
+Windows' own spell checker, reached with `ctypes` (no new dependency: `comtypes` was not
+needed), following the languages installed in Windows — a word right in any of them is right.
+The owner's worry decided its shape: text in a language the computer has no dictionary for must
+not turn red, so a sentence where most words are unknown is left alone, and the word being typed
+waits. Her decisions: **on by default**, **Ignore remembered on this computer**, and **no
+per-note "don't check this note"** for now. Trying it, she asked why an English sentence next to
+a Romanian one went unchecked: the first version judged whole paragraphs, and she chose
+**sentence by sentence** instead. She also chose the plainer **"Add to Windows dictionary"**,
+since the word goes to Windows and not to this app alone. Not checked: titles and checklist items (Tk
+cannot underline one word in a one-line box) and table cells (drawn on a canvas). The design is
+[Spelling](ARCHITECTURE.md#spelling-windows-own-dictionaries-built-to-stay-quiet).
 
 ### Sharp text on a scaled screen (2026-10-14)
 
@@ -271,9 +263,10 @@ bindings), and template deletion saying plainly that it skips the Trash and can'
 ### Splitting the UI into modules
 
 Done, and stopped deliberately rather than out of steam. The data-and-rules layer went first —
-fifteen modules under `noteorganizer/core/`, none importing tkinter — and six UI areas now live
-in `noteorganizer/ui/` as mixins: the calculator panel, the Settings page, the dialogs and popups,
-the calendar, attachments, and — re-measured once it became one drawing — the note list. All the
+fifteen modules under `noteorganizer/core/`, none importing tkinter — and six UI areas were moved
+into `noteorganizer/ui/` as mixins: the calculator panel, the Settings page, the dialogs and popups,
+the calendar, attachments, and — re-measured once it became one drawing — the note list. Spelling
+(2026-10-14) was written into both layers from the start: two `core/` modules and a seventh mixin. All the
 pure logic went down into `core/` first. `note_organizer.py` is about 20,500 lines — it dipped
 when the extractions landed and grew again through the rich-text, tables and field-testing work,
 but the pure logic behind all of that went into `core/` rather than into it, which is the point:
@@ -383,6 +376,7 @@ counting notes record what counted, what didn't, and why. The features themselve
 | `0.90.373` | 2026-10-12 | 90 | 373 | One `Added` and **two** `Fixed`, on four stacked branches released as one, as they land before one rebuild — the owner's pick of two roadmap groups, the two product decisions on her list and two follow-ups the audit scoped out. The `Added`: days a repeating note keeps its own edits for that its schedule no longer reaches, found (the series line, a walk through them, the calendar History), the owner's call between moving, asking and keeping them findable. The two `Fixed`, both as old as what they fix: a category move's Undo that said "Nothing left to put back" after a rename, and the series line that lost its first and last words at 1200 px. Not counted: the push-down's second rebuild of every table, removed under `Changed` (measured, and nothing on screen differed), and the tests — the own-backup re-import end to end, and seventeen mutants (RB01–RB03, TP01–TP02, CU01–CU03, OS01–OS09). |
 | `0.92.374` | 2026-10-13 | 92 | 374 | **Two** `Added` and one `Fixed`, on stacked branches released as one before one rebuild — the owner's field report about one day of a series, and her ask that followed it. The two `Added`: one day of a series opened on its own (the strip, the day's own date and category, what belongs to the series marked so), and a day held on another date while it stays in its series (Move this day…, Undo, Reset from the day itself, which asks about the text). The `Fixed`, as old as the "only this occurrence" edit: a day's edits waited, unseen, for a question asked only on leaving — now a day saves itself. Not counted: rows that run out of room keeping every control (`Changed` — nothing differs at the sizes Windows gives the app), two rows of this release's own day mended before it shipped, the docs, and the tests — DM01–DM15, MV01–MV25, FIT01–FIT05, and five catalogue checks mended. |
 | `0.93.374` | 2026-10-14 | 93 | 374 | One `Added`, no `Fixed`: sharp text on a scaled screen. The app declares itself aware of the main screen's scale, with everything that holds text grown to match, and Settings → Appearance → Sharp text to turn it off. It counts as one entry, the declaration, the sizes and the setting together, because none of them means anything without the others. The blur it ends was a known limitation, not a defect of something shipped, so it is not a `Fixed`. Not counted: the docs, and the tests — qa6's scaled screens and DPI01–DPI16. |
+| `0.94.374` | 2026-10-14 | 94 | 374 | One `Added`, no `Fixed`: spelling, with Windows' own dictionaries. The underline, its right-click menu (suggestions, Ignore, Add to Windows dictionary), the quiet rules and Settings → Appearance → Spelling count as one entry, because none of them is any use without the others. Not counted: the owner's two changes made while trying it before release (judged by sentence rather than by paragraph, and the menu's plainer name), as they belong to the same entry; the mutant runner telling its own two entries by a mark rather than by the letter S, a repair to a tool rather than to the app, found before anything ran wrong; the docs; and the tests — `test_spelling.py`, qa6's spelling block, and SP01–SP27. |
 | `0.88.361` | 2026-10-08 | 88 | 361 | **Four** `Added` and **four** `Fixed`, from the owner's two re-tests of `0.84.357`, on five stacked branches released as one, as they land before one rebuild. The `Added`, each counted once with everything it grew while unreleased: the table that moves with its caption (and the dialog that says how a table moves when every cell is aligned); "📎 With files" in the Show filter; checklist items moved with ▲ ▼ and Alt+↑/↓ — the arrows' place, the ring, the keyboard after a press and the template editor's list are one feature; search and order in the Share panel, its live following of a new sort included. The `Fixed`, all shipped in `0.84.357` or earlier, so all count: an open checkbox cell showing its brackets; a long checklist item's bin squeezed out at 1024 pixels and below; the find bar's accent border going grey while typed in (since `0.66.97`); the find box unreadable on a light theme when nothing is found (as old). NOT counted: the find bar closing when the note is left (`Changed`); introduced and repaired inside this unreleased work — the checklist's ring drawn grey (seen on a photograph), the Share panel 14 pixels over its room at 1150×860 (seen in the Linux image), the banner that went before it was read, and the not-found tint adjusted twice by eye. The qa checks, `ring_mismatches`, the contrast gate's `DERIVED` surfaces, `check_mutant_targets` and 53 new mutants (H, L, F, O, V, X, Z) are `Testing`. |
 | `0.82.232` | 2026-09-30 | 82 | 232 | **Two** `Fixed`, no `Added`, on a branch stacked straight after `0.82.230` and landing before the same rebuild — a bump of its own because `0.82.230` had already been cut in the branch before it, so the `.exe` built after both goes out as `0.82.232`. (1) The calendar as one drawing: counted, because the month's widgets are a mechanism of their own — the list's drawing did not touch them, and either fix would have shipped without the other, the rule `0.82.230` applied to the list and its on-demand drawing. Field-reported: the freeze of `0.82.230` kept the edge with the pointer but left the month standing still until the drag ended. (2) A day's markers drawn black on every theme — shipped since the markers did, found while drawing them, so it counts. NOT counted: the test harness pinning the mouse button (a check-strategy repair; the story's red it explains was the harness's, not the app's), the two new story chapters, the re-aimed mutant and the 28 mutants — all `Testing`. |
 | `0.82.230` | 2026-09-30 | 82 | 230 | One `Added` and **seventeen** `Fixed`: three stacked branches released as one, because they land back to back before one rebuild. The `Added` is Custom order — the list arranged by hand, by dragging a card or with Alt+↑/↓ — counted **once**, as each formatting phase was: the drag, the keys and the sort are one feature. The `Fixed`, all shipped in `0.81.213` or earlier, so all count: **eight** from the keyboard-and-dialogs branch (Cancel on a repeating day's save question keeps you there; a question holds the app-wide shortcuts; the keyboard goes back after a question; formatting after a table cell; Ctrl+N and Ctrl+F leave Settings; a popup's button closes it on a second click; the smallest window shows a note; a cancelled backup import cleans up), **five** from the speed branch (the autosave that rebuilt the list; the list drawn on demand; window handlers run once per widget; a picture opens at once; the notes file written in one piece), and **four** from the list branch (the list as one drawing — the field-reported tearing and slow return; a click handing the list the keyboard; the Ends radio's dot on dark themes; the window's edge following the mouse). One entry per mechanism: the drawing and the on-demand drawing are two, because either would have shipped without the other. NOT counted — introduced and repaired inside this unreleased work: the drawing's extent read from Tk's `bbox` (8.6.15 and 8.6.16 pad a rectangle differently, and the Linux image read the list's top as 1); the Select-mode tick column guessed at 17 pixels; the drop line that promised a place across the pinned line or into another group; the dragged card leaving the list's view; the drag's edge scrolling at one fixed, slow step; and the travel story's Romanian failure message. The qa checks, the two new story chapters and the 71 mutants are `Testing`. The window's-edge entry grew inside this work — a second field test called the freeze alone heavy, and Tk's whole-window repaint styles came off too — and stays one entry: one complaint, one mechanism seen from two sides. |

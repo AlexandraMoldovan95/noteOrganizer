@@ -30,7 +30,7 @@ calls, no accounts, no database.
 - **Organised as a package (split complete, stopped deliberately):** the
   app was a single file by design for most of its life; it now lives as a
   `core/` layer (data and rules; **must never import tkinter**) and a `ui/`
-  layer of mixin classes — fifteen `core/` modules and six `ui/` mixins —
+  layer of mixin classes — seventeen `core/` modules and seven `ui/` mixins —
   with `note_organizer.py` (~20,500 lines) remaining the entry point and
   the genuinely shared UI hub, by measurement rather than by neglect (see
   `docs/ARCHITECTURE.md`'s call-graph case study for why the split stopped
@@ -76,8 +76,8 @@ calls, no accounts, no database.
   password protection, or seed-based functionality anywhere in the app.
 - **Testing:** the `test_*.py` files are standalone unit-style suites —
   `test_recurrence.py`, `test_calculator.py`, `test_data_safety.py`,
-  `test_richtext.py`, `test_tables.py` and `test_note_identity.py` need
-  no GUI; `test_entry_module_identity.py` builds a window. `qa/qa1.py`–`qa9.py` are
+  `test_richtext.py`, `test_tables.py`, `test_note_identity.py` and
+  `test_spelling.py` need no GUI; `test_entry_module_identity.py` builds a window. `qa/qa1.py`–`qa9.py` are
   headless GUI tests, each starting from a clean data directory. All of them
   run automatically via `.github/workflows/tests.yml` on every pull request
   and every push to `main` that changes more than the documentation — on

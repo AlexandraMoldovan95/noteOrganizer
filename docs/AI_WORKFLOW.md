@@ -53,7 +53,7 @@ can be reviewed; the memory is just the agent's working notebook.
 5. **Walk it on the real app.** Story scripts press the keys a person presses, restart the app
    the way a person would close it, and photograph the app's window - someone looks at every
    photograph.
-6. **The whole suite, on both platforms.** About 3,900 checks, on Windows and in a Linux image
+6. **The whole suite, on both platforms.** About 4,000 checks, on Windows and in a Linux image
    that matches CI.
 7. **My turn.** I review the diff, the commits and what was tested, approve the push, open and
    merge the pull request, then rebuild and test the `.exe`. Whatever only a person can judge -
@@ -63,7 +63,7 @@ can be reviewed; the memory is just the agent's working notebook.
 ## How the agent's work is checked
 
 - **Checks are tested too.** Every fix's check is mutation-tested; the mutants worth keeping
-  (254, and 2 that test the runner itself) live in [`tools/mutants.json`](../tools/mutants.json)
+  (281, and 2 that test the runner itself) live in [`tools/mutants.json`](../tools/mutants.json)
   and run on demand in CI. A verdict counts only if the suite reached its end - a mutant that
   crashes the import "survives nothing" by running nothing, and the runner refuses it.
 - **Findings are hypotheses.** When agents review the app, each finding is checked against the

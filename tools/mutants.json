@@ -1,6 +1,7 @@
 [
   {
     "id": "S01",
+    "self_test": true,
     "about": "the runner's own check: a mutant that must be killed",
     "edits": [
       {
@@ -20,6 +21,7 @@
   },
   {
     "id": "S02",
+    "self_test": true,
     "about": "the runner's own check: an equivalent mutant that must survive",
     "edits": [
       {
@@ -3500,6 +3502,284 @@
                "find": "            return ctypes.windll.shcore.SetProcessDpiAwareness(\n                process_system_dpi_aware) == 0\n",
                "replace": "            return True\n"}],
     "must_fail": ["...and a process that declares it is drawn at its screen's scale by Windows"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SP01",
+    "about": "a word one installed dictionary knows is still underlined because another does not",
+    "edits": [{"file": "noteorganizer/core/spelling.py",
+               "find": "    return sorted(set.intersection(*lists))\n",
+               "replace": "    return sorted(set.union(*lists))\n"}],
+    "must_fail": ["a range is wrong only if every dictionary calls it wrong"],
+    "suites": ["test_spelling"],
+    "expect": "killed"
+  },
+  {
+    "id": "SP02",
+    "about": "text in a language with no dictionary is underlined word after word",
+    "edits": [{"file": "noteorganizer/core/spelling.py",
+               "find": "    return words >= MIN_WORDS_TO_JUDGE and errors > FOREIGN_SHARE * words\n",
+               "replace": "    return False\n"}],
+    "must_fail": ["...in a note that also holds a paragraph in another language, which shows nothing"],
+    "suites": ["test_spelling"],
+    "expect": "killed"
+  },
+  {
+    "id": "SP03",
+    "about": "a note of short lines in another language is judged line by line, and underlined",
+    "edits": [{"file": "noteorganizer/core/spelling.py",
+               "find": "    note_foreign = words >= MIN_WORDS_IN_NOTE and errors > FOREIGN_SHARE * words\n",
+               "replace": "    note_foreign = False\n"}],
+    "must_fail": ["a note of short lines in another language is judged whole"],
+    "suites": ["test_spelling"],
+    "expect": "killed"
+  },
+  {
+    "id": "SP04",
+    "about": "an abbreviation in capitals (PDF) is underlined",
+    "edits": [{"file": "noteorganizer/core/spelling.py",
+               "find": "    if len(letters) > 1 and all(c.isupper() for c in stem if c.isalpha()):\n",
+               "replace": "    if False:\n"}],
+    "must_fail": ["worth_flagging('PDF') is False"],
+    "suites": ["test_spelling"],
+    "expect": "killed"
+  },
+  {
+    "id": "SP05",
+    "about": "a file name, a link or a word with digits is underlined",
+    "edits": [{"file": "noteorganizer/core/spelling.py",
+               "find": "    if not word or _NOT_A_WORD.search(word):\n",
+               "replace": "    if not word:\n"}],
+    "must_fail": ["worth_flagging('file.txt') is False"],
+    "suites": ["test_spelling"],
+    "expect": "killed"
+  },
+  {
+    "id": "SP06",
+    "about": "a range is cut out of the text in Python characters, one place off after every emoji",
+    "edits": [{"file": "noteorganizer/core/spelling.py",
+               "find": "    return raw[2 * start:2 * (start + length)].decode(\"utf-16-le\", \"replace\")\n",
+               "replace": "    return text[start:start + length]\n"}],
+    "must_fail": ["...and slicing in those units returns the word itself"],
+    "suites": ["test_spelling"],
+    "expect": "killed"
+  },
+  {
+    "id": "SP07",
+    "about": "a long line is cut in the middle of a word",
+    "edits": [{"file": "noteorganizer/core/spelling.py",
+               "find": "        if space > 0:\n            cut = space + 1\n",
+               "replace": ""}],
+    "must_fail": ["...each cut after a space, so no word is split"],
+    "suites": ["test_spelling"],
+    "expect": "killed"
+  },
+  {
+    "id": "SP08",
+    "about": "every regional dictionary of a language is asked, nineteen for English",
+    "edits": [{"file": "noteorganizer/core/spelling.py",
+               "find": "        picked.append(home or tags[0])\n",
+               "replace": "        picked.extend(tags)\n"}],
+    "must_fail": ["nineteen kinds of English give one dictionary"],
+    "suites": ["test_spelling"],
+    "expect": "killed"
+  },
+  {
+    "id": "SP09",
+    "about": "an ignored word is underlined again when typed in another case",
+    "edits": [{"file": "noteorganizer/core/spelling.py",
+               "find": "    return word.strip().strip(\"'’-\").casefold()\n",
+               "replace": "    return word.strip().strip(\"'’-\")\n"}],
+    "must_fail": ["an ignored word is not underlined, whatever its case"],
+    "suites": ["test_spelling"],
+    "expect": "killed"
+  },
+  {
+    "id": "SP10",
+    "about": "the boxes are never given the spelling's own binding tag, so typing is never looked at",
+    "edits": [{"file": "noteorganizer/ui/spelling.py",
+               "find": "            widget.bindtags((self._SPELL_BINDTAG,) + tuple(tags))\n",
+               "replace": "            pass\n"}],
+    "must_fail": ["a word is not underlined while it is being typed",
+                  "...and the comments box is looked at as it is typed in, too"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SP11",
+    "about": "the word still being typed is underlined before it is finished",
+    "edits": [{"file": "noteorganizer/ui/spelling.py",
+               "find": "                        ranges.remove(typing)\n",
+               "replace": "                        pass\n"}],
+    "must_fail": ["a word is not underlined while it is being typed"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SP12",
+    "about": "a table's rows are read and underlined like prose",
+    "edits": [{"file": "noteorganizer/ui/spelling.py",
+               "find": "                if i not in skip and text.strip() and not is_table_row(text)\n",
+               "replace": "                if i not in skip and text.strip()\n"},
+              {"file": "noteorganizer/ui/spelling.py",
+               "find": "            if i in skip or not text.strip() or is_table_row(text):\n",
+               "replace": "            if i in skip or not text.strip():\n"}],
+    "must_fail": ["misspelled words in the note and its comments are underlined"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SP13",
+    "about": "a suggestion taken loses the word's formatting",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                     if t not in (\"sel\", self.SPELL_TAG))\n",
+               "replace": "                     if False)\n"}],
+    "must_fail": ["taking a suggestion replaces the word in its own formatting"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SP14",
+    "about": "a suggestion taken is not one undo step, so Ctrl+Z brings the word back without its formatting",
+    "edits": [{"file": "note_organizer.py",
+               "find": "    @_undo_atom\n    def _spell_replace_body(self, start, end, new):\n",
+               "replace": "    def _spell_replace_body(self, start, end, new):\n"}],
+    "must_fail": ["taking a suggestion replaces the word in its own formatting"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SP15",
+    "about": "a theme switch leaves the underline in the old theme's red",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self._spell_recolor()\n",
+               "replace": ""}],
+    "must_fail": ["a theme switch gives the underline the new theme's red"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SP16",
+    "about": "Spelling turned Off in Settings goes on underlining",
+    "edits": [{"file": "noteorganizer/ui/spelling.py",
+               "find": "        return (get_setting(spelling.SPELLING_SETTING, True, expect=bool)\n                and bool(self._spellers()))\n",
+               "replace": "        return bool(self._spellers())\n"}],
+    "must_fail": ["Spelling turned Off in Settings takes every line away at once"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SP17",
+    "about": "someone new, with nothing stored, starts with spelling off",
+    "edits": [{"file": "noteorganizer/ui/spelling.py",
+               "find": "        return (get_setting(spelling.SPELLING_SETTING, True, expect=bool)\n",
+               "replace": "        return (get_setting(spelling.SPELLING_SETTING, False, expect=bool)\n"}],
+    "must_fail": ["...and someone new, with nothing stored, has it on"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SP18",
+    "about": "a long note is read whole at once, holding the editor up",
+    "edits": [{"file": "noteorganizer/ui/spelling.py",
+               "find": "        for i in todo[:self.SPELL_SLICE]:\n",
+               "replace": "        for i in todo:\n"},
+              {"file": "noteorganizer/ui/spelling.py",
+               "find": "        rest = todo[self.SPELL_SLICE:]\n",
+               "replace": "        rest = []\n"}],
+    "must_fail": ["a long note is read a slice at a time"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SP19",
+    "about": "a very long line is asked about whole",
+    "edits": [{"file": "noteorganizer/ui/spelling.py",
+               "find": "                for offset, piece in spelling.pieces(text):\n",
+               "replace": "                for offset, piece in [(0, text)]:\n"}],
+    "must_fail": ["a line longer than 4000 units is asked about in pieces"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SP20",
+    "about": "the menu keeps the last word's suggestions when it opens somewhere else",
+    "edits": [{"file": "noteorganizer/ui/spelling.py",
+               "find": "            menu.delete(0, count - 1)\n",
+               "replace": "            pass\n"}],
+    "must_fail": ["right-clicking an underlined word puts its suggestions"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SP21",
+    "about": "Ignore is forgotten at the next start",
+    "edits": [{"file": "noteorganizer/ui/spelling.py",
+               "find": "        save_setting(spelling.SPELLING_IGNORED_SETTING,\n                     spelling.normalize_ignored(sorted(ignored)))\n",
+               "replace": ""}],
+    "must_fail": ["Ignore stops underlining the word in any case"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SP22",
+    "about": "a word added to the dictionary stays underlined, its old answer kept",
+    "edits": [{"file": "noteorganizer/ui/spelling.py",
+               "find": "            self._spell_cache = {}\n            self._show_toast(",
+               "replace": "            self._show_toast("}],
+    "must_fail": ["Add to Windows dictionary hands the word to the dictionary"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SP23",
+    "about": "a note opened is not looked at until something is typed in it",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self._update_occurrence_banner()\n        self._spell_schedule_all()\n",
+               "replace": "        self._update_occurrence_banner()\n"}],
+    "must_fail": ["misspelled words in the note and its comments are underlined"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SP24",
+    "about": "a paragraph is judged whole, so an English sentence beside a foreign one loses its underlines",
+    "edits": [{"file": "noteorganizer/core/spelling.py",
+               "find": "        for start, end in sentence_spans(text):\n",
+               "replace": "        for start, end in [(0, utf16_units(text))]:\n"}],
+    "must_fail": ["a paragraph of mostly unknown words still shows the typo in its English sentence"],
+    "suites": ["test_spelling"],
+    "expect": "killed"
+  },
+  {
+    "id": "SP25",
+    "about": "a sentence too short to tell its language is judged as English, and underlined in a foreign paragraph",
+    "edits": [{"file": "noteorganizer/core/spelling.py",
+               "find": "                foreign = paragraph_foreign\n",
+               "replace": "                foreign = False\n"}],
+    "must_fail": ["a sentence too short to judge takes its paragraph's verdict"],
+    "suites": ["test_spelling"],
+    "expect": "killed"
+  },
+  {
+    "id": "SP26",
+    "about": "a paragraph long enough to judge takes the whole note's verdict instead of its own",
+    "edits": [{"file": "noteorganizer/core/spelling.py",
+               "find": "            paragraph_foreign = is_foreign(n, len(ranges))\n",
+               "replace": "            paragraph_foreign = note_foreign\n"}],
+    "must_fail": ["a sentence too short to judge takes its paragraph's verdict"],
+    "suites": ["test_spelling"],
+    "expect": "killed"
+  },
+  {
+    "id": "SP27",
+    "about": "the red line is a formatting tag, so it is saved with the note and copied as an underline",
+    "edits": [{"file": "noteorganizer/ui/spelling.py",
+               "find": "    SPELL_TAG = \"spelling\"\n",
+               "replace": "    SPELL_TAG = \"underline\"\n"}],
+    "must_fail": ["...and underlining them changes nothing the note holds",
+                  "...nor in what a copy puts on the clipboard"],
     "suites": ["qa6"],
     "expect": "killed"
   }

@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.94.374](#094374--2026-10-14) | 2026-10-14 | Misspelled words underlined with Windows' own dictionaries, quiet on sentences in a language the computer cannot check — with suggestions, Ignore, Add to Windows dictionary and a switch to turn it off. |
 | [0.93.374](#093374--2026-10-14) | 2026-10-14 | Text and icons sharp on a screen Windows enlarges, with everything that holds text grown to match — and a setting to turn it off for a second screen that isn't enlarged. |
 | [0.92.374](#092374--2026-10-13) | 2026-10-13 | One day of a repeating note opened on its own and saved as you type, a day held on another date while it stays in its series, and a way back to the series from the day itself. |
 | [0.90.373](#090373--2026-10-12) | 2026-10-12 | Days a repeating note keeps its own edits for, left off its schedule, found and turned into notes of their own; a category move's Undo that survives a rename; the line above a repeating note keeping all its words. |
@@ -99,6 +100,37 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+---
+
+## [0.94.374] — 2026-10-14
+
+### Added
+
+- **Spelling.** Misspelled words in a note and its comments are underlined in red, judged by the
+  spell checker Windows already has for every language installed on the computer — no dictionary
+  ships with the app. Right-click one for suggestions, **Ignore** (remembered on this computer) or
+  **Add to Windows dictionary** (which other programs that use Windows' checker share); nothing is
+  ever corrected without being chosen, and a suggestion taken keeps the word's formatting, with
+  one Ctrl+Z to take it back. It is built to stay quiet: a sentence in a language with no
+  dictionary on the computer is left alone rather than turned red, while an English sentence
+  beside it keeps its underlines; a word is not underlined while it is still being typed, and
+  links, file names, numbers and abbreviations in capitals never are.
+  **Settings → Appearance → Spelling** turns it off, and says which languages are being checked.
+  Nothing about it is saved in a note, copied or exported. Windows only.
+
+### Testing
+
+- Spelling's rules in a new unit suite, `test_spelling.py` (positions counted the way Windows and
+  Tk count them, what is a word, the quiet rules sentence by sentence, one dictionary per
+  language, long lines in pieces), and the editor's side in qa6 with a stand-in dictionary: the
+  underline and what it leaves alone, never saved, copied or taken for an edit, the word being
+  typed, the menu, a suggestion taken and undone, Ignore, Add to Windows dictionary and its
+  toast, the theme's red, the switch, a long note
+  in slices — and Windows' real checker asked once, on Windows. The machine's dictionaries are
+  pinned away for every other qa script, so no check takes its verdict from the machine. Writing
+  the typing check found a real gap first: the comments box's autosave binding replaced the
+  spelling's, and comments were never looked at as they were typed. Mutants SP01–SP27.
 
 ---
 

@@ -1,7 +1,7 @@
 # The qa suite — read me before touching a guarded surface
 
-Nine scripts, ~2,700 checks (the seven unit suites beside them bring the
-whole run to ~3,400), all driving the real app headlessly (Xvfb on
+Nine scripts, ~3,000 checks (the eight unit suites beside them bring the
+whole run to ~4,000), all driving the real app headlessly (Xvfb on
 Linux CI, real Windows Tk on the Windows CI job and every dev machine).
 The manual half of the QA story sits beside them:
 `NoteOrganizer_TestPlan.xlsx`, the structured test plan for scenarios
@@ -35,9 +35,9 @@ says.
 | Unit suites | Seven `test_*.py`, no window for six of them | Every pull request | Dates, repeats, the calculator, tables, rich text, data safety, a note's identity |
 | The qa suite | Nine scripts, ~2,700 checks, driving the real app headlessly | Every pull request | What a person would notice: a note that must survive a restart, a share code or a backup; formatting and tables that must come back exactly; a question that must not lose what was typed |
 | Stories | Three scripts that press the buttons a person presses, restart the app and photograph it | On demand: by hand, or from the Actions tab | A screen that changed shape; a route nobody asked a check about |
-| Mutants | `tools/mutate.py` and its catalogue: the 254 worth re-running, and 2 that test the runner | On demand, the same way. Most mutants were one-off runs while a fix was made, named in its commit | A check that stays green with its fix taken away |
+| Mutants | `tools/mutate.py` and its catalogue: the 281 worth re-running, and 2 that test the runner | On demand, the same way. Most mutants were one-off runs while a fix was made, named in its commit | A check that stays green with its fix taken away |
 | Coverage | `tools/run_coverage.py` | Every pull request, with a floor of 80% | Code no test reaches |
-| The test plan | `NoteOrganizer_TestPlan.xlsx`, 545 cases ([an excerpt](../docs/TEST_PLAN_EXCERPT.md)) | By a person, on the built `.exe` | What needs a person: how a screen reads, the built `.exe`, real hardware — each row says whether a script already walks it |
+| The test plan | `NoteOrganizer_TestPlan.xlsx`, 552 cases ([an excerpt](../docs/TEST_PLAN_EXCERPT.md)) | By a person, on the built `.exe` | What needs a person: how a screen reads, the built `.exe`, real hardware — each row says whether a script already walks it |
 
 A fix lands with a check that fails when the fix is taken away, and a
 flaky check is treated as a bug in the check, never re-run until green
@@ -63,15 +63,15 @@ suite has had, and what each one really was:
 | `qa3` | trash, sharing, import/export |
 | `qa4` | theming, stress tests, leak regression — and the note list drawn a screenful at a time, with a save redrawing one card |
 | `qa5` | corrupt data, edge cases |
-| `qa6` | grouping, settings, attachments, multi-feature combinations — and every control in sight, on every page, at an ordinary and the smallest window, and on a screen scaled to 150% and 200% (Sharp text) |
+| `qa6` | grouping, settings, attachments, multi-feature combinations — and every control in sight, on every page, at an ordinary and the smallest window, and on a screen scaled to 150% and 200% (Sharp text); spelling, with a stand-in dictionary |
 | `qa7` | calendar delete, the month drawn on one canvas, the calendar History register, multi-select, image preview, autosave & memory fixes |
 | `qa8` | search debounce, background-timer robustness |
 | `qa9` | the nested-dropdown-inside-popup fix |
 
-Beside the GUI suite run seven standalone **unit suites**, each runnable on
+Beside the GUI suite run eight standalone **unit suites**, each runnable on
 its own (`py test_<name>.py`, from a scratch copy like everything else):
 `test_recurrence`, `test_calculator`, `test_data_safety`, `test_richtext`,
-`test_tables` and `test_note_identity` need no GUI;
+`test_tables`, `test_note_identity` and `test_spelling` need no GUI;
 `test_entry_module_identity` builds a window — it guards against a second
 copy of the entry module.
 
@@ -232,7 +232,9 @@ A new surface joins this list the moment it ships.
   (lists, indent, alignment) · font size/family · tables (grid, cells,
   merges, widths, checkboxes, caption) · checklist · calculator ·
   comments · attachments · emoji picker · find-in-note · word count &
-  reading time · Expand toggles · caret/scroll & view restore
+  reading time · Expand toggles · caret/scroll & view restore · spelling
+  (the underline and when it is drawn, its right-click menu, the quiet
+  rules, Ignore and Add to Windows dictionary)
 - **Organization:** sidebar search · sort modes · categories · grouping ·
   pinning · multi-select & bulk bar · note list rendering & scroll guards ·
   the note list's keyboard route (focus ring, ↑/↓ walk, Enter, menu key,
@@ -1085,6 +1087,22 @@ A new surface joins this list the moment it ships.
   be made inside the suite's process, which already has windows and could
   change its own drawing halfway through. It is made in a process of its
   own that opens none, and Windows is asked what it made of it.
+- **The machine's dictionaries are pinned away; spelling is checked with a
+  stand-in.** Windows' spell checker is the machine's: an English Windows
+  underlines what a Linux runner never does, so `pin_the_desktop` gives
+  every app no dictionary at all, and qa6's spelling block gives its app one
+  that knows exactly which words are wrong. Two things it taught. A key a
+  check generates goes to whichever window has the focus, not the one
+  named, so a typing check takes the focus first (`_take_focus`); without
+  it the first version watched an empty event list. And that same check
+  found a real gap: the comments box's autosave was bound after the
+  spelling, without `add="+"`, and replaced it, so comments were never
+  looked at as they were typed. The spelling binds on a tag of its own,
+  put first among the box's tags, and no binding made later can replace or
+  stop it. The clipboard is the machine's too: off Windows the app's writer
+  takes no HTML, so the check that a copy carries no red line read nothing
+  on Linux and failed there alone. A check on what a copy carries catches
+  it on its way to `clipboard.write`, as qa1's `_stub_clipboard` does.
 - **Under the mutant it guards, a check fails; it never stops the
   script.** The full catalogue, run whole on 2026-10-13, came back with
   four NO-RUN verdicts, from checks written on 8 and 12 October, that had all

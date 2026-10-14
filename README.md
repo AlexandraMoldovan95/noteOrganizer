@@ -26,7 +26,8 @@ cloud, no network calls. For people who want their notes, lists and dates
 in one place they control.
 
 - Notes with bold, italic, colours, headings and lists; tables you edit in
-  place; checklists.
+  place; checklists; spelling checked with Windows' own dictionaries, and
+  left alone in a language your computer has none for.
 - Notes that repeat — daily, weekly, monthly, yearly — and a calendar that
   shows them, with any one day editable on its own, or moved to another date.
 - Search, sort, group by category, or arrange the list by hand.

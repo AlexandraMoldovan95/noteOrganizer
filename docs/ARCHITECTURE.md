@@ -21,7 +21,7 @@ lives in two places: the `noteorganizer/` package — a `core/` layer of data an
 `ui/` layer of mixins — and `note_organizer.py` itself, the entry point and the UI hub the
 pieces hang off.
 
-Both layers are fully extracted: fifteen `core/` modules and six `ui/` mixins. The annotated,
+Both layers are fully extracted: seventeen `core/` modules and seven `ui/` mixins. The annotated,
 module-by-module inventory is [the code tour's project tree](CODE_TOUR.md#the-shape-of-the-project), and
 [CODE_TOUR.md](CODE_TOUR.md) walks through the modules for someone learning the codebase. Three
 of the core modules — `richtext`, `clipboard` and `tables` — landed with the rich-text and
@@ -34,12 +34,13 @@ sharing. **No module in here may import tkinter**, which is what keeps it testab
 and reusable by a different front end. `test_data_safety.py` checks that rather than trusting
 it — the property is easy to lose to one stray import and impossible to notice by hand.
 
-### `ui/` — six mixins over one class
+### `ui/` — seven mixins over one class
 
 `noteorganizer/ui/` holds everything on screen, split one area at a time into **mixin** classes
 that `NoteOrganizer` inherits from. The methods are unchanged: they still reach for
 `self.colors`, `self.notes` and each other exactly as before, so each move was cut-and-paste
-rather than a redesign.
+rather than a redesign. The seventh, `spelling.py`, was written there from the start rather than
+moved.
 
 This is organisation, not decoupling — the mixins share one object, and `self.colors` alone is
 read in ~800 places.
@@ -770,6 +771,76 @@ is built (which is what Windows does for a program that declares itself aware), 
 control on the main pages and popups whether it is wholly in sight. On Windows it also declares
 for real, in a process of its own that opens no window, and asks Windows what it made of that.
 **A new size in pixels that holds text or a mark goes through one of the three doors.**
+
+### Spelling: Windows' own dictionaries, built to stay quiet
+
+Misspelled words in a note and its comments are underlined in red. Right-click one for
+suggestions, Ignore, or Add to Windows dictionary. Nothing is corrected unless the person picks
+it. The last entry names Windows because that is where the word goes: Ignore is kept by this app
+alone, while an added word stops being underlined in every program that asks Windows' checker.
+
+#### Why Windows' checker
+
+Windows already carries a spell checker for every language whose typing features are
+installed — the one Edge and Mail use. Asking it means no dictionary ships with the app,
+nothing new is installed, and the languages checked are the ones the person chose for their
+computer. It is reached through the Spell Checking API, a COM interface, with `ctypes`, so it
+costs no dependency (`core/winspell.py`). A Python package with its own dictionaries was set aside:
+it has no Romanian, and would have been a second dependency for something Windows does already.
+Off Windows there is nothing to ask, and the feature, the Settings row included, is absent.
+
+#### Quiet by design
+
+A checker that underlines every word it does not know is worse than none: text in a language
+the computer has no dictionary for comes out red from end to end. Measured on the owner's
+English Windows, a Romanian paragraph had 17 of its 21 words flagged. So `core/spelling.py`
+decides what is shown:
+
+- **Another language is left alone, sentence by sentence.** A sentence where more than half
+  the words are unknown shows nothing, while an English sentence beside it, in the same
+  paragraph, keeps its underlines. Each verdict is asked of the smallest text long enough to
+  give one: a sentence of four words or more is judged alone, a shorter one ("Yes.") takes its
+  paragraph's verdict, and a short paragraph takes the whole note's, so a list of short lines
+  is judged by all of its words rather than two at a time. The first version judged whole
+  paragraphs; trying it, the owner found an English sentence next to a Romanian one unchecked,
+  and sentences replaced paragraphs. Nothing finer is possible inside one sentence: without
+  that language's dictionary, its words and a misspelling look the same.
+- **Every installed language counts.** A word is underlined only if every dictionary calls it
+  wrong. One dictionary per language: Windows lists nineteen kinds of English, and asking all
+  of them gives the same answer slower.
+- **Not everything is a word.** Links, addresses, file names, words with digits, abbreviations
+  in capitals and words the person ignored are never underlined. Neither is the word under the
+  caret while it is still being typed.
+
+#### What it never touches
+
+The underline is a Tk tag of its own. The save, the copy, the export and the undo journal read
+character formatting from a closed list of tags (`is_format_tag`), and this tag is not on it. So
+a note never reads as unsaved because of a red line, and no red line reaches the clipboard. A
+suggestion taken goes through `_undo_atom`, so the word keeps its formatting and one Ctrl+Z
+takes the whole replacement back. The ignored words live in `settings.json`: on this computer,
+not in a backup.
+
+#### When it looks, and how long it takes
+
+The editor looks after a pause in typing, a click, leaving the box, a paste, or opening a note.
+Each line's answer is kept by its text, so a pause re-reads only the line that changed. A note
+opening for the first time is read 40 lines per idle slice, and a single line longer than 4,000
+UTF-16 units is asked about in pieces. Measured: about 0.8 ms a paragraph, but 1.5 s for a
+28,000-word line asked whole. Positions are UTF-16 units throughout, which is what Windows
+reports and what a Tk Text widget's columns count — not Python characters, which differ by one
+for every emoji before the word.
+
+The moments it looks are bound on a binding tag of the spelling's own, put first among the box's
+tags. Bound on the box itself, they were silently replaced in the comments box, whose autosave
+was bound later without `add="+"`, so comments were never looked at as they were typed. The qa
+check written for typing found it.
+
+#### Tested without the machine's dictionaries
+
+The checks pin the machine's dictionaries away (qa/README's house rules) and drive the editor
+with a stand-in that knows exactly which words are wrong, so they answer the same on Windows,
+on Linux and on CI. The real checker is asked once, on Windows.
 
 ### Paste from a PDF: lines are not paragraphs
 

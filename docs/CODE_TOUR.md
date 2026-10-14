@@ -8,15 +8,16 @@ This is a companion to [ARCHITECTURE.md](ARCHITECTURE.md), which is the
 short reference version for someone who already knows the codebase. Start
 here; go there when you want the summary.
 
-> **Scope:** the data and rules layer is fully extracted — all fifteen
+> **Scope:** the data and rules layer is fully extracted — all seventeen
 > `core/` modules below are covered here in depth. The user interface has
-> since been split too: six areas now live in `noteorganizer/ui/` as mixins
+> since been split too: seven areas now live in `noteorganizer/ui/` as mixins
 > (calculator panel, Settings page, dialogs/popups, calendar, attachments,
-> the note list), while `note_organizer.py` stays the entry point and the
-> shared UI hub the rest hangs off. This tour walks the `core/` modules; the
-> `ui/` mixins are plain cut-and-paste moves of methods that already lived
-> on the class, so they read the same as they did in the single file — see
-> [ARCHITECTURE.md](ARCHITECTURE.md) for how the six were chosen.
+> the note list, spelling), while `note_organizer.py` stays the entry point
+> and the shared UI hub the rest hangs off. This tour walks the `core/`
+> modules; six of the `ui/` mixins are plain cut-and-paste moves of methods
+> that already lived on the class, so they read the same as they did in the
+> single file — see [ARCHITECTURE.md](ARCHITECTURE.md) for how those six
+> were chosen. The seventh, spelling, was written there from the start.
 
 ## Contents
 
@@ -28,6 +29,7 @@ here; go there when you want the summary.
 - [`noteorganizer/core/themes.py`](#noteorganizercorethemespy)
 - [`noteorganizer/core/formatting.py`](#noteorganizercoreformattingpy)
 - [`noteorganizer/core/richtext.py` and `core/clipboard.py`](#noteorganizercorerichtextpy-and-coreclipboardpy)
+- [`noteorganizer/core/spelling.py` and `core/winspell.py`](#noteorganizercorespellingpy-and-corewinspellpy)
 - [`noteorganizer/core/tables.py`](#noteorganizercoretablespy)
 - [`noteorganizer/core/sharing.py`](#noteorganizercoresharingpy)
 - [`noteorganizer/core/duplicates.py`](#noteorganizercoreduplicatespy)
@@ -65,9 +67,10 @@ To run every test — units + qa1–qa9 — safely in a scratch copy:
 py tools/run_tests.py
 ```
 
-The seven unit suites — `test_recurrence`, `test_calculator`,
+The eight unit suites — `test_recurrence`, `test_calculator`,
 `test_data_safety`, `test_richtext`, `test_tables`, `test_note_identity`,
-`test_entry_module_identity` — also run individually (`py test_<name>.py`).
+`test_spelling`, `test_entry_module_identity` — also run individually
+(`py test_<name>.py`).
 See [qa/README.md](../qa/README.md) for the map of the whole suite,
 and the QA safety rule in `CLAUDE.md` before running any test by hand —
 the GUI tests delete data files in whatever folder they run from.
@@ -86,6 +89,8 @@ noteorganizer/
 │   ├── formatting.py     how rich-text spans are stored on a note
 │   ├── richtext.py       HTML in and out, for paste, copy and export
 │   ├── clipboard.py      the Windows clipboard's richer formats
+│   ├── spelling.py       which misspellings to show, and which to leave alone
+│   ├── winspell.py       Windows' own spell checker, through COM
 │   ├── tables.py         tables as lines of text (pipes are the store)
 │   ├── sharing.py        share codes, and the guards that make import safe
 │   ├── duplicates.py     deciding when two notes are the same note
@@ -101,11 +106,12 @@ noteorganizer/
     ├── dialogs.py           the hand-built dialogs and popups
     ├── calendar_view.py     the Calendar tab
     ├── note_list.py         the note list: cards drawn on one canvas
-    └── attachments.py       the attachments section
+    ├── attachments.py       the attachments section
+    └── spelling.py          the red underline, and its right-click menu
 docs/                     these documents
 └── archive/              two finished registers, kept as history
 qa/                       headless GUI tests, the stories and the test plan
-test_*.py                 seven unit suites; six need no window
+test_*.py                 eight unit suites; seven need no window
 tools/                    what CI runs, and the tools behind the docs' numbers
 ├── check_*.py            nine static gates: eight in CI, the link check before a push
 ├── pre_push_check.py     the gates, locally, in seconds (links in, mutant targets left to CI)
@@ -634,6 +640,45 @@ and anything that does not look wrapped comes back byte-for-byte.
 `test_richtext.py` — needs no window and no clipboard, and covers
 `reflow_wrapped()`'s property (nothing lost, nothing split) across many
 widths.
+
+## `noteorganizer/core/spelling.py` and `core/winspell.py`
+
+**What they're for.** The red underline under a misspelled word, split the
+same way the clipboard is: a small platform part, and the decisions in a
+part that tests without Windows.
+
+`winspell.py` reaches the spell checker Windows already has — one per
+language the person installed — through COM, with `ctypes`, so no
+dictionary ships with the app and nothing new is installed. Every function
+returns an empty answer off Windows or on any failure. The one call that
+writes, `Speller.add`, puts a word in the person's own Windows dictionary,
+and runs only when they choose "Add to Windows dictionary".
+
+`spelling.py` decides what to do with the answers, and most of it is about
+staying quiet:
+
+- `visible_errors()` leaves a sentence alone when most of its words are
+  unknown — it is in a language the computer has no dictionary for — so an
+  English sentence beside it keeps its underlines. A sentence too short to
+  judge takes its paragraph's verdict, and a short paragraph the whole
+  note's, so a list of short lines in another language is judged by all of
+  its words. `sentence_spans()` cuts a line into its sentences.
+- `line_errors()` keeps a range only when every installed language calls
+  it wrong, and `pick_languages()` keeps one dictionary per language
+  (Windows lists nineteen kinds of English).
+- `worth_flagging()` turns down links, addresses, file names, words with
+  digits, abbreviations in capitals, and the words ignored on this computer.
+
+Positions are counted in UTF-16 units throughout, which is what Windows
+reports and what a Tk Text widget's columns count; `utf16_slice()` cuts
+text the same way. The editor's side — when to look, the menu — is
+`ui/spelling.py`.
+
+### Where it's tested
+
+`test_spelling.py` needs no window and no Windows: the dictionaries are
+stood in for. qa6 drives the editor with a stand-in that knows exactly which
+words are wrong, and asks the real checker once, on Windows.
 
 ## `noteorganizer/core/tables.py`
 

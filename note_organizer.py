@@ -47,7 +47,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.93.374"
+APP_VERSION = "0.94.374"
 
 
 def parse_version(v):
@@ -334,6 +334,7 @@ from noteorganizer.ui.calendar_view import CalendarViewMixin
 from noteorganizer.ui.dialogs import DialogsMixin
 from noteorganizer.ui.settings_page import SettingsPageMixin
 from noteorganizer.ui.note_list import NoteListMixin
+from noteorganizer.ui.spelling import SpellingMixin
 
 
 # ---- Note schema + one-time cleanup ----
@@ -731,7 +732,8 @@ def _table_edge_holds(app, index):
 
 
 class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
-                    DialogsMixin, NoteListMixin, SettingsPageMixin, tk.Tk):
+                    DialogsMixin, NoteListMixin, SettingsPageMixin, SpellingMixin,
+                    tk.Tk):
     def __init__(self):
         # Make sure the data layer is open before anything reads it. Safe to
         # call repeatedly; _main() calls it too.
@@ -2118,6 +2120,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         def popup(event):
             try:
                 text_widget.focus_set()
+                # A misspelled word under the pointer brings its
+                # suggestions to the top (ui/spelling.py).
+                self._spell_menu(text_widget, menu, event)
                 menu.tk_popup(event.x_root, event.y_root)
             finally:
                 menu.grab_release()
@@ -7386,6 +7391,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return True
 
     @_undo_atom
+    def _spell_replace_body(self, start, end, new):
+        """A spelling suggestion taken in the note: *new* replaces the text
+        from *start* to *end* in that text's own formatting -- a bold
+        misspelling stays bold, corrected -- as one step Ctrl+Z takes back
+        whole, formatting and all."""
+        b = self.body_text
+        tags = tuple(t for t in b.tag_names(start)
+                     if t not in ("sel", self.SPELL_TAG))
+        b.delete(start, end)
+        b.insert(start, new, tags)
+        self.update_word_count()
+
+    @_undo_atom
     def _paste_plain(self, event=None):
         """Paste the clipboard's text with none of its formatting.
 
@@ -12550,6 +12568,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # (the cells' own recipe); the new surface needs a re-blend.
         if hasattr(self, "body_text"):
             self._retint_highlight_tags(self.body_text)
+        # The spelling underline is a tag's colour, which no tracked widget
+        # option reaches.
+        self._spell_recolor()
         # The editor's quick toggle shows where a press would take you.
         if hasattr(self, "editor_theme_btn"):
             try:
@@ -14382,6 +14403,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             ("Text color…", lambda: self._open_color_swatch_popup("text_color")),
             ("Highlight…", lambda: self._open_color_swatch_popup("highlight")),
         ])
+        self._spell_setup(self.body_text)
         self.update_word_count()
 
         # How tall the writing area should be is a property of the note, not
@@ -14471,6 +14493,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.comments_text.pack(side="left", fill="both", expand=True)
         self._bind_text_wheel(self.comments_text)
         self._add_paste_menu(self.comments_text)
+        self._spell_setup(self.comments_text)
         self._bind_text_selection_fixes(self.comments_text)
         # Comments never render tables (only the body does), so a pasted
         # table used to land as raw pipe soup. Strip table rows out of a
@@ -18560,6 +18583,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._find_on_context_switch(leaving=not same_session)
         self._share_code_on_context_switch()
         self._update_occurrence_banner()
+        self._spell_schedule_all()
 
     # ---------- Right-click context menu ----------
     def duplicate_note(self, note):

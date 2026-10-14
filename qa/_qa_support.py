@@ -52,6 +52,11 @@ The rules that close it
     Windows the app's module already reads nothing and writes nothing, so
     it is left as it is: the app's fallback to Tk is what runs there.
 
+    The spelling dictionaries: Windows' are this machine's languages, and
+    a Linux runner has none, so a check near a misspelling would answer
+    differently on each. No dictionary at all here; the spelling checks
+    give their app a stand-in that knows exactly which words are wrong.
+
     The keyboard cannot be pinned: a test app can hold the focus while
     someone types. Every key a keyboard sends is noted instead
     (``REAL_KEYS``) and said when the run ends, so a red that came from
@@ -225,6 +230,12 @@ def pin_the_desktop(NO):
     cls = NO.NoteOrganizer
     _answer_what_waits(cls)
     cls._foreground_is_ours = lambda self: True
+    # The machine's spelling dictionaries are the desktop's too: an English
+    # Windows underlines what a Linux runner never does, so a check that
+    # touched a misspelling would take its verdict from the machine. No
+    # dictionary here; the spelling checks give an app one of their own
+    # (app._spellers_found), whose every word they know.
+    cls._spellers_found = []
     # Every app the script builds may take any size a check asks for. Tk caps
     # a window at the size of its screen, and a CI runner's screen is smaller
     # than the windows the checks ask for: a request past it is cut, in silence.

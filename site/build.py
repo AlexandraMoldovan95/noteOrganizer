@@ -157,8 +157,8 @@ def project_numbers(repo):
 
     with open(os.path.join(repo, "tools", "mutants.json"), encoding="utf-8") as f:
         mutants = json.load(f)
-    # Entries whose id starts with S test the runner itself (S01, S02).
-    numbers["mutants"] = sum(1 for m in mutants if not str(m.get("id", "")).startswith("S"))
+    # The two entries marked self_test test the runner itself.
+    numbers["mutants"] = sum(1 for m in mutants if not m.get("self_test"))
 
     workflow = read(os.path.join(repo, "docs", "AI_WORKFLOW.md"))
     match = re.search(r"About ([0-9][0-9,]*) checks", workflow)
