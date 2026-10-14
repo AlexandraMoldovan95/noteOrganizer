@@ -242,9 +242,9 @@ class SpellingMixin:
     # ---- the right-click menu ----
 
     def _spell_menu(self, widget, menu, event):
-        """Put the word's suggestions, Ignore and Add to dictionary at the
-        top of *widget*'s right-click menu when it opens on an underlined
-        word; take them away again when it opens anywhere else."""
+        """Put the word's suggestions, Ignore and Add to Windows dictionary
+        at the top of *widget*'s right-click menu when it opens on an
+        underlined word; take them away again when it opens anywhere else."""
         count = getattr(menu, "_spell_items", 0)
         if count:
             menu.delete(0, count - 1)
@@ -275,7 +275,10 @@ class SpellingMixin:
         if not suggestions:
             add(label="No suggestions", state="disabled")
         add(label="Ignore “%s”" % word, command=lambda: self._spell_ignore(word))
-        add(label="Add to dictionary", command=lambda: self._spell_add(word))
+        # "Windows" in the label: the word is not kept by this app but by
+        # Windows, and every other program that asks Windows' checker
+        # stops underlining it too.
+        add(label="Add to Windows dictionary", command=lambda: self._spell_add(word))
         menu.insert_separator(position)
         menu._spell_items = position + 1
 
@@ -312,10 +315,11 @@ class SpellingMixin:
         spellers = self._spellers()
         if spellers and spellers[0].add(word):
             self._spell_cache = {}
-            self._show_toast("Added “%s” to your Windows dictionary" % word)
+            self._show_toast("Added “%s” to the Windows dictionary — other "
+                             "programs know it too" % word)
             self._spell_schedule_all()
         else:
-            self._show_toast("Could not add “%s” to the dictionary" % word,
+            self._show_toast("Could not add “%s” to the Windows dictionary" % word,
                              kind="error")
 
     # ---- Settings -> Appearance -> Spelling ----

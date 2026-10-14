@@ -3524,8 +3524,8 @@ _sp_settle()
 check(f'...and the comments box is looked at as it is typed in, too '
       f'({_sp_lines(_sp_c)})', 'Anothr' in _sp_lines(_sp_c))
 
-# The right-click menu: suggestions first, then Ignore and Add to dictionary,
-# and none of it when the menu opens anywhere else.
+# The right-click menu: suggestions first, then Ignore and Add to Windows
+# dictionary, and none of it when the menu opens anywhere else.
 _sp_menu = next(c for c in _sp_b.winfo_children() if c.winfo_class() == 'Menu')
 import types
 
@@ -3544,9 +3544,9 @@ _sp_bold_at = _sp_b.search('boldd', '1.0')
 _sp_on_word = _sp_menu_at(_sp_bold_at)
 _sp_elsewhere = _sp_menu_at(_sp_b.search('letters', '1.0'))
 check(f'right-clicking an underlined word puts its suggestions, Ignore and Add to '
-      f'dictionary first ({_sp_on_word[:4]}), and right-clicking anywhere else '
-      f'shows the menu as it always was ({_sp_elsewhere[:2]})',
-      _sp_on_word[:4] == ['bold', 'Ignore “boldd”', 'Add to dictionary', '---']
+      f'Windows dictionary first ({_sp_on_word[:4]}), and right-clicking anywhere '
+      f'else shows the menu as it always was ({_sp_elsewhere[:2]})',
+      _sp_on_word[:4] == ['bold', 'Ignore “boldd”', 'Add to Windows dictionary', '---']
       and _sp_elsewhere[:2] == ['Cut', 'Copy'])
 _sp_menu_at(_sp_bold_at)
 _sp_menu.invoke(0)
@@ -3578,10 +3578,11 @@ check(f'Ignore stops underlining the word in any case, and is kept in settings f
       'teh' in _sp_kept and 'teh' not in _sp_lines(_sp_b))
 app._spell_add('tommorow')
 _sp_settle()
-check(f'Add to dictionary hands the word to the dictionary, and its line goes '
+check(f'Add to Windows dictionary hands the word to the dictionary, its line goes, '
+      f'and the toast says other programs know it too '
       f'({_sp_dict.added}; {_sp_lines(_sp_b)}; "{app.toast_lbl.cget("text")}")',
       _sp_dict.added == ['tommorow'] and 'tommorow' not in _sp_lines(_sp_b)
-      and 'Added' in app.toast_lbl.cget('text'))
+      and 'other programs know it too' in app.toast_lbl.cget('text'))
 
 # The theme's red, and Settings' switch.
 _sp_theme = app.theme_name

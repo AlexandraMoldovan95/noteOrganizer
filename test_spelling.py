@@ -79,10 +79,17 @@ check("...and no dictionary at all reports nothing",
 # German, standing for any language the computer has no dictionary for: an
 # English dictionary flags most of its words.
 import re
+
+
+def _unknown(text, known):
+    """What a dictionary that knows only *known* calls wrong in *text*."""
+    return [(m.start(), len(m.group())) for m in re.finditer(r"[^\W\d_]+", text)
+            if m.group() not in known]
+
+
 _de = ("Morgen fr\u00fch gehen wir auf den Markt und kaufen frisches "
        "Gem\u00fcse f\u00fcr die Suppe am Sonntag")
-_de_errors = [(m.start(), len(m.group())) for m in re.finditer(r"[^\W\d_]+", _de)
-              if m.group() not in ("am", "die", "den", "Markt")]
+_de_errors = _unknown(_de, {"am", "die", "den", "Markt"})
 check("a paragraph where most words are unknown shows nothing",
       spelling.visible_errors([_de], [_de_errors]) == {})
 _en = "I recieve teh letters every Tuesday and the meeting is at noon"
@@ -99,6 +106,33 @@ check("a note of short lines in another language is judged whole, and shows "
 check("...while one foreign word in a short English line is underlined",
       spelling.visible_errors(["Buy milk and Brot", "Call Ana tomorrow morning please"],
                               [[(13, 4)], []]) == {0: [(13, 4)]})
+# Sentence by sentence: an English sentence beside a German one keeps its typo
+# underlined, though the paragraph -- here the whole note -- is mostly unknown
+# words.
+_mix = ("I recieve the letters every day. Morgen früh gehen wir auf den Markt "
+        "und kaufen Gemüse am Sonntag.")
+_mix_errors = _unknown(_mix, {"I", "the", "letters", "every", "day", "den", "am"})
+check("a paragraph of mostly unknown words still shows the typo in its English "
+      "sentence, and nothing in its German one",
+      spelling.is_foreign(spelling.word_count(_mix), len(_mix_errors))
+      and spelling.visible_errors([_mix], [_mix_errors]) == {0: [(2, 7)]})
+check("...and so does a note of two such paragraphs",
+      spelling.visible_errors([_mix, _de], [_mix_errors, _de_errors]) == {0: [(2, 7)]})
+# The note around it is mostly English, so only the paragraph can say that
+# "Ja." is not English.
+_ja = "Ja. Morgen gehen wir auf den Markt."
+check("a sentence too short to judge takes its paragraph's verdict: quiet in a "
+      "German paragraph",
+      spelling.visible_errors([_ja, _en], [_unknown(_ja, ()), _en_errors])
+      == {1: [(2, 7), (10, 3)]})
+check("...and shown in an English one",
+      spelling.visible_errors(["Teh. I bought the bread and the milk today."],
+                              [[(0, 3)]]) == {0: [(0, 3)]})
+check("a line's sentences cover the whole of it, in UTF-16 units",
+      spelling.sentence_spans("One two. Three \U0001F389 four! Five")
+      == [(0, 8), (8, 23), (23, 28)])
+check("...and a line with no sentence end is one sentence",
+      spelling.sentence_spans("no full stop here") == [(0, 17)])
 check("a line not checked at all (a table row) counts for nothing",
       spelling.visible_errors(["| a | b |", _en], [None, _en_errors]) == {1: [(2, 7), (10, 3)]})
 check("the judgement is in words, not in characters: three short unknown words "

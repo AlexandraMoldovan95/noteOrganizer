@@ -11,12 +11,16 @@ A spell checker that underlines everything it does not know is worse than
 none: a note written in a language the computer has no dictionary for
 comes out red from end to end. So the rules here are about staying quiet:
 
-* **Another language is left alone.** When most of a paragraph's words are
-  unknown, the paragraph is in a language this computer cannot check, and
-  nothing in it is underlined. The same is asked of the note as a whole, so
-  a note of short lines -- a shopping list in Romanian -- is judged by all
-  of its words, not by two at a time. A Romanian paragraph read as English
-  had 17 of its 21 words flagged; an English one with three typos, 3 of 15.
+* **Another language is left alone.** When most of a sentence's words are
+  unknown, the sentence is in a language this computer cannot check, and
+  nothing in it is underlined -- while an English sentence beside it, in
+  the same paragraph, keeps its own underlines. A sentence too short to
+  tell ("Yes.") takes its paragraph's verdict, and the note as a whole is
+  asked too, so a note of short lines -- a shopping list in Romanian -- is
+  judged by all of its words, not by two at a time. A Romanian paragraph
+  read as English had 17 of its 21 words flagged; an English one with three
+  typos, 3 of 15. Within one sentence nothing finer can be done without
+  that language's own dictionary: its words are simply unknown.
 * **Every installed language counts.** A word is wrong only if every
   dictionary Windows has calls it wrong (line_errors), one dictionary per
   language (pick_languages): Windows offers nineteen kinds of English, and
@@ -43,8 +47,9 @@ SPELLING_IGNORED_SETTING = "spelling_ignored"
 # with it.
 PIECE_UNITS = 4000
 
-# A paragraph shorter than this says too little about its language to be
-# judged on its own; the note's verdict covers it.
+# A sentence or a paragraph shorter than this says too little about its
+# language to be judged on its own: a sentence takes its paragraph's verdict,
+# a paragraph the whole note's.
 MIN_WORDS_TO_JUDGE = 4
 # More than this share of the words unknown, and the text is taken to be in
 # a language the computer has no dictionary for.
@@ -174,8 +179,15 @@ def visible_errors(lines, results, ignored=()):
     ranges every dictionary called wrong (line_errors), or None for a line
     that is not checked at all (a table row). Returns {line index: [(start,
     length), ...]} in UTF-16 units, after the rules this module is for: a
-    note that reads as another language shows nothing, nor does such a
-    paragraph, nor anything worth_flagging turns down."""
+    sentence that reads as another language shows nothing, and neither does
+    anything worth_flagging turns down.
+
+    Each verdict is asked of the smallest text long enough to give one. A
+    sentence of MIN_WORDS_TO_JUDGE words or more is judged on its own, so an
+    English sentence beside one in another language keeps its underlines. A
+    shorter sentence ("Yes.") takes its paragraph's verdict, and a paragraph
+    too short to judge takes the whole note's: a shopping list of one word a
+    line is judged by all of its words, not by one at a time."""
     words = errors = 0
     counted = []
     for text, ranges in zip(lines, results):
@@ -186,17 +198,49 @@ def visible_errors(lines, results, ignored=()):
         counted.append(n)
         words += n
         errors += len(ranges)
-    if words >= MIN_WORDS_IN_NOTE and errors > FOREIGN_SHARE * words:
-        return {}
+    note_foreign = words >= MIN_WORDS_IN_NOTE and errors > FOREIGN_SHARE * words
     shown = {}
     for index, (text, ranges, n) in enumerate(zip(lines, results, counted)):
-        if not ranges or is_foreign(n, len(ranges)):
+        if not ranges:
             continue
-        keep = [(s, length) for s, length in ranges
-                if worth_flagging(utf16_slice(text, s, length), ignored)]
+        if n >= MIN_WORDS_TO_JUDGE:
+            paragraph_foreign = is_foreign(n, len(ranges))
+        else:
+            paragraph_foreign = note_foreign
+        keep = []
+        for start, end in sentence_spans(text):
+            inside = [r for r in ranges if start <= r[0] < end]
+            if not inside:
+                continue
+            sentence_words = word_count(utf16_slice(text, start, end - start))
+            if sentence_words >= MIN_WORDS_TO_JUDGE:
+                foreign = is_foreign(sentence_words, len(inside))
+            else:
+                foreign = paragraph_foreign
+            if not foreign:
+                keep += [(s, length) for s, length in inside
+                         if worth_flagging(utf16_slice(text, s, length), ignored)]
         if keep:
             shown[index] = keep
     return shown
+
+
+# A sentence ends at a full stop, a question or exclamation mark or an
+# ellipsis, with a space (or the end of the line) after it.
+_SENTENCE_END = re.compile(r"[.!?…]+(?=\s|$)")
+
+
+def sentence_spans(text):
+    """The sentences of a line, as (start, end) in UTF-16 units, covering
+    the whole of it: every position belongs to exactly one."""
+    spans, start = [], 0
+    for m in _SENTENCE_END.finditer(text):
+        end = m.end()
+        spans.append((utf16_units(text[:start]), utf16_units(text[:end])))
+        start = end
+    if start < len(text) or not spans:
+        spans.append((utf16_units(text[:start]), utf16_units(text)))
+    return spans
 
 
 def range_at(ranges, column):

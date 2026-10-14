@@ -24,7 +24,7 @@ THE ONE CALL THAT WRITES
 ------------------------
 Speller.add puts a word in the person's Windows dictionary, shared with
 every program that uses this checker. It runs only when someone chooses
-"Add to dictionary"; tests use a stand-in, never this.
+"Add to Windows dictionary"; tests use a stand-in, never this.
 """
 
 import sys

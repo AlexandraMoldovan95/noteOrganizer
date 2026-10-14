@@ -3517,7 +3517,7 @@
   },
   {
     "id": "SP02",
-    "about": "a paragraph in a language with no dictionary is underlined word after word",
+    "about": "text in a language with no dictionary is underlined word after word",
     "edits": [{"file": "noteorganizer/core/spelling.py",
                "find": "    return words >= MIN_WORDS_TO_JUDGE and errors > FOREIGN_SHARE * words\n",
                "replace": "    return False\n"}],
@@ -3529,8 +3529,8 @@
     "id": "SP03",
     "about": "a note of short lines in another language is judged line by line, and underlined",
     "edits": [{"file": "noteorganizer/core/spelling.py",
-               "find": "    if words >= MIN_WORDS_IN_NOTE and errors > FOREIGN_SHARE * words:\n        return {}\n",
-               "replace": ""}],
+               "find": "    note_foreign = words >= MIN_WORDS_IN_NOTE and errors > FOREIGN_SHARE * words\n",
+               "replace": "    note_foreign = False\n"}],
     "must_fail": ["a note of short lines in another language is judged whole"],
     "suites": ["test_spelling"],
     "expect": "killed"
@@ -3728,7 +3728,7 @@
     "edits": [{"file": "noteorganizer/ui/spelling.py",
                "find": "            self._spell_cache = {}\n            self._show_toast(",
                "replace": "            self._show_toast("}],
-    "must_fail": ["Add to dictionary hands the word to the dictionary"],
+    "must_fail": ["Add to Windows dictionary hands the word to the dictionary"],
     "suites": ["qa6"],
     "expect": "killed"
   },
@@ -3740,6 +3740,36 @@
                "replace": "        self._update_occurrence_banner()\n"}],
     "must_fail": ["misspelled words in the note and its comments are underlined"],
     "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SP24",
+    "about": "a paragraph is judged whole, so an English sentence beside a foreign one loses its underlines",
+    "edits": [{"file": "noteorganizer/core/spelling.py",
+               "find": "        for start, end in sentence_spans(text):\n",
+               "replace": "        for start, end in [(0, utf16_units(text))]:\n"}],
+    "must_fail": ["a paragraph of mostly unknown words still shows the typo in its English sentence"],
+    "suites": ["test_spelling"],
+    "expect": "killed"
+  },
+  {
+    "id": "SP25",
+    "about": "a sentence too short to tell its language is judged as English, and underlined in a foreign paragraph",
+    "edits": [{"file": "noteorganizer/core/spelling.py",
+               "find": "                foreign = paragraph_foreign\n",
+               "replace": "                foreign = False\n"}],
+    "must_fail": ["a sentence too short to judge takes its paragraph's verdict"],
+    "suites": ["test_spelling"],
+    "expect": "killed"
+  },
+  {
+    "id": "SP26",
+    "about": "a paragraph long enough to judge takes the whole note's verdict instead of its own",
+    "edits": [{"file": "noteorganizer/core/spelling.py",
+               "find": "            paragraph_foreign = is_foreign(n, len(ranges))\n",
+               "replace": "            paragraph_foreign = note_foreign\n"}],
+    "must_fail": ["a sentence too short to judge takes its paragraph's verdict"],
+    "suites": ["test_spelling"],
     "expect": "killed"
   }
 ]
