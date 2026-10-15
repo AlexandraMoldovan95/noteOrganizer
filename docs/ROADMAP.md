@@ -503,6 +503,18 @@ rebuilds what it did not before. **Do not reach for a rendering trick here** —
 the three reverted attempts were. The only thing that removes this is not being Tkinter, which is a
 decision of a different size and lives under [Under consideration](#under-consideration).
 
+*Tables, 2026-10-15.* The owner saw the switch flicker more on a note with tables, and it did:
+`apply_theme` rebuilt every drawn table, and a rebuilt table appears late — caught mid-switch, a
+table was simply gone for a frame. Tables are now repainted in place
+([Theme tracking](ARCHITECTURE.md#theme-tracking--two-different-patterns-on-purpose)). What
+remains was measured by reading two pixels every 9 ms, one in a table and one on the page beside
+it, over twelve switches: in about a third of them the two disagree for 10–20 ms, because the
+repaint after a switch takes ~23 ms, longer than one screen frame. A note without tables shows the
+same in smaller pieces (the colour button, a scrollbar). Two more ways were tried and dropped:
+repainting the tables next to the note's text changed nothing measurable, and Windows painting
+the whole window off screen (`WS_EX_COMPOSITED`) stopped the app from finishing its start. Left as
+it is — the owner's call.
+
 **Sharp on one screen's scale only** — with Sharp text on, the app is drawn for the main screen's
 scale, and Windows resizes it as a picture on a second screen at another scale, a little soft
 there. Being sharp on every screen would need the app to rebuild every font and size when its
