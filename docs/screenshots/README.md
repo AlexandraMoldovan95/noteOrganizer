@@ -69,7 +69,9 @@ day first, both calendar pictures on the month they stage and nothing cut
 at the bottom edge. On 2026-10-09 the search picture was retaken with three
 matches, Statistics with a "since" date inside the app's own lifetime, and
 two were added (the main window on a light theme, a search that matches
-nothing). Update this line whenever the set is recaptured.
+nothing). On 2026-10-15 `theme-picker.png` was retaken by the same script,
+on 0.94.379, to show the Sharp text and Spelling rows added since. Update
+this line whenever the set is recaptured.
 
 | Filename | What to capture |
 |---|---|
