@@ -86,6 +86,29 @@ the app's own reader on every code the demo made, and the demo's reader on
 codes the app made (its welcome note, a table, colours). The first run writes
 the app's codes, the second reads the demo's.
 
+## The feedback form
+
+`src/feedback.html` is the page **Settings → About → Send feedback** opens.
+Netlify keeps what is sent and forwards it by email, so no address appears
+on the page or in the app. The app adds its details to the link (version,
+Windows, screen scale, theme, how big the notebook is — never a note's
+words); `feedback.js` shows them under the form and puts them in its hidden
+fields, and the build refuses a page without a field for every detail the
+app sends (`DETAIL_KEYS` in `noteorganizer/core/diagnostics.py`). A hidden
+field named `company` is a trap for robots: Netlify drops what fills it.
+
+Set up once, after the first deploy that carries the page:
+
+1. On Netlify, open the project, then **Forms**, and turn on **form
+   detection**. Deploy again, so Netlify reads the form.
+2. In **Forms → Form notifications**, add an **email notification** to the
+   project's own address (not a personal one: answers go out from it too).
+3. Send a test message from the app (Settings → About → Send feedback) and
+   check that it arrives.
+
+Form submissions may count against the account's credits too, as deploys
+do.
+
 ## When the repository becomes public
 
 Put its address in `site.json` (`"repo_url": "https://github.com/..."`) and

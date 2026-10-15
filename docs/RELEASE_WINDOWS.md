@@ -36,6 +36,15 @@ This MSIX package version is separate from, and doesn't need to match, the app's
 
 Source: [Microsoft Learn — App package requirements for MSIX apps](https://learn.microsoft.com/en-us/windows/apps/publish/publish-your-app/msix/app-package-requirements)
 
+Two things wait for the listing, when there is one:
+
+- **The support contact** the listing asks for is the project's own address (the one the
+  feedback form forwards to — see [site/README.md](../site/README.md#the-feedback-form)), never a
+  personal one.
+- **The review button.** `STORE_REVIEW_URL` in `noteorganizer/core/diagnostics.py` is `None`
+  until the app has a Store page; set to that page's review link, **Settings → About** shows
+  **Rate on the Store** beside Send feedback.
+
 ## Alternatives to the Microsoft Store
 
 None of these are decided on — just what exists, for when the choice comes up:

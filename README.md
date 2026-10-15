@@ -22,8 +22,9 @@ dependency (Pillow, for images).
 ## What it is
 
 A notes app that keeps everything on your own computer: no account, no
-cloud, no network calls. For people who want their notes, lists and dates
-in one place they control.
+cloud, no network calls — **Send feedback** only opens a page in your
+browser. For people who want their notes, lists and dates in one place
+they control.
 
 - Notes with bold, italic, colours, headings and lists; tables you edit in
   place; checklists; spelling checked with Windows' own dictionaries, and

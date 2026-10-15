@@ -103,6 +103,34 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+### Added
+
+- **Send feedback, from Settings → About.** A short form opens in your browser: what happened,
+  what it is about (lost words, slow, does not work, looks wrong, an idea), and your email only if
+  you would like an answer. Under your words it shows the few details the app adds by itself —
+  its version, your Windows, the screen scale, the theme and how big your notebook is — and
+  nothing from your notes. The app still connects to nothing; it only opens the page. If the
+  browser cannot be opened, the link is copied instead.
+
+### Changed
+
+- **Every entry in crash_log.txt says which version and what size of notebook it came from**, on
+  a line under its date — never a note's words or a folder's path. The four places that wrote
+  the log, each in its own way, now write it through one function, and a crash before the data
+  folder is known no longer takes the crash window down with it.
+- The bug form on GitHub asks how many notes you have, and offers "It is slow or freezes for a
+  moment".
+
+### Testing
+
+- `test_data_safety` checks what the feedback link and a crash log carry — and that a note's
+  words, a file name or a path never get in, even when the app hands them over — that a crash
+  log survives a broken details function and an unknown data folder, and that nothing but
+  `core/diagnostics.py` writes `crash_log.txt`. qa6 presses Send feedback with the browser stood
+  in for, on a browser that will not open, and on the Store button that waits for a Store page.
+  The site's build refuses a feedback page missing a field for any detail the app sends. Mutants
+  FB01–FB10.
+
 ---
 
 ## [0.94.382] — 2026-10-15
