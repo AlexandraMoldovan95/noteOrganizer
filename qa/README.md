@@ -427,7 +427,11 @@ A new surface joins this list the moment it ships.
   in CI, the export panel's with them. A check that needs work still in
   flight holds off what would finish it (here the poll); a check about
   what the app showed records the call (the panel's `place`), not the
-  screen after an `update()`.
+  screen after an `update()`. A check about work still running when the
+  close stops waiting holds the worker itself: qa3 wraps its file in a
+  reader that waits for the stop before reading (`_Held`), a huge file
+  without one. A real 600 MB file would make the check a race against the
+  machine's disk, and the run slow.
 - **A job attribute answers only for the timer it tracks — ask Tcl which
   timers wait.** A held-BackSpace check went red on the Linux runner
   alone: an autosave fired between two presses and split the run the

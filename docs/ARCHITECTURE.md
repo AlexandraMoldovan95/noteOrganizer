@@ -1095,8 +1095,9 @@ machine:
 
 The last two rows were the work fixed on 2026-10-15 (one card redrawn; one walk through the
 notebook to match an import). The rows above them are what is left: the save rewrites the whole notes
-file, and a deep rebuild draws every row above the view. Both are recorded on the
-[ROADMAP](ROADMAP.md#under-consideration) with the size at which they become worth changing.
+file, and a deep rebuild draws every row above the view. Both are on the
+[ROADMAP](ROADMAP.md#under-consideration) — "A save that writes one note" and "Note list
+virtualization" — with the size at which they become worth changing.
 
 ### Custom order: a place is written only by a move
 
@@ -1260,6 +1261,16 @@ recorded as the last one; a finished import that was never merged is dropped who
 backup leaves the temp folder, and the files the worker copied in (it records them) leave the
 attachments folder unless a note uses them. Merging at close would mean asking the import's
 questions in a window that is closing.
+
+So an import is not waited for at all: the close asks it to stop at once, since its work would
+be thrown away. An export is waited for, up to the cap, and asked to stop only if it is still
+writing then. Asking means setting `"stop"` in the worker's state dict. The worker hands zipfile
+its file wrapped in `StoppableFile` (core/sharing.py), whose next read or write raises
+`BackupStopped`, and copies attachments with `copy_file_until_stopped`. A stop is therefore
+answered between two chunks, even inside one huge file, and the worker's own error path takes its
+unfinished files away before the window goes. Before this (2026-10-15), the import ran on to the
+cap and the process then died mid-file, with the unpacked backup in the temp folder and a
+half-copied `.part` in attachments; an export cut off at the cap left its `.tmp` beside the backup.
 
 ## Autosave
 

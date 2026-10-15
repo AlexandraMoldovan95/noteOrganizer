@@ -63,6 +63,7 @@ is in the table below as well.
 | [The binding that could never fire](#the-binding-that-could-never-fire) | A binding is not an answer to "does this key work" — ask where the key goes; and a probe whose finding is an absence needs a control that produces the presence. | 0.75.183 |
 | [Eleven decisions about your notes, made from half the evidence](#eleven-decisions-about-your-notes-made-from-half-the-evidence) | When two files must agree, rebuild the weaker from the stronger; an automatic removal asks the strictest question there is; a dialog's promise is part of the mechanism. | 0.81.213 |
 | [The backup the app could not restore](#the-backup-the-app-could-not-restore) | Every limit on reading is a promise about writing: when the app makes what it later reads, one definition checks both ends. | 0.94.379 |
+| [The import the close waited for, then threw away](#the-import-the-close-waited-for-then-threw-away) | A cap on a wait is half a decision: say what happens to the work still running at the cap — and test the cleanup on the case it exists for. | — |
 | [The Cancel that went ahead anyway](#the-cancel-that-went-ahead-anyway) | A function that can be told "no" must say so to its caller; a modal dialog holds the mouse only unless the keyboard is held too; bind the end of a widget-level record to the widget's own end. | 0.82.230 |
 | [The paste that landed on top of the placeholder](#the-paste-that-landed-on-top-of-the-placeholder) | `bind()` replaces where `add="+"` accumulates, so a widget's own binding silently displaces a shared helper's; and a virtual event outranks the physical one beside it in the same bindtag. | 0.75.185 |
 | [The sweep that stopped at the edge of the Settings page](#the-sweep-that-stopped-at-the-edge-of-the-settings-page) | A fix's sibling sweep must name the surfaces it did not visit; a cap in characters is not a width; and text that wraps for the first time inherits every multi-line default the widget was hiding. | 0.81.202 |
@@ -1813,6 +1814,35 @@ formatting ceiling, an anti-bomb limit set above any real note and recorded wher
 **Takeaway:** every limit on reading is a promise about writing. When the app makes the thing it
 later reads, one definition must check both ends, or the guard that protects the import becomes
 the bug that loses the backup.
+
+### The import the close waited for, then threw away
+
+*(2026-10-15)*
+
+**Symptom:** none reported. A probe asked what closing the app leaves behind. Closed three
+seconds into importing a 600 MB backup, the window took 33 seconds to go and left 1.2 GB on
+disk: 600 MB of unpacked backup in the temp folder, and a 600 MB half-copied `.part` in the
+notebook's own attachments folder. Closed during a 600 MB export, it left a 511 MB `.tmp` beside
+the backup.
+
+**Root cause:** the close waited for a running backup worker, but only for 30 seconds, so that a
+hung one could not hold the window open. Then the process ended, and a worker still running died
+wherever it was, with nothing to take its unfinished files away. An earlier fix ("Abandoning an
+import leaves nothing behind") cleaned up after an import that finished inside the wait, which
+was the case its test built; an import still running at the cap was never built. For the import,
+the wait bought nothing even when it was long enough: the close drops an import that was never
+merged, so the half minute went on copying files that were then removed.
+
+**Fix:** the close asks the work to stop, and waits only for the answer. An import is asked at
+once. An export is waited for, as the guide promises, and asked only if it is still writing at
+the cap. The worker hands zipfile its file wrapped in a `StoppableFile`, whose next read or write
+raises once a stop is asked, so even one huge file stops between two chunks, inside zipfile's own
+loops, without reaching into them. The worker's own error path then removes what it had begun.
+The same 600 MB import now closes in about 3 seconds and leaves nothing.
+
+**Takeaway:** a cap on a wait is half a decision; the other half is what happens to the work
+still running when the cap is reached. And a cleanup tested only on work that finished in time
+has not been tested on the case it exists for.
 
 
 ## Tk & platform gotchas
