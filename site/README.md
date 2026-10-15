@@ -99,15 +99,21 @@ field named `company` is a trap for robots: Netlify drops what fills it.
 
 Set up once, after the first deploy that carries the page:
 
-1. On Netlify, open the project, then **Forms**, and turn on **form
-   detection**. Deploy again, so Netlify reads the form.
+1. On Netlify, open the project's **Forms** page
+   (`https://app.netlify.com/projects/<project name>/forms`) and select
+   **Enable form detection**. It applies from the next deploy on, so
+   deploy again, so Netlify reads the form.
 2. In **Forms → Form notifications**, add an **email notification** to the
    project's own address (not a personal one: answers go out from it too).
 3. Send a test message from the app (Settings → About → Send feedback) and
    check that it arrives.
 
-Form submissions may count against the account's credits too, as deploys
-do.
+Form submissions cost no credits: since 14 April 2026 they are free and
+unlimited on every Netlify credit plan, the free one included (Netlify's
+changelog, "Free unlimited seats on Pro, unlimited form submissions").
+Deploys still cost credits. Whether a drag-and-drop deploy is scanned for
+forms the way a built one is, Netlify's documentation does not say — the
+first test message answers it.
 
 ## When the repository becomes public
 
