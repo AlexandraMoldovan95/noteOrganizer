@@ -47,7 +47,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.94.382"
+APP_VERSION = "0.95.382"
 
 
 def parse_version(v):
@@ -70,6 +70,11 @@ def parse_version(v):
 # unaffected.
 from noteorganizer.core import paths as _core_paths
 from noteorganizer.core import single_instance
+from noteorganizer.core import diagnostics as _core_diagnostics
+
+# What crash_log.txt and the feedback page say about the app (diagnostics):
+# the version from the start, so even a crash at start-up names it.
+_core_diagnostics.version = APP_VERSION
 from noteorganizer.core.paths import (
     bundled_file,
     get_appdata_dir,
@@ -783,6 +788,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # every failure to crash_log.txt, callback or not.
         from noteorganizer.core import storage as _core_storage
         _core_storage.on_write_failure = self._on_data_write_failure
+        # And what a crash log or the feedback page says about the running
+        # app (core/diagnostics): how it draws here, how big the notebook is.
+        _core_diagnostics.app_details = self._technical_details
         self.geometry("%dx%d" % self._fit_to_screen(900, 600))
         # The smallest window that still looks like the app, measured and
         # photographed rather than guessed. The sidebar's fixed parts -- the
@@ -1432,18 +1440,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if where in seen:
             return
         seen.add(where)
-        try:
-            import traceback
-            # errors="replace": a traceback quoting editor text can carry
-            # lone surrogates (a known-real class here), and the trace
-            # writer must never raise over its own payload.
-            with open(os.path.join(APP_DIR, "crash_log.txt"), "a",
-                      encoding="utf-8", errors="replace") as f:
-                f.write(f"\n--- {datetime.now().isoformat()} "
-                        f"(swallowed: {where}) ---\n"
-                        f"{traceback.format_exc()}\n")
-        except (IOError, OSError, NameError):
-            pass
+        import traceback
+        _core_diagnostics.append_crash_log(
+            "swallowed: %s" % where, traceback.format_exc(), APP_DIR)
 
     @_holds_repeat_off
     def _autosave_now(self):
@@ -21269,12 +21268,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         top-level crash handler uses, so both end up in one place."""
         import traceback
         details = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
-        try:
-            log_path = os.path.join(APP_DIR, "crash_log.txt")
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(f"\n--- {datetime.now().isoformat()} (callback) ---\n{details}\n")
-        except (IOError, OSError, NameError):
-            pass
+        _core_diagnostics.append_crash_log("callback", details, APP_DIR)
         try:
             self._show_toast("Something went wrong with that — your other notes are safe", kind="error")
         except tk.TclError:
@@ -21545,13 +21539,10 @@ def _main():
     except Exception as exc:  # noqa: BLE001 — last-resort catch-all on purpose
         import traceback
         details = traceback.format_exc()
-        # Try to write a crash log next to the data, best-effort.
-        try:
-            log_path = os.path.join(APP_DIR, "crash_log.txt")
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(f"\n--- {datetime.now().isoformat()} ---\n{details}\n")
-        except (IOError, OSError, NameError):
-            log_path = None
+        # A crash log next to the data, best-effort: before the data folder
+        # is known there is nowhere to put it, and the window below still
+        # shows (it once raised here and never did).
+        log_path = _core_diagnostics.append_crash_log("crash", details, APP_DIR)
         try:
             root = tk.Tk()
             root.withdraw()

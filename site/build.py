@@ -631,6 +631,38 @@ OPEN_ELSEWHERE = ("Windows would not let go of %s/: something has it open -- an 
                   "this again. The site in public/ was left as it was.")
 
 
+def check_feedback_form(repo):
+    """The feedback page keeps its promises: Netlify sees the form (and its
+    trap for robots), it has a field for every detail the app sends -- the
+    app's own list, DETAIL_KEYS, read from its source -- the page's script
+    knows each one, the thank-you page exists, and the site's headers let a
+    form send to the site itself."""
+    keys = literal_assignments(
+        read(os.path.join(repo, "noteorganizer", "core", "diagnostics.py")),
+        ["DETAIL_KEYS"])["DETAIL_KEYS"]
+    problems = []
+    page = os.path.join(OUT, "feedback.html")
+    if not os.path.exists(page):
+        return ["feedback.html is missing"]
+    html = read(page)
+    script = read(os.path.join(OUT, "feedback.js"))
+    for needed in ('name="feedback"', 'data-netlify="true"', 'netlify-honeypot="company"',
+                   'name="company"', '<input type="hidden" name="form-name" value="feedback">',
+                   'action="thanks.html"'):
+        if needed not in html:
+            problems.append("feedback.html: no %s" % needed)
+    for key in keys:
+        if '<input type="hidden" name="%s">' % key not in html:
+            problems.append("feedback.html: no hidden field for the app's detail %r" % key)
+        if '["%s",' % key not in script:
+            problems.append("feedback.js: no label for the app's detail %r" % key)
+    if not os.path.exists(os.path.join(OUT, "thanks.html")):
+        problems.append("thanks.html is missing: the form's answer page")
+    if "form-action 'self'" not in read(os.path.join(OUT, "_headers")):
+        problems.append("_headers: form-action must be 'self', or the feedback form cannot send")
+    return problems
+
+
 def publish():
     """Put the checked build in public/'s place, keeping the old one until
     the new one is there."""
@@ -734,6 +766,7 @@ def main():
           fill(read(os.path.join(SRC, "index.html")), index_values, "index.html"))
 
     problems, page_count = check_output()
+    problems += check_feedback_form(repo)
     if problems:
         print("\n".join(problems))
         shutil.rmtree(STAGE, ignore_errors=True)

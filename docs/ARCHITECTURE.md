@@ -10,6 +10,7 @@ including future-me.
 - [Data layer](#data-layer)
 - [UI layer](#ui-layer)
 - [Background work: exporting and importing](#background-work-exporting-and-importing)
+- [Feedback and the crash log: what the app says about itself](#feedback-and-the-crash-log-what-the-app-says-about-itself)
 - [Autosave](#autosave)
 - [Testing](#testing)
 - [Case study: deciding the split with a call graph](#case-study-deciding-the-split-with-a-call-graph)
@@ -21,7 +22,7 @@ lives in two places: the `noteorganizer/` package — a `core/` layer of data an
 `ui/` layer of mixins — and `note_organizer.py` itself, the entry point and the UI hub the
 pieces hang off.
 
-Both layers are fully extracted: seventeen `core/` modules and seven `ui/` mixins. The annotated,
+Both layers are fully extracted: eighteen `core/` modules and seven `ui/` mixins. The annotated,
 module-by-module inventory is [the code tour's project tree](CODE_TOUR.md#the-shape-of-the-project), and
 [CODE_TOUR.md](CODE_TOUR.md) walks through the modules for someone learning the codebase. Three
 of the core modules — `richtext`, `clipboard` and `tables` — landed with the rich-text and
@@ -1286,6 +1287,26 @@ A window that is closing cannot tell anyone what it dropped, so the close writes
 file) for an import dropped or an export not finished. The next start reads it out once, with
 the other startup news in `announce_startup_changes`, and clears it. An export that finished in
 time leaves nothing.
+
+## Feedback and the crash log: what the app says about itself
+
+The app makes no network calls, and feedback does not change that. **Settings → About → Send
+feedback** opens a page on the project's site in the browser; the person writes there and
+presses Send, and the site's host (Netlify Forms) forwards the message by email. Three things
+follow from that choice, made on 2026-10-15:
+
+- **No GitHub account needed**, which most people do not have; the repository's own bug form
+  stays for people who do.
+- **The owner's address appears nowhere** — not in the app, not on the page. It lives only in
+  the host's settings, and answers go out from an address kept for the project.
+- **The person sees what is sent.** The details the app adds — version, Windows, screen scale,
+  theme, how big the notebook is — are shown under the form, and never include a note's words or
+  a path.
+
+Those details, and the head of every `crash_log.txt` entry, come from one module,
+`core/diagnostics.py`, with one list of what may be said (`DETAIL_KEYS`); the site's build refuses a
+feedback page that lacks a field for any of them. The walk through the module is in
+[CODE_TOUR](CODE_TOUR.md#noteorganizercorediagnosticspy).
 
 ## Autosave
 

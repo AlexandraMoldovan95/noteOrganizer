@@ -25,12 +25,14 @@
 
 Note Organizer is a fully offline desktop notes app: Python + Tkinter, one
 runtime dependency (Pillow, for image/GIF preview rendering). No network
-calls, no accounts, no database.
+calls, no accounts, no database. (Settings → About → Send feedback opens
+the site's feedback page in the browser; the app itself connects to
+nothing — `core/diagnostics.py`.)
 
 - **Organised as a package (split complete, stopped deliberately):** the
   app was a single file by design for most of its life; it now lives as a
   `core/` layer (data and rules; **must never import tkinter**) and a `ui/`
-  layer of mixin classes — seventeen `core/` modules and seven `ui/` mixins —
+  layer of mixin classes — eighteen `core/` modules and seven `ui/` mixins —
   with `note_organizer.py` (~21,500 lines) remaining the entry point and
   the genuinely shared UI hub, by measurement rather than by neglect (see
   `docs/ARCHITECTURE.md`'s call-graph case study for why the split stopped

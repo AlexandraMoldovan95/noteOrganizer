@@ -4191,5 +4191,106 @@
     "must_fail": ["...nor one whose export finished in time"],
     "suites": ["qa3"],
     "expect": "killed"
+  },
+  {
+    "id": "FB01",
+    "about": "the feedback link carries whatever pairs it is given, not only the details' own names",
+    "edits": [{"file": "noteorganizer/core/diagnostics.py",
+               "find": "         if key in DETAIL_KEYS and value is not None])\n",
+               "replace": "         if value is not None])\n"}],
+    "must_fail": ["a link made from any pairs at all keeps only the details' own names"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "FB02",
+    "about": "the details pass on whatever the app hands them, a path or a title into the crash log",
+    "edits": [{"file": "noteorganizer/core/diagnostics.py",
+               "find": "    return [(key, value) for key, value in out if key in DETAIL_KEYS]\n",
+               "replace": "    return out\n"}],
+    "must_fail": ["...and no note's words or path in its line of details"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "FB03",
+    "about": "a crash before the data folder is known raises inside the crash handler, and the crash window never shows",
+    "edits": [{"file": "noteorganizer/core/diagnostics.py",
+               "find": "    except Exception:  # noqa: BLE001 -- see the docstring\n        return None\n",
+               "replace": "    except OSError:\n        return None\n"}],
+    "must_fail": ["before the data folder is known, a crash log writes nothing instead of raising"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "FB04",
+    "about": "an app whose details function breaks stops every crash from being logged",
+    "edits": [{"file": "noteorganizer/core/diagnostics.py",
+               "find": "        try:\n            out.extend(pair for pair in provider() if pair[0] != \"version\")\n        except Exception:  # noqa: BLE001 -- see environment()\n            pass\n",
+               "replace": "        out.extend(pair for pair in provider() if pair[0] != \"version\")\n"}],
+    "must_fail": ["a details provider that breaks cannot stop a crash being logged"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "FB05",
+    "about": "a place writes crash_log.txt by hand again, in its own format and without the details",
+    "edits": [{"file": "noteorganizer/core/storage.py",
+               "find": "    diagnostics.append_crash_log(\"write failure\", \"%s\\n%r\" % (path, exc))\n",
+               "replace": "    open(os.path.join(paths.APP_DIR, \"crash_log.txt\"), \"a\").write(\"%s\\n%r\" % (path, exc))\n"}],
+    "must_fail": ["crash_log.txt is written in one place only"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "FB06",
+    "about": "the running app never registers its details: the feedback link and crash log lose the notebook's size and how it draws",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        _core_diagnostics.app_details = self._technical_details\n",
+               "replace": "        pass\n"}],
+    "must_fail": ["Send feedback opens the feedback page, naming the version, how the app draws and how big the notebook is"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "FB07",
+    "about": "the version is not handed over: feedback and crash logs cannot say which build they came from",
+    "edits": [{"file": "note_organizer.py",
+               "find": "_core_diagnostics.version = APP_VERSION\n",
+               "replace": "_core_diagnostics.version = None\n"}],
+    "must_fail": ["Send feedback opens the feedback page, naming the version, how the app draws and how big the notebook is"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "FB08",
+    "about": "a browser that will not open leaves nothing to paste",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "            self.clipboard_append(url)\n",
+               "replace": "            pass\n"}],
+    "must_fail": ["a browser that will not open leaves the link copied, and says so"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "FB09",
+    "about": "a Store button is shown before the app is in the Store",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "        if diagnostics.STORE_REVIEW_URL:\n",
+               "replace": "        if True:\n"}],
+    "must_fail": ["no Store button while the app is not in the Store"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "FB10",
+    "about": "the notebook's attached files are not counted",
+    "edits": [{"file": "noteorganizer/core/diagnostics.py",
+               "find": "    files = sum(len(n.get(\"attachments\") or []) for n in notes)\n",
+               "replace": "    files = 0\n"}],
+    "must_fail": ["the feedback link carries the version, how the app draws and how big the notebook is",
+                  "Send feedback opens the feedback page, naming the version, how the app draws and how big the notebook is"],
+    "suites": ["test_data_safety", "qa6"],
+    "expect": "killed"
   }
 ]

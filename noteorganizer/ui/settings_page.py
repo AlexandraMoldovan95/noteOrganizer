@@ -39,12 +39,13 @@ nav plus a content pane.
 
 import os
 import sys
+import webbrowser
 import tkinter as tk
 from tkinter import ttk
 import tkinter.font as tkfont
 from datetime import datetime, timedelta, date as date_cls
 
-from ..core import paths
+from ..core import diagnostics, paths
 from ..core.categories import (CATEGORY_COLORS, category_name_refusal,
                                persist_categories)
 from ..core.formatting import FONT_FAMILIES, FONT_SIZES
@@ -3734,9 +3735,10 @@ class SettingsPageMixin:
                 row.pack_forget()
 
     def _build_settings_about_panel(self, parent):
-        """Version, where the data lives, and the welcome note."""
+        """Version, where the data lives, the welcome note, and feedback."""
         self._settings_subtitle(
-            parent, "Version info, where your notes live, and the welcome note.")
+            parent, "Version info, where your notes live, the welcome note, and "
+                    "a way to send feedback.")
         head = tk.Frame(parent, bg=self.colors["bg"])
         self.track_theme(head, bg="bg")
         head.pack(fill="x", pady=(0, 14))
@@ -3801,3 +3803,53 @@ class SettingsPageMixin:
             "A short guide to every part of the app. Deleted, it comes back "
             "from here.", first=True)
         self._text_button(control, "Show", self.show_welcome_note).pack()
+
+        # Feedback goes through a page on the site, opened in the browser:
+        # the app itself connects to nothing (core/diagnostics).
+        talk = self._settings_card(parent)
+        control = self._card_row(
+            talk, "Feedback",
+            "Something not working, slow, or an idea? Tell us — it takes a "
+            "minute. Your browser opens a short form; nothing from your "
+            "notes is sent.", first=True)
+        self._text_button(control, "Send feedback", self._open_feedback).pack()
+        if diagnostics.STORE_REVIEW_URL:
+            control = self._card_row(
+                talk, "Rate the app", "A review in the Microsoft Store.")
+            self._text_button(
+                control, "Rate on the Store",
+                lambda: self._open_in_browser(diagnostics.STORE_REVIEW_URL)).pack()
+
+    def _technical_details(self):
+        """What the running app may say about itself (core/diagnostics): how
+        it draws on this screen, and how big the notebook is -- never what
+        the notes say."""
+        sharp = get_setting(SHARP_TEXT_SETTING, True, expect=bool)
+        return ([("scale", "%d%%" % round(self._ui_scale * 100)),
+                 ("sharp", "on" if sharp else "off"),
+                 ("theme", THEME_LABELS.get(self.theme_name, self.theme_name))]
+                + diagnostics.notebook(self.notes))
+
+    def _open_feedback(self):
+        """The feedback page, carrying the details for the form to show."""
+        self._open_in_browser(diagnostics.feedback_url())
+
+    def _open_in_browser(self, url):
+        """Open *url* in the person's browser. Where that fails, the link is
+        copied, and the words say where to paste it."""
+        try:
+            opened = webbrowser.open(url)
+        except Exception:  # noqa: BLE001 -- any failure has the same answer
+            opened = False
+        if opened:
+            self.set_status("Opened in your browser")
+            return
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(url)
+        except tk.TclError:
+            pass
+        self.show_warning(
+            "Couldn't open your browser",
+            "The link is copied. Paste it into your browser's address bar "
+            "to open the page.")

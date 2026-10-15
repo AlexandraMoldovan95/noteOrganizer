@@ -35,9 +35,9 @@ says.
 | Unit suites | Eight `test_*.py`, no window for seven of them | Every pull request | Dates, repeats, the calculator, tables, rich text, data safety, a note's identity, spelling |
 | The qa suite | Nine scripts, ~3,000 checks, driving the real app headlessly | Every pull request | What a person would notice: a note that must survive a restart, a share code or a backup; formatting and tables that must come back exactly; a question that must not lose what was typed |
 | Stories | Three scripts that press the buttons a person presses, restart the app and photograph it | On demand: by hand, or from the Actions tab | A screen that changed shape; a route nobody asked a check about |
-| Mutants | `tools/mutate.py` and its catalogue: the 321 worth re-running, and 2 that test the runner | On demand, the same way. Most mutants were one-off runs while a fix was made, named in its commit | A check that stays green with its fix taken away |
+| Mutants | `tools/mutate.py` and its catalogue: the 331 worth re-running, and 2 that test the runner | On demand, the same way. Most mutants were one-off runs while a fix was made, named in its commit | A check that stays green with its fix taken away |
 | Coverage | `tools/run_coverage.py` | Every pull request, with a floor of 80% | Code no test reaches |
-| The test plan | `NoteOrganizer_TestPlan.xlsx`, 560 cases ([an excerpt](../docs/TEST_PLAN_EXCERPT.md)) | By a person, on the built `.exe` | What needs a person: how a screen reads, the built `.exe`, real hardware — each row says whether a script already walks it |
+| The test plan | `NoteOrganizer_TestPlan.xlsx`, 564 cases ([an excerpt](../docs/TEST_PLAN_EXCERPT.md)) | By a person, on the built `.exe` | What needs a person: how a screen reads, the built `.exe`, real hardware — each row says whether a script already walks it |
 
 A fix lands with a check that fails when the fix is taken away, and a
 flaky check is treated as a bug in the check, never re-run until green
@@ -255,7 +255,9 @@ A new surface joins this list the moment it ships.
   (positioning, multi-monitor) · the toast banner, plain and carrying an
   action (Undo) · keyboard shortcuts · Settings page · statistics ·
   open-note tabs · window sizing · a scaled screen (Sharp text: sizes
-  given at 100%, drawn marks, the drawing mode chosen at start)
+  given at 100%, drawn marks, the drawing mode chosen at start) · Send
+  feedback (the site's form, opened in the browser) and what the app says
+  about itself there and in `crash_log.txt` (`core/diagnostics`)
 - **Standing invariants:** plain text is the store · `core/` never
   imports tkinter · the worker thread never touches a widget · offsets
   counted in characters · any-script input · fast on weak machines ·

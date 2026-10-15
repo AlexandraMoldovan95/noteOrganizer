@@ -8,7 +8,7 @@ This is a companion to [ARCHITECTURE.md](ARCHITECTURE.md), which is the
 short reference version for someone who already knows the codebase. Start
 here; go there when you want the summary.
 
-> **Scope:** the data and rules layer is fully extracted — all seventeen
+> **Scope:** the data and rules layer is fully extracted — all eighteen
 > `core/` modules below are covered here in depth. The user interface has
 > since been split too: seven areas now live in `noteorganizer/ui/` as mixins
 > (calculator panel, Settings page, dialogs/popups, calendar, attachments,
@@ -38,6 +38,7 @@ here; go there when you want the summary.
 - [`noteorganizer/core/categories.py`](#noteorganizercorecategoriespy)
 - [`noteorganizer/core/model.py`](#noteorganizercoremodelpy)
 - [`noteorganizer/core/welcome.py`](#noteorganizercorewelcomepy)
+- [`noteorganizer/core/diagnostics.py`](#noteorganizercorediagnosticspy)
 - [Where the app starts](#where-the-app-starts)
 
 **Short on time?** Three sections repay a quick read:
@@ -99,6 +100,7 @@ noteorganizer/
 │   ├── categories.py     the live category map
 │   ├── single_instance.py  one window per notebook (a lock on its folder)
 │   ├── welcome.py        the note a first install opens on
+│   ├── diagnostics.py    what the app says about itself: crash log, feedback
 │   └── model.py          what a note is; normalize_note validates every one
 └── ui/                   on-screen areas, as mixins NoteOrganizer inherits
     ├── calculator_panel.py  the in-note calculator panel
@@ -1154,6 +1156,41 @@ if that one was deleted.
 One thing learned building it: its icons carry no emoji variation selector
 (U+FE0F). Tk draws that character as a blank two letters wide, so "✍️ Write"
 showed a gap after the hand.
+
+---
+
+## `noteorganizer/core/diagnostics.py`
+
+**What it's for.** What the app may say about itself — when something
+goes wrong, and when someone writes in. Two readers share it, so they can
+never disagree: `crash_log.txt`, and the feedback page that **Settings →
+About → Send feedback** opens in the browser.
+
+### One list of what may be said
+
+`DETAIL_KEYS` names every detail there is: the version, the screen scale
+and Sharp text, the theme, how many notes and attached files, the notes
+file's size, the Windows, and whether it runs as the built `.exe`.
+`details()` gathers them — the version the entry file hands over as it
+loads, what only a running app knows from the function it registers
+(`app_details`, the way `storage.on_write_failure` is registered), and the
+environment — and lets through only those names. Never a note's words,
+and never a path: a folder's path holds the person's name.
+
+`feedback_url()` puts the details on the page's link, filtered by the same
+list a second time. The page itself is `site/src/feedback.html`, and
+`site/build.py` refuses to publish it unless it has a field for every
+name in `DETAIL_KEYS`. The app opens the page and nothing more; it makes
+no connection of its own.
+
+### One writer for the crash log
+
+`append_crash_log(kind, text, folder)` is the only code that writes
+`crash_log.txt` (`test_data_safety` reads every source file to hold that):
+a dated line, the details on one line, then the trace. It never raises —
+it runs where something has already failed — and a crash before the data
+folder is known writes nothing rather than taking the crash window with it,
+which a hand-written writer once did.
 
 ---
 

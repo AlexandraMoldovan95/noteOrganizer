@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.95.382](#095382--2026-10-15) | 2026-10-15 | Send feedback from Settings → About: a short form in your browser, showing what the app adds — and nothing from your notes; crash logs that say which version and what size of notebook they came from. |
 | [0.94.382](#094382--2026-10-15) | 2026-10-15 | Closing the app in the middle of a backup leaves nothing behind and the next start says so; a note with many tables opens faster, and changing the theme no longer redraws its tables. |
 | [0.94.379](#094379--2026-10-15) | 2026-10-15 | A backup of any size comes back in, and a share code is never one its import refuses; a long notebook stays quick when one note moves, a big import no longer freezes, and a day left open on the Calendar waits instead of rebuilding at every save. |
 | [0.94.374](#094374--2026-10-14) | 2026-10-14 | Misspelled words underlined with Windows' own dictionaries, quiet on sentences in a language the computer cannot check — with suggestions, Ignore, Add to Windows dictionary and a switch to turn it off. |
@@ -102,6 +103,38 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+---
+
+## [0.95.382] — 2026-10-15
+
+### Added
+
+- **Send feedback, from Settings → About.** A short form opens in your browser: what happened,
+  what it is about (lost words, slow, does not work, looks wrong, an idea), and your email only if
+  you would like an answer. Under your words it shows the few details the app adds by itself —
+  its version, your Windows, the screen scale, the theme and how big your notebook is — and
+  nothing from your notes. The app still connects to nothing; it only opens the page. If the
+  browser cannot be opened, the link is copied instead.
+
+### Changed
+
+- **Every entry in crash_log.txt says which version and what size of notebook it came from**, on
+  a line under its date — never a note's words or a folder's path. The four places that wrote
+  the log, each in its own way, now write it through one function, and a crash before the data
+  folder is known no longer takes the crash window down with it.
+- The bug form on GitHub asks how many notes you have, and offers "It is slow or freezes for a
+  moment".
+
+### Testing
+
+- `test_data_safety` checks what the feedback link and a crash log carry — and that a note's
+  words, a file name or a path never get in, even when the app hands them over — that a crash
+  log survives a broken details function and an unknown data folder, and that nothing but
+  `core/diagnostics.py` writes `crash_log.txt`. qa6 presses Send feedback with the browser stood
+  in for, on a browser that will not open, and on the Store button that waits for a Store page.
+  The site's build refuses a feedback page missing a field for any detail the app sends. Mutants
+  FB01–FB10.
 
 ---
 

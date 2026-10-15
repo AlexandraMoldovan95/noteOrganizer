@@ -86,6 +86,35 @@ the app's own reader on every code the demo made, and the demo's reader on
 codes the app made (its welcome note, a table, colours). The first run writes
 the app's codes, the second reads the demo's.
 
+## The feedback form
+
+`src/feedback.html` is the page **Settings → About → Send feedback** opens.
+Netlify keeps what is sent and forwards it by email, so no address appears
+on the page or in the app. The app adds its details to the link (version,
+Windows, screen scale, theme, how big the notebook is — never a note's
+words); `feedback.js` shows them under the form and puts them in its hidden
+fields, and the build refuses a page without a field for every detail the
+app sends (`DETAIL_KEYS` in `noteorganizer/core/diagnostics.py`). A hidden
+field named `company` is a trap for robots: Netlify drops what fills it.
+
+Set up once, after the first deploy that carries the page:
+
+1. On Netlify, open the project's **Forms** page
+   (`https://app.netlify.com/projects/<project name>/forms`) and select
+   **Enable form detection**. It applies from the next deploy on, so
+   deploy again, so Netlify reads the form.
+2. In **Forms → Form notifications**, add an **email notification** to the
+   project's own address (not a personal one: answers go out from it too).
+3. Send a test message from the app (Settings → About → Send feedback) and
+   check that it arrives.
+
+Form submissions cost no credits: since 14 April 2026 they are free and
+unlimited on every Netlify credit plan, the free one included (Netlify's
+changelog, "Free unlimited seats on Pro, unlimited form submissions").
+Deploys still cost credits. Whether a drag-and-drop deploy is scanned for
+forms the way a built one is, Netlify's documentation does not say — the
+first test message answers it.
+
 ## When the repository becomes public
 
 Put its address in `site.json` (`"repo_url": "https://github.com/..."`) and

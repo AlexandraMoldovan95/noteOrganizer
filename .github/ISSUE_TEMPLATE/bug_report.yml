@@ -15,6 +15,7 @@ body:
         - Something I wrote was lost or changed
         - The app stopped, froze or would not start
         - A feature does the wrong thing
+        - It is slow or freezes for a moment
         - Something looks wrong or reads badly
     validations:
       required: true
@@ -54,6 +55,12 @@ body:
     attributes:
       label: Theme and Windows version
       placeholder: Warm Cream, Windows 11
+  - type: input
+    id: notes
+    attributes:
+      label: How many notes do you have?
+      description: Settings, then Statistics, shows it as "Total notes". It tells us whether a slow moment comes from a large notebook.
+      placeholder: "350"
   - type: textarea
     id: evidence
     attributes:

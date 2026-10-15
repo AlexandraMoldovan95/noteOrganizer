@@ -85,10 +85,19 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
   then swapped in). Measured on 2026-10-14 (`tools/bench.py --rich`), one note's automatic save
   takes 22 ms at 1,000 notes, 84 ms at 5,000 and 174 ms at 10,000 — it grows with the notebook,
   not with the note. Under about 100 ms nobody feels it; 174 ms is a hitch in a pause of typing.
-  Every way out changes how notes are kept on disk (a file per note, an append-only journal, a
-  database), and the Android exploration reads that same file, so it is a decision about the
-  data format before it is code. **Not decided.** Worth weighing when a real notebook passes
-  about 5,000 notes, or when a slow computer shows a save above ~100 ms at 1,000.
+  Profiled on 2026-10-15, at 10,000 notes (186 ms): 108 ms turning every note into JSON text,
+  45 ms writing the 24.6 MB file, 24 ms finding the saved card's place in the list. Writing the
+  file compact saves only a tenth. The way out that keeps the file exactly as it is — so the
+  Android exploration, backups and old copies notice nothing — keeps each note's text beside a
+  copy of the note, and remakes only the text of notes that compare unequal to their copy:
+  90 ms → 21 ms at 10,000 (the comparison of every note costs 8 ms), the same bytes written,
+  ~6 MB more memory per 1,000 notes and a one-off ~210 ms at the first save of a session. Next
+  after it: the disk write moved off the window's thread (45 ms), and the card's place found
+  without sorting every note (24 ms). **Decided 2026-10-15, the owner's call: not now** — weeks of
+  care in the riskiest code for a cost nobody has met. The signal to reopen it is a report that
+  the app is slow: the feedback form and the bug form both carry how many notes the person has
+  (Settings → About → Send feedback), so such a report says at once whether this is the cause.
+  `tools/bench.py --rich` re-measures the save at any size.
 - **An Android version.** An exploration is under way in a repository of its own
   (`noteOrganizerForAndroid`, private), begun on 2026-09-13: a native Android app in Kotlin that
   reads and writes the same notes file as this one, built to answer whether the data format
@@ -440,6 +449,7 @@ counting notes record what counted, what didn't, and why. The features themselve
 | `0.94.374` | 2026-10-14 | 94 | 374 | One `Added`, no `Fixed`: spelling, with Windows' own dictionaries. The underline, its right-click menu (suggestions, Ignore, Add to Windows dictionary), the quiet rules and Settings → Appearance → Spelling count as one entry, because none of them is any use without the others. Not counted: the owner's two changes made while trying it before release (judged by sentence rather than by paragraph, and the menu's plainer name), as they belong to the same entry; the mutant runner telling its own two entries by a mark rather than by the letter S, a repair to a tool rather than to the app, found before anything ran wrong; the docs; and the tests — `test_spelling.py`, qa6's spelling block, and SP01–SP27. |
 | `0.94.379` | 2026-10-15 | 94 | 379 | **Five** `Fixed`, no `Added`, on two stacked branches released as one before one rebuild — what the owner's question about thousands of notes turned up, measured and reviewed by four agents. One entry per mechanism, each would have shipped without the others: (1) a backup the app made refused on import over 500 MB or 10,000 files (the zip-bomb check over the whole archive, found by a security review of the first version, is part of this entry: introduced and repaired inside this work); (2) a share code made past the limits its own import enforces; (3) an import's matching walking the notebook once per incoming note; (4) a pin, a new category or a Custom-order move rebuilding the whole list; (5) a day left open on the Calendar rebuilt at every save behind the Notes tab. All shipped in `0.94.374` or earlier, so all count. Not counted: `tools/bench.py --rich --deep` (a tool), the qa2/qa7 previews made deaf to a real mouse (`Testing`: a check's strategy, not the app's), the docs, and the tests — BK01–BK06, SH01–SH03, MN01–MN08. |
 | `0.94.382` | 2026-10-15 | 94 | 382 | **Three** `Fixed`, no `Added`, on four stacked branches released as one before one rebuild — the owner's "1 2 si 3" (two small observations left by the scale work, and a pass over the docs) and her review of what followed. One entry per mechanism, each would have shipped without the others: (1) closing the app during a backup import or export let the worker die past the 30-second wait, leaving the unpacked backup, a half-copied attachment or an unfinished `.tmp`, and nothing said so — the next start's word, which the owner asked for at case 660, belongs to this entry (one complaint, completed inside this work); (2) drawing a note's tables asked every drawn grid for each cell, quadratic in the tables; (3) a theme switch rebuilt every drawn table, which flickered — field-reported by the owner. All three shipped in `0.94.379` or earlier, so all count. Not counted: the freshness pass over every `.md` and the retaken Appearance screenshot (docs), the part of the theme switch that remains (Known limitations, measured), and the tests — ST01–ST10, TB01–TB02, TH01–TH06, CN01–CN05. |
+| `0.95.382` | 2026-10-15 | 95 | 382 | One `Added`, no `Fixed`: Send feedback, the owner's ask once the whole-file save was decided "not now" — a way for people to say the app is slow, and how many notes they have, without a GitHub account and without her address shown anywhere. Counted once: the button, the site's form with the details it shows, the copied link when no browser opens, and the Store button that waits for a Store page are one feature. NOT counted: every crash log entry carrying the same details through one writer (`Changed`, an existing log made more useful — its start-up writer no longer raising before the data folder is known is part of that change, found while making it), the GitHub bug form's new field and option (the repository, not the app), the site's pages and its build check, the docs, and the tests — FB01–FB10. |
 
 ### At the real launch: 1.0.0 and after
 
