@@ -11827,6 +11827,94 @@ check(f'...and a coloured letter in the last of them still draws as itself '
       ('e', '#e63946') in _tq_runs and ('t', app.colors['text']) in _tq_runs)
 set_body('')
 
+# A theme switch repaints the drawn tables in place. It rebuilt them, and
+# each new grid is a window that maps a moment late: the switch flickered
+# on a note with tables (field report). The repaint must leave every grid
+# exactly as a rebuild in the new theme draws it.
+_th_body = chr(10).join(
+    'Part %d' % k + chr(10) + '| Item | Qty | Done |' + chr(10)
+    + '| --- | --- | --- |' + chr(10)
+    + '| tea | %d | %s |' % (k, core_tables.CHECKBOX_DONE) for k in range(8))
+set_body(_th_body)
+_th_item = _th_body.index('Item')
+_th_tea = _th_body.index('tea')
+_th_box = _th_body.index(core_tables.CHECKBOX_DONE)
+app._apply_formatting(app.body_text, [
+    {'start': _th_item, 'end': _th_item + 1, 'style': 'text_color',
+     'value': '#e63946'},
+    {'start': _th_tea, 'end': _th_tea + 3, 'style': 'highlight',
+     'value': '#ffd166'},
+    {'start': _th_box, 'end': _th_box + 3, 'style': 'text_color',
+     'value': '#2a9d8f'}])
+app._render_table_grids()
+app.update()
+app._grid_hide_col(app._table_grids[1], 1, True)
+app.update()
+
+
+def _th_snap():
+    out = []
+    for info in app._table_grids:
+        cv = info['canvas']
+        items = []
+        for it in cv.find_all():
+            if 'find_flash' in cv.gettags(it):
+                continue
+            have = cv.itemconfigure(it)
+            opts = tuple((k, str(cv.itemcget(it, k))) for k in
+                         ('fill', 'outline', 'width', 'text', 'font') if k in have)
+            items.append((cv.type(it), tuple(round(v) for v in cv.coords(it)),
+                          opts))
+        out.append((str(info['frame'].cget('bg')), str(cv.cget('bg')),
+                    sorted(items)))
+    return out
+
+
+_th_orig = app.theme_name
+_th_info = app._table_grids[0]
+app._grid_select_range(_th_info, (1, 0), (1, 1))
+_th_names = [str(i['frame']) for i in app._table_grids]
+_th_cells = sum(len(i['cells']) for i in app._table_grids)
+_th_asks = [0]
+_th_real = NO.NoteOrganizer._grid_first_line
+
+
+def _th_counted(self, info):
+    _th_asks[0] += 1
+    return _th_real(self, info)
+
+
+NO.NoteOrganizer._grid_first_line = _th_counted
+try:
+    app.set_theme('light' if _th_orig in NO.DARK_THEMES else 'dark')
+finally:
+    NO.NoteOrganizer._grid_first_line = _th_real
+app.update()
+check('a theme switch keeps every drawn table, repainted in place',
+      [str(i['frame']) for i in app._table_grids] == _th_names)
+_th_sel = getattr(app, '_grid_sel', None) or {}
+check('...its selection outlined in the new accent',
+      len(_th_sel.get('cells', [])) == 2 and all(
+          str(_th_info['canvas'].itemcget(_th_info['cells'][k]['rect'], 'outline'))
+          == app.colors['accent'] for k in _th_sel['cells']))
+check(f'...asking where a grid starts a few times per cell, not of every grid '
+      f'({_th_asks[0]} asks for {_th_cells} cells)',
+      _th_asks[0] <= 6 * _th_cells)
+app._grid_clear_selection()
+_th_in_place = _th_snap()
+app._render_table_grids()
+app.update()
+check('...and each one drawn exactly as a rebuild in the new theme draws it',
+      _th_in_place == _th_snap() and len(_th_in_place) == 8)
+# A stale grid (widths that changed under it) is still rebuilt.
+app._table_grids[0]['stale'] = True
+_th_names = [str(i['frame']) for i in app._table_grids]
+app.set_theme(_th_orig)
+app.update()
+check('...while a stale table is rebuilt at the switch',
+      not set(_th_names) & {str(i['frame']) for i in app._table_grids})
+set_body('')
+
 # ---- A TABLE OPERATION LEAVES EVERY CELL IT DID NOT TOUCH AS IT WAS ----
 # Clearing ONE cell with Delete, dropping a checkbox, deleting a row,
 # pasting cells: each rewrote the table's whole text, and every bold word

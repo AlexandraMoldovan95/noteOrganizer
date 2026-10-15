@@ -2891,7 +2891,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
         aligns = core_tables.cell_alignments(line)
         align = aligns[c] if c < len(aligns) else core_tables.ALIGN_LEFT
-        styles = self._cell_value_styles(line_no, line, c)
+        # This grid's own first line holds its window, as
+        # _grid_cell_text_range asks: no walk through every grid per cell.
+        styles = self._cell_value_styles(
+            line_no, line, c,
+            base=1 if line_no == self._grid_first_line(info) else 0)
         cell["texts"] = self._grid_draw_cell_text(
             info["canvas"], cell, cell["value"], styles, align,
             r == 0, 10, info["row_h"])
@@ -3988,6 +3992,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                            scrollregion=(0, 0, natural + 1, height + 1))
         canvas.pack(side="top", anchor="w")
         cells = {}
+        slivers = []   # a hidden column's rectangles, kept for a repaint
         rule = hairline(self.colors)
 
         def wash(line_no, line, c, styles):
@@ -4028,8 +4033,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 surface = (inset_surface(self.colors) if r == 0
                            else self.colors["card"])
                 if c in hidden_cols:
-                    canvas.create_rectangle(x, y, x + w, y + h,
-                                            fill=surface, outline=rule)
+                    slivers.append((canvas.create_rectangle(
+                        x, y, x + w, y + h, fill=surface, outline=rule), r))
                     continue
                 line_no = first + row_off[r]
                 line = block[row_off[r]]
@@ -4060,7 +4065,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         b.mark_set(mark, f"{first}.0")
         b.mark_gravity(mark, "left")
         info = {"frame": host, "canvas": canvas, "hbar": None,
-                "natural": natural, "cells": cells, "mark": mark,
+                "natural": natural, "cells": cells, "slivers": slivers,
+                "mark": mark,
                 "nrows": len(block), "data_rows": len(rows),
                 "row_off": row_off, "sep_cols": sep_cols,
                 "hidden_cols": hidden_cols,
@@ -6529,6 +6535,43 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         the one style the drawing paints cell-wide."""
         for (r, c) in info["cells"]:
             self._grid_redraw_cell_text(info, r, c)
+
+    def _recolor_table_grids(self):
+        """Repaint every drawn table in the current palette, in place.
+
+        A theme switch rebuilt them all, and each new grid is a new window
+        that maps a moment late: the switch flickered on a note with
+        tables and not on one without. Their colours live in canvas items
+        -- the cells, a hidden column's slivers, the selection -- so those
+        are repainted. False, with nothing painted, when a grid is gone or
+        stale: only a rebuild will do then."""
+        grids = list(getattr(self, "_table_grids", []))
+        if any(info.get("stale") or self._grid_first_line(info) is None
+               for info in grids):
+            return False
+        rule = hairline(self.colors)
+        for info in grids:
+            canvas = info["canvas"]
+            try:
+                info["frame"].configure(bg=self.colors["card"])
+                canvas.configure(bg=self.colors["card"])
+                for rect, r in info.get("slivers", ()):
+                    canvas.itemconfigure(rect, outline=rule, fill=(
+                        inset_surface(self.colors) if r == 0
+                        else self.colors["card"]))
+                for cell in info["cells"].values():
+                    canvas.itemconfigure(cell["rect"], outline=rule, width=1)
+            except tk.TclError:
+                return False
+            self._grid_restyle(info)
+        sel = getattr(self, "_grid_sel", None)
+        if sel and any(sel["info"] is info for info in grids):
+            for key in sel["cells"]:
+                cell = sel["info"]["cells"].get(key)
+                if cell is not None:
+                    sel["info"]["canvas"].itemconfigure(
+                        cell["rect"], outline=self.colors["accent"], width=2)
+        return True
 
     def _grid_stub_menu(self, info, event, c):
         """The only menu a hidden column can offer: bring it back."""
@@ -12608,14 +12651,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # The drawn tick boxes share two images; redrawn, every box follows.
         if getattr(self, "_tick_images", None) is not None:
             self._paint_tick_images()
-        # The drawn tables carry their colours in canvas items; without a
-        # rebuild they kept the OLD theme until the next edit touched them.
+        # The drawn tables carry their colours in canvas items, repainted
+        # in place: rebuilt, each grid was a new window that mapped late,
+        # and the switch flickered. A grid gone or stale is still rebuilt.
         # The commit first: render's contract is "never while focus is in
         # a cell", and a theme switched mid-typing otherwise destroyed the
         # editor's canvas under it -- the keystrokes went with it. A row
         # being typed stays text: a new theme is no reason to leave it.
         self._commit_cell_editor()
-        self._render_table_grids(keep_typed=self._row_being_typed())
+        if not self._recolor_table_grids():
+            self._render_table_grids(keep_typed=self._row_being_typed())
         # Text highlights are painted blended toward the theme surface
         # (the cells' own recipe); the new surface needs a re-blend.
         if hasattr(self, "body_text"):
@@ -12681,8 +12726,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # while the note stays open. Same treatment as the note cards.
         self._recolor_checklist_boxes()
         # The find highlights are blended from the palette, so re-tint them
-        # for the new theme; then re-draw the current cell flash, which the
-        # grid rebuild above tore off the canvas (a no-op if find is closed).
+        # for the new theme; then re-draw the current cell flash in the new
+        # accent -- a rebuild tears it off the canvas (a no-op if find is
+        # closed).
         if hasattr(self, "body_text"):
             self._retint_find_tags(self.body_text)
         self._find_reflash()
@@ -18448,8 +18494,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pass
 
     def _find_reflash(self):
-        """Re-draw the current cell flash after a rebuild (e.g. theme
-        switch tore the canvas down)."""
+        """Re-draw the current cell flash after a theme switch (in the new
+        accent) or a rebuild (which tore the canvas down)."""
         if not getattr(self, "_find_open", False):
             return
         matches = getattr(self, "_find_matches", [])
