@@ -435,7 +435,9 @@ from noteorganizer.core.sharing import (
     MAX_SHARED_NOTES,
     SHAREABLE_FIELDS,
     ShareCodeTooLarge,
+    StoppableFile,
     backup_entries_problem,
+    copy_file_until_stopped,
     encode_share_code,
     decode_share_code,
     _safe_extract_zip,
@@ -1852,26 +1854,43 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return t
 
     def _wait_for_io_workers(self, cap_s=30.0):
-        """Let an in-flight export/import worker finish before the process
-        goes away. Hard-capped: a genuinely hung worker must not make the
-        app refuse to close — the threads stay daemon for that reason, and
-        the export's tmp-then-replace protocol means even the capped-out
-        case can no longer destroy an existing backup."""
+        """Let an in-flight export finish before the process goes away, and
+        stop an import. Hard-capped: a genuinely hung worker must not make
+        the app refuse to close — the threads stay daemon for that reason,
+        and the export's tmp-then-replace protocol means even the
+        capped-out case can no longer destroy an existing backup.
+
+        The close drops an import that was never merged whole anyway
+        (_settle_background_work_at_close), so it is stopped at once: the
+        wait bought only time to copy files that were then removed, and
+        past the cap the process died mid-file, leaving the unpacked backup
+        in the temp folder and a half-copied file in attachments. An
+        export still writing at the cap is stopped too, and takes its
+        unfinished file away. Each answers within one chunk
+        (StoppableFile)."""
         workers = [t for t in getattr(self, "_io_workers", [])
                    if t.is_alive()]
         if not workers:
             return
+        if self._import_state is not None:
+            self._import_state["stop"] = True
         try:
             self.set_status("Finishing the file operation in progress…")
             self.update_idletasks()
         except tk.TclError:
             pass
-        deadline = time.time() + cap_s
-        for t in workers:
-            remaining = deadline - time.time()
-            if remaining <= 0:
-                break
-            t.join(timeout=remaining)
+
+        def join(cap):
+            deadline = time.time() + cap
+            for t in workers:
+                remaining = deadline - time.time()
+                if remaining <= 0:
+                    break
+                t.join(timeout=remaining)
+        join(cap_s)
+        if self._export_state is not None and any(t.is_alive() for t in workers):
+            self._export_state["stop"] = True
+            join(5.0)
 
     def export_data(self):
         """Bundle notes_data.json, settings.json, and every attached file
@@ -1930,13 +1949,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         def worker():
             state = self._export_state
+
+            def stop():
+                return state.get("stop")   # asked by the close, past its wait
             # Write beside the target and move into place only when whole —
             # the zip used to be opened ON the target, so a failure (or the
             # app dying) mid-write destroyed the very backup being replaced.
             # Same one-safe-way rule as _write_json_atomic.
             tmp_path = save_path + ".tmp"
             try:
-                with zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_DEFLATED) as zf:
+                with open(tmp_path, "wb") as raw, zipfile.ZipFile(
+                        StoppableFile(raw, stop), "w", zipfile.ZIP_DEFLATED) as zf:
                     for i, (src, arcname) in enumerate(entries, start=1):
                         zf.write(src, arcname=arcname)
                         state["current"] = i
@@ -1973,8 +1996,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         bar. This is the ONLY place export touches any Tkinter widget."""
         if not self._still_alive():
             # The app was closed while the background thread was still
-            # running — nothing left to update; the thread finishes and
-            # writes its file regardless, it just has no UI left to report to.
+            # running — nothing left to update; the close has already
+            # waited for it, or stopped it (_wait_for_io_workers).
             return
         state = self._export_state
         if state is None:
@@ -2712,21 +2735,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _char_is_emoji(ch):
         return ord(ch) >= 0x1F000 or 0x2600 <= ord(ch) <= 0x27BF or ord(ch) > 0xFFFF
 
-    def _cell_value_styles(self, line_no, line, c):
+    def _cell_value_styles(self, line_no, line, c, base=None):
         """Per-character style of one cell's raw value, read straight off
         the body tags: one dict per character. The drawing folds equal
         neighbours into runs, so a single coloured letter -- or a single
         coloured checkmark -- shows exactly as itself instead of painting
-        the whole cell."""
+        the whole cell. *base*: _col_base's answer, when the caller knows
+        it -- asking walks every drawn grid, once per cell."""
         bounds = core_tables.cell_bounds(line)
         if c >= len(bounds):
             return []
         start, end = bounds[c]
         if start >= end:
             return []
+        if base is None:
+            base = self._col_base(line_no)
         # The column walks along with the characters -- counting each one's
         # UTF-16 width from the line's start again made this quadratic.
-        col = self._col_base(line_no) + self._tk_col(line, start)
+        col = base + self._tk_col(line, start)
         out = []
         for ch in line[start:end]:
             try:
@@ -4007,7 +4033,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     continue
                 line_no = first + row_off[r]
                 line = block[row_off[r]]
-                styles = self._cell_value_styles(line_no, line, c)
+                # Base 0: read before this grid's window lands at column 0,
+                # on lines no other grid starts on (as wash() assumes).
+                styles = self._cell_value_styles(line_no, line, c, base=0)
                 bg = wash(line_no, line, c, styles)
                 # The saved colour stays pure; only the DRAWING blends it
                 # toward the cell's surface (see _grid_restyle).
@@ -11062,11 +11090,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         def worker():
             state = self._import_state
+
+            def stop():
+                return state.get("stop")   # asked by the close, at once
             try:
                 temp_dir = tempfile.mkdtemp(prefix="notes_import_")
                 state["temp_dir"] = temp_dir
                 try:
-                    with zipfile.ZipFile(zip_path, "r") as zf:
+                    with open(zip_path, "rb") as raw, \
+                            zipfile.ZipFile(StoppableFile(raw, stop), "r") as zf:
                         _safe_extract_zip(zf, temp_dir, ATTACHMENTS_DIR)
                 except (zipfile.BadZipFile, IOError, OSError, ValueError) as e:
                     state["error"] = f"That file couldn't be read as a backup:\n{e}"
@@ -11148,8 +11180,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                             # damage permanent.
                             part = dest + ".part"
                             try:
-                                shutil.copy2(
-                                    os.path.join(imported_attachments_dir, filename), part)
+                                copy_file_until_stopped(
+                                    os.path.join(imported_attachments_dir, filename),
+                                    part, stop)
                                 os.replace(part, dest)
                                 state["copied"].append(filename)
                             except (IOError, OSError):

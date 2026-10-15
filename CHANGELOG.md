@@ -102,6 +102,31 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+### Fixed
+
+- **Closing the app during a backup import or export leaves nothing behind.** The close waited
+  up to half a minute for the work, then quit wherever it had got to. Closed three seconds into
+  importing a 600 MB backup, the window took 33 seconds to go and left 1.2 GB on disk: the
+  unpacked backup in the temp folder and a half-copied file among the attachments. An export cut
+  off the same way left an unfinished file beside the backup. An import is now stopped at once,
+  since the close drops it anyway, and an export still writing after the half minute is stopped
+  too. Each takes its unfinished files away, and the same import now closes in about 3 seconds.
+- **A note with many tables opens faster.** Each cell of a table being drawn asked every table
+  already drawn where it started, so the cost grew with the square of the tables: 59,600
+  questions for 100 tables, where 200 are needed. Drawing 100 tables went from 236 ms to 140 ms,
+  and 30 tables from 75 ms to 53 ms.
+
+### Testing
+
+- qa3 closes the app on an import held mid-unpacking and mid-copying, and on an export held past
+  the wait, using a reader that waits for the stop as a stand-in for a huge file. It checks how
+  long the close takes and what is left in the temp folder, in attachments and beside the backup.
+  `test_data_safety` checks that a backup written through the stoppable file is the same byte
+  for byte, and that writing, unpacking and copying each stop mid-file when asked. Mutants
+  ST01–ST10.
+- qa1 counts how often drawing twelve tables asks where a grid starts (twice per table), and
+  checks that a coloured letter in the last table still draws as itself. Mutants TB01–TB02.
+
 ---
 
 ## [0.94.379] — 2026-10-15

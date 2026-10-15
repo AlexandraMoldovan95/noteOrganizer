@@ -3955,5 +3955,130 @@
     "must_fail": ["share: an open panel follows a new Sort and a pin at once"],
     "suites": ["qa1"],
     "expect": "killed"
+  },
+  {
+    "id": "ST01",
+    "about": "the close waits out an import it then throws away, and past the cap leaves it on disk",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if self._import_state is not None:\n            self._import_state[\"stop\"] = True\n",
+               "replace": ""}],
+    "must_fail": ["closing the window stops an import held mid-unpacking at once",
+                  "closing the window stops an import held mid-copying at once"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "ST02",
+    "about": "an export still writing when the close stops waiting is killed with the process, its .tmp left behind",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            self._export_state[\"stop\"] = True\n",
+               "replace": "            pass\n"}],
+    "must_fail": ["an export still writing when the close stops waiting is stopped"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "ST03",
+    "about": "the close asks the export to stop but does not wait for it to take its file away",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            self._export_state[\"stop\"] = True\n            join(5.0)\n",
+               "replace": "            self._export_state[\"stop\"] = True\n"}],
+    "must_fail": ["an export still writing when the close stops waiting is stopped"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "ST04",
+    "about": "a read never asks whether to stop: an import is cut only between files, or not at all",
+    "edits": [{"file": "noteorganizer/core/sharing.py",
+               "find": "    def read(self, *args):\n        self._check()\n",
+               "replace": "    def read(self, *args):\n"}],
+    "must_fail": ["...and so does an import's unpacking",
+                  "...and one asked to stop midway leaves nothing behind",
+                  "fixture: an import is held mid-unpacking"],
+    "suites": ["test_data_safety", "qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "ST05",
+    "about": "a write never asks whether to stop: an export runs on to the end of the file",
+    "edits": [{"file": "noteorganizer/core/sharing.py",
+               "find": "    def write(self, data):\n        self._check()\n",
+               "replace": "    def write(self, data):\n"}],
+    "must_fail": ["an export asked to stop stops in the middle of a file",
+                  "fixture: an export is held mid-write"],
+    "suites": ["test_data_safety", "qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "ST06",
+    "about": "an attachment copy that is stopped leaves its half-written file behind",
+    "edits": [{"file": "noteorganizer/core/sharing.py",
+               "find": "    except BaseException:\n        try:\n            os.remove(dst)\n        except OSError:\n            pass\n        raise\n",
+               "replace": "    except BaseException:\n        raise\n"}],
+    "must_fail": ["...and one asked to stop midway leaves nothing behind",
+                  "...and nothing of it among the attachments (copying)"],
+    "suites": ["test_data_safety", "qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "ST07",
+    "about": "an imported attachment loses the date copy2 kept",
+    "edits": [{"file": "noteorganizer/core/sharing.py",
+               "find": "        shutil.copystat(src, dst)\n",
+               "replace": ""}],
+    "must_fail": ["an attachment copied a chunk at a time arrives whole, its date kept"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "ST08",
+    "about": "the import reads its backup straight from the file, so nothing can stop the unpacking",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                            zipfile.ZipFile(StoppableFile(raw, stop), \"r\") as zf:\n",
+               "replace": "                            zipfile.ZipFile(raw, \"r\") as zf:\n"}],
+    "must_fail": ["fixture: an import is held mid-unpacking"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "ST09",
+    "about": "the export writes its zip straight to the file, so nothing can stop it",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                        StoppableFile(raw, stop), \"w\", zipfile.ZIP_DEFLATED) as zf:\n",
+               "replace": "                        raw, \"w\", zipfile.ZIP_DEFLATED) as zf:\n"}],
+    "must_fail": ["fixture: an export is held mid-write"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "ST10",
+    "about": "the import copies attachments whole again, so nothing can stop a long copy",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                                copy_file_until_stopped(\n                                    os.path.join(imported_attachments_dir, filename),\n                                    part, stop)\n",
+               "replace": "                                shutil.copy2(\n                                    os.path.join(imported_attachments_dir, filename),\n                                    part)\n"}],
+    "must_fail": ["fixture: an import is held mid-copying"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "TB01",
+    "about": "each cell of a table being drawn asks every grid drawn before it where it starts: quadratic in the tables",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                styles = self._cell_value_styles(line_no, line, c, base=0)\n",
+               "replace": "                styles = self._cell_value_styles(line_no, line, c)\n"}],
+    "must_fail": ["drawing twelve tables asks where each grid starts a few times per table"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "TB02",
+    "about": "a table being drawn reads its styles one column off, as if its window were already in place",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                styles = self._cell_value_styles(line_no, line, c, base=0)\n",
+               "replace": "                styles = self._cell_value_styles(line_no, line, c, base=1)\n"}],
+    "must_fail": ["...and a coloured letter in the last of them still draws as itself"],
+    "suites": ["qa1"],
+    "expect": "killed"
   }
 ]

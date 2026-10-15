@@ -2541,6 +2541,93 @@ os.remove(_ri_zip)
 app._import_state = None
 app.notes = []; app.save_notes()
 
+# ...and on an import still working: the close stops it at once, between
+# two chunks, where it waited 30 s and the process then died mid-file. A
+# huge file is a read or write held until the stop is asked (_Held).
+from noteorganizer.core import sharing as _hs
+_held = {'on': None, 'seen': False}
+
+
+class _Held(_hs.StoppableFile):
+    def _check(self):
+        if (_held['on'] and not _held['seen']
+                and str(getattr(self._raw, 'name', '')).endswith(_held['on'])):
+            _held['seen'] = True
+            t0 = time.time()
+            while not self._stop() and time.time() - t0 < 20:
+                time.sleep(0.01)
+            time.sleep(0.3)        # the disk still finishes its chunk
+        super()._check()
+
+
+_kept_stoppable = (NO.StoppableFile, _hs.StoppableFile)
+NO.StoppableFile = _hs.StoppableFile = _Held
+_hb_name = 'qa3_held_film.bin'
+_hb_zip = os.path.join(tempfile.gettempdir(), 'qa3_held_import.zip')
+with zipfile.ZipFile(_hb_zip, 'w') as _zf:
+    _zf.writestr('notes_data.json', json.dumps([{
+        'title': 'Film', 'body': 'x',
+        'attachments': [{'name': 'film.bin', 'stored_as': _hb_name}]}]))
+    _zf.writestr('attachments/' + _hb_name, b'film' * 1000)
+_he_zip = os.path.join(tempfile.gettempdir(), 'qa3_held_export.zip')
+fd.askopenfilename = lambda **k: _hb_zip
+app._poll_import_progress = lambda: None
+try:
+    for _hb_phase, _hb_marker in (('unpacking', 'qa3_held_import.zip'),
+                                  ('copying', _hb_name)):
+        _held.update(on=_hb_marker, seen=False)
+        app.import_data()
+        t0 = time.time()
+        while not _held['seen'] and time.time() - t0 < 10:
+            time.sleep(0.02)
+        _hb_temp = (app._import_state or {}).get('temp_dir')
+        _hb_part = os.path.join(NO.ATTACHMENTS_DIR, _hb_name + '.part')
+        check(f'fixture: an import is held mid-{_hb_phase}',
+              _held['seen'] and (_hb_phase == 'unpacking' or os.path.exists(_hb_part)))
+        app.destroy = lambda: None
+        t0 = time.time()
+        app.on_app_close()
+        _hb_took = time.time() - t0
+        del app.destroy
+        check(f'closing the window stops an import held mid-{_hb_phase} at once '
+              f'({_hb_took:.1f} s)', _hb_took < 5)
+        check(f'...leaving no unpacked backup in the temp folder ({_hb_phase})',
+              not (_hb_temp and os.path.exists(_hb_temp)))
+        check(f'...and nothing of it among the attachments ({_hb_phase})',
+              not os.path.exists(_hb_part)
+              and not os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _hb_name)))
+        app._import_state = None
+    # An export still writing when the close stops waiting is stopped the
+    # same way, and takes its unfinished file away.
+    with open(_he_zip, 'wb') as _fh:
+        _fh.write(b'OLD-BACKUP-BYTES')
+    fd.asksaveasfilename = lambda **k: _he_zip
+    _held.update(on='qa3_held_export.zip.tmp', seen=False)
+    app.export_data()
+    t0 = time.time()
+    while not _held['seen'] and time.time() - t0 < 10:
+        time.sleep(0.02)
+    check('fixture: an export is held mid-write, its .tmp on disk',
+          _held['seen'] and os.path.exists(_he_zip + '.tmp'))
+    app._wait_for_io_workers(cap_s=0.5)
+    check('an export still writing when the close stops waiting is stopped, '
+          'its unfinished file taken away',
+          not os.path.exists(_he_zip + '.tmp'))
+    with open(_he_zip, 'rb') as _fh:
+        check('...and the earlier backup is left as it was',
+              _fh.read() == b'OLD-BACKUP-BYTES')
+finally:
+    NO.StoppableFile, _hs.StoppableFile = _kept_stoppable
+    del app._poll_import_progress
+    for _t in getattr(app, '_io_workers', []):
+        _t.join(25)
+    app._import_state = None
+    app._export_state = None
+for _p in (_hb_zip, _he_zip, _he_zip + '.tmp'):
+    if os.path.exists(_p):
+        os.remove(_p)
+app.notes = []; app.save_notes()
+
 # A double-click on a Trash row's Restore restores that one note. The
 # second press used to land on the row that slid up into its place when
 # the first redrew the list, and restored that note too -- the checklist
