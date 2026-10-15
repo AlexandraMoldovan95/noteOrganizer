@@ -39,9 +39,11 @@ rather than a grep, like T1-1 — says so instead of guessing. Run it
 before planning a round, and correct this column from what it says
 rather than from memory.
 
-Two findings are marked fixed on the changelog's evidence rather than
+Some findings are marked fixed on the changelog's evidence rather than
 the code's, and are labelled that way above: T0-3 and T2-1 are
-user-visible messages, where the shipped bullet is the better witness.
+user-visible messages, where the shipped bullet is the better witness;
+T2-4, T2-7 and T4-9 (closed on 2026-10-15) are ones
+`tools/verify_findings.py` does not ask about.
 
 One thing the column cannot keep honest on its own is a line number. An
 evidence cell cites `file:line` as it stood when the finding was written
@@ -113,11 +115,11 @@ database — fix the list rendering instead.
 |---|---|---|
 | T2-1 | **The first screen of the product is a maintenance report**: a blocking modal reading "Cleanup pass (runs once) … 0 note(s) remain, IDs renumbered 1–0". Found independently by four lenses. (The deletion behind it is [T0-1](#tier-0--the-app-edits-or-deletes-data-without-saying-so).) | **fixed 0.71.154 — a fresh install opens straight to the notes** |
 | T2-2 | **No application icon anywhere**: the Tk feather in the title bar and taskbar, PyInstaller's own icon on the `.exe`, and an empty Win32 version resource (FileVersion 0.0.0.0, no ProductName). No `.ico` exists in the repository and `NoteOrganizer.spec` has no `icon=`. | **fixed 0.71.158 — drawn in `tools/make_icon.py`; window, `.exe` and version resource** |
-| T2-3 | **The app is DPI-unaware**, so Windows bitmap-stretches the whole window on any scaled display (the factory default on most modern laptops) — soft text, fuzzy 1px borders. Engage with ["The DPI fix that made things worse"](../ISSUES_LOG.md#the-dpi-fix-that-made-things-worse) before touching this; the previous attempt was reverted for good reasons. | open |
-| T2-4 | **A dead horizontal scrollbar spans the bottom of the window permanently**, and a first run with zero notes shows five scrollbars, all in ttk's bevelled `clam` style. | open |
+| T2-3 | **The app is DPI-unaware**, so Windows bitmap-stretches the whole window on any scaled display (the factory default on most modern laptops) — soft text, fuzzy 1px borders. Engage with ["The DPI fix that made things worse"](../ISSUES_LOG.md#the-dpi-fix-that-made-things-worse) before touching this; the previous attempt was reverted for good reasons. | **fixed 0.93.374 — Sharp text: DPI awareness engaged, every size grown to match** |
+| T2-4 | **A dead horizontal scrollbar spans the bottom of the window permanently**, and a first run with zero notes shows five scrollbars, all in ttk's bevelled `clam` style. | **fixed 0.84.340 — the bottom scrollbar shows only below the width the app needs (changelog is the evidence)** |
 | T2-5 | **The A and H toolbar buttons render in raw Windows grey** until the first click in the body — they are coloured only by `_refresh_format_buttons`, which never runs with no note loaded. This is the first-run frame anyone screenshots. | open |
 | T2-6 | **Note previews clip mid-word with no ellipsis** — the text is truncated by character count while the card is sized in pixels. Visible in the README's own hero screenshot. | open |
-| T2-7 | **A failed save produces three contradictory messages**, two of them false: a green "✓ Note updated" toast, then the error dialog, then an error toast that still reads "✓ …" because `_show_toast` hardcodes the checkmark and only varies the colour. | open |
+| T2-7 | **A failed save produces three contradictory messages**, two of them false: a green "✓ Note updated" toast, then the error dialog, then an error toast that still reads "✓ …" because `_show_toast` hardcodes the checkmark and only varies the colour. | **fixed 0.74.168 — the toast's mark follows its kind (changelog is the evidence)** |
 | T2-8 | **Two documented promises are no longer true**: README's "nothing ever falls back to an OS-native dialog" (five `filedialog` calls on core flows — attach, export, bulk export, import), and the User Guide's clickable Statistics chips (deliberately made inert). | **fixed 0.83.335** — by correcting the documents, the resolution C-25 adopted: the file chooser is the system's own on purpose, and the Statistics chips are read-only on purpose, and both documents now say so |
 | T2-9 | **The delete confirmation promises "30 days"** whatever retention the user chose (7–90), and never mentions the Trash at all. | **fixed 0.83.335** — the status line after a delete names the retention actually chosen, and the Trash |
 | T2-10 | **Ctrl+S confirms nothing visible** — the deliberate save writes to a status label at the bottom of a scrolling page, while the autosave nobody asked for gets the floating toast. | open |
@@ -130,7 +132,7 @@ database — fix the list rendering instead.
 | T3-1 | **Enter answers no dialog in the app.** On this Tk, `tk.Button`'s class bindings carry `<Key-space>` but no `<Key-Return>`, and the dialogs bind only `<Escape>` — so the Windows reflex is a no-op on every confirm. (It also means the 0.71.119 "focus No so Enter is safe" work rests on a premise that never held.) | **fixed 0.83.335** — Enter presses the button holding the keyboard on every question, Escape gives the safe answer, and Tab walks only the question's own buttons |
 | T3-2 | **No note in the list can take keyboard focus** — 0 of 12 widgets; Tab skips the entire list. Same for the calendar: 60 click targets, 0 focusable days. A keyboard-only user can create and save a note but can never open one that already exists. | **fixed for the note list in 0.81.199** (C-9: a click or Tab puts the keyboard on the list, the arrows walk it, Enter opens); the calendar's days still take no keyboard focus |
 | T3-3 | **Escape closes 3 of ~18 popups** — it is bound on borderless Toplevels that keyboard focus never enters. | **fixed 0.75.183** (C-7: Escape backs out of the anchored popups) |
-| T3-4 | **White-on-accent fails WCAG AA in all eight themes** (2.32–4.35:1; four themes fail even the 3:1 large-text floor). `success` as status text is 2.80:1 on every light theme. | open |
+| T3-4 | **White-on-accent fails WCAG AA in all eight themes** (2.32–4.35:1; four themes fail even the 3:1 large-text floor). `success` as status text is 2.80:1 on every light theme. | **fixed 0.89.365 — each role has a fill and a text shade; `tools/check_contrast.py` holds it** |
 | T3-5 | **The note body and Comments are Tab traps**; only undocumented Ctrl+Tab escapes. In Comments, Tk's legacy bindings are live: Ctrl+I inserts a tab and Ctrl+D deletes a character, because the formatting shortcuts are bound on the body only. | open |
 | T3-6 | **The in-app shortcut reference omits real keys** it calls "everything the keyboard can do" (the list-editing keys, Ctrl+Tab), and mislabels Ctrl+A as table-only. | open |
 
@@ -149,7 +151,7 @@ audience would actually feel.
 | T4-6 | **The app hoards full plaintext copies of the notebook** (`notes_data_backup_*.json`, never pruned — measured 26 files at 12.5× the live notebook) and no screen in the app admits they exist. The crash message even points at "Settings → Backup" to restore, where Import only accepts `.zip`. | deciding |
 | T4-7 | **Nothing in the shipped app teaches the app**: no starter templates, no welcome note, no Help section — and `NoteOrganizer.spec` has `datas=[]`, so the User Guide does not ship with the build. | deciding |
 | T4-8 | Ranked feature gaps a peer app would have: a **quick-switcher** (Ctrl+K), **clickable URLs** in a note, **find-and-replace**, **OS dark-mode following**, inline images. The existing ROADMAP candidates were ranked too — Undo on the delete toast first, then `.md`/`.html` import, then PDF via Edge. | deciding |
-| T4-9 | **The multi-tab machinery** — both waves agree independently: **do not build real tabs** (the single-editor model *is* the product's promise, and tabs would reintroduce N dirty buffers, N deferred occurrence prompts and N view-restore timers), **but delete the dead half**, which still runs on the hot path of every save and makes every future reader believe a feature exists. Keep `open_tabs`/`active_tab_index` as a documented single-slot snapshot. | deciding |
+| T4-9 | **The multi-tab machinery** — both waves agree independently: **do not build real tabs** (the single-editor model *is* the product's promise, and tabs would reintroduce N dirty buffers, N deferred occurrence prompts and N view-restore timers), **but delete the dead half**, which still runs on the hot path of every save and makes every future reader believe a feature exists. Keep `open_tabs`/`active_tab_index` as a documented single-slot snapshot. | **done 0.73.165 — the dead half removed, real tabs not built (changelog is the evidence)** |
 
 ## Round 2 — the consistency survey (2026-09-25)
 

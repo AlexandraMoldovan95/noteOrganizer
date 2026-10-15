@@ -32,12 +32,12 @@ says.
 | Layer | What it is | When it runs | What it catches |
 |---|---|---|---|
 | Static gates | Nine `tools/check_*.py` scripts, seconds in all | Eight on every pull request; the link check before a push | A name used but never defined; a method lost from the app class; a judgement about a note written out twice; a dead documentation link; Romanian in anything public; a script that wipes its folder with no deny rule; a long story told in a comment; text below WCAG contrast; a mutant that no longer finds the code it mutates |
-| Unit suites | Seven `test_*.py`, no window for six of them | Every pull request | Dates, repeats, the calculator, tables, rich text, data safety, a note's identity |
-| The qa suite | Nine scripts, ~2,700 checks, driving the real app headlessly | Every pull request | What a person would notice: a note that must survive a restart, a share code or a backup; formatting and tables that must come back exactly; a question that must not lose what was typed |
+| Unit suites | Eight `test_*.py`, no window for seven of them | Every pull request | Dates, repeats, the calculator, tables, rich text, data safety, a note's identity, spelling |
+| The qa suite | Nine scripts, ~3,000 checks, driving the real app headlessly | Every pull request | What a person would notice: a note that must survive a restart, a share code or a backup; formatting and tables that must come back exactly; a question that must not lose what was typed |
 | Stories | Three scripts that press the buttons a person presses, restart the app and photograph it | On demand: by hand, or from the Actions tab | A screen that changed shape; a route nobody asked a check about |
-| Mutants | `tools/mutate.py` and its catalogue: the 298 worth re-running, and 2 that test the runner | On demand, the same way. Most mutants were one-off runs while a fix was made, named in its commit | A check that stays green with its fix taken away |
+| Mutants | `tools/mutate.py` and its catalogue: the 310 worth re-running, and 2 that test the runner | On demand, the same way. Most mutants were one-off runs while a fix was made, named in its commit | A check that stays green with its fix taken away |
 | Coverage | `tools/run_coverage.py` | Every pull request, with a floor of 80% | Code no test reaches |
-| The test plan | `NoteOrganizer_TestPlan.xlsx`, 555 cases ([an excerpt](../docs/TEST_PLAN_EXCERPT.md)) | By a person, on the built `.exe` | What needs a person: how a screen reads, the built `.exe`, real hardware — each row says whether a script already walks it |
+| The test plan | `NoteOrganizer_TestPlan.xlsx`, 558 cases ([an excerpt](../docs/TEST_PLAN_EXCERPT.md)) | By a person, on the built `.exe` | What needs a person: how a screen reads, the built `.exe`, real hardware — each row says whether a script already walks it |
 
 A fix lands with a check that fails when the fix is taken away, and a
 flaky check is treated as a bug in the check, never re-run until green
@@ -91,23 +91,23 @@ the one you happen to be editing:
 
 | Surface | Guarded in |
 |---|---|
-| Bulk-action bar / selection mode | **qa1**, **qa3**, qa7, qa9, qa4 |
-| Theming (apply/track/toggle) | **qa1**, **qa4**, qa6 |
-| Autosave (debounce, guards, flush) | **qa1**, qa7, qa8, qa5, qa6, qa3, qa2, qa4 |
+| Bulk-action bar / selection mode | **qa1**, qa7, qa3, qa4, qa9, qa5, qa6 |
+| Theming (apply/track/toggle) | **qa1**, **qa4**, qa5, qa6 |
+| Autosave (debounce, guards, flush) | **qa5**, **qa1**, qa7, qa8, qa6, qa3, qa4, qa2, qa9 |
 | Editor page scroll/canvas | **qa1**, **qa8**, qa6 |
-| Note list (refresh, scroll guards, grouping) | **qa4**, qa1, qa7, qa6, qa3, qa8, qa2, qa9, qa5 |
-| Tables / drawn grids | **qa1**, qa7, qa5, qa3 |
+| Note list (refresh, scroll guards, grouping) | **qa4**, qa1, qa7, qa6, qa9, qa3, qa8, qa2, qa5 |
+| Tables / drawn grids | **qa1**, qa5, qa7, qa3 |
 | Find in note (Ctrl+F) / find bar | **qa1**, qa5 |
-| Templates | **qa9**, **qa1**, qa6, qa3, qa7, qa4 |
-| Settings panels | **qa6**, qa3, qa4, qa9, qa7, qa2, qa1 |
-| Calendar | **qa7**, qa4, qa2, qa1, qa9, qa5, qa6, qa8, qa3 |
-| Trash | **qa3**, **qa6**, qa7, qa2, qa1, qa4, qa5, qa9 |
-| Share codes | **qa3**, qa1, qa4, qa5 |
-| Export (files, backup) | **qa3**, **qa1**, qa6, qa8, qa4, qa9, qa5, qa7 |
-| Attachments | **qa7**, qa6, qa3, qa1, qa4, qa8, qa2, qa5 |
-| Recurrence / occurrences | **qa7**, **qa2**, qa3, qa1, qa8, qa5, qa4, qa6, qa9 |
-| Checklist | **qa1**, qa3, qa7, qa6, qa2, qa4, qa5, qa9, qa8 |
-| Formatting / rich text | **qa1**, qa3, qa2, qa9, qa7, qa6 |
+| Templates | **qa9**, qa1, qa6, qa3, qa7, qa4 |
+| Settings panels | **qa6**, qa9, qa3, qa4, qa7, qa1, qa2, qa5 |
+| Calendar | **qa7**, qa5, qa4, qa6, qa2, qa1, qa9, qa8, qa3 |
+| Trash | **qa3**, **qa6**, qa7, qa5, qa2, qa9, qa1, qa4 |
+| Share codes | **qa3**, qa1, qa5, qa4, qa9 |
+| Export (files, backup) | **qa3**, qa1, qa6, qa8, qa9, qa4, qa5, qa7 |
+| Attachments | **qa7**, qa6, qa3, qa1, qa4, qa5, qa8, qa2 |
+| Recurrence / occurrences | **qa5**, qa7, qa2, qa3, qa1, qa6, qa8, qa4, qa9 |
+| Checklist | **qa1**, qa3, qa7, qa5, qa6, qa2, qa4, qa9, qa8 |
+| Formatting / rich text | **qa1**, qa3, qa5, qa2, qa6, qa9, qa7 |
 
 Bold = the heavy owner(s): a file carrying at least a quarter of a
 surface's mentions, or leading the next one by more than double.
@@ -130,8 +130,8 @@ real notebook (it has happened; see [CLAUDE.md](../CLAUDE.md),
 "QA testing safety").
 `py tools/run_tests.py` does the whole safe-scratch ritual for you and
 is the verdict that counts before a push; `py tools/pre_push_check.py`
-is the two-second static half (names, API surface, compile-all) you
-run before *every* push. The CI's **Linux leg** runs locally too, via
+is the static half (the cheap gates CI runs first, compile-all
+included; its docstring lists them) you run before *every* push. The CI's **Linux leg** runs locally too, via
 Docker (`tools/linux-ci/` — build once, then
 `docker run --rm -v "${PWD}:/repo:ro" noteorg-linux-ci`), so the
 Xvfb-only behaviours that used to surface as red CI runs can be caught

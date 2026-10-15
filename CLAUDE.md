@@ -31,7 +31,7 @@ calls, no accounts, no database.
   app was a single file by design for most of its life; it now lives as a
   `core/` layer (data and rules; **must never import tkinter**) and a `ui/`
   layer of mixin classes — seventeen `core/` modules and seven `ui/` mixins —
-  with `note_organizer.py` (~20,500 lines) remaining the entry point and
+  with `note_organizer.py` (~21,500 lines) remaining the entry point and
   the genuinely shared UI hub, by measurement rather than by neglect (see
   `docs/ARCHITECTURE.md`'s call-graph case study for why the split stopped
   where it did, and why the note list moved later, once re-measured). The
@@ -54,8 +54,9 @@ calls, no accounts, no database.
   both deliberate: **choosing a file or folder** (`filedialog`, five call
   sites — save an export, open a backup `.zip`, pick a folder, attach
   files), because the OS chooser knows the user's drives and recent places
-  and a hand-built one would be worse; and the last-resort startup-crash
-  dialog. This line used to say "no native OS dialogs anywhere except the
+  and a hand-built one would be worse; and **the app failing to start**
+  (the last-resort startup-crash dialog, and "Missing dependency" when
+  Pillow is not installed). This line used to say "no native OS dialogs anywhere except the
   startup-crash dialog", which was wrong about the code while the code was
   right. Two different, deliberate theming patterns exist
   (`track_theme()` for persistent widgets vs. plain `.configure()` for

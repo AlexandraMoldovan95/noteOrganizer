@@ -156,8 +156,8 @@ is in the table below as well.
 | [The width that was guessed](#the-width-that-was-guessed) | A layout number that must agree with a layout it cannot see is wrong the first time either changes — ask the widget; and when a measurement disagrees with a photograph, doubt the measurement. | 0.73.167 |
 | [The rebuild nobody was looking at](#the-rebuild-nobody-was-looking-at) | When a new feature makes the user look somewhere new, expect a report about something that was always wrong there — measure before blaming the newest change; and a guard applied at one call site out of thirty-one is a comment, not a guard. | 0.74.169 |
 | [The sentence that counted notes](#the-sentence-that-counted-notes) | When a dialog counts things, ask what one of those things can be — a repeating series is one note in the count and every occurrence in the consequence; and a guard that has only ever been asked well-formed questions has been lucky, not tested. | 0.74.170 |
-| [Two ways to be invisible](#two-ways-to-be-invisible) | A layout whose last element absorbs every shortfall reports nothing and fails last — measure asked-for against given, on every font it will meet; and a fixture that does not do what its name says turns a measurement into a rumour. | 0.74.172 |
-| [The rule the app already had](#the-rule-the-app-already-had) | When two screens disagree, do not pick one — ask what the rest of the app does and make the odd one out match; and read what a gesture really offers before calling it a duplicate. | 0.75.174 |
+| [Two ways to be invisible](#two-ways-to-be-invisible) | A layout whose last element absorbs every shortfall reports nothing and fails last — measure asked-for against given, on every font it will meet; and a fixture that does not do what its name says turns a measurement into a rumour. | 0.75.173 |
+| [The rule the app already had](#the-rule-the-app-already-had) | When two screens disagree, do not pick one — ask what the rest of the app does and make the odd one out match; and read what a gesture really offers before calling it a duplicate. | 0.75.176 |
 | [The list that moved under the pointer](#the-list-that-moved-under-the-pointer) | An action that moves the layout must keep the user's target under the pointer — or remember what they pointed at. | 0.83.335 |
 | [The character only the drawn tables had](#the-character-only-the-drawn-tables-had) | An offset belongs to the space it was counted in: convert at every crossing, and compare in the space both sides share. | 0.83.335 |
 | [The tick that took the colour of its words](#the-tick-that-took-the-colour-of-its-words) | A rule written as "always" is a measurement nobody made; judge a control by what it draws, on every theme. | 0.84.357 |
@@ -2528,7 +2528,8 @@ always have. The "Empty note" warning joined its two neighbours behind
 surfaces its error, because silent data loss is worse than an
 interruption), the stacked-prompt ghost has no way to form. Making the
 dialog helper itself stack-safe (returning the grab to the dialog
-underneath) is tracked separately as hardening.
+underneath) was tracked separately as hardening, and shipped in
+[0.83.335](../CHANGELOG.md#083335--2026-10-02).
 
 The adversarial review of the fix itself then caught two gestures that
 broke the new promise: Ctrl+N and the calendar's "Add note for this
@@ -3504,7 +3505,7 @@ desktop is an input the person at the machine is feeding every test run, until a
 
 **What it was *not*:** the question that prompted the measurement was whether a long title slows the app down. It does not. Twenty notes with million-character titles make a 19MB file that still loads in 50ms, the note list costs the same as with ordinary titles, and searching them takes 1ms. The app was never the problem; one widget was.
 
-**Fix:** titles are capped at 200 characters — far past any real title, far short of where the widget struggles, and well above the 60 the note list displays.
+**Fix:** titles are capped at 200 characters — far past any real title, far short of where the widget struggles, and well above the 42 a card in the note list displays.
 
 **Two things that needed care.** A validator can only accept or refuse a change *whole*, so pasting something longer left the field empty, which reads as the paste having failed rather than having been shortened; pasting now trims to fit. And validation fires on programmatic inserts as well as on typing — so without a guard, opening a note written before the cap would have had the widget silently drop the overflow, and the next autosave would have written that shortened title back over the real one. Loading a note must never edit it.
 
