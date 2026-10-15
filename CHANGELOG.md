@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.95.382](#095382--2026-10-15) | 2026-10-15 | Send feedback from Settings → About: a short form in your browser, showing what the app adds — and nothing from your notes; crash logs that say which version and what size of notebook they came from. |
 | [0.94.382](#094382--2026-10-15) | 2026-10-15 | Closing the app in the middle of a backup leaves nothing behind and the next start says so; a note with many tables opens faster, and changing the theme no longer redraws its tables. |
 | [0.94.379](#094379--2026-10-15) | 2026-10-15 | A backup of any size comes back in, and a share code is never one its import refuses; a long notebook stays quick when one note moves, a big import no longer freezes, and a day left open on the Calendar waits instead of rebuilding at every save. |
 | [0.94.374](#094374--2026-10-14) | 2026-10-14 | Misspelled words underlined with Windows' own dictionaries, quiet on sentences in a language the computer cannot check — with suggestions, Ignore, Add to Windows dictionary and a switch to turn it off. |
@@ -102,6 +103,10 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+---
+
+## [0.95.382] — 2026-10-15
 
 ### Added
 
