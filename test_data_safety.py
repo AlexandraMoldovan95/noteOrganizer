@@ -2676,6 +2676,65 @@ try:
 finally:
     shutil.rmtree(_zroot, ignore_errors=True)
 
+# Closing the window stops a backup between two chunks (2026-10-15): the
+# close waited 30 s for a long import, then the process died mid-file and
+# left the unpacked backup, a half-copied attachment, an export's .tmp.
+_sroot = tempfile.mkdtemp(prefix="zip-stop-")
+try:
+    _film = os.path.join(_sroot, "film.bin")
+    with open(_film, "wb") as _fh:
+        _fh.write(os.urandom(3_000_000))
+    os.utime(_film, (1_600_000_000, 1_600_000_000))
+    _plain = os.path.join(_sroot, "plain.zip")
+    with _zipfile.ZipFile(_plain, "w", _zipfile.ZIP_DEFLATED) as _zf:
+        _zf.write(_film, "attachments/film.bin")
+    _through = os.path.join(_sroot, "through.zip")
+    with open(_through, "wb") as _raw, _zipfile.ZipFile(
+            _sh.StoppableFile(_raw, lambda: False), "w", _zipfile.ZIP_DEFLATED) as _zf:
+        _zf.write(_film, "attachments/film.bin")
+    with open(_plain, "rb") as _a, open(_through, "rb") as _b:
+        check("a backup written through the stoppable file is the same, byte for byte",
+              _a.read() == _b.read())
+
+    def _stopped(work):
+        try:
+            work()
+        except _sh.BackupStopped:
+            return True
+        return False
+
+    _cut = os.path.join(_sroot, "cut.zip")
+
+    def _write_cut():
+        with open(_cut, "wb") as _raw, _zipfile.ZipFile(_sh.StoppableFile(
+                _raw, lambda: os.path.getsize(_cut) > 100_000), "w",
+                _zipfile.ZIP_DEFLATED) as _zf:
+            _zf.write(_film, "attachments/film.bin")
+    check("an export asked to stop stops in the middle of a file",
+          _stopped(_write_cut) and os.path.getsize(_cut) < 2_000_000)
+    _unpacked = os.path.join(_sroot, "out", "attachments", "film.bin")
+
+    def _read_cut():
+        with open(_plain, "rb") as _raw, _zipfile.ZipFile(_sh.StoppableFile(
+                _raw, lambda: os.path.isfile(_unpacked)
+                and os.path.getsize(_unpacked) > 0)) as _zf:
+            _sh._safe_extract_zip(_zf, os.path.join(_sroot, "out"))
+    check("...and so does an import's unpacking",
+          _stopped(_read_cut) and 0 < os.path.getsize(_unpacked) < 3_000_000)
+    _copy = os.path.join(_sroot, "copy.bin")
+    _sh.copy_file_until_stopped(_film, _copy, lambda: False)
+    with open(_film, "rb") as _a, open(_copy, "rb") as _b:
+        check("an attachment copied a chunk at a time arrives whole, its date kept as copy2 keeps it",
+              _a.read() == _b.read()
+              and int(os.path.getmtime(_copy)) == 1_600_000_000)
+    _half = os.path.join(_sroot, "half.bin")
+    check("...and one asked to stop midway leaves nothing behind",
+          _stopped(lambda: _sh.copy_file_until_stopped(
+              _film, _half, lambda: os.path.isfile(_half) and os.path.getsize(_half) > 0))
+          and not os.path.exists(_half))
+finally:
+    shutil.rmtree(_sroot, ignore_errors=True)
+
 
 def _encode_answer(notes):
     try:

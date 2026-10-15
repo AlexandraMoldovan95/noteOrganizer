@@ -37,6 +37,10 @@ stage assumes the worst:
   has a name, "Zip Slip", and the defence is to resolve each path and
   confirm it still sits under the destination. It also refuses an entry
   shaped like a zip bomb, and a backup the disk has no room for.
+* :class:`StoppableFile` - the file a backup's worker hands zipfile, so
+  closing the window stops a long export or import between two chunks
+  and its unfinished files can be taken away, instead of the process
+  dying mid-file with them on disk.
 
 The pattern worth taking away: when data comes from outside, enforce
 limits *during* processing instead of trusting it to be reasonable.
@@ -328,3 +332,49 @@ def _safe_extract_zip(zf, dest_dir, attachments_dir=None):
         if not (target == dest_root or target.startswith(dest_root + os.sep)):
             raise ValueError("This backup contains unsafe file paths and was blocked.")
     zf.extractall(dest_dir)
+
+
+class BackupStopped(Exception):
+    """The window closed while a backup was still being written or read."""
+
+
+class StoppableFile:
+    """An open file whose next read or write raises BackupStopped once
+    *stop* (a function) answers true. A backup's worker hands zipfile one,
+    so closing the window cuts a long export or import short between two
+    chunks, inside zipfile's own loops -- and waits for nothing but that.
+    Everything else is the wrapped file's own."""
+
+    def __init__(self, raw, stop):
+        self._raw = raw
+        self._stop = stop
+
+    def _check(self):
+        if self._stop():
+            raise BackupStopped("The window closed before the backup was finished.")
+
+    def read(self, *args):
+        self._check()
+        return self._raw.read(*args)
+
+    def write(self, data):
+        self._check()
+        return self._raw.write(data)
+
+    def __getattr__(self, name):
+        return getattr(self._raw, name)
+
+
+def copy_file_until_stopped(src, dst, stop):
+    """shutil.copy2, a megabyte at a time, asking *stop* between them.
+    Nothing is left at *dst* unless the whole file got there."""
+    try:
+        with open(src, "rb") as fin, open(dst, "wb") as fout:
+            shutil.copyfileobj(StoppableFile(fin, stop), fout, 1 << 20)
+        shutil.copystat(src, dst)
+    except BaseException:
+        try:
+            os.remove(dst)
+        except OSError:
+            pass
+        raise

@@ -11789,6 +11789,44 @@ for _edge_key in ('<Delete>', '<BackSpace>'):
           _edge_after == _edge_two and len(app._table_grids) == 2)
 set_body('')
 
+# Drawing a note's tables asks where each grid starts a few times per
+# table: every cell asked it of every grid drawn before, and a note of 100
+# tables took a quarter of a second to open, growing with the square.
+_tq_body = chr(10).join(
+    'Part %d' % k + chr(10) + '| Item | Qty |' + chr(10) + '| --- | --- |'
+    + chr(10) + '| tea | %d |' % k for k in range(12))
+set_body(_tq_body)
+_tq_at = _tq_body.rindex('tea') + 1
+app._apply_formatting(app.body_text, [
+    {'start': _tq_at, 'end': _tq_at + 1, 'style': 'text_color',
+     'value': '#e63946'}])
+_tq_asks = [0]
+_tq_real = NO.NoteOrganizer._grid_first_line
+
+
+def _tq_counted(self, info):
+    _tq_asks[0] += 1
+    return _tq_real(self, info)
+
+
+NO.NoteOrganizer._grid_first_line = _tq_counted
+try:
+    app._render_table_grids()
+finally:
+    NO.NoteOrganizer._grid_first_line = _tq_real
+app.update()
+_tq_last = app._table_grids[-1] if app._table_grids else None
+_tq_runs = ([(_tq_last['canvas'].itemcget(t, 'text'),
+              _tq_last['canvas'].itemcget(t, 'fill'))
+             for t in _tq_last['cells'][(1, 0)]['texts']] if _tq_last else [])
+check(f'drawing twelve tables asks where each grid starts a few times per '
+      f'table, not for every cell ({_tq_asks[0]} asks)',
+      len(app._table_grids) == 12 and _tq_asks[0] <= 3 * 12)
+check(f'...and a coloured letter in the last of them still draws as itself '
+      f'({_tq_runs})',
+      ('e', '#e63946') in _tq_runs and ('t', app.colors['text']) in _tq_runs)
+set_body('')
+
 # ---- A TABLE OPERATION LEAVES EVERY CELL IT DID NOT TOUCH AS IT WAS ----
 # Clearing ONE cell with Delete, dropping a checkbox, deleting a row,
 # pasting cells: each rewrote the table's whole text, and every bold word

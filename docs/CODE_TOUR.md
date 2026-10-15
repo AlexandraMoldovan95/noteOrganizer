@@ -811,6 +811,13 @@ refuses to make a code its decoder would refuse, and the export runs
 and then refused to restore
 ([the story](ISSUES_LOG.md#the-backup-the-app-could-not-restore)).
 
+Two more names here serve the backup's worker thread rather than guard
+it. `StoppableFile` wraps the file the worker hands zipfile: once the
+window is closing, its next read or write raises `BackupStopped`, so even
+one huge file stops between two chunks. `copy_file_until_stopped` does the
+same for the attachments the import copies in. How the close uses them is
+in [ARCHITECTURE](ARCHITECTURE.md#background-work-exporting-and-importing).
+
 ---
 
 ## `noteorganizer/core/duplicates.py`

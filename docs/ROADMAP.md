@@ -59,10 +59,13 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
     still a new window that maps late. **Decided 2026-10-14, the owner's question answered with
     measurements and four reviewing agents: not needed now.** Worth doing if a real note of 30+
     tables lags past ~100 ms, if another bug lands in the view-restore class, or if opening very
-    long notes needs tables drawn as they come into view. One small step comes first if it ever
-    lags: a lookup that walks every drawn grid for each cell (`_col_base`), quadratic in the
-    tables of one note, and answerable without the walk during a build. An architectural phase
-    with its own design pass, not a patch; measured before, it must be measured after.
+    long notes needs tables drawn as they come into view. The one small step that came first is
+    done (2026-10-15): each cell of a table being drawn asked every grid already drawn whether it
+    started on that line — 59,600 such questions for 100 tables, quadratic — when during a build
+    the answer is always no. Now 2 per table; drawing 100 tables went from 236 ms to 140 ms, 30
+    from 75 to 53, and 10 tables is unchanged at about 28 ms. What is left grows in a straight
+    line with the tables. The rest is an architectural phase with its own design pass, not a
+    patch; measured before, it must be measured after.
 - **Note list virtualization.** Most of it is done: the main list draws a screenful and the
   rest as the view comes near it, a save redraws one card instead of the list, and the cards are
   drawn on one canvas rather than built from widgets, so a drawn card costs a handful of canvas
@@ -77,6 +80,15 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
   needed now.** Worth it when a real notebook passes about 2,000–3,000 notes, or when a slow
   computer shows a deep rebuild above ~0.3 s at 1,000. It is weeks of work: cards differ in
   height, and placing one without drawing those above it needs every card's height known first.
+- **A save that writes one note, not the whole notebook.** Every save, the autosave in a pause
+  of typing included, rewrites `notes_data.json` whole (`save_notes`: written beside the file,
+  then swapped in). Measured on 2026-10-14 (`tools/bench.py --rich`), one note's automatic save
+  takes 22 ms at 1,000 notes, 84 ms at 5,000 and 174 ms at 10,000 — it grows with the notebook,
+  not with the note. Under about 100 ms nobody feels it; 174 ms is a hitch in a pause of typing.
+  Every way out changes how notes are kept on disk (a file per note, an append-only journal, a
+  database), and the Android exploration reads that same file, so it is a decision about the
+  data format before it is code. **Not decided.** Worth weighing when a real notebook passes
+  about 5,000 notes, or when a slow computer shows a save above ~100 ms at 1,000.
 - **An Android version.** An exploration is under way in a repository of its own
   (`noteOrganizerForAndroid`, private), begun on 2026-09-13: a native Android app in Kotlin that
   reads and writes the same notes file as this one, built to answer whether the data format

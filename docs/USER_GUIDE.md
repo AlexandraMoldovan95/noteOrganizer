@@ -905,7 +905,9 @@ copy of your notes outside the app's data folder (see Getting started for where 
 a progress bar stays visible at the bottom of the window the whole time, and the app remains fully
 usable while it works. Two quiet guarantees ride along: a new export can never damage the
 previous backup file (the zip is written beside it and swapped in only when whole), and closing
-the app mid-export waits for the file to finish instead of cutting it off.
+the app mid-export waits for the file to finish instead of cutting it off. The wait lasts up to
+half a minute; an export still writing after that is stopped, and its unfinished file is removed.
+The previous backup stays as it was.
 
 ### Full backup: import
 
@@ -937,6 +939,9 @@ twice for a moment: the backup is unpacked, then its files are copied in.) What 
 archive shaped like a damaged or hostile one, where a file, or the whole backup, would expand to
 hundreds of times its packed size; the export checks each backup it makes the same way before
 putting it in place.
+
+Closing the app while an import is still working stops it straight away. Nothing of it is kept —
+no notes, no files, nothing left in the temp folder — so you can simply import the backup again.
 
 ![Import backup](screenshots/import-backup.png)
 
