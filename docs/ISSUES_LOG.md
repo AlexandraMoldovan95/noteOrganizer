@@ -1840,6 +1840,11 @@ raises once a stop is asked, so even one huge file stops between two chunks, ins
 loops, without reaching into them. The worker's own error path then removes what it had begun.
 The same 600 MB import now closes in about 3 seconds and leaves nothing.
 
+**What the owner added.** Leaving nothing is half of it: the person also has to know that nothing
+was kept, or they believe the import (or the backup) happened. A closing window cannot say so,
+so the close writes it down and the next start reads it out once, naming the file and what to do
+again.
+
 **Takeaway:** a cap on a wait is half a decision; the other half is what happens to the work
 still running when the cap is reached. And a cleanup tested only on work that finished in time
 has not been tested on the case it exists for.

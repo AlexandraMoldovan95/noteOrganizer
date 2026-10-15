@@ -2571,6 +2571,33 @@ with zipfile.ZipFile(_hb_zip, 'w') as _zf:
     _zf.writestr('attachments/' + _hb_name, b'film' * 1000)
 _he_zip = os.path.join(tempfile.gettempdir(), 'qa3_held_export.zip')
 fd.askopenfilename = lambda **k: _hb_zip
+# What was cut short is said at the next start: a closing window cannot,
+# and nothing said it before -- the work simply looked done.
+NO.save_setting('backup_cut_short', None)
+app.destroy = lambda: None
+app.on_app_close()
+del app.destroy
+check('a close with no backup running leaves no word for the next start',
+      NO.get_setting('backup_cut_short') is None)
+app._export_state = {'current': 1, 'total': 1, 'done': True, 'error': None,
+                     'save_path': _he_zip}
+app._settle_background_work_at_close()
+check('...nor one whose export finished in time',
+      NO.get_setting('backup_cut_short') is None and app._export_state is None)
+_said = []
+_kept_info = app.show_info
+
+
+def _next_start_says():
+    _said.clear()
+    app.show_info = lambda *a, **k: _said.append(' '.join(map(str, a)))
+    try:
+        app.announce_startup_changes()
+    finally:
+        app.show_info = _kept_info
+    return ' '.join(_said)
+
+
 app._poll_import_progress = lambda: None
 try:
     for _hb_phase, _hb_marker in (('unpacking', 'qa3_held_import.zip'),
@@ -2596,6 +2623,16 @@ try:
         check(f'...and nothing of it among the attachments ({_hb_phase})',
               not os.path.exists(_hb_part)
               and not os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _hb_name)))
+        check(f'...and it leaves word for the next start ({_hb_phase})',
+              NO.get_setting('backup_cut_short') == {'kind': 'import',
+                                                     'file': _hb_zip})
+        _words = _next_start_says()
+        check(f'the next start says the import was cut short, nothing kept, '
+              f'and to import it again ({_words[:140]!r})',
+              'qa3_held_import.zip' in _words and 'nothing from it was kept' in _words
+              and 'import it again' in _words)
+        check('...once', NO.get_setting('backup_cut_short') is None
+              and 'cut short' not in _next_start_says())
         app._import_state = None
     # An export still writing when the close stops waiting is stopped the
     # same way, and takes its unfinished file away.
@@ -2616,6 +2653,15 @@ try:
     with open(_he_zip, 'rb') as _fh:
         check('...and the earlier backup is left as it was',
               _fh.read() == b'OLD-BACKUP-BYTES')
+    app._settle_background_work_at_close()
+    check('...and the export cut short leaves word for the next start',
+          NO.get_setting('backup_cut_short') == {'kind': 'export',
+                                                 'file': _he_zip})
+    _words = _next_start_says()
+    check(f'the next start says no new backup was made, and to export again '
+          f'({_words[:140]!r})',
+          'qa3_held_export.zip' in _words and 'no new backup was made' in _words
+          and 'export again' in _words)
 finally:
     NO.StoppableFile, _hs.StoppableFile = _kept_stoppable
     del app._poll_import_progress

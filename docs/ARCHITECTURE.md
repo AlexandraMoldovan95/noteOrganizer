@@ -1281,6 +1281,12 @@ unfinished files away before the window goes. Before this (2026-10-15), the impo
 cap and the process then died mid-file, with the unpacked backup in the temp folder and a
 half-copied `.part` in attachments; an export cut off at the cap left its `.tmp` beside the backup.
 
+A window that is closing cannot tell anyone what it dropped, so the close writes it down:
+`_settle_background_work_at_close` leaves `backup_cut_short` in settings (which kind, which
+file) for an import dropped or an export not finished. The next start reads it out once, with
+the other startup news in `announce_startup_changes`, and clears it. An export that finished in
+time leaves nothing.
+
 ## Autosave
 
 Typing pauses trigger a debounced autosave; switching notes (or tabs) flushes any pending

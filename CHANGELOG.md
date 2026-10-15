@@ -111,6 +111,8 @@ How the numbers themselves are counted is the
   off the same way left an unfinished file beside the backup. An import is now stopped at once,
   since the close drops it anyway, and an export still writing after the half minute is stopped
   too. Each takes its unfinished files away, and the same import now closes in about 3 seconds.
+  The next time the app opens, it says what was cut short and what to do again: nothing said
+  so before, and the work looked done.
 - **A note with many tables opens faster.** Each cell of a table being drawn asked every table
   already drawn where it started, so the cost grew with the square of the tables: 59,600
   questions for 100 tables, where 200 are needed. Drawing 100 tables went from 236 ms to 140 ms,
@@ -127,7 +129,9 @@ How the numbers themselves are counted is the
   long the close takes and what is left in the temp folder, in attachments and beside the backup.
   `test_data_safety` checks that a backup written through the stoppable file is the same byte
   for byte, and that writing, unpacking and copying each stop mid-file when asked. Mutants
-  ST01–ST10.
+  ST01–ST10. qa3 also checks what the next start says, once, after an import or an export cut
+  short, and that a close with nothing running, or an export finished in time, says nothing.
+  Mutants CN01–CN05.
 - qa1 counts how often drawing twelve tables asks where a grid starts (twice per table), and
   checks that a coloured letter in the last table still draws as itself. Mutants TB01–TB02.
 - qa1 switches the theme on eight tables carrying a coloured letter, a highlight, a coloured

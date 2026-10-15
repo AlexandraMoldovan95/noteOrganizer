@@ -4140,5 +4140,56 @@
     "must_fail": ["...its selection outlined in the new accent"],
     "suites": ["qa1"],
     "expect": "killed"
+  },
+  {
+    "id": "CN01",
+    "about": "an export cut short by the close leaves no word, and the person believes a backup was made",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        elif state is not None:\n            # Stopped past the wait, or still running: no new backup. A\n",
+               "replace": "        elif False:\n            # Stopped past the wait, or still running: no new backup. A\n"}],
+    "must_fail": ["...and the export cut short leaves word for the next start"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "CN02",
+    "about": "an import dropped by the close leaves no word",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if state is not None:\n            save_setting(\"backup_cut_short\", {\n                \"kind\": \"import\"",
+               "replace": "        if False:\n            save_setting(\"backup_cut_short\", {\n                \"kind\": \"import\""}],
+    "must_fail": ["...and it leaves word for the next start (unpacking)"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "CN03",
+    "about": "the next start never reads out what the close cut short",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if cut:\n            save_setting(\"backup_cut_short\", None)\n",
+               "replace": "        if False:\n            save_setting(\"backup_cut_short\", None)\n"}],
+    "must_fail": ["the next start says the import was cut short",
+                  "the next start says no new backup was made"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "CN04",
+    "about": "the word about a cut-short backup is said at every start, not once",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if cut:\n            save_setting(\"backup_cut_short\", None)\n",
+               "replace": "        if cut:\n"}],
+    "must_fail": ["...once"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "CN05",
+    "about": "an export that finished in time is reported as cut short",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        elif state is not None:\n            # Stopped past the wait, or still running: no new backup. A\n",
+               "replace": "        if state is not None:\n            # Stopped past the wait, or still running: no new backup. A\n"}],
+    "must_fail": ["...nor one whose export finished in time"],
+    "suites": ["qa3"],
+    "expect": "killed"
   }
 ]
