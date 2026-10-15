@@ -908,7 +908,8 @@ usable while it works. Two quiet guarantees ride along: a new export can never d
 previous backup file (the zip is written beside it and swapped in only when whole), and closing
 the app mid-export waits for the file to finish instead of cutting it off. The wait lasts up to
 half a minute; an export still writing after that is stopped, and its unfinished file is removed.
-The previous backup stays as it was.
+The previous backup stays as it was, and the next time you open the app it tells you no new
+backup was made, so you know to export again.
 
 ### Full backup: import
 
@@ -942,7 +943,8 @@ whole backup, that would expand to over a hundred times its packed size. The exp
 it makes the same way before putting it in place, so it never makes one it could not bring back.
 
 Closing the app while an import is still working stops it straight away. Nothing of it is kept —
-no notes, no files, nothing left in the temp folder — so you can simply import the backup again.
+no notes, no files, nothing left in the temp folder — and the next time you open the app it says
+so, naming the backup to import again.
 
 ![Import backup](screenshots/import-backup.png)
 

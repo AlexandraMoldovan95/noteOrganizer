@@ -439,6 +439,7 @@ counting notes record what counted, what didn't, and why. The features themselve
 | `0.93.374` | 2026-10-14 | 93 | 374 | One `Added`, no `Fixed`: sharp text on a scaled screen. The app declares itself aware of the main screen's scale, with everything that holds text grown to match, and Settings → Appearance → Sharp text to turn it off. It counts as one entry, the declaration, the sizes and the setting together, because none of them means anything without the others. The blur it ends was a known limitation, not a defect of something shipped, so it is not a `Fixed`. Not counted: the docs, and the tests — qa6's scaled screens and DPI01–DPI16. |
 | `0.94.374` | 2026-10-14 | 94 | 374 | One `Added`, no `Fixed`: spelling, with Windows' own dictionaries. The underline, its right-click menu (suggestions, Ignore, Add to Windows dictionary), the quiet rules and Settings → Appearance → Spelling count as one entry, because none of them is any use without the others. Not counted: the owner's two changes made while trying it before release (judged by sentence rather than by paragraph, and the menu's plainer name), as they belong to the same entry; the mutant runner telling its own two entries by a mark rather than by the letter S, a repair to a tool rather than to the app, found before anything ran wrong; the docs; and the tests — `test_spelling.py`, qa6's spelling block, and SP01–SP27. |
 | `0.94.379` | 2026-10-15 | 94 | 379 | **Five** `Fixed`, no `Added`, on two stacked branches released as one before one rebuild — what the owner's question about thousands of notes turned up, measured and reviewed by four agents. One entry per mechanism, each would have shipped without the others: (1) a backup the app made refused on import over 500 MB or 10,000 files (the zip-bomb check over the whole archive, found by a security review of the first version, is part of this entry: introduced and repaired inside this work); (2) a share code made past the limits its own import enforces; (3) an import's matching walking the notebook once per incoming note; (4) a pin, a new category or a Custom-order move rebuilding the whole list; (5) a day left open on the Calendar rebuilt at every save behind the Notes tab. All shipped in `0.94.374` or earlier, so all count. Not counted: `tools/bench.py --rich --deep` (a tool), the qa2/qa7 previews made deaf to a real mouse (`Testing`: a check's strategy, not the app's), the docs, and the tests — BK01–BK06, SH01–SH03, MN01–MN08. |
+| `0.94.382` | 2026-10-15 | 94 | 382 | **Three** `Fixed`, no `Added`, on four stacked branches released as one before one rebuild — the owner's "1 2 si 3" (two small observations left by the scale work, and a pass over the docs) and her review of what followed. One entry per mechanism, each would have shipped without the others: (1) closing the app during a backup import or export let the worker die past the 30-second wait, leaving the unpacked backup, a half-copied attachment or an unfinished `.tmp`, and nothing said so — the next start's word, which the owner asked for at case 660, belongs to this entry (one complaint, completed inside this work); (2) drawing a note's tables asked every drawn grid for each cell, quadratic in the tables; (3) a theme switch rebuilt every drawn table, which flickered — field-reported by the owner. All three shipped in `0.94.379` or earlier, so all count. Not counted: the freshness pass over every `.md` and the retaken Appearance screenshot (docs), the part of the theme switch that remains (Known limitations, measured), and the tests — ST01–ST10, TB01–TB02, TH01–TH06, CN01–CN05. |
 
 ### At the real launch: 1.0.0 and after
 
@@ -502,6 +503,18 @@ The growth from ~26 ms to 37 ms is five months of features, not a regression: no
 rebuilds what it did not before. **Do not reach for a rendering trick here** — that is exactly what
 the three reverted attempts were. The only thing that removes this is not being Tkinter, which is a
 decision of a different size and lives under [Under consideration](#under-consideration).
+
+*Tables, 2026-10-15.* The owner saw the switch flicker more on a note with tables, and it did:
+`apply_theme` rebuilt every drawn table, and a rebuilt table appears late — caught mid-switch, a
+table was simply gone for a frame. Tables are now repainted in place
+([Theme tracking](ARCHITECTURE.md#theme-tracking--two-different-patterns-on-purpose)). What
+remains was measured by reading two pixels every 9 ms, one in a table and one on the page beside
+it, over twelve switches: in about a third of them the two disagree for 10–20 ms, because the
+repaint after a switch takes ~23 ms, longer than one screen frame. A note without tables shows the
+same in smaller pieces (the colour button, a scrollbar). Two more ways were tried and dropped:
+repainting the tables next to the note's text changed nothing measurable, and Windows painting
+the whole window off screen (`WS_EX_COMPOSITED`) stopped the app from finishing its start. Left as
+it is — the owner's call.
 
 **Sharp on one screen's scale only** — with Sharp text on, the app is drawn for the main screen's
 scale, and Windows resizes it as a picture on a second screen at another scale, a little soft

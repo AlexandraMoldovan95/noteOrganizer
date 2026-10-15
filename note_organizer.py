@@ -47,7 +47,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.94.379"
+APP_VERSION = "0.94.382"
 
 
 def parse_version(v):
@@ -1655,6 +1655,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 )
             lines.append(msg)
 
+        # Recorded by _settle_background_work_at_close, said once.
+        cut = get_setting("backup_cut_short", None, expect=dict)
+        if cut:
+            save_setting("backup_cut_short", None)
+            name = os.path.basename(str(cut.get("file") or "")) or "the backup"
+            if cut.get("kind") == "import":
+                lines.append(
+                    f"The import of {name} was cut short when Note Organizer "
+                    "closed, so nothing from it was kept: no notes and no "
+                    "files. To bring it in, import it again (Settings → "
+                    "Backup → Import).")
+            else:
+                lines.append(
+                    f"The export to {name} was cut short when Note Organizer "
+                    "closed, so no new backup was made. A file already there "
+                    "under that name is as it was. To make one, export again "
+                    "(Settings → Backup → Export).")
+
         if VERSION_CHANGE:
             direction, old, new = VERSION_CHANGE
             if direction == "up":
@@ -2047,13 +2065,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         folder. The close used to wait for the worker and quit, leaving both
         behind (forty orphaned files in one run) and the export unrecorded.
         Merging instead would mean asking the import's questions in a window
-        that is closing.
+        that is closing. An import dropped, or an export cut short, leaves a
+        line the next start reads out (announce_startup_changes): nothing
+        said it before, and the work looked done.
         """
         state = self._export_state
         if state is not None and state.get("done") and not state.get("error"):
             self._remember_finished_export()
             self._export_state = None
+        elif state is not None:
+            # Stopped past the wait, or still running: no new backup. A
+            # window that is closing cannot say so; the next start does.
+            save_setting("backup_cut_short", {
+                "kind": "export", "file": state.get("save_path") or ""})
         state = self._import_state
+        if state is not None:
+            save_setting("backup_cut_short", {
+                "kind": "import", "file": state.get("zip") or ""})
         if state is None or not state.get("done"):
             # Still running past the wait's cap: leave it alone.
             return
@@ -11125,7 +11153,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._import_state = {"phase": "extracting", "current": 0, "total": 1,
                               "done": False, "error": None,
                               "temp_dir": None, "imported_notes": None,
-                              "copied": []}
+                              "copied": [], "zip": zip_path}
         self.export_progress_bar.configure(maximum=1, value=0)
         self.export_progress_lbl.config(text="Importing… reading backup")
         self.export_progress_frame.place(relx=0.5, rely=1.0, anchor="s", y=-14)

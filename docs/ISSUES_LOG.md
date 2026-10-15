@@ -63,7 +63,7 @@ is in the table below as well.
 | [The binding that could never fire](#the-binding-that-could-never-fire) | A binding is not an answer to "does this key work" — ask where the key goes; and a probe whose finding is an absence needs a control that produces the presence. | 0.75.183 |
 | [Eleven decisions about your notes, made from half the evidence](#eleven-decisions-about-your-notes-made-from-half-the-evidence) | When two files must agree, rebuild the weaker from the stronger; an automatic removal asks the strictest question there is; a dialog's promise is part of the mechanism. | 0.81.213 |
 | [The backup the app could not restore](#the-backup-the-app-could-not-restore) | Every limit on reading is a promise about writing: when the app makes what it later reads, one definition checks both ends. | 0.94.379 |
-| [The import the close waited for, then threw away](#the-import-the-close-waited-for-then-threw-away) | A cap on a wait is half a decision: say what happens to the work still running at the cap — and test the cleanup on the case it exists for. | — |
+| [The import the close waited for, then threw away](#the-import-the-close-waited-for-then-threw-away) | A cap on a wait is half a decision: say what happens to the work still running at the cap — and test the cleanup on the case it exists for. | 0.94.382 |
 | [The Cancel that went ahead anyway](#the-cancel-that-went-ahead-anyway) | A function that can be told "no" must say so to its caller; a modal dialog holds the mouse only unless the keyboard is held too; bind the end of a widget-level record to the widget's own end. | 0.82.230 |
 | [The paste that landed on top of the placeholder](#the-paste-that-landed-on-top-of-the-placeholder) | `bind()` replaces where `add="+"` accumulates, so a widget's own binding silently displaces a shared helper's; and a virtual event outranks the physical one beside it in the same bindtag. | 0.75.185 |
 | [The sweep that stopped at the edge of the Settings page](#the-sweep-that-stopped-at-the-edge-of-the-settings-page) | A fix's sibling sweep must name the surfaces it did not visit; a cap in characters is not a width; and text that wraps for the first time inherits every multi-line default the widget was hiding. | 0.81.202 |
@@ -1817,7 +1817,7 @@ the bug that loses the backup.
 
 ### The import the close waited for, then threw away
 
-*(2026-10-15)*
+*([0.94.382](../CHANGELOG.md#094382--2026-10-15) · 2026-10-15)*
 
 **Symptom:** none reported. A probe asked what closing the app leaves behind. Closed three
 seconds into importing a 600 MB backup, the window took 33 seconds to go and left 1.2 GB on
@@ -1839,6 +1839,11 @@ the cap. The worker hands zipfile its file wrapped in a `StoppableFile`, whose n
 raises once a stop is asked, so even one huge file stops between two chunks, inside zipfile's own
 loops, without reaching into them. The worker's own error path then removes what it had begun.
 The same 600 MB import now closes in about 3 seconds and leaves nothing.
+
+**What the owner added.** Leaving nothing is half of it: the person also has to know that nothing
+was kept, or they believe the import (or the backup) happened. A closing window cannot say so,
+so the close writes it down and the next start reads it out once, naming the file and what to do
+again.
 
 **Takeaway:** a cap on a wait is half a decision; the other half is what happens to the work
 still running when the cap is reached. And a cleanup tested only on work that finished in time
@@ -3209,7 +3214,7 @@ that row as it is.
 
 **Takeaway:** three attempts were spent hiding a symptom before anyone measured where the time went; the measurement pointed straight at the fix and took less effort than any of them. When something looks like a rendering problem, profile before reaching for a rendering trick. Also worth remembering: an "additive" fix that only wraps existing behaviour can still make things worse (attempt 2), and reverting cleanly is a legitimate outcome rather than a failure. What remains is a genuine plain-Tkinter limit — one OS window per widget, each repainting as it is recoloured — not something further code can remove.
 
-**2026-10-15, the same class again.** The owner noticed the switch flickering on a note with tables, and less on one without. `apply_theme()` rebuilt every drawn table, since their colours live in canvas items no tracked widget reaches. Each rebuilt table is a new window that appears a moment late. The fix is the cards' fix: `_recolor_table_grids()` repaints the grids in place, proven against what a rebuild draws. Measured with 30 tables: 103 ms down to 87, and no window is created.
+**2026-10-15, the same class again.** The owner noticed the switch flickering on a note with tables, and less on one without. `apply_theme()` rebuilt every drawn table, since their colours live in canvas items no tracked widget reaches. Each rebuilt table is a new window that appears a moment late. The fix is the cards' fix: `_recolor_table_grids()` repaints the grids in place, proven against what a rebuild draws. Measured with 30 tables: 103 ms down to 87, and no window is created. It does not make the switch perfect: in about a third of switches a table and the page beside it still disagree for 10–20 ms, the per-window repaint above, measured and recorded under [Known limitations](ROADMAP.md#known-limitations) with the two further ways tried.
 
 ### The list that was drawn whole, for every pause in typing
 

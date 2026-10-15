@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.94.382](#094382--2026-10-15) | 2026-10-15 | Closing the app in the middle of a backup leaves nothing behind and the next start says so; a note with many tables opens faster, and changing the theme no longer redraws its tables. |
 | [0.94.379](#094379--2026-10-15) | 2026-10-15 | A backup of any size comes back in, and a share code is never one its import refuses; a long notebook stays quick when one note moves, a big import no longer freezes, and a day left open on the Calendar waits instead of rebuilding at every save. |
 | [0.94.374](#094374--2026-10-14) | 2026-10-14 | Misspelled words underlined with Windows' own dictionaries, quiet on sentences in a language the computer cannot check — with suggestions, Ignore, Add to Windows dictionary and a switch to turn it off. |
 | [0.93.374](#093374--2026-10-14) | 2026-10-14 | Text and icons sharp on a screen Windows enlarges, with everything that holds text grown to match — and a setting to turn it off for a second screen that isn't enlarged. |
@@ -102,6 +103,10 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+---
+
+## [0.94.382] — 2026-10-15
+
 ### Fixed
 
 - **Closing the app during a backup import or export leaves nothing behind.** The close waited
@@ -111,6 +116,8 @@ How the numbers themselves are counted is the
   off the same way left an unfinished file beside the backup. An import is now stopped at once,
   since the close drops it anyway, and an export still writing after the half minute is stopped
   too. Each takes its unfinished files away, and the same import now closes in about 3 seconds.
+  The next time the app opens, it says what was cut short and what to do again: nothing said
+  so before, and the work looked done.
 - **A note with many tables opens faster.** Each cell of a table being drawn asked every table
   already drawn where it started, so the cost grew with the square of the tables: 59,600
   questions for 100 tables, where 200 are needed. Drawing 100 tables went from 236 ms to 140 ms,
@@ -127,7 +134,9 @@ How the numbers themselves are counted is the
   long the close takes and what is left in the temp folder, in attachments and beside the backup.
   `test_data_safety` checks that a backup written through the stoppable file is the same byte
   for byte, and that writing, unpacking and copying each stop mid-file when asked. Mutants
-  ST01–ST10.
+  ST01–ST10. qa3 also checks what the next start says, once, after an import or an export cut
+  short, and that a close with nothing running, or an export finished in time, says nothing.
+  Mutants CN01–CN05.
 - qa1 counts how often drawing twelve tables asks where a grid starts (twice per table), and
   checks that a coloured letter in the last table still draws as itself. Mutants TB01–TB02.
 - qa1 switches the theme on eight tables carrying a coloured letter, a highlight, a coloured
