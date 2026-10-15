@@ -4080,5 +4080,65 @@
     "must_fail": ["...and a coloured letter in the last of them still draws as itself"],
     "suites": ["qa1"],
     "expect": "killed"
+  },
+  {
+    "id": "TH01",
+    "about": "a theme switch rebuilds every drawn table again, and the switch flickers on a note with tables",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if not self._recolor_table_grids():\n            self._render_table_grids(keep_typed=self._row_being_typed())\n",
+               "replace": "        self._render_table_grids(keep_typed=self._row_being_typed())\n"}],
+    "must_fail": ["a theme switch keeps every drawn table, repainted in place"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "TH02",
+    "about": "a hidden column's slivers keep the old theme after a switch",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                for rect, r in info.get(\"slivers\", ()):\n",
+               "replace": "                for rect, r in ():\n"}],
+    "must_fail": ["...and each one drawn exactly as a rebuild in the new theme draws it"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "TH03",
+    "about": "the cells' outlines keep the old theme's hairline after a switch",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                    canvas.itemconfigure(cell[\"rect\"], outline=rule, width=1)\n",
+               "replace": "                    pass\n"}],
+    "must_fail": ["...and each one drawn exactly as a rebuild in the new theme draws it"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "TH04",
+    "about": "a stale table is repainted in place at a switch instead of rebuilt",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if any(info.get(\"stale\") or self._grid_first_line(info) is None\n",
+               "replace": "        if any(self._grid_first_line(info) is None\n"}],
+    "must_fail": ["...while a stale table is rebuilt at the switch"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "TH05",
+    "about": "repainting a cell asks every drawn grid where it starts, so a switch grows with cells times tables",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        styles = self._cell_value_styles(\n            line_no, line, c,\n            base=1 if line_no == self._grid_first_line(info) else 0)\n",
+               "replace": "        styles = self._cell_value_styles(line_no, line, c)\n"}],
+    "must_fail": ["...asking where a grid starts a few times per cell, not of every grid"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "TH06",
+    "about": "a selection loses its outline at a theme switch",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if sel and any(sel[\"info\"] is info for info in grids):\n",
+               "replace": "        if False:\n"}],
+    "must_fail": ["...its selection outlined in the new accent"],
+    "suites": ["qa1"],
+    "expect": "killed"
   }
 ]

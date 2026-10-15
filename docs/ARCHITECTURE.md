@@ -367,6 +367,13 @@ changes note *data*, so `_recolor_note_cards()` now re-applies colors to the car
 drawn, through the items each card's record in `_note_cards` names (the list is a drawing on
 one canvas; see [Large lists](#large-lists-draw-what-can-be-seen-the-rest-on-demand)).
 
+The drawn tables are the same case. Until 2026-10-15 `apply_theme()` rebuilt every grid, and
+each new grid is a new window that maps a moment late: the switch flickered on a note with
+tables and not on one without (a field report). `_recolor_table_grids()` now repaints what each
+grid's record names: its cells, a hidden column's slivers and the selection. Only a grid that
+is gone or stale is still rebuilt. qa1 holds it the way the cards were held: the repainted grids
+must match, item for item, what a rebuild in the new theme draws.
+
 This is **not** the `track_theme` pattern that leaked: `_note_cards` is rebuilt from scratch
 by every `refresh_note_list()`, and every update that stops short of one keeps it exact, so it
 only ever holds the cards that are drawn. And since a drawing is not a widget,

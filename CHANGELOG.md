@@ -115,6 +115,10 @@ How the numbers themselves are counted is the
   already drawn where it started, so the cost grew with the square of the tables: 59,600
   questions for 100 tables, where 200 are needed. Drawing 100 tables went from 236 ms to 140 ms,
   and 30 tables from 75 ms to 53 ms.
+- **Changing the theme on a note with tables no longer flickers.** The switch rebuilt every
+  table, and a rebuilt table appears a moment late; a note without tables had nothing to
+  rebuild, so the switch looked smoother there. The tables are now repainted in place, as the
+  note list already was. With 30 tables the switch takes 87 ms instead of 103.
 
 ### Testing
 
@@ -126,6 +130,10 @@ How the numbers themselves are counted is the
   ST01–ST10.
 - qa1 counts how often drawing twelve tables asks where a grid starts (twice per table), and
   checks that a coloured letter in the last table still draws as itself. Mutants TB01–TB02.
+- qa1 switches the theme on eight tables carrying a coloured letter, a highlight, a coloured
+  checkbox, a hidden column and a selection. No table is rebuilt, the selection keeps its
+  outline, and each table matches item for item what a rebuild in the new theme draws; a stale
+  table is still rebuilt. Mutants TH01–TH06.
 
 ---
 

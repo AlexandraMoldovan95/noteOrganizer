@@ -3209,6 +3209,8 @@ that row as it is.
 
 **Takeaway:** three attempts were spent hiding a symptom before anyone measured where the time went; the measurement pointed straight at the fix and took less effort than any of them. When something looks like a rendering problem, profile before reaching for a rendering trick. Also worth remembering: an "additive" fix that only wraps existing behaviour can still make things worse (attempt 2), and reverting cleanly is a legitimate outcome rather than a failure. What remains is a genuine plain-Tkinter limit — one OS window per widget, each repainting as it is recoloured — not something further code can remove.
 
+**2026-10-15, the same class again.** The owner noticed the switch flickering on a note with tables, and less on one without. `apply_theme()` rebuilt every drawn table, since their colours live in canvas items no tracked widget reaches. Each rebuilt table is a new window that appears a moment late. The fix is the cards' fix: `_recolor_table_grids()` repaints the grids in place, proven against what a rebuild draws. Measured with 30 tables: 103 ms down to 87, and no window is created.
+
 ### The list that was drawn whole, for every pause in typing
 
 *([0.82.230](../CHANGELOG.md#082230--2026-09-30))*
