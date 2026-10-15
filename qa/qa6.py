@@ -1132,6 +1132,67 @@ for _theme in ('light', 'dark'):
 app.hide_settings_page()
 app.update()
 
+# ---- SEND FEEDBACK (Settings → About) ----
+# The button opens the site's feedback page in the browser, carrying what
+# the app may say about itself (core/diagnostics): the version, how it draws,
+# how big the notebook is -- never a note's words. The browser is stood in
+# for here: nothing is opened.
+import webbrowser as _fb_web
+from urllib.parse import parse_qsl as _fb_parse, urlsplit as _fb_split
+from noteorganizer.core import diagnostics as _fb_diag
+_fb_opened, _fb_warned = [], []
+_fb_real = (_fb_web.open, _fb_diag.STORE_REVIEW_URL, app.notes, app.show_warning)
+app.notes = [NO.normalize_note({'id': 1, 'title': 'SECRET-TITLE', 'body': 'SECRET-BODY',
+                                'attachments': [{'name': 'a.pdf', 'stored_as': '1_a.pdf'}]}),
+             NO.normalize_note({'id': 2, 'title': 'two', 'body': 'x'})]
+_fb_frame = tk.Frame(app)
+try:
+    _fb_web.open = lambda url, *a, **k: (_fb_opened.append(url), True)[1]
+    app.show_warning = lambda *a, **k: _fb_warned.append(' '.join(map(str, a)))
+    app._build_settings_about_panel(_fb_frame)
+    _fb_btn = find_btn_qa6(_fb_frame, 'Send feedback')
+    check('About offers Send feedback', _fb_btn is not None)
+    if _fb_btn is not None:
+        _fb_btn.invoke()
+    _fb_url = _fb_opened[0] if _fb_opened else ''
+    _fb_q = dict(_fb_parse(_fb_split(_fb_url).query))
+    check(f'Send feedback opens the feedback page, naming the version, how the app '
+          f'draws and how big the notebook is ({_fb_q})',
+          len(_fb_opened) == 1 and _fb_url.startswith(_fb_diag.FEEDBACK_URL + '?')
+          and _fb_q.get('version') == NO.APP_VERSION and _fb_q.get('notes') == '2'
+          and _fb_q.get('files') == '1'
+          and _fb_q.get('theme') == NO.THEME_LABELS[app.theme_name]
+          and _fb_q.get('scale', '').endswith('%') and _fb_q.get('sharp') in ('on', 'off'))
+    check('...and nothing from the notes in its link',
+          bool(_fb_url) and 'SECRET' not in _fb_url)
+    check('no Store button while the app is not in the Store',
+          find_btn_qa6(_fb_frame, 'Rate on the Store') is None)
+    # A browser that will not open: the link is copied, and the words say
+    # where to paste it.
+    _fb_web.open = lambda url, *a, **k: False
+    if _fb_btn is not None:
+        _fb_btn.invoke()
+    check('a browser that will not open leaves the link copied, and says so',
+          bool(_fb_warned) and 'copied' in _fb_warned[-1]
+          and app.clipboard_get().startswith(_fb_diag.FEEDBACK_URL + '?'))
+    # Once the app has a Store page, its review page has a button too.
+    _fb_diag.STORE_REVIEW_URL = 'ms-windows-store://review/?ProductId=TEST'
+    _fb_web.open = lambda url, *a, **k: (_fb_opened.append(url), True)[1]
+    _fb_frame.destroy()
+    _fb_frame = tk.Frame(app)
+    app._build_settings_about_panel(_fb_frame)
+    _fb_store = find_btn_qa6(_fb_frame, 'Rate on the Store')
+    if _fb_store is not None:
+        _fb_store.invoke()
+    check('with a Store page, Rate on the Store opens its review page',
+          _fb_store is not None and _fb_opened[-1] == _fb_diag.STORE_REVIEW_URL)
+finally:
+    # Put back what was there -- the script's own silent stand-in from its
+    # first lines -- not the real dialog a del would have uncovered.
+    _fb_web.open, _fb_diag.STORE_REVIEW_URL, app.notes, app.show_warning = _fb_real
+    _fb_frame.destroy()
+    app.update()
+
 # ---- EXPANDING THE BODY BOX ----
 # Twelve rows suits most notes and is cramped for a long one, so the writing
 # area has the same one-click Expand toggle the comments box has. Dragging an

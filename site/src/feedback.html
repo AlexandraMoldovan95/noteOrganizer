@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Send feedback · Note Organizer</title>
+<meta name="description" content="Tell us what is not working, what is slow, or an idea for Note Organizer.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="stylesheet" href="site.css">
+<script src="site.js"></script>
+<script src="feedback.js" defer></script>
+</head>
+<body>
+<main id="main" class="doc">
+  <div class="wrap">
+    <h1>Send feedback</h1>
+    <p>Something not working, slow, or an idea? Tell us in a few words &mdash; it takes a minute.</p>
+
+    <!-- Netlify keeps what is sent and forwards it by email; no address
+         appears on this page. "company" is a trap for robots: a person never
+         sees it, and a message that fills it is dropped. -->
+    <form class="feedback" name="feedback" method="POST" action="thanks.html"
+          data-netlify="true" netlify-honeypot="company">
+      <input type="hidden" name="form-name" value="feedback">
+      <p class="trap" aria-hidden="true">
+        <label>Leave this empty <input name="company" tabindex="-1" autocomplete="off"></label>
+      </p>
+
+      <label class="field" for="what">What happened?</label>
+      <textarea id="what" name="what" rows="6" required></textarea>
+      <p class="hint">For example: &ldquo;I opened a note with a table, pressed Ctrl+Z, and the table lost a column.&rdquo;</p>
+
+      <fieldset class="choices">
+        <legend>What is it about?</legend>
+        <label><input type="radio" name="about" value="Something I wrote was lost"> Something I wrote was lost</label>
+        <label><input type="radio" name="about" value="It is slow"> It is slow, or freezes for a moment</label>
+        <label><input type="radio" name="about" value="Something does not work"> Something does not work</label>
+        <label><input type="radio" name="about" value="Something looks wrong"> Something looks wrong</label>
+        <label><input type="radio" name="about" value="An idea"> An idea</label>
+      </fieldset>
+
+      <label class="field" for="email">Your email, if you'd like an answer <span class="optional">(optional)</span></label>
+      <input id="email" type="email" name="email" autocomplete="email">
+
+      <div class="details" id="details" hidden>
+        <p>Sent with your message &mdash; nothing from your notes:</p>
+        <ul id="details-list"></ul>
+      </div>
+      <!-- Filled from the link the app opens (core/diagnostics.py, DETAIL_KEYS). -->
+      <input type="hidden" name="version">
+      <input type="hidden" name="scale">
+      <input type="hidden" name="sharp">
+      <input type="hidden" name="theme">
+      <input type="hidden" name="notes">
+      <input type="hidden" name="files">
+      <input type="hidden" name="mb">
+      <input type="hidden" name="windows">
+      <input type="hidden" name="build">
+
+      <p><button class="btn btn-primary" type="submit">Send</button></p>
+    </form>
+    <p class="hint">Opened from the app: Settings &rarr; About &rarr; Send feedback adds the details above by itself.</p>
+  </div>
+</main>
+</body>
+</html>

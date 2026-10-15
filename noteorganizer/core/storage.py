@@ -14,7 +14,7 @@ import os
 import shutil
 from datetime import datetime, timedelta
 
-from . import paths
+from . import diagnostics, paths
 # normalize_template validates a template's rich-text spans and its
 # paragraph formatting, so the storage layer needs both validators.
 from .formatting import (normalize_formatting, normalize_paragraphs,
@@ -515,13 +515,7 @@ on_write_failure = None
 
 
 def _report_write_failure(path, exc):
-    try:
-        with open(os.path.join(paths.APP_DIR, "crash_log.txt"), "a",
-                  encoding="utf-8") as f:
-            f.write("\n--- %s (write failure) ---\n%s\n%r\n"
-                    % (datetime.now().isoformat(), path, exc))
-    except (IOError, OSError):
-        pass
+    diagnostics.append_crash_log("write failure", "%s\n%r" % (path, exc))
     cb = on_write_failure
     if cb is not None:
         try:

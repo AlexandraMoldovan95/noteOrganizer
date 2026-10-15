@@ -1391,6 +1391,95 @@ finally:
     _storage.on_write_failure = _real_wf_cb
     shutil.rmtree(_wf_dir, ignore_errors=True)
 
+# ---- What the app says about itself (core/diagnostics, 2026-10-15) ----
+# The feedback page and crash_log.txt carry the same details: the version,
+# how the app draws, how big the notebook is, the Windows -- never what a
+# note says, never a path (a folder's path holds the person's name).
+from urllib.parse import parse_qsl as _dg_parse, urlsplit as _dg_split
+from noteorganizer.core import diagnostics as _diag
+_dg_dir = tempfile.mkdtemp()
+_real_dg = (NO_paths.APP_DIR, NO_paths.DATA_FILE, _diag.app_details, _diag.version)
+
+
+def _dg_try(fn):
+    try:
+        return fn()
+    except Exception as _exc:  # a broken writer is a FAIL line, not a crash
+        return _exc
+
+
+def _dg_read(path):
+    return open(path, encoding="utf-8").read() if isinstance(path, str) else ""
+
+
+try:
+    NO_paths.APP_DIR = _dg_dir
+    NO_paths.DATA_FILE = os.path.join(_dg_dir, "notes_data.json")
+    _dg_notes = [{"id": 1, "title": "SECRET-TITLE", "body": "SECRET-BODY",
+                  "attachments": [{"name": "SECRET.pdf", "stored_as": "1_SECRET.pdf"}]},
+                 {"id": 2, "title": "two", "body": "x", "attachments": []},
+                 "not a note"]
+    with open(NO_paths.DATA_FILE, "w", encoding="utf-8") as _fh:
+        json.dump(_dg_notes, _fh)
+    _diag.version = "9.9.9"
+    # A provider that hands over more than it should: a path and a title.
+    _diag.app_details = lambda: ([("scale", "150%"), ("sharp", "on"),
+                                  ("theme", "Midnight Purple")]
+                                 + _diag.notebook(_dg_notes)
+                                 + [("path", _dg_dir), ("title", "SECRET-TITLE")])
+    _dg_url = _diag.feedback_url()
+    _dg_q = dict(_dg_parse(_dg_split(_dg_url).query))
+    check("the feedback link carries the version, how the app draws and how big the "
+          "notebook is",
+          _dg_url.startswith(_diag.FEEDBACK_URL + "?") and _dg_q.get("version") == "9.9.9"
+          and _dg_q.get("notes") == "2" and _dg_q.get("files") == "1"
+          and _dg_q.get("scale") == "150%" and "windows" in _dg_q
+          and _dg_q.get("build") in ("exe", "source"))
+    check("...and nothing else: no note's words, no file name, no path, whatever the "
+          "app hands it",
+          set(_dg_q) <= set(_diag.DETAIL_KEYS) and "SECRET" not in _dg_url
+          and os.path.basename(_dg_dir) not in _dg_url)
+    check("a link made from any pairs at all keeps only the details' own names",
+          "SECRET" not in _diag.feedback_url([("version", "1"), ("title", "SECRET")])
+          and "version=1" in _diag.feedback_url([("version", "1"), ("title", "SECRET")]))
+    _dg_text = _dg_read(_dg_try(lambda: _diag.append_crash_log("test", "the trace")))
+    _dg_head = _dg_text.split("the trace")[0]
+    check("a crash log entry names the version, the notebook's size and the Windows, "
+          "above its trace",
+          "(test)" in _dg_head and "version: 9.9.9" in _dg_head and "notes: 2" in _dg_head
+          and "windows: " in _dg_head and _dg_text.rstrip().endswith("the trace"))
+    check("...and no note's words or path in its line of details",
+          "SECRET" not in _dg_head and os.path.basename(_dg_dir) not in _dg_head)
+    _diag.app_details = lambda: 1 / 0
+    _dg_text = _dg_read(_dg_try(lambda: _diag.append_crash_log("broken", "trace two")))
+    check("a details provider that breaks cannot stop a crash being logged",
+          "trace two" in _dg_text)
+    NO_paths.APP_DIR = None
+    check("before the data folder is known, a crash log writes nothing instead of raising",
+          _dg_try(lambda: _diag.append_crash_log("crash", "early")) is None)
+finally:
+    NO_paths.APP_DIR, NO_paths.DATA_FILE, _diag.app_details, _diag.version = _real_dg
+    shutil.rmtree(_dg_dir, ignore_errors=True)
+
+# One writer for crash_log.txt: every other place in the app hands its entry
+# to diagnostics.append_crash_log, so every entry carries the same details.
+# Four places wrote it by hand, each in its own format.
+import tokenize as _dg_tok
+_dg_writers = []
+_dg_sources = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "note_organizer.py")]
+for _dg_root, _dg_dirs, _dg_files in os.walk(os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "noteorganizer")):
+    _dg_sources += [os.path.join(_dg_root, _f) for _f in _dg_files if _f.endswith(".py")]
+for _dg_src in _dg_sources:
+    if os.path.basename(_dg_src) == "diagnostics.py":
+        continue
+    with open(_dg_src, "rb") as _fh:
+        for _t in _dg_tok.tokenize(_fh.readline):
+            if _t.type == _dg_tok.STRING and _t.string.strip("\"'") == "crash_log.txt":
+                _dg_writers.append("%s:%d" % (os.path.basename(_dg_src), _t.start[0]))
+check("crash_log.txt is written in one place only (%s)" % (_dg_writers or "none other"),
+      _dg_writers == [])
+
 # ---- The one-time cleanup must not delete real notes (product review T0-1) ----
 # note_is_empty decides what the cleanup DESTROYS, so it has to mean the
 # same thing by "content" as the editor does. It counted title/body/
