@@ -136,7 +136,14 @@ def main(argv):
         if "FAILURES" not in r.stdout and "check(s)" not in r.stdout:
             unfinished.append(name)
             print("  DID NOT FINISH (exit %d):" % r.returncode)
-            for line in (r.stdout + r.stderr).strip().splitlines()[-6:]:
+            # The whole traceback: the frame that names who called is at
+            # its top. Six lines showed only where it broke, never from
+            # where -- run_tests.py learned this first, this tool did not.
+            lines = (r.stdout + r.stderr).strip().splitlines()
+            starts = [i for i, ln in enumerate(lines)
+                      if ln.startswith("Traceback (most recent call last)")]
+            shown = lines[starts[-1]:] if starts else lines[-25:]
+            for line in shown[-80:]:
                 print("    " + line)
 
     subprocess.run([sys.executable, "-m", "coverage", "combine",
