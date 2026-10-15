@@ -3826,7 +3826,7 @@ dependency.*
   whatever did not fit was simply unreachable. The wheel now scrolls it anywhere over the list,
   while the brand and the theme toggle stay put.
 - **A note title is now limited to 200 characters.** Not for storage or layout — the note list
-  already shortens titles to 60 for display — but because tk.Entry slows roughly with the
+  already shortens titles to 42 for display — but because tk.Entry slows roughly with the
   square of what it holds: one keystroke measured 0.5ms at 30 characters, 38ms at 10,000 and
   3.5 seconds at 100,000, so a document pasted into the title by accident froze the field with
   no way to edit it back. An over-long paste is shortened to fit rather than refused whole,
@@ -4515,7 +4515,7 @@ versions are cumulative Added/Fixed totals — see the
 
 ### Added
 - **Note CRUD** — create, edit, pin, duplicate, soft-delete to trash with automatic purge after
-  a configurable retention window.
+  a 30-day retention window (a setting since 0.58.82).
 - **Categories** — create, rename, delete (with reassignment of affected notes), custom colors.
 - **Recurring notes** — daily / weekly / monthly / yearly recurrence with custom intervals,
   specific-weekday and specific-day-of-month selection, a clamp/skip policy for month-end edge

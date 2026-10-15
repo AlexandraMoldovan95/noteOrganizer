@@ -63,16 +63,17 @@ can be reviewed; the memory is just the agent's working notebook.
 ## How the agent's work is checked
 
 - **Checks are tested too.** Every fix's check is mutation-tested; the mutants worth keeping
-  (298, and 2 that test the runner itself) live in [`tools/mutants.json`](../tools/mutants.json)
+  (310, and 2 that test the runner itself) live in [`tools/mutants.json`](../tools/mutants.json)
   and run on demand in CI. A verdict counts only if the suite reached its end - a mutant that
   crashes the import "survives nothing" by running nothing, and the runner refuses it.
 - **Findings are hypotheses.** When agents review the app, each finding is checked against the
   code before it is believed, often by separate verifiers told to refute it when unsure. What
   was refuted stays on record, so nobody chases it again
   ([findings register](archive/PRODUCT_FINDINGS.md)).
-- **Every report says what it did not cover.** An agent's report ends with what it skipped;
-  each such gap gets a verdict - cover it, it is covered elsewhere, or accept it
-  ([coverage ledger](archive/COVERAGE_LEDGER.md)).
+- **Every report says what it did not cover.** An agent's report ends with what it skipped,
+  and the gaps are weighed with the findings. Until October 2026 each one got a written
+  verdict - cover it, it is covered elsewhere, or accept it - in a
+  [coverage ledger](archive/COVERAGE_LEDGER.md), now archived.
 - **Real numbers only.** Failed rounds and raw scores are reported as they are, never smoothed.
   When a document states a figure, a tool can usually reproduce it (`tools/bench.py` for speed,
   `tools/call_graph.py` for the module split, `tools/verify_findings.py` for the register).

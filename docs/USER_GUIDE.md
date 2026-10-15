@@ -821,7 +821,8 @@ label reads **Unselect all** once everything on screen is ticked.
 
 One code carries at most 200 notes. Tick more than that, or notes too long for one code, and the
 panel says so instead of making a code no copy of the app would import: share them in parts, or
-send a full backup (below).
+send a full backup (below). **Generate code** in the editor does the same for one note too long
+for a code, on the status line.
 
 The notes come in the same order as the note list (your **Sort** choice, pinned notes first),
 and keep to it while the panel is open: change the sort or pin a note and the panel follows at
@@ -897,7 +898,7 @@ attachments.
 
 ### Full backup: export
 
-Settings → Export notes creates a single `.zip` containing every note, your settings, every
+Settings → Backup → **Export** creates a single `.zip` containing every note, your settings, every
 attachment, your templates and the Trash — the one file that moves *everything* to another
 device. A line under the button
 remembers when you last did this — worth a glance now and then, because that `.zip` is the only
@@ -911,7 +912,7 @@ The previous backup stays as it was.
 
 ### Full backup: import
 
-Settings → Import notes brings a previously exported `.zip` back in — notes, settings,
+Settings → Backup → **Import** brings a previously exported `.zip` back in — notes, settings,
 attachments, templates and the Trash together. Just like importing a code, you'll be asked
 about any notes that look identical to what you already have before anything is added; a
 template only comes in if you don't already have one by that name, and re-importing the same
@@ -933,12 +934,12 @@ Every question is asked before anything changes: **Cancel**, on any question tha
 leaves your notes, files and Trash exactly as they were. The question about unchanged notes has
 no Cancel — skipping them already changes nothing — so the import goes on with the rest.
 
-Any backup the app made can be imported back, however large: the only limit is the free space on
+Any backup the app made can be imported back, however large: what matters is the free space on
 the disk, and the import checks it first and says how much it needs. (The attachments need room
 twice for a moment: the backup is unpacked, then its files are copied in.) What it refuses is an
-archive shaped like a damaged or hostile one, where a file, or the whole backup, would expand to
-hundreds of times its packed size; the export checks each backup it makes the same way before
-putting it in place.
+archive shaped like a damaged or hostile one: more than 100,000 files, or a large file, or the
+whole backup, that would expand to over a hundred times its packed size. The export checks each backup
+it makes the same way before putting it in place, so it never makes one it could not bring back.
 
 Closing the app while an import is still working stops it straight away. Nothing of it is kept —
 no notes, no files, nothing left in the temp folder — so you can simply import the backup again.

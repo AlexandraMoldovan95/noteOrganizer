@@ -58,7 +58,7 @@ py note_organizer.py
 
 `note_organizer.py` is still the front door. The pure logic has moved into
 the `noteorganizer/` package next to it and is imported back in; the entry
-file itself stays large (~20,500 lines) because it is the UI hub the pieces
+file itself stays large (~21,500 lines) because it is the UI hub the pieces
 hang off, not a junk drawer of stray logic.
 
 To run every test — units + qa1–qa9 — safely in a scratch copy:
@@ -407,7 +407,7 @@ Two are handled explicitly, because dates are full of them:
 
 ### Where it's tested
 
-`test_recurrence.py` — 47 checks, no GUI. Read it alongside the module: it
+`test_recurrence.py` — over 120 checks, no GUI. Read it alongside the module: it
 covers the clamp/skip policies, count and end-date limits, exceptions, and
 the performance case above.
 
@@ -783,15 +783,14 @@ Two of those deserve explanation.
 
 **Zip bomb.** A tiny compressed payload that expands to gigabytes. Calling
 `zlib.decompress()` on one exhausts memory *before it returns* — so
-checking the size afterwards is already too late. The fix is to decompress
-in chunks through a decompressor object and stop the moment you cross the
-limit:
+checking the size afterwards is already too late. The fix is to ask a
+decompressor object for at most the limit, and refuse if anything is left
+over:
 
 ```python
-while chunk := decompressor.decompress(..., limit_step):
-    total += len(chunk)
-    if total > limit:
-        raise ValueError(...)
+out = dobj.decompress(compressed, limit)   # never more than limit bytes
+if dobj.unconsumed_tail:                   # there was more: too big
+    raise ValueError(...)
 ```
 
 **Zip Slip.** A ZIP entry named `../../something` would, on naive

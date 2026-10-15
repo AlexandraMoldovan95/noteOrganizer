@@ -67,11 +67,11 @@ circular — and reading it at call time is what the original code did anyway.
 ### `note_organizer.py` — entry point and UI hub
 
 `note_organizer.py` stays the entry point (`py note_organizer.py`) and re-exports the names
-that have moved, so existing callers — including the ~270 `note_organizer.<name>` references
-across the QA scripts — keep working untouched. That's deliberate: it means each extraction is
+that have moved, so existing callers — including the over 1,100 `note_organizer.<name>`
+references across the QA scripts — keep working untouched. That's deliberate: it means each extraction is
 a pure move that leaves the whole test suite green, rather than a rewrite.
 
-What remains in the file is ~20,500 lines of genuinely shared surface. It grew again through
+What remains in the file is ~21,500 lines of genuinely shared surface. It grew again through
 the rich-text and tables work even as the pure logic behind those features went into `core/`,
 and dropped by ~2,700 when the note list moved to `ui/note_list.py` (see the
 [case study](#the-list-measured-again)).
@@ -269,8 +269,9 @@ everywhere, including every dialog) and behaves consistently across the app.
 The system's own dialogs appear in exactly two situations, both deliberate. Choosing a file or
 folder — saving an export, opening a backup, picking a folder, attaching files — uses
 `filedialog`, because the system's chooser knows the person's drives and recent places and a
-hand-built one would be worse. And the last-resort startup-crash dialog uses the plain
-standard-library messagebox, precisely because it must not depend on the app's own UI having
+hand-built one would be worse. And when the app cannot start — the last-resort startup-crash
+dialog, and the "Missing dependency" one shown when Pillow is not installed — it uses the plain
+standard-library messagebox, precisely because that must not depend on the app's own UI having
 come up (see [ISSUES_LOG.md](ISSUES_LOG.md#a-crash-handler-that-would-have-crashed-itself)). This
 heading used to read "No native dialogs, anywhere", which was wrong about the first while the
 code was right.
@@ -1059,8 +1060,9 @@ row above it. So a change to ONE note goes through the one-card path, as a save 
 (`_redraw_saved_card`): a pin, a new category from the note's menu, a move in Custom order
 (`_show_note_moved`). The whole list is drawn again only when the one card cannot be known to
 be enough, and while the keyboard's ring is on the list: following the ring to its card's new
-place is the rebuild's (`_ring_follow`). A move by Alt+↑/↓ is the exception to the exception,
-since it puts the ring on the moved card and brings it into view itself.
+place is the rebuild's (`_ring_follow`). A move in Custom order — Alt+↑/↓ or a drop — is the
+exception to the exception, since it puts the ring on the moved card and brings it into view
+itself.
 
 ### Measured, at 1,000 and 5,000 notes
 
@@ -1338,11 +1340,12 @@ virtual display via Xvfb, and Windows runs through native win32, which is what m
 platform-specific pixel checks bite in CI. A regression shows up as a failed check rather than
 being found by hand later.
 
-The automated coverage is nine headless GUI scripts (`qa/qa1.py`–`qa9.py`) plus seven standalone
+The automated coverage is nine headless GUI scripts (`qa/qa1.py`–`qa9.py`) plus eight standalone
 unit suites: the recurrence engine, data-safety (backups & migration), the in-note calculator's
 expression evaluator, the rich-text conversion and PDF-rejoin logic (`test_richtext.py`), the
-table engine (`test_tables.py`) and a note's identity (`test_note_identity.py`) — these six need
-no GUI — and the entry-module-identity guard, which builds a window. [qa/README.md](../qa/README.md) owns the per-script inventory: which script guards which
+table engine (`test_tables.py`), a note's identity (`test_note_identity.py`) and the spelling
+rules (`test_spelling.py`) — these seven need no GUI — and the entry-module-identity guard, which
+builds a window. [qa/README.md](../qa/README.md) owns the per-script inventory: which script guards which
 surface, and the house rules new checks follow.
 
 `test_entry_module_identity.py` *does* build a window: it exists because the qa scripts'
@@ -1357,7 +1360,8 @@ imported — earlier than it must, since the data migrations run in `initialise(
 constructing the app calls ([Startup](#startup)) — and writes an empty `notes_data.json` and the
 migration marker, so a test's empty folder cannot invite the first-run migration to adopt the
 developer's real notebook from `%APPDATA%`. And it fails closed: it refuses to run unless a scratch run was
-declared (`NOTEORG_SCRATCH=1`, set only by `tools/run_tests.py` and the CI workflow), and beside
+declared (`NOTEORG_SCRATCH=1`, set only by `tools/run_tests.py`, `tools/run_coverage.py` and the
+CI workflow), and beside
 any `notes_data.json` it cannot prove empty — one that holds notes, or one it cannot read. The
 copies it replaced read an unreadable notebook as empty and overwrote it.
 

@@ -57,9 +57,10 @@ git branch
 Put the new file(s) in place, rebuild, and **test it locally** — a rebuild never touches Git, it's
 just for me to look at.
 
-Happy with it? Commit, run the two-second static gates, then push. `py tools/pre_push_check.py` is
-the same set of checks CI runs first — names resolve, class surface unchanged, every `.py`
-compiles — and two PRs went red learning that the hard way. The full suite is `tools/run_tests.py`.
+Happy with it? Commit, run the static gates, then push. `py tools/pre_push_check.py` runs the
+cheap checks CI runs first — names resolve, class surface unchanged, one definition per question,
+links, English, deny rules, comments, contrast, every `.py` compiles; its docstring lists them —
+and two PRs went red learning that the hard way. The full suite is `tools/run_tests.py`.
 
 ```powershell
 git add .

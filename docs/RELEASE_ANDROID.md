@@ -2,8 +2,9 @@
 
 **Reference material only, kept ready for if/when an Android release is ever scoped — nothing here
 is a plan or a commitment.** Android work stays out of scope until an explicit decision says
-otherwise: see `CLAUDE.md`'s "Project focus" and
-[ROADMAP's "Explicitly not planned right now"](ROADMAP.md#explicitly-not-planned-right-now).
+otherwise: see `CLAUDE.md`'s "Project focus" and "An Android version" under
+[ROADMAP's "Under consideration"](ROADMAP.md#under-consideration) — an exploration in a
+repository of its own.
 
 ## Two separate version numbers
 
