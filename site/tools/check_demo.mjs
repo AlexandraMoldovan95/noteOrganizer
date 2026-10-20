@@ -13,7 +13,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -498,11 +498,23 @@ try {
 } catch (err) {
   problems.push("the walk stopped: " + err.message);
 } finally {
+  // Edge is a tree of processes. edge.kill() ended only the one started
+  // here; the rest ran on, holding the profile, so removing it failed in
+  // silence and every run left about ten headless Edge processes behind
+  // (thirty were found from three runs). Browser.close shuts the browser
+  // down, taskkill /T takes what is left of the tree, and a profile that
+  // still cannot be removed fails the walk instead of passing quietly.
+  await Promise.race([send("Browser.close").catch(() => {}), sleep(3000)]);
   ws.close();
-  edge.kill();
+  spawnSync("taskkill", ["/PID", String(edge.pid), "/T", "/F"], { stdio: "ignore" });
   server.close();
-  await sleep(300);
-  try { fs.rmSync(profile, { recursive: true, force: true }); } catch { /* Edge may hold it a moment */ }
+  let removed = false;
+  for (let i = 0; i < 20 && !removed; i++) {
+    try { fs.rmSync(profile, { recursive: true, force: true }); } catch { /* still held */ }
+    removed = !fs.existsSync(profile);
+    if (!removed) await sleep(250);
+  }
+  if (!removed) problems.push("Edge outlived the walk: its profile could not be removed, " + profile);
 }
 
 for (const r of results) console.log((r.ok ? "ok   " : "FAIL ") + r.name + (r.ok || !r.detail ? "" : "  -- " + r.detail));
