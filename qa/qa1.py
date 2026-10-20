@@ -2305,6 +2305,23 @@ def _menu_entry_state(m, label):
     return None
 
 
+def _menu_invoke(m, label):
+    """Press the entry a person would, wherever its cascade put it."""
+    for i in range(m.index('end') + 1):
+        kind = m.type(i)
+        if kind == 'command' and m.entrycget(i, 'label') == label:
+            m.invoke(i)
+            return True
+        if kind == 'cascade':
+            try:
+                sub = m.nametowidget(m.entrycget(i, 'menu'))
+            except Exception:
+                continue
+            if _menu_invoke(sub, label):
+                return True
+    return False
+
+
 
 def _body_state():
     return (body(),
@@ -2846,7 +2863,7 @@ _t = app._grid_at_line(1)
 check(f'and a column ({_t["ncols"]} columns)',
       _t['ncols'] == 3
       and core_tables.split_row(lines_now()[0]) == ['A', '', 'B'])
-app._grid_set_marker(_t, 0, 1, core_tables.MERGE_LEFT)
+app._grid_merge_with(_t, 0, 1, 'left')
 app.update()
 _t = app._grid_at_line(1)
 check('merging from the menu spans the anchor',
@@ -2886,6 +2903,105 @@ app._grid_delete_table(_t)
 app.update()
 check('and deleting the table removes it outright',
       app._grid_at_line(1) is None and core_tables.find_blocks(body()) == [])
+
+# ---- MERGE AND INSERT FROM A CELL'S MENU, PRESSED AS A PERSON DOES ----
+# "Merge with cell to the left / above" wrote a merge marker over the
+# clicked cell, and its text was gone. "Insert row above" on the header
+# pushed the header down past the separator, which stopped being one: the
+# header became data and the dashes a row of content.
+def _press_cell_menu(r, c, label):
+    info = app._grid_at_line(1)
+    app._grid_clear_selection()
+    cell = info['cells'][(r, c)]
+    posted = []
+    real_popup = NO.tk.Menu.tk_popup
+    NO.tk.Menu.tk_popup = lambda _m, *a, **k: posted.append(_m)
+    try:
+        app._grid_menu(info, type('E', (), {
+            'x': int(cell['x'] + 12), 'y': int(cell['y'] + 6),
+            'x_root': 0, 'y_root': 0})())
+        pressed = bool(posted) and _menu_invoke(posted[-1], label)
+    finally:
+        NO.tk.Menu.tk_popup = real_popup
+    app.update()
+    return pressed
+
+
+_cm_table = chr(10).join(['| Name | Qty | Note |', '| --- | --- | --- |',
+                          '| apple | 3 | ripe |', '| pear | 5 | soft |'])
+set_body(_cm_table)
+app._render_table_grids()
+app.update()
+app.body_text.edit_reset()
+check('the cell menu offers Merge with cell to the left',
+      _press_cell_menu(1, 1, 'Merge with cell to the left'))
+check(f'merging with the cell to the left keeps both texts ({lines_now()[2]!r})',
+      core_tables.split_row(lines_now()[2]) == ['apple 3', '<', 'ripe'])
+app._body_undo_redo('undo')
+app.update()
+check(f'...and one Ctrl+Z gives both cells back ({lines_now()[2]!r})',
+      core_tables.split_row(lines_now()[2]) == ['apple', '3', 'ripe'])
+check('the cell menu offers Merge with cell above',
+      _press_cell_menu(2, 1, 'Merge with cell above'))
+check(f'merging with the cell above keeps both texts ({lines_now()[2:4]!r})',
+      core_tables.split_row(lines_now()[2]) == ['apple', '3 5', 'ripe']
+      and core_tables.split_row(lines_now()[3]) == ['pear', '^', 'soft'])
+# A neighbour that is itself merged is swallowed whole, as a selection
+# reaching into it would be: merging "pear" up into the wide cell above
+# takes in the whole width of that cell.
+app._body_undo_redo('undo')
+app.update()
+_press_cell_menu(1, 1, 'Merge with cell to the left')
+_press_cell_menu(2, 0, 'Merge with cell above')
+check(f'merging up into a wide cell swallows all of it ({lines_now()[2:4]!r})',
+      core_tables.split_row(lines_now()[2]) == ['apple 3 pear 5', '<', 'ripe']
+      and core_tables.split_row(lines_now()[3]) == ['^', '<', 'soft'])
+# The other door into the same menu: a right-click inside a cell being
+# written in, which commits the typed word first. That word was the one
+# the old merge wrote over.
+set_body(_cm_table)
+app._render_table_grids()
+app.update()
+_cm_info = app._grid_at_line(1)
+app._open_cell_editor(_cm_info, 1, 1)
+_cm_e = app._cell_editor['entry']
+_cm_e.delete('1.0', 'end')
+_cm_e.insert('1.0', 'seven')
+_cm_posted = []
+_cm_real_popup = NO.tk.Menu.tk_popup
+NO.tk.Menu.tk_popup = lambda _m, *a, **k: _cm_posted.append(_m)
+try:
+    app._editor_context_menu(_cm_info, type('E', (), {
+        'x': 0, 'y': 0, 'x_root': 0, 'y_root': 0})())
+    _cm_pressed = (bool(_cm_posted)
+                   and _menu_invoke(_cm_posted[-1], 'Merge with cell to the left'))
+finally:
+    NO.tk.Menu.tk_popup = _cm_real_popup
+app.update()
+check(f'typed in a cell, then merged left from its own menu: the typed word '
+      f'stays ({lines_now()[2]!r})',
+      _cm_pressed
+      and core_tables.split_row(lines_now()[2]) == ['apple seven', '<', 'ripe'])
+
+set_body(_cm_table)
+app._render_table_grids()
+app.update()
+check('the header\'s menu offers Insert row above',
+      _press_cell_menu(0, 0, 'Insert row above'))
+_cm_lines = lines_now()
+check(f'Insert row above on the header puts the row under it ({_cm_lines[:4]!r})',
+      core_tables.split_row(_cm_lines[0]) == ['Name', 'Qty', 'Note']
+      and core_tables.separator_index(_cm_lines[:4]) == 1
+      and core_tables.split_row(_cm_lines[2]) == ['', '', '']
+      and core_tables.split_row(_cm_lines[3]) == ['apple', '3', 'ripe'])
+set_body(chr(10).join(['| a | b |', '| c | d |']))
+app._render_table_grids()
+app.update()
+_press_cell_menu(0, 0, 'Insert row above')
+check(f'...while a table with no header still gets it on top ({lines_now()[:3]!r})',
+      core_tables.split_row(lines_now()[0]) == ['', '']
+      and core_tables.split_row(lines_now()[1]) == ['a', 'b'])
+set_body('')
 
 # ---- GRID DELETE captures the view BEFORE teardown (audit Z08-F02) ----
 # Every other grid op snapshots _grid_saved_view before tearing down so
@@ -12032,6 +12148,17 @@ check('carried styles: merging the red 12 into its row\'s first cell keeps '
       _cs_styles() == _cs_want
       and core_tables.split_row(app.body_text.get('4.0', '4.end'))[0]
       == 'Eggs 12')
+# The same through the cell menu's "Merge with cell to the left", which
+# goes the same way now; it used to write over the 12 and its red.
+_cs_info = _cs_setup()
+app._grid_merge_with(_cs_info, 2, 1, 'left')
+app.update()
+check('carried styles: Merge with cell to the left keeps the red 12 too '
+      f'({_cs_styles()}, '
+      f'{core_tables.split_row(app.body_text.get("4.0", "4.end"))})',
+      _cs_styles() == _cs_want
+      and core_tables.split_row(app.body_text.get('4.0', '4.end'))[0]
+      == 'Eggs 12')
 
 # ---- CELLS PASTED WIDER THAN THE TABLE GROW IT ----
 # Four columns copied from a spreadsheet into a two-column table: the rows
@@ -14125,6 +14252,10 @@ for _tu_name, _tu_do in (
          lambda i: (app._grid_select_range(i, (1, 1), (1, 1)),
                     app._set_paragraph_align('center'))),
         ('inserting a row below', lambda i: app._grid_insert_row(i, 2)),
+        ('inserting a row above the header',
+         lambda i: app._grid_insert_row(i, 0)),
+        ('merging a cell with the one to its left',
+         lambda i: app._grid_merge_with(i, 1, 1, 'left')),
         ('autofitting a column', lambda i: app._grid_autofit_col(i, 0)),
         ('inserting a column at the left', lambda i: app._grid_insert_col(i, 0)),
         ('merging two header cells',

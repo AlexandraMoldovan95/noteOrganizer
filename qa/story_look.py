@@ -343,6 +343,29 @@ app.toggle_settings_panel('trash')
 app.update()
 app.update_idletasks()
 """),
+    # A table just after "Insert row above" on its header: the new row
+    # under the header, the header still drawn as one, no row of dashes.
+    # Above it, the separator stopped counting and the header became data.
+    ("20-a-row-inserted-under-the-header", """
+app._dismiss_mini_popup()
+app.hide_settings_page()
+app.notebook.select(app.TAB_NOTES)
+if app.selection_mode:
+    app._toggle_selection_mode()
+_tn = NO.normalize_note({
+    'id': 7200, 'title': 'Shopping list', 'category': 'General',
+    'body': ('| Item | Qty | Shop |' + chr(10) + '| --- | --- | --- |'
+             + chr(10) + '| Milk | 2 | corner |'
+             + chr(10) + '| Eggs | 12 | market |')})
+app.notes.append(_tn)
+app.save_notes()
+app.refresh_note_list()
+app.open_note_in_tab(_tn)
+app.update()
+app._grid_insert_row(app._grid_at_line(1), 0)
+app.update()
+app.update_idletasks()
+"""),
 ]
 
 SEED = [

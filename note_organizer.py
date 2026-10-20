@@ -4161,12 +4161,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             except tk.TclError:
                 pass
 
-    def _grid_select_range(self, info, a, b):
-        """Highlight the rectangle spanned by two cells.
-
-        Grown until it swallows every merge it touches -- half a merged
-        cell is not a thing a selection can hold.
-        """
+    @staticmethod
+    def _grid_grown_box(info, a, b):
+        """The rectangle spanned by two cells, as ``(r0, c0, r1, c1)``,
+        grown until it swallows every merge it touches -- half a merged
+        cell is not a thing a selection, or a merge, can hold."""
         r0, r1 = sorted((a[0], b[0]))
         c0, c1 = sorted((a[1], b[1]))
         grew = True
@@ -4182,6 +4181,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 if (lo_r, hi_r, lo_c, hi_c) != (r0, r1, c0, c1):
                     r0, r1, c0, c1 = lo_r, hi_r, lo_c, hi_c
                     grew = True
+        return r0, c0, r1, c1
+
+    def _grid_select_range(self, info, a, b):
+        """Highlight the rectangle spanned by two cells (_grid_grown_box)."""
+        r0, c0, r1, c1 = self._grid_grown_box(info, a, b)
         self._grid_clear_selection()
         chosen = [key for key, cell in info["cells"].items()
                   if r0 <= key[0] <= r1 and c0 <= key[1] <= c1]
@@ -5329,6 +5333,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         first, nrows, ncols = context
         rows, _aligns, _sep, sep_at = self._grid_block_parts(first, nrows)
         data_off = [i for i in range(nrows) if i != sep_at]
+        if sep_at is not None and at < sep_at:
+            # Insert row above, asked on the header, goes under it: above,
+            # the separator moves to the third line, where it is no longer
+            # one (separator_index) -- the header becomes data and the
+            # dashes, with the widths they hold, a row of content.
+            at = sep_at
         blank = core_tables.blank_table(1, ncols)[0]
         if at >= len(data_off):
             self.body_text.insert(f"{first + nrows - 1}.end", "\n" + blank)
@@ -6056,6 +6066,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                    lambda _e: (None if getattr(self, "_hiding_popups", False)
                                else self._dismiss_mini_popup()))
         popup.focus_set()
+
+    def _grid_merge_with(self, info, r, c, toward):
+        """The right-click "Merge with cell to the left" (*toward* "left")
+        or "above" ("up"): the clicked cell and that neighbour merged the
+        way a selection of both is, every text kept. It used to write a
+        merge marker over the clicked cell, and its text was gone; a
+        neighbour that is itself merged is swallowed whole."""
+        cell = info["cells"].get((r, c))
+        if cell is None:
+            return
+        near = (r, c - 1) if toward == "left" else (r - 1, c)
+        if near[0] < 0 or near[1] < 0:
+            return
+        box = self._grid_grown_box(
+            info, near, (r + cell["rs"] - 1, c + cell["cs"] - 1))
+        self._grid_merge_selection({"info": info, "box": box})
 
     @_undo_atom
     def _grid_merge_selection(self, sel):
@@ -6809,12 +6835,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         merge_menu = _sub()
         merge_menu.add_command(label="Merge with cell to the left",
                                state="normal" if c > 0 else "disabled",
-                               command=lambda: self._grid_set_marker(
-                                   info, r, c, core_tables.MERGE_LEFT))
+                               command=lambda: self._grid_merge_with(
+                                   info, r, c, "left"))
         merge_menu.add_command(label="Merge with cell above",
                                state="normal" if r > 0 else "disabled",
-                               command=lambda: self._grid_set_marker(
-                                   info, r, c, core_tables.MERGE_UP))
+                               command=lambda: self._grid_merge_with(
+                                   info, r, c, "up"))
         merge_menu.add_command(label="Split merged cell",
                                state="normal" if merged else "disabled",
                                command=lambda: self._grid_split(info, r, c))
