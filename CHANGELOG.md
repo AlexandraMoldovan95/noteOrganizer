@@ -121,6 +121,14 @@ How the numbers themselves are counted is the
   startup cleanup — or removing the attachment from one of them — took it from the other. Both
   now spare any file a note or a kept Trash entry still uses, as Delete and Empty trash already
   did, and the cleanup does not run on a start whose notes file could not be read.
+- **Merging a table cell with its neighbour from the right-click menu keeps both texts.** "Merge
+  with cell to the left" and "Merge with cell above" wrote the merge over the clicked cell, and
+  its words were gone. They now merge as selecting both cells does: the texts join, their
+  formatting comes along, one Ctrl+Z separates them again, and a neighbour that is itself a
+  merged cell is taken in whole.
+- **"Insert row above" on a table's header row adds the row under the header.** Above it, the
+  line that marks the header moved down to where it no longer counts as one: the header became an
+  ordinary row, and a row of dashes appeared in the table, taking the column widths with it.
 
 ---
 

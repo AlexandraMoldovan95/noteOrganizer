@@ -313,8 +313,11 @@ A table works the way a spreadsheet has taught your hands to expect:
   the table (right-click → **Table**) and the caption follows. Selecting every cell and pressing
   an alignment button aligns the text *inside* the cells, as a spreadsheet does — and a short
   dialog, which stays until you press OK, says how to move the table itself.
-- The full set: merge the selected cells into one (their texts join), split a merge back apart,
-  insert or delete rows and columns, duplicate whole columns to the end of the table (and whole
+- The full set: merge the selected cells into one (their texts join — the same with **Merge with
+  cell to the left / above**, which takes in all of a neighbour that is itself merged), split a
+  merge back apart, insert or delete rows and columns (**Insert row above** on the header row
+  puts the new row just under it, so the header stays the header), duplicate whole columns to
+  the end of the table (and whole
   rows to the bottom), insert a **checkbox** (with its own colour palette) or an emoji, and
   highlight cells from a small colour palette.
 - A checkbox is a real little box, not text: **click it to tick and untick it** — for marking when

@@ -4578,5 +4578,46 @@
                   "Send feedback opens the feedback page, naming the version, how the app draws and how big the notebook is"],
     "suites": ["test_data_safety", "qa6"],
     "expect": "killed"
+  },
+  {
+    "id": "TM01",
+    "about": "the cell menu's Merge with cell to the left writes a marker over the clicked cell's text",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                               command=lambda: self._grid_merge_with(\n                                   info, r, c, \"left\"))\n",
+               "replace": "                               command=lambda: self._grid_set_marker(\n                                   info, r, c, core_tables.MERGE_LEFT))\n"}],
+    "must_fail": ["merging with the cell to the left keeps both texts",
+                  "typed in a cell, then merged left from its own menu: the typed word stays"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "TM02",
+    "about": "the cell menu's Merge with cell above writes a marker over the clicked cell's text",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                               command=lambda: self._grid_merge_with(\n                                   info, r, c, \"up\"))\n",
+               "replace": "                               command=lambda: self._grid_set_marker(\n                                   info, r, c, core_tables.MERGE_UP))\n"}],
+    "must_fail": ["merging with the cell above keeps both texts"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "TM03",
+    "about": "a merge with a neighbour takes half of a merged neighbour",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        box = self._grid_grown_box(\n            info, near, (r + cell[\"rs\"] - 1, c + cell[\"cs\"] - 1))\n",
+               "replace": "        box = (near[0], near[1], r + cell[\"rs\"] - 1, c + cell[\"cs\"] - 1)\n"}],
+    "must_fail": ["merging up into a wide cell swallows all of it"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "TM04",
+    "about": "Insert row above on the header puts the row above it, past which the separator is no longer one",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if sep_at is not None and at < sep_at:\n",
+               "replace": "        if False:\n"}],
+    "must_fail": ["Insert row above on the header puts the row under it"],
+    "suites": ["qa1"],
+    "expect": "killed"
   }
 ]
