@@ -36,14 +36,18 @@ This MSIX package version is separate from, and doesn't need to match, the app's
 
 Source: [Microsoft Learn — App package requirements for MSIX apps](https://learn.microsoft.com/en-us/windows/apps/publish/publish-your-app/msix/app-package-requirements)
 
-Three things wait for the listing, when there is one:
+Four things wait for the listing, when there is one:
 
 - **The privacy policy's address**, which Partner Center asks for: Microsoft requires a policy for
   every Win32 product (Store Policy 10.5.1). It is `PRIVACY_URL` in
   `noteorganizer/core/diagnostics.py`: the [privacy policy](PRIVACY.md), published on Google
   Sites, which **Settings → About** opens as well.
-- **The support contact** the listing asks for is the project's own address,
-  noteorganizer.app@gmail.com, never a personal one.
+- **The support contact** — optional for an app not on Xbox, given anyway — is the project's own
+  address, noteorganizer.app@gmail.com, never a personal one.
+- **The website field stays empty.** It is optional, and the project's site on Netlify is kept
+  apart from the apps' users (the owner's rule, 2026-10-21; see
+  [site/README.md](../site/README.md#kept-apart-from-the-apps)). Phone and postal address are
+  optional for an individual developer and not shown to customers; they are left out too.
 - **The review button.** `STORE_REVIEW_URL` in `noteorganizer/core/diagnostics.py` is `None`
   until the app has a Store page; set to that page's review link, **Settings → About** shows the
   Feedback card, whose **Write a review** opens it. It is the app's only way in for feedback.

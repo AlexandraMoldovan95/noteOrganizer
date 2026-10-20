@@ -1314,7 +1314,10 @@ app's version with each review), and there is no way in at all until the app is 
 The privacy policy itself is published on Google Sites, not on the project's site: the page both
 apps open (`PRIVACY_URL`) and both stores are given. `docs/PRIVACY.md` is its text, copied there
 by hand, which is why every release checks the two still match
-([RELEASE_WINDOWS](RELEASE_WINDOWS.md#microsoft-store-msix)).
+([RELEASE_WINDOWS](RELEASE_WINDOWS.md#the-privacy-page-at-every-release)). The project's site,
+on Netlify, is kept apart: it presents the project to the people sent there, and nothing the
+apps' users see — the apps, their store pages, their policy — points at it (the owner's rule,
+2026-10-21; the site's build refuses an app or a policy that names it).
 
 The head of every `crash_log.txt` entry still carries the details, on this computer only, from
 one module, `core/diagnostics.py`, with one list of what may be said (`DETAIL_KEYS`) — never a

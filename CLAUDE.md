@@ -97,7 +97,10 @@ nothing — `core/diagnostics.py`.)
   `site/public/` (not in git), which is dragged onto Netlify by hand, with
   changes gathered into one upload because every deploy costs credits. The
   test workflow ignores `site/`; its own checks are in `site/tools/`.
-  See `site/README.md`.
+  See `site/README.md`. **Kept apart from the apps (the owner's rule,
+  2026-10-21):** the site may link to the apps' store pages, but nothing
+  the apps' users see — the apps, their store listings (website field left
+  empty), their privacy policy on Google Sites — ever points at the site.
 
 For anything non-trivial, `docs/ARCHITECTURE.md`, `docs/ISSUES_LOG.md`, and
 `docs/ROADMAP.md` contain real, hard-won context — read them before assuming

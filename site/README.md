@@ -86,20 +86,21 @@ the app's own reader on every code the demo made, and the demo's reader on
 codes the app made (its welcome note, a table, colours). The first run writes
 the app's codes, the second reads the demo's.
 
-## No forms, and the privacy policy on its own page
+## Kept apart from the apps
 
-The site presents the app; the apps do not send anyone to it. It has no
-form — feedback is a review in the stores — and `_headers` says so
-(`form-action 'none'`); the build refuses a page with a `<form>` in it.
+The site presents the project to the people the owner sends here — once
+the apps are published, its overview links to their store pages. The
+other way round, nothing the apps' users see points at it: not the apps,
+not their store pages (whose optional website field stays empty), not
+their privacy policy (the owner's rule, 2026-10-21). The build refuses a
+site whose address appears in the app's sources or in `docs/PRIVACY.md`;
+the Android app, in its own repository, is held to the same by review.
 
-The privacy policy is not one of its pages either. Its text is
-`docs/PRIVACY.md`, published by hand on Google Sites: the page both apps
-open from Settings → About and both stores are given. Every page's footer
-links there, with the address the build reads from the app's own source
-(`PRIVACY_URL` in `noteorganizer/core/diagnostics.py`), and the browser
-walk checks the footer names that same address. Keeping the Google Site in
-step with the file is a release step
-([RELEASE_WINDOWS](../docs/RELEASE_WINDOWS.md#the-privacy-page-at-every-release)).
+So the apps' privacy policy is not one of the site's pages, and does not
+cover it: each page's footer says itself what the host sees, and the
+browser walk checks that it does. The site has no form either — feedback
+is a review in the stores — and `_headers` says so (`form-action
+'none'`); the build refuses a page with a `<form>` in it.
 
 ## When the repository becomes public
 

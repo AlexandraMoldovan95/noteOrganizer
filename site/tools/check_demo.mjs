@@ -216,15 +216,13 @@ try {
   await shot("site-index-phone-menu-open");
   check("phone menu opens", await js("document.getElementById('site-nav').classList.contains('open')"));
 
-  // ---------------- The footer's privacy policy ----------------
-  // Published on Google Sites, the page the app's About opens: the footer
-  // must name the same address as the app's own source.
-  const appSource = fs.readFileSync(path.resolve(HERE, "..", "..", "noteorganizer", "core", "diagnostics.py"), "utf8");
-  const policy = (appSource.match(/^PRIVACY_URL = "([^"]+)"/m) || [])[1];
+  // ---------------- The footer's word on hosting ----------------
+  // The apps' privacy policy does not cover this site, so each page says
+  // itself what its host sees.
   for (const p of ["index.html", "how-its-built.html"]) {
     await go("/" + p);
-    const href = await js("(document.querySelector('.site-footer a') || {}).href || ''");
-    check(`${p}: the footer's Privacy policy is the page the app opens`, !!policy && href === policy, href);
+    const note = await js("(document.querySelector('.site-footer .host-note') || {}).textContent || ''");
+    check(`${p}: the footer says what the site's host sees`, note.includes("Netlify") && note.includes("IP address"), note);
   }
 
   // ---------------- Opened from the folder, with no server ----------------

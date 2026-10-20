@@ -109,8 +109,7 @@ How the numbers themselves are counted is the
 
 - **A privacy policy, from Settings → About.** Privacy policy → Read opens it: what the app
   keeps and where, what leaves your computer — only what you send — and how an email to the
-  project is kept. Both stores are given the same page, and every page of the project's site
-  links to it.
+  project is kept. Both stores are given the same page.
 
 ### Removed
 

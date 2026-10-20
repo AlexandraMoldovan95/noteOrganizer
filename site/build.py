@@ -30,6 +30,7 @@ import os
 import re
 import shutil
 import sys
+import urllib.parse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(HERE, "src")
@@ -60,9 +61,11 @@ PAGES = {
                             "The twenty bugs my manual testing found, three "
                             "written out in a standard bug-report format."),
 }
-# docs/PRIVACY.md is not one of them: the privacy policy is published on
-# Google Sites, the page both apps open and both stores are given, and every
-# page's footer links there (privacy_url).
+# docs/PRIVACY.md is not one of them: the privacy policy belongs to the apps
+# and is published on Google Sites. This site presents the project to the
+# people sent here, and nothing the apps' users see points at it
+# (check_kept_apart).
+
 # Text that must never reach a published page. A build that finds one
 # stops; the page is not published with it.
 FORBIDDEN = [r"adas9", r"mekotrading", r"noteOrganizerSavedFiles",
@@ -474,8 +477,7 @@ def fill(template, values, name):
     return re.sub(r"\{\{(\w+)\}\}", sub, template)
 
 
-def doc_page(shell, config, page, title, description, body_html, source_note, version,
-             privacy):
+def doc_page(shell, config, page, title, description, body_html, source_note, version):
     return fill(shell, {
         "title": html.escape(title),
         "description": html.escape(description),
@@ -484,20 +486,24 @@ def doc_page(shell, config, page, title, description, body_html, source_note, ve
         "content": body_html,
         "source_note": source_note,
         "version": version,
-        "privacy_url": html.escape(privacy),
     }, page)
 
 
-def privacy_url(repo):
-    """The privacy policy's address, read from the app's own source
-    (diagnostics.PRIVACY_URL), so the site's footer and the app's About
-    cannot point at two different pages."""
-    url = literal_assignments(
-        read(os.path.join(repo, "noteorganizer", "core", "diagnostics.py")),
-        ["PRIVACY_URL"])["PRIVACY_URL"]
-    if not isinstance(url, str) or not url.startswith("https://"):
-        fail("diagnostics.PRIVACY_URL is not an https address: %r" % (url,))
-    return url
+def check_kept_apart(repo, config):
+    """This site presents the project to the people sent here; the apps,
+    and the privacy policy the stores are given, never point at it -- the
+    owner's rule (2026-10-21), so its users need not know it exists. The
+    app's sources and docs/PRIVACY.md must not name the site's address.
+    (The Android app lives in another repository, where this cannot look.)"""
+    host = urllib.parse.urlparse(config.get("site_url", "")).netloc
+    if not host:
+        return ["site.json has no site_url, so the apps cannot be checked for it"]
+    files = [os.path.join(repo, "note_organizer.py"), os.path.join(repo, "docs", "PRIVACY.md")]
+    for root, _, names in os.walk(os.path.join(repo, "noteorganizer")):
+        files += [os.path.join(root, n) for n in names if n.endswith(".py")]
+    return ["%s names this site (%s): the apps and their privacy policy must not point "
+            "here" % (os.path.relpath(f, repo), host)
+            for f in sorted(files) if host.lower() in read(f).lower()]
 
 
 def check_doc_structure(page, body_html):
@@ -521,7 +527,7 @@ def check_doc_structure(page, body_html):
     return problems
 
 
-def build_doc_pages(repo, config, shell, version, privacy):
+def build_doc_pages(repo, config, shell, version):
     repo_url = config.get("repo_url", "")
     # The Issues Log is the project's internal engineering journal, not
     # published as its own page here. A reference to one of its anchors is
@@ -546,7 +552,7 @@ def build_doc_pages(repo, config, shell, version, privacy):
         body = Renderer(make_linker(path, repo_url)).render(text)
         structure_problems += check_doc_structure(page, body)
         written[page] = doc_page(shell, config, page, title, description, body,
-                                 note % html.escape(path), version, privacy)
+                                 note % html.escape(path), version)
     if structure_problems:
         fail("site.css styles some things by their position in the page, not a class "
              "(see the comments by h2#contents and h3 + ul in src/site.css) -- these "
@@ -732,8 +738,7 @@ def main():
           "window.NO_APP = " + json.dumps(app_data, ensure_ascii=False, indent=1) + ";\n")
 
     shell = read(os.path.join(SRC, "page.html"))
-    privacy = privacy_url(repo)
-    doc_pages = build_doc_pages(repo, config, shell, version, privacy)
+    doc_pages = build_doc_pages(repo, config, shell, version)
     for page, text in doc_pages.items():
         write(os.path.join(OUT, page), text)
 
@@ -744,7 +749,6 @@ def main():
                       "An offline notes app for Windows, with a web demo you can try "
                       "in the browser."),
         "nav": nav_html("index.html"),
-        "privacy_url": html.escape(privacy),
         "theme_count": len(themes["THEMES"]),
         "theme_names": ", ".join(themes["THEME_LABELS"][key] for key in
                                  themes["DARK_THEMES"] + themes["LIGHT_THEMES"]),
@@ -756,6 +760,7 @@ def main():
           fill(read(os.path.join(SRC, "index.html")), index_values, "index.html"))
 
     problems, page_count = check_output()
+    problems += check_kept_apart(repo, config)
     if problems:
         print("\n".join(problems))
         shutil.rmtree(STAGE, ignore_errors=True)

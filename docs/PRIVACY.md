@@ -17,7 +17,7 @@ apps collect nothing, and send nothing to me.
 - [When something leaves your device](#when-something-leaves-your-device)
 - [Feedback and reviews](#feedback-and-reviews)
 - [If you write to me](#if-you-write-to-me)
-- [Where this policy and the website live](#where-this-policy-and-the-website-live)
+- [Where this policy lives](#where-this-policy-lives)
 - [Your rights](#your-rights)
 - [Children](#children)
 - [Changes to this policy](#changes-to-this-policy)
@@ -93,20 +93,10 @@ the latest 12 months after it was sent.
 a legitimate interest in answering it and fixing what it reports, which is also why you sent it
 (GDPR Article 6(1)(f)). You can object to this at any time, and I will delete your message.
 
-## Where this policy and the website live
+## Where this policy lives
 
-- **This policy** is published on Google Sites, a Google service; visiting it is covered by
-  [Google's privacy policy](https://policies.google.com/privacy).
-- **The project's website,** which presents the app and has a demo, is hosted by Netlify, in the
-  United States. Like any web host, Netlify receives the technical details of each visit - your
-  IP address, your browser, the page asked for. It handles them for me, only to deliver the page
-  and to keep the site safe from abuse, and keeps them only as long as it needs them for that, as
-  [its privacy policy](https://www.netlify.com/privacy/) explains. Netlify takes part in the
-  EU–US Data Privacy Framework. The website has no cookies, no analytics, no advertising, no
-  forms, and loads nothing from other websites.
-- **What your browser remembers** of the website: two things, on your device only - the theme
-  you picked for it, and the demo's notebook: its sample notes, anything you write there, and its
-  settings. Clearing the website's data in your browser removes both.
+This policy is published on Google Sites, a Google service; visiting it is covered by
+[Google's privacy policy](https://policies.google.com/privacy).
 
 ## Your rights
 
