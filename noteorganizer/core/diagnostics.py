@@ -23,6 +23,10 @@ from . import paths
 # site's host; no address of hers appears in the app or on the page.
 FEEDBACK_URL = "https://note-organizer-8f7772.netlify.app/feedback.html"
 
+# The privacy policy, opened from Settings → About. Both stores are given
+# this address too; site/build.py fails if the page it names is missing.
+PRIVACY_URL = "https://note-organizer-8f7772.netlify.app/privacy.html"
+
 # The Microsoft Store's review page, once the app is published there. While
 # it is None, the button that would open it is not shown.
 STORE_REVIEW_URL = None
@@ -92,9 +96,13 @@ def details():
 
 def feedback_url(pairs=None):
     """The feedback page, carrying the details for the form to show and send
-    -- only those DETAIL_KEYS names, whatever else *pairs* holds."""
+    -- only those DETAIL_KEYS names, whatever else *pairs* holds.
+
+    After a "#", not a "?": a browser never sends that part of a link, so
+    the site receives the details only with the form, when Send is pressed
+    -- which is what the privacy policy promises."""
     pairs = details() if pairs is None else pairs
-    return FEEDBACK_URL + "?" + urlencode(
+    return FEEDBACK_URL + "#" + urlencode(
         [(key, value) for key, value in pairs
          if key in DETAIL_KEYS and value is not None])
 

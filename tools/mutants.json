@@ -4580,6 +4580,27 @@
     "expect": "killed"
   },
   {
+    "id": "FB11",
+    "about": "the feedback link puts its details in the query, which the browser sends when the page opens -- breaking the privacy policy's promise",
+    "edits": [{"file": "noteorganizer/core/diagnostics.py",
+               "find": "    return FEEDBACK_URL + \"#\" + urlencode(\n",
+               "replace": "    return FEEDBACK_URL + \"?\" + urlencode(\n"}],
+    "must_fail": ["...and none of it in the part of the link a browser sends to the site",
+                  "...and nothing in the part of the link a browser sends"],
+    "suites": ["test_data_safety", "qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "FB12",
+    "about": "About's privacy policy button opens the feedback form instead",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "            lambda: self._open_in_browser(diagnostics.PRIVACY_URL)).pack()\n",
+               "replace": "            self._open_feedback).pack()\n"}],
+    "must_fail": ["About opens the privacy policy"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
     "id": "TM01",
     "about": "the cell menu's Merge with cell to the left writes a marker over the clicked cell's text",
     "edits": [{"file": "note_organizer.py",

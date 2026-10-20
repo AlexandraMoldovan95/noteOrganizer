@@ -1181,16 +1181,25 @@ try:
     if _fb_btn is not None:
         _fb_btn.invoke()
     _fb_url = _fb_opened[0] if _fb_opened else ''
-    _fb_q = dict(_fb_parse(_fb_split(_fb_url).query))
+    _fb_q = dict(_fb_parse(_fb_split(_fb_url).fragment))
     check(f'Send feedback opens the feedback page, naming the version, how the app '
           f'draws and how big the notebook is ({_fb_q})',
-          len(_fb_opened) == 1 and _fb_url.startswith(_fb_diag.FEEDBACK_URL + '?')
+          len(_fb_opened) == 1 and _fb_url.startswith(_fb_diag.FEEDBACK_URL + '#')
           and _fb_q.get('version') == NO.APP_VERSION and _fb_q.get('notes') == '2'
           and _fb_q.get('files') == '1'
           and _fb_q.get('theme') == NO.THEME_LABELS[app.theme_name]
           and _fb_q.get('scale', '').endswith('%') and _fb_q.get('sharp') in ('on', 'off'))
     check('...and nothing from the notes in its link',
           bool(_fb_url) and 'SECRET' not in _fb_url)
+    # The policy promises the site receives the details only with the form:
+    # a browser sends a link's query, never what follows its "#".
+    check('...and nothing in the part of the link a browser sends',
+          bool(_fb_url) and _fb_split(_fb_url).query == '')
+    _fb_privacy = find_btn_qa6(_fb_frame, 'Read')
+    if _fb_privacy is not None:
+        _fb_privacy.invoke()
+    check('About opens the privacy policy',
+          _fb_privacy is not None and _fb_opened[-1] == _fb_diag.PRIVACY_URL)
     check('no Store button while the app is not in the Store',
           find_btn_qa6(_fb_frame, 'Rate on the Store') is None)
     # A browser that will not open: the link is copied, and the words say
@@ -1200,7 +1209,7 @@ try:
         _fb_btn.invoke()
     check('a browser that will not open leaves the link copied, and says so',
           bool(_fb_warned) and 'copied' in _fb_warned[-1]
-          and app.clipboard_get().startswith(_fb_diag.FEEDBACK_URL + '?'))
+          and app.clipboard_get().startswith(_fb_diag.FEEDBACK_URL + '#'))
     # Once the app has a Store page, its review page has a button too.
     _fb_diag.STORE_REVIEW_URL = 'ms-windows-store://review/?ProductId=TEST'
     _fb_web.open = lambda url, *a, **k: (_fb_opened.append(url), True)[1]

@@ -105,6 +105,27 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+### Added
+
+- **A privacy policy, from Settings → About.** Privacy policy → Read opens it on the project's
+  site: what the app keeps and where, what leaves your computer — only what you send — and how a
+  feedback message is kept. Every page of the site links to it, and both stores are given its
+  address.
+
+### Changed
+
+- **Send feedback's details reach the site only when you press Send.** They travel after the
+  link's `#`, a part a browser never sends, so opening the form no longer hands them to the
+  site's host. The form still shows them before you send, and still reads a link from an older
+  version.
+
+### Testing
+
+- `test_data_safety` and qa6 check that the feedback link keeps every detail out of the part a
+  browser sends, and qa6 that About opens the privacy policy. The site's build refuses a site
+  missing a page the app opens, or a feedback page that no longer reads the details after the
+  `#`; its browser walk checks that the server never received them. Mutants FB11–FB12.
+
 ---
 
 ## [0.95.391] — 2026-10-20

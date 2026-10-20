@@ -1510,10 +1510,10 @@ try:
                                  + _diag.notebook(_dg_notes)
                                  + [("path", _dg_dir), ("title", "SECRET-TITLE")])
     _dg_url = _diag.feedback_url()
-    _dg_q = dict(_dg_parse(_dg_split(_dg_url).query))
+    _dg_q = dict(_dg_parse(_dg_split(_dg_url).fragment))
     check("the feedback link carries the version, how the app draws and how big the "
           "notebook is",
-          _dg_url.startswith(_diag.FEEDBACK_URL + "?") and _dg_q.get("version") == "9.9.9"
+          _dg_url.startswith(_diag.FEEDBACK_URL + "#") and _dg_q.get("version") == "9.9.9"
           and _dg_q.get("notes") == "2" and _dg_q.get("files") == "1"
           and _dg_q.get("scale") == "150%" and "windows" in _dg_q
           and _dg_q.get("build") in ("exe", "source"))
@@ -1521,6 +1521,10 @@ try:
           "app hands it",
           set(_dg_q) <= set(_diag.DETAIL_KEYS) and "SECRET" not in _dg_url
           and os.path.basename(_dg_dir) not in _dg_url)
+    # What the privacy policy promises: the details travel after the "#",
+    # which a browser never sends, so the site has them only with the form.
+    check("...and none of it in the part of the link a browser sends to the site",
+          _dg_split(_dg_url).query == "" and _dg_split(_dg_url).path.endswith("feedback.html"))
     check("a link made from any pairs at all keeps only the details' own names",
           "SECRET" not in _diag.feedback_url([("version", "1"), ("title", "SECRET")])
           and "version=1" in _diag.feedback_url([("version", "1"), ("title", "SECRET")]))

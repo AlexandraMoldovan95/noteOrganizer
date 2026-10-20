@@ -3752,10 +3752,11 @@ class SettingsPageMixin:
                 row.pack_forget()
 
     def _build_settings_about_panel(self, parent):
-        """Version, where the data lives, the welcome note, and feedback."""
+        """Version, where the data lives, the welcome note, feedback and the
+        privacy policy."""
         self._settings_subtitle(
-            parent, "Version info, where your notes live, the welcome note, and "
-                    "a way to send feedback.")
+            parent, "Version info, where your notes live, the welcome note, "
+                    "a way to send feedback, and the privacy policy.")
         head = tk.Frame(parent, bg=self.colors["bg"])
         self.track_theme(head, bg="bg")
         head.pack(fill="x", pady=(0, 14))
@@ -3830,6 +3831,13 @@ class SettingsPageMixin:
             "minute. Your browser opens a short form; nothing from your "
             "notes is sent.", first=True)
         self._text_button(control, "Send feedback", self._open_feedback).pack()
+        control = self._card_row(
+            talk, "Privacy policy",
+            "Your notes stay on this computer. The policy says what leaves "
+            "it, and that it leaves only when you send it.")
+        self._text_button(
+            control, "Read",
+            lambda: self._open_in_browser(diagnostics.PRIVACY_URL)).pack()
         if diagnostics.STORE_REVIEW_URL:
             control = self._card_row(
                 talk, "Rate the app", "A review in the Microsoft Store.")
