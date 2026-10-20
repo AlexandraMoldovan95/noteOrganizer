@@ -161,6 +161,7 @@ hiding anything.
 - Hover any button and it tells you what it does.
 - **Style**: **Bold**, *Italic*, <u>Underline</u>, and ~~Strikethrough~~ — also on the right-click
   menu, and available as keyboard shortcuts (**Ctrl+B**, **Ctrl+I**, **Ctrl+U**, **Ctrl+D**).
+  Making a sentence bold leaves its italic words italic, and the other way round.
 - **Colours**: text colour and highlight, each opening a small swatch picker (no hex codes to type —
   just pick a colour) with a Clear option to remove it again.
 - All six work the same way: select some text and click (or press) one to apply it there, or click
@@ -175,8 +176,11 @@ don't need to select a line exactly.
 
 - **Lists.** The **•** and **1.** buttons turn those lines into a bullet or numbered list. Click
   the same button again to turn the list off. Press **Enter** to start the next item; press it on
-  an item you haven't typed anything into and the list ends there. **Backspace** with the cursor
-  just after a marker removes the marker rather than deleting it one character at a time.
+  an item you haven't typed anything into and the list ends there. Pressed at the very start of
+  an item, before its marker, Enter leaves an empty item above it; pressed with words selected,
+  it replaces them, as anywhere else. **Backspace** with the cursor just after a marker removes
+  the marker rather than deleting it one character at a time — unless words are selected, which
+  it deletes instead.
 - **Nesting.** **Tab** pushes a list item one level in, **Shift+Tab** pulls it back out — or use
   the **⇤** and **⇥** buttons. A numbered sub-list counts from 1 again under each parent, and
   picks the outer numbering back up when it ends. Bullets change shape as they go deeper
@@ -313,8 +317,11 @@ A table works the way a spreadsheet has taught your hands to expect:
   the table (right-click → **Table**) and the caption follows. Selecting every cell and pressing
   an alignment button aligns the text *inside* the cells, as a spreadsheet does — and a short
   dialog, which stays until you press OK, says how to move the table itself.
-- The full set: merge the selected cells into one (their texts join), split a merge back apart,
-  insert or delete rows and columns, duplicate whole columns to the end of the table (and whole
+- The full set: merge the selected cells into one (their texts join — the same with **Merge with
+  cell to the left / above**, which takes in all of a neighbour that is itself merged), split a
+  merge back apart, insert or delete rows and columns (**Insert row above** on the header row
+  puts the new row just under it, so the header stays the header), duplicate whole columns to
+  the end of the table (and whole
   rows to the bottom), insert a **checkbox** (with its own colour palette) or an emoji, and
   highlight cells from a small colour palette.
 - A checkbox is a real little box, not text: **click it to tick and untick it** — for marking when
@@ -621,7 +628,12 @@ selector at the top of the same panel offers 7 to 90 days, and a change applies 
 startup's cleanup. Restore individual notes, delete them permanently one at a time, or empty the
 whole trash at once. With a lot of deleted notes, the list loads the most recent batch first, with
 a button to reveal more — so it stays quick to open no matter how much has accumulated there.
-Deleting permanently never removes an attached file that a note still uses.
+Deleting permanently — by hand or by the automatic cleanup — never removes an attached file that
+a note still uses.
+
+If the settings file can't be read (a bad shutdown or a disk problem can do that), the app no
+longer knows how long you chose, so it removes nothing from the Trash until you choose again. It
+says so once when it starts, and the selector shows **Choose…** until you do.
 
 Each row also carries a tick box, so getting a batch back is one gesture rather than forty: tick
 what you want and an **↩ Restore N selected** button appears at the foot of the panel, just above
@@ -1009,7 +1021,7 @@ keys that only mean something inside a list, in the find bar, or on the note lis
 | **Ctrl+Z** | editor | Undoes, in the note body and in comments. |
 | **Ctrl+Y** / **Ctrl+Shift+Z** | editor | Redoes. |
 | **Enter** | in a list | Starts the next item; on an item you haven't typed anything into, the list ends there. |
-| **Backspace** | in a list | With the cursor just after a marker, removes the marker. |
+| **Backspace** | in a list | With the cursor just after a marker and nothing selected, removes the marker. |
 | **Tab** / **Shift+Tab** | in a list | Pushes an item one level in / pulls it back out. |
 | **Tab** / **Shift+Tab** | in a table | Moves to the next / previous cell; Tab on the very last cell adds a fresh row. |
 | **Enter** / **Shift+Enter** | in a table | Starts a new line inside the cell. |

@@ -64,6 +64,8 @@ is in the table below as well.
 | [Eleven decisions about your notes, made from half the evidence](#eleven-decisions-about-your-notes-made-from-half-the-evidence) | When two files must agree, rebuild the weaker from the stronger; an automatic removal asks the strictest question there is; a dialog's promise is part of the mechanism. | 0.81.213 |
 | [The backup the app could not restore](#the-backup-the-app-could-not-restore) | Every limit on reading is a promise about writing: when the app makes what it later reads, one definition checks both ends. | 0.94.379 |
 | [The import the close waited for, then threw away](#the-import-the-close-waited-for-then-threw-away) | A cap on a wait is half a decision: say what happens to the work still running at the cap — and test the cleanup on the case it exists for. | 0.94.382 |
+| [The figure that was not one of the ten](#the-figure-that-was-not-one-of-the-ten) | The fourth fix of one mistake is the moment for a gate that refuses the pattern, not a fifth fix by hand. | 0.95.391 |
+| [The Trash that forgot its window](#the-trash-that-forgot-its-window) | "I don't know" and "the default" are different answers: carry the not-knowing in the data until a person resolves it. | 0.95.391 |
 | [The Cancel that went ahead anyway](#the-cancel-that-went-ahead-anyway) | A function that can be told "no" must say so to its caller; a modal dialog holds the mouse only unless the keyboard is held too; bind the end of a widget-level record to the widget's own end. | 0.82.230 |
 | [The paste that landed on top of the placeholder](#the-paste-that-landed-on-top-of-the-placeholder) | `bind()` replaces where `add="+"` accumulates, so a widget's own binding silently displaces a shared helper's; and a virtual event outranks the physical one beside it in the same bindtag. | 0.75.185 |
 | [The sweep that stopped at the edge of the Settings page](#the-sweep-that-stopped-at-the-edge-of-the-settings-page) | A fix's sibling sweep must name the surfaces it did not visit; a cap in characters is not a width; and text that wraps for the first time inherits every multi-line default the widget was hiding. | 0.81.202 |
@@ -114,6 +116,7 @@ is in the table below as well.
 | [Ctrl+Z, and the formatting Tk's stack never held](#ctrlz-and-the-formatting-tks-stack-never-held) | Keep what an undo system cannot see beside it, keyed to what it does see — and measure how it groups steps first. | 0.83.335 |
 | [The key that typed nothing, and the line it forgot](#the-key-that-typed-nothing-and-the-line-it-forgot) | A fix that narrows when a feature acts must re-walk its main path; ask the text what a key did, and press modifiers as keys. | 0.83.335 |
 | [The bold the screen kept for later](#the-bold-the-screen-kept-for-later) | When one tag draws several properties, a change to any of them must reach it: the screen shows what was laid last. | 0.83.335 |
+| [The keys that took over from Tk and dropped its first step](#the-keys-that-took-over-from-tk-and-dropped-its-first-step) | A handler that takes a key over from the toolkit takes over everything the toolkit's binding did: read it and list its steps first. | 0.95.391 |
 | [The rebuild under the click](#the-rebuild-under-the-click) | Re-anchor gestures by what survives a rebuild — a line number, never a widget reference. | 0.39.63 |
 | [The centring that would not save itself](#the-centring-that-would-not-save-itself) | A comparison that lists fields silently exempts whatever field is added next. | 0.39.63 |
 | [The accepted cost that nobody had accepted](#the-accepted-cost-that-nobody-had-accepted) | When a docstring says 'accepted cost', check who pays it, and for what. | 0.64.95 |
@@ -1849,6 +1852,69 @@ again.
 still running when the cap is reached. And a cleanup tested only on work that finished in time
 has not been tested on the case it exists for.
 
+### The figure that was not one of the ten
+
+*([0.95.391](../CHANGELOG.md#095391--2026-10-20) · 2026-10-20)*
+
+**Symptom:** none reported. Found while comparing the Android port with the desktop. Type
+"17²" in a note's date field ("²" has a key of its own on a French keyboard) and every autosave
+of that note failed: nothing typed after it was kept, body included, and closing the app stopped
+on "Something went wrong". A notes file holding such a date, edited by hand, kept the app from
+opening at all.
+
+**Root cause:** `read_date` sorted each piece of the field into letters and figures with
+`str.isdigit()`, which is True for "²", "①" and "₂" as well as for 0–9. The patterns that read
+the figures are written `[0-9]`, so a piece sent to them as a figure matched nothing, and the
+match's `None` raised. The same mistake had been fixed three times before, one reader at a
+time: a day of the month, a year, the calculator. Each fix closed its own door and left the
+next.
+
+**Fix:** a figure is one of `"0123456789"`, the same set the patterns read. And the one-definition
+gate (`tools/check_one_definition.py`) now refuses a bare `.isdigit()` anywhere in the app's
+code, naming `isdecimal()` (what `int()` reads) or a test against the ten figures instead. The
+one remaining use is allowed by name, with its reason: it runs only after `isascii()`.
+
+**Takeaway:** the fourth fix of one mistake is the moment to stop fixing it by hand — a gate
+that refuses the pattern closes every door at once, including the ones not yet written.
+
+### The Trash that forgot its window
+
+*([0.95.391](../CHANGELOG.md#095391--2026-10-20) · 2026-10-20)*
+
+**Symptom:** none reported; the Android port had the same weakness, found by its own audit, and
+the desktop was checked for it. Someone who keeps deleted notes for 90 days, and whose
+settings file is damaged by a bad shutdown, starts the app — and every note in the Trash older
+than 30 days is removed for good, with its attached files. A hand-edited window of `0` removed
+everything older than a day. Separately, the automatic cleanup could delete a file that a
+living note was still showing.
+
+**Root cause:** three gaps, one theme — a deletion nobody asks for acting on something it
+could not know.
+
+- An unreadable `settings.json` read as `{}`. Before the purge ran, the first write of any
+  setting (the app writes several while it starts) stored a fresh file with no window in it,
+  so "unknown" had already become "never chosen", which means 30 days.
+- A stored value no app writes was clamped rather than refused: `0` became one day, `"forever"`
+  became 30.
+- Two notes can share one stored file, when a duplicate or an import could not copy it and kept
+  the name. Delete and Empty trash spared a file a note still used; the startup purge, and
+  removing one attachment from a note, did not.
+
+**Fix:** `load_settings()` answers an unreadable file with a marker,
+`desktop_trash_window_unknown`, instead of `{}`. Every writer reads, changes and writes, so the
+marker survives until the person chooses a window again, in one write
+(`choose_trash_window()`). `trash_retention_days()` answers `None` while the marker is set or the
+stored value is not a whole number from 1 to 365, and `None` purges nothing. The next start says
+so once; the Trash panel says nothing is removed automatically and its selector reads
+**Choose…**; the texts that promised "restorable for N days" leave the number out while there is
+none to promise. The purge and the single-attachment removal now spare every file a note or a
+kept entry still uses, and on a launch whose notes file could not be read the purge does not run
+at all, since there are no notes to ask.
+
+**Takeaway:** "I don't know" and "the default" are different answers, and a store that turns
+one into the other on its next write erases the difference before anyone can act on it. Carry
+the not-knowing in the data until a person resolves it.
+
 
 ## Tk & platform gotchas
 
@@ -2795,6 +2861,34 @@ come in too: the refit went a character at a time, and a long paste paid for eve
 rule now lives in one helper that every road asks, and the refit goes by stretches of
 unchanging tags. Fixing a mechanism on the road it was reported on, rather than on every road
 that reaches it, is how the same finding came back three rounds running.
+
+### The keys that took over from Tk and dropped its first step
+
+*([0.95.391](../CHANGELOG.md#095391--2026-10-20) · 2026-10-20)*
+
+**Symptom:** none reported; found while comparing the Android port's lists with the desktop's.
+Select "and " in the item "• milk and eggs" and press Enter: the words stayed, with a new item
+cut into the middle of them. In an open table cell, Enter did the same. Select back to just after
+a bullet and press Backspace: the bullet went and the words stayed. Press Home, then Enter, on an
+item: "• • milk". And making a sentence bold took the italic off its one italic word.
+
+**Root cause:** the list's Enter and Backspace, and the cell's Enter, are handlers that take a key
+over from Tk's own. Tk's first step for both keys is "if the caret is in a selection, delete the
+selection", and none of the three handlers did it: they asked only where the caret stood. The
+Enter handler also put its new marker at the caret without asking whether the caret was inside
+the old one. Bold and italic had the matching flaw in another shape: one answer, read from the
+whole selection, for a style that each part of it holds differently.
+
+**Fix:** one helper asks Tk's own question (`_selection_holds_caret`, also now used by the three
+places that had written it out by hand). Backspace steps aside when it is true; the list's Enter
+deletes the selection and continues the list from there, as one Ctrl+Z, keeping the marker when
+all of an item's words were selected; the cell's Enter deletes it first. Enter before a marker's
+end starts from the marker's end, which leaves an empty item above. Bold and italic keep the
+whole selection's on/off decision and give each stretch its own other style
+(`_set_weight_by_stretch`), in the body and across table cells.
+
+**Takeaway:** a handler that takes a key over from the toolkit takes over everything the
+toolkit's binding did — read that binding first, and list its steps before writing the first line.
 
 ## Tables
 

@@ -325,6 +325,77 @@ app.toggle_settings_panel('trash')
 app.update()
 app.update_idletasks()
 """),
+    # The Trash when the window chosen before could not be read: a line
+    # that says nothing leaves by itself, a selector reading Choose…, and
+    # rows with no days left. Last, because the marker stays in settings.
+    ("19-trash-window-not-known", """
+app._dismiss_mini_popup()
+NO.save_setting(NO.TRASH_WINDOW_UNKNOWN, 'told')
+app.trash = [
+    {'id': 9201, 'title': 'Kept since the summer', 'body': 'b',
+     'category': 'General', 'deleted_at': _days_ago(80)},
+    {'id': 9202, 'title': 'Deleted last week', 'body': 'b',
+     'category': 'General', 'deleted_at': _days_ago(6)},
+]
+app.show_settings_page()
+app.update()
+app.toggle_settings_panel('trash')
+app.update()
+app.update_idletasks()
+"""),
+    # A table just after "Insert row above" on its header: the new row
+    # under the header, the header still drawn as one, no row of dashes.
+    # Above it, the separator stopped counting and the header became data.
+    ("20-a-row-inserted-under-the-header", """
+app._dismiss_mini_popup()
+app.hide_settings_page()
+app.notebook.select(app.TAB_NOTES)
+if app.selection_mode:
+    app._toggle_selection_mode()
+_tn = NO.normalize_note({
+    'id': 7200, 'title': 'Shopping list', 'category': 'General',
+    'body': ('| Item | Qty | Shop |' + chr(10) + '| --- | --- | --- |'
+             + chr(10) + '| Milk | 2 | corner |'
+             + chr(10) + '| Eggs | 12 | market |')})
+app.notes.append(_tn)
+app.save_notes()
+app.refresh_note_list()
+app.open_note_in_tab(_tn)
+app.update()
+app._grid_insert_row(app._grid_at_line(1), 0)
+app.update()
+app.update_idletasks()
+"""),
+    # A sentence made bold that keeps its italic word italic, and a list
+    # after Home, then Enter, on its item: an empty item above, never
+    # "• • milk". Both used to come out wrong.
+    ("21-bold-keeps-italic-and-enter-at-a-marker", """
+app._dismiss_mini_popup()
+app.hide_settings_page()
+app.notebook.select(app.TAB_NOTES)
+_tn = NO.normalize_note({
+    'id': 7300, 'title': 'Styles and lists', 'category': 'General',
+    'body': ('Pack the warm coat today' + chr(10) + '• milk'),
+    'formatting': [{'start': 9, 'end': 13, 'style': 'italic'}],
+    'paragraphs': [{'line': 1, 'kind': 'bullet'}]})
+app.notes.append(_tn)
+app.save_notes()
+app.refresh_note_list()
+app.open_note_in_tab(_tn)
+app.update()
+app.body_text.tag_add('sel', '1.0', '1.end')
+app._toggle_body_style('bold')
+app.body_text.tag_remove('sel', '1.0', 'end')
+app.body_text.mark_set('insert', '2.0')
+app._on_body_return(None)
+# The edits schedule an autosave, whose "Note updated" toast would land in
+# the picture or not, by timing alone.
+app._cancel_pending_autosave()
+app.update()
+app._hide_toast()
+app.update()
+app.update_idletasks()
+"""),
 ]
 
 SEED = [

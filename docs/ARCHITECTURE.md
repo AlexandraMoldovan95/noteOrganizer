@@ -421,14 +421,17 @@ size across a paragraph reads back as several pieces, gets written that way, and
 on the next save.
 
 The composite carries the weight and slant, so a change to bold or italic under it is drawn
-only once the composite is fitted again. Ctrl+B and Ctrl+I swap the composites inside the
-selection for ones with the new weight (`_weigh_font_tags`); typed and pasted letters are
-refitted (`_fit_font_tags`) by stretches over which their tags stay the same, keeping the size
-or font they did not pick — and leaving one plain font tag where typing or a paste laid bold
-and italic on the same letters. Before they were, the toolbar and the save said bold while the
-text stayed drawn as before until the note was opened again — and laying every composite in
-the note again instead cost a long note set in a font 250 ms per Ctrl+B; fitting a character at
-a time cost a long paste two to three times that. For the same reason, bold and italic over the
+only once the composite is fitted again. Typed and pasted letters are refitted
+(`_fit_font_tags`) by stretches over which their tags stay the same, keeping the size or font
+they did not pick — and leaving one plain font tag where typing or a paste laid bold and italic
+on the same letters. Ctrl+B and Ctrl+I go the same way (`_set_weight_by_stretch`): the on/off
+answer is the whole selection's, but each stretch keeps its own other style, so making a
+sentence bold leaves its one italic word italic — the selection used to get one answer for
+both, and that word lost its italic. Before they were refitted, the toolbar and the save said
+bold while the text stayed drawn as before until the note was opened again — and laying
+every composite in the note again instead cost a long note set in a font 250 ms per Ctrl+B;
+fitting a character at a time cost a long paste two to three times that. For the same reason,
+bold and italic over the
 same letters are folded into one `bold_italic` span in `normalize_formatting()`, the list given
 back in the order the editor reads spans in (in any other, an untouched note read as unsaved).
 `resolve_font_runs()` works its stretches out in one sweep over the boundaries: checking every

@@ -975,6 +975,97 @@ app.update()
 check('Backspace elsewhere in the item is left to Tk, deleting one character',
       app._on_body_backspace(None) is None)
 
+# ---- Enter and Backspace where the caret or a selection meets a marker ----
+# Home, then Enter, put the new marker in front of the old one ("• • milk").
+# Enter over selected words left them in place with a new item cut into
+# them. Backspace over a selection ending just after a marker took the
+# marker and kept the words. Real keys, pressed and released.
+def _list_key(keysym):
+    take_focus(app.body_text)
+    app.body_text.event_generate(f'<KeyPress-{keysym}>', keysym=keysym,
+                                 when='now')
+    app.body_text.event_generate(f'<KeyRelease-{keysym}>', keysym=keysym,
+                                 when='now')
+    app.update()
+
+
+def _listed(text, kind='bullet'):
+    set_body(text)
+    select_all_body()
+    app._list_buttons[kind].invoke()
+    clear_selection()
+
+
+for _lk_col in (0, 1):
+    _listed('milk')
+    app.body_text.mark_set('insert', f'1.{_lk_col}')
+    _list_key('Return')
+    check(f'Enter at column {_lk_col} of a bulleted item leaves an empty item '
+          f'above, the words below ({body()!r})',
+          body() == '• \n• milk'
+          and app._extract_paragraphs(app.body_text)
+          == [{'line': 0, 'kind': 'bullet'}, {'line': 1, 'kind': 'bullet'}])
+_list_key('Return')
+check(f'...and pressed again, a second empty item, no doubled marker ({body()!r})',
+      body() == '• \n• \n• milk')
+_listed('first', 'number')
+app.body_text.mark_set('insert', '1.1')
+_list_key('Return')
+check(f'Enter inside a number marker: an empty item above, counted ({body()!r})',
+      body() == '1. \n2. first')
+
+_listed('milk and eggs')
+app.body_text.tag_add('bold', '1.7', '1.11')
+app.body_text.edit_reset()
+app.body_text.tag_add('sel', '1.7', '1.11')
+app.body_text.mark_set('insert', '1.11')
+_list_key('Return')
+check(f'Enter over selected words in an item replaces them with the new item '
+      f'({body()!r})',
+      body() == '• milk \n• eggs'
+      and not app.body_text.tag_ranges('sel'))
+app._body_undo_redo('undo')
+app.update()
+check(f'...and one Ctrl+Z gives the words back, bold and all ({body()!r})',
+      body() == '• milk and eggs'
+      and 'bold' in app.body_text.tag_names('1.8'))
+_listed('milk')
+app.body_text.tag_add('sel', '1.2', '1.6')
+app.body_text.mark_set('insert', '1.6')
+_list_key('Return')
+check(f'Enter over all of an item\'s words keeps its marker: an empty item, '
+      f'then the new one ({body()!r})',
+      body() == '• \n• ')
+_listed('one\ntwo\nthree\nfour', 'number')
+app.body_text.tag_add('sel', '2.5', '3.3')
+app.body_text.mark_set('insert', '3.3')
+_list_key('Return')
+check(f'Enter over a selection across numbered items counts them again '
+      f'({body()!r})',
+      body() == '1. one\n2. tw\n3. three\n4. four')
+
+_listed('milk')
+app.body_text.tag_add('sel', '1.2', '1.6')
+app.body_text.mark_set('insert', '1.2')
+_list_key('BackSpace')
+check(f'Backspace over a selection that ends at the marker deletes the words, '
+      f'not the marker ({body()!r})',
+      body() == '• ')
+_listed('milk')
+app._set_paragraph_indent(1, 1)
+app.body_text.tag_add('sel', '1.2', '1.6')
+app.body_text.mark_set('insert', '1.2')
+_list_key('BackSpace')
+check('...and on a nested item it leaves the depth alone',
+      app._paragraph_indent_of(app.body_text, 1) == 1
+      and app._list_kind_of(app.body_text, 1) == 'bullet')
+_listed('milk\neggs')
+app.body_text.mark_set('insert', '1.2')
+select_all_body()
+_list_key('BackSpace')
+check(f'Ctrl+A with the caret after a marker, then Backspace, empties the '
+      f'note ({body()!r})', body() == '')
+
 # ---- Marker and indent tag must not drift apart (regression) ----
 # The indent tag first covered each line's trailing newline. Tk hands a tag
 # on to text inserted between two characters that both carry it, so the next
@@ -2305,6 +2396,23 @@ def _menu_entry_state(m, label):
     return None
 
 
+def _menu_invoke(m, label):
+    """Press the entry a person would, wherever its cascade put it."""
+    for i in range(m.index('end') + 1):
+        kind = m.type(i)
+        if kind == 'command' and m.entrycget(i, 'label') == label:
+            m.invoke(i)
+            return True
+        if kind == 'cascade':
+            try:
+                sub = m.nametowidget(m.entrycget(i, 'menu'))
+            except Exception:
+                continue
+            if _menu_invoke(sub, label):
+                return True
+    return False
+
+
 
 def _body_state():
     return (body(),
@@ -2846,7 +2954,7 @@ _t = app._grid_at_line(1)
 check(f'and a column ({_t["ncols"]} columns)',
       _t['ncols'] == 3
       and core_tables.split_row(lines_now()[0]) == ['A', '', 'B'])
-app._grid_set_marker(_t, 0, 1, core_tables.MERGE_LEFT)
+app._grid_merge_with(_t, 0, 1, 'left')
 app.update()
 _t = app._grid_at_line(1)
 check('merging from the menu spans the anchor',
@@ -2886,6 +2994,140 @@ app._grid_delete_table(_t)
 app.update()
 check('and deleting the table removes it outright',
       app._grid_at_line(1) is None and core_tables.find_blocks(body()) == [])
+
+# ---- MERGE AND INSERT FROM A CELL'S MENU, PRESSED AS A PERSON DOES ----
+# "Merge with cell to the left / above" wrote a merge marker over the
+# clicked cell, and its text was gone. "Insert row above" on the header
+# pushed the header down past the separator, which stopped being one: the
+# header became data and the dashes a row of content.
+def _press_cell_menu(r, c, label):
+    info = app._grid_at_line(1)
+    app._grid_clear_selection()
+    cell = info['cells'][(r, c)]
+    posted = []
+    real_popup = NO.tk.Menu.tk_popup
+    NO.tk.Menu.tk_popup = lambda _m, *a, **k: posted.append(_m)
+    try:
+        app._grid_menu(info, type('E', (), {
+            'x': int(cell['x'] + 12), 'y': int(cell['y'] + 6),
+            'x_root': 0, 'y_root': 0})())
+        pressed = bool(posted) and _menu_invoke(posted[-1], label)
+    finally:
+        NO.tk.Menu.tk_popup = real_popup
+    app.update()
+    return pressed
+
+
+_cm_table = chr(10).join(['| Name | Qty | Note |', '| --- | --- | --- |',
+                          '| apple | 3 | ripe |', '| pear | 5 | soft |'])
+set_body(_cm_table)
+app._render_table_grids()
+app.update()
+app.body_text.edit_reset()
+check('the cell menu offers Merge with cell to the left',
+      _press_cell_menu(1, 1, 'Merge with cell to the left'))
+check(f'merging with the cell to the left keeps both texts ({lines_now()[2]!r})',
+      core_tables.split_row(lines_now()[2]) == ['apple 3', '<', 'ripe'])
+app._body_undo_redo('undo')
+app.update()
+check(f'...and one Ctrl+Z gives both cells back ({lines_now()[2]!r})',
+      core_tables.split_row(lines_now()[2]) == ['apple', '3', 'ripe'])
+check('the cell menu offers Merge with cell above',
+      _press_cell_menu(2, 1, 'Merge with cell above'))
+check(f'merging with the cell above keeps both texts ({lines_now()[2:4]!r})',
+      core_tables.split_row(lines_now()[2]) == ['apple', '3 5', 'ripe']
+      and core_tables.split_row(lines_now()[3]) == ['pear', '^', 'soft'])
+# A neighbour that is itself merged is swallowed whole, as a selection
+# reaching into it would be: merging "pear" up into the wide cell above
+# takes in the whole width of that cell.
+app._body_undo_redo('undo')
+app.update()
+_press_cell_menu(1, 1, 'Merge with cell to the left')
+_press_cell_menu(2, 0, 'Merge with cell above')
+check(f'merging up into a wide cell swallows all of it ({lines_now()[2:4]!r})',
+      core_tables.split_row(lines_now()[2]) == ['apple 3 pear 5', '<', 'ripe']
+      and core_tables.split_row(lines_now()[3]) == ['^', '<', 'soft'])
+# The other door into the same menu: a right-click inside a cell being
+# written in, which commits the typed word first. That word was the one
+# the old merge wrote over.
+set_body(_cm_table)
+app._render_table_grids()
+app.update()
+_cm_info = app._grid_at_line(1)
+app._open_cell_editor(_cm_info, 1, 1)
+_cm_e = app._cell_editor['entry']
+_cm_e.delete('1.0', 'end')
+_cm_e.insert('1.0', 'seven')
+_cm_posted = []
+_cm_real_popup = NO.tk.Menu.tk_popup
+NO.tk.Menu.tk_popup = lambda _m, *a, **k: _cm_posted.append(_m)
+try:
+    app._editor_context_menu(_cm_info, type('E', (), {
+        'x': 0, 'y': 0, 'x_root': 0, 'y_root': 0})())
+    _cm_pressed = (bool(_cm_posted)
+                   and _menu_invoke(_cm_posted[-1], 'Merge with cell to the left'))
+finally:
+    NO.tk.Menu.tk_popup = _cm_real_popup
+app.update()
+check(f'typed in a cell, then merged left from its own menu: the typed word '
+      f'stays ({lines_now()[2]!r})',
+      _cm_pressed
+      and core_tables.split_row(lines_now()[2]) == ['apple seven', '<', 'ripe'])
+# Enter over words selected in an open cell replaces them, as it does
+# anywhere else; the cell's own Enter put the line break in and left them.
+set_body(_cm_table)
+app._render_table_grids()
+app.update()
+app._open_cell_editor(app._grid_at_line(1), 1, 2)
+_cm_e = app._cell_editor['entry']
+_cm_e.delete('1.0', 'end')
+_cm_e.insert('1.0', 'very ripe now')
+_cm_e.tag_add('sel', '1.5', '1.10')
+_cm_e.mark_set('insert', '1.10')
+app._editor_newline()
+app._commit_cell_editor()
+app.update()
+_cm_cell = core_tables.split_row(lines_now()[2])[2]
+check(f'Enter over words selected in a cell replaces them with the line '
+      f'break ({_cm_cell!r})',
+      'ripe' not in _cm_cell and 'very' in _cm_cell and 'now' in _cm_cell
+      and '<br>' in _cm_cell)
+# Bold over two cells keeps the italic one italic: the cells got one
+# answer for both styles, and the italic went.
+set_body(_cm_table)
+app._render_table_grids()
+app.update()
+_cm_info = app._grid_at_line(1)
+app._grid_apply_style(_cm_info, (1, 1, 1, 1), 'italic')
+app.update()
+_cm_info = app._grid_at_line(1)
+app._grid_apply_style(_cm_info, (1, 0, 1, 1), 'bold')
+app.update()
+_cm_info = app._grid_at_line(1)
+_cm_paint = [(app._grid_cell_paint(_cm_info, 1, c)['bold'],
+              app._grid_cell_paint(_cm_info, 1, c)['italic']) for c in (0, 1)]
+check(f'Bold over two cells keeps the italic one italic ({_cm_paint})',
+      _cm_paint == [(True, False), (True, True)])
+
+set_body(_cm_table)
+app._render_table_grids()
+app.update()
+check('the header\'s menu offers Insert row above',
+      _press_cell_menu(0, 0, 'Insert row above'))
+_cm_lines = lines_now()
+check(f'Insert row above on the header puts the row under it ({_cm_lines[:4]!r})',
+      core_tables.split_row(_cm_lines[0]) == ['Name', 'Qty', 'Note']
+      and core_tables.separator_index(_cm_lines[:4]) == 1
+      and core_tables.split_row(_cm_lines[2]) == ['', '', '']
+      and core_tables.split_row(_cm_lines[3]) == ['apple', '3', 'ripe'])
+set_body(chr(10).join(['| a | b |', '| c | d |']))
+app._render_table_grids()
+app.update()
+_press_cell_menu(0, 0, 'Insert row above')
+check(f'...while a table with no header still gets it on top ({lines_now()[:3]!r})',
+      core_tables.split_row(lines_now()[0]) == ['', '']
+      and core_tables.split_row(lines_now()[1]) == ['a', 'b'])
+set_body('')
 
 # ---- GRID DELETE captures the view BEFORE teardown (audit Z08-F02) ----
 # Every other grid op snapshots _grid_saved_view before tearing down so
@@ -6565,6 +6807,47 @@ check(f'bold, italic or plain given under a size or a font is drawn at once '
       and _bs_seen['Bold on, then typing'] == (20, 'bold', 'roman')
       and _bs_seen['a bold paste'] == (20, 'bold', 'roman')
       and _bs_seen['a letter glued onto the bold word'] == (20, 'bold', 'roman'))
+
+
+# Ctrl+B or Ctrl+I over a selection keeps each stretch's OTHER style: the
+# whole selection got one answer for both, so an italic word in a sentence
+# made bold lost its italic. Real Ctrl+B / Ctrl+I.
+def _wb_spans():
+    return sorted((s['start'], s['end'], s['style'])
+                  for s in app._extract_formatting(app.body_text))
+
+
+def _wb_press(letter):
+    select('1.0', '1.end')
+    take_focus(app.body_text)
+    app.body_text.event_generate(f'<Control-{letter}>')
+    app.update()
+    clear_selection()
+
+
+set_body('one two three')
+app.body_text.tag_add('italic', '1.4', '1.7')
+_wb_press('b')
+_wb_on = _wb_spans()
+_wb_drawn = _drawn('1.5')
+check(f'Ctrl+B over a sentence keeps its italic word italic ({_wb_on}, {_wb_drawn})',
+      _wb_on == [(0, 4, 'bold'), (4, 7, 'bold_italic'), (7, 13, 'bold')]
+      and _wb_drawn[1:] == ('bold', 'italic'))
+_wb_press('b')
+check(f'...and Ctrl+B again takes the bold off and leaves the italic '
+      f'({_wb_spans()})', _wb_spans() == [(4, 7, 'italic')])
+set_body('one two three')
+app.body_text.tag_add('bold', '1.4', '1.7')
+_wb_press('i')
+check(f'Ctrl+I over a sentence keeps its bold word bold ({_wb_spans()})',
+      _wb_spans() == [(0, 4, 'italic'), (4, 7, 'bold_italic'),
+                      (7, 13, 'italic')])
+_sized_line({'start': 4, 'end': 9, 'style': 'italic'})
+_wb_press('b')
+_wb_sized = (_drawn('1.1'), _drawn('1.5'))
+check(f'...under a size too, each stretch drawn with both ({_wb_sized})',
+      _wb_sized == ((20, 'bold', 'roman'), (20, 'bold', 'italic')))
+set_body('')
 # A size picked with nothing selected and typed inside a run of another size
 # draws at the size picked: the letters took the run's composite too, and Tk
 # drew whichever of the two tags was made later.
@@ -12032,6 +12315,17 @@ check('carried styles: merging the red 12 into its row\'s first cell keeps '
       _cs_styles() == _cs_want
       and core_tables.split_row(app.body_text.get('4.0', '4.end'))[0]
       == 'Eggs 12')
+# The same through the cell menu's "Merge with cell to the left", which
+# goes the same way now; it used to write over the 12 and its red.
+_cs_info = _cs_setup()
+app._grid_merge_with(_cs_info, 2, 1, 'left')
+app.update()
+check('carried styles: Merge with cell to the left keeps the red 12 too '
+      f'({_cs_styles()}, '
+      f'{core_tables.split_row(app.body_text.get("4.0", "4.end"))})',
+      _cs_styles() == _cs_want
+      and core_tables.split_row(app.body_text.get('4.0', '4.end'))[0]
+      == 'Eggs 12')
 
 # ---- CELLS PASTED WIDER THAN THE TABLE GROW IT ----
 # Four columns copied from a spreadsheet into a two-column table: the rows
@@ -14125,6 +14419,10 @@ for _tu_name, _tu_do in (
          lambda i: (app._grid_select_range(i, (1, 1), (1, 1)),
                     app._set_paragraph_align('center'))),
         ('inserting a row below', lambda i: app._grid_insert_row(i, 2)),
+        ('inserting a row above the header',
+         lambda i: app._grid_insert_row(i, 0)),
+        ('merging a cell with the one to its left',
+         lambda i: app._grid_merge_with(i, 1, 1, 'left')),
         ('autofitting a column', lambda i: app._grid_autofit_col(i, 0)),
         ('inserting a column at the left', lambda i: app._grid_insert_col(i, 0)),
         ('merging two header cells',

@@ -2731,6 +2731,292 @@
     "expect": "killed"
   },
   {
+    "id": "RD20",
+    "about": "read_date takes any figure str.isdigit() passes -- superscript, circled -- for one of 0-9",
+    "edits": [
+      {
+        "file": "noteorganizer/core/recurrence.py",
+        "find": "        if part[0] in \"0123456789\":\n",
+        "replace": "        if part[0].isdigit():\n"
+      }
+    ],
+    "must_fail": ["'17\\xb2' is not read as a date, and does not raise",
+                  "a note dated with a superscript figure still loads, its date kept"],
+    "suites": ["test_recurrence"],
+    "expect": "killed"
+  },
+  {
+    "id": "TW01",
+    "about": "an unreadable settings.json reads as an empty one, the Trash's window as never chosen",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "        return {TRASH_WINDOW_UNKNOWN: True}\n",
+        "replace": "        return {}\n"
+      }
+    ],
+    "must_fail": ["an unreadable settings file leaves the window not known"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "TW02",
+    "about": "the window ignores the marker an unreadable settings file left",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "    if settings.get(TRASH_WINDOW_UNKNOWN):\n        return None\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["an unreadable settings file leaves the window not known",
+                  "...and a write of another setting keeps it not known"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "TW03",
+    "about": "a stored window outside 1-365 is clamped again, so a hand-edited 0 purges at one day",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "    if isinstance(days, bool) or not isinstance(days, int) or not 1 <= days <= 365:\n        return None\n    return days\n",
+        "replace": "    if isinstance(days, bool) or not isinstance(days, int):\n        return None\n    return max(1, min(days, 365))\n"
+      }
+    ],
+    "must_fail": ["a stored window of 0 is not known, and purges nothing",
+                  "a stored window of 400 is not known, and purges nothing"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "TW04",
+    "about": "the purge falls back to 30 days when the window is not known",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "        window = trash_retention_days()\n        if window is None:\n            return None\n",
+        "replace": "        window = trash_retention_days() or TRASH_RETENTION_DAYS\n"
+      }
+    ],
+    "must_fail": ["...and a 40-day-old entry survives the purge"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "TW05",
+    "about": "choosing a window leaves the not-known marker behind",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "    settings.pop(TRASH_WINDOW_UNKNOWN, None)\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["choosing a window forgets that the last one was not known"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "TW06",
+    "about": "a promise about the Trash names a number of days the app does not know",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "    return \"\" if days is None else f\" {lead} {days} days\"",
+        "replace": "    return f\" {lead} {days} days\""
+      }
+    ],
+    "must_fail": ["...and no promise names a number of days"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "TW07",
+    "about": "a Trash row counts days left against 30 when the window is not known",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "    window = trash_retention_days()\n    if window is None:\n        return None\n    elapsed",
+        "replace": "    window = trash_retention_days() or TRASH_RETENTION_DAYS\n    elapsed"
+      }
+    ],
+    "must_fail": ["...nothing is named as past the window, nor given days left"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "TW08",
+    "about": "the first window chosen after one not known is saved without asking what it removes",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "            if current is None or days < current:\n",
+        "replace": "            if current is not None and days < current:\n"
+      }
+    ],
+    "must_fail": ["window not known: choosing asks about what it would now remove"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "TW09",
+    "about": "the startup notice about the window not known is said at every start",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            save_setting(TRASH_WINDOW_UNKNOWN, \"told\")\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["window not known: ...and says it once"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "TW10",
+    "about": "the Trash panel quotes a window it does not know",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "        if days is None:\n            return (\"The length chosen before",
+        "replace": "        if False:\n            return (\"The length chosen before"
+      }
+    ],
+    "must_fail": ["window not known: the panel says nothing is removed automatically"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "TW11",
+    "about": "the retention dropdown shows a number for a window not known",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "            return \"Choose…\" if days is None else f\"{days} days\"",
+        "replace": "            return f\"{days} days\""
+      }
+    ],
+    "must_fail": ["window not known: the dropdown asks for a choice, names no number",
+                  "window not known: answering No keeps it not known, and the label"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "TW12",
+    "about": "the dropdown saves the window but keeps the not-known marker",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "            choose_trash_window(days)\n",
+        "replace": "            save_setting(\"trash_retention_days\", days)\n"
+      }
+    ],
+    "must_fail": ["window not known: answering Yes chooses 90 days and forgets the marker"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "TW13",
+    "about": "the next start never says the Trash's window could not be read",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if get_setting(TRASH_WINDOW_UNKNOWN) is True:\n",
+        "replace": "        if False:\n"
+      }
+    ],
+    "must_fail": ["window not known: the next start says the Trash keeps everything"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SF01",
+    "about": "the startup purge deletes files that living notes and kept entries still use",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "    _delete_attachment_files(\n        purged_entries, spare=attachment_names_in(list(notes or []) + kept))\n",
+        "replace": "    _delete_attachment_files(purged_entries)\n"
+      }
+    ],
+    "must_fail": ["the purge keeps a file a living note still uses",
+                  "the purge keeps a file a kept Trash entry still uses"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SF02",
+    "about": "the startup purge spares the notes' files but not those of the entries it keeps",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "spare=attachment_names_in(list(notes or []) + kept))",
+        "replace": "spare=attachment_names_in(list(notes or [])))"
+      }
+    ],
+    "must_fail": ["the purge keeps a file a kept Trash entry still uses"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SF03",
+    "about": "removing an attachment deletes a file other notes and Trash entries still show",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "        _delete_attachment_files(\n            [{\"attachments\": [removed]}],\n            spare=attachment_names_in(\n                others + list(self.trash)\n                + [{\"attachments\": self.current_attachments}]))\n",
+        "replace": "        _delete_attachment_files([{\"attachments\": [removed]}])\n"
+      }
+    ],
+    "must_fail": ["removing a file one of the notes still shows keeps it on disk",
+                  "removing a file one of the trash still shows keeps it on disk"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SF04",
+    "about": "the note's own saved copy spares the file removed from it, so it is never deleted",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "        others = [n for n in self.notes\n                  if not (isinstance(n, dict) and n.get(\"id\") == note_id)]\n",
+        "replace": "        others = list(self.notes)\n"
+      }
+    ],
+    "must_fail": ["remove_attachment deletes the file from disk"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SF05",
+    "about": "removing an attachment spares the notes' files but not the Trash's",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "                others + list(self.trash)\n",
+        "replace": "                others\n"
+      }
+    ],
+    "must_fail": ["removing a file one of the trash still shows keeps it on disk"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SF06",
+    "about": "the startup purge runs on a launch whose notes file could not be read",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if self._corrupt_notes_report is None:\n            self.trash, purged",
+        "replace": "        if True:\n            self.trash, purged"
+      }
+    ],
+    "must_fail": ["...and purges nothing from the Trash on that launch: the entry and its file are both still there"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
     "id": "OS03",
     "about": "the line above a series counts the days off its schedule as days that keep their own edits",
     "edits": [
@@ -4291,6 +4577,152 @@
     "must_fail": ["the feedback link carries the version, how the app draws and how big the notebook is",
                   "Send feedback opens the feedback page, naming the version, how the app draws and how big the notebook is"],
     "suites": ["test_data_safety", "qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "TM01",
+    "about": "the cell menu's Merge with cell to the left writes a marker over the clicked cell's text",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                               command=lambda: self._grid_merge_with(\n                                   info, r, c, \"left\"))\n",
+               "replace": "                               command=lambda: self._grid_set_marker(\n                                   info, r, c, core_tables.MERGE_LEFT))\n"}],
+    "must_fail": ["merging with the cell to the left keeps both texts",
+                  "typed in a cell, then merged left from its own menu: the typed word stays"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "TM02",
+    "about": "the cell menu's Merge with cell above writes a marker over the clicked cell's text",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                               command=lambda: self._grid_merge_with(\n                                   info, r, c, \"up\"))\n",
+               "replace": "                               command=lambda: self._grid_set_marker(\n                                   info, r, c, core_tables.MERGE_UP))\n"}],
+    "must_fail": ["merging with the cell above keeps both texts"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "TM03",
+    "about": "a merge with a neighbour takes half of a merged neighbour",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        box = self._grid_grown_box(\n            info, near, (r + cell[\"rs\"] - 1, c + cell[\"cs\"] - 1))\n",
+               "replace": "        box = (near[0], near[1], r + cell[\"rs\"] - 1, c + cell[\"cs\"] - 1)\n"}],
+    "must_fail": ["merging up into a wide cell swallows all of it"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "TM04",
+    "about": "Insert row above on the header puts the row above it, past which the separator is no longer one",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if sep_at is not None and at < sep_at:\n",
+               "replace": "        if False:\n"}],
+    "must_fail": ["Insert row above on the header puts the row under it"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "LS01",
+    "about": "Enter before a list marker's end puts a second marker in front of the first",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if col < len(marker):\n            self.body_text.mark_set(\"insert\", f\"{line_no}.{len(marker)}\")\n",
+               "replace": ""}],
+    "must_fail": ["Enter at column 0 of a bulleted item leaves an empty item above",
+                  "Enter inside a number marker: an empty item above, counted"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "LS02",
+    "about": "Enter over selected words in a list item leaves them, a new item cut into them",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if _selection_holds_caret(self.body_text):\n            return self._list_return_over_selection()\n",
+               "replace": ""}],
+    "must_fail": ["Enter over selected words in an item replaces them with the new item"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "LS03",
+    "about": "Enter over all of an item's words takes its marker away, as on an empty item",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                return self._continue_list(line_no, kind, leave_if_empty=False)\n",
+               "replace": "                return self._continue_list(line_no, kind)\n"}],
+    "must_fail": ["Enter over all of an item's words keeps its marker"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "LS04",
+    "about": "Enter over a selection in a list is two Ctrl+Z steps, the delete and the new item",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self._undo_atom_begin()\n        try:\n            first = b.index(\"sel.first\")\n",
+               "replace": "        try:\n            first = b.index(\"sel.first\")\n"},
+              {"file": "note_organizer.py",
+               "find": "        finally:\n            self._undo_atom_end()\n\n    def _continue_list(",
+               "replace": "        finally:\n            pass\n\n    def _continue_list("}],
+    "must_fail": ["...and one Ctrl+Z gives the words back, bold and all"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "LS05",
+    "about": "Backspace over a selection that ends just after a marker removes the marker and keeps the words",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if _selection_holds_caret(self.body_text):\n            return None\n",
+               "replace": ""}],
+    "must_fail": ["Backspace over a selection that ends at the marker deletes the words"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "LS06",
+    "about": "Enter in an open table cell leaves the selected words, a line break cut into them",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            if _selection_holds_caret(entry):\n                entry.delete(\"sel.first\", \"sel.last\")\n",
+               "replace": ""}],
+    "must_fail": ["Enter over words selected in a cell replaces them with the line break"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "LS07",
+    "about": "Ctrl+B over a selection is one stretch, read where it starts: taking bold off leaves a bold-italic word bold",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                if tag in self._FONT_STYLES and b.compare(index, \">\", points[-1]):\n",
+               "replace": "                if False:\n"}],
+    "must_fail": ["...and Ctrl+B again takes the bold off and leaves the italic"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "LS08",
+    "about": "Ctrl+B under a size changes the plain tag alone, and the text is drawn as before",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                if tag:\n                    b.tag_add(tag, lo, hi)\n            self._fit_font_tags(start, end)\n",
+               "replace": "                if tag:\n                    b.tag_add(tag, lo, hi)\n"}],
+    "must_fail": ["...under a size too, each stretch drawn with both"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "LS09",
+    "about": "Bold over several table cells gives them all one answer for italic",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            self._set_weight_by_stretch(ranges, kind, on)\n",
+               "replace": "            tag = self._font_tag_for(on if kind == \"bold\" else False,\n                                     on if kind == \"italic\" else False)\n            for s, e in ranges:\n                for t in self._FONT_STYLES:\n                    b.tag_remove(t, s, e)\n                if tag:\n                    b.tag_add(tag, s, e)\n"}],
+    "must_fail": ["Bold over two cells keeps the italic one italic"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "LS10",
+    "about": "Ctrl+B over a selection gives all of it one answer for italic, as it did",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            self._set_weight_by_stretch([(start, end)], style, on)\n",
+               "replace": "            for t in self._FONT_STYLES:\n                self.body_text.tag_remove(t, start, end)\n            tag = self._font_tag_for(on if style == \"bold\" else False,\n                                     on if style == \"italic\" else False)\n            if tag:\n                self.body_text.tag_add(tag, start, end)\n            self._fit_font_tags(start, end)\n"}],
+    "must_fail": ["Ctrl+B over a sentence keeps its italic word italic",
+                  "Ctrl+I over a sentence keeps its bold word bold"],
+    "suites": ["qa1"],
     "expect": "killed"
   }
 ]

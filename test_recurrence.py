@@ -527,6 +527,28 @@ for _form in ('31.09.2026', '00.10.2026', '17.13.2026', '17.10.20262',
           and _rd(_form, settled=True) is None)
 check('a date stretched past forty characters is not read',
       _rd('17' + ' ' * 40 + '10 2026') is None)
+# Figures that are not 0-9 -- superscript, subscript, circled -- pass
+# str.isdigit(), and read_date took them for figures its pattern then
+# could not find: it raised, and with "17²" in the date field every
+# autosave of the note failed ("²" is a key of its own on a French
+# keyboard). Found by the audit of the Android port, 2026-10-20. Each is
+# not a date, and a raise is caught here as a failure of its own, so the
+# suite still reaches its footer.
+for _form in ('17²', '①.10.2026', '17.10.2026²', 'Oct 17²', '17₂', '²'):
+    try:
+        _ok = _rd(_form) is None and _rd(_form, settled=True) is None
+    except Exception as _err:
+        print('   (%s raised %s)' % (ascii(_form), type(_err).__name__))
+        _ok = False
+    check('%s is not read as a date, and does not raise' % ascii(_form), _ok)
+try:
+    _nn = NO.normalize_note({'title': 't', 'date': '17²',
+                             'recurrence': {'freq': 'daily', 'end': '17²'}})
+    _ok = isinstance(_nn, dict) and _nn.get('date') == '17²'
+except Exception as _err:
+    print('   (normalize_note raised %s)' % type(_err).__name__)
+    _ok = False
+check('a note dated with a superscript figure still loads, its date kept', _ok)
 # No three letters start two months' names today, in either language, so
 # the rule that such a word names no month is proved by teaching the table
 # a name that would make "mar" ambiguous -- and taking it away again.

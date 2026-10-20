@@ -720,6 +720,32 @@ for _mv_path in _mv_files:
     if os.path.isfile(_mv_path):
         os.remove(_mv_path)
 
+# A file another note or a Trash entry still shows stays on disk: a
+# duplicate or an import that could not copy a file keeps its name, and
+# removing it from one note deleted it from under the other.
+_sh_path = os.path.join(NO.ATTACHMENTS_DIR, 'shared_dup.txt')
+_sh_att = {'filename': 'shared.txt', 'stored_as': 'shared_dup.txt'}
+for _sh_where in ('notes', 'trash'):
+    with open(_sh_path, 'w') as _sh_f:
+        _sh_f.write('two notes show me')
+    _sh_holder = {'id': 99001, 'title': 'the duplicate',
+                  'attachments': [dict(_sh_att)]}
+    getattr(app, _sh_where).append(_sh_holder)
+    app.current_attachments = [dict(_sh_att)]
+    app.ask_yes_no = lambda *a, **k: True
+    try:
+        app.remove_attachment(0)
+        app.update()
+    finally:
+        app.ask_yes_no = _orig_ask_att
+        getattr(app, _sh_where).remove(_sh_holder)
+    check('removing a file one of the %s still shows keeps it on disk' % _sh_where,
+          app.current_attachments == [] and os.path.isfile(_sh_path))
+# Only if still there: a regression deletes it, and the suite must still
+# reach its footer to say so.
+if os.path.isfile(_sh_path):
+    os.remove(_sh_path)
+
 # A file attached or removed after a save in the same visit. The save stored
 # the editor's own list in the note, so the attach changed the note too: the
 # editor read as saved, and closing the app lost the file's entry -- and a
@@ -1439,21 +1465,23 @@ check('picking 60 days in the dropdown saves the setting',
 check('the subtitle follows the choice',
       'Kept for 60 days' in str(app._trash_subtitle_lbl.cget('text')))
 check('the purge window follows too', NO.trash_retention_days() == 60)
+# A value no app writes is a window not known, and then nothing is purged:
+# 'forever' used to read as 30, and 0 as one day -- purge almost everything.
 NO.save_setting('trash_retention_days', 'forever')
-check("a hand-edited 'forever' reads as the default",
-      NO.trash_retention_days() == 30)
+check("a hand-edited 'forever' is a window not known",
+      NO.trash_retention_days() is None)
 NO.save_setting('trash_retention_days', 0)
-check('zero days clamps to one -- never purge-everything',
-      NO.trash_retention_days() == 1)
+check('zero days is a window not known -- never purge-everything',
+      NO.trash_retention_days() is None)
 import datetime as _dtQW
 _oldQW = (_dtQW.datetime.now()
           - _dtQW.timedelta(days=10)).strftime('%Y-%m-%d %H:%M:%S')
 _entryQW = {'id': 9990, 'title': 'old', 'deleted_at': _oldQW,
             'attachments': []}
 NO.save_setting('trash_retention_days', 7)
-_keptQW, _nQW = NO.purge_expired_trash([dict(_entryQW)])
+_keptQW, _nQW = NO.purge_expired_trash([dict(_entryQW)], app.notes)
 NO.save_setting('trash_retention_days', 30)
-_keptQW2, _nQW2 = NO.purge_expired_trash([dict(_entryQW)])
+_keptQW2, _nQW2 = NO.purge_expired_trash([dict(_entryQW)], app.notes)
 check('a 10-day-old entry purges under a 7-day window', _nQW == 1)
 check('and survives under the 30-day default', _nQW2 == 0)
 
@@ -1650,7 +1678,8 @@ check('retention: a repeating series in the trash is named',
       'repeating series' in _rt_asked.get('msg', ''))
 NO.save_setting('trash_retention_days', 7)
 _rt_previewed = len(NO.trash_entries_past_window(app.trash, 7))
-_rt_kept, _rt_purged = NO.purge_expired_trash([dict(e) for e in app.trash])
+_rt_kept, _rt_purged = NO.purge_expired_trash([dict(e) for e in app.trash],
+                                              app.notes)
 check('retention: the preview and the purge remove the same number',
       _rt_previewed == _rt_purged == 2)
 check('retention: the purge keeps the unreadable stamp',
@@ -1676,6 +1705,50 @@ _rt_doomed_ids = [e.get('id')
                       [_RT_OLD, _RT_RECENT, _RT_HOURS], 7)]
 check('retention: the preview names the expired entry, not merely a count',
       _rt_doomed_ids == [9801])
+
+# ---- A WINDOW NOT KNOWN: SAID, KEPT, AND CHOSEN AGAIN ----
+# An unreadable settings.json leaves its marker (load_settings). The panel
+# must say nothing is removed, and the first choice is a shorter one than
+# "keep everything", so it asks about what it would remove.
+_rt_said = []
+_rt_real_info = app.show_info
+app.show_info = lambda title, msg, *a, **k: _rt_said.append(msg)
+NO.save_setting(NO.TRASH_WINDOW_UNKNOWN, True)
+app.announce_startup_changes()
+check('window not known: the next start says the Trash keeps everything',
+      any('Nothing will be removed from the Trash' in m for m in _rt_said))
+_rt_said.clear()
+app.announce_startup_changes()
+check('window not known: ...and says it once',
+      not any('Nothing will be removed' in m for m in _rt_said)
+      and NO.trash_retention_days() is None)
+app.show_info = _rt_real_info
+app.trash = [dict(_RT_ANCIENT), dict(_RT_RECENT)]
+app.toggle_settings_panel('trash')
+app.update()
+check('window not known: the panel says nothing is removed automatically',
+      'nothing is removed automatically'
+      in str(app._trash_subtitle_lbl.cget('text')))
+check('window not known: the dropdown asks for a choice, names no number',
+      str(app.trash_retention_var.get()) == 'Choose…')
+check('window not known: a row names no days left',
+      app._days_left_in_trash(_RT_ANCIENT['deleted_at']) is None)
+_rt_answer(False)
+_rt_pick('90 days')
+check('window not known: choosing asks about what it would now remove',
+      'holds 1 note older than 90 days' in _rt_asked.get('msg', ''))
+check('window not known: ...with no "instead of" a window nobody knows',
+      'instead of' not in _rt_asked.get('msg', ''))
+check('window not known: answering No keeps it not known, and the label',
+      NO.trash_retention_days() is None
+      and str(app.trash_retention_var.get()) == 'Choose…')
+_rt_answer(True)
+_rt_pick('90 days')
+check('window not known: answering Yes chooses 90 days and forgets the marker',
+      NO.trash_retention_days() == 90
+      and NO.TRASH_WINDOW_UNKNOWN not in NO.load_settings())
+check('window not known: ...and the subtitle names the window again',
+      'Kept for 90 days' in str(app._trash_subtitle_lbl.cget('text')))
 
 app.ask_yes_no = _rt_real_ask
 app.trash = list(_rt_saved_trash)

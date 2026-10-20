@@ -47,7 +47,7 @@ except ImportError:
 # Added/Fixed CHANGELOG.md entries, not per-release counts). The running
 # app records this into settings, so the next time a newer build opens
 # over older data it can tell the user what changed version-wise.
-APP_VERSION = "0.95.382"
+APP_VERSION = "0.95.391"
 
 
 def parse_version(v):
@@ -248,7 +248,10 @@ from noteorganizer.core.formatting import (
 
 from noteorganizer.core.storage import (
     TRASH_RETENTION_DAYS,
+    TRASH_WINDOW_UNKNOWN,
     trash_retention_days,
+    trash_window_words,
+    choose_trash_window,
     load_settings,
     save_settings,
     mend_surrogates,
@@ -716,6 +719,18 @@ def _checklist_rows_current(drawn, items, theme):
                     for rec, item in zip(drawn["rows"], items)))
 
 
+def _selection_holds_caret(text_widget):
+    """Tk's own test before a key replaces the selection (its
+    TextCursorInSelection): there is one, and the caret is in it, ends
+    included. A handler that takes a key over from Tk asks it too."""
+    try:
+        return bool(text_widget.tag_ranges("sel")
+                    and text_widget.compare("sel.first", "<=", "insert")
+                    and text_widget.compare("insert", "<=", "sel.last"))
+    except tk.TclError:
+        return False
+
+
 def _table_edge_holds(app, index):
     """Does a drawn table's edge hold the body character at *index*?
 
@@ -858,11 +873,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # User-defined note templates.
         self.templates = load_templates()
 
-        # Load trash and auto-purge anything past the retention window.
+        # Load trash and auto-purge anything past the retention window --
+        # but not on a launch whose notes file could not be read: the list
+        # is empty then, so no file a note still uses would be spared.
         self.trash = load_trash()
-        self.trash, purged = purge_expired_trash(self.trash)
-        if purged:
-            save_trash(self.trash)
+        if self._corrupt_notes_report is None:
+            self.trash, purged = purge_expired_trash(self.trash, self.notes)
+            if purged:
+                save_trash(self.trash)
 
         # User-chosen colors for individual calendar days (date -> #hex).
         # Each value passes sanitize_color: settings.json is hand-editable
@@ -1653,6 +1671,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     "notes_data.json from the data folder first."
                 )
             lines.append(msg)
+
+        # Set by load_settings on an unreadable settings.json; said once,
+        # and the Trash keeps everything until a window is chosen again.
+        if get_setting(TRASH_WINDOW_UNKNOWN) is True:
+            save_setting(TRASH_WINDOW_UNKNOWN, "told")
+            lines.append(
+                "Your settings file couldn't be read, so Note Organizer "
+                "doesn't know how long you chose to keep deleted notes. "
+                "Nothing will be removed from the Trash until you choose "
+                "again in Settings → Recently deleted.")
 
         # Recorded by _settle_background_work_at_close, said once.
         cut = get_setting("backup_cut_short", None, expect=dict)
@@ -3797,6 +3825,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         entry = editor["entry"]
         self._editor_flush_type_paint()
         try:
+            # Taken over from Tk's own Enter, which replaces a selection
+            # first: the selected words stayed, a line break cut into them.
+            if _selection_holds_caret(entry):
+                entry.delete("sel.first", "sel.last")
             entry.insert("insert", "\n")
             entry.tag_add("cellalign", "1.0", "end")
             caret = entry.index("insert")
@@ -4145,12 +4177,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             except tk.TclError:
                 pass
 
-    def _grid_select_range(self, info, a, b):
-        """Highlight the rectangle spanned by two cells.
-
-        Grown until it swallows every merge it touches -- half a merged
-        cell is not a thing a selection can hold.
-        """
+    @staticmethod
+    def _grid_grown_box(info, a, b):
+        """The rectangle spanned by two cells, as ``(r0, c0, r1, c1)``,
+        grown until it swallows every merge it touches -- half a merged
+        cell is not a thing a selection, or a merge, can hold."""
         r0, r1 = sorted((a[0], b[0]))
         c0, c1 = sorted((a[1], b[1]))
         grew = True
@@ -4166,6 +4197,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 if (lo_r, hi_r, lo_c, hi_c) != (r0, r1, c0, c1):
                     r0, r1, c0, c1 = lo_r, hi_r, lo_c, hi_c
                     grew = True
+        return r0, c0, r1, c1
+
+    def _grid_select_range(self, info, a, b):
+        """Highlight the rectangle spanned by two cells (_grid_grown_box)."""
+        r0, c0, r1, c1 = self._grid_grown_box(info, a, b)
         self._grid_clear_selection()
         chosen = [key for key, cell in info["cells"].items()
                   if r0 <= key[0] <= r1 and c0 <= key[1] <= c1]
@@ -5023,9 +5059,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """
         b = self.body_text
         try:
-            if (selection_wins and b.tag_ranges("sel")
-                    and b.compare("sel.first", "<=", "insert")
-                    and b.compare("insert", "<=", "sel.last")):
+            if selection_wins and _selection_holds_caret(b):
                 return False
             if not forward and b.compare("insert", "==", "1.0"):
                 return False
@@ -5313,6 +5347,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         first, nrows, ncols = context
         rows, _aligns, _sep, sep_at = self._grid_block_parts(first, nrows)
         data_off = [i for i in range(nrows) if i != sep_at]
+        if sep_at is not None and at < sep_at:
+            # Insert row above, asked on the header, goes under it: above,
+            # the separator moves to the third line, where it is no longer
+            # one (separator_index) -- the header becomes data and the
+            # dashes, with the widths they hold, a row of content.
+            at = sep_at
         blank = core_tables.blank_table(1, ncols)[0]
         if at >= len(data_off):
             self.body_text.insert(f"{first + nrows - 1}.end", "\n" + blank)
@@ -6041,6 +6081,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                else self._dismiss_mini_popup()))
         popup.focus_set()
 
+    def _grid_merge_with(self, info, r, c, toward):
+        """The right-click "Merge with cell to the left" (*toward* "left")
+        or "above" ("up"): the clicked cell and that neighbour merged the
+        way a selection of both is, every text kept. It used to write a
+        merge marker over the clicked cell, and its text was gone; a
+        neighbour that is itself merged is swallowed whole."""
+        cell = info["cells"].get((r, c))
+        if cell is None:
+            return
+        near = (r, c - 1) if toward == "left" else (r - 1, c)
+        if near[0] < 0 or near[1] < 0:
+            return
+        box = self._grid_grown_box(
+            info, near, (r + cell["rs"] - 1, c + cell["cs"] - 1))
+        self._grid_merge_selection({"info": info, "box": box})
+
     @_undo_atom
     def _grid_merge_selection(self, sel):
         """The selected rectangle becomes one cell, anchored top-left.
@@ -6486,20 +6542,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         b = self.body_text
         if kind in ("bold", "italic"):
-            is_bold = all(self._selection_has_style(
-                b, {"bold", "bold_italic"}, s, e) for s, e in ranges)
-            is_italic = all(self._selection_has_style(
-                b, {"italic", "bold_italic"}, s, e) for s, e in ranges)
-            if kind == "bold":
-                is_bold = not is_bold
-            else:
-                is_italic = not is_italic
-            tag = self._font_tag_for(is_bold, is_italic)
-            for s, e in ranges:
-                for t in self._FONT_STYLES:
-                    b.tag_remove(t, s, e)
-                if tag:
-                    b.tag_add(tag, s, e)
+            # On unless every cell has it; each keeps its own other style.
+            on = not all(self._selection_has_style(
+                b, {kind, "bold_italic"}, s, e) for s, e in ranges)
+            self._set_weight_by_stretch(ranges, kind, on)
         elif kind in ("underline", "strike"):
             on = all(self._selection_has_style(b, {kind}, s, e)
                      for s, e in ranges)
@@ -6793,12 +6839,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         merge_menu = _sub()
         merge_menu.add_command(label="Merge with cell to the left",
                                state="normal" if c > 0 else "disabled",
-                               command=lambda: self._grid_set_marker(
-                                   info, r, c, core_tables.MERGE_LEFT))
+                               command=lambda: self._grid_merge_with(
+                                   info, r, c, "left"))
         merge_menu.add_command(label="Merge with cell above",
                                state="normal" if r > 0 else "disabled",
-                               command=lambda: self._grid_set_marker(
-                                   info, r, c, core_tables.MERGE_UP))
+                               command=lambda: self._grid_merge_with(
+                                   info, r, c, "up"))
         merge_menu.add_command(label="Split merged cell",
                                state="normal" if merged else "disabled",
                                command=lambda: self._grid_split(info, r, c))
@@ -8442,13 +8488,53 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._render_table_grids()
             self._schedule_autosave()
             return "break"
+        if _selection_holds_caret(self.body_text):
+            return self._list_return_over_selection()
         kind = self._list_kind_of(self.body_text, line_no)
         if not kind:
             return None
+        return self._continue_list(line_no, kind)
+
+    def _list_return_over_selection(self):
+        """Enter with words selected, the caret in them, on a list line.
+
+        Tk's own Enter deletes the selection first; the list's Enter takes
+        over from it and did not, so the new item was cut into the middle
+        of what was selected. Deleted here, then the list goes on from
+        where the words were, as one Ctrl+Z. All of an item's words
+        selected keeps its marker -- an empty item, the new one under it.
+        """
+        b = self.body_text
+        line_no = int(b.index("sel.first").split(".")[0])
+        if not self._list_kind_of(b, line_no):
+            return None
+        self._undo_atom_begin()
+        try:
+            first = b.index("sel.first")
+            b.delete("sel.first", "sel.last")
+            b.mark_set("insert", first)
+            # A selection over several lines leaves pieces of their tags.
+            self._resync_list_tags(line_no)
+            kind = self._list_kind_of(b, line_no)
+            if kind:
+                return self._continue_list(line_no, kind, leave_if_empty=False)
+            # The marker went with the words: a plain line break, Tk's own.
+            b.insert("insert", "\n")
+            self._resync_list_tags(line_no + 1)
+            self._renumber_lists()
+            b.see("insert")
+            self._schedule_autosave()
+            return "break"
+        finally:
+            self._undo_atom_end()
+
+    def _continue_list(self, line_no, kind, leave_if_empty=True):
+        """Enter on list line *line_no*: a new item, or -- on an item with
+        no words, unless *leave_if_empty* is False -- out of the list."""
         line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
         _, marker, rest = parse_list_marker(line)
         indent = self._paragraph_indent_of(self.body_text, line_no)
-        if not rest.strip():
+        if leave_if_empty and not rest.strip():
             # An empty nested item steps out one level first. Pressing Enter
             # twice to leave a list is muscle memory, but from three levels
             # deep it should climb out rather than drop straight to a plain
@@ -8461,6 +8547,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._clear_paragraph_tags(self.body_text, line_no)
             self._renumber_lists()
             return "break"
+        # Before the marker's end (Home, then Enter) the new marker went in
+        # front of the old one: "• • milk". From its end the same Enter
+        # leaves an empty item above, the words below, as Word does.
+        col = int(self.body_text.index("insert").split(".")[1])
+        if col < len(marker):
+            self.body_text.mark_set("insert", f"{line_no}.{len(marker)}")
         self.body_text.insert("insert", "\n" + marker_for(kind, 1, indent))
         new_line = line_no + 1
         self.body_text.tag_add(
@@ -8503,6 +8595,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # before the caret is the table's own line break: nothing to take.
         if self._deletion_joins_table(False):
             return "break"
+        # Words selected: Tk deletes them, as everywhere else. The marker
+        # shortcut below asked only where the caret stood, so a selection
+        # ending just after a marker lost the marker and kept the words.
+        if _selection_holds_caret(self.body_text):
+            return None
         index = self.body_text.index("insert")
         line_no, col = (int(p) for p in index.split("."))
         kind = self._list_kind_of(self.body_text, line_no)
@@ -8698,40 +8795,39 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             except tk.TclError:
                 pass
 
-    def _weigh_font_tags(self, start, end, is_bold, is_italic):
-        """Ctrl+B or Ctrl+I over a selection left every character of it the
-        same weight and slant: give each piece of a composite font tag inside
-        it the composite with its own size and family and that weight.
+    def _set_weight_by_stretch(self, ranges, style, on):
+        """Bold or italic (*style*) turned *on* or off over *ranges*, each
+        stretch keeping its own other one: Ctrl+B over "one *two* three"
+        leaves "two" italic. The whole selection got one answer for both,
+        so an italic word in it lost its italic.
 
-        A size or a font is drawn by one tag with the weight and slant folded
-        in (_ensure_font_tag), configured after bold and italic so that it
-        wins the font. Bold or italic changed under it, the plain tag alone,
-        was saved and lit the toolbar and was drawn as before until the note
-        was opened again. Laid again across the whole note instead, one
-        word's Ctrl+B in a note set in a font took 250 ms at 8,000 styled
-        words; this costs what the selection holds."""
+        By stretches, where none of the plain font tags starts or stops,
+        as _fit_font_tags goes -- which then gives each stretch under a
+        size or a font the composite its weight now calls for, the way a
+        character typed or pasted gets it, at what the selection costs."""
         b = self.body_text
-        for t in [t for t in b.tag_names() if parse_font_tag(t)]:
-            _bold, _italic, size, family = parse_font_tag(t)
-            want = self._ensure_font_tag(b, is_bold, is_italic, size, family)
-            if want == t:
-                continue
-            pieces = []
-            covering = b.tag_prevrange(t, start)
-            if covering and b.compare(covering[1], ">", start):
-                pieces.append((start, covering[1]))
-            at = start
-            while True:
-                found = b.tag_nextrange(t, at, end)
-                if not found:
-                    break
-                pieces.append(found)
-                at = found[1]
-            for lo, hi in pieces:
-                if b.compare(hi, ">", end):
-                    hi = end
-                b.tag_remove(t, lo, hi)
-                b.tag_add(want, lo, hi)
+        for start, end in ranges:
+            start, end = b.index(start), b.index(end)
+            points = [start]
+            for _key, tag, index in b.dump(start, end, tag=True):
+                if tag in self._FONT_STYLES and b.compare(index, ">", points[-1]):
+                    points.append(index)
+            if b.compare(points[-1], "<", end):
+                points.append(end)
+            for lo, hi in zip(points, points[1:]):
+                plain = [t for t in b.tag_names(lo) if t in self._FONT_STYLES]
+                is_bold = "bold" in plain or "bold_italic" in plain
+                is_italic = "italic" in plain or "bold_italic" in plain
+                if style == "bold":
+                    is_bold = on
+                else:
+                    is_italic = on
+                for t in plain:
+                    b.tag_remove(t, lo, hi)
+                tag = self._font_tag_for(is_bold, is_italic)
+                if tag:
+                    b.tag_add(tag, lo, hi)
+            self._fit_font_tags(start, end)
 
     def _fit_font_tags(self, start, end, like=None, size=None, family=None):
         """Give each of the characters from *start* to *end* -- just typed
@@ -9075,19 +9171,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # wins. So the two can't just be independent on/off tags the way
             # underline/strike are; the pair is tracked as one of exactly
             # four mutually exclusive font tags (none/bold/italic/both).
-            is_bold = self._selection_has_style(self.body_text, {"bold", "bold_italic"}, start, end)
-            is_italic = self._selection_has_style(self.body_text, {"italic", "bold_italic"}, start, end)
-            if style == "bold":
-                is_bold = not is_bold
-            else:
-                is_italic = not is_italic
-            for t in self._FONT_STYLES:
-                self.body_text.tag_remove(t, start, end)
-            tag = self._font_tag_for(is_bold, is_italic)
-            if tag:
-                self.body_text.tag_add(tag, start, end)
-            # Under a size or a font, what is drawn is the composite tag.
-            self._weigh_font_tags(start, end, is_bold, is_italic)
+            # On unless all of it has the style already; the other one is
+            # each stretch's own (_set_weight_by_stretch).
+            on = not self._selection_has_style(
+                self.body_text, {style, "bold_italic"}, start, end)
+            self._set_weight_by_stretch([(start, end)], style, on)
         else:
             already_on = self._selection_has_style(self.body_text, {style}, start, end)
             if already_on:
@@ -15392,8 +15480,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 + f"\n\nThis day keeps its own edits, but the repeat "
                 f"({describe_recurrence(note)}) no longer lands on it, so the "
                 "calendar does not show it.\n\nA note of its own puts it back "
-                "on the calendar, on its day. The Trash keeps it "
-                f"{trash_retention_days()} days.",
+                "on the calendar, on its day. The Trash keeps it"
+                f"{trash_window_words('for')}.",
                 kind="question",
                 buttons=[("Leave it", "keep"), ("Move to the Trash", "trash"),
                          ("Make it a note", "note")],
@@ -16639,8 +16727,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # a selection holding a table, the table went. Insert does
             # nothing there.
             try:
-                if (b.compare("sel.first", "<=", "insert")
-                        and b.compare("insert", "<=", "sel.last")
+                if (_selection_holds_caret(b)
                         and b.tag_nextrange(self.TABLE_HIDE_TAG,
                                             "sel.first", "sel.last")):
                     return "break"
@@ -16716,12 +16803,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # Tk's own Insert pastes the selection, deleting it first when
             # the caret is in it (tk::TextInsert): a replace, as typing over
             # it is. Its style came back plain, and Ctrl+Z left it so.
-            try:
-                if (b.compare("sel.first", "<=", "insert")
-                        and b.compare("insert", "<=", "sel.last")):
-                    return sel, "replace"
-            except tk.TclError:
-                pass
+            if _selection_holds_caret(b):
+                return sel, "replace"
             return None, None
         char = getattr(event, "char", "") or ""
         # Control+Alt is AltGr on Windows, which types a character.
@@ -17124,8 +17207,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not self.ask_yes_no(
             "Move to trash",
             f"Move {count} selected {noun} to the trash? "
-            f"You can restore {'it' if count == 1 else 'them'} within "
-            f"{trash_retention_days()} days.{warning}",
+            f"You can restore {'it' if count == 1 else 'them'}"
+            f"{trash_window_words('within')}.{warning}",
             # Enter answers a question now, and a reflexive Enter must not
             # be the one that deletes.
             icon="question", default="no"
@@ -21247,8 +21330,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # The window is a setting (Settings -> Recently deleted), so the
             # number is read, never written: this line promised thirty days
             # to someone who had chosen seven.
-            self.set_status("Note moved to Trash (recoverable for "
-                            f"{trash_retention_days()} days)")
+            self.set_status("Note moved to Trash (recoverable"
+                            f"{trash_window_words('for')})")
             # The status line says where it went; the toast is the way
             # back. Settings -> Recently deleted was the only route home
             # until now, and it asks you to know the trash exists.

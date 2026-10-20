@@ -997,18 +997,30 @@ Both are the general shape of moving code down here: the logic comes as-is,
 but anything that reached *up* — to a global on the entry module, or to a
 widget — has to become an argument or a return value.
 
-### A setting read fresh, clamped on the way in
+### A setting read fresh, and "I don't know" kept apart from "never chosen"
 
 `trash_retention_days()` is small but shows a pattern worth copying: the
 trash window is a *setting*, so the function reads it from disk on every
 call rather than caching it — the user can change it mid-session and the
-next purge should honour the change. And it never trusts what it reads:
-booleans and non-integers fall back to the 30-day default, and integers
-clamp into 1–365. The failure it guards against is concrete — a
-hand-edited `settings.json` saying `0` or `"forever"` must degrade to
-"keep notes the normal length of time", never to "purge everything at
-startup". When a bad value can choose between two wrong behaviours, pick
-the one that keeps data.
+next purge should honour the change.
+
+And it never guesses. A window never chosen is the 30-day default. But a
+stored value no app writes — `0`, `"forever"`, `400`, `true` — and a
+settings file that could not be read at all both answer `None`, and `None`
+means the startup purge removes nothing. This used to say the opposite:
+bad values fell back to 30 and integers were clamped, so a hand-edited `0`
+purged everything older than a day, and a damaged file made the purge
+empty the Trash at 30 days for someone who had chosen 90.
+
+The damaged file is the subtle half. `load_settings()` returns the marker
+`TRASH_WINDOW_UNKNOWN` instead of `{}`, because the very next write of any
+setting would otherwise store a file with no window in it, and "unknown"
+would turn into "never chosen" before the purge ever ran. Every writer
+reads, changes and writes, so the marker rides along until the person
+picks a window again (`choose_trash_window()`, one write). When a bad value
+can choose between two wrong behaviours, pick the one that keeps data —
+and when the value is gone, say so rather than invent one.
+([ISSUES_LOG: The Trash that forgot its window](ISSUES_LOG.md#the-trash-that-forgot-its-window).)
 
 ### The binding rule this module is built around
 

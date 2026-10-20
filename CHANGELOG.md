@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.95.391](#095391--2026-10-20) | 2026-10-20 | The Trash never empties itself by a length it could not read; a "²" in a date no longer stops a note saving; table merges from the menu keep both texts; Enter, Backspace and bold do what you expect in lists and over a selection. |
 | [0.95.382](#095382--2026-10-15) | 2026-10-15 | Send feedback from Settings → About: a short form in your browser, showing what the app adds — and nothing from your notes; crash logs that say which version and what size of notebook they came from. |
 | [0.94.382](#094382--2026-10-15) | 2026-10-15 | Closing the app in the middle of a backup leaves nothing behind and the next start says so; a note with many tables opens faster, and changing the theme no longer redraws its tables. |
 | [0.94.379](#094379--2026-10-15) | 2026-10-15 | A backup of any size comes back in, and a share code is never one its import refuses; a long notebook stays quick when one note moves, a big import no longer freezes, and a day left open on the Calendar waits instead of rebuilding at every save. |
@@ -103,6 +104,47 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+---
+
+## [0.95.391] — 2026-10-20
+
+### Fixed
+
+- **A superscript figure in a note's date no longer stops the note saving.** "17²" in the date
+  field ("²" has its own key on a French keyboard) made every autosave of that note fail —
+  nothing typed after it was kept — and closing the app stopped on "Something went wrong"; a
+  notes file holding such a date kept the app from opening. Superscript, subscript and circled
+  figures are now simply not a date, like any other text the field cannot read.
+- **The Trash never empties itself by a length of time it could not read.** If the settings file
+  was damaged, the next start removed everything in the Trash older than 30 days, with its
+  attached files, even for someone who had chosen 90; a hand-edited `0` removed everything older
+  than a day. Now nothing is removed automatically until a length is chosen again: the app says
+  so once when it starts, and Settings → Recently deleted shows **Choose…** in place of a number.
+- **The automatic Trash cleanup no longer deletes a file a note is still showing.** Two notes can
+  share one stored file (a duplicate or an import that could not copy it keeps the name), and the
+  startup cleanup — or removing the attachment from one of them — took it from the other. Both
+  now spare any file a note or a kept Trash entry still uses, as Delete and Empty trash already
+  did, and the cleanup does not run on a start whose notes file could not be read.
+- **Merging a table cell with its neighbour from the right-click menu keeps both texts.** "Merge
+  with cell to the left" and "Merge with cell above" wrote the merge over the clicked cell, and
+  its words were gone. They now merge as selecting both cells does: the texts join, their
+  formatting comes along, one Ctrl+Z separates them again, and a neighbour that is itself a
+  merged cell is taken in whole.
+- **"Insert row above" on a table's header row adds the row under the header.** Above it, the
+  line that marks the header moved down to where it no longer counts as one: the header became an
+  ordinary row, and a row of dashes appeared in the table, taking the column widths with it.
+- **Bold or italic over a partly styled selection keeps each part's other style.** Making a
+  sentence bold took the italic off its one italic word (and Italic over a bold word, its bold),
+  in the note and across table cells alike. Each stretch now keeps its own, under a size or a
+  font too.
+- **Enter at the very start of a list item leaves an empty item above it.** Home, then Enter,
+  put a second marker in front of the first ("• • milk").
+- **Enter with words selected in a list item, or in a table cell, replaces them.** It added the
+  new item (or line) in the middle of them and left them there. One Ctrl+Z gives them back;
+  selecting all of an item's words keeps its marker.
+- **Backspace with words selected deletes them, also right after a list marker.** With the
+  selection ending just after a marker, it took the marker off and kept the words.
 
 ---
 

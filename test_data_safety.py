@@ -893,7 +893,7 @@ _keptT, _nT = _storage.purge_expired_trash([
      "attachments": [{"stored_as": "teeth_old.bin"}]},
     {"id": 2, "deleted_at": _stampN,
      "attachments": [{"stored_as": "teeth_new.bin"}]},
-])
+], [])
 check("purge removes the expired entry and keeps the fresh one",
       _nT == 1 and len(_keptT) == 1 and _keptT[0]["id"] == 2)
 check("purge permanently deletes the expired entry's attachment file",
@@ -901,6 +901,85 @@ check("purge permanently deletes the expired entry's attachment file",
 check("while the kept entry's file is untouched",
       os.path.exists(_new_att))
 os.remove(_new_att)
+
+# ---- The purge spares a file something still uses ----
+# Two notes share one stored file when a duplicate or an import could not
+# copy it and kept the name. Delete and Empty trash spared it; the startup
+# purge, the one deletion nobody asks for, took it from the living note.
+_shared = os.path.join(_paths.ATTACHMENTS_DIR, "shared_att.bin")
+for _whose, _notesS, _trashS in (
+        ("a living note", [{"id": 5, "attachments": [{"stored_as": "shared_att.bin"}]}], []),
+        ("a kept Trash entry", [], [{"id": 6, "deleted_at": _stampN,
+                                     "attachments": [{"stored_as": "shared_att.bin"}]}])):
+    with open(_shared, "w") as _f:
+        _f.write("x")
+    _keptS, _nS = _storage.purge_expired_trash(
+        [{"id": 7, "deleted_at": _stampO,
+          "attachments": [{"stored_as": "shared_att.bin"}]}] + _trashS, _notesS)
+    check("the purge keeps a file %s still uses" % _whose,
+          _nS == 1 and os.path.exists(_shared))
+# Only if still there: a regression deletes it, and the suite must still
+# reach its footer to say so.
+if os.path.exists(_shared):
+    os.remove(_shared)
+
+# ---- A window not known removes nothing ----
+# An unreadable settings.json read as {}, the next write made "unknown"
+# into "never chosen", and the startup purge emptied the Trash at 30 days
+# what the person had kept for 90. A hand-edited 0 clamped to one day.
+_settings_heldW = None
+if os.path.exists(_paths.SETTINGS_FILE):
+    with open(_paths.SETTINGS_FILE, "rb") as _f:
+        _settings_heldW = _f.read()
+_stamp40 = (_dtT.datetime.now()
+            - _dtT.timedelta(days=40)).strftime("%Y-%m-%d %H:%M:%S")
+_stamp31 = (_dtT.datetime.now()
+            - _dtT.timedelta(days=31)).strftime("%Y-%m-%d %H:%M:%S")
+_old40 = {"id": 8, "deleted_at": _stamp40, "attachments": []}
+with open(_paths.SETTINGS_FILE, "w", encoding="utf-8") as _f:
+    _f.write("{not json")
+check("an unreadable settings file leaves the window not known",
+      _storage.trash_retention_days() is None)
+_storage.save_setting("theme", "dark")
+check("...and a write of another setting keeps it not known",
+      _storage.trash_retention_days() is None
+      and _storage.get_setting("theme") == "dark")
+_keptW, _nW = _storage.purge_expired_trash([dict(_old40)], [])
+check("...and a 40-day-old entry survives the purge", _nW == 0 and len(_keptW) == 1)
+check("...nothing is named as past the window, nor given days left",
+      _storage.trash_entries_past_window([_old40]) == []
+      and _storage.days_left_in_trash(_stamp40) is None)
+check("...and no promise names a number of days",
+      _storage.trash_window_words("within") == "")
+_storage.choose_trash_window(90)
+check("choosing a window forgets that the last one was not known",
+      _storage.trash_retention_days() == 90
+      and _storage.TRASH_WINDOW_UNKNOWN not in _storage.load_settings()
+      and _storage.trash_window_words("within") == " within 90 days")
+_storage.save_settings({})
+check("a window never chosen is still the default",
+      _storage.trash_retention_days() == _storage.TRASH_RETENTION_DAYS)
+_keptW, _nW = _storage.purge_expired_trash(
+    [{"id": 9, "deleted_at": _stamp31, "attachments": []}], [])
+check("...and the default still empties a 31-day-old entry", _nW == 1)
+for _bad in (0, -3, 400, "forever", True, 7.5, None):
+    _storage.save_settings({"trash_retention_days": _bad})
+    _keptW, _nW = _storage.purge_expired_trash([dict(_old40)], [])
+    check("a stored window of %r is not known, and purges nothing" % (_bad,),
+          _storage.trash_retention_days() is None and _nW == 0)
+# What was here goes back, and the copy this block's damage left goes.
+if _settings_heldW is None:
+    os.remove(_paths.SETTINGS_FILE)
+else:
+    with open(_paths.SETTINGS_FILE, "wb") as _f:
+        _f.write(_settings_heldW)
+for _name in os.listdir(os.path.dirname(_paths.SETTINGS_FILE)):
+    if _name.startswith("settings_corrupt_"):
+        _pathW = os.path.join(os.path.dirname(_paths.SETTINGS_FILE), _name)
+        with open(_pathW, "rb") as _f:
+            _heldW = _f.read()
+        if _heldW == b"{not json":
+            os.remove(_pathW)
 
 # ---- Attachment deletion can't escape the attachments folder ----
 # A crafted share code (or hand-edited data) could carry an attachment
@@ -1188,7 +1267,10 @@ for _how, _bytes in _DAMAGED.items():
           and _dmg[1]["notes_file_corrupt"]
           and _kept_aside("notes_data_corrupt_", _bytes))
     for _file, _load, _empty, _prefix in (
-            (_paths.SETTINGS_FILE, _storage.load_settings, {}, "settings_corrupt_"),
+            # Empty but for the one thing the file's loss means: the
+            # Trash's window went with it (TRASH_WINDOW_UNKNOWN).
+            (_paths.SETTINGS_FILE, _storage.load_settings,
+             {_storage.TRASH_WINDOW_UNKNOWN: True}, "settings_corrupt_"),
             (_paths.TRASH_FILE, _storage.load_trash, [], "trash_corrupt_"),
             (_paths.TEMPLATES_FILE, _storage.load_templates, [],
              "templates_corrupt_")):
@@ -1255,8 +1337,8 @@ _storage.save_settings(_setK)
 with open(_paths.SETTINGS_FILE, "w", encoding="utf-8") as _f:
     _f.write("{broken settings")
 _setP = _storage.load_settings()
-check("corrupt settings.json -> empty dict plus a preserved copy",
-      _setP == {} and any(
+check("corrupt settings.json -> only the window's marker, plus a preserved copy",
+      _setP == {_storage.TRASH_WINDOW_UNKNOWN: True} and any(
           open(os.path.join(_paths.APP_DIR, p), encoding="utf-8").read()
           == "{broken settings"
           for p in os.listdir(_paths.APP_DIR)
