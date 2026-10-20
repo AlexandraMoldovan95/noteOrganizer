@@ -129,6 +129,17 @@ How the numbers themselves are counted is the
 - **"Insert row above" on a table's header row adds the row under the header.** Above it, the
   line that marks the header moved down to where it no longer counts as one: the header became an
   ordinary row, and a row of dashes appeared in the table, taking the column widths with it.
+- **Bold or italic over a partly styled selection keeps each part's other style.** Making a
+  sentence bold took the italic off its one italic word (and Italic over a bold word, its bold),
+  in the note and across table cells alike. Each stretch now keeps its own, under a size or a
+  font too.
+- **Enter at the very start of a list item leaves an empty item above it.** Home, then Enter,
+  put a second marker in front of the first ("• • milk").
+- **Enter with words selected in a list item, or in a table cell, replaces them.** It added the
+  new item (or line) in the middle of them and left them there. One Ctrl+Z gives them back;
+  selecting all of an item's words keeps its marker.
+- **Backspace with words selected deletes them, also right after a list marker.** With the
+  selection ending just after a marker, it took the marker off and kept the words.
 
 ---
 

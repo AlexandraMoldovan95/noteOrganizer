@@ -4619,5 +4619,110 @@
     "must_fail": ["Insert row above on the header puts the row under it"],
     "suites": ["qa1"],
     "expect": "killed"
+  },
+  {
+    "id": "LS01",
+    "about": "Enter before a list marker's end puts a second marker in front of the first",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if col < len(marker):\n            self.body_text.mark_set(\"insert\", f\"{line_no}.{len(marker)}\")\n",
+               "replace": ""}],
+    "must_fail": ["Enter at column 0 of a bulleted item leaves an empty item above",
+                  "Enter inside a number marker: an empty item above, counted"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "LS02",
+    "about": "Enter over selected words in a list item leaves them, a new item cut into them",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if _selection_holds_caret(self.body_text):\n            return self._list_return_over_selection()\n",
+               "replace": ""}],
+    "must_fail": ["Enter over selected words in an item replaces them with the new item"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "LS03",
+    "about": "Enter over all of an item's words takes its marker away, as on an empty item",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                return self._continue_list(line_no, kind, leave_if_empty=False)\n",
+               "replace": "                return self._continue_list(line_no, kind)\n"}],
+    "must_fail": ["Enter over all of an item's words keeps its marker"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "LS04",
+    "about": "Enter over a selection in a list is two Ctrl+Z steps, the delete and the new item",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self._undo_atom_begin()\n        try:\n            first = b.index(\"sel.first\")\n",
+               "replace": "        try:\n            first = b.index(\"sel.first\")\n"},
+              {"file": "note_organizer.py",
+               "find": "        finally:\n            self._undo_atom_end()\n\n    def _continue_list(",
+               "replace": "        finally:\n            pass\n\n    def _continue_list("}],
+    "must_fail": ["...and one Ctrl+Z gives the words back, bold and all"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "LS05",
+    "about": "Backspace over a selection that ends just after a marker removes the marker and keeps the words",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if _selection_holds_caret(self.body_text):\n            return None\n",
+               "replace": ""}],
+    "must_fail": ["Backspace over a selection that ends at the marker deletes the words"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "LS06",
+    "about": "Enter in an open table cell leaves the selected words, a line break cut into them",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            if _selection_holds_caret(entry):\n                entry.delete(\"sel.first\", \"sel.last\")\n",
+               "replace": ""}],
+    "must_fail": ["Enter over words selected in a cell replaces them with the line break"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "LS07",
+    "about": "Ctrl+B over a selection is one stretch, read where it starts: taking bold off leaves a bold-italic word bold",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                if tag in self._FONT_STYLES and b.compare(index, \">\", points[-1]):\n",
+               "replace": "                if False:\n"}],
+    "must_fail": ["...and Ctrl+B again takes the bold off and leaves the italic"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "LS08",
+    "about": "Ctrl+B under a size changes the plain tag alone, and the text is drawn as before",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                if tag:\n                    b.tag_add(tag, lo, hi)\n            self._fit_font_tags(start, end)\n",
+               "replace": "                if tag:\n                    b.tag_add(tag, lo, hi)\n"}],
+    "must_fail": ["...under a size too, each stretch drawn with both"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "LS09",
+    "about": "Bold over several table cells gives them all one answer for italic",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            self._set_weight_by_stretch(ranges, kind, on)\n",
+               "replace": "            tag = self._font_tag_for(on if kind == \"bold\" else False,\n                                     on if kind == \"italic\" else False)\n            for s, e in ranges:\n                for t in self._FONT_STYLES:\n                    b.tag_remove(t, s, e)\n                if tag:\n                    b.tag_add(tag, s, e)\n"}],
+    "must_fail": ["Bold over two cells keeps the italic one italic"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "LS10",
+    "about": "Ctrl+B over a selection gives all of it one answer for italic, as it did",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            self._set_weight_by_stretch([(start, end)], style, on)\n",
+               "replace": "            for t in self._FONT_STYLES:\n                self.body_text.tag_remove(t, start, end)\n            tag = self._font_tag_for(on if style == \"bold\" else False,\n                                     on if style == \"italic\" else False)\n            if tag:\n                self.body_text.tag_add(tag, start, end)\n            self._fit_font_tags(start, end)\n"}],
+    "must_fail": ["Ctrl+B over a sentence keeps its italic word italic",
+                  "Ctrl+I over a sentence keeps its bold word bold"],
+    "suites": ["qa1"],
+    "expect": "killed"
   }
 ]

@@ -116,6 +116,7 @@ is in the table below as well.
 | [Ctrl+Z, and the formatting Tk's stack never held](#ctrlz-and-the-formatting-tks-stack-never-held) | Keep what an undo system cannot see beside it, keyed to what it does see — and measure how it groups steps first. | 0.83.335 |
 | [The key that typed nothing, and the line it forgot](#the-key-that-typed-nothing-and-the-line-it-forgot) | A fix that narrows when a feature acts must re-walk its main path; ask the text what a key did, and press modifiers as keys. | 0.83.335 |
 | [The bold the screen kept for later](#the-bold-the-screen-kept-for-later) | When one tag draws several properties, a change to any of them must reach it: the screen shows what was laid last. | 0.83.335 |
+| [The keys that took over from Tk and dropped its first step](#the-keys-that-took-over-from-tk-and-dropped-its-first-step) | A handler that takes a key over from the toolkit takes over everything the toolkit's binding did: read it and list its steps first. | — |
 | [The rebuild under the click](#the-rebuild-under-the-click) | Re-anchor gestures by what survives a rebuild — a line number, never a widget reference. | 0.39.63 |
 | [The centring that would not save itself](#the-centring-that-would-not-save-itself) | A comparison that lists fields silently exempts whatever field is added next. | 0.39.63 |
 | [The accepted cost that nobody had accepted](#the-accepted-cost-that-nobody-had-accepted) | When a docstring says 'accepted cost', check who pays it, and for what. | 0.64.95 |
@@ -2860,6 +2861,34 @@ come in too: the refit went a character at a time, and a long paste paid for eve
 rule now lives in one helper that every road asks, and the refit goes by stretches of
 unchanging tags. Fixing a mechanism on the road it was reported on, rather than on every road
 that reaches it, is how the same finding came back three rounds running.
+
+### The keys that took over from Tk and dropped its first step
+
+*(2026-10-20)*
+
+**Symptom:** none reported; found while comparing the Android port's lists with the desktop's.
+Select "and " in the item "• milk and eggs" and press Enter: the words stayed, with a new item
+cut into the middle of them. In an open table cell, Enter did the same. Select back to just after
+a bullet and press Backspace: the bullet went and the words stayed. Press Home, then Enter, on an
+item: "• • milk". And making a sentence bold took the italic off its one italic word.
+
+**Root cause:** the list's Enter and Backspace, and the cell's Enter, are handlers that take a key
+over from Tk's own. Tk's first step for both keys is "if the caret is in a selection, delete the
+selection", and none of the three handlers did it: they asked only where the caret stood. The
+Enter handler also put its new marker at the caret without asking whether the caret was inside
+the old one. Bold and italic had the matching flaw in another shape: one answer, read from the
+whole selection, for a style that each part of it holds differently.
+
+**Fix:** one helper asks Tk's own question (`_selection_holds_caret`, also now used by the three
+places that had written it out by hand). Backspace steps aside when it is true; the list's Enter
+deletes the selection and continues the list from there, as one Ctrl+Z, keeping the marker when
+all of an item's words were selected; the cell's Enter deletes it first. Enter before a marker's
+end starts from the marker's end, which leaves an empty item above. Bold and italic keep the
+whole selection's on/off decision and give each stretch its own other style
+(`_set_weight_by_stretch`), in the body and across table cells.
+
+**Takeaway:** a handler that takes a key over from the toolkit takes over everything the
+toolkit's binding did — read that binding first, and list its steps before writing the first line.
 
 ## Tables
 
