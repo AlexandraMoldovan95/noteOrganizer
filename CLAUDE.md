@@ -25,8 +25,9 @@
 
 Note Organizer is a fully offline desktop notes app: Python + Tkinter, one
 runtime dependency (Pillow, for image/GIF preview rendering). No network
-calls, no accounts, no database. (Settings → About → Send feedback opens
-the site's feedback page in the browser; the app itself connects to
+calls, no accounts, no database. (Settings → About opens the privacy
+policy, and — once the app is in the Store — its review page, in the
+browser; feedback is a Store review, and the app itself connects to
 nothing — `core/diagnostics.py`.)
 
 - **Organised as a package (split complete, stopped deliberately):** the
@@ -483,6 +484,15 @@ summary.
   unrelated change.
 - Docs-only changes do not get a version bump, matching how they don't
   call for an `.exe` rebuild either.
+- **The privacy page, at every release (the owner's rule, 2026-10-21).**
+  The privacy policy both apps open and both stores are given lives on
+  Google Sites, as a copy of `docs/PRIVACY.md` the owner makes by hand —
+  so nothing keeps the two in step but this. Every release cut, desktop or
+  Android, asks whether the text changed or the release changes what the
+  apps keep, send or open; if so, the owner republishes the page BEFORE
+  the build goes out, and the live page is compared with the file either
+  way. No build ships while the page answers with an error. The steps are
+  in [RELEASE_WINDOWS](docs/RELEASE_WINDOWS.md#the-privacy-page-at-every-release).
 
 ## Git & GitHub workflow
 

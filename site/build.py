@@ -59,13 +59,10 @@ PAGES = {
     "docs/BUG_REPORTS.md": ("bug-reports.html", "Bug reports",
                             "The twenty bugs my manual testing found, three "
                             "written out in a standard bug-report format."),
-    # Linked from every page's footer and from the feedback form; both apps
-    # open it from Settings > About, and both stores are given its address,
-    # so its file name must not change (check_app_links).
-    "docs/PRIVACY.md": ("privacy.html", "Privacy policy",
-                        "What Note Organizer keeps, where it keeps it, and "
-                        "the one thing that is ever sent."),
 }
+# docs/PRIVACY.md is not one of them: the privacy policy is published on
+# Google Sites, the page both apps open and both stores are given, and every
+# page's footer links there (privacy_url).
 # Text that must never reach a published page. A build that finds one
 # stops; the page is not published with it.
 FORBIDDEN = [r"adas9", r"mekotrading", r"noteOrganizerSavedFiles",
@@ -477,7 +474,8 @@ def fill(template, values, name):
     return re.sub(r"\{\{(\w+)\}\}", sub, template)
 
 
-def doc_page(shell, config, page, title, description, body_html, source_note, version):
+def doc_page(shell, config, page, title, description, body_html, source_note, version,
+             privacy):
     return fill(shell, {
         "title": html.escape(title),
         "description": html.escape(description),
@@ -486,7 +484,20 @@ def doc_page(shell, config, page, title, description, body_html, source_note, ve
         "content": body_html,
         "source_note": source_note,
         "version": version,
+        "privacy_url": html.escape(privacy),
     }, page)
+
+
+def privacy_url(repo):
+    """The privacy policy's address, read from the app's own source
+    (diagnostics.PRIVACY_URL), so the site's footer and the app's About
+    cannot point at two different pages."""
+    url = literal_assignments(
+        read(os.path.join(repo, "noteorganizer", "core", "diagnostics.py")),
+        ["PRIVACY_URL"])["PRIVACY_URL"]
+    if not isinstance(url, str) or not url.startswith("https://"):
+        fail("diagnostics.PRIVACY_URL is not an https address: %r" % (url,))
+    return url
 
 
 def check_doc_structure(page, body_html):
@@ -510,7 +521,7 @@ def check_doc_structure(page, body_html):
     return problems
 
 
-def build_doc_pages(repo, config, shell, version):
+def build_doc_pages(repo, config, shell, version, privacy):
     repo_url = config.get("repo_url", "")
     # The Issues Log is the project's internal engineering journal, not
     # published as its own page here. A reference to one of its anchors is
@@ -535,7 +546,7 @@ def build_doc_pages(repo, config, shell, version):
         body = Renderer(make_linker(path, repo_url)).render(text)
         structure_problems += check_doc_structure(page, body)
         written[page] = doc_page(shell, config, page, title, description, body,
-                                 note % html.escape(path), version)
+                                 note % html.escape(path), version, privacy)
     if structure_problems:
         fail("site.css styles some things by their position in the page, not a class "
              "(see the comments by h2#contents and h3 + ul in src/site.css) -- these "
@@ -596,6 +607,9 @@ def check_output():
         for pattern in FORBIDDEN:
             if re.search(pattern, text, re.IGNORECASE):
                 problems.append("%s: private text matching %r" % (rel, pattern))
+        if re.search(r"<form\b", text, re.IGNORECASE):
+            problems.append("%s: a form, which cannot send: _headers says form-action "
+                            "'none', and feedback goes through the stores" % rel)
         for attr, href in re.findall(r'\b(href|src)="([^"]+)"', text):
             if re.match(r"^(https?:|mailto:|data:)", href):
                 continue
@@ -635,62 +649,6 @@ def check_output():
 OPEN_ELSEWHERE = ("Windows would not let go of %s/: something has it open -- an Explorer "
                   "window, or a browser tab showing a page from it. Close it and run "
                   "this again. The site in public/ was left as it was.")
-
-
-def check_feedback_form(repo):
-    """The feedback page keeps its promises: Netlify sees the form (and its
-    trap for robots), it has a field for every detail the app sends -- the
-    app's own list, DETAIL_KEYS, read from its source -- the page's script
-    knows each one, the thank-you page exists, and the site's headers let a
-    form send to the site itself."""
-    keys = literal_assignments(
-        read(os.path.join(repo, "noteorganizer", "core", "diagnostics.py")),
-        ["DETAIL_KEYS"])["DETAIL_KEYS"]
-    problems = []
-    page = os.path.join(OUT, "feedback.html")
-    if not os.path.exists(page):
-        return ["feedback.html is missing"]
-    html = read(page)
-    script = read(os.path.join(OUT, "feedback.js"))
-    for needed in ('name="feedback"', 'data-netlify="true"', 'netlify-honeypot="company"',
-                   'name="company"', '<input type="hidden" name="form-name" value="feedback">',
-                   'action="thanks.html"'):
-        if needed not in html:
-            problems.append("feedback.html: no %s" % needed)
-    for key in keys:
-        if '<input type="hidden" name="%s">' % key not in html:
-            problems.append("feedback.html: no hidden field for the app's detail %r" % key)
-        if '["%s",' % key not in script:
-            problems.append("feedback.js: no label for the app's detail %r" % key)
-    if not os.path.exists(os.path.join(OUT, "thanks.html")):
-        problems.append("thanks.html is missing: the form's answer page")
-    if "form-action 'self'" not in read(os.path.join(OUT, "_headers")):
-        problems.append("_headers: form-action must be 'self', or the feedback form cannot send")
-    # The privacy policy promises the details arrive only with the form:
-    # the app puts them after a "#", and only the page's script reads them.
-    if "location.hash" not in script:
-        problems.append("feedback.js: does not read the details after the '#' the app "
-                        "puts them behind")
-    return problems
-
-
-def check_app_links(repo, config):
-    """The pages the app opens by their address are pages this build makes,
-    at the site's own address: the feedback form, and the privacy policy,
-    whose address both stores are given as well."""
-    urls = literal_assignments(
-        read(os.path.join(repo, "noteorganizer", "core", "diagnostics.py")),
-        ["FEEDBACK_URL", "PRIVACY_URL"])
-    site = config.get("site_url", "").rstrip("/") + "/"
-    problems = []
-    for name, url in sorted(urls.items()):
-        if not url.startswith(site):
-            problems.append("diagnostics.%s (%s) is not on the site's address, %s" %
-                            (name, url, site))
-        elif not os.path.isfile(os.path.join(OUT, url[len(site):])):
-            problems.append("diagnostics.%s opens %s, a page this build does not make" %
-                            (name, url[len(site):]))
-    return problems
 
 
 def publish():
@@ -774,7 +732,8 @@ def main():
           "window.NO_APP = " + json.dumps(app_data, ensure_ascii=False, indent=1) + ";\n")
 
     shell = read(os.path.join(SRC, "page.html"))
-    doc_pages = build_doc_pages(repo, config, shell, version)
+    privacy = privacy_url(repo)
+    doc_pages = build_doc_pages(repo, config, shell, version, privacy)
     for page, text in doc_pages.items():
         write(os.path.join(OUT, page), text)
 
@@ -785,6 +744,7 @@ def main():
                       "An offline notes app for Windows, with a web demo you can try "
                       "in the browser."),
         "nav": nav_html("index.html"),
+        "privacy_url": html.escape(privacy),
         "theme_count": len(themes["THEMES"]),
         "theme_names": ", ".join(themes["THEME_LABELS"][key] for key in
                                  themes["DARK_THEMES"] + themes["LIGHT_THEMES"]),
@@ -796,8 +756,6 @@ def main():
           fill(read(os.path.join(SRC, "index.html")), index_values, "index.html"))
 
     problems, page_count = check_output()
-    problems += check_feedback_form(repo)
-    problems += check_app_links(repo, config)
     if problems:
         print("\n".join(problems))
         shutil.rmtree(STAGE, ignore_errors=True)

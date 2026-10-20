@@ -41,7 +41,7 @@ every major feature.
   - [Keyboard shortcuts](#keyboard-shortcuts)
   - [Appearance](#appearance)
   - [About](#about)
-  - [Sending feedback](#sending-feedback)
+  - [Feedback and the privacy policy](#feedback-and-the-privacy-policy)
 
 ---
 
@@ -1095,24 +1095,21 @@ computer, with **Open folder** and **Copy path** beside it. Under it, **Welcome 
 opens the welcome note from the first start — or, if you deleted it, puts a fresh copy back in
 your notebook and opens that. Pressing it again opens the same note rather than adding another.
 
-### Sending feedback
+### Feedback and the privacy policy
 
-Something not working, slow, or an idea? **Settings → About → Send feedback** opens a short form
-in your browser: what happened, what it is about, and your email only if you would like an answer.
-The app itself never connects to the internet — it only opens the page, and nothing is sent until
-you press **Send** there.
+Something not working, slow, or an idea? Once the app is in the Microsoft Store, **Settings →
+About → Feedback → Write a review** opens its page there: write it in a review, and the answer
+comes back in the Store. Before the app has a Store page, About has no Feedback card. The app
+itself never connects to the internet — it only opens the page.
 
-The form shows, under your words, the few details the app adds by itself so a problem can be
-found: the app's version, your Windows version, the screen scale and Sharp text, the theme, and how
-big your notebook is (how many notes and attached files, and the notes file's size). **Nothing from
-your notes is sent** — no titles, no text, no file names, no folders. If the browser cannot be
-opened, the link is copied instead, ready to paste into one.
+**Privacy policy → Read** opens the [privacy policy](PRIVACY.md): what the app keeps, where, and
+what leaves your computer — only what you send. If the browser cannot be opened, the link is
+copied instead, ready to paste into one.
 
-If the app ever hits an error, the same details head each entry in `crash_log.txt` beside your
-notes, so a log you choose to share says which version and what size of notebook it came from.
-
-Below it, **Privacy policy → Read** opens the [privacy policy](PRIVACY.md) on the same site: what
-the app keeps, where, and what leaves your computer — only when you send it.
+If the app ever hits an error, it writes what went wrong to `crash_log.txt` beside your notes,
+headed by the app's version, your Windows version, the screen scale and Sharp text, the theme,
+and how big your notebook is. **Nothing from your notes goes in** — no titles, no text, no file
+names, no folders — and the log never leaves your computer unless you send it to someone.
 
 ---
 

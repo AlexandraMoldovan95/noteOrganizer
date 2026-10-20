@@ -107,24 +107,29 @@ How the numbers themselves are counted is the
 
 ### Added
 
-- **A privacy policy, from Settings → About.** Privacy policy → Read opens it on the project's
-  site: what the app keeps and where, what leaves your computer — only what you send — and how a
-  feedback message is kept. Every page of the site links to it, and both stores are given its
-  address.
+- **A privacy policy, from Settings → About.** Privacy policy → Read opens it: what the app
+  keeps and where, what leaves your computer — only what you send — and how an email to the
+  project is kept. Both stores are given the same page, and every page of the project's site
+  links to it.
 
-### Changed
+### Removed
 
-- **Send feedback's details reach the site only when you press Send.** They travel after the
-  link's `#`, a part a browser never sends, so opening the form no longer hands them to the
-  site's host. The form still shows them before you send, and still reads a link from an older
-  version.
+- **Send feedback, and the form on the project's site behind it.** Feedback is now a review in
+  the Microsoft Store: once the app is there, Settings → About → Feedback → Write a review opens
+  its page, and the answer comes back in the Store. Until then About has no Feedback card. The
+  form held every message, with its sender's address, on the site's host; the owner chose to
+  keep as little as that about anyone. Crash logs still name the version and the notebook's size,
+  on this computer only.
 
 ### Testing
 
-- `test_data_safety` and qa6 check that the feedback link keeps every detail out of the part a
-  browser sends, and qa6 that About opens the privacy policy. The site's build refuses a site
-  missing a page the app opens, or a feedback page that no longer reads the details after the
-  `#`; its browser walk checks that the server never received them. Mutants FB11–FB12.
+- qa6 checks that About opens the privacy policy, that a browser that will not open leaves its
+  link copied, that there is no Feedback card before the Store page exists and that Write a
+  review opens it after, and that the running app still hands a crash log its version and the
+  notebook's size. `test_data_safety` holds the crash log's details to the same list. Mutants
+  FB01 and FB11 retired with the link they aimed at, the rest of FB02–FB12 re-aimed and all
+  killed; the site's build refuses a page with a form, and its browser walk checks that every
+  footer names the page the app opens.
 
 ---
 

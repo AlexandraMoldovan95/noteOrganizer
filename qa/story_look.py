@@ -396,9 +396,10 @@ app._hide_toast()
 app.update()
 app.update_idletasks()
 """),
-    # Settings > About: Send feedback, and under it the privacy policy's
-    # row. The folder line would show this scratch copy's path, which holds
-    # a person's name, in a picture kept in the repository, so the label
+    # Settings > About before the app is in the Store: the privacy policy's
+    # card, and no Feedback card. The folder line would show this scratch
+    # copy's path, which holds a person's name, in a picture kept in the
+    # repository, so the label
     # alone is given a neutral one -- where the app writes is untouched.
     ("22-settings-about-privacy", """
 app._dismiss_mini_popup()

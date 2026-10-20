@@ -1173,10 +1173,9 @@ showed a gap after the hand.
 
 ## `noteorganizer/core/diagnostics.py`
 
-**What it's for.** What the app may say about itself — when something
-goes wrong, and when someone writes in. Two readers share it, so they can
-never disagree: `crash_log.txt`, and the feedback page that **Settings →
-About → Send feedback** opens in the browser.
+**What it's for.** What the app may say about itself when something goes
+wrong — the head of every `crash_log.txt` entry, on this computer only —
+and the two pages Settings → About opens in the browser.
 
 ### One list of what may be said
 
@@ -1189,14 +1188,11 @@ loads, what only a running app knows from the function it registers
 environment — and lets through only those names. Never a note's words,
 and never a path: a folder's path holds the person's name.
 
-`feedback_url()` puts the details after the page link's `#`, filtered by
-the same list a second time. A browser never sends that part of a link,
-so the site receives them only with the form. The page itself is
-`site/src/feedback.html`, and `site/build.py` refuses to publish it
-unless it has a field for every name in `DETAIL_KEYS`. `PRIVACY_URL` is
-the privacy policy, which About opens too; the build refuses a site
-missing either page. The app opens the page and nothing more; it makes no
-connection of its own.
+`PRIVACY_URL` is the privacy policy on Google Sites, which About opens and
+the site's footer links (`site/build.py` reads it from here, so the two
+cannot differ). `STORE_REVIEW_URL` is the Store's review page once there is
+one: until then it is `None`, and About shows no Feedback card. The app
+opens a page and nothing more; it makes no connection of its own.
 
 ### One writer for the crash log
 

@@ -40,14 +40,30 @@ Three things wait for the listing, when there is one:
 
 - **The privacy policy's address**, which Partner Center asks for: Microsoft requires a policy for
   every Win32 product (Store Policy 10.5.1). It is `PRIVACY_URL` in
-  `noteorganizer/core/diagnostics.py`, the site's [privacy policy](PRIVACY.md), which
-  **Settings → About** opens as well.
-- **The support contact** the listing asks for is the project's own address (the one the
-  feedback form forwards to — see [site/README.md](../site/README.md#the-feedback-form)), never a
-  personal one.
+  `noteorganizer/core/diagnostics.py`: the [privacy policy](PRIVACY.md), published on Google
+  Sites, which **Settings → About** opens as well.
+- **The support contact** the listing asks for is the project's own address,
+  noteorganizer.app@gmail.com, never a personal one.
 - **The review button.** `STORE_REVIEW_URL` in `noteorganizer/core/diagnostics.py` is `None`
-  until the app has a Store page; set to that page's review link, **Settings → About** shows
-  **Rate on the Store** beside Send feedback.
+  until the app has a Store page; set to that page's review link, **Settings → About** shows the
+  Feedback card, whose **Write a review** opens it. It is the app's only way in for feedback.
+
+### The privacy page, at every release
+
+The policy's text is [`docs/PRIVACY.md`](PRIVACY.md); the page the apps and the stores point at
+is a copy of it on Google Sites, made by hand, so nothing keeps the two in step but this step
+(the owner's rule, 2026-10-21):
+
+1. Before a release is cut, ask whether `docs/PRIVACY.md` changed since the last one, or whether
+   the release changes what the apps keep, send or open. If the apps changed, the text changes
+   first, with a new "Last updated" date.
+2. If the text changed, the owner copies it to the Google Site — from the Markdown preview of
+   `docs/PRIVACY.md` — and publishes it before the build goes out.
+3. The live page is compared with `docs/PRIVACY.md` (the date line, then each section), and the
+   release report says so, even when nothing changed.
+
+No build ships while `PRIVACY_URL` answers with an error: the Google Site is made before the
+first release.
 
 ## Alternatives to the Microsoft Store
 

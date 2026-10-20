@@ -86,44 +86,20 @@ the app's own reader on every code the demo made, and the demo's reader on
 codes the app made (its welcome note, a table, colours). The first run writes
 the app's codes, the second reads the demo's.
 
-## The feedback form
+## No forms, and the privacy policy on its own page
 
-`src/feedback.html` is the page **Settings → About → Send feedback** opens.
-Netlify keeps what is sent and forwards it by email, so no address appears
-on the page or in the app. The app adds its details to the link (version,
-Windows, screen scale, theme, how big the notebook is — never a note's
-words), after a `#`, the part a browser keeps to itself, so Netlify
-receives them only with the form; older versions of the app put them in
-the query, which the page still reads. `feedback.js` shows them under the
-form and puts them in its hidden fields, and the build refuses a page
-without a field for every detail the app sends (`DETAIL_KEYS` in
-`noteorganizer/core/diagnostics.py`). A hidden field named `company` is a
-trap for robots: Netlify drops what fills it.
+The site presents the app; the apps do not send anyone to it. It has no
+form — feedback is a review in the stores — and `_headers` says so
+(`form-action 'none'`); the build refuses a page with a `<form>` in it.
 
-The privacy policy is `docs/PRIVACY.md`, built into `privacy.html` and
-linked from every page's footer and from the form. Both apps open it from
-Settings → About, and both stores are given its address, so its file name
-must stay; the build refuses a site missing a page the app opens
-(`FEEDBACK_URL` and `PRIVACY_URL` in the same file). The browser walk
-checks that the details after the `#` never reach the server.
-
-Set up once, after the first deploy that carries the page:
-
-1. On Netlify, open the project's **Forms** page
-   (`https://app.netlify.com/projects/<project name>/forms`) and select
-   **Enable form detection**. It applies from the next deploy on, so
-   deploy again, so Netlify reads the form.
-2. In **Forms → Form notifications**, add an **email notification** to the
-   project's own address (not a personal one: answers go out from it too).
-3. Send a test message from the app (Settings → About → Send feedback) and
-   check that it arrives.
-
-Form submissions cost no credits: since 14 April 2026 they are free and
-unlimited on every Netlify credit plan, the free one included (Netlify's
-changelog, "Free unlimited seats on Pro, unlimited form submissions").
-Deploys still cost credits. Whether a drag-and-drop deploy is scanned for
-forms the way a built one is, Netlify's documentation does not say — the
-first test message answers it.
+The privacy policy is not one of its pages either. Its text is
+`docs/PRIVACY.md`, published by hand on Google Sites: the page both apps
+open from Settings → About and both stores are given. Every page's footer
+links there, with the address the build reads from the app's own source
+(`PRIVACY_URL` in `noteorganizer/core/diagnostics.py`), and the browser
+walk checks the footer names that same address. Keeping the Google Site in
+step with the file is a release step
+([RELEASE_WINDOWS](../docs/RELEASE_WINDOWS.md#the-privacy-page-at-every-release)).
 
 ## When the repository becomes public
 

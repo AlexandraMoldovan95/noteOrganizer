@@ -1158,13 +1158,12 @@ for _theme in ('light', 'dark'):
 app.hide_settings_page()
 app.update()
 
-# ---- SEND FEEDBACK (Settings → About) ----
-# The button opens the site's feedback page in the browser, carrying what
-# the app may say about itself (core/diagnostics): the version, how it draws,
-# how big the notebook is -- never a note's words. The browser is stood in
-# for here: nothing is opened.
+# ---- SETTINGS → ABOUT: the privacy policy, and feedback as a Store review ----
+# About opens pages in the browser: the privacy policy always, a Store
+# review once the app has a Store page -- and before that, no Feedback card
+# at all. The browser is stood in for here: nothing is opened. The running
+# app's own details still head every crash_log.txt entry (core/diagnostics).
 import webbrowser as _fb_web
-from urllib.parse import parse_qsl as _fb_parse, urlsplit as _fb_split
 from noteorganizer.core import diagnostics as _fb_diag
 _fb_opened, _fb_warned = [], []
 _fb_real = (_fb_web.open, _fb_diag.STORE_REVIEW_URL, app.notes, app.show_warning)
@@ -1175,51 +1174,41 @@ _fb_frame = tk.Frame(app)
 try:
     _fb_web.open = lambda url, *a, **k: (_fb_opened.append(url), True)[1]
     app.show_warning = lambda *a, **k: _fb_warned.append(' '.join(map(str, a)))
+    _fb_said = dict(_fb_diag.details())
+    check(f'the running app hands a crash log its version, how it draws and how big '
+          f'the notebook is ({_fb_said})',
+          _fb_said.get('version') == NO.APP_VERSION and _fb_said.get('notes') == 2
+          and _fb_said.get('files') == 1
+          and _fb_said.get('theme') == NO.THEME_LABELS[app.theme_name]
+          and str(_fb_said.get('scale', '')).endswith('%')
+          and _fb_said.get('sharp') in ('on', 'off'))
+    check('...and nothing from the notes', 'SECRET' not in repr(_fb_said))
     app._build_settings_about_panel(_fb_frame)
-    _fb_btn = find_btn_qa6(_fb_frame, 'Send feedback')
-    check('About offers Send feedback', _fb_btn is not None)
-    if _fb_btn is not None:
-        _fb_btn.invoke()
-    _fb_url = _fb_opened[0] if _fb_opened else ''
-    _fb_q = dict(_fb_parse(_fb_split(_fb_url).fragment))
-    check(f'Send feedback opens the feedback page, naming the version, how the app '
-          f'draws and how big the notebook is ({_fb_q})',
-          len(_fb_opened) == 1 and _fb_url.startswith(_fb_diag.FEEDBACK_URL + '#')
-          and _fb_q.get('version') == NO.APP_VERSION and _fb_q.get('notes') == '2'
-          and _fb_q.get('files') == '1'
-          and _fb_q.get('theme') == NO.THEME_LABELS[app.theme_name]
-          and _fb_q.get('scale', '').endswith('%') and _fb_q.get('sharp') in ('on', 'off'))
-    check('...and nothing from the notes in its link',
-          bool(_fb_url) and 'SECRET' not in _fb_url)
-    # The policy promises the site receives the details only with the form:
-    # a browser sends a link's query, never what follows its "#".
-    check('...and nothing in the part of the link a browser sends',
-          bool(_fb_url) and _fb_split(_fb_url).query == '')
+    check('no Feedback card while the app is not in the Store',
+          find_btn_qa6(_fb_frame, 'Write a review') is None)
     _fb_privacy = find_btn_qa6(_fb_frame, 'Read')
     if _fb_privacy is not None:
         _fb_privacy.invoke()
     check('About opens the privacy policy',
-          _fb_privacy is not None and _fb_opened[-1] == _fb_diag.PRIVACY_URL)
-    check('no Store button while the app is not in the Store',
-          find_btn_qa6(_fb_frame, 'Rate on the Store') is None)
+          _fb_privacy is not None and _fb_opened[-1:] == [_fb_diag.PRIVACY_URL])
     # A browser that will not open: the link is copied, and the words say
     # where to paste it.
     _fb_web.open = lambda url, *a, **k: False
-    if _fb_btn is not None:
-        _fb_btn.invoke()
+    if _fb_privacy is not None:
+        _fb_privacy.invoke()
     check('a browser that will not open leaves the link copied, and says so',
           bool(_fb_warned) and 'copied' in _fb_warned[-1]
-          and app.clipboard_get().startswith(_fb_diag.FEEDBACK_URL + '#'))
-    # Once the app has a Store page, its review page has a button too.
+          and app.clipboard_get() == _fb_diag.PRIVACY_URL)
+    # Once the app has a Store page, feedback is a review there.
     _fb_diag.STORE_REVIEW_URL = 'ms-windows-store://review/?ProductId=TEST'
     _fb_web.open = lambda url, *a, **k: (_fb_opened.append(url), True)[1]
     _fb_frame.destroy()
     _fb_frame = tk.Frame(app)
     app._build_settings_about_panel(_fb_frame)
-    _fb_store = find_btn_qa6(_fb_frame, 'Rate on the Store')
+    _fb_store = find_btn_qa6(_fb_frame, 'Write a review')
     if _fb_store is not None:
         _fb_store.invoke()
-    check('with a Store page, Rate on the Store opens its review page',
+    check('with a Store page, Feedback\'s Write a review opens its review page',
           _fb_store is not None and _fb_opened[-1] == _fb_diag.STORE_REVIEW_URL)
 finally:
     # Put back what was there -- the script's own silent stand-in from its

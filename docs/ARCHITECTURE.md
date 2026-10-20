@@ -1293,32 +1293,33 @@ time leaves nothing.
 
 ## Feedback and the crash log: what the app says about itself
 
-The app makes no network calls, and feedback does not change that. **Settings → About → Send
-feedback** opens a page on the project's site in the browser; the person writes there and
-presses Send, and the site's host (Netlify Forms) forwards the message by email. Three things
-follow from that choice, made on 2026-10-15:
+The app makes no network calls, and feedback does not change that: it is a review in the store
+the app came from. Once the app has a Microsoft Store page (`STORE_REVIEW_URL` in
+`core/diagnostics.py`), **Settings → About → Feedback → Write a review** opens it; before that,
+About has no Feedback card. The store keeps the review, and the answer goes back there, under the
+name Note Organizer. The one public contact beside it is the project's own address,
+noteorganizer.app@gmail.com, which the stores require and the [privacy policy](PRIVACY.md)
+names; the owner's personal address appears nowhere.
 
-- **No GitHub account needed**, which most people do not have; the repository's own bug form
-  stays for people who do.
-- **The owner's address appears nowhere** — not in the app, not on the page. It lives only in
-  the host's settings, and answers go out from an address kept for the project. That project
-  address is the one public contact: the [privacy policy](PRIVACY.md) names it beside the form,
-  as the stores will.
-- **The person sees what is sent.** The details the app adds — version, Windows, screen scale,
-  theme, how big the notebook is — are shown under the form, and never include a note's words or
-  a path.
+**How it came to this.** From 2026-10-15 feedback was a form on the project's site: the app
+opened it with its details in the link — version, Windows, screen scale, theme, how big the
+notebook is — Netlify Forms forwarded each message by email, and no GitHub account was needed.
+Writing the privacy policy both stores require showed what that cost to hold: every message with
+its IP address, a spam check by a third company, transfers to the United States, deletions done
+by hand. On 2026-10-21 the owner chose the stores' reviews instead, so the developer keeps next
+to nothing. What that gives up, knowingly: a problem reaches a public review rather than a
+private message, the app's details no longer come with it (Google Play shows the device and the
+app's version with each review), and there is no way in at all until the app is published.
 
-Those details, and the head of every `crash_log.txt` entry, come from one module,
-`core/diagnostics.py`, with one list of what may be said (`DETAIL_KEYS`); the site's build refuses a
-feedback page that lacks a field for any of them. The walk through the module is in
+The privacy policy itself is published on Google Sites, not on the project's site: the page both
+apps open (`PRIVACY_URL`) and both stores are given. `docs/PRIVACY.md` is its text, copied there
+by hand, which is why every release checks the two still match
+([RELEASE_WINDOWS](RELEASE_WINDOWS.md#microsoft-store-msix)).
+
+The head of every `crash_log.txt` entry still carries the details, on this computer only, from
+one module, `core/diagnostics.py`, with one list of what may be said (`DETAIL_KEYS`) — never a
+note's words or a path. The walk through the module is in
 [CODE_TOUR](CODE_TOUR.md#noteorganizercorediagnosticspy).
-
-The details travel after the link's `#`, the part a browser keeps on the device, so the site
-receives them only with the form, when Send is pressed. Until 2026-10-20 they were in the query,
-and the host received them with the request for the page. The change came with the
-[privacy policy](PRIVACY.md), which both stores require: it can now say that nothing leaves the
-device before Send, and the Android app can answer Google Play's Data safety form with "no data
-collected". The page still reads a query, for the versions that send one.
 
 ## Autosave
 

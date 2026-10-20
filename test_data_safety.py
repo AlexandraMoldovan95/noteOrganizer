@@ -1474,10 +1474,9 @@ finally:
     shutil.rmtree(_wf_dir, ignore_errors=True)
 
 # ---- What the app says about itself (core/diagnostics, 2026-10-15) ----
-# The feedback page and crash_log.txt carry the same details: the version,
-# how the app draws, how big the notebook is, the Windows -- never what a
-# note says, never a path (a folder's path holds the person's name).
-from urllib.parse import parse_qsl as _dg_parse, urlsplit as _dg_split
+# Every crash_log.txt entry carries the same details: the version, how the
+# app draws, how big the notebook is, the Windows -- never what a note says,
+# never a path (a folder's path holds the person's name).
 from noteorganizer.core import diagnostics as _diag
 _dg_dir = tempfile.mkdtemp()
 _real_dg = (NO_paths.APP_DIR, NO_paths.DATA_FILE, _diag.app_details, _diag.version)
@@ -1509,31 +1508,22 @@ try:
                                   ("theme", "Midnight Purple")]
                                  + _diag.notebook(_dg_notes)
                                  + [("path", _dg_dir), ("title", "SECRET-TITLE")])
-    _dg_url = _diag.feedback_url()
-    _dg_q = dict(_dg_parse(_dg_split(_dg_url).fragment))
-    check("the feedback link carries the version, how the app draws and how big the "
-          "notebook is",
-          _dg_url.startswith(_diag.FEEDBACK_URL + "#") and _dg_q.get("version") == "9.9.9"
-          and _dg_q.get("notes") == "2" and _dg_q.get("files") == "1"
-          and _dg_q.get("scale") == "150%" and "windows" in _dg_q
-          and _dg_q.get("build") in ("exe", "source"))
+    _dg_said = dict(_diag.details())
+    check("the details carry the version, how the app draws and how big the notebook is",
+          _dg_said.get("version") == "9.9.9" and _dg_said.get("notes") == 2
+          and _dg_said.get("files") == 1 and _dg_said.get("scale") == "150%"
+          and "windows" in _dg_said and _dg_said.get("build") in ("exe", "source"))
     check("...and nothing else: no note's words, no file name, no path, whatever the "
           "app hands it",
-          set(_dg_q) <= set(_diag.DETAIL_KEYS) and "SECRET" not in _dg_url
-          and os.path.basename(_dg_dir) not in _dg_url)
-    # What the privacy policy promises: the details travel after the "#",
-    # which a browser never sends, so the site has them only with the form.
-    check("...and none of it in the part of the link a browser sends to the site",
-          _dg_split(_dg_url).query == "" and _dg_split(_dg_url).path.endswith("feedback.html"))
-    check("a link made from any pairs at all keeps only the details' own names",
-          "SECRET" not in _diag.feedback_url([("version", "1"), ("title", "SECRET")])
-          and "version=1" in _diag.feedback_url([("version", "1"), ("title", "SECRET")]))
+          set(_dg_said) <= set(_diag.DETAIL_KEYS) and "SECRET" not in repr(_dg_said)
+          and os.path.basename(_dg_dir) not in repr(_dg_said))
     _dg_text = _dg_read(_dg_try(lambda: _diag.append_crash_log("test", "the trace")))
     _dg_head = _dg_text.split("the trace")[0]
     check("a crash log entry names the version, the notebook's size and the Windows, "
           "above its trace",
           "(test)" in _dg_head and "version: 9.9.9" in _dg_head and "notes: 2" in _dg_head
-          and "windows: " in _dg_head and _dg_text.rstrip().endswith("the trace"))
+          and "files: 1" in _dg_head and "windows: " in _dg_head
+          and _dg_text.rstrip().endswith("the trace"))
     check("...and no note's words or path in its line of details",
           "SECRET" not in _dg_head and os.path.basename(_dg_dir) not in _dg_head)
     _diag.app_details = lambda: 1 / 0
