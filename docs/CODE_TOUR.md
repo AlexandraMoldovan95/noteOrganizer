@@ -1189,11 +1189,14 @@ loads, what only a running app knows from the function it registers
 environment — and lets through only those names. Never a note's words,
 and never a path: a folder's path holds the person's name.
 
-`feedback_url()` puts the details on the page's link, filtered by the same
-list a second time. The page itself is `site/src/feedback.html`, and
-`site/build.py` refuses to publish it unless it has a field for every
-name in `DETAIL_KEYS`. The app opens the page and nothing more; it makes
-no connection of its own.
+`feedback_url()` puts the details after the page link's `#`, filtered by
+the same list a second time. A browser never sends that part of a link,
+so the site receives them only with the form. The page itself is
+`site/src/feedback.html`, and `site/build.py` refuses to publish it
+unless it has a field for every name in `DETAIL_KEYS`. `PRIVACY_URL` is
+the privacy policy, which About opens too; the build refuses a site
+missing either page. The app opens the page and nothing more; it makes no
+connection of its own.
 
 ### One writer for the crash log
 

@@ -59,6 +59,12 @@ PAGES = {
     "docs/BUG_REPORTS.md": ("bug-reports.html", "Bug reports",
                             "The twenty bugs my manual testing found, three "
                             "written out in a standard bug-report format."),
+    # Linked from every page's footer and from the feedback form; both apps
+    # open it from Settings > About, and both stores are given its address,
+    # so its file name must not change (check_app_links).
+    "docs/PRIVACY.md": ("privacy.html", "Privacy policy",
+                        "What Note Organizer keeps, where it keeps it, and "
+                        "the one thing that is ever sent."),
 }
 # Text that must never reach a published page. A build that finds one
 # stops; the page is not published with it.
@@ -660,6 +666,30 @@ def check_feedback_form(repo):
         problems.append("thanks.html is missing: the form's answer page")
     if "form-action 'self'" not in read(os.path.join(OUT, "_headers")):
         problems.append("_headers: form-action must be 'self', or the feedback form cannot send")
+    # The privacy policy promises the details arrive only with the form:
+    # the app puts them after a "#", and only the page's script reads them.
+    if "location.hash" not in script:
+        problems.append("feedback.js: does not read the details after the '#' the app "
+                        "puts them behind")
+    return problems
+
+
+def check_app_links(repo, config):
+    """The pages the app opens by their address are pages this build makes,
+    at the site's own address: the feedback form, and the privacy policy,
+    whose address both stores are given as well."""
+    urls = literal_assignments(
+        read(os.path.join(repo, "noteorganizer", "core", "diagnostics.py")),
+        ["FEEDBACK_URL", "PRIVACY_URL"])
+    site = config.get("site_url", "").rstrip("/") + "/"
+    problems = []
+    for name, url in sorted(urls.items()):
+        if not url.startswith(site):
+            problems.append("diagnostics.%s (%s) is not on the site's address, %s" %
+                            (name, url, site))
+        elif not os.path.isfile(os.path.join(OUT, url[len(site):])):
+            problems.append("diagnostics.%s opens %s, a page this build does not make" %
+                            (name, url[len(site):]))
     return problems
 
 
@@ -767,6 +797,7 @@ def main():
 
     problems, page_count = check_output()
     problems += check_feedback_form(repo)
+    problems += check_app_links(repo, config)
     if problems:
         print("\n".join(problems))
         shutil.rmtree(STAGE, ignore_errors=True)

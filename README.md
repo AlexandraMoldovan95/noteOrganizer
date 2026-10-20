@@ -130,7 +130,8 @@ the note list was redrawn took 8 seconds to start and 10 to save at 1,000
 The [five-minute path](#in-five-minutes) is above. The rest is reference,
 for when you need it:
 
-- **Using it:** the [user guide](docs/USER_GUIDE.md) — every part of the app.
+- **Using it:** the [user guide](docs/USER_GUIDE.md) — every part of the app —
+  and the [privacy policy](docs/PRIVACY.md).
 - **How the code works:** [architecture](docs/ARCHITECTURE.md) — how it is
   organised, and why — and the [code tour](docs/CODE_TOUR.md), a walk
   through the files.

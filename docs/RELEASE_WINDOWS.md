@@ -36,8 +36,12 @@ This MSIX package version is separate from, and doesn't need to match, the app's
 
 Source: [Microsoft Learn — App package requirements for MSIX apps](https://learn.microsoft.com/en-us/windows/apps/publish/publish-your-app/msix/app-package-requirements)
 
-Two things wait for the listing, when there is one:
+Three things wait for the listing, when there is one:
 
+- **The privacy policy's address**, which Partner Center asks for: Microsoft requires a policy for
+  every Win32 product (Store Policy 10.5.1). It is `PRIVACY_URL` in
+  `noteorganizer/core/diagnostics.py`, the site's [privacy policy](PRIVACY.md), which
+  **Settings → About** opens as well.
 - **The support contact** the listing asks for is the project's own address (the one the
   feedback form forwards to — see [site/README.md](../site/README.md#the-feedback-form)), never a
   personal one.

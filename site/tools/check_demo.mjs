@@ -45,7 +45,12 @@ function netlifyHeaders() {
 }
 const RULES = netlifyHeaders();
 
+// Every address the browser asked for, as the server received it: what the
+// site's host would see.
+const requested = [];
+
 const server = http.createServer((req, res) => {
+  requested.push(req.url);
   const url = new URL(req.url, "http://x");
   let file = path.join(PUBLIC, decodeURIComponent(url.pathname));
   if (!file.startsWith(PUBLIC)) { res.writeHead(403); res.end(); return; }
@@ -203,7 +208,8 @@ try {
                                              ["dark", 390, 844, true, "phone-dark"],
                                              ["light", 390, 844, true, "phone-light"]]) {
     await viewport(w, h, mobile, scheme);
-    for (const p of ["index.html", "how-its-built.html", "in-my-words.html", "testing.html", "nowhere"]) {
+    for (const p of ["index.html", "how-its-built.html", "in-my-words.html", "testing.html", "privacy.html",
+                     "nowhere"]) {
       await go("/" + p);
       await noHorizontalScroll(`${p} ${tag}`);
       if (p === "index.html" || (mobile && p !== "nowhere")) await shot(`site-${p.replace(".html", "")}-${tag}`, true);
@@ -215,6 +221,35 @@ try {
   await click("#menu-toggle");
   await shot("site-index-phone-menu-open");
   check("phone menu opens", await js("document.getElementById('site-nav').classList.contains('open')"));
+
+  // ---------------- The feedback page, as the app opens it ----------------
+  // The privacy policy promises the details reach the site only with the
+  // form: the app puts them after a "#", which a browser never sends.
+  await viewport(1366, 900, false, "light");
+  const asked = requested.length;
+  await go("/feedback.html#version=9.9.9&notes=3&title=SECRET");
+  const listed = await js("[...document.querySelectorAll('#details-list li')].map(li => li.textContent).join(' | ')");
+  check("the feedback page lists the details after the '#'",
+    listed.includes("App version: 9.9.9") && listed.includes("Notes: 3"), listed);
+  check("...fills the form with them", (await js("document.querySelector('input[name=version]').value")) === "9.9.9");
+  check("...and nothing the app does not name", !listed.includes("SECRET"), listed);
+  const sent = requested.slice(asked).filter((u) => u.includes("9.9.9") || u.includes("SECRET"));
+  check("...while the site was never sent them", sent.length === 0, sent.join(", "));
+  await shot("site-feedback-from-the-app");
+  await go("/feedback.html?version=0.95.391&notes=4");
+  check("an older app's details, in the query, are still listed",
+    (await js("document.getElementById('details-list').textContent")).includes("App version: 0.95.391"));
+  await go("/feedback.html");
+  check("opened by itself, the page lists no details", await js("document.getElementById('details').hidden"));
+  await follow("a[href='privacy.html#send-feedback']");
+  check("its privacy link opens the policy at Send feedback",
+    (await js("location.pathname + location.hash")) === "/privacy.html#send-feedback",
+    await js("location.href"));
+  await go("/index.html");
+  await follow(".site-footer a[href='privacy.html']");
+  check("the footer leads to the privacy policy",
+    (await js("document.querySelector('h1') && document.querySelector('h1').textContent")) === "Privacy policy",
+    await js("location.href"));
 
   // ---------------- Opened from the folder, with no server ----------------
   // As the owner previews it: a double-click on public/index.html, then

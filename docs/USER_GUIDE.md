@@ -1111,6 +1111,9 @@ opened, the link is copied instead, ready to paste into one.
 If the app ever hits an error, the same details head each entry in `crash_log.txt` beside your
 notes, so a log you choose to share says which version and what size of notebook it came from.
 
+Below it, **Privacy policy → Read** opens the [privacy policy](PRIVACY.md) on the same site: what
+the app keeps, where, and what leaves your computer — only when you send it.
+
 ---
 
 **What changed recently:** see the [CHANGELOG](../CHANGELOG.md).

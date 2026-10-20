@@ -257,7 +257,9 @@ A new surface joins this list the moment it ships.
   open-note tabs · window sizing · a scaled screen (Sharp text: sizes
   given at 100%, drawn marks, the drawing mode chosen at start) · Send
   feedback (the site's form, opened in the browser) and what the app says
-  about itself there and in `crash_log.txt` (`core/diagnostics`)
+  about itself there and in `crash_log.txt` (`core/diagnostics`) · the
+  privacy policy (About opens the site's page, whose promises the
+  feedback link must keep)
 - **Standing invariants:** plain text is the store · `core/` never
   imports tkinter · the worker thread never touches a widget · offsets
   counted in characters · any-script input · fast on weak machines ·

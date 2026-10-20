@@ -18,12 +18,22 @@
   ];
   var RUNS_AS = { exe: "the installed app", source: "from source" };
 
+  // The app puts its details after a "#", the part of a link the browser
+  // keeps to itself, so they reach the site only with the form, when Send
+  // is pressed. Older versions of the app put them in the query, read
+  // here when the "#" holds none.
+  function detailsInLink() {
+    var hash = new URLSearchParams(window.location.hash.slice(1));
+    var any = LABELS.some(function (entry) { return hash.has(entry[0]); });
+    return any ? hash : new URLSearchParams(window.location.search);
+  }
+
   function start() {
     var form = document.querySelector("form.feedback");
     var list = document.getElementById("details-list");
     var box = document.getElementById("details");
     if (!form || !list || !box) { return; }
-    var params = new URLSearchParams(window.location.search);
+    var params = detailsInLink();
     var shown = 0;
     LABELS.forEach(function (entry) {
       var key = entry[0];

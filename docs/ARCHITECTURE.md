@@ -1311,6 +1311,13 @@ Those details, and the head of every `crash_log.txt` entry, come from one module
 feedback page that lacks a field for any of them. The walk through the module is in
 [CODE_TOUR](CODE_TOUR.md#noteorganizercorediagnosticspy).
 
+The details travel after the link's `#`, the part a browser keeps on the device, so the site
+receives them only with the form, when Send is pressed. Until 2026-10-20 they were in the query,
+and the host received them with the request for the page. The change came with the
+[privacy policy](PRIVACY.md), which both stores require: it can now say that nothing leaves the
+device before Send, and the Android app can answer Google Play's Data safety form with "no data
+collected". The page still reads a query, for the versions that send one.
+
 ## Autosave
 
 Typing pauses trigger a debounced autosave; switching notes (or tabs) flushes any pending

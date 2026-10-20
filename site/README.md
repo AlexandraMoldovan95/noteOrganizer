@@ -92,10 +92,20 @@ the app's codes, the second reads the demo's.
 Netlify keeps what is sent and forwards it by email, so no address appears
 on the page or in the app. The app adds its details to the link (version,
 Windows, screen scale, theme, how big the notebook is — never a note's
-words); `feedback.js` shows them under the form and puts them in its hidden
-fields, and the build refuses a page without a field for every detail the
-app sends (`DETAIL_KEYS` in `noteorganizer/core/diagnostics.py`). A hidden
-field named `company` is a trap for robots: Netlify drops what fills it.
+words), after a `#`, the part a browser keeps to itself, so Netlify
+receives them only with the form; older versions of the app put them in
+the query, which the page still reads. `feedback.js` shows them under the
+form and puts them in its hidden fields, and the build refuses a page
+without a field for every detail the app sends (`DETAIL_KEYS` in
+`noteorganizer/core/diagnostics.py`). A hidden field named `company` is a
+trap for robots: Netlify drops what fills it.
+
+The privacy policy is `docs/PRIVACY.md`, built into `privacy.html` and
+linked from every page's footer and from the form. Both apps open it from
+Settings → About, and both stores are given its address, so its file name
+must stay; the build refuses a site missing a page the app opens
+(`FEEDBACK_URL` and `PRIVACY_URL` in the same file). The browser walk
+checks that the details after the `#` never reach the server.
 
 Set up once, after the first deploy that carries the page:
 
