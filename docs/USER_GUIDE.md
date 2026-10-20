@@ -621,7 +621,12 @@ selector at the top of the same panel offers 7 to 90 days, and a change applies 
 startup's cleanup. Restore individual notes, delete them permanently one at a time, or empty the
 whole trash at once. With a lot of deleted notes, the list loads the most recent batch first, with
 a button to reveal more — so it stays quick to open no matter how much has accumulated there.
-Deleting permanently never removes an attached file that a note still uses.
+Deleting permanently — by hand or by the automatic cleanup — never removes an attached file that
+a note still uses.
+
+If the settings file can't be read (a bad shutdown or a disk problem can do that), the app no
+longer knows how long you chose, so it removes nothing from the Trash until you choose again. It
+says so once when it starts, and the selector shows **Choose…** until you do.
 
 Each row also carries a tick box, so getting a batch back is one gesture rather than forty: tick
 what you want and an **↩ Restore N selected** button appears at the foot of the panel, just above

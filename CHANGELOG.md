@@ -104,6 +104,24 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+### Fixed
+
+- **A superscript figure in a note's date no longer stops the note saving.** "17²" in the date
+  field ("²" has its own key on a French keyboard) made every autosave of that note fail —
+  nothing typed after it was kept — and closing the app stopped on "Something went wrong"; a
+  notes file holding such a date kept the app from opening. Superscript, subscript and circled
+  figures are now simply not a date, like any other text the field cannot read.
+- **The Trash never empties itself by a length of time it could not read.** If the settings file
+  was damaged, the next start removed everything in the Trash older than 30 days, with its
+  attached files, even for someone who had chosen 90; a hand-edited `0` removed everything older
+  than a day. Now nothing is removed automatically until a length is chosen again: the app says
+  so once when it starts, and Settings → Recently deleted shows **Choose…** in place of a number.
+- **The automatic Trash cleanup no longer deletes a file a note is still showing.** Two notes can
+  share one stored file (a duplicate or an import that could not copy it keeps the name), and the
+  startup cleanup — or removing the attachment from one of them — took it from the other. Both
+  now spare any file a note or a kept Trash entry still uses, as Delete and Empty trash already
+  did, and the cleanup does not run on a start whose notes file could not be read.
+
 ---
 
 ## [0.95.382] — 2026-10-15

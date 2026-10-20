@@ -64,6 +64,8 @@ is in the table below as well.
 | [Eleven decisions about your notes, made from half the evidence](#eleven-decisions-about-your-notes-made-from-half-the-evidence) | When two files must agree, rebuild the weaker from the stronger; an automatic removal asks the strictest question there is; a dialog's promise is part of the mechanism. | 0.81.213 |
 | [The backup the app could not restore](#the-backup-the-app-could-not-restore) | Every limit on reading is a promise about writing: when the app makes what it later reads, one definition checks both ends. | 0.94.379 |
 | [The import the close waited for, then threw away](#the-import-the-close-waited-for-then-threw-away) | A cap on a wait is half a decision: say what happens to the work still running at the cap — and test the cleanup on the case it exists for. | 0.94.382 |
+| [The figure that was not one of the ten](#the-figure-that-was-not-one-of-the-ten) | The fourth fix of one mistake is the moment for a gate that refuses the pattern, not a fifth fix by hand. | — |
+| [The Trash that forgot its window](#the-trash-that-forgot-its-window) | "I don't know" and "the default" are different answers: carry the not-knowing in the data until a person resolves it. | — |
 | [The Cancel that went ahead anyway](#the-cancel-that-went-ahead-anyway) | A function that can be told "no" must say so to its caller; a modal dialog holds the mouse only unless the keyboard is held too; bind the end of a widget-level record to the widget's own end. | 0.82.230 |
 | [The paste that landed on top of the placeholder](#the-paste-that-landed-on-top-of-the-placeholder) | `bind()` replaces where `add="+"` accumulates, so a widget's own binding silently displaces a shared helper's; and a virtual event outranks the physical one beside it in the same bindtag. | 0.75.185 |
 | [The sweep that stopped at the edge of the Settings page](#the-sweep-that-stopped-at-the-edge-of-the-settings-page) | A fix's sibling sweep must name the surfaces it did not visit; a cap in characters is not a width; and text that wraps for the first time inherits every multi-line default the widget was hiding. | 0.81.202 |
@@ -1848,6 +1850,69 @@ again.
 **Takeaway:** a cap on a wait is half a decision; the other half is what happens to the work
 still running when the cap is reached. And a cleanup tested only on work that finished in time
 has not been tested on the case it exists for.
+
+### The figure that was not one of the ten
+
+*(2026-10-20)*
+
+**Symptom:** none reported. Found while comparing the Android port with the desktop. Type
+"17²" in a note's date field ("²" has a key of its own on a French keyboard) and every autosave
+of that note failed: nothing typed after it was kept, body included, and closing the app stopped
+on "Something went wrong". A notes file holding such a date, edited by hand, kept the app from
+opening at all.
+
+**Root cause:** `read_date` sorted each piece of the field into letters and figures with
+`str.isdigit()`, which is True for "²", "①" and "₂" as well as for 0–9. The patterns that read
+the figures are written `[0-9]`, so a piece sent to them as a figure matched nothing, and the
+match's `None` raised. The same mistake had been fixed three times before, one reader at a
+time: a day of the month, a year, the calculator. Each fix closed its own door and left the
+next.
+
+**Fix:** a figure is one of `"0123456789"`, the same set the patterns read. And the one-definition
+gate (`tools/check_one_definition.py`) now refuses a bare `.isdigit()` anywhere in the app's
+code, naming `isdecimal()` (what `int()` reads) or a test against the ten figures instead. The
+one remaining use is allowed by name, with its reason: it runs only after `isascii()`.
+
+**Takeaway:** the fourth fix of one mistake is the moment to stop fixing it by hand — a gate
+that refuses the pattern closes every door at once, including the ones not yet written.
+
+### The Trash that forgot its window
+
+*(2026-10-20)*
+
+**Symptom:** none reported; the Android port had the same weakness, found by its own audit, and
+the desktop was checked for it. Someone who keeps deleted notes for 90 days, and whose
+settings file is damaged by a bad shutdown, starts the app — and every note in the Trash older
+than 30 days is removed for good, with its attached files. A hand-edited window of `0` removed
+everything older than a day. Separately, the automatic cleanup could delete a file that a
+living note was still showing.
+
+**Root cause:** three gaps, one theme — a deletion nobody asks for acting on something it
+could not know.
+
+- An unreadable `settings.json` read as `{}`. Before the purge ran, the first write of any
+  setting (the app writes several while it starts) stored a fresh file with no window in it,
+  so "unknown" had already become "never chosen", which means 30 days.
+- A stored value no app writes was clamped rather than refused: `0` became one day, `"forever"`
+  became 30.
+- Two notes can share one stored file, when a duplicate or an import could not copy it and kept
+  the name. Delete and Empty trash spared a file a note still used; the startup purge, and
+  removing one attachment from a note, did not.
+
+**Fix:** `load_settings()` answers an unreadable file with a marker,
+`desktop_trash_window_unknown`, instead of `{}`. Every writer reads, changes and writes, so the
+marker survives until the person chooses a window again, in one write
+(`choose_trash_window()`). `trash_retention_days()` answers `None` while the marker is set or the
+stored value is not a whole number from 1 to 365, and `None` purges nothing. The next start says
+so once; the Trash panel says nothing is removed automatically and its selector reads
+**Choose…**; the texts that promised "restorable for N days" leave the number out while there is
+none to promise. The purge and the single-attachment removal now spare every file a note or a
+kept entry still uses, and on a launch whose notes file could not be read the purge does not run
+at all, since there are no notes to ask.
+
+**Takeaway:** "I don't know" and "the default" are different answers, and a store that turns
+one into the other on its next write erases the difference before anyone can act on it. Carry
+the not-knowing in the data until a person resolves it.
 
 
 ## Tk & platform gotchas

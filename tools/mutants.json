@@ -2731,6 +2731,292 @@
     "expect": "killed"
   },
   {
+    "id": "RD20",
+    "about": "read_date takes any figure str.isdigit() passes -- superscript, circled -- for one of 0-9",
+    "edits": [
+      {
+        "file": "noteorganizer/core/recurrence.py",
+        "find": "        if part[0] in \"0123456789\":\n",
+        "replace": "        if part[0].isdigit():\n"
+      }
+    ],
+    "must_fail": ["'17\\xb2' is not read as a date, and does not raise",
+                  "a note dated with a superscript figure still loads, its date kept"],
+    "suites": ["test_recurrence"],
+    "expect": "killed"
+  },
+  {
+    "id": "TW01",
+    "about": "an unreadable settings.json reads as an empty one, the Trash's window as never chosen",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "        return {TRASH_WINDOW_UNKNOWN: True}\n",
+        "replace": "        return {}\n"
+      }
+    ],
+    "must_fail": ["an unreadable settings file leaves the window not known"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "TW02",
+    "about": "the window ignores the marker an unreadable settings file left",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "    if settings.get(TRASH_WINDOW_UNKNOWN):\n        return None\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["an unreadable settings file leaves the window not known",
+                  "...and a write of another setting keeps it not known"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "TW03",
+    "about": "a stored window outside 1-365 is clamped again, so a hand-edited 0 purges at one day",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "    if isinstance(days, bool) or not isinstance(days, int) or not 1 <= days <= 365:\n        return None\n    return days\n",
+        "replace": "    if isinstance(days, bool) or not isinstance(days, int):\n        return None\n    return max(1, min(days, 365))\n"
+      }
+    ],
+    "must_fail": ["a stored window of 0 is not known, and purges nothing",
+                  "a stored window of 400 is not known, and purges nothing"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "TW04",
+    "about": "the purge falls back to 30 days when the window is not known",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "        window = trash_retention_days()\n        if window is None:\n            return None\n",
+        "replace": "        window = trash_retention_days() or TRASH_RETENTION_DAYS\n"
+      }
+    ],
+    "must_fail": ["...and a 40-day-old entry survives the purge"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "TW05",
+    "about": "choosing a window leaves the not-known marker behind",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "    settings.pop(TRASH_WINDOW_UNKNOWN, None)\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["choosing a window forgets that the last one was not known"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "TW06",
+    "about": "a promise about the Trash names a number of days the app does not know",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "    return \"\" if days is None else f\" {lead} {days} days\"",
+        "replace": "    return f\" {lead} {days} days\""
+      }
+    ],
+    "must_fail": ["...and no promise names a number of days"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "TW07",
+    "about": "a Trash row counts days left against 30 when the window is not known",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "    window = trash_retention_days()\n    if window is None:\n        return None\n    elapsed",
+        "replace": "    window = trash_retention_days() or TRASH_RETENTION_DAYS\n    elapsed"
+      }
+    ],
+    "must_fail": ["...nothing is named as past the window, nor given days left"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "TW08",
+    "about": "the first window chosen after one not known is saved without asking what it removes",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "            if current is None or days < current:\n",
+        "replace": "            if current is not None and days < current:\n"
+      }
+    ],
+    "must_fail": ["window not known: choosing asks about what it would now remove"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "TW09",
+    "about": "the startup notice about the window not known is said at every start",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            save_setting(TRASH_WINDOW_UNKNOWN, \"told\")\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["window not known: ...and says it once"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "TW10",
+    "about": "the Trash panel quotes a window it does not know",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "        if days is None:\n            return (\"The length chosen before",
+        "replace": "        if False:\n            return (\"The length chosen before"
+      }
+    ],
+    "must_fail": ["window not known: the panel says nothing is removed automatically"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "TW11",
+    "about": "the retention dropdown shows a number for a window not known",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "            return \"Choose…\" if days is None else f\"{days} days\"",
+        "replace": "            return f\"{days} days\""
+      }
+    ],
+    "must_fail": ["window not known: the dropdown asks for a choice, names no number",
+                  "window not known: answering No keeps it not known, and the label"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "TW12",
+    "about": "the dropdown saves the window but keeps the not-known marker",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "            choose_trash_window(days)\n",
+        "replace": "            save_setting(\"trash_retention_days\", days)\n"
+      }
+    ],
+    "must_fail": ["window not known: answering Yes chooses 90 days and forgets the marker"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "TW13",
+    "about": "the next start never says the Trash's window could not be read",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if get_setting(TRASH_WINDOW_UNKNOWN) is True:\n",
+        "replace": "        if False:\n"
+      }
+    ],
+    "must_fail": ["window not known: the next start says the Trash keeps everything"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SF01",
+    "about": "the startup purge deletes files that living notes and kept entries still use",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "    _delete_attachment_files(\n        purged_entries, spare=attachment_names_in(list(notes or []) + kept))\n",
+        "replace": "    _delete_attachment_files(purged_entries)\n"
+      }
+    ],
+    "must_fail": ["the purge keeps a file a living note still uses",
+                  "the purge keeps a file a kept Trash entry still uses"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SF02",
+    "about": "the startup purge spares the notes' files but not those of the entries it keeps",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "spare=attachment_names_in(list(notes or []) + kept))",
+        "replace": "spare=attachment_names_in(list(notes or [])))"
+      }
+    ],
+    "must_fail": ["the purge keeps a file a kept Trash entry still uses"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SF03",
+    "about": "removing an attachment deletes a file other notes and Trash entries still show",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "        _delete_attachment_files(\n            [{\"attachments\": [removed]}],\n            spare=attachment_names_in(\n                others + list(self.trash)\n                + [{\"attachments\": self.current_attachments}]))\n",
+        "replace": "        _delete_attachment_files([{\"attachments\": [removed]}])\n"
+      }
+    ],
+    "must_fail": ["removing a file one of the notes still shows keeps it on disk",
+                  "removing a file one of the trash still shows keeps it on disk"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SF04",
+    "about": "the note's own saved copy spares the file removed from it, so it is never deleted",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "        others = [n for n in self.notes\n                  if not (isinstance(n, dict) and n.get(\"id\") == note_id)]\n",
+        "replace": "        others = list(self.notes)\n"
+      }
+    ],
+    "must_fail": ["remove_attachment deletes the file from disk"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SF05",
+    "about": "removing an attachment spares the notes' files but not the Trash's",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "                others + list(self.trash)\n",
+        "replace": "                others\n"
+      }
+    ],
+    "must_fail": ["removing a file one of the trash still shows keeps it on disk"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SF06",
+    "about": "the startup purge runs on a launch whose notes file could not be read",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if self._corrupt_notes_report is None:\n            self.trash, purged",
+        "replace": "        if True:\n            self.trash, purged"
+      }
+    ],
+    "must_fail": ["...and purges nothing from the Trash on that launch: the entry and its file are both still there"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
     "id": "OS03",
     "about": "the line above a series counts the days off its schedule as days that keep their own edits",
     "edits": [
