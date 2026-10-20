@@ -494,8 +494,10 @@ summary.
   Android, asks whether the text changed or the release changes what the
   apps keep, send or open; if so, the owner republishes the page BEFORE
   the build goes out, and the live page is compared with the file either
-  way. No build ships while the page answers with an error. The steps are
-  in [RELEASE_WINDOWS](docs/RELEASE_WINDOWS.md#the-privacy-page-at-every-release).
+  way. No build ships until the page, opened signed out, shows the
+  policy's text — a Site that is missing or private sends visitors to a
+  Google sign-in page instead of an error. The steps are in
+  [RELEASE_WINDOWS](docs/RELEASE_WINDOWS.md#the-privacy-page-at-every-release).
 
 ## Git & GitHub workflow
 

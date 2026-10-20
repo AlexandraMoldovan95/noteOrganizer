@@ -97,10 +97,13 @@ site whose address appears in the app's sources or in `docs/PRIVACY.md`;
 the Android app, in its own repository, is held to the same by review.
 
 So the apps' privacy policy is not one of the site's pages, and does not
-cover it: each page's footer says itself what the host sees, and the
-browser walk checks that it does. The site has no form either — feedback
-is a review in the stores — and `_headers` says so (`form-action
-'none'`); the build refuses a page with a `<form>` in it.
+cover it. The site has its own short notice, `src/site-privacy.html`:
+who runs it, what Netlify sees and why, the transfer to the United
+States, what the browser keeps, and how to object or complain. Every
+page's footer links it, and so does the demo's About; the browser walk
+checks both, and that the notice says those things. The site has no form
+either — feedback is a review in the stores — and `_headers` says so
+(`form-action 'none'`); the build refuses a page with a `<form>` in it.
 
 ## When the repository becomes public
 

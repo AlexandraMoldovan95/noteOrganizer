@@ -1926,7 +1926,8 @@
         el("p", { text: "Only in the desktop app: attachments, templates, backups to another computer, statistics, finding duplicates, editing a single day of a repeating note, a list you arrange by hand, find-in-note, and a calculator." }),
         el("p", null, "It mirrors version " + A.version + ". Everything you type is kept in this browser's storage, on this device, and nowhere else. ",
           el("a", { href: "../index.html", text: "Back to the site" }), " · ",
-          el("a", { href: "../how-its-built.html", text: "How the app is built" })),
+          el("a", { href: "../how-its-built.html", text: "How the app is built" }), " · ",
+          el("a", { href: "../site-privacy.html", text: "Privacy" })),
         el("button", { type: "button", class: "btn-danger-text", onclick: resetDemo }, "Reset the demo")));
     }
     body.scrollTop = 0;

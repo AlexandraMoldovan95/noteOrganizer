@@ -37,8 +37,9 @@ The apps do not encrypt these files. They are protected by your device's own sec
 Windows account, or your phone's lock.
 
 Your notes stay there until you delete them. Uninstalling the Android app deletes them from the
-phone; uninstalling the Windows app leaves its folder, which you can delete yourself. Save a
-backup first if you want to keep them.
+phone (a copy in your phone's backup to your Google account stays there, under Google's rules);
+uninstalling the Windows app leaves its folder, which you can delete yourself. Save a backup
+first if you want to keep them.
 
 ## When something leaves your device
 
@@ -52,8 +53,9 @@ Only when you do it, or when your phone's own backup is on:
   file, and nothing else of the app's.
 - **Android's own backup.** If backup is turned on in your phone's settings, Android copies the
   app's data, notes included, to your Google account, and puts it back when the app is installed
-  again. Google keeps that copy under its own privacy policy, and you can turn it off in the
-  phone's settings. The app says so on its Settings → Backup page.
+  again - or copies it straight to a new phone when you move to one. Google keeps that copy under
+  its own privacy policy, and you can turn it off in the phone's settings. The app says so on its
+  Settings → Backup page.
 - **A page you open from the app.** Settings → About opens this policy, and, once the app is in
   a store, its page there for a review. Your browser or the store's app opens it as it would any
   other page; the app sends nothing with it.
@@ -65,17 +67,21 @@ in the Microsoft Store or on Google Play: Settings → About → Feedback takes 
 app is published.
 
 The store keeps your review under its own privacy policy, and shows it publicly with the name
-you post under. I read reviews in the store's own pages for developers, which show me what the
-store shows everyone - and on Google Play also your phone's model and Android version and the
-app's version, so that I can find the problem. I answer in the store, publicly, as Note
+you post under. I read reviews in the store's own pages for developers. Besides what the store
+shows everyone, those pages show me a few details with each review: your country or region, the
+app's version and, depending on the store, your device's make and model, its Windows or Android
+version and its language. I use them only to find and fix the problem, because I have a
+legitimate interest in doing so (GDPR Article 6(1)(f)). I answer in the store, publicly, as Note
 Organizer. I keep nothing of a review outside the store, and you can change or delete your
 review there at any time.
 
 ## If you write to me
 
-The stores show the app's contact address, noteorganizer.app@gmail.com, and you can write to it
-as well. If you do, I receive your message and your email address, and use them only to answer
-you and to fix what you report.
+The app's contact address is noteorganizer.app@gmail.com, which Google Play also shows on the
+app's page, and you can write to it as well. If you do, I receive your message and your email
+address, and use them only to answer you and to fix what you report. Please don't send your
+notes, passwords or anything sensitive: a short description of the problem is enough. If
+something like that arrives, I delete it.
 
 My mailbox is Gmail: Google keeps mail in data centres around the world, the United States among
 them, and takes part in the EU–US Data Privacy Framework, which the European Commission
@@ -86,8 +92,8 @@ Apart from Google, which runs the mailbox, your message is never sold or shared 
 it leads to a fix, I may describe the problem in my own words in the project's public list of
 issues on GitHub - never with your name, your email address or your message itself.
 
-I delete a message, my answer included, once it has been answered and its problem fixed, and at
-the latest 12 months after it was sent.
+I delete a message from my mailbox, its Trash and my answer included, as soon as it has been
+answered and its problem fixed, and at the latest 3 months after it was sent.
 
 **Why I may keep it:** writing to me is your choice. I keep and use your message because I have
 a legitimate interest in answering it and fixing what it reports, which is also why you sent it
@@ -108,9 +114,8 @@ you wrote from, so that I can find it. I answer within a month.
 
 A review belongs to the store you wrote it in: you change or delete it there.
 
-If you think I have handled your data wrongly, you can complain to the data protection authority
-in your country, or to Romania's, where I live: ANSPDCP,
-[dataprotection.ro](https://www.dataprotection.ro).
+If you think I have handled your data wrongly, you can complain to a data protection authority,
+such as the one in the country where you live.
 
 ## Children
 
