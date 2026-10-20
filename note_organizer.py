@@ -248,7 +248,10 @@ from noteorganizer.core.formatting import (
 
 from noteorganizer.core.storage import (
     TRASH_RETENTION_DAYS,
+    TRASH_WINDOW_UNKNOWN,
     trash_retention_days,
+    trash_window_words,
+    choose_trash_window,
     load_settings,
     save_settings,
     mend_surrogates,
@@ -858,11 +861,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # User-defined note templates.
         self.templates = load_templates()
 
-        # Load trash and auto-purge anything past the retention window.
+        # Load trash and auto-purge anything past the retention window --
+        # but not on a launch whose notes file could not be read: the list
+        # is empty then, so no file a note still uses would be spared.
         self.trash = load_trash()
-        self.trash, purged = purge_expired_trash(self.trash)
-        if purged:
-            save_trash(self.trash)
+        if self._corrupt_notes_report is None:
+            self.trash, purged = purge_expired_trash(self.trash, self.notes)
+            if purged:
+                save_trash(self.trash)
 
         # User-chosen colors for individual calendar days (date -> #hex).
         # Each value passes sanitize_color: settings.json is hand-editable
@@ -1653,6 +1659,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     "notes_data.json from the data folder first."
                 )
             lines.append(msg)
+
+        # Set by load_settings on an unreadable settings.json; said once,
+        # and the Trash keeps everything until a window is chosen again.
+        if get_setting(TRASH_WINDOW_UNKNOWN) is True:
+            save_setting(TRASH_WINDOW_UNKNOWN, "told")
+            lines.append(
+                "Your settings file couldn't be read, so Note Organizer "
+                "doesn't know how long you chose to keep deleted notes. "
+                "Nothing will be removed from the Trash until you choose "
+                "again in Settings → Recently deleted.")
 
         # Recorded by _settle_background_work_at_close, said once.
         cut = get_setting("backup_cut_short", None, expect=dict)
@@ -15392,8 +15408,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 + f"\n\nThis day keeps its own edits, but the repeat "
                 f"({describe_recurrence(note)}) no longer lands on it, so the "
                 "calendar does not show it.\n\nA note of its own puts it back "
-                "on the calendar, on its day. The Trash keeps it "
-                f"{trash_retention_days()} days.",
+                "on the calendar, on its day. The Trash keeps it"
+                f"{trash_window_words('for')}.",
                 kind="question",
                 buttons=[("Leave it", "keep"), ("Move to the Trash", "trash"),
                          ("Make it a note", "note")],
@@ -17124,8 +17140,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not self.ask_yes_no(
             "Move to trash",
             f"Move {count} selected {noun} to the trash? "
-            f"You can restore {'it' if count == 1 else 'them'} within "
-            f"{trash_retention_days()} days.{warning}",
+            f"You can restore {'it' if count == 1 else 'them'}"
+            f"{trash_window_words('within')}.{warning}",
             # Enter answers a question now, and a reflexive Enter must not
             # be the one that deletes.
             icon="question", default="no"
@@ -21247,8 +21263,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # The window is a setting (Settings -> Recently deleted), so the
             # number is read, never written: this line promised thirty days
             # to someone who had chosen seven.
-            self.set_status("Note moved to Trash (recoverable for "
-                            f"{trash_retention_days()} days)")
+            self.set_status("Note moved to Trash (recoverable"
+                            f"{trash_window_words('for')})")
             # The status line says where it went; the toast is the way
             # back. Settings -> Recently deleted was the only route home
             # until now, and it asks you to know the trash exists.

@@ -63,6 +63,8 @@ from ..core.model import _truncate
 from ..core.storage import (
     TRASH_RETENTION_DAYS,
     trash_retention_days,
+    trash_window_words,
+    choose_trash_window,
     # Asks which entries a window has already outlived, without deleting
     # any of them: the same answer the startup purge acts on, so the
     # confirmation below cannot promise a different number from the one
@@ -1491,18 +1493,30 @@ class SettingsPageMixin:
         if files:
             attached = (f", along with {files} attached "
                         f"{'file' if files == 1 else 'files'}")
+        # `current` is None while the window before could not be read:
+        # there is no "instead of" to name, and nothing was going before.
+        instead = "" if current is None else f" instead of {current}"
         return (
             f"The trash holds {count} {noun} older than {days} days.\n\n"
-            f"Keeping deleted notes for {days} days instead of {current} "
+            f"Keeping deleted notes for {days} days{instead} "
             f"removes {'it' if count == 1 else 'them'} for good the next time "
             f"the app starts{attached}. This can't be undone."
             + self._series_warning(doomed)
         )
 
+    @staticmethod
+    def _trash_window_line():
+        """The trash panel's subtitle: the window, or -- while it is not
+        known -- that nothing leaves the Trash until one is chosen."""
+        days = trash_retention_days()
+        if days is None:
+            return ("The length chosen before couldn't be read, so nothing "
+                    "is removed automatically until you choose one below.")
+        return f"Kept for {days} days, then removed automatically."
+
     def _build_settings_trash_panel(self, parent):
         self._trash_subtitle_lbl = self._settings_subtitle(
-            parent,
-            f"Kept for {trash_retention_days()} days, then removed automatically.")
+            parent, self._trash_window_line())
 
         card = self._settings_card(parent)
         row = self._card_row(
@@ -1510,8 +1524,12 @@ class SettingsPageMixin:
             "How long the trash holds a note before removing it for good. "
             "A change applies from the next startup's cleanup.",
             first=True)
+
+        def shown(days):
+            return "Choose…" if days is None else f"{days} days"
+
         self.trash_retention_var = tk.StringVar(
-            value=f"{trash_retention_days()} days")
+            value=shown(trash_retention_days()))
 
         def set_retention(value):
             try:
@@ -1523,7 +1541,8 @@ class SettingsPageMixin:
             # entries it has already outlived. Lengthening is silent, and
             # so is shortening with nothing old enough to lose -- a
             # question nobody needs teaches people to dismiss questions.
-            if days < current:
+            # A window not known removed nothing, so any choice is shorter.
+            if current is None or days < current:
                 doomed = trash_entries_past_window(self.trash, days)
                 # No parent= here, unlike its neighbours in this file: the
                 # dialog renders as an overlay inside the app window and
@@ -1539,17 +1558,15 @@ class SettingsPageMixin:
                     # put the old one back, or the screen says 7 days while
                     # the setting says 30.
                     try:
-                        self.trash_retention_var.set(f"{current} days")
+                        self.trash_retention_var.set(shown(current))
                     except tk.TclError:
                         pass
                     return
-            save_setting("trash_retention_days", days)
+            choose_trash_window(days)
             # The subtitle above quotes the window -- keep it honest
             # without rebuilding the panel under the dropdown's feet.
             try:
-                self._trash_subtitle_lbl.config(
-                    text=f"Kept for {trash_retention_days()} days, "
-                         "then removed automatically.")
+                self._trash_subtitle_lbl.config(text=self._trash_window_line())
             except (tk.TclError, AttributeError):
                 pass
 
@@ -3253,8 +3270,8 @@ class SettingsPageMixin:
             # a safe choice -- or worse, convinced them notes were gone when
             # they were sitting in Trash.
             buttons=[("Cancel", None),
-                     (f"Delete the notes too (restorable for "
-                      f"{trash_retention_days()} days)", "delete_notes", "danger"),
+                     (f"Delete the notes too (restorable"
+                      f"{trash_window_words('for')})", "delete_notes", "danger"),
                      (f"Move them to “{PROTECTED_CATEGORY}” (keep the notes)", "move")]
         )
 
@@ -3306,7 +3323,7 @@ class SettingsPageMixin:
         if not self.ask_yes_no(
             "Move duplicates to trash",
             f"Move {len(to_trash)} selected note(s) to the trash? "
-            f"You can restore them within {trash_retention_days()} days.",
+            f"You can restore them{trash_window_words('within')}.",
             # Enter answers a question now: a reflexive one deletes nothing.
             icon="question", default="no"
         ):

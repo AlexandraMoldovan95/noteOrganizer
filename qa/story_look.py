@@ -325,6 +325,24 @@ app.toggle_settings_panel('trash')
 app.update()
 app.update_idletasks()
 """),
+    # The Trash when the window chosen before could not be read: a line
+    # that says nothing leaves by itself, a selector reading Choose…, and
+    # rows with no days left. Last, because the marker stays in settings.
+    ("19-trash-window-not-known", """
+app._dismiss_mini_popup()
+NO.save_setting(NO.TRASH_WINDOW_UNKNOWN, 'told')
+app.trash = [
+    {'id': 9201, 'title': 'Kept since the summer', 'body': 'b',
+     'category': 'General', 'deleted_at': _days_ago(80)},
+    {'id': 9202, 'title': 'Deleted last week', 'body': 'b',
+     'category': 'General', 'deleted_at': _days_ago(6)},
+]
+app.show_settings_page()
+app.update()
+app.toggle_settings_panel('trash')
+app.update()
+app.update_idletasks()
+"""),
 ]
 
 SEED = [

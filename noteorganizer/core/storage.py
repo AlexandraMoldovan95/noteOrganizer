@@ -25,15 +25,45 @@ from .formatting import (normalize_formatting, normalize_paragraphs,
 # through trash_retention_days() below.
 TRASH_RETENTION_DAYS = 30
 
+# Set by load_settings on an unreadable settings.json, kept by every
+# writer until choose_trash_window; True, then "told" once the startup
+# notice has said so. ISSUES_LOG: "The Trash that forgot its window".
+TRASH_WINDOW_UNKNOWN = "desktop_trash_window_unknown"
+
 
 def trash_retention_days():
-    """The trash retention window in days: the user's setting or the default,
-    clamped to 1-365 so a hand-edited 0, -3 or "forever" cannot make startup
-    purge everything. Read fresh each call: the setting can change mid-run."""
-    days = get_setting("trash_retention_days")
-    if isinstance(days, bool) or not isinstance(days, int):
+    """The trash retention window in days, or None when it is not known --
+    settings.json unreadable (TRASH_WINDOW_UNKNOWN), or a stored value that
+    is not a whole number from 1 to 365 -- and then nothing leaves the
+    Trash by itself. Never chosen, it is the default. Read fresh each call:
+    the setting can change mid-run."""
+    settings = load_settings()
+    if settings.get(TRASH_WINDOW_UNKNOWN):
+        return None
+    if "trash_retention_days" not in settings:
         return TRASH_RETENTION_DAYS
-    return max(1, min(days, 365))
+    days = settings["trash_retention_days"]
+    if isinstance(days, bool) or not isinstance(days, int) or not 1 <= days <= 365:
+        return None
+    return days
+
+
+def trash_window_words(lead):
+    """" within 30 days" -- *lead* and the window in force, for a promise a
+    delete makes about the Trash -- or "" while the window is not known,
+    when no number of days would be true."""
+    days = trash_retention_days()
+    return "" if days is None else f" {lead} {days} days"
+
+
+def choose_trash_window(days):
+    """Save the window the person chose, and with it forget that the one
+    before could not be read: one write, so no start can see either half
+    alone. Returns what save_settings returns."""
+    settings = load_settings()
+    settings["trash_retention_days"] = days
+    settings.pop(TRASH_WINDOW_UNKNOWN, None)
+    return save_settings(settings)
 
 
 # ---- Settings file (read/modify/write, so keys never clobber each other) ----
@@ -50,6 +80,9 @@ def load_settings():
         # Reached only when the file exists but held nothing usable —
         # keep its bytes before the next save replaces them.
         _preserve_corrupt(paths.SETTINGS_FILE)
+        # And say that the Trash's window went with them, or the next
+        # write turns "unknown" into "never chosen" (TRASH_WINDOW_UNKNOWN).
+        return {TRASH_WINDOW_UNKNOWN: True}
     return {}
 
 
@@ -263,13 +296,15 @@ def _delete_attachment_files(notes_or_entries, spare=()):
 def _trash_cutoff(days=None):
     """The moment an entry has to predate to count as expired.
 
-    `days=None` means the window currently in force. A number is clamped
-    the same way trash_retention_days() clamps a stored one, so a window
-    being PREVIEWED cannot be judged by looser arithmetic than the window
-    that will actually be applied.
+    `days=None` means the window currently in force, and gives None while
+    that window is not known: then nothing has expired. A number being
+    PREVIEWED is clamped to 1-365, so no preview can name more than a
+    window the dropdown offers would remove.
     """
     if days is None:
         window = trash_retention_days()
+        if window is None:
+            return None
     elif isinstance(days, bool) or not isinstance(days, int):
         window = TRASH_RETENTION_DAYS
     else:
@@ -281,8 +316,9 @@ def _trash_entry_is_past(entry, cutoff):
     """THE single answer to "has this entry outlived the window?", asked by
     the startup purge and by trash_entries_past_window, so a dialog names
     what a shorter window will destroy by the very rule the purge uses. An
-    unreadable deleted_at is never past: better kept too long than early."""
-    if not isinstance(entry, dict):
+    unreadable deleted_at is never past, and nothing is past a window not
+    known (cutoff None): better kept too long than early."""
+    if cutoff is None or not isinstance(entry, dict):
         return False
     try:
         when = datetime.strptime(entry.get("deleted_at", "") or "",
@@ -305,13 +341,13 @@ def trash_entries_past_window(trash, days=None):
             if _trash_entry_is_past(entry, cutoff)]
 
 
-def purge_expired_trash(trash):
+def purge_expired_trash(trash, notes):
     """Remove entries older than the retention window. Returns (kept, purged
-    count). Entries with a missing/invalid deleted_at are kept (fail-safe: we'd
-    rather keep a note too long than delete it early). Attachment files
-    belonging to purged notes are permanently deleted too — this is the one
-    place purging happens automatically, without an explicit user action, so
-    it must not be the one place that silently leaves orphaned files behind."""
+    count). An entry with a missing/invalid deleted_at is kept: better too
+    long than early. The purged notes' attached files go too -- the one
+    deletion nobody asks for must not leave orphans -- except a file *notes*
+    or a kept entry still uses, as Delete and Empty trash spare it
+    (ISSUES_LOG: "The Trash that forgot its window")."""
     cutoff = _trash_cutoff()
     kept = []
     purged_entries = []
@@ -320,7 +356,8 @@ def purge_expired_trash(trash):
             purged_entries.append(entry)
         else:
             kept.append(entry)
-    _delete_attachment_files(purged_entries)
+    _delete_attachment_files(
+        purged_entries, spare=attachment_names_in(list(notes or []) + kept))
     return kept, len(purged_entries)
 
 
@@ -605,13 +642,17 @@ def move_notes_to_trash(trash, notes_to_trash):
 
 
 def days_left_in_trash(deleted_at):
-    """How many days until this trashed note auto-purges. None if unknown."""
+    """How many days until this trashed note auto-purges. None if unknown --
+    the stamp unreadable, or the window (then it never purges by itself)."""
     try:
         when = datetime.strptime(deleted_at, "%Y-%m-%d %H:%M:%S")
     except (ValueError, TypeError):
         return None
+    window = trash_retention_days()
+    if window is None:
+        return None
     elapsed = (datetime.now() - when).days
-    return max(0, trash_retention_days() - elapsed)
+    return max(0, window - elapsed)
 
 
 def restore_from_trash(notes, trash, entry):

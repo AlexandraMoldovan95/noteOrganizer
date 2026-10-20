@@ -724,6 +724,7 @@
   "_toggle_selection_mode": "(self)",
   "_toggles_its_popup": "(self, btn, open_popup)",
   "_top_up_list": "(self)",
+  "_trash_window_line": "()",
   "_trim_fmt_journal": "(self, journal)",
   "_turn_off_rescue_copy": "(self, note)",
   "_typed_date": "(self)",

@@ -292,9 +292,22 @@ else:
 # with no trace — and the next save overwrote the corrupt file, turning
 # recoverable corruption into permanent loss. The loader now preserves
 # the unreadable original aside and the startup notice says so plainly.
-import glob as _glob5, time as _time5
+import glob as _glob5, time as _time5, json as _json5c, os
 with open('notes_data.json', 'w', encoding='utf-8') as _f5:
     _f5.write('this is not json')
+# And an expired Trash entry whose file a note in that unread file may
+# show: the startup purge spares files the notes use, and on this launch
+# there are no notes to ask, so it must not run at all.
+os.makedirs(NO.ATTACHMENTS_DIR, exist_ok=True)
+_cp5_file = os.path.join(NO.ATTACHMENTS_DIR, 'corrupt_launch_shared.txt')
+with open(_cp5_file, 'w') as _f5:
+    _f5.write('a note in the unread file shows me')
+with open('trash.json', 'w', encoding='utf-8') as _f5:
+    _json5c.dump([{'id': 77, 'title': 'old copy',
+                   'deleted_at': '2020-01-01 00:00:00',
+                   'attachments': [{'filename': 'x.txt',
+                                    'stored_as': 'corrupt_launch_shared.txt'}]}],
+                 _f5)
 _msgs5 = []
 app5c = NO.NoteOrganizer(); app5c._poll_active_dirty = lambda: None
 app5c.show_info = lambda t, m: _msgs5.append((t, m))
@@ -310,7 +323,14 @@ check('the unreadable original was preserved bit for bit',
       bool(_corr5)
       and open(_corr5[0], encoding='utf-8').read() == 'this is not json')
 check('the app starts with an empty list, not a crash', app5c.notes == [])
+check('...and purges nothing from the Trash on that launch: the entry and '
+      'its file are both still there',
+      len(app5c.trash) == 1 and os.path.isfile(_cp5_file))
 app5c.destroy()
+with open('trash.json', 'w', encoding='utf-8') as _f5:
+    _f5.write('[]')
+if os.path.isfile(_cp5_file):   # a regression purged it; still reach the footer
+    os.remove(_cp5_file)
 
 # When even the preserve fails, the notice must still appear and carry
 # the do-not-save warning — the corrupt flag travels separately from

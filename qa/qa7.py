@@ -101,7 +101,7 @@ path_c = os.path.join(NO.ATTACHMENTS_DIR, fname_c)
 with open(path_c, 'w') as f: f.write('x')
 old_entry = {'id': 920, 'title': 'VeryOld', 'attachments': [{'filename': 'old.txt', 'stored_as': fname_c}],
              'deleted_at': '2020-01-01 00:00:00'}
-kept, purged_count = NO.purge_expired_trash([old_entry])
+kept, purged_count = NO.purge_expired_trash([old_entry], app.notes)
 check('purge_expired_trash removes the attachment file', not os.path.isfile(path_c))
 check('purge_expired_trash reports 1 purged', purged_count == 1 and len(kept) == 0)
 

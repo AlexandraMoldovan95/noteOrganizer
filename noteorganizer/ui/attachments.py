@@ -38,7 +38,8 @@ from PIL import Image, ImageTk
 
 from ..core import paths
 from ..core.model import MAX_ATTACHMENTS
-from ..core.storage import _attachment_path_within, _delete_attachment_files
+from ..core.storage import (_attachment_path_within, _delete_attachment_files,
+                            attachment_names_in)
 
 
 class AttachmentsMixin:
@@ -129,7 +130,18 @@ class AttachmentsMixin:
         if index is None:
             return
         removed = self.current_attachments.pop(index)
-        _delete_attachment_files([{"attachments": [removed]}])
+        # Not a file another note or a Trash entry still shows -- a
+        # duplicate or an import that could not copy it kept its name --
+        # nor one this note lists twice. This note's own saved copy is left
+        # out: it names the file until the autosave below, and would spare
+        # it for ever.
+        others = [n for n in self.notes
+                  if not (isinstance(n, dict) and n.get("id") == note_id)]
+        _delete_attachment_files(
+            [{"attachments": [removed]}],
+            spare=attachment_names_in(
+                others + list(self.trash)
+                + [{"attachments": self.current_attachments}]))
         self.refresh_attachments_list()
         self._schedule_autosave()
 
