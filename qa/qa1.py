@@ -975,6 +975,97 @@ app.update()
 check('Backspace elsewhere in the item is left to Tk, deleting one character',
       app._on_body_backspace(None) is None)
 
+# ---- Enter and Backspace where the caret or a selection meets a marker ----
+# Home, then Enter, put the new marker in front of the old one ("• • milk").
+# Enter over selected words left them in place with a new item cut into
+# them. Backspace over a selection ending just after a marker took the
+# marker and kept the words. Real keys, pressed and released.
+def _list_key(keysym):
+    take_focus(app.body_text)
+    app.body_text.event_generate(f'<KeyPress-{keysym}>', keysym=keysym,
+                                 when='now')
+    app.body_text.event_generate(f'<KeyRelease-{keysym}>', keysym=keysym,
+                                 when='now')
+    app.update()
+
+
+def _listed(text, kind='bullet'):
+    set_body(text)
+    select_all_body()
+    app._list_buttons[kind].invoke()
+    clear_selection()
+
+
+for _lk_col in (0, 1):
+    _listed('milk')
+    app.body_text.mark_set('insert', f'1.{_lk_col}')
+    _list_key('Return')
+    check(f'Enter at column {_lk_col} of a bulleted item leaves an empty item '
+          f'above, the words below ({body()!r})',
+          body() == '• \n• milk'
+          and app._extract_paragraphs(app.body_text)
+          == [{'line': 0, 'kind': 'bullet'}, {'line': 1, 'kind': 'bullet'}])
+_list_key('Return')
+check(f'...and pressed again, a second empty item, no doubled marker ({body()!r})',
+      body() == '• \n• \n• milk')
+_listed('first', 'number')
+app.body_text.mark_set('insert', '1.1')
+_list_key('Return')
+check(f'Enter inside a number marker: an empty item above, counted ({body()!r})',
+      body() == '1. \n2. first')
+
+_listed('milk and eggs')
+app.body_text.tag_add('bold', '1.7', '1.11')
+app.body_text.edit_reset()
+app.body_text.tag_add('sel', '1.7', '1.11')
+app.body_text.mark_set('insert', '1.11')
+_list_key('Return')
+check(f'Enter over selected words in an item replaces them with the new item '
+      f'({body()!r})',
+      body() == '• milk \n• eggs'
+      and not app.body_text.tag_ranges('sel'))
+app._body_undo_redo('undo')
+app.update()
+check(f'...and one Ctrl+Z gives the words back, bold and all ({body()!r})',
+      body() == '• milk and eggs'
+      and 'bold' in app.body_text.tag_names('1.8'))
+_listed('milk')
+app.body_text.tag_add('sel', '1.2', '1.6')
+app.body_text.mark_set('insert', '1.6')
+_list_key('Return')
+check(f'Enter over all of an item\'s words keeps its marker: an empty item, '
+      f'then the new one ({body()!r})',
+      body() == '• \n• ')
+_listed('one\ntwo\nthree\nfour', 'number')
+app.body_text.tag_add('sel', '2.5', '3.3')
+app.body_text.mark_set('insert', '3.3')
+_list_key('Return')
+check(f'Enter over a selection across numbered items counts them again '
+      f'({body()!r})',
+      body() == '1. one\n2. tw\n3. three\n4. four')
+
+_listed('milk')
+app.body_text.tag_add('sel', '1.2', '1.6')
+app.body_text.mark_set('insert', '1.2')
+_list_key('BackSpace')
+check(f'Backspace over a selection that ends at the marker deletes the words, '
+      f'not the marker ({body()!r})',
+      body() == '• ')
+_listed('milk')
+app._set_paragraph_indent(1, 1)
+app.body_text.tag_add('sel', '1.2', '1.6')
+app.body_text.mark_set('insert', '1.2')
+_list_key('BackSpace')
+check('...and on a nested item it leaves the depth alone',
+      app._paragraph_indent_of(app.body_text, 1) == 1
+      and app._list_kind_of(app.body_text, 1) == 'bullet')
+_listed('milk\neggs')
+app.body_text.mark_set('insert', '1.2')
+select_all_body()
+_list_key('BackSpace')
+check(f'Ctrl+A with the caret after a marker, then Backspace, empties the '
+      f'note ({body()!r})', body() == '')
+
 # ---- Marker and indent tag must not drift apart (regression) ----
 # The indent tag first covered each line's trailing newline. Tk hands a tag
 # on to text inserted between two characters that both carry it, so the next
@@ -2982,6 +3073,41 @@ check(f'typed in a cell, then merged left from its own menu: the typed word '
       f'stays ({lines_now()[2]!r})',
       _cm_pressed
       and core_tables.split_row(lines_now()[2]) == ['apple seven', '<', 'ripe'])
+# Enter over words selected in an open cell replaces them, as it does
+# anywhere else; the cell's own Enter put the line break in and left them.
+set_body(_cm_table)
+app._render_table_grids()
+app.update()
+app._open_cell_editor(app._grid_at_line(1), 1, 2)
+_cm_e = app._cell_editor['entry']
+_cm_e.delete('1.0', 'end')
+_cm_e.insert('1.0', 'very ripe now')
+_cm_e.tag_add('sel', '1.5', '1.10')
+_cm_e.mark_set('insert', '1.10')
+app._editor_newline()
+app._commit_cell_editor()
+app.update()
+_cm_cell = core_tables.split_row(lines_now()[2])[2]
+check(f'Enter over words selected in a cell replaces them with the line '
+      f'break ({_cm_cell!r})',
+      'ripe' not in _cm_cell and 'very' in _cm_cell and 'now' in _cm_cell
+      and '<br>' in _cm_cell)
+# Bold over two cells keeps the italic one italic: the cells got one
+# answer for both styles, and the italic went.
+set_body(_cm_table)
+app._render_table_grids()
+app.update()
+_cm_info = app._grid_at_line(1)
+app._grid_apply_style(_cm_info, (1, 1, 1, 1), 'italic')
+app.update()
+_cm_info = app._grid_at_line(1)
+app._grid_apply_style(_cm_info, (1, 0, 1, 1), 'bold')
+app.update()
+_cm_info = app._grid_at_line(1)
+_cm_paint = [(app._grid_cell_paint(_cm_info, 1, c)['bold'],
+              app._grid_cell_paint(_cm_info, 1, c)['italic']) for c in (0, 1)]
+check(f'Bold over two cells keeps the italic one italic ({_cm_paint})',
+      _cm_paint == [(True, False), (True, True)])
 
 set_body(_cm_table)
 app._render_table_grids()
@@ -6681,6 +6807,47 @@ check(f'bold, italic or plain given under a size or a font is drawn at once '
       and _bs_seen['Bold on, then typing'] == (20, 'bold', 'roman')
       and _bs_seen['a bold paste'] == (20, 'bold', 'roman')
       and _bs_seen['a letter glued onto the bold word'] == (20, 'bold', 'roman'))
+
+
+# Ctrl+B or Ctrl+I over a selection keeps each stretch's OTHER style: the
+# whole selection got one answer for both, so an italic word in a sentence
+# made bold lost its italic. Real Ctrl+B / Ctrl+I.
+def _wb_spans():
+    return sorted((s['start'], s['end'], s['style'])
+                  for s in app._extract_formatting(app.body_text))
+
+
+def _wb_press(letter):
+    select('1.0', '1.end')
+    take_focus(app.body_text)
+    app.body_text.event_generate(f'<Control-{letter}>')
+    app.update()
+    clear_selection()
+
+
+set_body('one two three')
+app.body_text.tag_add('italic', '1.4', '1.7')
+_wb_press('b')
+_wb_on = _wb_spans()
+_wb_drawn = _drawn('1.5')
+check(f'Ctrl+B over a sentence keeps its italic word italic ({_wb_on}, {_wb_drawn})',
+      _wb_on == [(0, 4, 'bold'), (4, 7, 'bold_italic'), (7, 13, 'bold')]
+      and _wb_drawn[1:] == ('bold', 'italic'))
+_wb_press('b')
+check(f'...and Ctrl+B again takes the bold off and leaves the italic '
+      f'({_wb_spans()})', _wb_spans() == [(4, 7, 'italic')])
+set_body('one two three')
+app.body_text.tag_add('bold', '1.4', '1.7')
+_wb_press('i')
+check(f'Ctrl+I over a sentence keeps its bold word bold ({_wb_spans()})',
+      _wb_spans() == [(0, 4, 'italic'), (4, 7, 'bold_italic'),
+                      (7, 13, 'italic')])
+_sized_line({'start': 4, 'end': 9, 'style': 'italic'})
+_wb_press('b')
+_wb_sized = (_drawn('1.1'), _drawn('1.5'))
+check(f'...under a size too, each stretch drawn with both ({_wb_sized})',
+      _wb_sized == ((20, 'bold', 'roman'), (20, 'bold', 'italic')))
+set_body('')
 # A size picked with nothing selected and typed inside a run of another size
 # draws at the size picked: the letters took the run's composite too, and Tk
 # drew whichever of the two tags was made later.

@@ -719,6 +719,18 @@ def _checklist_rows_current(drawn, items, theme):
                     for rec, item in zip(drawn["rows"], items)))
 
 
+def _selection_holds_caret(text_widget):
+    """Tk's own test before a key replaces the selection (its
+    TextCursorInSelection): there is one, and the caret is in it, ends
+    included. A handler that takes a key over from Tk asks it too."""
+    try:
+        return bool(text_widget.tag_ranges("sel")
+                    and text_widget.compare("sel.first", "<=", "insert")
+                    and text_widget.compare("insert", "<=", "sel.last"))
+    except tk.TclError:
+        return False
+
+
 def _table_edge_holds(app, index):
     """Does a drawn table's edge hold the body character at *index*?
 
@@ -3813,6 +3825,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         entry = editor["entry"]
         self._editor_flush_type_paint()
         try:
+            # Taken over from Tk's own Enter, which replaces a selection
+            # first: the selected words stayed, a line break cut into them.
+            if _selection_holds_caret(entry):
+                entry.delete("sel.first", "sel.last")
             entry.insert("insert", "\n")
             entry.tag_add("cellalign", "1.0", "end")
             caret = entry.index("insert")
@@ -5043,9 +5059,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """
         b = self.body_text
         try:
-            if (selection_wins and b.tag_ranges("sel")
-                    and b.compare("sel.first", "<=", "insert")
-                    and b.compare("insert", "<=", "sel.last")):
+            if selection_wins and _selection_holds_caret(b):
                 return False
             if not forward and b.compare("insert", "==", "1.0"):
                 return False
@@ -6528,20 +6542,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         b = self.body_text
         if kind in ("bold", "italic"):
-            is_bold = all(self._selection_has_style(
-                b, {"bold", "bold_italic"}, s, e) for s, e in ranges)
-            is_italic = all(self._selection_has_style(
-                b, {"italic", "bold_italic"}, s, e) for s, e in ranges)
-            if kind == "bold":
-                is_bold = not is_bold
-            else:
-                is_italic = not is_italic
-            tag = self._font_tag_for(is_bold, is_italic)
-            for s, e in ranges:
-                for t in self._FONT_STYLES:
-                    b.tag_remove(t, s, e)
-                if tag:
-                    b.tag_add(tag, s, e)
+            # On unless every cell has it; each keeps its own other style.
+            on = not all(self._selection_has_style(
+                b, {kind, "bold_italic"}, s, e) for s, e in ranges)
+            self._set_weight_by_stretch(ranges, kind, on)
         elif kind in ("underline", "strike"):
             on = all(self._selection_has_style(b, {kind}, s, e)
                      for s, e in ranges)
@@ -8484,13 +8488,53 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._render_table_grids()
             self._schedule_autosave()
             return "break"
+        if _selection_holds_caret(self.body_text):
+            return self._list_return_over_selection()
         kind = self._list_kind_of(self.body_text, line_no)
         if not kind:
             return None
+        return self._continue_list(line_no, kind)
+
+    def _list_return_over_selection(self):
+        """Enter with words selected, the caret in them, on a list line.
+
+        Tk's own Enter deletes the selection first; the list's Enter takes
+        over from it and did not, so the new item was cut into the middle
+        of what was selected. Deleted here, then the list goes on from
+        where the words were, as one Ctrl+Z. All of an item's words
+        selected keeps its marker -- an empty item, the new one under it.
+        """
+        b = self.body_text
+        line_no = int(b.index("sel.first").split(".")[0])
+        if not self._list_kind_of(b, line_no):
+            return None
+        self._undo_atom_begin()
+        try:
+            first = b.index("sel.first")
+            b.delete("sel.first", "sel.last")
+            b.mark_set("insert", first)
+            # A selection over several lines leaves pieces of their tags.
+            self._resync_list_tags(line_no)
+            kind = self._list_kind_of(b, line_no)
+            if kind:
+                return self._continue_list(line_no, kind, leave_if_empty=False)
+            # The marker went with the words: a plain line break, Tk's own.
+            b.insert("insert", "\n")
+            self._resync_list_tags(line_no + 1)
+            self._renumber_lists()
+            b.see("insert")
+            self._schedule_autosave()
+            return "break"
+        finally:
+            self._undo_atom_end()
+
+    def _continue_list(self, line_no, kind, leave_if_empty=True):
+        """Enter on list line *line_no*: a new item, or -- on an item with
+        no words, unless *leave_if_empty* is False -- out of the list."""
         line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
         _, marker, rest = parse_list_marker(line)
         indent = self._paragraph_indent_of(self.body_text, line_no)
-        if not rest.strip():
+        if leave_if_empty and not rest.strip():
             # An empty nested item steps out one level first. Pressing Enter
             # twice to leave a list is muscle memory, but from three levels
             # deep it should climb out rather than drop straight to a plain
@@ -8503,6 +8547,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._clear_paragraph_tags(self.body_text, line_no)
             self._renumber_lists()
             return "break"
+        # Before the marker's end (Home, then Enter) the new marker went in
+        # front of the old one: "• • milk". From its end the same Enter
+        # leaves an empty item above, the words below, as Word does.
+        col = int(self.body_text.index("insert").split(".")[1])
+        if col < len(marker):
+            self.body_text.mark_set("insert", f"{line_no}.{len(marker)}")
         self.body_text.insert("insert", "\n" + marker_for(kind, 1, indent))
         new_line = line_no + 1
         self.body_text.tag_add(
@@ -8545,6 +8595,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # before the caret is the table's own line break: nothing to take.
         if self._deletion_joins_table(False):
             return "break"
+        # Words selected: Tk deletes them, as everywhere else. The marker
+        # shortcut below asked only where the caret stood, so a selection
+        # ending just after a marker lost the marker and kept the words.
+        if _selection_holds_caret(self.body_text):
+            return None
         index = self.body_text.index("insert")
         line_no, col = (int(p) for p in index.split("."))
         kind = self._list_kind_of(self.body_text, line_no)
@@ -8740,40 +8795,39 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             except tk.TclError:
                 pass
 
-    def _weigh_font_tags(self, start, end, is_bold, is_italic):
-        """Ctrl+B or Ctrl+I over a selection left every character of it the
-        same weight and slant: give each piece of a composite font tag inside
-        it the composite with its own size and family and that weight.
+    def _set_weight_by_stretch(self, ranges, style, on):
+        """Bold or italic (*style*) turned *on* or off over *ranges*, each
+        stretch keeping its own other one: Ctrl+B over "one *two* three"
+        leaves "two" italic. The whole selection got one answer for both,
+        so an italic word in it lost its italic.
 
-        A size or a font is drawn by one tag with the weight and slant folded
-        in (_ensure_font_tag), configured after bold and italic so that it
-        wins the font. Bold or italic changed under it, the plain tag alone,
-        was saved and lit the toolbar and was drawn as before until the note
-        was opened again. Laid again across the whole note instead, one
-        word's Ctrl+B in a note set in a font took 250 ms at 8,000 styled
-        words; this costs what the selection holds."""
+        By stretches, where none of the plain font tags starts or stops,
+        as _fit_font_tags goes -- which then gives each stretch under a
+        size or a font the composite its weight now calls for, the way a
+        character typed or pasted gets it, at what the selection costs."""
         b = self.body_text
-        for t in [t for t in b.tag_names() if parse_font_tag(t)]:
-            _bold, _italic, size, family = parse_font_tag(t)
-            want = self._ensure_font_tag(b, is_bold, is_italic, size, family)
-            if want == t:
-                continue
-            pieces = []
-            covering = b.tag_prevrange(t, start)
-            if covering and b.compare(covering[1], ">", start):
-                pieces.append((start, covering[1]))
-            at = start
-            while True:
-                found = b.tag_nextrange(t, at, end)
-                if not found:
-                    break
-                pieces.append(found)
-                at = found[1]
-            for lo, hi in pieces:
-                if b.compare(hi, ">", end):
-                    hi = end
-                b.tag_remove(t, lo, hi)
-                b.tag_add(want, lo, hi)
+        for start, end in ranges:
+            start, end = b.index(start), b.index(end)
+            points = [start]
+            for _key, tag, index in b.dump(start, end, tag=True):
+                if tag in self._FONT_STYLES and b.compare(index, ">", points[-1]):
+                    points.append(index)
+            if b.compare(points[-1], "<", end):
+                points.append(end)
+            for lo, hi in zip(points, points[1:]):
+                plain = [t for t in b.tag_names(lo) if t in self._FONT_STYLES]
+                is_bold = "bold" in plain or "bold_italic" in plain
+                is_italic = "italic" in plain or "bold_italic" in plain
+                if style == "bold":
+                    is_bold = on
+                else:
+                    is_italic = on
+                for t in plain:
+                    b.tag_remove(t, lo, hi)
+                tag = self._font_tag_for(is_bold, is_italic)
+                if tag:
+                    b.tag_add(tag, lo, hi)
+            self._fit_font_tags(start, end)
 
     def _fit_font_tags(self, start, end, like=None, size=None, family=None):
         """Give each of the characters from *start* to *end* -- just typed
@@ -9117,19 +9171,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # wins. So the two can't just be independent on/off tags the way
             # underline/strike are; the pair is tracked as one of exactly
             # four mutually exclusive font tags (none/bold/italic/both).
-            is_bold = self._selection_has_style(self.body_text, {"bold", "bold_italic"}, start, end)
-            is_italic = self._selection_has_style(self.body_text, {"italic", "bold_italic"}, start, end)
-            if style == "bold":
-                is_bold = not is_bold
-            else:
-                is_italic = not is_italic
-            for t in self._FONT_STYLES:
-                self.body_text.tag_remove(t, start, end)
-            tag = self._font_tag_for(is_bold, is_italic)
-            if tag:
-                self.body_text.tag_add(tag, start, end)
-            # Under a size or a font, what is drawn is the composite tag.
-            self._weigh_font_tags(start, end, is_bold, is_italic)
+            # On unless all of it has the style already; the other one is
+            # each stretch's own (_set_weight_by_stretch).
+            on = not self._selection_has_style(
+                self.body_text, {style, "bold_italic"}, start, end)
+            self._set_weight_by_stretch([(start, end)], style, on)
         else:
             already_on = self._selection_has_style(self.body_text, {style}, start, end)
             if already_on:
@@ -16681,8 +16727,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # a selection holding a table, the table went. Insert does
             # nothing there.
             try:
-                if (b.compare("sel.first", "<=", "insert")
-                        and b.compare("insert", "<=", "sel.last")
+                if (_selection_holds_caret(b)
                         and b.tag_nextrange(self.TABLE_HIDE_TAG,
                                             "sel.first", "sel.last")):
                     return "break"
@@ -16758,12 +16803,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # Tk's own Insert pastes the selection, deleting it first when
             # the caret is in it (tk::TextInsert): a replace, as typing over
             # it is. Its style came back plain, and Ctrl+Z left it so.
-            try:
-                if (b.compare("sel.first", "<=", "insert")
-                        and b.compare("insert", "<=", "sel.last")):
-                    return sel, "replace"
-            except tk.TclError:
-                pass
+            if _selection_holds_caret(b):
+                return sel, "replace"
             return None, None
         char = getattr(event, "char", "") or ""
         # Control+Alt is AltGr on Windows, which types a character.
