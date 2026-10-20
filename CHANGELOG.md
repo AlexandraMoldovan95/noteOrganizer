@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.95.391](#095391--2026-10-20) | 2026-10-20 | The Trash never empties itself by a length it could not read; a "²" in a date no longer stops a note saving; table merges from the menu keep both texts; Enter, Backspace and bold do what you expect in lists and over a selection. |
 | [0.95.382](#095382--2026-10-15) | 2026-10-15 | Send feedback from Settings → About: a short form in your browser, showing what the app adds — and nothing from your notes; crash logs that say which version and what size of notebook they came from. |
 | [0.94.382](#094382--2026-10-15) | 2026-10-15 | Closing the app in the middle of a backup leaves nothing behind and the next start says so; a note with many tables opens faster, and changing the theme no longer redraws its tables. |
 | [0.94.379](#094379--2026-10-15) | 2026-10-15 | A backup of any size comes back in, and a share code is never one its import refuses; a long notebook stays quick when one note moves, a big import no longer freezes, and a day left open on the Calendar waits instead of rebuilding at every save. |
@@ -103,6 +104,10 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+---
+
+## [0.95.391] — 2026-10-20
 
 ### Fixed
 
