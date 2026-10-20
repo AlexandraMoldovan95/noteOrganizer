@@ -277,7 +277,11 @@ def read_date(text, settled=False, today=None):
     words = []
     weekdays = 0
     for part in _DATE_PART.findall(text):
-        if part[0].isdigit():
+        # A figure from 0 to 9 only: str.isdigit() also passes "²", "①" and
+        # "₂", which the patterns above take for letters, so "17²" reached
+        # the match below, found no figure there, and raised -- and with it
+        # in the date field, every autosave of the note.
+        if part[0] in "0123456789":
             numbers.append(_DATE_FIGURES.match(part).group())
         elif _fold(part) in _DATE_FILLERS:
             continue

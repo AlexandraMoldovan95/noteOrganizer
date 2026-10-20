@@ -210,6 +210,23 @@ RULES = [
         window=1,
     ),
     Rule(
+        question="is this a figure from 0 to 9?",
+        owner='isdecimal(), what int() reads, or a test against "0123456789"',
+        # str.isdigit() is True for superscript and circled figures too --
+        # "²", "①", "₂" -- which int() refuses and the patterns, written
+        # [0-9], never match. "17²" in the date field passed read_date's
+        # test as a figure, failed its match, and every autosave of the
+        # note raised. Three readers had been fixed one at a time before
+        # (a day of the month, a year, the calculator); this stops the
+        # next. Code only, before any "#": the comments that tell this
+        # story name it.
+        pattern=re.compile(r"(?m)^[^#\n]*\.isdigit\(\)"),
+        allowed={
+            "_day": "asked only after head.isascii(): no figure but 0-9 reaches it",
+        },
+        window=1,
+    ),
+    Rule(
         question="what has the person typed in the date field?",
         owner="_typed_date",
         # The field read by hand. Five readers each compared it with its
@@ -288,8 +305,10 @@ def main():
     for rel, lineno, func, rule in problems:
         print("  %s:%d  in %s()" % (rel, lineno, func))
         print("      question : %s" % rule.question)
-        print("      owned by : %s%s" % (rule.owner,
-                                         "" if rule.owner.isupper() else "()"))
+        # A function's name gets its "()"; a constant, or an owner that is
+        # a way of asking rather than one function, is printed as it is.
+        plain = rule.owner.isupper() or " " in rule.owner
+        print("      owned by : %s%s" % (rule.owner, "" if plain else "()"))
         print("      Use the owner, or -- if this answer is genuinely")
         print("      different -- add it to that rule's `allowed` in")
         print("      tools/check_one_definition.py WITH the reason, so the")
