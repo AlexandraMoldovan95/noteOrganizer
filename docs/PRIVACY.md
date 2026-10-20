@@ -126,8 +126,9 @@ The only thing about you that I ever hold is a feedback message you sent, with t
 came from. You can ask me for a copy of it, to correct it, to delete it sooner, to stop using it
 while a question about it is settled, or to send it to you in a file you can take elsewhere; and
 you can object to my keeping it. Ask through the
-[feedback form](https://note-organizer-8f7772.netlify.app/feedback.html), with the email address
-you sent your message from (or, if you gave none, a line of the message), so that I can find it.
+[feedback form](https://note-organizer-8f7772.netlify.app/feedback.html) or by email at
+[noteorganizer.app@gmail.com](mailto:noteorganizer.app@gmail.com), with the email address you
+sent your message from (or, if you gave none, a line of the message), so that I can find it.
 I answer within a month.
 
 If you think I have handled your data wrongly, you can complain to the data protection authority
@@ -148,4 +149,6 @@ new date at the top.
 
 I am Alexandra Moldovan, in Romania, and I am responsible for the data described on this page.
 Questions about privacy, or about this policy, are welcome through the
-[feedback form](https://note-organizer-8f7772.netlify.app/feedback.html).
+[feedback form](https://note-organizer-8f7772.netlify.app/feedback.html), or by email at
+[noteorganizer.app@gmail.com](mailto:noteorganizer.app@gmail.com), an address kept for Note
+Organizer alone.

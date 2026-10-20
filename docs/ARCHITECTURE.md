@@ -1301,7 +1301,9 @@ follow from that choice, made on 2026-10-15:
 - **No GitHub account needed**, which most people do not have; the repository's own bug form
   stays for people who do.
 - **The owner's address appears nowhere** — not in the app, not on the page. It lives only in
-  the host's settings, and answers go out from an address kept for the project.
+  the host's settings, and answers go out from an address kept for the project. That project
+  address is the one public contact: the [privacy policy](PRIVACY.md) names it beside the form,
+  as the stores will.
 - **The person sees what is sent.** The details the app adds — version, Windows, screen scale,
   theme, how big the notebook is — are shown under the form, and never include a note's words or
   a path.
