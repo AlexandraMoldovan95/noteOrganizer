@@ -37,7 +37,7 @@ says.
 | Stories | Three scripts that press the buttons a person presses, restart the app and photograph it | On demand: by hand, or from the Actions tab | A screen that changed shape; a route nobody asked a check about |
 | Mutants | `tools/mutate.py` and its catalogue: the 331 worth re-running, and 2 that test the runner | On demand, the same way. Most mutants were one-off runs while a fix was made, named in its commit | A check that stays green with its fix taken away |
 | Coverage | `tools/run_coverage.py` | Every pull request, with a floor of 80% | Code no test reaches |
-| The test plan | `NoteOrganizer_TestPlan.xlsx`, 564 cases ([an excerpt](../docs/TEST_PLAN_EXCERPT.md)) | By a person, on the built `.exe` | What needs a person: how a screen reads, the built `.exe`, real hardware — each row says whether a script already walks it |
+| The test plan | `NoteOrganizer_TestPlan.xlsx`, 577 cases ([an excerpt](../docs/TEST_PLAN_EXCERPT.md)) | By a person, on the built `.exe` | What needs a person: how a screen reads, the built `.exe`, real hardware — each row says whether a script already walks it |
 
 A fix lands with a check that fails when the fix is taken away, and a
 flaky check is treated as a bug in the check, never re-run until green
@@ -190,9 +190,9 @@ a Windows check.
 ## Photographs: did a screen change shape while nobody was looking?
 
 `py qa/story_look.py` opens the app on a fixed little notebook,
-photographs eighteen screens — the list, the editor, the calendar,
-Settings sections, a light theme, and the popups and panels that releases
-changed — and compares each against the copy in `qa/screens/`. Those
+photographs twenty-one screens — the list, the editor, the calendar,
+Settings sections, a light theme, and the popups, panels and states that
+releases changed — and compares each against the copy in `qa/screens/`. Those
 copies are committed, so a change of appearance shows up in a diff like
 any other change.
 
