@@ -60,10 +60,11 @@ Scope is decided by what an area *owns*, not by keyword: the theming engine (`ap
 `_build_themed_dropdown`) stay on `NoteOrganizer`, because the whole app uses them — only the
 Settings *UI* for picking a theme moved.
 
-Where a mixin needs a value that lives on the entry module and is only filled in by
-`initialise()` (`APP_VERSION`, `APP_DIR`, `FIRST_LAUNCH_DATE`), it reads it through a small
-local-import helper rather than importing `note_organizer` at module level, which would be
-circular — and reading it at call time is what the original code did anyway.
+Where a mixin needs a constant from the entry module (`APP_VERSION`), it reads it through a
+small local-import helper, `_host()`, rather than importing `note_organizer` at module level,
+which would be circular. What `initialise()` fills in (`APP_DIR`, the first-launch date) is read
+from `core/` instead: running the app makes a second copy of the entry module whose
+`initialise()` never ran ([the story](ISSUES_LOG.md#the-module-that-existed-twice)).
 
 ### `note_organizer.py` — entry point and UI hub
 
@@ -1298,7 +1299,7 @@ the app came from. Once the app has a Microsoft Store page (`STORE_REVIEW_URL` i
 `core/diagnostics.py`), **Settings → About → Feedback → Write a review** opens it; before that,
 About has no Feedback card. The store keeps the review, and the answer goes back there, under the
 name Note Organizer. The one public contact beside it is the project's own address,
-noteorganizer.app@gmail.com, which the stores require and the [privacy policy](PRIVACY.md)
+noteorganizer.app@gmail.com, which Google Play requires and the [privacy policy](PRIVACY.md)
 names; the owner's personal address appears nowhere.
 
 **How it came to this.** From 2026-10-15 feedback was a form on the project's site: the app

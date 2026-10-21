@@ -171,7 +171,7 @@ is in the table below as well.
 | [The heart that left a gap](#the-heart-that-left-a-gap) | An invisible character is still drawn; when the toolkit draws it badly, keep it out of what the app writes, and say what is left. | 0.89.362 |
 | [Save and Delete, the same khaki](#save-and-delete-the-same-khaki) | A gate measures the pairs it was told about — walk what is on the screen; and two colours that differ only in hue are one colour to a reader who cannot see hue. | 0.89.365 |
 | [Two answers to one question](#two-answers-to-one-question) | Two helpers answering one question disagree somewhere — measure them against each other; and a base theme's state map silently overrides what you configured. | 0.89.371 |
-| [The icon drawn as narrow as a letter](#the-icon-drawn-as-narrow-as-a-letter) | An icon's width is the width of whichever font answered for it; where icons must line up, choose them from the range one font draws, and measure the column. | Unreleased |
+| [The icon drawn as narrow as a letter](#the-icon-drawn-as-narrow-as-a-letter) | An icon's width is the width of whichever font answered for it; where icons must line up, choose them from the range one font draws, and measure the column. | 0.96.392 |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -4894,7 +4894,8 @@ of what the app writes, clean it where nothing hangs off the text, and say plain
 
 ### The icon drawn as narrow as a letter
 
-*(found by the owner, reading the welcome note thirteen days after it shipped)*
+*([0.96.392](../CHANGELOG.md#096392--2026-10-21) · 2026-10-21 · found by the owner, reading the
+welcome note thirteen days after it shipped)*
 
 **Symptom:** the welcome note's "Good to know" heading started further left than the headings
 above it. Measured, every icon was 23 px wide and its title began at 43 px — but ℹ was 7 px and

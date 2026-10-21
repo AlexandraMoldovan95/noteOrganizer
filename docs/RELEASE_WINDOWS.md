@@ -1,8 +1,9 @@
 # Windows Release Reference
 
-Reference material for actually publishing the built `.exe` on Windows,
-once the app is stable enough for that. Nothing here is decided or in
-progress. This file is specifically about building and distributing;
+Reference material for publishing the built `.exe` on Windows. The
+Microsoft Store is the planned route; the decisions taken for it so far
+are dated below, and the alternatives are kept for reference. This file
+is specifically about building and distributing;
 the app's own version-numbering policy lives in
 [`docs/ROADMAP.md`](ROADMAP.md), "Versioning".
 

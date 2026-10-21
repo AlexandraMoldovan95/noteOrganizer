@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.96.392](#096392--2026-10-21) | 2026-10-21 | A privacy policy in Settings → About, and a section on your privacy in the welcome note; feedback becomes a review in the Microsoft Store; the welcome note's headings start in one column. |
 | [0.95.391](#095391--2026-10-20) | 2026-10-20 | The Trash never empties itself by a length it could not read; a "²" in a date no longer stops a note saving; table merges from the menu keep both texts; Enter, Backspace and bold do what you expect in lists and over a selection. |
 | [0.95.382](#095382--2026-10-15) | 2026-10-15 | Send feedback from Settings → About: a short form in your browser, showing what the app adds — and nothing from your notes; crash logs that say which version and what size of notebook they came from. |
 | [0.94.382](#094382--2026-10-15) | 2026-10-15 | Closing the app in the middle of a backup leaves nothing behind and the next start says so; a note with many tables opens faster, and changing the theme no longer redraws its tables. |
@@ -105,6 +106,10 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+---
+
+## [0.96.392] — 2026-10-21
+
 ### Added
 
 - **A privacy policy, from Settings → About.** Privacy policy → Read opens it: what the app
@@ -145,7 +150,8 @@ How the numbers themselves are counted is the
   Store page exists and that Write a review opens it after, and that the running app still hands
   a crash log its version and the notebook's size. `test_data_safety` holds the crash log's
   details to the same list. Mutants FB01 and FB11 retired with the link they aimed at, the rest
-  of FB02–FB12 re-aimed and FB13 added, all killed. The site's build refuses a page with a form,
+  of FB02–FB12 re-aimed and FB13 added, all killed; story_look photographs About's privacy policy
+  row as scene 22. The site's build refuses a page with a form,
   or an app source or privacy policy that names the site; its browser walk checks the site's own
   privacy notice and the links to it. `test_data_safety` checks that the welcome note's privacy
   has a section of its own, under its own heading (Y10 and Y11, killed), and story_look
