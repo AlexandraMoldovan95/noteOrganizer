@@ -122,6 +122,9 @@ How the numbers themselves are counted is the
 
 ### Changed
 
+- **The welcome note says what the app does with your data** — it collects nothing and sends
+  nothing anywhere — and that Settings → About → Privacy policy has the whole of it, so a new
+  notebook meets the policy on its first page rather than only by finding it.
 - **About says the app is free software under the MIT license, provided as is,** and to keep a
   backup of your notes — where someone who installed it from a store, and never sees the license
   file, will read it.
@@ -135,7 +138,8 @@ How the numbers themselves are counted is the
   details to the same list. Mutants FB01 and FB11 retired with the link they aimed at, the rest
   of FB02–FB12 re-aimed and FB13 added, all killed. The site's build refuses a page with a form,
   or an app source or privacy policy that names the site; its browser walk checks the site's own
-  privacy notice and the links to it.
+  privacy notice and the links to it. `test_data_safety` checks the welcome note's privacy line
+  (Y10, killed), and story_look photographs it as scene 23.
 
 ---
 

@@ -535,6 +535,12 @@ check('every bullet of the welcome note is a line that starts with one',
       == sum(1 for line in _WELCOME_LINES if line.startswith('- '))
       and all(_welcome_lines[p['line']].startswith('• ')
               for p in _welcome['paragraphs']))
+# The first thing a new notebook shows says what the app does with your data
+# and where the privacy policy is, so nobody meets it only by chance.
+check('the welcome note says the app collects nothing, and points to the '
+      'privacy policy in Settings → About',
+      'collects nothing' in _welcome['body']
+      and 'Settings → About → Privacy policy' in _welcome['body'])
 check('no line of the welcome note leaves its bold open, and no icon '
       'carries the variation selector',
       all(line.count('**') % 2 == 0 for line in _WELCOME_LINES)

@@ -418,6 +418,24 @@ _sl_no_names(app.settings_about_panel)
 app.update()
 app.update_idletasks()
 """),
+    # The welcome note, opened the way About's Show opens it, scrolled to its
+    # privacy line: the first thing a new notebook shows says what the app
+    # does with your data, and where the privacy policy is.
+    ("23-welcome-note-privacy-line", """
+app._dismiss_mini_popup()
+app.hide_settings_page()
+app.update()
+app.show_welcome_note()
+app.update()
+_sl_privacy = app.body_text.search('Your privacy', '1.0')
+if _sl_privacy:
+    app.body_text.see(_sl_privacy)
+# Opening it saved the note scene 21 left edited, and that save's "Note
+# updated" would be in the picture or not by timing alone.
+app._hide_toast()
+app.update()
+app.update_idletasks()
+"""),
 ]
 
 SEED = [
