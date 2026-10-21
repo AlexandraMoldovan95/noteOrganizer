@@ -3752,10 +3752,11 @@ class SettingsPageMixin:
                 row.pack_forget()
 
     def _build_settings_about_panel(self, parent):
-        """Version, where the data lives, the welcome note, and feedback."""
+        """Version, where the data lives, the welcome note, the privacy
+        policy, and -- once the app is in the Store -- a way to review it."""
         self._settings_subtitle(
-            parent, "Version info, where your notes live, the welcome note, and "
-                    "a way to send feedback.")
+            parent, "Version info, where your notes live, the welcome note, "
+                    "and the privacy policy.")
         head = tk.Frame(parent, bg=self.colors["bg"])
         self.track_theme(head, bg="bg")
         head.pack(fill="x", pady=(0, 14))
@@ -3777,6 +3778,10 @@ class SettingsPageMixin:
         tk.Label(titles, text=f"Version {_host().APP_VERSION}",
                  font=("Consolas", 9), anchor="w",
                  bg=self.colors["bg"], fg=self.colors["subtext"]).pack(fill="x")
+        terms = tk.Label(titles, text=diagnostics.ABOUT_TERMS, font=("Segoe UI", 9), anchor="w",
+                         justify="left", bg=self.colors["bg"], fg=self.colors["subtext"])
+        terms.pack(fill="x", pady=(4, 0))
+        self._wrap_to_own_width(terms)
 
         card = self._settings_card(parent)
         self._field_label(card, "Where your notes are stored")
@@ -3821,20 +3826,26 @@ class SettingsPageMixin:
             "from here.", first=True)
         self._text_button(control, "Show", self.show_welcome_note).pack()
 
-        # Feedback goes through a page on the site, opened in the browser:
-        # the app itself connects to nothing (core/diagnostics).
-        talk = self._settings_card(parent)
+        # The pages this opens are in the browser: the app itself connects to
+        # nothing (core/diagnostics). Feedback is a Store review, so until the
+        # app has a Store page there is no Feedback card at all.
+        policy = self._settings_card(parent)
         control = self._card_row(
-            talk, "Feedback",
-            "Something not working, slow, or an idea? Tell us — it takes a "
-            "minute. Your browser opens a short form; nothing from your "
-            "notes is sent.", first=True)
-        self._text_button(control, "Send feedback", self._open_feedback).pack()
+            policy, "Privacy policy",
+            "Your notes stay on this computer. The policy says what leaves "
+            "it, and that it leaves only when you send it.", first=True)
+        self._text_button(
+            control, "Read",
+            lambda: self._open_in_browser(diagnostics.PRIVACY_URL)).pack()
         if diagnostics.STORE_REVIEW_URL:
+            talk = self._settings_card(parent)
             control = self._card_row(
-                talk, "Rate the app", "A review in the Microsoft Store.")
+                talk, "Feedback",
+                "Something not working, slow, or an idea? Write a review in "
+                "the Microsoft Store — I read each one and answer there.",
+                first=True)
             self._text_button(
-                control, "Rate on the Store",
+                control, "Write a review",
                 lambda: self._open_in_browser(diagnostics.STORE_REVIEW_URL)).pack()
 
     def _technical_details(self):
@@ -3846,10 +3857,6 @@ class SettingsPageMixin:
                  ("sharp", "on" if sharp else "off"),
                  ("theme", THEME_LABELS.get(self.theme_name, self.theme_name))]
                 + diagnostics.notebook(self.notes))
-
-    def _open_feedback(self):
-        """The feedback page, carrying the details for the form to show."""
-        self._open_in_browser(diagnostics.feedback_url())
 
     def _open_in_browser(self, url):
         """Open *url* in the person's browser. Where that fails, the link is

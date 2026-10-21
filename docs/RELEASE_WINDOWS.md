@@ -36,14 +36,54 @@ This MSIX package version is separate from, and doesn't need to match, the app's
 
 Source: [Microsoft Learn — App package requirements for MSIX apps](https://learn.microsoft.com/en-us/windows/apps/publish/publish-your-app/msix/app-package-requirements)
 
-Two things wait for the listing, when there is one:
+Four things wait for the listing, when there is one:
 
-- **The support contact** the listing asks for is the project's own address (the one the
-  feedback form forwards to — see [site/README.md](../site/README.md#the-feedback-form)), never a
-  personal one.
+- **The privacy policy's address**, which Partner Center asks for: Microsoft requires a policy for
+  every Win32 product (Store Policy 10.5.1). It is `PRIVACY_URL` in
+  `noteorganizer/core/diagnostics.py`: the [privacy policy](PRIVACY.md), published on Google
+  Sites, which **Settings → About** opens as well.
+- **The support contact** — optional for an app not on Xbox, given anyway — is the project's own
+  address, noteorganizer.app@gmail.com, never a personal one.
+- **The website field stays empty.** It is optional, and the project's site on Netlify is kept
+  apart from the apps' users (the owner's rule, 2026-10-21; see
+  [site/README.md](../site/README.md#kept-apart-from-the-apps)). Phone and postal address are
+  optional for an individual developer and not shown to customers; they are left out too.
 - **The review button.** `STORE_REVIEW_URL` in `noteorganizer/core/diagnostics.py` is `None`
-  until the app has a Store page; set to that page's review link, **Settings → About** shows
-  **Rate on the Store** beside Send feedback.
+  until the app has a Store page; set to that page's review link, **Settings → About** shows the
+  Feedback card, whose **Write a review** opens it. It is the app's only way in for feedback.
+  Answers to reviews stay public: a private reply by email would make the policy's "I answer in
+  the store, publicly" untrue.
+
+Two things to prove on the package itself, before the listing goes live:
+
+- **Uninstalling leaves the notes.** The privacy policy says so, and it holds only if the MSIX
+  package excludes `%APPDATA%\NoteOrganizer` from file-system write virtualization — the owner's
+  decision, 2026-10-21 (`unvirtualizedResources`, with flexible virtualization on Windows 11).
+  Without that, Windows keeps the notes in the package's own folder and deletes them with the app.
+  A real Store install is uninstalled once to watch the folder stay; if it does not, the policy's
+  sentence changes before anything ships.
+- **Markets.** `sites.google.com`, where the policy lives, is blocked in mainland China: untick
+  China among the markets, or accept that the policy cannot be opened there.
+
+### The privacy page, at every release
+
+The policy's text is [`docs/PRIVACY.md`](PRIVACY.md); the page the apps and the stores point at
+is a copy of it on Google Sites, made by hand, so nothing keeps the two in step but this step
+(the owner's rule, 2026-10-21):
+
+1. Before a release is cut, ask whether `docs/PRIVACY.md` changed since the last one, or whether
+   the release changes what the apps keep, send or open. If the apps changed, the text changes
+   first, with a new "Last updated" date.
+2. If the text changed, the owner copies it to the Google Site — from the Markdown preview of
+   `docs/PRIVACY.md` — and publishes it before the build goes out.
+3. The live page is compared with `docs/PRIVACY.md` (the date line, then each section), and the
+   release report says so, even when nothing changed.
+
+No build ships until `PRIVACY_URL`, opened signed out (in a private window), shows the policy's
+text: a Google Site that is missing or not public sends a visitor to Google's sign-in page rather
+than answering with an error, and Google Play rejects that. The Site is made under the project's
+account, published with **Who can view** set to Public, typed into the Site rather than an
+embedded document, and never renamed — its address is built into both apps.
 
 ## Alternatives to the Microsoft Store
 

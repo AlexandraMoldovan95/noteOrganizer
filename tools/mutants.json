@@ -4479,16 +4479,6 @@
     "expect": "killed"
   },
   {
-    "id": "FB01",
-    "about": "the feedback link carries whatever pairs it is given, not only the details' own names",
-    "edits": [{"file": "noteorganizer/core/diagnostics.py",
-               "find": "         if key in DETAIL_KEYS and value is not None])\n",
-               "replace": "         if value is not None])\n"}],
-    "must_fail": ["a link made from any pairs at all keeps only the details' own names"],
-    "suites": ["test_data_safety"],
-    "expect": "killed"
-  },
-  {
     "id": "FB02",
     "about": "the details pass on whatever the app hands them, a path or a title into the crash log",
     "edits": [{"file": "noteorganizer/core/diagnostics.py",
@@ -4530,21 +4520,21 @@
   },
   {
     "id": "FB06",
-    "about": "the running app never registers its details: the feedback link and crash log lose the notebook's size and how it draws",
+    "about": "the running app never registers its details: the crash log loses the notebook's size and how it draws",
     "edits": [{"file": "note_organizer.py",
                "find": "        _core_diagnostics.app_details = self._technical_details\n",
                "replace": "        pass\n"}],
-    "must_fail": ["Send feedback opens the feedback page, naming the version, how the app draws and how big the notebook is"],
+    "must_fail": ["the running app hands a crash log its version, how it draws and how big the notebook is"],
     "suites": ["qa6"],
     "expect": "killed"
   },
   {
     "id": "FB07",
-    "about": "the version is not handed over: feedback and crash logs cannot say which build they came from",
+    "about": "the version is not handed over: a crash log cannot say which build it came from",
     "edits": [{"file": "note_organizer.py",
                "find": "_core_diagnostics.version = APP_VERSION\n",
                "replace": "_core_diagnostics.version = None\n"}],
-    "must_fail": ["Send feedback opens the feedback page, naming the version, how the app draws and how big the notebook is"],
+    "must_fail": ["the running app hands a crash log its version, how it draws and how big the notebook is"],
     "suites": ["qa6"],
     "expect": "killed"
   },
@@ -4560,11 +4550,11 @@
   },
   {
     "id": "FB09",
-    "about": "a Store button is shown before the app is in the Store",
+    "about": "a Feedback card is shown before the app is in the Store, its review button opening nothing",
     "edits": [{"file": "noteorganizer/ui/settings_page.py",
                "find": "        if diagnostics.STORE_REVIEW_URL:\n",
                "replace": "        if True:\n"}],
-    "must_fail": ["no Store button while the app is not in the Store"],
+    "must_fail": ["no Feedback card while the app is not in the Store"],
     "suites": ["qa6"],
     "expect": "killed"
   },
@@ -4574,9 +4564,30 @@
     "edits": [{"file": "noteorganizer/core/diagnostics.py",
                "find": "    files = sum(len(n.get(\"attachments\") or []) for n in notes)\n",
                "replace": "    files = 0\n"}],
-    "must_fail": ["the feedback link carries the version, how the app draws and how big the notebook is",
-                  "Send feedback opens the feedback page, naming the version, how the app draws and how big the notebook is"],
+    "must_fail": ["the details carry the version, how the app draws and how big the notebook is",
+                  "a crash log entry names the version, the notebook's size and the Windows, above its trace",
+                  "the running app hands a crash log its version, how it draws and how big the notebook is"],
     "suites": ["test_data_safety", "qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "FB12",
+    "about": "About's privacy policy button opens the Store's review page instead",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "            lambda: self._open_in_browser(diagnostics.PRIVACY_URL)).pack()\n",
+               "replace": "            lambda: self._open_in_browser(diagnostics.STORE_REVIEW_URL)).pack()\n"}],
+    "must_fail": ["About opens the privacy policy"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "FB13",
+    "about": "About no longer says the app is provided as is, so a store user never reads the license's terms",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "        terms.pack(fill=\"x\", pady=(4, 0))\n",
+               "replace": "        pass\n"}],
+    "must_fail": ["About says the app is free software, provided as is, under the MIT license"],
+    "suites": ["qa6"],
     "expect": "killed"
   },
   {

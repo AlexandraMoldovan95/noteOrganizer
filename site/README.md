@@ -86,34 +86,24 @@ the app's own reader on every code the demo made, and the demo's reader on
 codes the app made (its welcome note, a table, colours). The first run writes
 the app's codes, the second reads the demo's.
 
-## The feedback form
+## Kept apart from the apps
 
-`src/feedback.html` is the page **Settings → About → Send feedback** opens.
-Netlify keeps what is sent and forwards it by email, so no address appears
-on the page or in the app. The app adds its details to the link (version,
-Windows, screen scale, theme, how big the notebook is — never a note's
-words); `feedback.js` shows them under the form and puts them in its hidden
-fields, and the build refuses a page without a field for every detail the
-app sends (`DETAIL_KEYS` in `noteorganizer/core/diagnostics.py`). A hidden
-field named `company` is a trap for robots: Netlify drops what fills it.
+The site presents the project to the people the owner sends here — once
+the apps are published, its overview links to their store pages. The
+other way round, nothing the apps' users see points at it: not the apps,
+not their store pages (whose optional website field stays empty), not
+their privacy policy (the owner's rule, 2026-10-21). The build refuses a
+site whose address appears in the app's sources or in `docs/PRIVACY.md`;
+the Android app, in its own repository, is held to the same by review.
 
-Set up once, after the first deploy that carries the page:
-
-1. On Netlify, open the project's **Forms** page
-   (`https://app.netlify.com/projects/<project name>/forms`) and select
-   **Enable form detection**. It applies from the next deploy on, so
-   deploy again, so Netlify reads the form.
-2. In **Forms → Form notifications**, add an **email notification** to the
-   project's own address (not a personal one: answers go out from it too).
-3. Send a test message from the app (Settings → About → Send feedback) and
-   check that it arrives.
-
-Form submissions cost no credits: since 14 April 2026 they are free and
-unlimited on every Netlify credit plan, the free one included (Netlify's
-changelog, "Free unlimited seats on Pro, unlimited form submissions").
-Deploys still cost credits. Whether a drag-and-drop deploy is scanned for
-forms the way a built one is, Netlify's documentation does not say — the
-first test message answers it.
+So the apps' privacy policy is not one of the site's pages, and does not
+cover it. The site has its own short notice, `src/site-privacy.html`:
+who runs it, what Netlify sees and why, the transfer to the United
+States, what the browser keeps, and how to object or complain. Every
+page's footer links it, and so does the demo's About; the browser walk
+checks both, and that the notice says those things. The site has no form
+either — feedback is a review in the stores — and `_headers` says so
+(`form-action 'none'`); the build refuses a page with a `<form>` in it.
 
 ## When the repository becomes public
 

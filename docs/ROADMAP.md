@@ -95,8 +95,8 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
   after it: the disk write moved off the window's thread (45 ms), and the card's place found
   without sorting every note (24 ms). **Decided 2026-10-15, the owner's call: not now** — weeks of
   care in the riskiest code for a cost nobody has met. The signal to reopen it is a report that
-  the app is slow: the feedback form and the bug form both carry how many notes the person has
-  (Settings → About → Send feedback), so such a report says at once whether this is the cause.
+  the app is slow: the bug form asks how many notes the person has, and every crash log names the
+  notebook's size, so such a report says at once whether this is the cause.
   `tools/bench.py --rich` re-measures the save at any size.
 - **An Android version.** An exploration is under way in a repository of its own
   (`noteOrganizerForAndroid`, private), begun on 2026-09-13: a native Android app in Kotlin that

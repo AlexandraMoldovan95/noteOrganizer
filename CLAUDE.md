@@ -25,8 +25,9 @@
 
 Note Organizer is a fully offline desktop notes app: Python + Tkinter, one
 runtime dependency (Pillow, for image/GIF preview rendering). No network
-calls, no accounts, no database. (Settings → About → Send feedback opens
-the site's feedback page in the browser; the app itself connects to
+calls, no accounts, no database. (Settings → About opens the privacy
+policy, and — once the app is in the Store — its review page, in the
+browser; feedback is a Store review, and the app itself connects to
 nothing — `core/diagnostics.py`.)
 
 - **Organised as a package (split complete, stopped deliberately):** the
@@ -96,7 +97,10 @@ nothing — `core/diagnostics.py`.)
   `site/public/` (not in git), which is dragged onto Netlify by hand, with
   changes gathered into one upload because every deploy costs credits. The
   test workflow ignores `site/`; its own checks are in `site/tools/`.
-  See `site/README.md`.
+  See `site/README.md`. **Kept apart from the apps (the owner's rule,
+  2026-10-21):** the site may link to the apps' store pages, but nothing
+  the apps' users see — the apps, their store listings (website field left
+  empty), their privacy policy on Google Sites — ever points at the site.
 
 For anything non-trivial, `docs/ARCHITECTURE.md`, `docs/ISSUES_LOG.md`, and
 `docs/ROADMAP.md` contain real, hard-won context — read them before assuming
@@ -483,6 +487,17 @@ summary.
   unrelated change.
 - Docs-only changes do not get a version bump, matching how they don't
   call for an `.exe` rebuild either.
+- **The privacy page, at every release (the owner's rule, 2026-10-21).**
+  The privacy policy both apps open and both stores are given lives on
+  Google Sites, as a copy of `docs/PRIVACY.md` the owner makes by hand —
+  so nothing keeps the two in step but this. Every release cut, desktop or
+  Android, asks whether the text changed or the release changes what the
+  apps keep, send or open; if so, the owner republishes the page BEFORE
+  the build goes out, and the live page is compared with the file either
+  way. No build ships until the page, opened signed out, shows the
+  policy's text — a Site that is missing or private sends visitors to a
+  Google sign-in page instead of an error. The steps are in
+  [RELEASE_WINDOWS](docs/RELEASE_WINDOWS.md#the-privacy-page-at-every-release).
 
 ## Git & GitHub workflow
 

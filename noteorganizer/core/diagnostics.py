@@ -1,35 +1,36 @@
-"""What the app may say about itself, when something goes wrong or someone
-writes in.
+"""What the app may say about itself when something goes wrong, and the
+pages it opens in the browser.
 
-Two readers share one definition, so they always agree: crash_log.txt, and
-the feedback page that Settings → About opens in the browser. The app itself
-connects to nothing -- the browser opens a page, and the person decides
-whether to send it.
+crash_log.txt says it, on this computer only: the version, the Windows it
+runs on, how it draws on this screen, and how big the notebook is. Never what
+the notes say, and never a path: a folder's path holds the person's name.
 
-What is said: the version, the Windows it runs on, how it draws on this
-screen, and how big the notebook is. Never what the notes say, and never a
-path: a folder's path holds the person's name.
+The app connects to nothing. Feedback goes through the Microsoft Store's
+reviews, and the privacy policy is a page on Google Sites -- the browser
+opens both.
 """
 
 import os
 import platform
 import sys
 from datetime import datetime
-from urllib.parse import urlencode
 
 from . import paths
 
-# The page the feedback button opens. Its form sends to the owner through the
-# site's host; no address of hers appears in the app or on the page.
-FEEDBACK_URL = "https://note-organizer-8f7772.netlify.app/feedback.html"
+# The privacy policy, opened from Settings → About and given to both stores.
+# docs/PRIVACY.md is its text; the owner copies it to this page by hand.
+PRIVACY_URL = "https://sites.google.com/view/noteorganizer-privacy"
+
+# Said under the version in Settings → About: the MIT license's "as is",
+# where people who install from a store, and never see LICENSE, read it.
+ABOUT_TERMS = ("Free software under the MIT license, provided as is. "
+               "Keep a backup of your notes.")
 
 # The Microsoft Store's review page, once the app is published there. While
-# it is None, the button that would open it is not shown.
+# it is None, About has no Feedback card: reviews are the only way in.
 STORE_REVIEW_URL = None
 
-# Every detail there is, in the order both readers give them. The feedback
-# link carries these and nothing else, and site/build.py requires the
-# feedback page to have a field for each: one list, so the two cannot drift.
+# Every detail a crash log entry carries, in its order.
 DETAIL_KEYS = ("version", "scale", "sharp", "theme", "notes", "files", "mb",
                "windows", "build")
 
@@ -74,7 +75,7 @@ def notebook(notes):
 
 
 def details():
-    """Every (key, value) pair the two readers may carry, in one order:
+    """Every (key, value) pair a crash log entry may carry, in one order:
     the version, the running app's own details when it has registered them,
     then the environment. A key is given once, only DETAIL_KEYS names pass,
     and None means unknown."""
@@ -88,15 +89,6 @@ def details():
     seen = {key for key, _ in out}
     out.extend(pair for pair in environment() if pair[0] not in seen)
     return [(key, value) for key, value in out if key in DETAIL_KEYS]
-
-
-def feedback_url(pairs=None):
-    """The feedback page, carrying the details for the form to show and send
-    -- only those DETAIL_KEYS names, whatever else *pairs* holds."""
-    pairs = details() if pairs is None else pairs
-    return FEEDBACK_URL + "?" + urlencode(
-        [(key, value) for key, value in pairs
-         if key in DETAIL_KEYS and value is not None])
 
 
 def append_crash_log(kind, text, folder=None):

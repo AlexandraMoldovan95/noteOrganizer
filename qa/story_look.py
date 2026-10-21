@@ -396,6 +396,28 @@ app._hide_toast()
 app.update()
 app.update_idletasks()
 """),
+    # Settings > About before the app is in the Store: the privacy policy's
+    # card, and no Feedback card. The folder line would show this scratch
+    # copy's path, which holds a person's name, in a picture kept in the
+    # repository, so the label
+    # alone is given a neutral one -- where the app writes is untouched.
+    ("22-settings-about-privacy", """
+app._dismiss_mini_popup()
+app.show_settings_page()
+app.update()
+app.toggle_settings_panel('about')
+app.update()
+from noteorganizer.core import paths as _sl_paths
+_sl_shown = chr(92).join(['C:', 'Users', 'you', 'AppData', 'Roaming', 'NoteOrganizer'])
+def _sl_no_names(widget):
+    for child in widget.winfo_children():
+        if isinstance(child, tk.Label) and str(child.cget('text')) == str(_sl_paths.APP_DIR):
+            child.configure(text=_sl_shown)
+        _sl_no_names(child)
+_sl_no_names(app.settings_about_panel)
+app.update()
+app.update_idletasks()
+"""),
 ]
 
 SEED = [

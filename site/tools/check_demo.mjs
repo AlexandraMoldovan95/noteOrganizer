@@ -216,6 +216,20 @@ try {
   await shot("site-index-phone-menu-open");
   check("phone menu opens", await js("document.getElementById('site-nav').classList.contains('open')"));
 
+  // ---------------- The site's own privacy notice ----------------
+  // The apps' privacy policy does not cover this site, so every footer
+  // leads to the site's own notice, and it says what its host sees.
+  for (const p of ["index.html", "how-its-built.html"]) {
+    await go("/" + p);
+    check(`${p}: the footer leads to the site's own privacy notice`,
+      await js("!!document.querySelector(\".site-footer a[href='site-privacy.html']\")"));
+  }
+  await go("/site-privacy.html");
+  const notice = await js("document.querySelector('main').textContent");
+  check("the site's notice names its host, what it sees, and how to object",
+    notice.includes("Netlify") && notice.includes("IP address") && notice.includes("object"));
+  await noHorizontalScroll("site-privacy.html");
+
   // ---------------- Opened from the folder, with no server ----------------
   // As the owner previews it: a double-click on public/index.html, then
   // the buttons. A link to a folder works on a server and shows a file
@@ -490,6 +504,8 @@ try {
   await shot("demo-phone-settings");
   await click(".set-nav [data-section=about]");
   await shot("demo-phone-about");
+  check("the demo's About leads to the site's privacy notice, where its storage is explained",
+    await js("!!document.querySelector(\".set-panel.about a[href='../site-privacy.html']\")"));
   await click("#set-back");
   await js("[...document.querySelectorAll('.nc-open')].find(b => b.textContent.includes('Team stand-up')).click()");
   await sleep(250);

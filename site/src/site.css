@@ -194,40 +194,6 @@ a:hover { text-decoration-thickness: 2px; }
 .btn-primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .btn-primary:hover { filter: brightness(1.06); }
 
-/* ---- The feedback form (feedback.html) ---- */
-
-.feedback { display: grid; gap: 10px; max-width: 640px; }
-.feedback .field { font-weight: 600; margin-top: 10px; }
-.feedback .optional, .hint { color: var(--subtext); font-weight: 400; }
-.hint { font-size: 14px; margin: 0; }
-.feedback textarea, .feedback input[type="email"] {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--text);
-  font: 16px/1.5 var(--font);
-}
-.feedback textarea:focus, .feedback input[type="email"]:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.feedback .choices { border: 0; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
-.feedback .choices legend { font-weight: 600; margin-bottom: 4px; }
-.feedback .choices label { display: flex; gap: 8px; align-items: center; }
-.feedback .details {
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--sidebar);
-  padding: 4px 16px;
-  font-size: 14px;
-  color: var(--subtext);
-}
-.feedback .details ul { margin: 0 0 10px; padding-left: 18px; }
-.feedback .trap { position: absolute; left: -10000px; }
-
 /* ---- Hero ---- */
 
 .hero { padding-block: 56px 40px; }

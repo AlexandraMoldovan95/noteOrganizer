@@ -72,8 +72,8 @@ from noteorganizer.core import paths as _core_paths
 from noteorganizer.core import single_instance
 from noteorganizer.core import diagnostics as _core_diagnostics
 
-# What crash_log.txt and the feedback page say about the app (diagnostics):
-# the version from the start, so even a crash at start-up names it.
+# What crash_log.txt says about the app (diagnostics): the version from the
+# start, so even a crash at start-up names it.
 _core_diagnostics.version = APP_VERSION
 from noteorganizer.core.paths import (
     bundled_file,
@@ -803,8 +803,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # every failure to crash_log.txt, callback or not.
         from noteorganizer.core import storage as _core_storage
         _core_storage.on_write_failure = self._on_data_write_failure
-        # And what a crash log or the feedback page says about the running
-        # app (core/diagnostics): how it draws here, how big the notebook is.
+        # And what a crash log says about the running app (core/diagnostics):
+        # how it draws here, how big the notebook is.
         _core_diagnostics.app_details = self._technical_details
         self.geometry("%dx%d" % self._fit_to_screen(900, 600))
         # The smallest window that still looks like the app, measured and

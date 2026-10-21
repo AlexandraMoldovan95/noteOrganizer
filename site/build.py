@@ -30,6 +30,7 @@ import os
 import re
 import shutil
 import sys
+import urllib.parse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(HERE, "src")
@@ -60,6 +61,11 @@ PAGES = {
                             "The twenty bugs my manual testing found, three "
                             "written out in a standard bug-report format."),
 }
+# docs/PRIVACY.md is not one of them: the privacy policy belongs to the apps
+# and is published on Google Sites. This site presents the project to the
+# people sent here, and nothing the apps' users see points at it
+# (check_kept_apart).
+
 # Text that must never reach a published page. A build that finds one
 # stops; the page is not published with it.
 FORBIDDEN = [r"adas9", r"mekotrading", r"noteOrganizerSavedFiles",
@@ -483,6 +489,23 @@ def doc_page(shell, config, page, title, description, body_html, source_note, ve
     }, page)
 
 
+def check_kept_apart(repo, config):
+    """This site presents the project to the people sent here; the apps,
+    and the privacy policy the stores are given, never point at it -- the
+    owner's rule (2026-10-21), so its users need not know it exists. The
+    app's sources and docs/PRIVACY.md must not name the site's address.
+    (The Android app lives in another repository, where this cannot look.)"""
+    host = urllib.parse.urlparse(config.get("site_url", "")).netloc
+    if not host:
+        return ["site.json has no site_url, so the apps cannot be checked for it"]
+    files = [os.path.join(repo, "note_organizer.py"), os.path.join(repo, "docs", "PRIVACY.md")]
+    for root, _, names in os.walk(os.path.join(repo, "noteorganizer")):
+        files += [os.path.join(root, n) for n in names if n.endswith(".py")]
+    return ["%s names this site (%s): the apps and their privacy policy must not point "
+            "here" % (os.path.relpath(f, repo), host)
+            for f in sorted(files) if host.lower() in read(f).lower()]
+
+
 def check_doc_structure(page, body_html):
     """A couple of things in site.css style a block by its position right
     after a heading, rather than by a class, because markdown gives the
@@ -590,6 +613,9 @@ def check_output():
         for pattern in FORBIDDEN:
             if re.search(pattern, text, re.IGNORECASE):
                 problems.append("%s: private text matching %r" % (rel, pattern))
+        if re.search(r"<form\b", text, re.IGNORECASE):
+            problems.append("%s: a form, which cannot send: _headers says form-action "
+                            "'none', and feedback goes through the stores" % rel)
         for attr, href in re.findall(r'\b(href|src)="([^"]+)"', text):
             if re.match(r"^(https?:|mailto:|data:)", href):
                 continue
@@ -629,38 +655,6 @@ def check_output():
 OPEN_ELSEWHERE = ("Windows would not let go of %s/: something has it open -- an Explorer "
                   "window, or a browser tab showing a page from it. Close it and run "
                   "this again. The site in public/ was left as it was.")
-
-
-def check_feedback_form(repo):
-    """The feedback page keeps its promises: Netlify sees the form (and its
-    trap for robots), it has a field for every detail the app sends -- the
-    app's own list, DETAIL_KEYS, read from its source -- the page's script
-    knows each one, the thank-you page exists, and the site's headers let a
-    form send to the site itself."""
-    keys = literal_assignments(
-        read(os.path.join(repo, "noteorganizer", "core", "diagnostics.py")),
-        ["DETAIL_KEYS"])["DETAIL_KEYS"]
-    problems = []
-    page = os.path.join(OUT, "feedback.html")
-    if not os.path.exists(page):
-        return ["feedback.html is missing"]
-    html = read(page)
-    script = read(os.path.join(OUT, "feedback.js"))
-    for needed in ('name="feedback"', 'data-netlify="true"', 'netlify-honeypot="company"',
-                   'name="company"', '<input type="hidden" name="form-name" value="feedback">',
-                   'action="thanks.html"'):
-        if needed not in html:
-            problems.append("feedback.html: no %s" % needed)
-    for key in keys:
-        if '<input type="hidden" name="%s">' % key not in html:
-            problems.append("feedback.html: no hidden field for the app's detail %r" % key)
-        if '["%s",' % key not in script:
-            problems.append("feedback.js: no label for the app's detail %r" % key)
-    if not os.path.exists(os.path.join(OUT, "thanks.html")):
-        problems.append("thanks.html is missing: the form's answer page")
-    if "form-action 'self'" not in read(os.path.join(OUT, "_headers")):
-        problems.append("_headers: form-action must be 'self', or the feedback form cannot send")
-    return problems
 
 
 def publish():
@@ -766,7 +760,7 @@ def main():
           fill(read(os.path.join(SRC, "index.html")), index_values, "index.html"))
 
     problems, page_count = check_output()
-    problems += check_feedback_form(repo)
+    problems += check_kept_apart(repo, config)
     if problems:
         print("\n".join(problems))
         shutil.rmtree(STAGE, ignore_errors=True)
