@@ -77,7 +77,9 @@ is a copy of it on Google Sites, made by hand, so nothing keeps the two in step 
 2. If the text changed, the owner copies it to the Google Site — from the Markdown preview of
    `docs/PRIVACY.md` — and publishes it before the build goes out.
 3. The live page is compared with `docs/PRIVACY.md` (the date line, then each section), and the
-   release report says so, even when nothing changed.
+   release report says so, even when nothing changed. The one accepted difference is the
+   Contents list: its links do not work on Google Sites, so the Site leaves it out or uses the
+   Site's own table of contents instead.
 
 No build ships until `PRIVACY_URL`, opened signed out (in a private window), shows the policy's
 text: a Google Site that is missing or not public sends a visitor to Google's sign-in page rather

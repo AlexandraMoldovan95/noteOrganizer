@@ -129,7 +129,7 @@ first, with a new date at the top.
 
 ## Contact
 
-I am Alexandra Moldovan, in Romania, and I am responsible for the data described on this page.
+I am Alexandra Moldovan, and I am responsible for the data described on this page.
 Questions about privacy, or about this policy, are welcome at
 [noteorganizer.app@gmail.com](mailto:noteorganizer.app@gmail.com), an address kept for Note
 Organizer alone.
