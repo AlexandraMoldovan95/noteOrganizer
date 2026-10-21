@@ -1066,6 +1066,106 @@ _list_key('BackSpace')
 check(f'Ctrl+A with the caret after a marker, then Backspace, empties the '
       f'note ({body()!r})', body() == '')
 
+# ---- A delete that reaches a list: renumbered, no marker among the words ----
+# Tk's own deletes saw only characters: items 2 and 3 selected and deleted
+# left "1. one / 4. four", a letter typed over them "x4. four", BackSpace at
+# a line's very start "2. two3. three", a paste over them "zz4. four", and
+# nothing renumbered until the next Enter (_list_aware_delete). Each route by
+# its real key, and one Ctrl+Z gives the list back for each.
+_LD_START = '1. one\n2. two\n3. three\n4. four'
+
+
+def _ld_list(sel_from, sel_to=None):
+    _listed('one\ntwo\nthree\nfour', 'number')
+    app.body_text.edit_reset()
+    if sel_to:
+        app.body_text.tag_add('sel', sel_from, sel_to)
+    app.body_text.mark_set('insert', sel_to or sel_from)
+
+
+def _ld_typed(char):
+    take_focus(app.body_text)
+    app.body_text.event_generate('<KeyPress>', keysym=char, when='now')
+    app.body_text.event_generate('<KeyRelease>', keysym=char, when='now')
+    app.update()
+
+
+def _ld_virtual(name):
+    take_focus(app.body_text)
+    app.body_text.event_generate(name)
+    app.update()
+
+
+def _ld_clip(text):
+    app.body_text.clipboard_clear()
+    app.body_text.clipboard_append(text)
+
+
+for _ld_name, _ld_where, _ld_do, _ld_want in (
+        ('BackSpace over items 2 and 3', ('2.0', '4.0'),
+         lambda: _list_key('BackSpace'), '1. one\n2. four'),
+        ('Delete over items 2 and 3', ('2.0', '4.0'),
+         lambda: _list_key('Delete'), '1. one\n2. four'),
+        ('Cut over items 2 and 3', ('2.0', '4.0'),
+         lambda: _ld_virtual('<<Cut>>'), '1. one\n2. four'),
+        ('a letter typed over items 2 and 3', ('2.0', '4.0'),
+         lambda: _ld_typed('x'), '1. one\n2. x\n3. four'),
+        ('a plain paste over items 2 and 3', ('2.0', '4.0'),
+         lambda: (_ld_clip('zz'), _ld_virtual('<<Paste>>')), '1. one\n2. zz\n3. four'),
+        ('Ctrl+Shift+V over items 2 and 3', ('2.0', '4.0'),
+         lambda: (_ld_clip('zz'), app._paste_plain(), app.update()), '1. one\n2. zz\n3. four'),
+        ('BackSpace at the very start of item 3', ('3.0', None),
+         lambda: _list_key('BackSpace'), '1. one\n2. twothree\n3. four'),
+        ('Delete at the end of item 2', ('2.end', None),
+         lambda: _list_key('Delete'), '1. one\n2. twothree\n3. four'),
+        ("BackSpace over item 2's marker", ('2.0', '2.3'),
+         lambda: _list_key('BackSpace'), '1. one\ntwo\n1. three\n2. four'),
+        ("BackSpace from item 2's words into item 3's", ('2.4', '3.5'),
+         lambda: _list_key('BackSpace'), '1. one\n2. tree\n3. four'),
+        ("BackSpace just after item 3's marker", ('3.3', None),
+         lambda: _list_key('BackSpace'), '1. one\n2. two\nthree\n1. four')):
+    _ld_list(*_ld_where)
+    _ld_do()
+    _ld_after = body()
+    _ld_paras = app._extract_paragraphs(app.body_text)
+    _ld_clipped = app.body_text.clipboard_get() if 'Cut' in _ld_name else None
+    app._body_undo_redo('undo')
+    app.update()
+    check(f'{_ld_name}: renumbered, no marker among the words ({_ld_after!r}), '
+          f'and one Ctrl+Z gives the list back ({body()!r})',
+          _ld_after == _ld_want and body() == _LD_START
+          and [p['line'] for p in _ld_paras]
+          == [i for i, line in enumerate(_ld_want.split('\n'))
+              if NO.parse_list_marker(line)[0]])
+    if _ld_clipped is not None:
+        check(f'...and Cut puts on the clipboard what Tk\'s own Cut did '
+              f'({_ld_clipped!r})', _ld_clipped == '2. two\n3. three\n')
+
+_ld_list('3.0')
+app.body_text.tag_add('bold', '3.3', '3.8')
+app.body_text.edit_reset()
+_list_key('BackSpace')
+_ld_three = body().split('\n')[1].index('three')
+check(f'a bold word joined onto the item above stays bold ({body()!r})',
+      body() == '1. one\n2. twothree\n3. four'
+      and 'bold' in app.body_text.tag_names(f'2.{_ld_three + 1}'))
+app._body_undo_redo('undo')
+app.update()
+check('...and Ctrl+Z puts it back on its own item, still bold',
+      body() == _LD_START and 'bold' in app.body_text.tag_names('3.4'))
+
+# The net under every other route: a key that takes lines away renumbers at
+# its release. Lines taken by hand between a press and its release stand in
+# for a route nobody has named yet.
+_ld_list('2.end')
+take_focus(app.body_text)
+app.body_text.event_generate('<KeyPress-Shift_L>', keysym='Shift_L', when='now')
+app.body_text.delete('2.0', '3.0')
+app.body_text.event_generate('<KeyRelease-Shift_L>', keysym='Shift_L', when='now')
+app.update()
+check(f'lines taken away under a key are renumbered at its release ({body()!r})',
+      body() == '1. one\n2. three\n3. four')
+
 # ---- Marker and indent tag must not drift apart (regression) ----
 # The indent tag first covered each line's trailing newline. Tk hands a tag
 # on to text inserted between two characters that both carry it, so the next

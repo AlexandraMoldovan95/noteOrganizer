@@ -106,6 +106,27 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+### Fixed
+
+- **A numbered list stays numbered when you delete across it.** Items selected and deleted with
+  Backspace, Delete or Cut left the numbers after them as they were ("1. one / 4. four") until
+  the next Enter; joining two items with Backspace at a line's start, or Delete at its end, kept
+  the second one's number among the words ("2. two3. three"); and typing or pasting over whole
+  items glued the next item's number onto what went in ("x4. four"). Now the list renumbers at
+  once, a joined item's number goes, and what is typed or pasted over whole items takes their
+  place while the next item keeps its own — as Word does — each as one Ctrl+Z.
+- **Backspace just after a list marker comes back with one Ctrl+Z.** It took two: the first gave
+  back the numbers, the second the marker.
+
+### Testing
+
+- qa1 walks every route by its real key — Backspace, Delete and Cut over items, a letter typed
+  over them, a plain paste and Ctrl+Shift+V over them, Backspace at a line's start, Delete at its
+  end, a marker selected, words into the next item, Backspace just after a marker — and checks
+  each one's list, what is saved with it and one Ctrl+Z back; a bold word joined onto the item
+  above stays bold; the net renumbers lines taken away under a key. `test_richtext` holds
+  `list_deletion_range` to fifteen cases. Mutants LD01–LD10, all killed.
+
 ---
 
 ## [0.96.392] — 2026-10-21

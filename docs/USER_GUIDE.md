@@ -181,7 +181,9 @@ don't need to select a line exactly.
   an item, before its marker, Enter leaves an empty item above it; pressed with words selected,
   it replaces them, as anywhere else. **Backspace** with the cursor just after a marker removes
   the marker rather than deleting it one character at a time — unless words are selected, which
-  it deletes instead.
+  it deletes instead. Deleting across items, joining two of them with Backspace or Delete, or
+  typing, cutting or pasting over them keeps a numbered list counted 1, 2, 3; the number of an
+  item joined onto the one above goes, rather than staying among its words.
 - **Nesting.** **Tab** pushes a list item one level in, **Shift+Tab** pulls it back out — or use
   the **⇤** and **⇥** buttons. A numbered sub-list counts from 1 again under each parent, and
   picks the outer numbering back up when it ends. Bullets change shape as they go deeper

@@ -4778,5 +4778,109 @@
                   "Ctrl+I over a sentence keeps its bold word bold"],
     "suites": ["qa1"],
     "expect": "killed"
+  },
+  {
+    "id": "LD01",
+    "about": "Tk's own deletes go on reaching lists unseen: nothing renumbers, markers land among the words",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self.bind_class(self._STYLED_DELETE_TAG, \"<KeyPress>\",\n                        self._list_aware_delete, add=\"+\")\n",
+               "replace": ""}],
+    "must_fail": ["BackSpace over items 2 and 3: renumbered",
+                  "a letter typed over items 2 and 3: renumbered"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "LD02",
+    "about": "two lines joined keep the second line's marker among the words",
+    "edits": [{"file": "noteorganizer/core/formatting.py",
+               "find": "        if keeps_words:\n            return (l1, c1), (l2, len(m2))\n",
+               "replace": "        if keeps_words:\n            return (l1, c1), (l2, c2)\n"}],
+    "must_fail": ["list deletion: BackSpace at item 3's very start",
+                  "BackSpace at the very start of item 3: renumbered"],
+    "suites": ["test_richtext", "qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "LD03",
+    "about": "typing over whole items swallows the next item's marker",
+    "edits": [{"file": "noteorganizer/core/formatting.py",
+               "find": "        if typing:\n            return (l1, len(m1) if k1 else 0), (l2 - 1, len(lines[l2 - 1]))\n",
+               "replace": ""}],
+    "must_fail": ["list deletion: a letter typed over items 2 and 3",
+                  "a letter typed over items 2 and 3: renumbered",
+                  "a plain paste over items 2 and 3: renumbered"],
+    "suites": ["test_richtext", "qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "LD04",
+    "about": "a deletion inside a marker leaves the rest of the marker behind",
+    "edits": [{"file": "noteorganizer/core/formatting.py",
+               "find": "        return (l1, 0), (l2, max(c2, len(m1)))\n",
+               "replace": "        return (l1, c1), (l2, c2)\n"}],
+    "must_fail": ["list deletion: one character inside a marker"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
+  },
+  {
+    "id": "LD05",
+    "about": "Ctrl+V over list items is Tk's own again: the next item's marker among the words",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if name is None and self._paste_reaching_list() == \"break\":\n            return \"break\"\n",
+               "replace": ""}],
+    "must_fail": ["a plain paste over items 2 and 3: renumbered"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "LD06",
+    "about": "Ctrl+Shift+V over list items deletes the whole selection, the next marker swallowed",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        listed = self._delete_selection_reaching_list()\n",
+               "replace": "        listed = False\n"}],
+    "must_fail": ["Ctrl+Shift+V over items 2 and 3: renumbered"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "LD07",
+    "about": "BackSpace just after a marker takes Ctrl+Z twice again: the numbers first, the marker never",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            self._renumber_lists()\n        finally:\n            self._undo_atom_end()\n        self._schedule_autosave()\n        return \"break\"\n\n    def _list_aware_delete",
+               "replace": "            self._undo_atom_end()\n            self._renumber_lists()\n        finally:\n            pass\n        self._schedule_autosave()\n        return \"break\"\n\n    def _list_aware_delete"}],
+    "must_fail": ["BackSpace just after item 3's marker: renumbered"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "LD08",
+    "about": "lines taken away by a route nobody named are not renumbered at the key's release",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self.body_text.bind(\"<KeyRelease>\", self._renumber_if_lines_fell, add=\"+\")\n",
+               "replace": ""}],
+    "must_fail": ["lines taken away under a key are renumbered at its release"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "LD09",
+    "about": "the app's own Cut over list items puts nothing on the clipboard",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                b.clipboard_append(b.get(\"sel.first\", \"sel.last\"))\n",
+               "replace": ""}],
+    "must_fail": ["...and Cut puts on the clipboard what Tk's own Cut did"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "LD10",
+    "about": "a delete reaching a list is done and not renumbered, the net at the release told it was",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            self._resync_list_tags(int(start.split(\".\")[0]))\n            self._renumber_lists()\n",
+               "replace": "            self._resync_list_tags(int(start.split(\".\")[0]))\n"}],
+    "must_fail": ["BackSpace over items 2 and 3: renumbered"],
+    "suites": ["qa1"],
+    "expect": "killed"
   }
 ]
