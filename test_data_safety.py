@@ -536,11 +536,23 @@ check('every bullet of the welcome note is a line that starts with one',
       and all(_welcome_lines[p['line']].startswith('• ')
               for p in _welcome['paragraphs']))
 # The first thing a new notebook shows says what the app does with your data
-# and where the privacy policy is, so nobody meets it only by chance.
-check('the welcome note says the app collects nothing, and points to the '
-      'privacy policy in Settings → About',
-      'collects nothing' in _welcome['body']
-      and 'Settings → About → Privacy policy' in _welcome['body'])
+# and where the privacy policy is, so nobody meets it only by chance -- under
+# a heading of its own, the owner's call: a line inside another section did
+# not catch the eye.
+_privacy_heading = '🛡 Your privacy'
+_privacy_section = []
+if _privacy_heading in _welcome_lines:
+    for _line in _welcome_lines[_welcome_lines.index(_privacy_heading) + 1:]:
+        if not _line:
+            break
+        _privacy_section.append(_line)
+check('the welcome note gives privacy a section of its own, which says the app '
+      'collects nothing and points to the privacy policy in Settings → About',
+      any(_welcome['body'][s['start']:s['end']] == _privacy_heading
+          for s in _welcome['formatting'] if s['style'] == 'bold')
+      and any('collects nothing' in line for line in _privacy_section)
+      and any('Settings → About → Privacy policy' in line
+              for line in _privacy_section))
 check('no line of the welcome note leaves its bold open, and no icon '
       'carries the variation selector',
       all(line.count('**') % 2 == 0 for line in _WELCOME_LINES)

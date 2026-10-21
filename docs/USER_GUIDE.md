@@ -56,8 +56,8 @@ keeps it per-user under `%APPDATA%\NoteOrganizer` (worth knowing if you ever go 
 notes folder).
 
 The very first time the app starts, it opens on a **welcome note**: a short tour of what each
-part of the app is for, written as an ordinary note, with a line on what the app does with your
-data and where its privacy policy is. Delete it whenever you like — it goes to the
+part of the app is for, written as an ordinary note, with a section of its own on what the app
+does with your data and where its privacy policy is. Delete it whenever you like — it goes to the
 Trash like any other note — and **Settings → About** brings it back if you want it again. It only
 greets a brand-new notebook: an update, or a notebook you have emptied, never gets one.
 

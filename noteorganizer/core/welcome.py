@@ -63,9 +63,11 @@ LINES = (
     "it safe or move it to another computer.",
     "- Deleted notes wait in **Settings → Recently deleted**, so a slip can "
     "be undone.",
-    "- **Your privacy:** the app collects nothing and sends nothing anywhere; "
-    "a note leaves this computer only when you share it or save a backup. "
-    "**Settings → About → Privacy policy** has the whole of it.",
+    "",
+    "# 🛡 Your privacy",
+    "- The app collects nothing and sends nothing anywhere. A note leaves "
+    "this computer only when you share it or save a backup.",
+    "- **Settings → About → Privacy policy** has the whole of it.",
     "",
     "# 🎨 Make it yours",
     "- Pick one of eight light and dark themes in **Settings → Appearance**, "

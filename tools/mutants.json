@@ -2037,11 +2037,25 @@
     "edits": [
       {
         "file": "noteorganizer/core/welcome.py",
-        "find": "    \"- **Your privacy:** the app collects nothing and sends nothing anywhere; \"\n    \"a note leaves this computer only when you share it or save a backup. \"\n    \"**Settings → About → Privacy policy** has the whole of it.\",\n",
+        "find": "    \"\",\n    \"# 🛡 Your privacy\",\n    \"- The app collects nothing and sends nothing anywhere. A note leaves \"\n    \"this computer only when you share it or save a backup.\",\n    \"- **Settings → About → Privacy policy** has the whole of it.\",\n",
         "replace": ""
       }
     ],
-    "must_fail": ["the welcome note says the app collects nothing, and points to the privacy policy in Settings → About"],
+    "must_fail": ["the welcome note gives privacy a section of its own"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "Y11",
+    "about": "the welcome note's privacy lines lose their heading, and fall back inside Share and keep safe",
+    "edits": [
+      {
+        "file": "noteorganizer/core/welcome.py",
+        "find": "    \"\",\n    \"# 🛡 Your privacy\",\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["the welcome note gives privacy a section of its own"],
     "suites": ["test_data_safety"],
     "expect": "killed"
   },
