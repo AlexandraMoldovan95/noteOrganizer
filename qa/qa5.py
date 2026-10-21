@@ -513,6 +513,32 @@ check('...and the editor shows it exactly as it is stored',
       and app5w.body_text.get('1.0', 'end-1c') == _w5_open['body']
       and app5w._extract_formatting(app5w.body_text) == _w5_open['formatting']
       and app5w._extract_paragraphs(app5w.body_text) == _w5_open['paragraphs'])
+# Every heading's title starts in one column. Tk draws an icon with the
+# first font that has it: ℹ and ✍, older symbols, came from the text font,
+# as narrow as letters, and their titles started left of the others -- the
+# owner saw it. Measured where the app ships: on Windows the emoji font
+# draws the note's icons; another system's fonts are its own.
+if sys.platform == 'win32' and _w5_open is not None:
+    from noteorganizer.core.welcome import LINES as _W5_LINES
+    _w5_heads = [_l[2:] for _l in _W5_LINES if _l.startswith('# ')]
+    _w5_t = app5w.body_text
+    _w5_starts = {}
+    for _w5_head in _w5_heads:
+        _w5_words = _w5_head.split(' ', 1)[1]
+        _w5_at = _w5_t.search(_w5_head, '1.0')
+        _w5_word = (_w5_t.search(_w5_words, _w5_at.split('.')[0] + '.0',
+                                 _w5_at.split('.')[0] + '.end')
+                    if _w5_at else '')
+        _w5_box = None
+        if _w5_word:
+            _w5_t.see(_w5_word); app5w.update()
+            _w5_box = _w5_t.bbox(_w5_word)
+        _w5_starts[_w5_words] = _w5_box[0] if _w5_box else None
+    check(f'every heading of the welcome note starts its title in one column '
+          f'({_w5_starts})',
+          len(_w5_starts) == len(_w5_heads) >= 5
+          and None not in _w5_starts.values()
+          and len(set(_w5_starts.values())) == 1)
 app5w.delete_current_note(); app5w.update()
 app5w.destroy()
 app5x = _w5_app()

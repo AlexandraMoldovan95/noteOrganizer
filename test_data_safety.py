@@ -557,6 +557,17 @@ check('no line of the welcome note leaves its bold open, and no icon '
       'carries the variation selector',
       all(line.count('**') % 2 == 0 for line in _WELCOME_LINES)
       and '\ufe0f' not in _welcome['title'] + _welcome['body'])
+# Every heading's title starts in one column: its icon is from the emoji
+# block, which only the emoji font draws. Tk found \u2139 and \u270d, older symbols,
+# in the text font, as narrow as letters, and their titles started left of
+# the others -- the owner saw it. qa5 measures the column itself, on Windows.
+_welcome_heading_icons = [line[2:].split(' ', 1)[0] for line in _WELCOME_LINES
+                          if line.startswith('# ')]
+_welcome_narrow = [icon for icon in _welcome_heading_icons
+                   if len(icon) != 1 or ord(icon) < 0x1F000]
+check(f'every heading of the welcome note starts with an icon from the emoji '
+      f'block ({_welcome_narrow or "all"})',
+      len(_welcome_heading_icons) >= 5 and not _welcome_narrow)
 # The note shows the app; an icon in it the emoji picker cannot give back
 # is one the person cannot use. Six of its eleven were missing once. An icon
 # is anything from U+2100 up but the arrows: by category alone, ℹ is a letter.
