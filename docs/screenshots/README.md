@@ -70,8 +70,11 @@ at the bottom edge. On 2026-10-09 the search picture was retaken with three
 matches, Statistics with a "since" date inside the app's own lifetime, and
 two were added (the main window on a light theme, a search that matches
 nothing). On 2026-10-15 `theme-picker.png` was retaken by the same script,
-on 0.94.379, to show the Sharp text and Spelling rows added since. Update
-this line whenever the set is recaptured.
+on 0.94.379, to show the Sharp text and Spelling rows added since. On
+2026-10-22 `emoji-picker.png` was retaken the same way, on 0.96.392: the
+picker opens on the same three groups, and only its scrollbar is shorter,
+the picker holding more emoji since. Update this line whenever the set is
+recaptured.
 
 | Filename | What to capture |
 |---|---|
