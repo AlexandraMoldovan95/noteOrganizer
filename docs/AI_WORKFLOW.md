@@ -157,7 +157,8 @@ a few dozen commits soon after, were made without the convention.
 
 - The [Issues Log](ISSUES_LOG.md) is my own internal engineering journal, not published on this
   site - the day-to-day story of what went wrong and what changed, including the agent's own
-  first-person entries ("one of my own renames"). Anyone curious can read it on GitHub.
+  first-person entries ("one of my own renames"). Once the repository is public, anyone curious
+  can read it on GitHub.
 - The **test plan** ([`qa/NoteOrganizer_TestPlan.xlsx`](../qa/NoteOrganizer_TestPlan.xlsx), with
   an [excerpt in Markdown](TEST_PLAN_EXCERPT.md)) is mine: I walk it, and its status column is
   mine to set.

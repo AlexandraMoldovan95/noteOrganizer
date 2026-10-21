@@ -100,7 +100,7 @@ noteorganizer/
 │   ├── categories.py     the live category map
 │   ├── single_instance.py  one window per notebook (a lock on its folder)
 │   ├── welcome.py        the note a first install opens on
-│   ├── diagnostics.py    what the app says about itself: crash log, feedback
+│   ├── diagnostics.py    what the app says about itself: crash log, About's pages
 │   └── model.py          what a note is; normalize_note validates every one
 └── ui/                   on-screen areas, as mixins NoteOrganizer inherits
     ├── calculator_panel.py  the in-note calculator panel
@@ -1192,8 +1192,9 @@ environment — and lets through only those names. Never a note's words,
 and never a path: a folder's path holds the person's name.
 
 `PRIVACY_URL` is the privacy policy on Google Sites, which About opens and
-the site's footer links (`site/build.py` reads it from here, so the two
-cannot differ). `STORE_REVIEW_URL` is the Store's review page once there is
+both stores are given. The project's site does not link it: the site is
+kept apart from the apps ([site/README](../site/README.md#kept-apart-from-the-apps)).
+`STORE_REVIEW_URL` is the Store's review page once there is
 one: until then it is `None`, and About shows no Feedback card. The app
 opens a page and nothing more; it makes no connection of its own.
 

@@ -980,8 +980,8 @@ lands in `crash_log.txt` beside your data — worth attaching if you ever report
 
 ## Settings
 
-Categories, templates, trash, duplicate cleanup, appearance, your name, usage statistics, and a
-keyboard-shortcut reference all live on one page, reached via the **⚙ Settings** button at the
+Categories, templates, backups, trash, duplicate cleanup, appearance, your name, usage
+statistics, a keyboard-shortcut reference and About all live on one page, reached via the **⚙ Settings** button at the
 bottom of the sidebar. The page is split in two: a list of settings on the left, and whichever one
 you picked on the right. One section shows at a time, so you're only ever looking at the setting
 you came for. A **← Back to Notes** button at the top returns you to your notes.

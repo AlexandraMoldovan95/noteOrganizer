@@ -13,8 +13,8 @@ What it does, in order:
    documentation pages converted from Markdown, and the screenshots,
    resized to WebP.
 3. Checks what it built: every internal link and anchor resolves, no
-   {{token}} is left unfilled, and nothing private (a home folder, an
-   e-mail address) reached a page.
+   {{token}} is left unfilled, and nothing private (a home folder, a
+   private account or folder name: FORBIDDEN) reached a page.
 4. Only then puts it in public/'s place. Any failure stops the build with
    a non-zero exit and leaves the last good site in public/ untouched.
 

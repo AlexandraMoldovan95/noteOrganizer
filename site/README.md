@@ -19,7 +19,7 @@ change that only touches `site/`.
 | Path | What it is |
 |---|---|
 | `public/` | **The finished site — this is what goes to Netlify.** Never edit it by hand: the build replaces it. Not in git: the build makes it again whenever it is needed. |
-| `src/` | The source: the overview page, the page template, the styles, the demo, the Netlify headers. |
+| `src/` | The source: the overview page, the page template, the site's privacy notice, the styles, the demo, the Netlify headers. |
 | `build.py` | Turns `src/` plus the app's repository into `public/`. |
 | `site.json` | Two settings: the site's address and, later, the repository's address. |
 | `tools/check_demo.mjs` | Walks the built site in a real browser (Edge), on a computer and on a phone, and photographs it. |
@@ -60,7 +60,8 @@ themes, the emoji, the version), read as text — none of the app's code runs.
 It builds in `public.building/` first and only swaps that into `public/`
 once every check has passed, so it stops, and leaves the old site alone, if
 a link is broken, a value is missing, a page would contain something
-private such as a home-folder path or an e-mail address — or if Windows
+private such as a home-folder path or a private account or folder name (the strings listed in
+`FORBIDDEN`) — or if Windows
 will not let go of `public/` because an Explorer window or a browser tab
 has it open (close it and run the build again).
 
@@ -109,8 +110,7 @@ either — feedback is a review in the stores — and `_headers` says so
 
 Put its address in `site.json` (`"repo_url": "https://github.com/..."`) and
 rebuild: every mention of a document that is not published on the site
-becomes a link to it on GitHub. Change the footer line in `src/index.html`
-that says the code is private.
+becomes a link to it on GitHub.
 
 ## Linking to it from somewhere else
 

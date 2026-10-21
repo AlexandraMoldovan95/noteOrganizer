@@ -98,10 +98,11 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
   the app is slow: the bug form asks how many notes the person has, and every crash log names the
   notebook's size, so such a report says at once whether this is the cause.
   `tools/bench.py --rich` re-measures the save at any size.
-- **An Android version.** An exploration is under way in a repository of its own
-  (`noteOrganizerForAndroid`, private), begun on 2026-09-13: a native Android app in Kotlin that
-  reads and writes the same notes file as this one, built to answer whether the data format
-  survives the trip and what a touch-sized version costs. It is not a product yet. Of the two
+- **An Android version.** It is built in a repository of its own (`noteOrganizerForAndroid`,
+  private), begun on 2026-09-13: a native Android app in Kotlin that reads and writes the same
+  notes file as this one. It began as an exploration of whether the data format survives the trip
+  and what a touch-sized version costs, and is now on its way to Google Play, after this app's
+  Store release. Of the two
   routes once weighed here, it took the first — a full rewrite with a mobile-first toolkit — rather
   than a port of this code onto Kivy or BeeWare, and nothing in this repository is shaped for it
   (CLAUDE.md's project focus).
@@ -451,6 +452,7 @@ counting notes record what counted, what didn't, and why. The features themselve
 | `0.94.382` | 2026-10-15 | 94 | 382 | **Three** `Fixed`, no `Added`, on four stacked branches released as one before one rebuild — the owner's "1 2 si 3" (two small observations left by the scale work, and a pass over the docs) and her review of what followed. One entry per mechanism, each would have shipped without the others: (1) closing the app during a backup import or export let the worker die past the 30-second wait, leaving the unpacked backup, a half-copied attachment or an unfinished `.tmp`, and nothing said so — the next start's word, which the owner asked for at case 660, belongs to this entry (one complaint, completed inside this work); (2) drawing a note's tables asked every drawn grid for each cell, quadratic in the tables; (3) a theme switch rebuilt every drawn table, which flickered — field-reported by the owner. All three shipped in `0.94.379` or earlier, so all count. Not counted: the freshness pass over every `.md` and the retaken Appearance screenshot (docs), the part of the theme switch that remains (Known limitations, measured), and the tests — ST01–ST10, TB01–TB02, TH01–TH06, CN01–CN05. |
 | `0.95.382` | 2026-10-15 | 95 | 382 | One `Added`, no `Fixed`: Send feedback, the owner's ask once the whole-file save was decided "not now" — a way for people to say the app is slow, and how many notes they have, without a GitHub account and without her address shown anywhere. Counted once: the button, the site's form with the details it shows, the copied link when no browser opens, and the Store button that waits for a Store page are one feature. NOT counted: every crash log entry carrying the same details through one writer (`Changed`, an existing log made more useful — its start-up writer no longer raising before the data folder is known is part of that change, found while making it), the GitHub bug form's new field and option (the repository, not the app), the site's pages and its build check, the docs, and the tests — FB01–FB10. |
 | `0.95.391` | 2026-10-20 | 95 | 391 | **Nine** `Fixed`, no `Added`, on three stacked branches released as one before one rebuild — what comparing the Android port with the desktop turned up on the desktop's side, each tried by the owner from source before release. One entry per mechanism, each would have shipped without the others: (1) a superscript, subscript or circled figure in the date field raised in `read_date`, so the note stopped saving; (2) the Trash purged by a window it could not read — a damaged settings file, or a hand-edited `0`, `"forever"` or `400` (the startup notice, the "Choose…" selector and the promises without a number are part of this entry); (3) the startup purge and removing one attachment deleted a file another note still used (the purge not running on a launch whose notes file could not be read is part of this entry); (4) the cell menu's "Merge with cell to the left / above" wrote over the clicked cell's text; (5) "Insert row above" on a table's header pushed its separator out; (6) bold or italic over a partly styled selection gave all of it one answer for the other style, in the body and across cells; (7) Enter before a list marker's end put a second marker in front; (8) Enter over a selection in a list item or a table cell left the selected words; (9) Backspace over a selection ending just after a marker took the marker. All shipped in `0.95.382` or earlier, so all count. Not counted: the one-definition gate's new rule against a bare `.isdigit()` (a tool), the three new story-look scenes, the docs, and the tests — RD20, TW01–TW13, SF01–SF06, TM01–TM04, LS01–LS10. |
+| `0.96.392` | 2026-10-21 | 96 | 392 | One `Added` and one `Fixed`, on three branches merged one after another before one rebuild (PRs #291, #292 and #294; #289 and #290, the docs' freshness and the site's walk, move nothing). The `Added`: the privacy policy from Settings → About — Privacy policy → Read, the link copied when no browser opens, and the policy itself (`docs/PRIVACY.md`, published by hand on Google Sites) counted once. The `Fixed`: the welcome note's headings in one column — ℹ and ✍ drawn as narrow as letters are one mechanism, Tk finding older symbols in the text font, so one entry; shipped in `0.89.362`, so it counts. Not counted: Send feedback and the site's form behind it (`Removed`); the welcome note's 🛡 Your privacy section and the MIT "provided as is" line in About (`Changed`); 🛡 joining the emoji picker (part of that section: every icon the note uses must be one a person can pick); the site kept apart from the apps, with its own privacy notice (the site, not the app); the docs, and the tests — FB02–FB10, FB12–FB13, Y06, Y10–Y12, CB09. |
 
 ### At the real launch: 1.0.0 and after
 
@@ -470,14 +472,14 @@ the release above it** — no more cumulative totals:
 
 This section is only about the app's own `APP_VERSION`/`CHANGELOG.md` numbering — how a build
 actually gets packaged and published on a given platform (store-specific package versions,
-submission requirements) is documented separately, since it's not decided or in progress and
-doesn't belong mixed into the numbering policy above:
+submission requirements) is documented separately, since it doesn't belong mixed into the
+numbering policy above:
 
 - [`docs/RELEASE_WINDOWS.md`](RELEASE_WINDOWS.md) — Microsoft Store (MSIX) and alternative Windows
   distribution channels.
-- [`docs/RELEASE_ANDROID.md`](RELEASE_ANDROID.md) — exploratory only, kept ready for if an Android
-  release is ever scoped; not current work (see "An Android version" under
-  [Under consideration](#under-consideration) and `CLAUDE.md`'s Project focus).
+- [`docs/RELEASE_ANDROID.md`](RELEASE_ANDROID.md) — Google Play, for the Android app built in its
+  own repository (see "An Android version" under [Under consideration](#under-consideration) and
+  `CLAUDE.md`'s Project focus).
 
 ## Known limitations
 
