@@ -535,10 +535,39 @@ check('every bullet of the welcome note is a line that starts with one',
       == sum(1 for line in _WELCOME_LINES if line.startswith('- '))
       and all(_welcome_lines[p['line']].startswith('• ')
               for p in _welcome['paragraphs']))
+# The first thing a new notebook shows says what the app does with your data
+# and where the privacy policy is, so nobody meets it only by chance -- under
+# a heading of its own, the owner's call: a line inside another section did
+# not catch the eye.
+_privacy_heading = '🛡 Your privacy'
+_privacy_section = []
+if _privacy_heading in _welcome_lines:
+    for _line in _welcome_lines[_welcome_lines.index(_privacy_heading) + 1:]:
+        if not _line:
+            break
+        _privacy_section.append(_line)
+check('the welcome note gives privacy a section of its own, which says the app '
+      'collects nothing and points to the privacy policy in Settings → About',
+      any(_welcome['body'][s['start']:s['end']] == _privacy_heading
+          for s in _welcome['formatting'] if s['style'] == 'bold')
+      and any('collects nothing' in line for line in _privacy_section)
+      and any('Settings → About → Privacy policy' in line
+              for line in _privacy_section))
 check('no line of the welcome note leaves its bold open, and no icon '
       'carries the variation selector',
       all(line.count('**') % 2 == 0 for line in _WELCOME_LINES)
       and '\ufe0f' not in _welcome['title'] + _welcome['body'])
+# Every heading's title starts in one column: its icon is from the emoji
+# block, which only the emoji font draws. Tk found \u2139 and \u270d, older symbols,
+# in the text font, as narrow as letters, and their titles started left of
+# the others -- the owner saw it. qa5 measures the column itself, on Windows.
+_welcome_heading_icons = [line[2:].split(' ', 1)[0] for line in _WELCOME_LINES
+                          if line.startswith('# ')]
+_welcome_narrow = [icon for icon in _welcome_heading_icons
+                   if len(icon) != 1 or ord(icon) < 0x1F000]
+check(f'every heading of the welcome note starts with an icon from the emoji '
+      f'block ({_welcome_narrow or "all"})',
+      len(_welcome_heading_icons) >= 5 and not _welcome_narrow)
 # The note shows the app; an icon in it the emoji picker cannot give back
 # is one the person cannot use. Six of its eleven were missing once. An icon
 # is anything from U+2100 up but the arrows: by category alone, ℹ is a letter.

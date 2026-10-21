@@ -23,7 +23,10 @@ TITLE = "Welcome to Note Organizer 👋"
 # The text, a line at a time: "# " starts a heading, "- " a bullet, "" is a
 # blank line and anything else a paragraph. **Double asterisks** make bold.
 # No icon carries the emoji variation selector (U+FE0F): Tk draws it as a
-# blank the width of two letters, after the icon.
+# blank the width of two letters, after the icon. And every heading's icon
+# is from the emoji block (U+1F000 up), which only the emoji font draws: Tk
+# finds an older symbol such as ℹ or ✍ in the text font, as narrow as a
+# letter, and its title then starts left of the others.
 LINES = (
     "Hi, and welcome! This is your own space for everything worth keeping: "
     "ideas, plans, lists, recipes, the things you don't want to forget. It "
@@ -31,7 +34,7 @@ LINES = (
     "Here is a quick look at what you can do. When you no longer need this "
     "note, delete it; you can always bring it back (see the end).",
     "",
-    "# ✍ Write",
+    "# 📝 Write",
     "- **+ New Note** starts a note. Give it a title and write; it saves "
     "itself as you go.",
     "- The toolbar shapes your words: bold, colours, highlights, sizes, "
@@ -64,11 +67,16 @@ LINES = (
     "- Deleted notes wait in **Settings → Recently deleted**, so a slip can "
     "be undone.",
     "",
+    "# 🛡 Your privacy",
+    "- The app collects nothing and sends nothing anywhere. A note leaves "
+    "this computer only when you share it or save a backup.",
+    "- **Settings → About → Privacy policy** has the whole of it.",
+    "",
     "# 🎨 Make it yours",
     "- Pick one of eight light and dark themes in **Settings → Appearance**, "
     "or switch between light and dark with the ☀ / 🌙 button on the toolbar.",
     "",
-    "# ℹ Good to know",
+    "# 💡 Good to know",
     "- **Settings → About** shows where your notes are saved on this "
     "computer, with buttons to open that folder or copy its path. It is also "
     "where you can bring this note back after deleting it.",

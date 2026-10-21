@@ -171,6 +171,7 @@ is in the table below as well.
 | [The heart that left a gap](#the-heart-that-left-a-gap) | An invisible character is still drawn; when the toolkit draws it badly, keep it out of what the app writes, and say what is left. | 0.89.362 |
 | [Save and Delete, the same khaki](#save-and-delete-the-same-khaki) | A gate measures the pairs it was told about — walk what is on the screen; and two colours that differ only in hue are one colour to a reader who cannot see hue. | 0.89.365 |
 | [Two answers to one question](#two-answers-to-one-question) | Two helpers answering one question disagree somewhere — measure them against each other; and a base theme's state map silently overrides what you configured. | 0.89.371 |
+| [The icon drawn as narrow as a letter](#the-icon-drawn-as-narrow-as-a-letter) | An icon's width is the width of whichever font answered for it; where icons must line up, choose them from the range one font draws, and measure the column. | Unreleased |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -4890,6 +4891,31 @@ in the ROADMAP).
 
 **Takeaway:** an invisible character is still drawn. When the toolkit draws it badly, keep it out
 of what the app writes, clean it where nothing hangs off the text, and say plainly what is left.
+
+### The icon drawn as narrow as a letter
+
+*(found by the owner, reading the welcome note thirteen days after it shipped)*
+
+**Symptom:** the welcome note's "Good to know" heading started further left than the headings
+above it. Measured, every icon was 23 px wide and its title began at 43 px — but ℹ was 7 px and
+"Good to know" began at 27, and ✍ was 17 px, putting "Write" at 37.
+
+**Root cause:** Tk draws each character with the first font that has it. The note's text font has
+ℹ (U+2139) and ✍ (U+270D), older symbols, and draws them at the width of a letter. The other
+icons are in the emoji block (U+1F000 up), which only Segoe UI Emoji has, at one width of its own.
+Table cells were never affected: they tag every emoji with the emoji font themselves, a rule the
+body does not have.
+
+**Fix:** the note's two icons are 💡 and 📝, from the emoji block. Extra spaces were measured as
+the other way and rejected: a space is about 4 px against a 6 px gap that changes with each text
+size, so no count of them lined up at the default size, and some made it worse. Giving the whole
+body the cells' emoji font was rejected as well — a rule over every character of every note, for a
+column only the app's own note has. `test_data_safety` holds every heading's icon to the emoji
+block; qa5 measures the column on Windows.
+
+**Takeaway:** an icon's width is the width of whichever font answered for it. Where icons must
+line up, choose them from the one range a single font draws, and measure the column rather than
+trust the look of one line.
 
 ## Smaller lessons, moved out of the code
 

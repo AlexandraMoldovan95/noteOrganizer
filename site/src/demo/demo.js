@@ -533,7 +533,7 @@
       html: "<div>This page is a re-creation of Note Organizer's interface, so you can try it " +
         "without installing anything. The real app is a Windows program; what you do here is " +
         "kept in this browser only.</div><div><br></div>" +
-        "<div><b>✍ Write</b></div><ul><li><b>+ New Note</b> starts a note. Give it a title " +
+        "<div><b>\u{1F4DD} Write</b></div><ul><li><b>+ New Note</b> starts a note. Give it a title " +
         "and write; it saves itself as you go.</li><li>The toolbar shapes your words: bold, " +
         "fonts and sizes, colours, highlights, lists, indents, alignment, emoji, and tables." +
         "</li><li>Under the text you'll " +

@@ -1167,7 +1167,10 @@ if that one was deleted.
 
 One thing learned building it: its icons carry no emoji variation selector
 (U+FE0F). Tk draws that character as a blank two letters wide, so "✍️ Write"
-showed a gap after the hand.
+showed a gap after the hand. And one learned after it shipped: every
+heading's icon is from the emoji block (U+1F000 up). Tk found ℹ and ✍ in the
+text font, as narrow as letters, and their titles started left of the
+others ([the story](ISSUES_LOG.md#the-icon-drawn-as-narrow-as-a-letter)).
 
 ---
 

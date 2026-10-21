@@ -1981,12 +1981,27 @@
     "edits": [
       {
         "file": "noteorganizer/core/welcome.py",
-        "find": "    \"# ✍ Write\",\n",
-        "replace": "    \"# ✍️ Write\",\n"
+        "find": "    \"# 📝 Write\",\n",
+        "replace": "    \"# 📝️ Write\",\n"
       }
     ],
     "must_fail": ["no line of the welcome note leaves its bold open, and no icon carries the variation selector"],
     "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "Y12",
+    "about": "a welcome heading's icon is an older symbol, drawn as narrow as a letter, so its title starts left of the others",
+    "edits": [
+      {
+        "file": "noteorganizer/core/welcome.py",
+        "find": "    \"# 📝 Write\",\n",
+        "replace": "    \"# ✍ Write\",\n"
+      }
+    ],
+    "must_fail": ["every heading of the welcome note starts with an icon from the emoji block",
+                  "every heading of the welcome note starts its title in one column"],
+    "suites": ["test_data_safety", "qa5"],
     "expect": "killed"
   },
   {
@@ -2029,6 +2044,34 @@
     ],
     "must_fail": ["Settings -> About's Show brings a deleted welcome note back"],
     "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "Y10",
+    "about": "the welcome note no longer says what the app does with your data, nor where the privacy policy is",
+    "edits": [
+      {
+        "file": "noteorganizer/core/welcome.py",
+        "find": "    \"\",\n    \"# 🛡 Your privacy\",\n    \"- The app collects nothing and sends nothing anywhere. A note leaves \"\n    \"this computer only when you share it or save a backup.\",\n    \"- **Settings → About → Privacy policy** has the whole of it.\",\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["the welcome note gives privacy a section of its own"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "Y11",
+    "about": "the welcome note's privacy lines lose their heading, and fall back inside Share and keep safe",
+    "edits": [
+      {
+        "file": "noteorganizer/core/welcome.py",
+        "find": "    \"\",\n    \"# 🛡 Your privacy\",\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["the welcome note gives privacy a section of its own"],
+    "suites": ["test_data_safety"],
     "expect": "killed"
   },
   {
@@ -2557,12 +2600,12 @@
   },
   {
     "id": "CB09",
-    "about": "the emoji picker loses the welcome note's information sign, the icon Unicode files as a letter",
+    "about": "the emoji picker loses the welcome note's light bulb, the icon before Good to know",
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                            \"ℹ\", \"❗\"], \"#A0C4FF\"),\n",
-        "replace": "                            \"❗\"], \"#A0C4FF\"),\n"
+        "find": "        (\"Objects\", [\"📌\", \"📎\", \"📅\", \"📝\", \"💡\", \"🔥\",",
+        "replace": "        (\"Objects\", [\"📌\", \"📎\", \"📅\", \"📝\", \"🔥\","
       }
     ],
     "must_fail": ["every icon of the welcome note"],

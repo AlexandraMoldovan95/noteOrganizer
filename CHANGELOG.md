@@ -111,6 +111,14 @@ How the numbers themselves are counted is the
   keeps and where, what leaves your computer — only what you send — and how an email to the
   project is kept. Both stores are given the same page.
 
+### Fixed
+
+- **The welcome note's headings start in one column.** The ℹ before Good to know, and the ✍
+  before Write, were drawn as narrow as letters — Tk found them in the text font, not the emoji
+  font — so those two titles began left of the others, by 16 and 6 pixels at the usual size. They
+  are 💡 and 📝 now, from the emoji block like every other heading's icon, and line up at every
+  text size in Settings. Shipped with the note, in 0.89.362; the owner saw it.
+
 ### Removed
 
 - **Send feedback, and the form on the project's site behind it.** Feedback is now a review in
@@ -122,6 +130,10 @@ How the numbers themselves are counted is the
 
 ### Changed
 
+- **The welcome note gives your privacy a section of its own** — 🛡 Your privacy: the app
+  collects nothing and sends nothing anywhere, and Settings → About → Privacy policy has the
+  whole of it — so a new notebook meets the policy on its first page rather than only by finding
+  it. The emoji picker offers the 🛡 too, as it offers every icon the note uses.
 - **About says the app is free software under the MIT license, provided as is,** and to keep a
   backup of your notes — where someone who installed it from a store, and never sees the license
   file, will read it.
@@ -135,7 +147,11 @@ How the numbers themselves are counted is the
   details to the same list. Mutants FB01 and FB11 retired with the link they aimed at, the rest
   of FB02–FB12 re-aimed and FB13 added, all killed. The site's build refuses a page with a form,
   or an app source or privacy policy that names the site; its browser walk checks the site's own
-  privacy notice and the links to it.
+  privacy notice and the links to it. `test_data_safety` checks that the welcome note's privacy
+  has a section of its own, under its own heading (Y10 and Y11, killed), and story_look
+  photographs it as scene 23. qa5 measures, on Windows, that every heading of the welcome note
+  starts its title at the same place, and `test_data_safety` holds every heading's icon to the
+  emoji block (Y12, killed by both); Y06 and CB09 re-aimed at the new icons.
 
 ---
 
