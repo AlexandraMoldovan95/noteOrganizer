@@ -1186,6 +1186,17 @@ try:
     app._build_settings_about_panel(_fb_frame)
     check('no Feedback card while the app is not in the Store',
           find_btn_qa6(_fb_frame, 'Write a review') is None)
+
+    def _fb_texts(w):
+        # Only labels a geometry manager shows: one built and never packed
+        # is in the tree but not on the screen.
+        out = [str(w.cget('text'))] if isinstance(w, tk.Label) and w.winfo_manager() else []
+        for c in w.winfo_children():
+            out += _fb_texts(c)
+        return out
+    check('About says the app is free software, provided as is, under the MIT license',
+          _fb_diag.ABOUT_TERMS in _fb_texts(_fb_frame)
+          and 'MIT license' in _fb_diag.ABOUT_TERMS and 'as is' in _fb_diag.ABOUT_TERMS)
     _fb_privacy = find_btn_qa6(_fb_frame, 'Read')
     if _fb_privacy is not None:
         _fb_privacy.invoke()

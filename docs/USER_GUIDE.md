@@ -1090,8 +1090,9 @@ languages Windows is checking. How it works, and how it stays quiet in other lan
 
 ### About
 
-Settings → About shows which version you are running and **where your notes are stored** on this
-computer, with **Open folder** and **Copy path** beside it. Under it, **Welcome note → Show**
+Settings → About shows which version you are running — Note Organizer is free software under the
+MIT license, provided as is, so keep a backup of your notes — and **where your notes are stored**
+on this computer, with **Open folder** and **Copy path** beside it. Under it, **Welcome note → Show**
 opens the welcome note from the first start — or, if you deleted it, puts a fresh copy back in
 your notebook and opens that. Pressing it again opens the same note rather than adding another.
 

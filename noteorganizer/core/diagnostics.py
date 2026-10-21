@@ -21,6 +21,11 @@ from . import paths
 # docs/PRIVACY.md is its text; the owner copies it to this page by hand.
 PRIVACY_URL = "https://sites.google.com/view/noteorganizer-privacy"
 
+# Said under the version in Settings → About: the MIT license's "as is",
+# where people who install from a store, and never see LICENSE, read it.
+ABOUT_TERMS = ("Free software under the MIT license, provided as is. "
+               "Keep a backup of your notes.")
+
 # The Microsoft Store's review page, once the app is published there. While
 # it is None, About has no Feedback card: reviews are the only way in.
 STORE_REVIEW_URL = None

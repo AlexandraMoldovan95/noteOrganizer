@@ -4581,6 +4581,16 @@
     "expect": "killed"
   },
   {
+    "id": "FB13",
+    "about": "About no longer says the app is provided as is, so a store user never reads the license's terms",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "        terms.pack(fill=\"x\", pady=(4, 0))\n",
+               "replace": "        pass\n"}],
+    "must_fail": ["About says the app is free software, provided as is, under the MIT license"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
     "id": "TM01",
     "about": "the cell menu's Merge with cell to the left writes a marker over the clicked cell's text",
     "edits": [{"file": "note_organizer.py",

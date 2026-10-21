@@ -3778,6 +3778,10 @@ class SettingsPageMixin:
         tk.Label(titles, text=f"Version {_host().APP_VERSION}",
                  font=("Consolas", 9), anchor="w",
                  bg=self.colors["bg"], fg=self.colors["subtext"]).pack(fill="x")
+        terms = tk.Label(titles, text=diagnostics.ABOUT_TERMS, font=("Segoe UI", 9), anchor="w",
+                         justify="left", bg=self.colors["bg"], fg=self.colors["subtext"])
+        terms.pack(fill="x", pady=(4, 0))
+        self._wrap_to_own_width(terms)
 
         card = self._settings_card(parent)
         self._field_label(card, "Where your notes are stored")

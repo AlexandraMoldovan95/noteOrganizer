@@ -120,15 +120,22 @@ How the numbers themselves are counted is the
   keep as little as that about anyone. Crash logs still name the version and the notebook's size,
   on this computer only.
 
+### Changed
+
+- **About says the app is free software under the MIT license, provided as is,** and to keep a
+  backup of your notes — where someone who installed it from a store, and never sees the license
+  file, will read it.
+
 ### Testing
 
-- qa6 checks that About opens the privacy policy, that a browser that will not open leaves its
-  link copied, that there is no Feedback card before the Store page exists and that Write a
-  review opens it after, and that the running app still hands a crash log its version and the
-  notebook's size. `test_data_safety` holds the crash log's details to the same list. Mutants
-  FB01 and FB11 retired with the link they aimed at, the rest of FB02–FB12 re-aimed and all
-  killed; the site's build refuses a page with a form, and its browser walk checks that every
-  footer names the page the app opens.
+- qa6 checks that About opens the privacy policy and says the app is provided as is, that a
+  browser that will not open leaves its link copied, that there is no Feedback card before the
+  Store page exists and that Write a review opens it after, and that the running app still hands
+  a crash log its version and the notebook's size. `test_data_safety` holds the crash log's
+  details to the same list. Mutants FB01 and FB11 retired with the link they aimed at, the rest
+  of FB02–FB12 re-aimed and FB13 added, all killed. The site's build refuses a page with a form,
+  or an app source or privacy policy that names the site; its browser walk checks the site's own
+  privacy notice and the links to it.
 
 ---
 
