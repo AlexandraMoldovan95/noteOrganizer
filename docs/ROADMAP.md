@@ -98,10 +98,11 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
   the app is slow: the bug form asks how many notes the person has, and every crash log names the
   notebook's size, so such a report says at once whether this is the cause.
   `tools/bench.py --rich` re-measures the save at any size.
-- **An Android version.** An exploration is under way in a repository of its own
-  (`noteOrganizerForAndroid`, private), begun on 2026-09-13: a native Android app in Kotlin that
-  reads and writes the same notes file as this one, built to answer whether the data format
-  survives the trip and what a touch-sized version costs. It is not a product yet. Of the two
+- **An Android version.** It is built in a repository of its own (`noteOrganizerForAndroid`,
+  private), begun on 2026-09-13: a native Android app in Kotlin that reads and writes the same
+  notes file as this one. It began as an exploration of whether the data format survives the trip
+  and what a touch-sized version costs, and is now on its way to Google Play, after this app's
+  Store release. Of the two
   routes once weighed here, it took the first — a full rewrite with a mobile-first toolkit — rather
   than a port of this code onto Kivy or BeeWare, and nothing in this repository is shaped for it
   (CLAUDE.md's project focus).
@@ -476,9 +477,9 @@ numbering policy above:
 
 - [`docs/RELEASE_WINDOWS.md`](RELEASE_WINDOWS.md) — Microsoft Store (MSIX) and alternative Windows
   distribution channels.
-- [`docs/RELEASE_ANDROID.md`](RELEASE_ANDROID.md) — exploratory only, kept ready for if an Android
-  release is ever scoped; not current work (see "An Android version" under
-  [Under consideration](#under-consideration) and `CLAUDE.md`'s Project focus).
+- [`docs/RELEASE_ANDROID.md`](RELEASE_ANDROID.md) — Google Play, for the Android app built in its
+  own repository (see "An Android version" under [Under consideration](#under-consideration) and
+  `CLAUDE.md`'s Project focus).
 
 ## Known limitations
 

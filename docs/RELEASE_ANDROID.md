@@ -1,10 +1,10 @@
-# Android Release Reference (exploratory — not current work)
+# Android Release Reference
 
-**Reference material only, kept ready for if/when an Android release is ever scoped — nothing here
-is a plan or a commitment.** Android work stays out of scope until an explicit decision says
-otherwise: see `CLAUDE.md`'s "Project focus" and "An Android version" under
-[ROADMAP's "Under consideration"](ROADMAP.md#under-consideration) — an exploration in a
-repository of its own.
+**Reference material for the Android app's release on Google Play.** The app is built in a
+repository of its own, which keeps its own release notes; this repository's work stays on the
+desktop app (`CLAUDE.md`'s "Project focus", and "An Android version" under
+[ROADMAP's "Under consideration"](ROADMAP.md#under-consideration)). What the two share is the
+notes file's format and the privacy policy, which covers both apps.
 
 ## Two separate version numbers
 
