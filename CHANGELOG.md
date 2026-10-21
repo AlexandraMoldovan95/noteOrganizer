@@ -118,6 +118,13 @@ How the numbers themselves are counted is the
 - **Backspace just after a list marker comes back with one Ctrl+Z.** It took two: the first gave
   back the numbers, the second the marker.
 
+### Changed
+
+- **A new search shows its results from the top.** With the list scrolled down, a search typed
+  kept the list where it was, and its first matches could sit above the screen. Each new search,
+  and clearing one, now starts at the top; a rebuild with the same search — a note saved, a
+  sort — keeps its place, as before. The owner's call, on both apps.
+
 ### Testing
 
 - qa1 walks every route by its real key — Backspace, Delete and Cut over items, a letter typed
@@ -126,6 +133,11 @@ How the numbers themselves are counted is the
   each one's list, what is saved with it and one Ctrl+Z back; a bold word joined onto the item
   above stays bold; the net renumbers lines taken away under a key. `test_richtext` holds
   `list_deletion_range` to fifteen cases. Mutants LD01–LD10, all killed.
+- qa1: a search typed with the list scrolled down shows its results from the top, a rebuild with
+  the same search keeps its place, and clearing the search starts from the top too (SS01, killed).
+  qa4's check that the keyboard brings the ring back to its card after a search had the old way
+  built in — a search that kept the view and took the card out of sight — and failed when the
+  search began at the top. It now leaves the card far below the results instead (SS02, killed).
 
 ---
 

@@ -5736,6 +5736,42 @@ check('collapsing from deep scroll lands at the end, not a blank view',
 app.collapsed_groups.discard('General')
 app.group_by_category.set(False)
 app._on_toggle_group_by_category()
+
+# A new search starts its results at the top, and a rebuild with the same
+# search keeps its place. Kept in place, the first matches of a search typed
+# with the list scrolled down sat above the screen (the owner's call,
+# 2026-10-21). The search box waits 180 ms for a pause in typing.
+def _settle25(seconds=0.6):
+    _end25 = time.time() + seconds
+    while time.time() < _end25:
+        app.update()
+        time.sleep(0.02)
+
+
+app.notes = [NO.normalize_note({'id': 9300 + i, 'title': 'Found %d' % i,
+                                'body': 'match', 'category': 'General'})
+             for i in range(40)]
+app.refresh_note_list()
+_settle25()
+_cv23.yview_moveto(0.6)
+app.update()
+_before25 = _cv23.canvasy(0)
+app.search_var.set('match')
+_settle25()
+check(f'a new search shows its results from the top ({_before25:.0f} px down '
+      f'before, {_cv23.canvasy(0):.0f} after)',
+      _before25 > 200 and _cv23.canvasy(0) == 0)
+_cv23.yview_moveto(0.5)
+app.update()
+_px25 = _cv23.canvasy(0)
+app.refresh_note_list()
+_settle25()
+check('...while a rebuild with the same search keeps its place',
+      _px25 > 200 and abs(_cv23.canvasy(0) - _px25) < 30)
+app.search_var.set('')
+_settle25()
+check('...and clearing the search starts from the top too',
+      _cv23.canvasy(0) == 0)
 app.notes = _savedNotes23
 app.refresh_note_list()
 app.update()

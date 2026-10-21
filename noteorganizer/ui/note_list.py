@@ -239,6 +239,18 @@ class NoteListMixin:
                 saved_list_scroll = max(0, self.canvas.canvasy(0))
         except (tk.TclError, AttributeError):
             saved_list_scroll = 0
+        # A new search starts its results at the top: kept in place, its
+        # first matches could sit above the screen (the owner's call,
+        # 2026-10-21). Any other rebuild -- a save, a sort -- keeps its place.
+        query = self._search_query()
+        if query != getattr(self, "_list_query_drawn", query):
+            saved_list_scroll = 0
+            self._list_restore_px = None
+            try:
+                self.canvas.yview_moveto(0)
+            except (tk.TclError, AttributeError):
+                pass
+        self._list_query_drawn = query
         # Every data change ends here, so the Statistics panel refreshes too,
         # live while Settings is open -- before the early returns below.
         self._render_statistics()

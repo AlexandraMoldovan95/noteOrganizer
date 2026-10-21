@@ -4882,5 +4882,26 @@
     "must_fail": ["BackSpace over items 2 and 3: renumbered"],
     "suites": ["qa1"],
     "expect": "killed"
+  },
+  {
+    "id": "SS01",
+    "about": "a new search keeps the list's place, its first matches above the screen",
+    "edits": [{"file": "noteorganizer/ui/note_list.py",
+               "find": "        if query != getattr(self, \"_list_query_drawn\", query):\n",
+               "replace": "        if False:\n"}],
+    "must_fail": ["a new search shows its results from the top",
+                  "...and clearing the search starts from the top too"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "SS02",
+    "about": "a search starts at the top, and the keyboard's return leaves the ringed card far below it",
+    "edits": [{"file": "noteorganizer/ui/note_list.py",
+               "find": "            elif seen != \"all\":\n                self._scroll_row_into_view(rec)\n",
+               "replace": "            elif False:\n                self._scroll_row_into_view(rec)\n"}],
+    "must_fail": ["...and after a search, which starts its results from the top, left the card far below them"],
+    "suites": ["qa4"],
+    "expect": "killed"
   }
 ]

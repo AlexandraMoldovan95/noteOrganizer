@@ -471,8 +471,9 @@ Appearance → Spelling**.
 Search the note list by keyword, and sort by recency, title, category, or date, from the controls
 above the list. This is the search for finding *which* note you want, across the whole notebook.
 An **✕** appears inside the search box once you have typed something; it empties the box and puts
-the whole list straight back. Right-clicking the box offers Cut / Copy / Paste, like every other
-text field in the app.
+the whole list straight back. A new search shows its results from the top of the list, wherever
+you had scrolled to; the list keeps its place for anything else, such as a note being saved.
+Right-clicking the box offers Cut / Copy / Paste, like every other text field in the app.
 
 Two dropdowns sit under the box, each with its own caption so you can tell at a glance which is
 which. **Sort** offers eight orders — Recently updated, Oldest updated, Title A–Z, Title Z–A,

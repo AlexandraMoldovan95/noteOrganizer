@@ -5098,7 +5098,8 @@ line or three and points here, by name, for what happened.*
   and the menu key post its menu off the screen. What took the ring's row out of sight decides
   how. If the person scrolled the list away, the ring goes to the first row the view shows, and
   the view stays where they put it. If the list moved the row while the keyboard was elsewhere —
-  a save took the card to the top, a search keystroke filtered out the notes above it — the ring
+  a save took the card to the top, a search showed its results from the top with the card far
+  below them (until 2026-10, by filtering out the notes above it, the view kept) — the ring
   stays on its row and the row is brought into view; given to the first row in view instead, it
   sat on another note, and Enter opened that one.
 - **`_restore_card_focus`** — Since the cards became a drawing, a rebuild never moves the
