@@ -216,6 +216,50 @@ def apply_shared_update(note, incoming, fields=UPDATABLE_FROM_SHARED):
     return note
 
 
+def rescue_copy_spent(note):
+    """Whether *note* holds again everything its rescue copy ``_prev`` kept
+    -- the words, their styles and comments, and each other field the copy
+    brings back -- so "↩ Restore previous" has nothing left to rescue.
+    Undo after a big deletion brought the words back while the button
+    stayed, and pressed later it put the old version over everything
+    written since (2026-10-22, the owner's call, on both apps)."""
+    prev = note.get("_prev")
+    if not isinstance(prev, dict):
+        return False
+    body = note.get("body") or ""
+    if ((note.get("title") or "") != (prev.get("title") or "")
+            or body != (prev.get("body") or "")
+            or (note.get("comments") or "") != (prev.get("comments") or "")):
+        return False
+    lines = len(body.split("\n"))
+    if (normalize_formatting(note.get("formatting") or [])
+            != normalize_formatting(prev.get("formatting") or [])):
+        return False
+    if (normalize_paragraphs(note.get("paragraphs") or [], lines)
+            != normalize_paragraphs(prev.get("paragraphs") or [], lines)):
+        return False
+    return all(prev[key] == note.get(key, NOTE_DEFAULTS.get(key))
+               for key in prev if key not in PREV_TEXT_FIELDS)
+
+
+def copy_replaced_by_restore(note, prev):
+    """What "↩ Restore previous" keeps of the version it replaces, to be
+    the rescue copy in its turn -- its text, and each other field *prev*
+    brings back -- so the same button brings it back; spent, the copy took
+    everything written since the deletion with no way back. None when it
+    holds nothing the restored version lacks (an emptied note, words the
+    restored text contains): a button offering that back would mislead."""
+    title = note.get("title") or ""
+    nothing_lost = ((note.get("body") or "").strip() in (prev.get("body") or "")
+                    and (not title.strip() or title == (prev.get("title") or ""))
+                    and all(prev[key] == note.get(key, NOTE_DEFAULTS.get(key))
+                            for key in prev if key not in PREV_TEXT_FIELDS))
+    if nothing_lost:
+        return None
+    return {key: copy.deepcopy(note.get(key, NOTE_DEFAULTS.get(key)))
+            for key in list(PREV_TEXT_FIELDS) + [k for k in prev if k not in PREV_TEXT_FIELDS]}
+
+
 def shared_update_changes(note, incoming, fields=UPDATABLE_FROM_SHARED):
     """Whether updating *note* from *incoming* would change any of *fields*,
     both compared as a load shapes them.

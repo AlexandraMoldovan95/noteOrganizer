@@ -240,6 +240,18 @@ added past the duplicate check, having just been asked about. The duplicate chec
 the notebook as it will be (`_dup_keys_after`), since the updates are not applied yet when it
 runs.
 
+### The rescue copy: kept while it rescues, swapped when used
+
+A drastic shrink, a repeat turned off with days of its own, or an update from a code or a backup
+keeps the version it replaces in the note's `_prev`, which **↩ Restore previous** brings back.
+Two rules, both from 2026-10-22 and both the owner's call on both apps, keep that copy from ever
+costing words. A save that holds again everything the copy kept spends it (`rescue_copy_spent`):
+a shrink taken back with Ctrl+Z left the button in place, and pressed later it put the old
+version over everything written since. And a restore keeps what it replaces as the copy in its
+turn (`copy_replaced_by_restore`), so the same button brings that back — unless it holds nothing
+the restored version lacks, such as an emptied note, when a button offering it back would only
+mislead. The question before a restore says the text is kept only when it will be.
+
 ### A name lives in more than one place
 
 A category's name is held by the notes (and their per-day overrides), the Trash, the templates,

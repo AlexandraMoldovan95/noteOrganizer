@@ -4402,10 +4402,37 @@ app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '2030-1')
 app.restore_previous_version(); app.update()
 _pn = app.find_note(_pid)
 check('a half-typed date cannot block the restore any more',
-      _pn is not None and _pn.get('_prev') is None
-      and 'original version' in _pn.get('body', ''))
-check('...and the button is gone, because the copy was spent',
-      not app.restore_prev_btn.winfo_ismapped())
+      _pn is not None and 'original version' in _pn.get('body', ''))
+# What the restore replaced is kept as the copy in its turn (2026-10-22,
+# the owner's call): spent, it took the words written since the deletion
+# with no way back. So the button stays, and brings "short" back.
+check(f"...and what it replaced is kept, the button there to bring it back "
+      f"({(_pn.get('_prev') or {}).get('body')!r})",
+      (_pn.get('_prev') or {}).get('body') == 'short'
+      and app.restore_prev_btn.winfo_ismapped())
+# A big deletion taken back by Undo: the save after it holds what the copy
+# kept, so the copy is spent and the button goes. It stayed, and pressed
+# later it put the old version over everything written since. (The date
+# half-typed above is cleared first: leaving it asks a question.)
+app.date_entry.delete(0, 'end')
+app.save_current_note(auto=False); app.update()
+app.open_blank_tab(); app.update()
+app.title_entry.insert(0, 'Undone')
+app.body_text.insert('1.0', 'a long text that a slip of the hand is about to delete whole')
+app.save_current_note(auto=False); app.update()
+_ud_id = app.selected_note_id
+app.body_text.edit_separator()
+app.body_text.delete('1.0', 'end')
+app.save_current_note(auto=False); app.update()
+_ud_kept = isinstance((app.find_note(_ud_id) or {}).get('_prev'), dict)
+app._body_undo_redo('undo'); app.update()
+app.save_current_note(auto=False); app.update()
+_ud = app.find_note(_ud_id) or {}
+check(f"a big deletion's copy is spent once Undo has brought the words back, "
+      f"and the button goes (kept after the delete: {_ud_kept}; body {_ud.get('body')!r})",
+      _ud_kept and _ud.get('_prev') is None
+      and _ud.get('body', '').rstrip('\n') == 'a long text that a slip of the hand is about to delete whole'
+      and not app.restore_prev_btn.winfo_ismapped())
 
 # ============================================================
 # UNDO ON THE DELETE TOAST: THE OCCURRENCE HALF

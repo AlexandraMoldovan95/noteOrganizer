@@ -1166,6 +1166,28 @@ app.update()
 check(f'lines taken away under a key are renumbered at its release ({body()!r})',
       body() == '1. one\n2. three\n3. four')
 
+# ---- A click on a marker puts the caret after it (the owner's call) ----
+# Before it, a letter typed made "x2. two", a line that is no item any more.
+_ld_list('2.1')
+_qa_fire(app.body_text, '<ButtonRelease-1>', x=2, y=2)
+app.update()
+_cm_on = app.body_text.index('insert')
+_ld_typed('x')
+check(f'a click on a marker puts the caret after it, and what is typed joins the item '
+      f'(caret {_cm_on}; {body()!r})',
+      _cm_on == '2.3' and body() == '1. one\n2. xtwo\n3. three\n4. four')
+_ld_list('2.5')
+_qa_fire(app.body_text, '<ButtonRelease-1>', x=2, y=2)
+app.update()
+_cm_words = app.body_text.index('insert')
+_ld_list('2.0', '2.2')
+_qa_fire(app.body_text, '<ButtonRelease-1>', x=2, y=2)
+app.update()
+check(f'...while a click in the words, or one that selects the marker, stays where it is '
+      f'(caret {_cm_words}; selection {[str(i) for i in app.body_text.tag_ranges("sel")]})',
+      _cm_words == '2.5' and [str(i) for i in app.body_text.tag_ranges('sel')] == ['2.0', '2.2'])
+app.body_text.tag_remove('sel', '1.0', 'end')
+
 # ---- Marker and indent tag must not drift apart (regression) ----
 # The indent tag first covered each line's trailing newline. Tk hands a tag
 # on to text inserted between two characters that both carry it, so the next

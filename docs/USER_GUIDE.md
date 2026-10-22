@@ -94,7 +94,9 @@ always save immediately when you switch to a different note. There is a safety n
 autosave, too: if a note's text suddenly shrinks drastically (an accidental select-all-and-type,
 say), the app quietly keeps the earlier version and an **↩ Restore previous** button appears in
 the editor — one click (past a warning that pre-selects No) brings the old text back whole,
-tables redrawn and all.
+tables redrawn and all. What it replaces is kept in turn, so pressing it again brings that back:
+nothing written since is lost. If you take the shrink back yourself with Ctrl+Z, the button goes
+away once the note is saved, as there is nothing left to rescue.
 
 Closing the app works the same way:
 anything still unsaved is saved on the way out, silently — no "unsaved changes" question, because
@@ -196,6 +198,8 @@ These combine: a bullet can be centred, an indented paragraph can be right-align
 can carry bold or a text colour.
 
 List markers are part of the note's own text — a bullet really is a "• " at the start of the line.
+A click on a marker puts the cursor just after it, at the item's words, so what you type joins the
+item instead of breaking it.
 
 *Why: it means a list still looks like a list when you export the note, share it as a code, or
 paste it into an email.*

@@ -118,6 +118,7 @@
   "_card_texts": "(self, note)",
   "_card_view": "(self, note_id)",
   "_caret_out_of_hidden": "(self, _event=None)",
+  "_caret_past_marker": "(self, _event=None)",
   "_catch_up_deferred_refresh": "(self)",
   "_category_override_warning": "(self, notes)",
   "_cell_at": "(self, line_no, column)",
