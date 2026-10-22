@@ -4,7 +4,7 @@
 
 The testing itself lives in the [test plan](../qa/NoteOrganizer_TestPlan.xlsx), an Excel workbook
 of **583 test cases**. Each case has its steps and the result it expects, and once run it carries
-what actually happened, the build, the date and who tested it. 294 of them also point to the
+what actually happened, the build, the date and who tested it. 295 of them also point to the
 GitHub issue or pull request they check. Every pass and every retest is recorded there.
 
 My first full manual pass over it - more than 500 cases, on the packaged app - and the two
