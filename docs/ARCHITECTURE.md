@@ -73,7 +73,7 @@ that have moved, so existing callers — including the over 1,100 `note_organize
 references across the QA scripts — keep working untouched. That's deliberate: it means each extraction is
 a pure move that leaves the whole test suite green, rather than a rewrite.
 
-What remains in the file is ~21,500 lines of genuinely shared surface. It grew again through
+What remains in the file is ~21,900 lines of genuinely shared surface. It grew again through
 the rich-text and tables work even as the pure logic behind those features went into `core/`,
 and dropped by ~2,700 when the note list moved to `ui/note_list.py` (see the
 [case study](#the-list-measured-again)).
@@ -472,6 +472,13 @@ Renumbering therefore rewrites real characters, which moves everything after the
 `10.`). The editor itself writes only the characters of each marker that changed, so Tk carries
 every tag, the view and every drawn table along by itself — see
 [The list that rewrote the whole note](ISSUES_LOG.md#the-list-that-rewrote-the-whole-note).
+
+And because the marker is characters, every route that edits text edits it. A delete that
+reaches a list is placed by one rule, `list_deletion_range`, the way Word places it: two lines
+joined keep the first one's marker and drop the second's, typing or pasting over whole items
+keeps the next item's number, and a delete into a marker takes all of it — then the list
+renumbers. The Android port carries the same rule, as `Paragraphs.deletionRange`. See
+[The marker that was only characters](ISSUES_LOG.md#the-marker-that-was-only-characters).
 
 #### One tag per combination, built lazily
 
@@ -956,7 +963,11 @@ selection, Cut) are no unit of the app's, so a bindtag put first on the body,
 one is about to delete text that carries formatting, `_note_styled_delete` notes the formatting
 and starts a step with a separator; a run of BackSpaces stays open (Tk merges contiguous deletes
 into one unit) and closes at the first other event, at an app undo unit, at the autosave's
-boundary, or at the next Ctrl+Z / Ctrl+Y. Plain text is left to Tk entirely.
+boundary, or at the next Ctrl+Z / Ctrl+Y. Plain text is left to Tk entirely. The exception,
+since `0.96.394`, is a delete that reaches a list: `_list_aware_delete`, bound in the same tag
+ahead of `_note_styled_delete`, makes it where `list_deletion_range` says, renumbers, and makes
+the whole of it one undo unit of the app's; a paste over a list does the same through
+`_paste_reaching_list`.
 
 Three details keep every route inside that net. The tag's `<<Cut>>`, `<<Clear>>` and `<<Paste>>`
 bindings say they are virtual (`virtual=True`): a key that means Cut or Paste reaches them as the
@@ -1059,7 +1070,8 @@ Rules that keep it honest:
   which row it is over. A click on a card also puts the keyboard on the list, with the ring on
   that card, and the ring's walk scrolls the list to keep it in view.
 
-A rebuild keeps the depth that was drawn when the list was scrolled, so the position restored
+A rebuild keeps the depth that was drawn when the list was scrolled (a new search excepted: it
+starts from the top, below), so the position restored
 in pixels (below) has content to land on, and draws the card the keyboard was on. This is not
 virtualization: a card once drawn stays drawn until the next rebuild — which costs the drawing
 little, since a drawn card is a handful of canvas items rather than six windows. Windowed
@@ -1162,7 +1174,10 @@ editor page's window item, the list's own `_list_extent()`), because a scrollreg
 not a fact.
 
 A deliberate wheel or scrollbar move cancels the pending restore: the user always outranks the
-machinery. Any new scrollable canvas whose content gets rebuilt should either reuse this family
+machinery. So does a new search, the one rebuild that does not keep the list's place: since
+`0.96.394` it starts its results at the top and drops any restore in force (the owner's call,
+on both apps; `refresh_note_list` compares the search with the one it last drew for). Any new
+scrollable canvas whose content gets rebuilt should either reuse this family
 or consciously argue why it can't suffer the same two failures.
 
 ### Showing and hiding asks the layout, not the screen
@@ -1393,7 +1408,7 @@ being found by hand later.
 
 The automated coverage is nine headless GUI scripts (`qa/qa1.py`–`qa9.py`) plus eight standalone
 unit suites: the recurrence engine, data-safety (backups & migration), the in-note calculator's
-expression evaluator, the rich-text conversion and PDF-rejoin logic (`test_richtext.py`), the
+expression evaluator, the rich-text conversion, PDF-rejoin and list-deletion logic (`test_richtext.py`), the
 table engine (`test_tables.py`), a note's identity (`test_note_identity.py`) and the spelling
 rules (`test_spelling.py`) — these seven need no GUI — and the entry-module-identity guard, which
 builds a window. [qa/README.md](../qa/README.md) owns the per-script inventory: which script guards which

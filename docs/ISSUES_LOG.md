@@ -172,7 +172,7 @@ is in the table below as well.
 | [Save and Delete, the same khaki](#save-and-delete-the-same-khaki) | A gate measures the pairs it was told about — walk what is on the screen; and two colours that differ only in hue are one colour to a reader who cannot see hue. | 0.89.365 |
 | [Two answers to one question](#two-answers-to-one-question) | Two helpers answering one question disagree somewhere — measure them against each other; and a base theme's state map silently overrides what you configured. | 0.89.371 |
 | [The icon drawn as narrow as a letter](#the-icon-drawn-as-narrow-as-a-letter) | An icon's width is the width of whichever font answered for it; where icons must line up, choose them from the range one font draws, and measure the column. | 0.96.392 |
-| [The marker that was only characters](#the-marker-that-was-only-characters) | When a structure is stored as text, every route that edits text edits it: count the routes that reach it, not the ones the feature was written for. | — |
+| [The marker that was only characters](#the-marker-that-was-only-characters) | When a structure is stored as text, every route that edits text edits it: count the routes that reach it, not the ones the feature was written for. | 0.96.394 |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -4815,7 +4815,8 @@ which will be forgotten.
 
 ### The marker that was only characters
 
-*(found probing numbered lists, after 0.96.392)*
+*([0.96.394](../CHANGELOG.md#096394--2026-10-22) · 2026-10-22 · found probing numbered lists,
+after 0.96.392)*
 
 **Symptom:** items 2 and 3 of a numbered list selected and deleted left "1. one / 4. four"; a
 letter typed over them left "x4. four"; Backspace at the very start of item 3 left
@@ -5045,7 +5046,7 @@ line or three and points here, by name, for what happened.*
 - **`refresh_note_list`** — A rebuild's scroll restore is in force from the moment the rows are
   drawn, not from when the app is next idle. Every deliberate scroll — the wheel, the scrollbar,
   the ring's scroll into view, a click keeping its card under the pointer — cancels a restore by
-  clearing `_list_restore_px`. A restore queued as a bare callback could not be cancelled, and
+  clearing `_list_restore_px`, and since 0.96.394 so does a new search, which starts at the top. A restore queued as a bare callback could not be cancelled, and
   scrolled the view back after them; a press measured in one view and a jitter read in the other
   then passed for a drag.
 - **`_list_extent`** — How far the list reaches is worked out from its rows, never asked of Tk.

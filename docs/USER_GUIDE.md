@@ -471,8 +471,9 @@ Appearance → Spelling**.
 Search the note list by keyword, and sort by recency, title, category, or date, from the controls
 above the list. This is the search for finding *which* note you want, across the whole notebook.
 An **✕** appears inside the search box once you have typed something; it empties the box and puts
-the whole list straight back. A new search shows its results from the top of the list, wherever
-you had scrolled to; the list keeps its place for anything else, such as a note being saved.
+the whole list straight back. A new search — and clearing one — shows the list from the top,
+wherever you had scrolled to; the list keeps its place for anything else, such as a note being
+saved or a new sort.
 Right-clicking the box offers Cut / Copy / Paste, like every other text field in the app.
 
 Two dropdowns sit under the box, each with its own caption so you can tell at a glance which is
@@ -517,8 +518,8 @@ the list scrolls along to keep the ring in view. **Enter** (or **Space**) opens 
 menu where the note is, so pinning, duplicating, exporting and deleting are all reachable without
 leaving the keyboard. The whole list is one **Tab** stop: Tab again moves on to the next thing in
 the window instead of through every card. If the list moves underneath you — a save takes the
-edited note's card to the top, a search keystroke filters the notes above it away — the ring
-comes back to the card you were on, brought into view. Only when you scrolled away from it
+edited note's card to the top, a new search starts the list from the top with the card further
+down — the ring comes back to the card you were on, brought into view. Only when you scrolled away from it
 yourself (wheel, scrollbar, a drag held at the edge) does it start again from the first card in
 view.
 
