@@ -172,6 +172,7 @@ is in the table below as well.
 | [Save and Delete, the same khaki](#save-and-delete-the-same-khaki) | A gate measures the pairs it was told about — walk what is on the screen; and two colours that differ only in hue are one colour to a reader who cannot see hue. | 0.89.365 |
 | [Two answers to one question](#two-answers-to-one-question) | Two helpers answering one question disagree somewhere — measure them against each other; and a base theme's state map silently overrides what you configured. | 0.89.371 |
 | [The icon drawn as narrow as a letter](#the-icon-drawn-as-narrow-as-a-letter) | An icon's width is the width of whichever font answered for it; where icons must line up, choose them from the range one font draws, and measure the column. | 0.96.392 |
+| [The marker that was only characters](#the-marker-that-was-only-characters) | When a structure is stored as text, every route that edits text edits it: count the routes that reach it, not the ones the feature was written for. | — |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -4812,6 +4813,34 @@ edit). Enter in a list now keeps its new line in sight, as Tk's own Enter does.
 the text — the view, the tables, the caret — and each of those then needs its own repair, one of
 which will be forgotten.
 
+### The marker that was only characters
+
+*(found probing numbered lists, after 0.96.392)*
+
+**Symptom:** items 2 and 3 of a numbered list selected and deleted left "1. one / 4. four"; a
+letter typed over them left "x4. four"; Backspace at the very start of item 3 left
+"2. two3. three"; a paste over them left "zz4. four". The numbers came right only at the next
+Enter. Every one of seven deleting routes and three pastes did it, and so did the Android app,
+which had ported the same rules.
+
+**Root cause:** a list's marker is stored as characters (`core/formatting.py` says why), and the
+deletes that reached a list were Tk's own: Backspace and Delete over a selection, Cut, typing
+over it, a paste, Backspace at a line's start. Each deleted characters and nothing else. The
+list's own keys — Enter, Backspace just after a marker, Tab, the buttons — renumbered; nothing
+else did, and nothing knew that a marker left in the middle of a line had stopped being one.
+
+**Fix:** `list_deletion_range` decides where a delete that reaches a list really falls, the way
+Word behaves, where a marker is no character at all: two lines joined keep the first one's marker
+and lose the second's, and typing or pasting over whole items keeps the next item's number.
+`_list_aware_delete` takes Tk's own deletes over in the bindtag that sees every key first, the
+paste routes ask the same question, and each renumbers in one undo unit. A net renumbers after
+any key that took lines away, for a route nobody has named yet. Backspace just after a marker,
+the list's own route, took two Ctrl+Z (the numbers first, then the marker); it is one unit now.
+
+**Takeaway:** when a structure is stored as text, every route that edits text edits the
+structure. Count the routes that reach it — the keys, the clipboard's three, typing over a
+selection — not the ones the feature was written for.
+
 ### Nine regressions in fifteen fixes
 
 *(found by three read-only reviews of the fixes above, before any of them shipped)*
@@ -5069,7 +5098,8 @@ line or three and points here, by name, for what happened.*
   and the menu key post its menu off the screen. What took the ring's row out of sight decides
   how. If the person scrolled the list away, the ring goes to the first row the view shows, and
   the view stays where they put it. If the list moved the row while the keyboard was elsewhere —
-  a save took the card to the top, a search keystroke filtered out the notes above it — the ring
+  a save took the card to the top, a search showed its results from the top with the card far
+  below them (until 2026-10, by filtering out the notes above it, the view kept) — the ring
   stays on its row and the row is brought into view; given to the first row in view instead, it
   sat on another note, and Enter opened that one.
 - **`_restore_card_focus`** — Since the cards became a drawing, a rebuild never moves the

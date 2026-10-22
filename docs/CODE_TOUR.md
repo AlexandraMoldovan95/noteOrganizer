@@ -573,6 +573,14 @@ sideways the moment `9.` becomes `10.`. In the editor, `_renumber_lists`
 writes only the characters of each marker that changed, and Tk moves every
 tag, the view and the drawn tables along by itself.
 
+The other cost is that a marker made of characters is reached by every key
+that deletes characters. `list_deletion_range()` decides where such a
+delete really falls — two lines joined keep the first one's marker and drop
+the second's, typing or pasting over whole items keeps the next item's
+number — and the editor's `_list_aware_delete` and its paste routes apply
+it and renumber, as one Ctrl+Z
+([the story](ISSUES_LOG.md#the-marker-that-was-only-characters)).
+
 Bullets change glyph with depth (`•`, `◦`, `▪`) because those are
 characters nobody types by accident. Numbers deliberately don't: `1.` then
 `a.` then `i.` is ambiguous with ordinary prose, and a note is exactly the

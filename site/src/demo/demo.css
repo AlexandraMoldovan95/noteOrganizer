@@ -2,6 +2,19 @@
    own palettes (app-data.js, generated from noteorganizer/core/themes.py);
    the values below are Midnight Purple, for the moment before it runs. */
 
+/* The emoji block (U+1F000 up) goes to the emoji font, first in --font.
+   An icon such as 🗂 asks for its plain form unless U+FE0F follows it, and
+   the browser then draws it narrow, in one colour, so the welcome note's
+   "Organise" started left of the other headings. The text keeps no U+FE0F,
+   because a share code carries it to the app, where Tk draws it as a
+   blank. Older symbols (☀ ↩ ▪ ⚠) stay out of the range and keep their
+   text form, as in the app. */
+@font-face {
+  font-family: "Emoji block";
+  src: local("Segoe UI Emoji"), local("Apple Color Emoji"), local("Noto Color Emoji");
+  unicode-range: U+1F000-1FAFF;
+}
+
 :root {
   --bg: #1e1e2f;
   --sidebar: #26263f;
@@ -22,7 +35,7 @@
   --line: #4a4a68;
   --check-well: #f7f7fb;
   --find-all: #5a4d8a;
-  --font: "Segoe UI", "Segoe UI Variable", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font: "Emoji block", "Segoe UI", "Segoe UI Variable", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
   color-scheme: dark;
 }
 

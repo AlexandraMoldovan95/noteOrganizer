@@ -925,6 +925,64 @@ check("a day's markers come in without it, three at most, and a single "
       and NO.NoteOrganizer._clean_day_markers({"x": 1}) == []
       and NO.NoteOrganizer._clean_day_markers(["\ufe0f"]) == [])
 
+# ---- A deletion that reaches a list (list_deletion_range) ----
+# The editor deleted characters, and a marker is characters: a join kept the
+# second line's marker among the words ("2. two3. three"), typing over whole
+# items swallowed the next one's ("x4. four"), a marker half-deleted stayed
+# half there. Each answer applied to the text and renumbered, as the editor
+# does with it.
+from noteorganizer.core.formatting import (list_deletion_range as _ldr,
+                                           parse_list_marker, renumber)
+
+
+def _ld_apply(body, start, end, typed=""):
+    lines = body.split("\n")
+    plan = _ldr(lines, start, end, typing=bool(typed))
+    (l1, c1), (l2, c2) = plan if plan else (start, end)
+    out = "\n".join(lines[:l1] + [lines[l1][:c1] + typed + lines[l2][c2:]]
+                    + lines[l2 + 1:])
+    paras = [{"line": i, "kind": parse_list_marker(line)[0]}
+             for i, line in enumerate(out.split("\n"))
+             if parse_list_marker(line)[0]]
+    return renumber(out, paras)[0]
+
+
+_LD = "1. one\n2. two\n3. three\n4. four"
+for _ld_name, _ld_args, _ld_want in (
+        ("items 2 and 3 deleted whole", (_LD, (1, 0), (3, 0)), "1. one\n2. four"),
+        ("a letter typed over items 2 and 3", (_LD, (1, 0), (3, 0), "x"),
+         "1. one\n2. x\n3. four"),
+        ("a letter typed over item 2 alone", (_LD, (1, 0), (2, 0), "x"),
+         "1. one\n2. x\n3. three\n4. four"),
+        ("BackSpace at item 3's very start", (_LD, (1, 6), (2, 0)),
+         "1. one\n2. twothree\n3. four"),
+        ("item 2's marker selected", (_LD, (1, 0), (1, 3)),
+         "1. one\ntwo\n1. three\n2. four"),
+        ("one character inside a marker", (_LD, (1, 0), (1, 1)),
+         "1. one\ntwo\n1. three\n2. four"),
+        ("from item 2's words into item 3's", (_LD, (1, 4), (2, 5)),
+         "1. one\n2. tree\n3. four"),
+        ("from just after item 2's marker into item 3's words", (_LD, (1, 3), (2, 5)),
+         "1. one\n2. ree\n3. four"),
+        ("from item 2's words to item 4's start", (_LD, (1, 4), (3, 0)),
+         "1. one\n2. tfour"),
+        ("typed over from item 2's words to item 4's start", (_LD, (1, 4), (3, 0), "x"),
+         "1. one\n2. txfour"),
+        ("an empty item joined from below", ("1. one\n2. \n3. three", (1, 3), (2, 0)),
+         "1. one\n2. three"),
+        ("an empty line above an item", ("intro\n\n1. one\n2. two", (1, 0), (2, 0)),
+         "intro\n1. one\n2. two"),
+        ("words typed over a line up to an item", ("plain words\n1. one", (0, 0), (1, 0), "x"),
+         "x\n1. one"),
+        ("everything selected from the first line's start", (_LD, (0, 0), (3, 7)), ""),
+        ("bullets joined", ("• a\n• b\n• c", (0, 3), (1, 0)), "• ab\n• c")):
+    _ld_got = _ld_apply(*_ld_args)
+    check(f"list deletion: {_ld_name} ({_ld_got!r})", _ld_got == _ld_want)
+check("a deletion that reaches no list is left alone, as is one inside an "
+      "item's words",
+      _ldr(["plain words", "more words"], (0, 2), (1, 2)) is None
+      and _ldr(["1. one", "2. two"], (1, 4), (1, 5)) is None)
+
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
 

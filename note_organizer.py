@@ -223,6 +223,7 @@ from noteorganizer.core.formatting import (
     marker_for,
     bullet_level_of,
     renumber,
+    list_deletion_range,
     merge_spans,
     split_toolbar_rows,
     MAX_INDENT,
@@ -7591,16 +7592,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return "break"
 
     def _replace_selection_with(self, text):
-        """Drop the selection, if any, and put *text* where the cursor is."""
+        """Drop the selection, if any, and put *text* where the cursor is --
+        over a list, the next item keeping its number (see
+        _delete_selection_reaching_list), and the lists renumbered."""
         self._caret_out_of_hidden()
-        try:
-            self.body_text.delete("sel.first", "sel.last")
-        except tk.TclError:
-            pass
+        listed = self._delete_selection_reaching_list()
+        if not listed:
+            try:
+                self.body_text.delete("sel.first", "sel.last")
+            except tk.TclError:
+                pass
         lead, trail = self._rows_gap(text)
         at = self.body_text.index("insert")
         self.body_text.insert("insert", lead + text + trail)
         self._take_run_between(at, self.body_text.index("insert"))
+        if listed:
+            self._resync_list_tags()
+            self._renumber_lists()
 
     def _rows_gap(self, text):
         """What *text*, about to go in at the caret, needs before and after
@@ -8614,18 +8622,211 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Deleting a bullet three levels in would otherwise leave its text
         # stranded at a depth with nothing above it.
         indent = self._paragraph_indent_of(self.body_text, line_no)
-        if indent:
-            self._set_paragraph_indent(line_no, indent - 1)
+        # One unit with the renumbering it causes: apart, Ctrl+Z took back
+        # the new numbers first and left the marker gone.
+        self._undo_atom_begin()
+        try:
+            if indent:
+                self._set_paragraph_indent(line_no, indent - 1)
+                self._renumber_lists()
+                self._refresh_list_buttons()
+                self._schedule_autosave()
+                return "break"
+            self.body_text.delete(f"{line_no}.0", f"{line_no}.0+{len(marker)}c")
+            for tag in ("list_bullet", "list_number"):
+                self.body_text.tag_remove(tag, f"{line_no}.0", f"{line_no}.end+1c")
             self._renumber_lists()
-            self._refresh_list_buttons()
-            self._schedule_autosave()
-            return "break"
-        self.body_text.delete(f"{line_no}.0", f"{line_no}.0+{len(marker)}c")
-        for tag in ("list_bullet", "list_number"):
-            self.body_text.tag_remove(tag, f"{line_no}.0", f"{line_no}.end+1c")
-        self._renumber_lists()
+        finally:
+            self._undo_atom_end()
         self._schedule_autosave()
         return "break"
+
+    def _list_aware_delete(self, event=None, virtual=None):
+        """Tk's own deletes, when they reach a list: done here as
+        core/formatting's list_deletion_range says, then renumbered, as one
+        Ctrl+Z.
+
+        Left to Tk, a selection across items deleted left "1. one / 4. four",
+        typing over them "x4. four", and BackSpace at a line's start
+        "2. two3. three" -- the marker of the line joined kept among the
+        words, nothing renumbered until the next Enter. In the styled-delete
+        bindtag, after _note_key_down and before _note_styled_delete, so it
+        sees BackSpace, Delete, Ctrl+H, Ctrl+K, a key typed over a selection
+        and *virtual* "cut" or "clear" before Tk acts. What the body's own
+        handlers already own is left to them: cells, a drawn table's lines,
+        BackSpace just after a marker, Enter and Tab over a selection, and a
+        paste (_on_body_paste, and _renumber_after_paste for Tk's own).
+        """
+        b = self.body_text
+        self._lines_before_key = int(b.index("end-1c").split(".")[0])
+        if getattr(self, "_grid_sel", None) is not None:
+            return None
+        holds = _selection_holds_caret(b)
+        keysym = getattr(event, "keysym", "") if virtual is None else ""
+        state = getattr(event, "state", 0) if virtual is None else 0
+        if not isinstance(state, int):
+            state = 0
+        control, alt = bool(state & 0x4), bool(state & 0x20000)
+        char = (getattr(event, "char", "") or "") if virtual is None else ""
+        typing = False
+        try:
+            if virtual is not None:
+                if not b.tag_ranges("sel"):
+                    return None
+                doomed = (b.index("sel.first"), b.index("sel.last"))
+            elif keysym in ("BackSpace", "Delete") and holds:
+                doomed = (b.index("sel.first"), b.index("sel.last"))
+            elif keysym == "Delete":
+                doomed = (None if b.compare("insert", ">=", "end-1c")
+                          else (b.index("insert"), b.index("insert+1c")))
+            elif keysym == "BackSpace" or (control and not alt and keysym == "h"):
+                ln, col = (int(p) for p in b.index("insert").split("."))
+                marker = parse_list_marker(b.get(f"{ln}.0", f"{ln}.end"))[1]
+                if keysym == "BackSpace" and marker and col == len(marker):
+                    # BackSpace just after a marker is the body's own: it
+                    # climbs a nested item out a level first.
+                    return None
+                doomed = (None if b.compare("insert", "==", "1.0")
+                          else (b.index("insert-1c"), b.index("insert")))
+            elif control and not alt and keysym == "k":
+                doomed = self._tk_control_delete_range("k")[0]
+            elif holds and char and char.isprintable() and (not control or alt):
+                doomed, typing = (b.index("sel.first"), b.index("sel.last")), True
+            else:
+                return None
+        except tk.TclError:
+            return None
+        if not doomed:
+            return None
+        span = self._list_range_for(doomed, typing)
+        if span is None:
+            return None
+        start, end = span
+        self._undo_atom_begin()
+        try:
+            if virtual == "cut":
+                # What Tk's own Cut puts on the clipboard: the selection.
+                b.clipboard_clear()
+                b.clipboard_append(b.get("sel.first", "sel.last"))
+            b.tag_remove("sel", "1.0", "end")
+            if b.compare(start, "<", end):
+                b.delete(start, end)
+            b.mark_set("insert", start)
+            if typing:
+                # Typed here, in the same unit, as Tk's own typing over a
+                # selection is one Ctrl+Z; the marks first, so the letter
+                # is settled as typing (_note_typing_key).
+                self._note_typing_key(event)
+                b.insert("insert", char)
+            self._resync_list_tags(int(start.split(".")[0]))
+            self._renumber_lists()
+            b.see("insert")
+        finally:
+            self._undo_atom_end()
+        # Renumbered already: the net at the key's release has nothing to do.
+        self._lines_before_key = None
+        self._schedule_autosave()
+        self.update_word_count()
+        return "break"
+
+    def _list_range_for(self, doomed, typing):
+        """The body's ``(start, end)`` to delete instead of *doomed* when it
+        reaches a list (core/formatting's list_deletion_range), or None: no
+        list reached, or a table's row among its lines, which the table's
+        own guards answer for."""
+        b = self.body_text
+        (l1, t1), (l2, t2) = (tuple(int(p) for p in b.index(i).split("."))
+                              for i in doomed)
+        lines = b.get(f"{l1}.0", f"{l2}.end").split("\n")
+        if any(is_table_row(line) for line in lines):
+            return None
+        plan = list_deletion_range(
+            lines, (0, self._py_col(lines[0], t1)),
+            (l2 - l1, self._py_col(lines[-1], t2)), typing=typing)
+        if plan is None:
+            return None
+        (p1, q1), (p2, q2) = plan
+        return (f"{l1 + p1}.{self._tk_col(lines[p1], q1)}",
+                f"{l1 + p2}.{self._tk_col(lines[p2], q2)}")
+
+    def _delete_selection_reaching_list(self):
+        """For text about to take the selection's place -- a paste -- the
+        selection deleted as typing over it is, when it reaches a list: the
+        next item keeps its number, and no marker lands among the words.
+        True when it did, the caret then where the text goes; the caller
+        renumbers once the text is in."""
+        b = self.body_text
+        if getattr(self, "_grid_sel", None) is not None or not b.tag_ranges("sel"):
+            return False
+        span = self._list_range_for((b.index("sel.first"), b.index("sel.last")), True)
+        if span is None:
+            return False
+        start, end = span
+        b.tag_remove("sel", "1.0", "end")
+        if b.compare(start, "<", end):
+            b.delete(start, end)
+        b.mark_set("insert", start)
+        return True
+
+    def _paste_reaching_list(self):
+        """Ctrl+V over a selection that reaches a list, as one unit: the
+        selection deleted as _delete_selection_reaching_list says, then the
+        paste -- the app's own (_on_body_paste) or, where that leaves it to
+        Tk, the clipboard's text as Tk's own paste puts it in -- and the
+        lists renumbered. Left to Tk, "zz" over items 2 and 3 gave
+        "zz4. four"."""
+        b = self.body_text
+        if getattr(self, "_grid_sel", None) is not None or not b.tag_ranges("sel"):
+            return None
+        if self._list_range_for((b.index("sel.first"), b.index("sel.last")),
+                                True) is None:
+            return None
+        self._undo_atom_begin()
+        try:
+            self._delete_selection_reaching_list()
+            if self._on_body_paste() != "break":
+                try:
+                    b.insert("insert", b.clipboard_get())
+                except tk.TclError:
+                    pass
+            self._resync_list_tags()
+            self._renumber_lists()
+            b.see("insert")
+        finally:
+            self._undo_atom_end()
+        self._schedule_autosave()
+        self.update_word_count()
+        return "break"
+
+    def _on_styled_virtual(self, event, name):
+        """Cut, Clear and Paste in the styled-delete bindtag: the key noted;
+        a cut or clear reaching a list done as _list_aware_delete says, a
+        paste over one as _paste_reaching_list does; anything else's
+        formatting noted for Ctrl+Z (_note_styled_delete)."""
+        self._note_key_down()
+        if name and self._list_aware_delete(event, virtual=name) == "break":
+            return "break"
+        if name is None and self._paste_reaching_list() == "break":
+            return "break"
+        return self._note_styled_delete(event, virtual=True)
+
+    def _renumber_if_lines_fell(self, _event=None):
+        """A key that took away lines renumbers what follows, whatever took
+        them (Tk's own Ctrl+K at a line's end, a key bound nowhere here):
+        the routes _list_aware_delete knows end lists well, and this is the
+        net under the rest. Only when lines fell, so typing costs nothing."""
+        before = getattr(self, "_lines_before_key", None)
+        if before is None:
+            return
+        self._lines_before_key = None
+        if int(self.body_text.index("end-1c").split(".")[0]) < before:
+            self._renumber_lists()
+
+    def _renumber_after_paste(self, _event=None):
+        """Tk's own paste over a selection -- the plain path _on_body_paste
+        falls through to -- joins lines like any delete; renumber once it
+        has run. The rich path returned "break" and renumbered itself."""
+        self.after_idle(self._renumber_lists)
 
     def _setup_body_formatting_tags(self, text_widget):
         """Define the Tkinter tags the formatting toolbar/menu apply. Font
@@ -14502,6 +14703,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # that type.
         self.bind_class(self._STYLED_DELETE_TAG, "<KeyPress>",
                         self._note_key_down)
+        # A delete that reaches a list is the app's own, in one undo unit
+        # that notes the formatting itself (see _list_aware_delete).
+        self.bind_class(self._STYLED_DELETE_TAG, "<KeyPress>",
+                        self._list_aware_delete, add="+")
         self.bind_class(self._STYLED_DELETE_TAG, "<KeyPress>",
                         self._note_styled_delete, add="+")
         # Each virtual binding says what it is: a key that means Cut or
@@ -14510,14 +14715,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # back plain on Ctrl+Z. Only the menu's Cut was a virtual event.
         # The same outranking hid Ctrl+V and Shift+Insert from
         # _note_key_down, and a paste after its Ctrl wore the word's style.
-        for virtual in ("<<Cut>>", "<<Clear>>", "<<Paste>>"):
+        for virtual, name in (("<<Cut>>", "cut"), ("<<Clear>>", "clear"),
+                              ("<<Paste>>", None)):
             self.bind_class(self._STYLED_DELETE_TAG, virtual,
-                            lambda e: (self._note_key_down(),
-                                       self._note_styled_delete(
-                                           e, virtual=True))[1])
+                            lambda e, name=name: self._on_styled_virtual(e, name))
         self.body_text.bindtags(
             (self._STYLED_DELETE_TAG,) + tuple(self.body_text.bindtags()))
         self.body_text.bind("<<Paste>>", self._on_body_paste, add="+")
+        self.body_text.bind("<<Paste>>", self._renumber_after_paste, add="+")
         self.body_text.bind("<<Copy>>", self._copy_formatted, add="+")
         # Ctrl+Shift+V is the usual way to ask for the text without its
         # styling; Ctrl+V keeps it, the way every other editor does.
@@ -14535,6 +14740,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except tk.TclError:
             pass
         self.body_text.bind("<KeyRelease>", self._schedule_autosave)
+        self.body_text.bind("<KeyRelease>", self._renumber_if_lines_fell, add="+")
         self.body_text.bind("<KeyRelease>", self._apply_pending_style_to_typed_char, add="+")
         self.body_text.bind("<KeyRelease>", self._refresh_format_buttons, add="+")
         self.body_text.bind("<KeyRelease>", self._align_table_on_leaving, add="+")

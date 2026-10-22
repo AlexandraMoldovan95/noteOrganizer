@@ -260,6 +260,15 @@ try {
   await go("/demo/");
   await shot("demo-desktop-welcome");
   check("demo opens on the welcome note", (await js("document.getElementById('ed-title').value")).startsWith("Welcome"));
+  // Where each heading's first word starts: the icons are from the emoji
+  // block, drawn full width by the emoji font (demo.css, "Emoji block").
+  // 🗂 asks for its plain form, and the browser drew it narrow.
+  const starts = await js(`[...document.querySelectorAll('#ed-body div > b')]
+    .filter((b) => /^\\p{Extended_Pictographic}/u.test(b.textContent))
+    .map((b) => { const t = b.firstChild, at = t.textContent.indexOf(" ") + 1, r = document.createRange();
+      r.setStart(t, at); r.setEnd(t, at + 1); return Math.round(r.getBoundingClientRect().left); })`);
+  check("the welcome note's five headings start their words in one column",
+    starts.length === 5 && Math.max(...starts) - Math.min(...starts) <= 1, JSON.stringify(starts));
   check("nine sample notes", (await js("document.querySelectorAll('.note-card').length")) === 9);
 
   await js("[...document.querySelectorAll('.nc-open')].find(b => b.textContent.includes('Weekly meal plan')).click()");

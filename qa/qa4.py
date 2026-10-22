@@ -2844,20 +2844,22 @@ check(f'...while a wheel turn made with the ring\'s card not drawn leaves the '
       and abs(app.canvas.canvasy(0) - _bl_top) < 1
       and app._focused_note_id != _bl_nid
       and _bl_seen(app._focused_note_id) == 'all')
-# A search keystroke: the notes above the card filtered away, the view kept.
+# A search: its results start from the top, and the card, far down them,
+# is out of sight. (A search once kept the view, and the notes filtered
+# away above the card took it out of sight instead.)
 _co_fresh(_bl_alpha)
-_bl_scroll_away(app._card_view(2017)['y0'] - 20)
-app._put_keyboard_on_card(2017); _ls_settle()
+_ls_scroll_to_end()
+app._put_keyboard_on_card(2037); _ls_settle()
 app._list_focus_in(); _ls_settle()
 app._list_focus_out(); _ls_settle()
 _ls_search('zeta'); _ls_let_restores_finish()
-_bl_away = _bl_seen(2017)
+_bl_away = (round(app.canvas.canvasy(0)), _bl_seen(2037))
 app._list_focus_in(); _ls_settle()
-check(f'...and after a search keystroke filtered away the notes above it '
-      f'(was {_bl_away}; ring on {app._focused_note_id}: '
-      f'{_bl_seen(app._focused_note_id)})',
-      _bl_away == 'none' and app._focused_note_id == 2017
-      and _bl_seen(2017) == 'all')
+check(f'...and after a search, which starts its results from the top, left '
+      f'the card far below them (view, card: {_bl_away}; ring on '
+      f'{app._focused_note_id}: {_bl_seen(app._focused_note_id)})',
+      _bl_away[0] == 0 and _bl_away[1] in ('none', 'not drawn')
+      and app._focused_note_id == 2037 and _bl_seen(2037) == 'all')
 app._list_focus_out(); _ls_settle()
 _ls_search('')
 # A sort chosen meanwhile can take the card past what the rebuild drew: a

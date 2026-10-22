@@ -778,6 +778,58 @@ def renumber(body, paragraphs):
     return "\n".join(lines), shifts
 
 
+def list_deletion_range(lines, start, end, typing=False):
+    """Where a deletion should fall when it reaches a list, or None.
+
+    A list's marker is characters, and the editor's own deletes saw only
+    characters: two lines joined kept the second one's marker among the
+    words ("2. two3. three"), typing over whole items swallowed the next
+    item's marker ("x4. four"), and a marker selected and deleted took one
+    character of it, or all, and nothing renumbered. The answer is Word's,
+    where a marker is no character at all:
+
+    - two lines joined keep the first one's marker, and the second one's
+      goes -- unless nothing of the first line is kept, when the second one
+      simply takes its place, marker and all;
+    - typing over a selection that ends at an item's start keeps that
+      item, number and all, and what is typed takes the selection's place;
+    - a deletion from just after a marker keeps it, and one reaching into
+      a marker takes the whole marker, so the line stops being an item
+      rather than keeping a broken one.
+
+    *lines* are the body's lines; *start* and *end* are ``(line, column)``,
+    lines from 0, columns in characters -- what the key would delete.
+    *typing*: the selection is being typed over. Returns the
+    ``(start, end)`` to delete instead, unchanged when only the numbering
+    needs mending, or None when no list is touched. The caller renumbers.
+    """
+    (l1, c1), (l2, c2) = start, end
+    k1, m1, _ = parse_list_marker(lines[l1])
+    if l1 == l2:
+        # Within one line only its own marker can be reached.
+        if not k1 or c1 >= len(m1):
+            return None
+        return (l1, 0), (l2, max(c2, len(m1)))
+    k2, m2, _ = parse_list_marker(lines[l2])
+    if not (k1 or k2 or any(parse_list_marker(lines[n])[0]
+                            for n in range(l1 + 1, l2))):
+        return None
+    keeps_words = c1 > (len(m1) if k1 else 0)
+    if k2 and c2 <= len(m2):
+        # The end is at the start of an item, before its words.
+        if keeps_words:
+            return (l1, c1), (l2, len(m2))
+        if typing:
+            return (l1, len(m1) if k1 else 0), (l2 - 1, len(lines[l2 - 1]))
+        return (l1, 0), (l2, 0)
+    if k1 and 0 < c1 <= len(m1):
+        # From just after (or inside) a marker into words: the item keeps
+        # its marker. From the line's very start the marker was chosen too,
+        # and goes with the rest -- Ctrl+A and BackSpace empty the note.
+        return (l1, len(m1)), (l2, c2)
+    return (l1, c1), (l2, c2)
+
+
 def shift_spans(spans, shifts):
     """Move formatting spans by the character shifts renumbering caused.
 

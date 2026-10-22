@@ -181,7 +181,9 @@ don't need to select a line exactly.
   an item, before its marker, Enter leaves an empty item above it; pressed with words selected,
   it replaces them, as anywhere else. **Backspace** with the cursor just after a marker removes
   the marker rather than deleting it one character at a time — unless words are selected, which
-  it deletes instead.
+  it deletes instead. Deleting across items, joining two of them with Backspace or Delete, or
+  typing, cutting or pasting over them keeps a numbered list counted 1, 2, 3; the number of an
+  item joined onto the one above goes, rather than staying among its words.
 - **Nesting.** **Tab** pushes a list item one level in, **Shift+Tab** pulls it back out — or use
   the **⇤** and **⇥** buttons. A numbered sub-list counts from 1 again under each parent, and
   picks the outer numbering back up when it ends. Bullets change shape as they go deeper
@@ -469,8 +471,9 @@ Appearance → Spelling**.
 Search the note list by keyword, and sort by recency, title, category, or date, from the controls
 above the list. This is the search for finding *which* note you want, across the whole notebook.
 An **✕** appears inside the search box once you have typed something; it empties the box and puts
-the whole list straight back. Right-clicking the box offers Cut / Copy / Paste, like every other
-text field in the app.
+the whole list straight back. A new search shows its results from the top of the list, wherever
+you had scrolled to; the list keeps its place for anything else, such as a note being saved.
+Right-clicking the box offers Cut / Copy / Paste, like every other text field in the app.
 
 Two dropdowns sit under the box, each with its own caption so you can tell at a glance which is
 which. **Sort** offers eight orders — Recently updated, Oldest updated, Title A–Z, Title Z–A,
