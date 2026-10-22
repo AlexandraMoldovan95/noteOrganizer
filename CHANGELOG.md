@@ -132,8 +132,8 @@ How the numbers themselves are counted is the
   the words or one that selects stays where it is. qa7: a big deletion's copy spent once Ctrl+Z has
   brought the words back, the button gone; a restore keeping the text it replaced, the button there
   to bring it back. qa2's restore from a day checks the copy holds the series' text it replaced.
-  `test_note_identity` holds the copy spent and kept, and the swap's exceptions. Mutants MC01 and
-  RC01–RC03.
+  `test_note_identity` holds the copy spent and kept, and the swap's exceptions. qa3 reads the
+  buttons of the question a single returning note asks. Mutants MC01, RC01–RC03 and IM01.
 
 ---
 

@@ -20036,8 +20036,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # ...and kept, when it holds anything the earlier version lacks:
         # said only then, as only then is it true.
         if copy_replaced_by_restore(note, prev) is not None:
-            question += (" It is kept in its turn, so “↩ Restore "
-                         "previous” brings it back.")
+            question += (" It is kept in its turn, so \u201c\u21a9 Restore "
+                         "previous\u201d brings it back.")
         occurrence = self.current_occurrence_date
         if not self.ask_yes_no(
             "Restore previous version", question + extra,

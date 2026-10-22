@@ -4944,5 +4944,15 @@
     "must_fail": ["...but nothing over an emptied note, or words the restored text holds"],
     "suites": ["test_note_identity"],
     "expect": "killed"
+  },
+  {
+    "id": "IM01",
+    "about": "the import's question for one note says \"Update the 1\" again",
+    "edits": [{"file": "note_organizer.py",
+               "find": "(\"Update it\" if count == 1 else f\"Update the {count}\", \"update\")",
+               "replace": "(f\"Update the {count}\", \"update\")"}],
+    "must_fail": ["one note we have, among new ones: the batch's question says it as one"],
+    "suites": ["qa3"],
+    "expect": "killed"
   }
 ]
