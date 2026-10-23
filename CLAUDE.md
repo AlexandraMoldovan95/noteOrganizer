@@ -91,8 +91,10 @@ nothing — `core/diagnostics.py`.)
   automating.
 - **Build:** packaged via PyInstaller using `NoteOrganizer.spec`
   (`--windowed`, one-folder output to `dist/NoteOrganizer/`).
-- **Website:** `site/` holds the site that presents the app and its web
-  demo (a re-creation of the interface in HTML and JavaScript), published
+- **Website:** `site/` holds the site that presents both apps and a web
+  demo of each (re-creations of their interfaces in HTML and JavaScript;
+  the build also reads the Android repository, beside this one, and never
+  writes to it), published
   on Netlify. It is edited only there; `py site/build.py` builds it into
   `site/public/` (not in git), which is dragged onto Netlify by hand, with
   changes gathered into one upload because every deploy costs credits. The

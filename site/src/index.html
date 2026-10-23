@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Note Organizer</title>
-<meta name="description" content="An offline notes app for Windows: rich notes, tables, checklists, repeating notes and a calendar. Built by Alexandra Moldovan with an AI coding agent. Try the web demo in your browser.">
+<meta name="description" content="An offline notes app for Windows, with an Android version on its way: rich notes, tables, checklists, repeating notes and a calendar. Built by Alexandra Moldovan with an AI coding agent. Try both in your browser.">
 {{og}}
 <link rel="icon" href="favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
@@ -29,11 +29,12 @@
 <section class="hero">
   <div class="wrap">
     <div>
-      <p class="eyebrow">Note Organizer · Windows desktop app · offline</p>
+      <p class="eyebrow">Note Organizer · Windows, and Android · offline</p>
       <h1>Notes that stay on your own device</h1>
       <p class="lede">A notes app that keeps everything on your own computer: rich notes with
         tables and checklists, notes that repeat, and a calendar that shows them. No account,
-        no cloud, no network calls.</p>
+        no cloud, no network calls. An Android version, made to the same rules, is on its way
+        to Google Play.</p>
       <p class="byline">Built by me, Alexandra Moldovan, with Claude Code, an AI coding agent. I
         decide what the app does, test it by hand and approve every change; the agent writes
         most of the code.</p>
@@ -156,7 +157,46 @@
   </div>
 </section>
 
-<section class="band" aria-labelledby="made">
+<section class="band" aria-labelledby="android">
+  <div class="wrap">
+    <div class="section-head">
+      <h2 id="android">On your phone too</h2>
+      <p>A native Android app, written in Kotlin, keeps notes in exactly the desktop's format. A
+        note or the whole notebook moves between the two by share code or backup, when you send
+        it: nothing syncs by itself, and a note that comes back replaces yours only if you say so.
+        Version {{android_version}}, on its way to Google Play; its code lives in a repository of
+        its own.</p>
+    </div>
+    <div class="phones">
+      <figure class="phone-shot">
+        <img src="img/android-01-note-list.webp" width="{{w_android_01_note_list}}" height="{{h_android_01_note_list}}" loading="lazy"
+             alt="The Android app's note list: a greeting, search, sort and show, and the note cards.">
+        <figcaption>The note list</figcaption>
+      </figure>
+      <figure class="phone-shot">
+        <img src="img/android-02-a-note.webp" width="{{w_android_02_a_note}}" height="{{h_android_02_a_note}}" loading="lazy"
+             alt="A note open on the phone, its first line bold and its checklist below.">
+        <figcaption>A note and its checklist</figcaption>
+      </figure>
+      <figure class="phone-shot">
+        <img src="img/android-07-calendar.webp" width="{{w_android_07_calendar}}" height="{{h_android_07_calendar}}" loading="lazy"
+             alt="The calendar on the phone, a repeating note's days marked with dots.">
+        <figcaption>The calendar</figcaption>
+      </figure>
+      <figure class="phone-shot">
+        <img src="img/android-06-dark.webp" width="{{w_android_06_dark}}" height="{{h_android_06_dark}}" loading="lazy"
+             alt="The same note list in the dark Midnight Purple theme.">
+        <figcaption>A dark theme</figcaption>
+      </figure>
+    </div>
+    <div class="actions spaced">
+      <a class="btn btn-primary" href="android-demo/index.html">Try the Android demo</a>
+      <a class="btn" href="android.html">About the Android app</a>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="made">
   <div class="wrap">
     <div class="section-head">
       <h2 id="made">Built with an AI agent, checked by tools and by hand</h2>
@@ -199,15 +239,20 @@
   </div>
 </section>
 
-<section aria-labelledby="try">
+<section class="band" aria-labelledby="try">
   <div class="wrap cta">
     <div>
       <h2 id="try">Try it, without installing anything</h2>
-      <p>The demo is a re-creation of the app's interface in HTML and JavaScript, so you can click
-        through the everyday parts in a browser, on a computer or a phone. The real app is a
-        Windows program in Python and Tkinter. What you type in the demo stays in your browser.</p>
+      <p>Two demos re-create the apps' interfaces in HTML and JavaScript, so you can click through
+        the everyday parts in a browser, on a computer or a phone. The real apps are a Windows
+        program in Python and Tkinter and an Android app in Kotlin. What you type in a demo stays
+        in your browser, and a share code moves a note from one demo to the other, as between the
+        apps.</p>
     </div>
-    <a class="btn btn-primary" href="demo/index.html">Open the demo</a>
+    <div class="actions">
+      <a class="btn btn-primary" href="demo/index.html">The desktop demo</a>
+      <a class="btn" href="android-demo/index.html">The Android demo</a>
+    </div>
   </div>
 </section>
 

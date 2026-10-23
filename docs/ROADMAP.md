@@ -28,9 +28,12 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
     both ways. It stays as it is now (the owner's call, 2026-10-14): the calculator under a note,
     and opening or moving one day of a repeating series, remain among the things the demo names
     as the desktop app's alone.
-  - **One site for both apps.** When an Android version exists, the same site presents it too,
-    with its own presentation and demo. Its code stays in its own repository, and the site's build
-    reads it the way it reads this one — no third repository for the site.
+  - **One site for both apps** — done on 2026-10-24, the owner's call: the overview presents the
+    Android app beside the desktop one, an Android page is built from that repository's README
+    and screenshots, and an Android demo draws the phone's screens over the desktop demo's rules,
+    so a share code crosses between the two demos as between the apps. Its code stays in its own
+    repository, which the site's build reads the way it reads this one — no third repository for
+    the site. Each repository is named as a link once it is public (`site/site.json`).
   - **At the public launch, links to the stores** — the Microsoft Store for the desktop app,
     Google Play for Android — rather than the built `dist/` folder to download. A store signs the
     app (an unsigned `.exe` from a website meets Windows' unknown-publisher warning), keeps it up

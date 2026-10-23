@@ -320,6 +320,32 @@ a.card .label::after { content: " \2192"; }
 /* Taken at 150%: wider than this, the picture would be drawn larger than
    the app draws itself, and soft. */
 .themes-shot { max-width: 600px; }
+
+/* The Android app's screens: a phone's own proportions and rounded
+   corners, four across on a computer and two on a phone. On the Android
+   page, the picture of the phone on its side takes a row of its own. */
+.phones, .phone-gallery {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+  margin: 0;
+}
+.phone-gallery { margin: 8px 0 24px; gap: 14px; }
+.phone-shot { margin: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.phone-shot img {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  background: var(--surface);
+}
+.phone-shot figcaption { font-size: 13px; color: var(--subtext); line-height: 1.45; }
+.phone-gallery .phone-shot.wide { grid-column: 1 / -1; }
+.phone-gallery .phone-shot.wide img { border-radius: 12px; }
+@media (max-width: 760px) {
+  .phones, .phone-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.actions.spaced { margin-top: 26px; }
 @media (max-width: 700px) { .pair { grid-template-columns: minmax(0, 1fr); } }
 
 /* The figures strip: four across, or two by two -- never three and one. */

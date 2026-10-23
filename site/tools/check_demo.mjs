@@ -223,7 +223,7 @@ try {
                                              ["dark", 390, 844, true, "phone-dark"],
                                              ["light", 390, 844, true, "phone-light"]]) {
     await viewport(w, h, mobile, scheme, "reduce");
-    for (const p of ["index.html", "how-its-built.html", "in-my-words.html", "testing.html", "nowhere"]) {
+    for (const p of ["index.html", "android.html", "how-its-built.html", "in-my-words.html", "testing.html", "nowhere"]) {
       await go("/" + p);
       await noHorizontalScroll(`${p} ${tag}`);
       if (p === "index.html" || (mobile && p !== "nowhere")) await shot(`site-${p.replace(".html", "")}-${tag}`, true);
@@ -308,6 +308,11 @@ try {
     await js("!!document.querySelector('.hero h1')"), await js("location.href"));
   await follow(".hero .btn-primary");
   check("...and from there the demo opens", (await js("document.querySelectorAll('.note-card').length")) > 0,
+    await js("location.href"));
+  await go(fileUrl("index.html"));
+  await follow("a.btn-primary[href='android-demo/index.html']");
+  check("from the folder, the Android demo opens too, the desktop demo's rules loaded beside it",
+    (await js("document.querySelectorAll('.card').length")) > 0 && await js("!!window.NO_DEMO && !window.NO_DEMO.state()"),
     await js("location.href"));
 
   // ---------------- The demo, desktop ----------------
@@ -577,6 +582,123 @@ try {
   await sleep(250);
   await shot("demo-phone-repeat-full", true);
   await click("#import-code").catch(() => {});
+
+  // ---------------- The Android demo ----------------
+  // Its own screens over the desktop demo's rules (window.NO_DEMO), its
+  // own notebook -- and share codes that cross between the two, as
+  // between the apps.
+  const cardWith = (words) => `[...document.querySelectorAll('.card')].find(c => c.textContent.includes(${JSON.stringify(words)}))`;
+  await viewport(390, 844, true, "light");
+  await go("/android-demo/index.html");
+  await js("localStorage.removeItem('noteorganizer-android-demo-v1')");
+  await go("/android-demo/index.html");
+  await noHorizontalScroll("android demo list");
+  await shot("android-phone-list");
+  check("the Android demo opens on its own sample notebook, five notes",
+    await js("document.querySelectorAll('.card').length") === 5, String(await js("document.querySelectorAll('.card').length")));
+  check("...with no name set, the list is headed with the app's name",
+    await js("document.querySelector('.greeting').textContent") === "Note Organizer");
+  check("a card's preview leaves its table out, as the phone's does, and badges it",
+    await js(`(() => { const c = ${cardWith("September expenses")}; const p = c.querySelector('.c-preview');
+      return (!p || !p.textContent.includes('1500')) && c.textContent.includes('1 table'); })()`));
+  check("...and it leaves the desktop demo's notebook alone",
+    await js("JSON.parse(localStorage.getItem('noteorganizer-demo-v1') || '{\"notes\":[]}').notes.some(n => n.title === 'Shopping list')"));
+  await typeInto("#search", "boat");
+  check("search narrows the cards to the one that says it, an untitled note by its first line",
+    await js("document.querySelectorAll('.card').length") === 1 && await js(`!!${cardWith("boat trip")}`));
+  await js("const s = document.getElementById('search'); s.value = ''; s.dispatchEvent(new Event('input'))");
+  await js(`${cardWith("Home-made bread")}.click()`);
+  await sleep(200);
+  await noHorizontalScroll("android demo note");
+  await shot("android-phone-note");
+  check("a note opens on the whole screen, its checklist below it and the format bar under it",
+    await js("document.getElementById('ed-title').value") === "Home-made bread"
+    && await js("document.querySelectorAll('.cl-row').length") === 3
+    && await js("!!document.getElementById('fmt') && document.getElementById('navbar').hidden"));
+  check("its date reads day first, as the app shows it, not in the browser's own order",
+    /\d{2}\.\d{2}\.\d{4}/.test(await js("document.querySelector('.date-chip').textContent")),
+    await js("document.querySelector('.date-chip').textContent"));
+  await js("document.getElementById('ed-title').focus(); document.getElementById('ed-title').setSelectionRange(99, 99)");
+  await page("Input.insertText", { text: " for Sunday" });
+  await sleep(1100);
+  check("typing saves itself, and says so", await js("document.getElementById('ed-status').textContent") === "Auto-saved");
+  await js("[...document.querySelectorAll('.ed-top .icon-btn')].find(b => b.getAttribute('aria-label') === 'More').click()");
+  await sleep(150);
+  await js("[...document.querySelectorAll('.menu-item')].find(b => b.textContent.includes('Add comments')).click()");
+  await sleep(150);
+  check("⋮ adds comments under the note", await js("!!document.getElementById('ed-comments')"));
+  await go("/android-demo/index.html");
+  check("after a reload the note is open again, its title as typed",
+    await js("document.getElementById('ed-title') && document.getElementById('ed-title').value") === "Home-made bread for Sunday");
+  await js("[...document.querySelectorAll('.ed-top .icon-btn')].find(b => b.getAttribute('aria-label') === 'Share').click()");
+  await sleep(150);
+  await js("[...document.querySelectorAll('.sheet .btn')].find(b => b.textContent === 'Make a share code').click()");
+  await sleep(400);
+  const breadCode = await js("(document.querySelector('.sheet .code-area') || {}).value || ''");
+  const breadBack = await js(`__demo.decodeShareCode(${JSON.stringify(breadCode)}).then(n => ({ title: n[0].title, items: n[0].checklist.length }), e => ({ error: e.message }))`);
+  check("Share makes a share code that reads back", breadBack.title === "Home-made bread for Sunday" && breadBack.items === 3,
+    JSON.stringify(breadBack));
+  await js("document.querySelector('.scrim').click()");
+  await js("[...document.querySelectorAll('.ed-top .icon-btn')].find(b => b.getAttribute('aria-label') === 'Back to the notes').click()");
+  await sleep(150);
+  check("Back returns to the list and its bar", await js("!document.getElementById('navbar').hidden && document.querySelectorAll('.card').length === 5"));
+  await click("#navbar [data-tab=calendar]");
+  await noHorizontalScroll("android demo calendar");
+  await shot("android-phone-calendar");
+  check("the calendar marks the days a repeating note falls on", await js("document.querySelectorAll('.cal-dots span').length") >= 4,
+    String(await js("document.querySelectorAll('.cal-dots span').length")));
+  await click("#navbar [data-tab=settings]");
+  await js("[...document.querySelectorAll('.set-row')].find(b => b.textContent.includes('Appearance')).click()");
+  await js("[...document.querySelectorAll('.seg button')].find(b => b.textContent === 'Dark').click()");
+  await sleep(150);
+  await shot("android-phone-appearance-dark");
+  check("Light | Dark switches the whole app to the dark side of its theme",
+    await js("NO_APP.darkThemes.includes(__android.state().theme) && document.documentElement.style.colorScheme === 'dark'"));
+  // Codes both ways: the desktop demo's into this one, and this one's into the desktop demo.
+  const standupCode = codes["Team stand-up"];
+  await js("document.querySelector('.page-title .icon-btn').click()");
+  await js("[...document.querySelectorAll('.set-row')].find(b => b.textContent.includes('Import')).click()");
+  await js(`document.querySelector('.code-area').value = ${JSON.stringify(standupCode)}`);
+  await js("[...document.querySelectorAll('.btn')].find(b => b.textContent === 'Import').click()");
+  await sleep(500);
+  const imported = await js("(() => { const n = __android.state().notes.find(x => x.title === 'Team stand-up'); return n ? { freq: n.recurrence.freq, days: n.recurrence.weekdays } : null; })()");
+  check("a share code from the desktop demo opens in the Android demo, its repeat with it",
+    imported && imported.freq === "weekly" && JSON.stringify(imported.days) === "[0]", JSON.stringify(imported));
+  const androidCodes = await js(`(async () => {
+    const out = {};
+    for (const n of __android.state().notes) if (n.title !== 'Team stand-up') out[n.title] = await __demo.encodeShareCode([n]);
+    return out;
+  })()`);
+  const allCodes = Object.assign(JSON.parse(fs.readFileSync(path.join(OUT, "share_codes_from_demo.json"), "utf8")), androidCodes);
+  fs.writeFileSync(path.join(OUT, "share_codes_from_demo.json"), JSON.stringify(allCodes, null, 1));
+  check("...and the Android demo's own notes make codes for the app's reader", Object.keys(androidCodes).length === 5,
+    Object.keys(androidCodes).join(", "));
+  await js("[...document.querySelectorAll('#navbar [data-tab]')].find(b => b.dataset.tab === 'settings').click()");
+  await js("[...document.querySelectorAll('.set-row')].find(b => b.textContent.includes('About')).click()");
+  check("the Android demo's About leads to the site's privacy notice",
+    await js("!!document.querySelector(\".about a[href='../site-privacy.html']\")"));
+  await viewport(1366, 900, false, "light");
+  await go("/demo/");
+  const crossed = await js(`(async () => {
+    __demo.importShared(await __demo.decodeShareCode(${JSON.stringify(breadCode)}));
+    const n = __demo.state().notes.find(x => x.title === 'Home-made bread for Sunday');
+    return n ? n.checklist.length : -1;
+  })()`);
+  check("a share code from the Android demo opens in the desktop demo, its checklist with it", crossed === 3, String(crossed));
+  await go("/android-demo/index.html");
+  await noHorizontalScroll("android demo on a computer");
+  await shot("android-desktop");
+  check("on a computer the Android demo is drawn as a phone, with a word beside it",
+    await js("document.getElementById('phone').getBoundingClientRect().width") < 440
+    && await js("getComputedStyle(document.querySelector('.beside')).display !== 'none'"));
+  // Photographed with motion reduced, as the document pages are: the fade
+  // caught the page's last block half-way in.
+  await viewport(1366, 900, false, "light", "reduce");
+  await go("/android.html");
+  await shot("site-android-desktop-light", true);
+  check("the Android page shows the app's eight pictures, captioned",
+    await js("document.querySelectorAll('.phone-gallery .phone-shot').length") === 8
+    && await js("[...document.querySelectorAll('.phone-gallery figcaption')].every(f => f.textContent.trim().length > 20)"));
 } catch (err) {
   problems.push("the walk stopped: " + err.message);
 } finally {

@@ -74,9 +74,18 @@ FORBIDDEN = [r"adas9", r"mekotrading", r"noteOrganizerSavedFiles",
 # Pages are linked by file, never by folder ("demo/index.html", not
 # "demo/"): a server opens a folder's index.html by itself, but a page
 # opened from the computer gets a file listing instead.
-NAV = [("index.html", "Overview"),
+NAV = [("index.html", "Overview"), ("android.html", "Android"),
        ("how-its-built.html", "How it's built"),
        ("in-my-words.html", "In my words"), ("testing.html", "How it's tested")]
+
+# The Android app's repository, beside this one unless site.json or
+# --android-repo says otherwise. The site presents both apps from one
+# build (the owner's call, 2026-10-24) and reads the phone's repository
+# the way it reads this one: its screenshots, its README's description,
+# its version -- read, never written.
+ANDROID_DEFAULT = os.path.join("..", "androidVersion")
+# The Android README's sections the Android page shows, by their headings.
+ANDROID_SECTIONS = ["What it does", "What it is not"]
 
 
 def fail(message):
@@ -526,20 +535,23 @@ def doc_page(shell, config, page, title, description, body_html, source_note, ve
     }, page)
 
 
-def check_kept_apart(repo, config):
+def check_kept_apart(repo, config, android):
     """This site presents the project to the people sent here; the apps,
     and the privacy policy the stores are given, never point at it -- the
     owner's rule (2026-10-21), so its users need not know it exists. The
-    app's sources and docs/PRIVACY.md must not name the site's address.
-    (The Android app lives in another repository, where this cannot look.)"""
+    desktop app's sources and docs/PRIVACY.md must not name the site's
+    address, and neither may the Android app's, now that the build reads
+    its repository too."""
     host = urllib.parse.urlparse(config.get("site_url", "")).netloc
     if not host:
         return ["site.json has no site_url, so the apps cannot be checked for it"]
     files = [os.path.join(repo, "note_organizer.py"), os.path.join(repo, "docs", "PRIVACY.md")]
     for root, _, names in os.walk(os.path.join(repo, "noteorganizer")):
         files += [os.path.join(root, n) for n in names if n.endswith(".py")]
+    for root, _, names in os.walk(os.path.join(android, "app", "src", "main")):
+        files += [os.path.join(root, n) for n in names if n.endswith((".kt", ".xml"))]
     return ["%s names this site (%s): the apps and their privacy policy must not point "
-            "here" % (os.path.relpath(f, repo), host)
+            "here" % (f, host)
             for f in sorted(files) if host.lower() in read(f).lower()]
 
 
@@ -631,6 +643,131 @@ def build_images(repo):
 
 
 # ---------------------------------------------------------------------
+# The Android app
+# ---------------------------------------------------------------------
+
+def android_facts(android):
+    """What the pages say about the Android app, each from its own source
+    in that repository: the version from its build file, the figures and
+    the description from its README, the pictures' captions from the
+    README beside them."""
+    gradle = read(os.path.join(android, "app", "build.gradle.kts"))
+    m = re.search(r'versionName\s*=\s*"([^"]+)"', gradle)
+    if not m:
+        fail("the Android app's build.gradle.kts no longer names a versionName")
+    readme = read(os.path.join(android, "README.md"))
+    unit = re.search(r"# ([0-9][0-9,]*) JVM unit tests", readme)
+    walk = re.search(r"([0-9][0-9,]*) checks, each reading the file the app wrote", readme)
+    if not unit or not walk:
+        fail("the Android README no longer gives its unit tests and walk checks "
+             "in the words build.py reads; update one of them")
+    captions = {}
+    shots_readme = read(os.path.join(android, "docs", "screenshots", "README.md"))
+    for name, caption in re.findall(r"^\| `([\w-]+)\.png` \| (.+?) \|$", shots_readme, re.M):
+        captions[name] = caption
+    return {"version": m.group(1), "unit_tests": unit.group(1), "walk_checks": walk.group(1),
+            "readme": readme, "captions": captions}
+
+
+def build_android_images(android):
+    """The Android app's screenshots, as img/android-NAME.webp: a phone held
+    upright at 540px wide, twice what a page shows it at; on its side at
+    1200."""
+    from PIL import Image
+    shots = os.path.join(android, "docs", "screenshots")
+    out_dir = os.path.join(OUT, "img")
+    made = {}
+    for name in sorted(os.listdir(shots)):
+        if not re.fullmatch(r"\d\d-[\w-]+\.png", name):
+            continue
+        with Image.open(os.path.join(shots, name)) as img:
+            img = img.convert("RGB")
+            width = 540 if img.height > img.width else 1200
+            if img.width > width:
+                img = img.resize((width, round(img.height * width / img.width)), Image.LANCZOS)
+            key = "android-" + name[:-4]
+            img.save(os.path.join(out_dir, key + ".webp"), "WEBP", quality=84, method=6)
+            made[key] = (img.width, img.height)
+    if not made:
+        fail("no screenshots in %s" % shots)
+    return made
+
+
+def readme_section(text, heading):
+    """A README's `## heading` section, its heading included, up to the next."""
+    m = re.search(r"^## %s\s*$(.*?)(?=^## |\Z)" % re.escape(heading), text, re.M | re.S)
+    if not m:
+        fail("the Android README has no '## %s' section" % heading)
+    return "## %s\n%s" % (heading, m.group(1).strip())
+
+
+def android_linker(config):
+    """Links in the Android README: to the desktop app's repository, the
+    site's own overview of it; to the phone's own files, GitHub once its
+    repository is public (android_repo_url), plain text until then."""
+    repo_url = config.get("android_repo_url", "")
+
+    def link(href, image=False):
+        if image:
+            return None
+        if re.match(r"^https?://github\.com/[^/]+/noteOrganizer/?$", href):
+            return "index.html"
+        if re.match(r"^(https?:|mailto:)", href):
+            return href
+        if href.startswith("#"):
+            return None
+        path, anchor = resolve("README.md", href)
+        if repo_url:
+            return "%s/blob/main/%s%s" % (repo_url.rstrip("/"), path, "#" + anchor if anchor else "")
+        return None
+    return link
+
+
+def android_page(shell, config, facts, sizes, version):
+    """The Android page: the README's opening, the eight pictures with the
+    captions their own README gives them, its sections, where it stands."""
+    readme = facts["readme"]
+    m = re.search(r"^# [^\n]*\n(.*?)^---\s*$", readme, re.M | re.S)
+    if not m:
+        fail("the Android README no longer opens with a description above a --- line")
+    link = android_linker(config)
+    parts = ["<h1>Note Organizer for Android</h1>", Renderer(link).render(m.group(1))]
+    figures = []
+    for key in sorted(k for k in sizes if k.startswith("android-")):
+        name = key[len("android-"):]
+        w, h = sizes[key]
+        caption = Renderer(link).inline(facts["captions"].get(name, ""))
+        alt = re.sub(r"<[^>]+>", "", caption)
+        wide = " wide" if w > h else ""
+        figures.append(
+            '<figure class="phone-shot%s"><a href="img/%s.webp"><img src="img/%s.webp" width="%d" '
+            'height="%d" alt="%s" loading="lazy"></a><figcaption>%s</figcaption></figure>'
+            % (wide, key, key, w, h, html.escape(alt), caption))
+    parts.append('<div class="phone-gallery">%s</div>' % "".join(figures))
+    for heading in ANDROID_SECTIONS:
+        parts.append(Renderer(link).render(readme_section(readme, heading)))
+    repo = config.get("android_repo_url", "")
+    where = ("in a repository of its own on GitHub, "
+             '<a href="%s" rel="noopener" target="_blank">%s</a>' % (html.escape(repo), html.escape(repo))
+             if repo else "in a repository of its own on GitHub, published when the time comes")
+    parts.append(
+        '<h2 id="where-it-stands">Where it stands</h2>'
+        "<p>Version %s, on its way to Google Play and not published there yet. It is checked by "
+        "%s unit tests and by a walk of %s checks on an emulator, each reading the file the app "
+        "wrote; a note, a share code and a backup it makes are read back by the desktop app's own "
+        "code. Its code lives %s.</p>"
+        % (facts["version"], facts["unit_tests"], facts["walk_checks"], where))
+    parts.append('<p class="page-actions"><a class="btn btn-primary" href="android-demo/index.html">'
+                 "Try the Android demo</a></p>")
+    note = ('<p class="source-note">This page is built from the Android app\'s README and its '
+            "screenshots, read from its repository when the site was last built. Links to its "
+            "documents are shown as plain text until that repository is published.</p>")
+    return doc_page(shell, config, "android.html", "Android",
+                    "Note Organizer for Android: the same notes as the desktop app, on a phone, "
+                    "offline.", "\n".join(parts), note, version)
+
+
+# ---------------------------------------------------------------------
 # Checks on what was written
 # ---------------------------------------------------------------------
 
@@ -718,6 +855,9 @@ def main():
     # repository is the folder this one sits in.
     parser.add_argument("--repo", default=os.path.dirname(HERE),
                         help="the app's repository (read only)")
+    parser.add_argument("--android-repo", default=None,
+                        help="the Android app's repository (read only); by default "
+                             "site.json's android_repo, or ../androidVersion beside the app's")
     args = parser.parse_args()
     repo = os.path.abspath(args.repo)
     if not os.path.isfile(os.path.join(repo, "note_organizer.py")):
@@ -727,9 +867,14 @@ def main():
     if os.path.exists(CONFIG):
         with open(CONFIG, encoding="utf-8") as f:
             config = json.load(f)
+    android = os.path.abspath(args.android_repo or os.path.join(
+        repo, config.get("android_repo") or ANDROID_DEFAULT))
+    if not os.path.isfile(os.path.join(android, "app", "build.gradle.kts")):
+        fail("no Android app in %s; pass --android-repo" % android)
 
     version, themes, ui = app_facts(repo)
     numbers = project_numbers(repo)
+    droid = android_facts(android)
 
     # Only these two folders, both this folder's own output, are ever
     # emptied or replaced.
@@ -754,6 +899,7 @@ def main():
             shutil.copy2(source, target)
 
     images = build_images(repo)
+    images.update(build_android_images(android))
 
     app_data = {
         "version": version,
@@ -775,11 +921,15 @@ def main():
     write(os.path.join(OUT, "demo", "app-data.js"),
           "// Generated by build.py from the app's own source -- do not edit.\n"
           "window.NO_APP = " + json.dumps(app_data, ensure_ascii=False, indent=1) + ";\n")
+    write(os.path.join(OUT, "android-demo", "android-data.js"),
+          "// Generated by build.py from the Android app's build file -- do not edit.\n"
+          "window.NO_ANDROID = " + json.dumps({"version": droid["version"]}) + ";\n")
 
     shell = read(os.path.join(SRC, "page.html"))
     doc_pages = build_doc_pages(repo, config, shell, version, images)
     for page, text in doc_pages.items():
         write(os.path.join(OUT, page), text)
+    write(os.path.join(OUT, "android.html"), android_page(shell, config, droid, images, version))
 
     # The privacy notice and the 404 wear the site's header and footer, so
     # neither reads as a dead end from another site. The 404 is shown at any
@@ -795,6 +945,7 @@ def main():
                       "An offline notes app for Windows, with a web demo you can try "
                       "in the browser."),
         "nav": nav_html("index.html"),
+        "android_version": droid["version"],
         "theme_count": len(themes["THEMES"]),
         "theme_names": ", ".join(themes["THEME_LABELS"][key] for key in
                                  themes["DARK_THEMES"] + themes["LIGHT_THEMES"]),
@@ -806,7 +957,7 @@ def main():
           fill(read(os.path.join(SRC, "index.html")), index_values, "index.html"))
 
     problems, page_count = check_output()
-    problems += check_kept_apart(repo, config)
+    problems += check_kept_apart(repo, config, android)
     if problems:
         print("\n".join(problems))
         shutil.rmtree(STAGE, ignore_errors=True)

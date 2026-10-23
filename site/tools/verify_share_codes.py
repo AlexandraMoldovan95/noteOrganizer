@@ -178,6 +178,15 @@ def run(out):
         if title == "Team stand-up":
             check("  weekly on Monday", note["recurrence"]["freq"] == "weekly" and note["recurrence"]["weekdays"] == [0],
                   repr(note["recurrence"]))
+        # Two of the Android demo's notes, whose codes check_demo.mjs adds.
+        if title == "To read":
+            check("  weekly on Monday and Thursday",
+                  note["recurrence"]["freq"] == "weekly" and note["recurrence"]["weekdays"] == [0, 3],
+                  repr(note["recurrence"]))
+        if title == "Home-made bread for Sunday":
+            check("  its bold first line and its three checklist items came across",
+                  any(s["style"] == "bold" for s in note["formatting"]) and len(note["checklist"]) == 3,
+                  repr((note["formatting"], note["checklist"])))
         if title == "Plant the tulips":
             check("  bold came across", any(s["style"] == "bold" for s in note["formatting"]), repr(note["formatting"]))
             # Set with the formatting bar in tools/check_demo.mjs.

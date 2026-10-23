@@ -496,10 +496,13 @@
   var S = null;
   var storageOk = true;
 
-  function blankNote(extra) {
+  // `into` is another demo's notebook: the Android demo keeps its own, and
+  // makes its notes and takes in share codes by these same rules.
+  function blankNote(extra, into) {
+    var T = into || S;
     var now = Date.now();
     var n = {
-      id: S ? S.nextId++ : 0, uid: uuid(), title: "", html: "", comments: "",
+      id: T ? T.nextId++ : 0, uid: uuid(), title: "", html: "", comments: "",
       category: PROTECTED, date: "", color: "", recurrence: normRec({}),
       checklist: [], pinned: false, created: now, updated: now
     };
@@ -2426,13 +2429,16 @@
 
   function str(v, max) { return typeof v === "string" ? v.slice(0, max || 100000) : ""; }
 
-  function importShared(shared) {
+  // Into this demo's notebook, which is saved and redrawn; or `into` another
+  // demo's, which saves and redraws its own.
+  function importShared(shared, into) {
+    var T = into || S;
     var added = 0, updated = 0;
     shared.forEach(function (sn) {
       var catName = str(sn.category, 40).trim() || PROTECTED;
-      if (!S.categories.some(function (c) { return c.name === catName; })) {
-        var used = S.categories.map(function (c) { return c.color; });
-        S.categories.push({ name: catName, color: A.paletteColors.filter(function (c) { return used.indexOf(c) < 0; })[0] || A.paletteColors[0] });
+      if (!T.categories.some(function (c) { return c.name === catName; })) {
+        var used = T.categories.map(function (c) { return c.color; });
+        T.categories.push({ name: catName, color: A.paletteColors.filter(function (c) { return used.indexOf(c) < 0; })[0] || A.paletteColors[0] });
       }
       var date = readDate(str(sn.date, 40));
       var fields = {
@@ -2448,21 +2454,23 @@
           .map(function (c) { return { text: c.text.slice(0, 500), done: !!c.done }; })
       };
       var uid = str(sn.uid, 100).trim();
-      var mine = uid ? S.notes.filter(function (n) { return n.uid === uid; })[0] : null;
+      var mine = uid ? T.notes.filter(function (n) { return n.uid === uid; })[0] : null;
       if (mine) {
         Object.keys(fields).forEach(function (k) { mine[k] = fields[k]; });
         mine.updated = Date.now();
         updated++;
       } else {
-        var n = blankNote(fields);
+        var n = blankNote(fields, T);
         if (uid) n.uid = uid;
-        S.notes.push(n);
-        S.ui.openId = n.id;
+        T.notes.push(n);
+        T.ui.openId = n.id;
         added++;
       }
     });
-    persist();
-    renderAll();
+    if (!into) {
+      persist();
+      renderAll();
+    }
     var parts = [];
     if (added) parts.push("Imported " + plural(added, "note"));
     if (updated) parts.push((added ? "updated " : "Updated ") + plural(updated, "note") + " already here");
@@ -2626,14 +2634,25 @@
     persist();
   }
 
-  // Exposed for the demo's own checks (tools/check_demo.mjs), not used by the page.
-  window.__demo = {
+  // The rules this demo keeps, for the Android demo, which loads this file
+  // and draws its own screens -- one copy of the palettes' arithmetic, the
+  // dates and repeats, the share codes, a note's body to HTML and back --
+  // and for the checks (tools/check_demo.mjs), as window.__demo.
+  window.NO_DEMO = window.__demo = {
     encodeShareCode: encodeShareCode, decodeShareCode: decodeShareCode,
     htmlToBody: htmlToBody, bodyToHtml: bodyToHtml, occurrences: occurrences,
+    nextOccurrence: nextOccurrence, normRec: normRec,
     describeRec: describeRec, readDate: readDate, legibleOn: legibleOn, lettersOn: lettersOn,
-    state: function () { return S; }, importShared: importShared,
-    iso: iso, parseIso: parseIso
+    blend: blend, applyTheme: applyTheme, partnerTheme: partnerTheme,
+    state: function () { return S; }, importShared: importShared, blankNote: blankNote,
+    sanitizeHtml: sanitizeHtml, plainText: plainText, sortNotes: sortNotes,
+    el: el, icon: icon, plural: plural, uuid: uuid,
+    iso: iso, parseIso: parseIso, showDate: showDate, longDate: longDate,
+    today: today, addDays: addDays, weekday: weekday,
+    WEEKDAYS: WEEKDAYS, WEEKDAYS_LONG: WEEKDAYS_LONG, MONTHS: MONTHS, SORTS: SORTS,
+    TRASH_DAYS: TRASH_DAYS, PROTECTED: PROTECTED
   };
 
-  init();
+  // The desktop's screens only on its own page: the Android demo has no #app.
+  if (document.getElementById("app")) init();
 })();
