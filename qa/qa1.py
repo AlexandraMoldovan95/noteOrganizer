@@ -4261,6 +4261,128 @@ check(f'a motionless click on a rule changes nothing (W={_wS2})',
       _wS2 == _wS)
 set_body('')
 
+# ---- A PASTED MARKDOWN TABLE SIZES TO WHAT IT HOLDS ----
+# Markdown spells a right-aligned column "---:", four characters, and the
+# app reads a separator cell over three as a width set by hand: a table
+# pasted from a chat or a .md file drew its column four wide, the header
+# cut to "How...". Every route a paste from elsewhere takes spells the
+# separator at markdown's minimum; the app's own copy keeps its widths.
+_mdP = '| What | How much |\n| --- | ---: |\n| rent | 1500 |'
+
+
+def _pasted_widths():
+    # The last separator in the note: the pasted table's, where one was
+    # being typed above it.
+    found = None
+    for line in body().split('\n'):
+        if core_tables.is_separator_row(line):
+            found = [c['width'] for c in core_tables.parse_separator(line)]
+    return found
+
+
+def _drawn_header(first_line):
+    app._render_table_grids()
+    app.update()
+    grid = app._grid_at_line(first_line)
+    if grid is None:
+        return None
+    return ''.join(grid['canvas'].itemcget(t, 'text')
+                   for t in grid['cells'][(0, 1)]['texts'])
+
+
+set_body('')
+_stub_clipboard(html=None, text=_mdP)
+check('a plain markdown table is pasted by the app, not by Tk',
+      app._on_body_paste() == 'break')
+app.update()
+check(f'...its "---:" keeps the colon and loses the width ({_pasted_widths()}, '
+      f'{body().split(chr(10))[1]!r})',
+      _pasted_widths() == [None, None] and '--:' in body().split('\n')[1])
+check(f'...and its header is drawn whole ({_drawn_header(1)!r})',
+      _drawn_header(1) == 'How much')
+
+set_body('')
+_stub_clipboard(html=None, text='Costs:\n' + _mdP + '\nThat is all.')
+check('a table in the middle of pasted text takes the app\'s route too',
+      app._on_body_paste() == 'break')
+app.update()
+check(f'...the same widths forgotten ({_pasted_widths()}), the words around it kept',
+      _pasted_widths() == [None, None] and body().startswith('Costs:\n| What')
+      and body().endswith('That is all.'))
+app._body_undo_redo('undo'); app.update()
+check(f'...and one Ctrl+Z takes the whole paste back ({body()!r})', body() == '')
+
+# Pasted from inside a table still being typed, the app makes the paste
+# itself (_paste_text_leaving_table), and forgets the widths there too.
+set_body('Intro\n| Item name | Qty |\n| --- | --- |\n| Tea | 2 |\nend line')
+app.body_text.mark_set('insert', '4.end')
+app._last_caret_line = None
+_typedP = app._row_being_typed()
+_stub_clipboard(html=None, text='\nPrices:\n' + _mdP + '\nthat is all')
+app._on_body_paste()
+app.update()
+check(f'a paste out of a table being typed forgets them as well '
+      f'(typed row {_typedP}, {_pasted_widths()})',
+      _typedP == 4 and _pasted_widths() == [None, None]
+      and sum(core_tables.is_separator_row(l) for l in body().split('\n')) == 2
+      and 'Prices:' in body())
+
+set_body('')
+_stub_clipboard(html='<p>| What | How much |</p><p>| :------: | ---: |</p>'
+                     '<p>| <b>rent</b> | 1500 |</p>',
+                text=_mdP)
+app._on_body_paste()
+app.update()
+_mdS = {(s['style'], body()[s['start']:s['end']])
+        for s in app._extract_formatting(app.body_text)}
+check(f'a markdown table arriving as a web page\'s text forgets its widths too '
+      f'({_pasted_widths()}), its bold kept on its word ({_mdS})',
+      _pasted_widths() == [None, None] and ('bold', 'rent') in _mdS)
+
+set_body('')
+_stub_clipboard(html='<p>x</p>', text=_mdP)
+take_focus(app.body_text)
+app.body_text.event_generate('<Control-Shift-V>')
+app.update()
+check(f'Ctrl+Shift+V forgets them as well ({_pasted_widths()})',
+      _pasted_widths() == [None, None] and 'How much' in body())
+
+# The template editor's body is a plain box of its own, with its own paste.
+_tplT = NO.tk.Text(app.body_text.winfo_toplevel())
+_stub_clipboard(html=None, text=_mdP)
+_tplR = app._paste_table_aware(_tplT)
+check(f'a template\'s body takes a pasted markdown table the same way '
+      f'({_tplT.get("1.0", "end-1c").split(chr(10))[1:2]})',
+      _tplR == 'break'
+      and _tplT.get('1.0', 'end-1c').split('\n')[1] == '| --- | --: |')
+_tplT.destroy()
+_stub_clipboard(html=None, text='just words')
+_tplT = NO.tk.Text(app.body_text.winfo_toplevel())
+check('...and leaves words without a table to the normal paste',
+      app._paste_table_aware(_tplT) is None)
+_tplT.destroy()
+
+# Our own copy: the dashes are a width set here, and come back as they went.
+set_body('| What | How much |\n| ------------ | --------: |\n| rent | 1500 |')
+app.update()
+_stub_clipboard(loopback=True)
+app.body_text.tag_add('sel', '1.0', 'end-1c')
+app._copy_formatted()
+app.body_text.tag_remove('sel', '1.0', 'end')
+set_body('')
+app._on_body_paste()
+app.update()
+check(f'a table copied from a note keeps its set widths ({_pasted_widths()})',
+      _pasted_widths() == [12, 9])
+set_body('')
+NO.clipboard.read_html = lambda: None
+app._on_body_paste()
+app.update()
+check(f'...by the plain route as well ({_pasted_widths()})',
+      _pasted_widths() == [12, 9])
+_stub_clipboard()
+set_body('')
+
 # ---- MERGE KEEPS THE TEXT IT SWALLOWS ----
 # Merging 'A' with an empty neighbour used to keep whichever cell was the
 # anchor -- and lose the text when the anchor was the empty one.

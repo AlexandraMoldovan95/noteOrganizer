@@ -339,6 +339,41 @@ check("a narrow separator never truncates the data",
 # cell length IS the stored width -- so that variant is equivalent, not a
 # bug to test for.)
 
+# Text from outside the app: markdown's "---:" is four characters, read as
+# a column set by hand to four -- "How much" drawn "How…". forget_widths
+# spells every such cell at markdown's minimum, and only that.
+_fw, _fw_shifts = tables.forget_widths(
+    "| What | How much |\n| --- | ---: |\n| rent | 1500 |")
+check(f"a pasted '---:' keeps its colon and loses its width ({_fw!r})",
+      _fw.split("\n")[1] == "| --- | --: |"
+      and [c["width"] for c in tables.parse_separator(_fw.split("\n")[1])] == [None, None]
+      and tables.parse_separator(_fw.split("\n")[1])[1]["align"] == "right")
+_fw2, _ = tables.forget_widths("| a | b | c |\n|:------|:-----:|~|\n| 1 | 2 | 3 |")
+check(f"left, centred and hidden columns keep their marks ({_fw2.split(chr(10))[1]!r})",
+      _fw2.split("\n")[1] == "|:--|:-:|~|")
+_fw3_text = "| a | b |\n| --- | :-: |\n| x | y |"
+check("a separator already at markdown's minimum is left exactly as it came",
+      tables.forget_widths(_fw3_text) == (_fw3_text, []))
+check("so is text with no table in it, a line of dashes included",
+      tables.forget_widths("one\n------\ntwo") == ("one\n------\ntwo", []))
+# Two tables, a bold word after each separator: the shifts are counted in
+# the text as it came, as shift_spans judges them, so both words keep it.
+_fw4_text = ("| Name | Age |\n|------|-----|\n| Alexandra | 31 |\n\n"
+             "| p | q |\n| ----: | :---- |\n| Radu | 2 |")
+_fw4, _fw4_shifts = tables.forget_widths(_fw4_text)
+_fw4_spans = shift_spans(
+    [{"start": _fw4_text.index("Alexandra"), "end": _fw4_text.index("Alexandra") + 9,
+      "style": "bold"},
+     {"start": _fw4_text.index("Radu"), "end": _fw4_text.index("Radu") + 4,
+      "style": "bold"}], _fw4_shifts)
+check(f"a style after each forgotten width stays on its word "
+      f"({[_fw4[s['start']:s['end']] for s in _fw4_spans]})",
+      [_fw4[s["start"]:s["end"]] for s in _fw4_spans] == ["Alexandra", "Radu"])
+check("and the tidy then sizes the column to what it holds, not to the dashes",
+      "| Alexandra |" in tables.align(_fw4)[0]
+      and tables.align(tables.forget_widths(
+          "| a |\n| ------------ |\n| b |")[0])[0].split("\n")[0].count(" ") < 12)
+
 # The separator never reaches exported HTML.
 _sep_html = note_to_html(_sep_body)
 check("export skips the separator row",

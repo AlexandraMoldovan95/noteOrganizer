@@ -108,6 +108,25 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+### Fixed
+
+- **A table pasted as markdown fits its words.** A table copied as text — from a chat's Copy
+  button, a `.md` file, a web page's code — came in with its columns cut short, "How much" drawn
+  "How…": markdown spells a right-aligned column `---:`, and the app read every separator cell
+  longer than three characters as a width set by hand. A paste from elsewhere now spells the
+  separator at markdown's minimum, its colons and hidden marks kept, by every route — Ctrl+V,
+  Ctrl+Shift+V, a page's HTML, a template's text. A table copied from a note keeps the widths set
+  in it, and notes already saved are read as before.
+
+### Testing
+
+- `test_tables` holds `forget_widths`: the colons and the hidden mark kept, a separator already at
+  its minimum and a line of dashes left alone, and the styles after it kept on their words. qa1
+  pastes a markdown table by each route — rows on their own lines, a table in the middle of
+  words, out of a table being typed, a page's HTML, Ctrl+Shift+V, a template's text — its header
+  drawn whole, one Ctrl+Z taking it back, and a note's own copy keeping its widths by the rich
+  route and the plain one. Mutants FW01–FW10.
+
 ---
 
 ## [0.96.395] — 2026-10-23

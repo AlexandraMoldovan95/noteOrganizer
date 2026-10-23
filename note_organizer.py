@@ -4012,9 +4012,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if column and column.get("width"):
                 # The dash count is the display width, exactly -- narrower
                 # than the content clips to an ellipsis, deliberately (a
-                # hand-narrowed column). Pasted markdown's conventional
-                # "---" never reaches here: parse_separator reads a
-                # minimum-width separator as "no width opinion".
+                # hand-narrowed column). Pasted markdown never reaches here:
+                # parse_separator reads a minimum-width separator as "no
+                # width opinion", and a paste from elsewhere spells every
+                # separator at that minimum (_foreign_plain) -- "---:" and
+                # "|------|" included.
                 col_w[c] = char_px * column["width"] + 2 * pad_x
                 continue
             for r, row in enumerate(rows):
@@ -7241,6 +7243,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if (getattr(self, "_paste_from_table", None)
                 and self._paste_text_leaving_table()):
             return "break"
+        if self._paste_text_forgetting_widths():
+            return "break"
         # None of them took it, and Tk's paste is the delete the run was
         # opened for -- given back while the text is still what the run
         # noted.
@@ -7291,7 +7295,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             single = raw or ""
             if not core_tables.is_table_row(single.strip("\n")):
                 return False
-        raw = raw.replace("\r\n", "\n").replace("\r", "\n")
+        raw = self._foreign_plain(raw)
         lines = raw.strip("\n").split("\n")
         if not (core_tables.is_table_row(lines[0])
                 or core_tables.is_table_row(lines[-1])):
@@ -7312,6 +7316,48 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         text = raw.strip("\n")
         lead, trail = self._rows_gap(text)
         b.insert("insert", lead + text + trail)
+        kept = self._tidy_table_paste_left()
+        self._body_follow_caret = True
+        self._resync_list_tags()
+        self._render_table_grids(keep_typed=kept)
+        self._schedule_autosave()
+        return True
+
+    def _foreign_plain(self, raw):
+        """*raw*, pasted as text, with every table's separator spelled at
+        markdown's minimum: dashes typed in another program are not widths
+        set here, and read as them a pasted "---:" drew its column four
+        characters wide (core_tables.forget_widths). This app's own copy
+        from a note (_copy_formatted) keeps its dashes, which are. Line
+        endings come back as the note's."""
+        text = raw.replace("\r\n", "\n").replace("\r", "\n")
+        mine = getattr(self, "_formatted_clip", None)
+        if mine and text == mine[0].replace("\r\n", "\n"):
+            return text
+        return core_tables.forget_widths(text)[0]
+
+    @_undo_atom
+    def _paste_text_forgetting_widths(self):
+        """Plain text with a table in it whose separator spells widths,
+        pasted by the app instead of by Tk, so the separator goes in at
+        markdown's minimum (_foreign_plain) inside the paste's own unit --
+        a table in the middle of the text, which no route above takes.
+        Anything _foreign_plain leaves as it came stays Tk's to paste."""
+        raw = clipboard.read_text()
+        if raw is None:
+            try:
+                raw = self.body_text.clipboard_get()
+            except tk.TclError:
+                return False
+        if not raw:
+            return False
+        text = self._foreign_plain(raw)
+        if text == raw.replace("\r\n", "\n").replace("\r", "\n"):
+            return False
+        # The grids down before anything is written (see
+        # _paste_tsv_as_table): the drawing at the end would split the unit.
+        self._teardown_table_grids()
+        self._replace_selection_with(text)
         kept = self._tidy_table_paste_left()
         self._body_follow_caret = True
         self._resync_list_tags()
@@ -7416,7 +7462,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             b.delete("sel.first", "sel.last")
         except tk.TclError:
             pass
-        b.insert("insert", text.replace("\r\n", "\n").replace("\r", "\n"))
+        b.insert("insert", self._foreign_plain(text))
         kept = self._tidy_table_paste_left()
         self._body_follow_caret = True
         self._resync_list_tags()
@@ -7604,7 +7650,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # writer did. Rejoined before the markers are stripped, because that
         # decision reads the line structure and refuses to touch a list.
         self._paste_from_table = self._note_raw_table_at_caret()
-        self._replace_selection_with(strip_list_markers(reflow_wrapped(text)))
+        self._replace_selection_with(
+            strip_list_markers(reflow_wrapped(self._foreign_plain(text))))
         kept = self._tidy_table_paste_left()
         self._body_follow_caret = True
         self.after_idle(self._resync_list_tags)
@@ -19656,7 +19703,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         from Excel, Word or a web page dropped the structure and left
         the words. When the clipboard's HTML holds a table, the same
         converter the main editor trusts turns it into the note's own
-        pipe-text form; anything else falls through to the normal paste.
+        pipe-text form; text with a markdown table in it goes in with its
+        separator at markdown's minimum (_foreign_plain); anything else
+        falls through to the normal paste.
         """
         try:
             html = clipboard.read_html()
@@ -19676,7 +19725,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 text_widget.insert("insert", text)
                 self._say_if_paste_was_cut(cut)
                 return "break"
-        return None
+        # Text holding a table of its own: its separator spelled at
+        # markdown's minimum, as the note's body takes it (_foreign_plain).
+        try:
+            raw = clipboard.read_text()
+        except Exception:
+            raw = None
+        if raw is None:
+            try:
+                raw = text_widget.clipboard_get()
+            except tk.TclError:
+                return None
+        text = self._foreign_plain(raw)
+        if text == raw.replace("\r\n", "\n").replace("\r", "\n"):
+            return None
+        try:
+            text_widget.delete("sel.first", "sel.last")
+        except tk.TclError:
+            pass
+        text_widget.insert("insert", text)
+        return "break"
 
     def save_current_as_template(self):
         """Save the current editor content as a reusable template. Asks for a

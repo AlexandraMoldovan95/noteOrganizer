@@ -98,6 +98,23 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
   the app is slow: the bug form asks how many notes the person has, and every crash log names the
   notebook's size, so such a report says at once whether this is the cause.
   `tools/bench.py --rich` re-measures the save at any size.
+- **A Share button like the phone's.** The Android app has one Share button in a note — PDF,
+  web page, plain text or share code, handed to the phone's share sheet — which replaced its
+  "Send by email" on 2026-10-19, because the sheet covers email too. Here the same ground is
+  covered in three places: **Generate code** in the editor, **🔗 Share notes** for several notes,
+  and right-click → **Export as file** (.html or .txt), a file to attach by hand. Weighed on
+  2026-10-23: Windows has a share window of its own (the one Edge and File Explorer open), which
+  a desktop app reaches only through Windows' COM interfaces (`IDataTransferManagerInterop`). That
+  needs no new dependency, but it is native code that can take the app down where the crash log
+  cannot follow, and no script can press anything in the window once it opens. What it offers
+  depends on the machine — on many, little beyond Nearby Share and Outlook, and never a webmail
+  open in a browser tab — and PDF would not be among the choices
+  ([decided against](#explicitly-not-planned-right-now)). The lighter routes weighed with it: a
+  Share popup offering Copy text, a file put on the clipboard to paste into a mail or a chat, and
+  a `mailto:` link, which carries only the words and cuts a long note short. **Decided
+  2026-10-23, the owner's call: not now** — the app does the job as it is. Worth reopening
+  together with the toolkit question further down this list, if the desktop ever moves off
+  Tkinter.
 - **An Android version.** It is built in a repository of its own (`noteOrganizerForAndroid`,
   private), begun on 2026-09-13: a native Android app in Kotlin that reads and writes the same
   notes file as this one. It began as an exploration of whether the data format survives the trip

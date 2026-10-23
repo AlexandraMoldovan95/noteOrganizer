@@ -918,8 +918,17 @@ table. And the second row — `| :---: | --- |` — is not decoration: the dash 
 column's hand-dragged width (with one reading nuance since 0.71.134: a minimum-width cell of
 three characters or fewer is markdown's conventional spelling, not an authored size, so it
 parses as "no width opinion" and the column sizes to its content — authored widths floor at 4
-so they always round-trip as authored), the colons store its alignment, and a `~` marks a
-hidden column, so even *layout* survives every trip through plain text.
+so they always round-trip as authored), and a `~` marks a hidden column, so even *layout*
+survives every trip through plain text. The colons are kept as they came, and written back; a
+cell's alignment is drawn from its own padding, never from them.
+
+Markdown from elsewhere writes longer separators than that minimum — `---:` and `:---:` for an
+aligned column, `|------|` as wide as a header — and read as this app's own they were widths
+set by hand: a pasted table's header drawn "How…". The file cannot say whose dashes they are,
+and a paste can, so every paste from outside the app spells its separators at the minimum
+(`tables.forget_widths`), colons and `~` kept, while the app's own copy keeps its widths and a
+note already saved is read as before
+([the story](ISSUES_LOG.md#a-separators-dashes-read-as-a-width-nobody-set)).
 
 The `0.55.81` round extended the same storage idiom in three directions, none of which changed
 the note format:

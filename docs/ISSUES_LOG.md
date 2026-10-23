@@ -174,6 +174,7 @@ is in the table below as well.
 | [The icon drawn as narrow as a letter](#the-icon-drawn-as-narrow-as-a-letter) | An icon's width is the width of whichever font answered for it; where icons must line up, choose them from the range one font draws, and measure the column. | 0.96.392 |
 | [The marker that was only characters](#the-marker-that-was-only-characters) | When a structure is stored as text, every route that edits text edits it: count the routes that reach it, not the ones the feature was written for. | 0.96.394 |
 | [The rescue copy that outlived what it rescued](#the-rescue-copy-that-outlived-what-it-rescued) | A safety net that can be pressed later must know whether it still rescues anything, and must itself be undoable. | 0.96.395 |
+| [A separator's dashes, read as a width nobody set](#a-separators-dashes-read-as-a-width-nobody-set) | When a format borrows another's syntax, the borrowed form arrives written as the other world writes it: decide whose it is where that is still known — at the way in. | Unreleased |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -3252,6 +3253,38 @@ follow the rule too.
 size drew any row being typed, pasted into or not, and the next letter went under the table.
 They ask the same question now — is the caret on a row of a table not yet drawn? — and leave
 that row as it is.
+
+### A separator's dashes, read as a width nobody set
+
+*(Unreleased · 2026-10-23 · seen in a photograph of the Android app taken for its documentation;
+the desktop did the same)*
+
+**Symptom:** a table's header drawn "How…" instead of "How much", its column barely wider than
+"1500". The note had been written as GitHub's markdown writes a table with a right-aligned
+column: `| What | How much |` over `| --- | ---: |`. Any table pasted as text — from a chat's
+Copy button, a `.md` file, a page's code block — came in the same way whenever its separator had
+a colon or more dashes than three.
+
+**Root cause:** the app keeps a column's hand-set width in the separator itself, as its dash
+count; `---:` is four characters, so it read as a column set by hand to four, and a set width is
+drawn exactly, cut short with an ellipsis. A waiver from 0.71.134 already read three characters
+or fewer as markdown's spelling rather than a width — but markdown's spelling of an aligned
+column is four or five, and of a column as wide as its header, more. The two meanings share one
+form, and in the file nothing says which one a separator is.
+
+**Fix:** the decision is made where it is still known: at the paste. Text from outside the app has
+every separator spelled at markdown's minimum on its way in — `---:` becomes `--:`, colons and `~`
+kept (`tables.forget_widths`) — by every route a paste takes: `html_to_note` for a page's HTML,
+and `_foreign_plain` for plain text, from rows on their own lines, a table in the middle of words
+(which Tk used to paste itself, now made by the app in one undo unit), a table being typed,
+Ctrl+Shift+V and a template's text. The app's own copy from a note keeps its dashes, which are
+widths set here. Notes already saved are read as before: a reading rule changed would have
+widened every column someone narrowed on purpose. The phone has the same fix, held to the
+desktop's answers on 86 texts by its paste fixture.
+
+**Takeaway:** when a format borrows another's syntax, the borrowed form arrives written the
+way the other world writes it. Decide whose it is where that is still known — at the way in — and
+leave what is already stored alone.
 
 ## Theming & performance
 

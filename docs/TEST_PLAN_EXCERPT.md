@@ -1,7 +1,7 @@
 # Test plan - an excerpt
 
 The manual test plan is a spreadsheet,
-[`qa/NoteOrganizer_TestPlan.xlsx`](../qa/NoteOrganizer_TestPlan.xlsx): **585 cases**. I walk it
+[`qa/NoteOrganizer_TestPlan.xlsx`](../qa/NoteOrganizer_TestPlan.xlsx): **586 cases**. I walk it
 by hand on the packaged `.exe` before a release - a case passes only when I've seen it pass.
 
 ## How the plan is used
@@ -21,7 +21,7 @@ by hand on the packaged `.exe` before a release - a case passes only when I've s
 | Priority | Cases |
 |---|---:|
 | High | 179 |
-| Medium | 286 |
+| Medium | 287 |
 | Low | 120 |
 
 #### The six largest areas
@@ -30,14 +30,14 @@ by hand on the packaged `.exe` before a release - a case passes only when I've s
 |---|---:|
 | Editor | 70 |
 | Notes | 63 |
-| Tables | 52 |
+| Tables | 53 |
 | Recurrence | 47 |
 | Calendar | 46 |
 | Settings | 43 |
 
 ## The test case template, filled out four times
 
-Every one of the 585 cases uses the same template: area, priority, preconditions, numbered
+Every one of the 586 cases uses the same template: area, priority, preconditions, numbered
 steps, expected result, status, and what automation covers. **The four below are a small sample
 of that full list** - not the only ones, just quick to picture without seeing the app:
 
