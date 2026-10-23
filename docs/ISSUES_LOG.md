@@ -173,6 +173,7 @@ is in the table below as well.
 | [Two answers to one question](#two-answers-to-one-question) | Two helpers answering one question disagree somewhere — measure them against each other; and a base theme's state map silently overrides what you configured. | 0.89.371 |
 | [The icon drawn as narrow as a letter](#the-icon-drawn-as-narrow-as-a-letter) | An icon's width is the width of whichever font answered for it; where icons must line up, choose them from the range one font draws, and measure the column. | 0.96.392 |
 | [The marker that was only characters](#the-marker-that-was-only-characters) | When a structure is stored as text, every route that edits text edits it: count the routes that reach it, not the ones the feature was written for. | 0.96.394 |
+| [The rescue copy that outlived what it rescued](#the-rescue-copy-that-outlived-what-it-rescued) | A safety net that can be pressed later must know whether it still rescues anything, and must itself be undoable. | Unreleased |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -4841,6 +4842,31 @@ the list's own route, took two Ctrl+Z (the numbers first, then the marker); it i
 **Takeaway:** when a structure is stored as text, every route that edits text edits the
 structure. Count the routes that reach it — the keys, the clipboard's three, typing over a
 selection — not the ones the feature was written for.
+
+### The rescue copy that outlived what it rescued
+
+*(2026-10-22 · found on the Android app by an agent playing an ordinary user; the desktop did the
+same)*
+
+**Symptom:** a note's text selected whole and deleted, then brought back with Ctrl+Z. The button
+**↩ Restore previous** stayed. Later edits were made — a line added, words appended, two items
+bolded — and the button pressed: the note went back to the version before the deletion, the later
+edits gone, Undo empty, the button gone. The question had said only "The current text will be
+replaced".
+
+**Root cause:** the rescue copy (`_prev`) was made by the save that shrank the note and spent only
+by a restore. Nothing asked whether the note still needed rescuing, so a copy whose words were
+back on the page went on offering itself; and a restore, the one action that replaces text
+wholesale, left nothing behind to take it back.
+
+**Fix:** the owner's call, on both apps. A save that holds again everything the copy kept spends
+it (`rescue_copy_spent`), and the button goes. A restore keeps what it replaces as the copy in
+its turn (`copy_replaced_by_restore`), so the same button brings it back — unless it holds
+nothing the restored version lacks, an emptied note above all, when a button offering it back
+would only mislead. The question says the text is kept only when it will be.
+
+**Takeaway:** a safety net that can be pressed later must know whether it still rescues
+anything — and pressing it must leave a way back, or the net becomes the fall.
 
 ### Nine regressions in fifteen fixes
 

@@ -21,7 +21,9 @@ from noteorganizer.core.duplicates import _dup_key
 from noteorganizer.core.model import (
     NOTE_DEFAULTS,
     apply_shared_update,
+    copy_replaced_by_restore,
     find_by_uid,
+    rescue_copy_spent,
     split_by_identity,
     new_note_uid,
     normalize_note,
@@ -298,6 +300,33 @@ check('split_by_identity on an empty batch finds nothing',
       split_by_identity(_mine_all, []) == ([], []))
 check('split_by_identity against an empty notebook calls everything new',
       len(split_by_identity([], _batch)[1]) == 3)
+
+# ---- the rescue copy, spent and swapped (2026-10-22, both apps) ----
+#
+# Undo after a big deletion brought the words back and the button stayed;
+# pressed later, it put the old version over everything written since,
+# with no way back. A save that holds what the copy kept spends it, and a
+# restore keeps what it replaces -- unless that holds nothing new.
+_long = "a long text that a slip of the hand deleted whole"
+_kept = {"title": "t", "body": _long, "formatting": [], "paragraphs": [], "comments": ""}
+check('a note holding again what its copy kept: the copy is spent',
+      rescue_copy_spent({"title": "t", "body": _long, "_prev": dict(_kept)}))
+check('...but not while the words differ',
+      not rescue_copy_spent({"title": "t", "body": "", "_prev": dict(_kept)}))
+check("...nor while an update's extra field differs",
+      not rescue_copy_spent({"title": "t", "body": _long, "pinned": True,
+                             "_prev": dict(_kept, pinned=False)}))
+check('...and a note with no copy has none to spend',
+      not rescue_copy_spent({"title": "t", "body": _long}))
+_swap = copy_replaced_by_restore({"title": "t", "body": "written since"}, _kept)
+check('a restore keeps the text it replaces, to be the copy in its turn',
+      isinstance(_swap, dict) and _swap.get("body") == "written since" and _swap.get("title") == "t")
+check('...the fields an update brings back with it',
+      copy_replaced_by_restore({"title": "New", "body": "new", "category": "Home"},
+                               dict(_kept, category="Work")).get("category") == "Home")
+check('...but nothing over an emptied note, or words the restored text holds',
+      copy_replaced_by_restore({"title": "t", "body": ""}, _kept) is None
+      and copy_replaced_by_restore({"title": "t", "body": "a long text"}, _kept) is None)
 
 # ---- the identity has to survive the app closing ----
 #

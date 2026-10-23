@@ -601,8 +601,8 @@ check('...with its formatting intact, not flattened to plain text',
       _rs_after.get('formatting') == [{'start': 0, 'end': 9, 'style': 'bold'}])
 check('...and no per-day override was manufactured for that day',
       _RS_OCC not in (_rs_after.get('overrides') or {}))
-check('...and the rescue copy is spent exactly once',
-      _rs_after.get('_prev') is None)
+check("...and the copy now holds the series' text it replaced, not a day's",
+      ((_rs_after.get('_prev') or {}).get('body') or '').rstrip('\n') == 'short')
 del app.ask_occurrence_scope
 app.notes = []
 app.save_notes()

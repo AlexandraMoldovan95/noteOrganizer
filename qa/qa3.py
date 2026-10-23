@@ -522,6 +522,28 @@ app._themed_dialog = _real_dlg_id
 
 check('a returning note is recognised as one we already have, and asked about',
       len(_asked) == 1 and 'already here' in _asked[0])
+
+# One note we have among several new ones: the batch's question says it as
+# one -- "Update the 1" and "Add it as new notes" came of counting it.
+# Cancelled, so nothing here changes.
+_batch_code = NO.encode_share_code([
+    {'uid': _sent_uid, 'title': 'Departed', 'body': 'text corrected again',
+     'formatting': [], 'paragraphs': [], 'comments': '',
+     'category': 'General', 'date': '', 'color': '', 'checklist': []},
+    {'uid': 'one-new-note-in-the-batch', 'title': 'Fresh', 'body': 'new here',
+     'formatting': [], 'paragraphs': [], 'comments': '',
+     'category': 'General', 'date': '', 'color': '', 'checklist': []},
+])
+_batch_buttons = []
+app._themed_dialog = lambda *a, **k: (_batch_buttons.append(
+    [label for label, _v in k.get('buttons') or []]), 'cancel')[1]
+app.import_box.delete('1.0', 'end')
+app.import_box.insert('1.0', _batch_code)
+app._do_inline_import()
+app.update()
+app._themed_dialog = _real_dlg_id
+check(f"one note we have, among new ones: the batch's question says it as one ({_batch_buttons})",
+      _batch_buttons[:1] == [['Cancel', 'Add it as a new note', 'Update it']])
 check('choosing Update adds no second note',
       len(app.notes) == _ident_base + 1)
 check('...and the note we had now carries the text that came back',

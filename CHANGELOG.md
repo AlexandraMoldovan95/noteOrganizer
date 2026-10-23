@@ -107,6 +107,34 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+### Fixed
+
+- **An import's question says one note as one.** For a single note already here, edited
+  elsewhere, its buttons read "Add it as new notes" and "Update the 1"; they read "Add it as a new
+  note" and "Update it".
+
+### Changed
+
+- **A click on a list's number or bullet puts the cursor after it**, at the item's words — the
+  owner's call, on both apps. Before it, a letter typed made "x3. ham", a line that is no item any
+  more. A click that selects is left as it is.
+- **"↩ Restore previous" keeps what it replaces, and the button goes once the text is back** — the
+  owner's call, on both apps, after an agent playing an ordinary user on the Android app found it.
+  A big deletion taken back with Ctrl+Z left the button in place, and pressed later it put the old
+  version over everything written since, with no way back. Now the save that holds what the copy
+  kept spends it, and a restore keeps the text it replaces as the copy, so the button brings that
+  back — unless it holds nothing the restored text lacks, such as an emptied note. The question
+  before a restore says so only when it is true.
+
+### Testing
+
+- qa1: a click on a marker puts the caret after it and a letter joins the item, while a click in
+  the words or one that selects stays where it is. qa7: a big deletion's copy spent once Ctrl+Z has
+  brought the words back, the button gone; a restore keeping the text it replaced, the button there
+  to bring it back. qa2's restore from a day checks the copy holds the series' text it replaced.
+  `test_note_identity` holds the copy spent and kept, and the swap's exceptions. qa3 reads the
+  buttons of the question a single returning note asks. Mutants MC01, RC01–RC03 and IM01.
+
 ---
 
 ## [0.96.394] — 2026-10-22

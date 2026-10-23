@@ -369,6 +369,8 @@ from noteorganizer.core.model import (
     _truncate,
     _note_str,
     normalize_note,
+    rescue_copy_spent,
+    copy_replaced_by_restore,
     find_by_uid,
     split_by_identity,
     apply_shared_update,
@@ -4944,6 +4946,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     b.tag_remove("sel", b.index(f"{top} -1c"), end)
             except tk.TclError:
                 return
+
+    def _caret_past_marker(self, _event=None):
+        """A click on a list's marker -- "3." or "•" -- puts the caret after
+        it, at the item's words. Before it, a letter typed made "x3. ham",
+        a line that is no item any more (the owner's call, 2026-10-22, on
+        both apps). A click that selects is left as it is."""
+        b = self.body_text
+        try:
+            if b.tag_ranges("sel"):
+                return None
+            line_no, col = (int(p) for p in b.index("insert").split("."))
+            line = b.get(f"{line_no}.0", f"{line_no}.end")
+        except (tk.TclError, ValueError):
+            return None
+        kind, marker, _rest = parse_list_marker(line)
+        # The marker's characters are all in the Basic Multilingual Plane,
+        # so Tk's columns and Python's agree inside it.
+        if kind and col < len(marker):
+            b.mark_set("insert", f"{line_no}.{len(marker)}")
+            self._resync_pending_style_anchor()
+            self._refresh_format_buttons()
+        return None
 
     def _caret_out_of_hidden(self, _event=None):
         """Keep the caret off a rendered table's lines entirely.
@@ -10299,9 +10323,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             f"{count} note{plural} you already have",
             message,
             kind="question",
+            # One note said as one: "Update the 1" and "Add it as new notes"
+            # came of counting it.
             buttons=[("Cancel", "cancel"),
-                     (f"Add {'it' if count == 1 else 'them'} as new notes", "add"),
-                     (f"Update the {count}", "update")],
+                     ("Add it as a new note" if count == 1 else "Add them as new notes", "add"),
+                     ("Update it" if count == 1 else f"Update the {count}", "update")],
         )
         if choice is None or choice == "cancel":
             return False, [], [], unchanged, []
@@ -14781,6 +14807,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             lambda e: self.after_idle(self._reassert_line_alignment),
             add="+")
         self.body_text.bind("<ButtonRelease-1>", self._caret_out_of_hidden, add="+")
+        self.body_text.bind("<ButtonRelease-1>", self._caret_past_marker, add="+")
         # Overrides Tk's default double-click "select word" so punctuation
         # like "." always breaks a word (and an empty line selects
         # nothing), and its default triple-click "select line" so it stops
@@ -20006,6 +20033,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         else:
             question = ("Bring back the earlier version of this note's text? "
                         "The current text will be replaced.")
+        # ...and kept, when it holds anything the earlier version lacks:
+        # said only then, as only then is it true.
+        if copy_replaced_by_restore(note, prev) is not None:
+            question += (" It is kept in its turn, so \u201c\u21a9 Restore "
+                         "previous\u201d brings it back.")
         occurrence = self.current_occurrence_date
         if not self.ask_yes_no(
             "Restore previous version", question + extra,
@@ -20072,6 +20104,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # A direct write has neither problem: there is no scope to get
         # wrong, and no probe to misread — the note holds the restored
         # text the moment this returns.
+        # What it replaces is kept as the copy in its turn, read before
+        # the writes below (copy_replaced_by_restore).
+        replaced = copy_replaced_by_restore(note, prev)
         note["title"] = prev.get("title", "")
         note["body"] = with_caret_line(prev.get("body", ""))
         note["comments"] = prev.get("comments", "")
@@ -20094,7 +20129,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if (isinstance(patch, dict) and "category" in patch
                     and patch["category"] not in CATEGORY_COLORS):
                 patch["category"] = "General"
-        note.pop("_prev", None)
+        if replaced is None:
+            note.pop("_prev", None)
+        else:
+            note["_prev"] = replaced
         # Seconds included, matching what save_current_note stamps: the
         # minute-resolution version sorted a just-restored note BELOW
         # notes touched earlier in the same minute under "Recently
@@ -20860,6 +20898,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 announce = False
             if announce:
                 self._show_toast("Note updated", yield_to_action=True)
+            # The note holds again what its rescue copy kept -- Undo after
+            # a big deletion -- so the copy is spent, and the button with it.
+            if rescue_copy_spent(note):
+                note.pop("_prev", None)
         # Recurrence or override counts may have just changed either way.
         self._update_occurrence_banner()
 

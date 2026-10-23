@@ -4903,5 +4903,56 @@
     "must_fail": ["...and after a search, which starts its results from the top, left the card far below them"],
     "suites": ["qa4"],
     "expect": "killed"
+  },
+  {
+    "id": "MC01",
+    "about": "a click on a list's marker leaves the caret before it, and a letter breaks the item",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if kind and col < len(marker):\n            b.mark_set(\"insert\", f\"{line_no}.{len(marker)}\")\n",
+               "replace": "        if False:\n            b.mark_set(\"insert\", f\"{line_no}.{len(marker)}\")\n"}],
+    "must_fail": ["a click on a marker puts the caret after it, and what is typed joins the item"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "RC01",
+    "about": "a big deletion's rescue copy outlives the Ctrl+Z that brought the words back",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            if rescue_copy_spent(note):\n",
+               "replace": "            if False:\n"}],
+    "must_fail": ["a big deletion's copy is spent once Undo has brought the words back, and the button goes"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "RC02",
+    "about": "Restore previous spends the copy again, the text it replaced lost",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        else:\n            note[\"_prev\"] = replaced\n",
+               "replace": "        else:\n            note.pop(\"_prev\", None)\n"}],
+    "must_fail": ["...and what it replaced is kept, the button there to bring it back",
+                  "...and the copy now holds the series' text it replaced, not a day's"],
+    "suites": ["qa7", "qa2"],
+    "expect": "killed"
+  },
+  {
+    "id": "RC03",
+    "about": "a restore over an emptied note keeps the empty note as the copy",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "    if nothing_lost:\n        return None\n",
+               "replace": "    if False:\n        return None\n"}],
+    "must_fail": ["...but nothing over an emptied note, or words the restored text holds"],
+    "suites": ["test_note_identity"],
+    "expect": "killed"
+  },
+  {
+    "id": "IM01",
+    "about": "the import's question for one note says \"Update the 1\" again",
+    "edits": [{"file": "note_organizer.py",
+               "find": "(\"Update it\" if count == 1 else f\"Update the {count}\", \"update\")",
+               "replace": "(f\"Update the {count}\", \"update\")"}],
+    "must_fail": ["one note we have, among new ones: the batch's question says it as one"],
+    "suites": ["qa3"],
+    "expect": "killed"
   }
 ]
