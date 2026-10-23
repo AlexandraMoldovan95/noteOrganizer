@@ -373,16 +373,6 @@ a.card .label::after { content: " \2192"; }
 .figures span { font-size: 14px; color: var(--subtext); }
 @media (max-width: 760px) { .figures { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
-.honest {
-  border-left: 4px solid var(--accent);
-  background: var(--surface);
-  border-radius: 0 8px 8px 0;
-  padding: 14px 18px;
-  max-width: 46em;
-  color: var(--text);
-}
-.honest p { margin: 0; }
-
 .cta {
   display: flex;
   flex-wrap: wrap;
