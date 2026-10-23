@@ -736,13 +736,17 @@ export like everything else, and `richtext.py` turns them into
 **The separator row.** `|-----|:---:|~|` as a block's second row is
 mechanics, not data: the dash count is the column's display width (a
 hand-dragged resize is remembered as more or fewer dashes), the colons
-are its alignment, and `~` is a hidden column. `parse_separator()` reads
+are kept as they came (a cell's alignment is its padding), and `~` is a
+hidden column. `parse_separator()` reads
 those into plain dicts — with one deliberate waiver since 0.71.134: a
-minimum-width cell (three characters or fewer, the `---` every markdown
-serializer writes regardless of content) carries no width opinion and
-parses as `width=None`, so pasted tables size to their content while a
-hand-authored width (always 4+, the setter floors it there) stays
-exact. `make_separator()` writes authored widths back to the dash, so
+minimum-width cell (three characters or fewer, the bare `---` markdown
+writes regardless of content) carries no width opinion and parses as
+`width=None`, while a hand-authored width (always 4+, the setter floors
+it there) stays exact. Markdown also writes `---:` and `|------|`, longer
+than that, so a paste from outside the app spells every separator at the
+minimum on its way in — `forget_widths()`, called by `html_to_note()` and,
+for plain text, by the editor's `_foreign_plain()`, which spares the
+app's own copy. `make_separator()` writes authored widths back to the dash, so
 regenerating the row never forgets a resize —
 and `separator_index()` only accepts it in a block's first
 two rows, where Markdown puts it; a dashed line further down is far more

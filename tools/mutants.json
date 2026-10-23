@@ -4954,5 +4954,108 @@
     "must_fail": ["one note we have, among new ones: the batch's question says it as one"],
     "suites": ["qa3"],
     "expect": "killed"
+  },
+  {
+    "id": "FW01",
+    "about": "a pasted markdown separator keeps the widths its dashes spell",
+    "edits": [{"file": "noteorganizer/core/tables.py",
+               "find": "            if not column[\"width\"]:\n                continue\n",
+               "replace": "            if True:\n                continue\n"}],
+    "must_fail": ["a pasted '---:' keeps its colon and loses its width",
+                  "...and its header is drawn whole"],
+    "suites": ["test_tables", "qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "FW02",
+    "about": "the second cell of a separator is respelled where the first one was",
+    "edits": [{"file": "noteorganizer/core/tables.py",
+               "find": "            cut += (b - a) - len(short)\n",
+               "replace": "            cut += 0\n"}],
+    "must_fail": ["left, centred and hidden columns keep their marks"],
+    "suites": ["test_tables"],
+    "expect": "killed"
+  },
+  {
+    "id": "FW03",
+    "about": "the forgotten widths' shifts move the styles after them the wrong way",
+    "edits": [{"file": "noteorganizer/core/tables.py",
+               "find": "len(short) - (b - a)))",
+               "replace": "(b - a) - len(short)))"}],
+    "must_fail": ["a style after each forgotten width stays on its word"],
+    "suites": ["test_tables"],
+    "expect": "killed"
+  },
+  {
+    "id": "FW04",
+    "about": "a markdown table in a web page's text keeps its widths",
+    "edits": [{"file": "noteorganizer/core/richtext.py",
+               "find": "        text, forgotten = tables.forget_widths(text)\n",
+               "replace": "        forgotten = []\n"}],
+    "must_fail": ["a markdown table arriving as a web page's text forgets its widths too"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "FW05",
+    "about": "the app's own copy pasted plain loses the widths set in it",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if mine and text == mine[0].replace(\"\\r\\n\", \"\\n\"):\n",
+               "replace": "        if False:\n"}],
+    "must_fail": ["...by the plain route as well"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "FW06",
+    "about": "a table in the middle of pasted text is left to Tk, widths and all",
+    "edits": [{"file": "note_organizer.py",
+               "find": "Anything _foreign_plain leaves as it came stays Tk's to paste.\"\"\"\n",
+               "replace": "Anything _foreign_plain leaves as it came stays Tk's to paste.\"\"\"\n        return False\n"}],
+    "must_fail": ["a table in the middle of pasted text takes the app's route too",
+                  "...the same widths forgotten"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "FW07",
+    "about": "pasted rows on their own lines keep their separator's widths",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        raw = self._foreign_plain(raw)\n        lines = raw.strip(\"\\n\").split(\"\\n\")\n",
+               "replace": "        raw = raw.replace(\"\\r\\n\", \"\\n\")\n        lines = raw.strip(\"\\n\").split(\"\\n\")\n"}],
+    "must_fail": ["...its \"---:\" keeps the colon and loses the width",
+                  "...and its header is drawn whole"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "FW08",
+    "about": "Ctrl+Shift+V keeps a pasted separator's widths",
+    "edits": [{"file": "note_organizer.py",
+               "find": "strip_list_markers(reflow_wrapped(self._foreign_plain(text))))",
+               "replace": "strip_list_markers(reflow_wrapped(text)))"}],
+    "must_fail": ["Ctrl+Shift+V forgets them as well"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "FW09",
+    "about": "a template's body takes a pasted markdown table with its widths",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        text = self._foreign_plain(raw)\n        if text == raw.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\"):\n            return None\n",
+               "replace": "        return None\n"}],
+    "must_fail": ["a template's body takes a pasted markdown table the same way"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "FW10",
+    "about": "a paste out of a table being typed keeps the pasted separator's widths",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        b.insert(\"insert\", self._foreign_plain(text))\n",
+               "replace": "        b.insert(\"insert\", text.replace(\"\\r\\n\", \"\\n\"))\n"}],
+    "must_fail": ["a paste out of a table being typed forgets them as well"],
+    "suites": ["qa1"],
+    "expect": "killed"
   }
 ]

@@ -356,6 +356,9 @@ def parse_separator(line):
         # of content, and honouring it exactly clipped the drawn column
         # under its own text. A hand-dragged width is always wider. The
         # alignment colons still count; only the width opinion is waived.
+        # The wild also writes "---:" and "|------|", longer than this:
+        # those are spelled at the minimum as they are pasted in
+        # (forget_widths), since only there is it known whose they are.
         width = len(cell) if len(cell) > 3 else None
         columns.append({"width": width, "align": align, "hidden": False})
     return columns
@@ -499,6 +502,44 @@ def align(text):
                 shifts.append((pos + at, delta))
             pos += len(old) + 1
             lines[first + offset] = new
+    return "\n".join(lines), shifts
+
+
+def forget_widths(text):
+    """Every table's separator in *text* without the widths its dashes spell.
+
+    For text that came from outside this app. A separator there is
+    markdown's, its dashes as many as its writer typed: "---:" and ":---:"
+    are how markdown spells an aligned column, and "|------|" one as wide
+    as its header. Read as this app's own record, each was a width set by
+    hand -- the column drawn exactly that narrow, its words cut to
+    "How…". Each cell longer than markdown's minimum is spelled at the
+    minimum instead, its colons and a hidden mark kept, so
+    parse_separator's waiver applies and the column sizes to what it holds.
+
+    Returns ``(text, shifts)`` in align()'s shape, every offset counted in
+    the text as it came, for shift_spans().
+    """
+    lines = (text or "").split("\n")
+    starts, pos = [], 0
+    for line in lines:
+        starts.append(pos)
+        pos += len(line) + 1
+    shifts = []
+    for first, last in find_blocks(text):
+        at = separator_index(lines[first:last + 1])
+        if at is None:
+            continue
+        n = first + at
+        line, new, cut = lines[n], lines[n], 0
+        for (a, b), column in zip(cell_bounds(line), parse_separator(line)):
+            if not column["width"]:
+                continue
+            short = make_separator([dict(column, width=None)])[0]
+            new = new[:a - cut] + short + new[b - cut:]
+            shifts.append((starts[n] + a + len(short), len(short) - (b - a)))
+            cut += (b - a) - len(short)
+        lines[n] = new
     return "\n".join(lines), shifts
 
 

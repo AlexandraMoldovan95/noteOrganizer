@@ -310,7 +310,8 @@ A table works the way a spreadsheet has taught your hands to expect:
   **Ctrl+V** somewhere else pastes it in the same shape.
 - Copying works with the outside world in both directions: cells copied here paste into Excel as
   cells and into Word as a real table with visible borders, and a table copied from Excel or a web
-  page lands here as a real table.
+  page lands here as a real table. So does a table written as markdown text, from a chat or a
+  `.md` file, its columns as wide as its words: the dashes under its header set no width here.
 - Copied cells keep how they look — highlights, coloured and bold words, sizes, each cell's
   alignment — in Word, in a duplicate pasted under the table, and pasted into another table's
   cells.

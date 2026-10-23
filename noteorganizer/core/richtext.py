@@ -516,6 +516,12 @@ def html_to_note(fragment, report=None):
     # step from the moment the note is built -- and align() reports what it
     # moved, so the spans move with it.
     if tables.find_blocks(text):
+        # A page's own markdown -- a table written out in a code block --
+        # brings its separator's dashes as whoever typed them, never a width
+        # set in this app; the app's own copy is put back whole by the paste
+        # (_paste_formatted), whatever this returns.
+        text, forgotten = tables.forget_widths(text)
+        spans = shift_spans(spans, forgotten)
         # A cell that held a block tag has picked up the space put in its
         # place, and one that held several has picked up several. align()
         # rebuilds each row from its cells' stripped text, which settles all
