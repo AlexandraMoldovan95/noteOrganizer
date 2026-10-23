@@ -213,8 +213,74 @@ def _top_of_cut_row(edge):
     return min(tops) if tops else None
 
 
-def capture(name, widgets=None, pad=8):
-    """Save the whole window, or the box that holds `widgets`."""
+def _box_of(widgets, pad=0):
+    """The screen box, in Tk's logical pixels, that holds every widget."""
+    xs, ys, xe, ye = [], [], [], []
+    for w in widgets:
+        xs.append(w.winfo_rootx())
+        ys.append(w.winfo_rooty())
+        xe.append(w.winfo_rootx() + w.winfo_width())
+        ye.append(w.winfo_rooty() + w.winfo_height())
+    return (min(xs) - pad, min(ys) - pad, max(xe) + pad, max(ye) + pad)
+
+
+def _fit(box, aspect):
+    """`box` grown -- never cut -- to the shape `aspect` (width / height),
+    evenly on both sides, then slid back inside the window where it ran
+    past an edge. The website's cards show a picture at 16:10, cropping
+    the rest: a picture already that shape loses nothing of its subject."""
+    left, top, right, bottom = box
+    width, height = right - left, bottom - top
+    if width / float(height) < aspect:
+        grow = height * aspect - width
+        left, right = left - grow / 2, right + grow / 2
+    else:
+        grow = width / aspect - height
+        top, bottom = top - grow / 2, bottom + grow / 2
+    frame = (app.winfo_rootx(), app.winfo_rooty(),
+             app.winfo_rootx() + app.winfo_width(), app.winfo_rooty() + app.winfo_height())
+    for lo, hi, flo, fhi in ((0, 2, 0, 2), (1, 3, 1, 3)):
+        edges = [left, top, right, bottom]
+        if edges[lo] < frame[flo]:
+            shift = frame[flo] - edges[lo]
+            edges[lo] += shift
+            edges[hi] += shift
+        if edges[hi] > frame[fhi]:
+            shift = edges[hi] - frame[fhi]
+            edges[lo] -= shift
+            edges[hi] -= shift
+        left, top, right, bottom = edges
+    return tuple(int(round(v)) for v in (left, top, right, bottom))
+
+
+def _cut(box, aspect):
+    """`box` cut to the shape `aspect`, keeping its top-left corner: for a
+    subject that starts at the top and runs on further than a card shows."""
+    left, top, right, bottom = box
+    width, height = right - left, bottom - top
+    if width / float(height) < aspect:
+        bottom = top + width / aspect
+    else:
+        right = left + height * aspect
+    return tuple(int(round(v)) for v in (left, top, right, bottom))
+
+
+def _widgets_with_text(*texts):
+    """The mapped widgets of the main window whose text is one of `texts`,
+    for a panel that keeps no handle on the rows or tiles it draws."""
+    found = []
+    for w in _all_widgets(app):
+        try:
+            if w.winfo_ismapped() and w.cget('text') in texts:
+                found.append(w)
+        except tk.TclError:
+            continue
+    return found
+
+
+def capture(name, widgets=None, pad=8, box=None):
+    """Save the whole window, the box that holds `widgets`, or `box` --
+    left, top, right, bottom on the screen, in Tk's logical pixels."""
     app.lift()
     app.attributes('-topmost', True)
     app.focus_force()
@@ -233,14 +299,9 @@ def capture(name, widgets=None, pad=8):
             except tk.TclError:
                 pass
     pump(10)
-    if widgets:
-        xs, ys, xe, ye = [], [], [], []
-        for w in widgets:
-            xs.append(w.winfo_rootx())
-            ys.append(w.winfo_rooty())
-            xe.append(w.winfo_rootx() + w.winfo_width())
-            ye.append(w.winfo_rooty() + w.winfo_height())
-        box = (min(xs) - pad, min(ys) - pad, max(xe) + pad, max(ye) + pad)
+    if widgets or box:
+        if widgets:
+            box = _box_of(widgets, pad)
         # Clamped to the window. A crop that reaches past the edge
         # photographs whatever is behind the app -- the checklist shot
         # came back with the Windows taskbar along its bottom, and the
@@ -1006,6 +1067,194 @@ def demo():
                    duration=[ms for _im, ms in frames], loop=0, optimize=True)
     print('  %-22s %d frames, %d KB' % ('demo', len(frames),
                                         os.path.getsize(path) // 1024))
+
+
+# ---------------------------------------------------------------------
+# The website's pictures (site/src/index.html), added 2026-10-24.
+#
+# Its feature cards showed whole windows shrunk to a third of their size,
+# the feature each card named lost somewhere inside, and dark on a light
+# page as well. Each picture here is cropped close around what its card is
+# about, grown to the card's 16:10 so the card crops none of it away, and
+# taken in both themes: the page shows the one it is in.
+# ---------------------------------------------------------------------
+
+SITE_ASPECT = 16 / 10.0
+
+
+def _site_shot(name, stage, frame):
+    """`stage` the scene and photograph `frame()` -- a logical screen box --
+    as site-NAME-dark.png and site-NAME-light.png."""
+    was = app.theme_name
+    try:
+        for theme in ('dark', 'light'):
+            clean()
+            app.set_theme(theme)
+            pump(10)
+            stage()
+            pump(12)
+            capture('site-%s-%s' % (name, theme), box=_fit(frame(), SITE_ASPECT))
+    finally:
+        try:
+            app.hide_settings_page()
+        except Exception:
+            pass
+        app.set_theme(was)
+        pump()
+
+
+def _checklist_scene():
+    note = _note(
+        title='Trip packing',
+        body='The flight leaves early; nothing left for the morning.',
+        checklist=[{'text': 'Passports', 'done': True},
+                   {'text': 'Charger and adapter', 'done': True},
+                   {'text': 'Print the booking', 'done': False},
+                   {'text': 'Stop the milk', 'done': False}])
+    app.notes.append(note)
+    app.save_notes()
+    app.refresh_note_list()
+    app.open_note_in_tab(note)
+    pump(10)
+    if not app.checklist_section.winfo_ismapped():
+        app.toggle_checklist_section()
+    pump(16)
+    _scroll_editor_to(app.checklist_section)
+
+
+def _table_frame():
+    """The note's opening line and its drawn table, nothing below."""
+    body = app.body_text
+    grids = [info.get('canvas') for info in getattr(app, '_table_grids', [])
+             if info.get('canvas') is not None]
+    if not grids:
+        return _box_of([body], 12)
+    grid = grids[0]
+    # From the text's own edge: 8px further left took in the sidebar's
+    # edge and its collapse arrow.
+    return (body.winfo_rootx() + 2, body.winfo_rooty() - 8,
+            grid.winfo_rootx() + grid.winfo_width() + 16,
+            grid.winfo_rooty() + grid.winfo_height() + 12)
+
+
+def _checklist_frame():
+    """The checklist's header and its items, down to the last one: the
+    section runs on below them, empty, and the calculator sits beside."""
+    section, header = app.checklist_section, app.checklist_btn
+    left, top = section.winfo_rootx(), header.winfo_rooty() - 4
+    width = section.winfo_width()
+    return _cut((left, top, left + width, top + width), SITE_ASPECT)
+
+
+def _repeat_frame():
+    """The note's title, its date and the whole Repeat block, at the width
+    its widest row needs -- not the editor's, which is mostly empty there."""
+    title = app.title_entry
+    left, top = title.winfo_rootx() - 12, title.winfo_rooty() - 12
+    width = 480
+    return (left, top, left + width, top + width / SITE_ASPECT)
+
+
+def _search_scene():
+    for title, body, cat, date in (
+            ('Quarterly review', "Numbers for the board pack, the team's targets.",
+             'Work', '2026-09-30'),
+            ('Team lunch', 'Friday at the Italian place, booked for six.',
+             'Personal', '2026-09-25'),
+            ('Reading list', 'Three books before the holidays.', 'Personal', ''),
+            ('Groceries', 'Everything for the weekend.', 'Personal', '')):
+        app.notes.append(_note(title=title, body=body, category=cat, date=date))
+    _weekly_note()
+    app.search_var.set('team')
+    app.sort_var.set('Calendar: oldest')
+    app.refresh_note_list()
+    pump(14)
+
+
+def _search_frame():
+    """The search box, the sort, and the first two matches, with the start
+    of the note it opened beside them."""
+    # From the sidebar's own top, so its heading and the open note's title
+    # are whole: a box starting at the search field cut both through.
+    s = app.sidebar
+    top = s.winfo_rooty()
+    height = 520
+    return (s.winfo_rootx(), top, s.winfo_rootx() + height * SITE_ASPECT, top + height)
+
+
+def _calendar_scene():
+    _september()
+    app.notebook.select(app.TAB_CALENDAR)
+    pump(10)
+    app.cal_year, app.cal_month = 2026, 9
+    app.render_calendar()
+    pump(14)
+
+
+def _calendar_frame():
+    """The month's first weeks, Monday to Thursday and a little more:
+    readable at a card's size, as the whole month is not."""
+    g = app.cal_grid_frame
+    # Four of seven columns, ending in the gap before Friday: 0.62 showed
+    # a sliver of Friday's note, a "B" on the edge.
+    width = g.winfo_width() * 0.568
+    return (g.winfo_rootx(), g.winfo_rooty(),
+            g.winfo_rootx() + width, g.winfo_rooty() + width / SITE_ASPECT)
+
+
+def _trash_scene():
+    _demo_notebook()
+    app.trash = [
+        {'id': 901, 'title': 'Old shopping list', 'body': 'Milk, bread.',
+         'category': 'General', 'deleted_at': _days_ago(2, '08:30:00')},
+        {'id': 902, 'title': 'Draft email to the landlord',
+         'body': 'About the boiler service.', 'category': 'General',
+         'deleted_at': _days_ago(5, '19:05:00')},
+        {'id': 903, 'title': 'Conference notes', 'body': 'Talk three was the good one.',
+         'category': 'Work', 'deleted_at': _days_ago(12, '11:20:00')},
+    ]
+    _settings('trash')
+
+
+def _trash_frame():
+    """The three rows: tick box, title, date line, Restore and Delete."""
+    titles = sorted(_widgets_with_text('Old shopping list', 'Conference notes'),
+                    key=lambda w: w.winfo_rooty())
+    first, last = titles[0], titles[-1]
+    deletes = [w for w in _widgets_with_text('Delete')
+               if first.winfo_rooty() - 30 <= w.winfo_rooty() <= last.winfo_rooty() + 60]
+    right = max([w.winfo_rootx() + w.winfo_width() for w in deletes]
+                or [last.winfo_rootx() + 400])
+    left, top = first.winfo_rootx() - 56, first.winfo_rooty() - 16
+    # Already the card's shape, grown downward only: grown evenly, the top
+    # took in half a line of the retention text above the rows.
+    return (left, top, right + 14, top + (right + 14 - left) / SITE_ASPECT)
+
+
+def _themes_scene():
+    _demo_notebook()
+    _settings('appearance')
+
+
+def _themes_frame():
+    """Both rows of theme tiles, their DARK and LIGHT headings with them."""
+    heads = _widgets_with_text('DARK', 'LIGHT')
+    tiles = [w.master for w in _widgets_with_text(
+        'Midnight Purple', 'Warm Charcoal', 'Soft Lavender', 'Warm Cream')]
+    return _box_of(heads + tiles, 10)
+
+
+@scene('site-cards')
+def site_cards():
+    """Every picture of the website's feature cards and its themes
+    section, each in the dark theme and the light one."""
+    _site_shot('tables', _table_note, _table_frame)
+    _site_shot('checklist', _checklist_scene, _checklist_frame)
+    _site_shot('repeat', _weekly_note, _repeat_frame)
+    _site_shot('calendar', _calendar_scene, _calendar_frame)
+    _site_shot('search', _search_scene, _search_frame)
+    _site_shot('trash', _trash_scene, _trash_frame)
+    _site_shot('themes', _themes_scene, _themes_frame)
 
 
 def _all_widgets(w, out=None):

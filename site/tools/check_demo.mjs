@@ -128,9 +128,16 @@ listeners.push((msg) => {
   }
 });
 
-async function viewport(width, height, mobile, scheme) {
+// `motion` is the visitor's motion setting. The document pages fade their
+// blocks in as they scroll into view, so a full-length photograph taken
+// with motion on shows a page blank below its first screen -- which every
+// photograph of them did, unnoticed, until 2026-10-24. They are photographed
+// with motion reduced, as a visitor who asks for it sees them, and the
+// fade has checks of its own (below).
+async function viewport(width, height, mobile, scheme, motion = "no-preference") {
   await page("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile });
-  await page("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: scheme }] });
+  await page("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: scheme },
+                                                        { name: "prefers-reduced-motion", value: motion }] });
   await page("Emulation.setTouchEmulationEnabled", { enabled: mobile });
 }
 
@@ -167,6 +174,19 @@ async function js(expression) {
 async function shot(name, full = false) {
   const params = { format: "png" };
   if (full) {
+    // Scrolled through first, and its pictures waited for: a picture
+    // marked loading="lazy" loads only once it nears the screen, and a
+    // full-length photograph taken from the top showed every one below the
+    // first screen as an empty frame.
+    await js(`(async () => {
+      for (let y = 0; y < document.documentElement.scrollHeight; y += innerHeight) {
+        scrollTo(0, y);
+        await new Promise((r) => setTimeout(r, 60));
+      }
+      scrollTo(0, 0);
+      await Promise.all([...document.images].filter((i) => !i.complete).map((i) =>
+        new Promise((r) => { i.addEventListener("load", r); i.addEventListener("error", r); setTimeout(r, 3000); })));
+    })()`);
     const { cssContentSize } = await page("Page.getLayoutMetrics");
     params.captureBeyondViewport = true;
     params.clip = { x: 0, y: 0, width: cssContentSize.width, height: Math.min(cssContentSize.height, 12000), scale: 1 };
@@ -202,7 +222,7 @@ try {
                                              ["light", 1366, 900, false, "desktop-light"],
                                              ["dark", 390, 844, true, "phone-dark"],
                                              ["light", 390, 844, true, "phone-light"]]) {
-    await viewport(w, h, mobile, scheme);
+    await viewport(w, h, mobile, scheme, "reduce");
     for (const p of ["index.html", "how-its-built.html", "in-my-words.html", "testing.html", "nowhere"]) {
       await go("/" + p);
       await noHorizontalScroll(`${p} ${tag}`);
@@ -215,6 +235,43 @@ try {
   await click("#menu-toggle");
   await shot("site-index-phone-menu-open");
   check("phone menu opens", await js("document.getElementById('site-nav').classList.contains('open')"));
+  await page("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+  await page("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+  await sleep(100);
+  check("Escape closes the phone menu", await js("!document.getElementById('site-nav').classList.contains('open')"));
+
+  // ---------------- The document pages' fade, with motion on ----------------
+  // Kept by the owner's choice (2026-10-24), and held to what the first
+  // version broke: the first screen faded in on every load, printing gave
+  // blank pages, a Contents link landed on text still fading, and a tall
+  // table whose visible slice stayed under the threshold never appeared.
+  const HIDDEN_ON_SCREEN = `[...document.querySelectorAll('.doc .wrap > *')].filter((e) => {
+      const r = e.getBoundingClientRect();
+      return r.bottom > 0 && r.top < innerHeight && parseFloat(getComputedStyle(e).opacity) < 0.99;
+    }).length`;
+  await viewport(1366, 900, false, "light");
+  await go("/how-its-built.html");
+  check("a document page's first screen is shown at once, never faded",
+        await js(HIDDEN_ON_SCREEN) === 0 && await js("!document.querySelector('.doc h1').classList.contains('reveal')"),
+        await js(HIDDEN_ON_SCREEN) + " block(s) on the first screen not shown");
+  check("...while the blocks below it wait to fade in (the fade is still there)",
+        await js("document.querySelectorAll('.doc .wrap > .reveal:not(.in-view)').length") > 5);
+  await page("Emulation.setEmulatedMedia", { media: "print", features: [{ name: "prefers-reduced-motion", value: "no-preference" }] });
+  const hiddenInPrint = await js(`[...document.querySelectorAll('.doc .wrap > *')]
+      .filter((e) => parseFloat(getComputedStyle(e).opacity) < 0.99).length`);
+  check("printed, a document page hides nothing", hiddenInPrint === 0, hiddenInPrint + " block(s) hidden in print");
+  await viewport(1366, 900, false, "light");
+  await go("/how-its-built.html");
+  await click(".doc h2#contents + ul li:nth-child(4) a");
+  await sleep(60);
+  check("a Contents link lands on text already shown, not fading in",
+        await js(HIDDEN_ON_SCREEN) === 0, await js(HIDDEN_ON_SCREEN) + " block(s) on screen still hidden");
+  await go("/testing.html");
+  await js("window.scrollTo(0, document.documentElement.scrollHeight)");
+  await sleep(700);
+  check("at a page's end every block on screen has appeared, a tall table's too",
+        await js(HIDDEN_ON_SCREEN) === 0, await js(HIDDEN_ON_SCREEN) + " block(s) on screen still hidden");
+  await shot("site-testing-desktop-end");
 
   // ---------------- The site's own privacy notice ----------------
   // The apps' privacy policy does not cover this site, so every footer

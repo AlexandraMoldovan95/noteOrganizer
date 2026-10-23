@@ -41,8 +41,8 @@ can be reviewed; the memory is just the agent's working notebook.
 ## One change, start to finish
 
 1. **Investigate, then plan.** For anything beyond a trivial fix, the agent explains its approach
-   and walks the [surface inventory](../qa/README.md#the-surface-inventory-what-every-new-feature-is-walked-against)
-   - what the change touches, what it risks - before writing any code. I approve it or send it back.
+   and walks the [surface inventory](../qa/README.md#the-surface-inventory-what-every-new-feature-is-walked-against) -
+   what the change touches, what it risks - before writing any code. I approve it or send it back.
 2. **A branch of its own.** `main` only receives merged pull requests.
 3. **The pre-flight.** Name the mechanism, find its siblings, list every reader of a value whose
    meaning changes, and test the heavy features (tables, recurring notes, attachments,

@@ -103,6 +103,20 @@ recaptured.
 | `import-backup.png` | The Import notes file picker or its resulting confirmation |
 | `settings-overview.png` | The Settings page: the section list on the left and a section open on the right |
 | `theme-picker.png` | Settings → Appearance, with the theme variant cards visible |
+| `site-*-dark.png`, `site-*-light.png` | The website's pictures — see below |
+
+## The website's pictures
+
+The fourteen `site-*` pictures are the website's own: its six feature cards
+(`tables`, `checklist`, `calendar`, `repeat`, `search`, `trash`) and its
+themes section (`themes`), each in the dark theme and in the light one, so
+the page shows the one it is in. They are the one deliberate exception to
+*one theme throughout*. The `site-cards` scene of
+`tools/doc_screenshots.py` takes all fourteen: each is cropped close around
+what its card is about, then grown to the card's 16:10 so the card crops
+none of it away. Whole windows shrunk to a card's size, as the cards had
+before 2026-10-24, showed no feature a visitor could make out. Taken on
+2026-10-24 on 0.96.395.
 
 ## A picture of an earlier version
 

@@ -76,7 +76,7 @@ FORBIDDEN = [r"adas9", r"mekotrading", r"noteOrganizerSavedFiles",
 # opened from the computer gets a file listing instead.
 NAV = [("index.html", "Overview"),
        ("how-its-built.html", "How it's built"),
-       ("in-my-words.html", "In my words"), ("testing.html", "Testing")]
+       ("in-my-words.html", "In my words"), ("testing.html", "How it's tested")]
 
 
 def fail(message):
@@ -208,11 +208,21 @@ def github_slug(text, seen):
 
 class Renderer:
     """Markdown to HTML for one document. `link` maps an href to a new
-    href, or None when the target is not published here."""
+    href, or None when the target is not published here; `sizes` gives each
+    built picture's width and height, by its name under img/."""
 
-    def __init__(self, link):
+    def __init__(self, link, sizes=None):
         self.link = link
+        self.sizes = sizes or {}
         self.slugs = set()
+
+    def picture(self, src, alt):
+        """A picture of the project's, at its size -- so the text does not
+        jump when it loads -- and a click away from its full size."""
+        name = os.path.splitext(os.path.basename(src))[0]
+        size = ' width="%d" height="%d"' % self.sizes[name] if name in self.sizes else ""
+        return '<a href="%s"><img src="%s" alt="%s"%s loading="lazy"></a>' % (
+            html.escape(src), html.escape(src), alt, size)
 
     # -- inline --------------------------------------------------------
     def inline(self, text):
@@ -229,8 +239,7 @@ class Renderer:
             src = self.link(html.unescape(m.group(2)), image=True)
             if not src:
                 return html.escape(m.group(1))
-            return '<img src="%s" alt="%s" loading="lazy">' % (
-                html.escape(src), m.group(1))
+            return self.picture(src, m.group(1))
 
         def anchor(m):
             label, href = m.group(1), html.unescape(m.group(2)).strip()
@@ -245,6 +254,9 @@ class Renderer:
         text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
         text = re.sub(r"(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])", r"<em>\1</em>", text)
         text = re.sub(r"(?<![\w])_(?!\s)(.+?)(?<!\s)_(?![\w])", r"<em>\1</em>", text)
+        # Some documents write a dash as a spaced hyphen; on the page it is
+        # set as the dash it stands for (code is held aside above, untouched).
+        text = text.replace(" - ", " – ")
         return re.sub("\x00(\\d+)\x00", lambda m: codes[int(m.group(1))], text)
 
     # -- blocks --------------------------------------------------------
@@ -323,11 +335,36 @@ class Renderer:
         while i < len(lines) and lines[i].strip().startswith("|"):
             body.append(cells(lines[i]))
             i += 1
-        parts = ['<div class="table-wrap"><table><thead><tr>']
-        parts += ["<th>%s</th>" % self.inline(c) for c in head]
+        # Pictures set side by side in a table, a caption over each: the
+        # overview's .pair of figures, which stacks on a phone. As a table
+        # they were two thumbnails 150px wide there, and the row jumped.
+        picture = re.compile(r"^!\[([^\]]*)\]\(([^)\s]+)\)$")
+        if body and all(picture.match(c) for row in body for c in row):
+            figures = []
+            for row in body:
+                for k, c in enumerate(row):
+                    m = picture.match(c)
+                    src = self.link(html.unescape(m.group(2)), image=True)
+                    caption = self.inline(head[k]) if k < len(head) else ""
+                    shown = self.picture(src, html.escape(m.group(1))) if src else html.escape(m.group(1))
+                    figures.append('<figure class="shot">%s<figcaption>%s</figcaption></figure>'
+                                   % (shown, caption))
+            out.append('<div class="pair">%s</div>' % "".join(figures))
+            return i
+        figure = re.compile(r"^[~≈]?[\d][\d,.\s]*%?$")
+        numeric = [k for k in range(len(head))
+                   if body and all(k < len(row) and figure.match(row[k]) for row in body)]
+
+        def cell(tag, k, c):
+            css = ' class="num"' if k in numeric else ""
+            return "<%s%s>%s</%s>" % (tag, css, self.inline(c), tag)
+
+        narrow = " narrow" if len(head) <= 2 else ""
+        parts = ['<div class="table-wrap%s"><table><thead><tr>' % narrow]
+        parts += [cell("th", k, c) for k, c in enumerate(head)]
         parts.append("</tr></thead><tbody>")
         for row in body:
-            parts.append("<tr>" + "".join("<td>%s</td>" % self.inline(c) for c in row) + "</tr>")
+            parts.append("<tr>" + "".join(cell("td", k, c) for k, c in enumerate(row)) + "</tr>")
         parts.append("</tbody></table></div>")
         out.append("".join(parts))
         return i
@@ -520,14 +557,16 @@ def check_doc_structure(page, body_html):
     if m and m.group(1) not in ("ul", "ol"):
         problems.append("%s: the Contents heading is followed by <%s>, not a list" %
                         (page, m.group(1)))
-    for hm in re.finditer(r'<h3 id="[^"]*">.*?</h3>\n<(\w+)', body_html):
+    # Only a test case's heading ("Case 9 - Cancel a delete") owes a list:
+    # other h3s, the plan's "By priority" among them, are plain sections.
+    for hm in re.finditer(r'<h3 id="[^"]*">Case .*?</h3>\n<(\w+)', body_html):
         if hm.group(1) != "ul":
             problems.append("%s: a <h3> case heading is followed by <%s>, not its "
                             "metadata list" % (page, hm.group(1)))
     return problems
 
 
-def build_doc_pages(repo, config, shell, version):
+def build_doc_pages(repo, config, shell, version, sizes):
     repo_url = config.get("repo_url", "")
     # The Issues Log is the project's internal engineering journal, not
     # published as its own page here. A reference to one of its anchors is
@@ -549,7 +588,7 @@ def build_doc_pages(repo, config, shell, version):
     structure_problems = []
     for path, (page, title, description) in PAGES.items():
         text = read(os.path.join(repo, path))
-        body = Renderer(make_linker(path, repo_url)).render(text)
+        body = Renderer(make_linker(path, repo_url), sizes).render(text)
         structure_problems += check_doc_structure(page, body)
         written[page] = doc_page(shell, config, page, title, description, body,
                                  note % html.escape(path), version)
@@ -707,7 +746,7 @@ def main():
     # Static files from src/, as they are, except the templates.
     for root, _, files in os.walk(SRC):
         for name in files:
-            if name in ("index.html", "page.html") and root == SRC:
+            if name in ("index.html", "page.html", "site-privacy.html", "404.html") and root == SRC:
                 continue
             source = os.path.join(root, name)
             target = os.path.join(OUT, os.path.relpath(source, SRC))
@@ -738,9 +777,16 @@ def main():
           "window.NO_APP = " + json.dumps(app_data, ensure_ascii=False, indent=1) + ";\n")
 
     shell = read(os.path.join(SRC, "page.html"))
-    doc_pages = build_doc_pages(repo, config, shell, version)
+    doc_pages = build_doc_pages(repo, config, shell, version, images)
     for page, text in doc_pages.items():
         write(os.path.join(OUT, page), text)
+
+    # The privacy notice and the 404 wear the site's header and footer, so
+    # neither reads as a dead end from another site. The 404 is shown at any
+    # address, so its links start at the site's root.
+    for name, prefix in (("site-privacy.html", ""), ("404.html", "/")):
+        write(os.path.join(OUT, name), fill(read(os.path.join(SRC, name)), {
+            "nav": nav_html("", prefix), "version": version, "root": prefix}, name))
 
     index_values = dict(numbers)
     index_values.update({

@@ -1,6 +1,6 @@
-# Test plan - an excerpt
+# How it's tested
 
-The manual test plan is a spreadsheet,
+An excerpt from the manual test plan, a spreadsheet,
 [`qa/NoteOrganizer_TestPlan.xlsx`](../qa/NoteOrganizer_TestPlan.xlsx): **586 cases**. I walk it
 by hand on the packaged `.exe` before a release - a case passes only when I've seen it pass.
 
@@ -16,7 +16,7 @@ by hand on the packaged `.exe` before a release - a case passes only when I've s
 
 ## The plan in numbers
 
-#### By priority
+### By priority
 
 | Priority | Cases |
 |---|---:|
@@ -24,7 +24,7 @@ by hand on the packaged `.exe` before a release - a case passes only when I've s
 | Medium | 287 |
 | Low | 120 |
 
-#### The six largest areas
+### The six largest areas
 
 | Area | Cases |
 |---|---:|

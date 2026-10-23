@@ -1312,18 +1312,27 @@
 
   function toolbar() {
     var bar = el("div", { class: "toolbar", id: "toolbar", role: "toolbar", "aria-label": "Formatting" });
+    // The tools in groups that wrap as a whole: as loose siblings, a narrow
+    // bar broke a group in two -- left-align ending one row, centre and
+    // right starting the next, separators at the start of rows.
+    var group = null;
+    function newGroup() {
+      group = el("span", { class: "tb-group" });
+      bar.appendChild(group);
+    }
     function tool(label, title, onPress, extra) {
       var b = el("button", Object.assign({ type: "button", class: "tb", title: title, "aria-label": title }, extra || {}), label);
       // Pressing a tool must not take the selection out of the note.
       b.addEventListener("mousedown", function (e) { e.preventDefault(); });
       b.addEventListener("click", onPress);
-      bar.appendChild(b);
+      group.appendChild(b);
       return b;
     }
+    newGroup();
     TOOLS.forEach(function (t) {
       tool(t[1], t[2], function () { exec(t[0]); }, { class: "tb " + t[3], "data-state": t[0], "aria-pressed": "false" });
     });
-    bar.appendChild(el("span", { class: "sep" }));
+    newGroup();
     // Font and size, as the app's two lists: "Default" first, which is the
     // editor's own and stores nothing.
     function chooser(id, title, choices, show, pick) {
@@ -1341,7 +1350,7 @@
     chooser("tb-family", "Font", A.fontFamilies,
       function (item, f) { item.style.fontFamily = '"' + f + '"'; }, applyFontFamily);
     chooser("tb-size", "Font size", A.fontSizes, function () {}, applyFontSize);
-    bar.appendChild(el("span", { class: "sep" }));
+    newGroup();
     var colourBtn = tool(el("span", null, "A", el("span", { class: "bar", vars: { "--bar": "#e63946" } })), "Text colour", function () {
       rememberRange();
       popup(swatchGrid(A.noteColors, null, function (c) { exec("foreColor", c); },
@@ -1354,17 +1363,17 @@
         el("button", { type: "button", class: "menu-item", onclick: function () { closePopup(); clearInline("background-color"); } }, "No highlight")),
         markBtn, { role: "dialog" });
     });
-    bar.appendChild(el("span", { class: "sep" }));
+    newGroup();
     tool("•", "Bulleted list", function () { exec("insertUnorderedList"); }, { "data-state": "insertUnorderedList", "aria-pressed": "false" });
     tool("1.", "Numbered list", function () { exec("insertOrderedList"); }, { "data-state": "insertOrderedList", "aria-pressed": "false" });
-    bar.appendChild(el("span", { class: "sep" }));
+    newGroup();
     tool(icon("left"), "Align left", function () { exec("justifyLeft"); }, { "data-state": "justifyLeft", "aria-pressed": "false" });
     tool(icon("center"), "Centre", function () { exec("justifyCenter"); }, { "data-state": "justifyCenter", "aria-pressed": "false" });
     tool(icon("right"), "Align right", function () { exec("justifyRight"); }, { "data-state": "justifyRight", "aria-pressed": "false" });
-    bar.appendChild(el("span", { class: "sep" }));
+    newGroup();
     tool(icon("outdent"), "Indent less", function () { changeIndent(-1); });
     tool(icon("indent"), "Indent more", function () { changeIndent(1); });
-    bar.appendChild(el("span", { class: "sep" }));
+    newGroup();
     tool(icon("table"), "Insert a table", insertTable);
     var emojiBtn = tool("\u{1F642}", "Insert emoji", function () { rememberRange(); emojiPicker(emojiBtn, "body"); });
     tool(icon(isDark() ? "sun" : "moon"), isDark() ? "Switch to the light theme" : "Switch to the dark theme",

@@ -81,6 +81,10 @@ send, presses what a visitor presses (opening notes, ticking a checklist,
 searching, writing a new note, reloading, deleting and restoring, the
 calendar, the themes, the phone layout) and fails on any error. It saves
 photographs in the folder you name: look at them, the phone ones especially.
+The document pages are photographed with motion reduced and scrolled through
+first, so a full-length picture holds the whole page and its pictures; the
+fade their blocks scroll in with has checks of its own, with motion on
+([why](../docs/ISSUES_LOG.md#photographs-of-the-sites-pages-blank-below-the-first-screen)).
 
 The share-code check copies the app's package to a temporary folder and runs
 the app's own reader on every code the demo made, and the demo's reader on

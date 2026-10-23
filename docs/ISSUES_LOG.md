@@ -175,6 +175,7 @@ is in the table below as well.
 | [The marker that was only characters](#the-marker-that-was-only-characters) | When a structure is stored as text, every route that edits text edits it: count the routes that reach it, not the ones the feature was written for. | 0.96.394 |
 | [The rescue copy that outlived what it rescued](#the-rescue-copy-that-outlived-what-it-rescued) | A safety net that can be pressed later must know whether it still rescues anything, and must itself be undoable. | 0.96.395 |
 | [A separator's dashes, read as a width nobody set](#a-separators-dashes-read-as-a-width-nobody-set) | When a format borrows another's syntax, the borrowed form arrives written as the other world writes it: decide whose it is where that is still known — at the way in. | Unreleased |
+| [Photographs of the site's pages, blank below the first screen](#photographs-of-the-sites-pages-blank-below-the-first-screen) | A photograph proves only what was on the screen when it was taken: photograph a page as a reader meets it, and give what changes it checks of its own. | the website |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -5006,6 +5007,34 @@ block; qa5 measures the column on Windows.
 **Takeaway:** an icon's width is the width of whichever font answered for it. Where icons must
 line up, choose them from the one range a single font draws, and measure the column rather than
 trust the look of one line.
+
+### Photographs of the site's pages, blank below the first screen
+
+*(2026-10-24 · found by a design review of the website, run by an agent at the owner's request)*
+
+**Symptom:** the website's document pages, printed or saved as a PDF, gave the title, the
+Contents and then blank pages. A Contents link landed on text still fading in; a tall table at the
+bottom of a page could stay invisible. And the site's own browser walk, whose full-length
+photographs of those pages were looked at before each upload, had been photographing pages empty
+below their first screen — nobody had seen the problem in pictures taken to show it.
+
+**Root cause:** each block of a document page faded in as it scrolled into view. The walk photographs
+a whole page from the top, so nothing below the first screen ever "came into view"; printing never
+scrolls either; a jump lands before the fade ends; and a visible slice of a tall table under 5% of
+its height never crossed the threshold. The same blind spot hid the pictures too: an image marked
+`loading="lazy"` loads only near the screen, and showed in the photographs as an empty frame.
+
+**Fix:** the fade was kept, the owner's choice, and held to what it broke: blocks on the first
+screen are never hidden; any visible pixel shows a block; a click on an in-page link, a page opened
+at an anchor and printing show every block at once. The walk photographs the document pages with
+motion reduced, as a visitor who asks for it sees them, scrolls a page through and waits for its
+pictures before a full-length photograph, and checks the fade on its own, with motion on: the
+first screen shown at once, nothing hidden in print, a Contents jump landing on text already shown,
+every block on screen at a page's end. All four failed against the old code.
+
+**Takeaway:** a photograph proves only what was on the screen when it was taken. A page that
+changes with scrolling or time has to be photographed in the state a reader meets it — and the
+behaviour that changes it needs checks of its own, not the photograph's silence.
 
 ## Smaller lessons, moved out of the code
 

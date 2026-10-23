@@ -276,8 +276,15 @@ input.ed-title:focus { background: var(--card); border-color: var(--accent); }
 .ed-note-head b { color: var(--subtext); font-size: 13px; }
 .ed-count { color: var(--subtext); font-size: 12px; text-align: right; line-height: 1.3; }
 
-.toolbar { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
-.toolbar .sep { width: 1px; align-self: stretch; background: var(--line); margin: 2px 4px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 6px 4px; align-items: center; }
+/* A group wraps as a whole, never broken in two. Lines between groups, as
+   the app draws them, only where the bar fits one row: once it wraps, a
+   line would start the next row, so a wider space parts the groups. */
+.toolbar .tb-group { display: inline-flex; flex-wrap: nowrap; gap: 4px; align-items: center; }
+.toolbar .tb-group + .tb-group { border-left: 1px solid var(--line); padding-left: 6px; margin-left: 2px; }
+@media (max-width: 1200px) {
+  .toolbar .tb-group + .tb-group { border-left: 0; padding-left: 0; margin-left: 8px; }
+}
 .tb {
   min-width: 36px; height: 36px; padding: 0 8px;
   border: 0; background: var(--card); color: var(--text); font-weight: 700; font-size: 15px;
@@ -528,8 +535,26 @@ kbd { font: 600 13px var(--font); background: var(--sidebar); border: 1px solid 
   .cal-titles { display: none; }
   .cal-num { width: 24px; height: 24px; line-height: 24px; font-size: 14px; }
 
+  /* Taps of a comfortable size: the banner's two buttons were 27px tall,
+     a card's menu 28px square. */
+  .demo-banner a, .demo-banner button { min-height: 40px; display: inline-flex; align-items: center; padding: 6px 12px; }
+  .nc-more { min-width: 40px; min-height: 40px; }
+  /* The seven days in one row of seven: wrapped, Sunday sat alone below. */
+  .repeat-box .rb-row[role="group"] { display: grid; grid-template-columns: auto repeat(7, minmax(0, 1fr)); gap: 4px; align-items: center; }
+  .repeat-box .wd { min-width: 0; padding: 6px 2px; }
+
   .settings-view { flex-direction: column; }
-  .set-nav { width: 100%; flex-direction: row; overflow-x: auto; overflow-y: hidden; padding: 8px; gap: 4px; flex: none; }
+  /* The section names scroll sideways, and a shadow at an edge says there
+     are more that way (the table frames on the site's pages do the same). */
+  .set-nav {
+    width: 100%; flex-direction: row; overflow-x: auto; overflow-y: hidden; padding: 8px; gap: 4px; flex: none;
+    background:
+      linear-gradient(to right, var(--sidebar) 30%, transparent) left / 32px 100% no-repeat local,
+      linear-gradient(to left, var(--sidebar) 30%, transparent) right / 32px 100% no-repeat local,
+      radial-gradient(farthest-side at 0 50%, color-mix(in srgb, var(--text) 25%, transparent), transparent) left / 12px 100% no-repeat scroll,
+      radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--text) 25%, transparent), transparent) right / 12px 100% no-repeat scroll,
+      var(--sidebar);
+  }
   .set-brand, .set-group { display: none; }
   .set-nav button { flex: none; white-space: nowrap; padding: 8px 12px; }
   .set-nav button[aria-current="true"] { box-shadow: inset 0 -3px var(--accent); }

@@ -29,8 +29,8 @@
 <section class="hero">
   <div class="wrap">
     <div>
-      <p class="eyebrow">Windows desktop app · Python + Tkinter · offline</p>
-      <h1>Note Organizer</h1>
+      <p class="eyebrow">Note Organizer · Windows desktop app · offline</p>
+      <h1>Notes that stay on your own device</h1>
       <p class="lede">A notes app that keeps everything on your own computer: rich notes with
         tables and checklists, notes that repeat, and a calendar that shows them. No account,
         no cloud, no network calls.</p>
@@ -60,8 +60,10 @@
     </div>
     <div class="cards">
       <article class="card cat-general">
-        <img src="img/tables.webp" width="{{w_tables}}" height="{{h_tables}}" loading="lazy"
-             alt="A table inside a note, with a header row and four rows of meals.">
+        <img class="for-dark" src="img/site-tables-dark.webp" width="{{w_site_tables_dark}}" height="{{h_site_tables_dark}}" loading="lazy"
+             alt="A table inside a note: a header row, and lunch and dinner for four days.">
+        <img class="for-light" src="img/site-tables-light.webp" width="{{w_site_tables_light}}" height="{{h_site_tables_light}}" loading="lazy"
+             alt="A table inside a note: a header row, and lunch and dinner for four days.">
         <div class="card-body">
           <h3>Rich notes and tables</h3>
           <p>Bold, italic, colours, highlights, headings and lists, and tables you edit in place,
@@ -70,8 +72,10 @@
         </div>
       </article>
       <article class="card cat-personal">
-        <img src="img/checklist.webp" width="{{w_checklist}}" height="{{h_checklist}}" loading="lazy"
-             alt="A checklist with four items, two of them ticked and struck through.">
+        <img class="for-dark" src="img/site-checklist-dark.webp" width="{{w_site_checklist_dark}}" height="{{h_site_checklist_dark}}" loading="lazy"
+             alt="A checklist of four items, two ticked and struck through, with arrows to reorder them.">
+        <img class="for-light" src="img/site-checklist-light.webp" width="{{w_site_checklist_light}}" height="{{h_site_checklist_light}}" loading="lazy"
+             alt="A checklist of four items, two ticked and struck through, with arrows to reorder them.">
         <div class="card-body">
           <h3>A checklist under every note</h3>
           <p>With a count of what is done. The arrows that reorder items sit beside the boxes,
@@ -80,8 +84,10 @@
         </div>
       </article>
       <article class="card cat-work">
-        <img src="img/calendar-view.webp" width="{{w_calendar_view}}" height="{{h_calendar_view}}" loading="lazy"
-             alt="The calendar for September 2026, with a weekly stand-up on every Monday and three other notes.">
+        <img class="for-dark" src="img/site-calendar-dark.webp" width="{{w_site_calendar_dark}}" height="{{h_site_calendar_dark}}" loading="lazy"
+             alt="The calendar's September, Monday to Thursday: a weekly stand-up on each Monday, a dentist and a board review.">
+        <img class="for-light" src="img/site-calendar-light.webp" width="{{w_site_calendar_light}}" height="{{h_site_calendar_light}}" loading="lazy"
+             alt="The calendar's September, Monday to Thursday: a weekly stand-up on each Monday, a dentist and a board review.">
         <div class="card-body">
           <h3>A calendar that shows your notes</h3>
           <p>Give a note a date and it appears on its day. Mark a day with a colour or an emoji,
@@ -90,8 +96,10 @@
         </div>
       </article>
       <article class="card cat-work">
-        <img src="img/recurrence-setup.webp" width="{{w_recurrence_setup}}" height="{{h_recurrence_setup}}" loading="lazy"
-             alt="A note set to repeat every week on Monday, never ending.">
+        <img class="for-dark" src="img/site-repeat-dark.webp" width="{{w_site_repeat_dark}}" height="{{h_site_repeat_dark}}" loading="lazy"
+             alt="A note's Repeat settings: weekly, every week on Monday, ending never.">
+        <img class="for-light" src="img/site-repeat-light.webp" width="{{w_site_repeat_light}}" height="{{h_site_repeat_light}}" loading="lazy"
+             alt="A note's Repeat settings: weekly, every week on Monday, ending never.">
         <div class="card-body">
           <h3>Notes that repeat</h3>
           <p>Daily, weekly, monthly or yearly, on the weekdays you choose, ending never, on a date
@@ -100,7 +108,9 @@
         </div>
       </article>
       <article class="card cat-ideas">
-        <img src="img/search-and-sort.webp" width="{{w_search_and_sort}}" height="{{h_search_and_sort}}" loading="lazy"
+        <img class="for-dark" src="img/site-search-dark.webp" width="{{w_site_search_dark}}" height="{{h_site_search_dark}}" loading="lazy"
+             alt="The note list narrowed by a search for the word team, sorted by calendar date.">
+        <img class="for-light" src="img/site-search-light.webp" width="{{w_site_search_light}}" height="{{h_site_search_light}}" loading="lazy"
              alt="The note list narrowed by a search for the word team, sorted by calendar date.">
         <div class="card-body">
           <h3>Search, sort and group</h3>
@@ -110,8 +120,10 @@
         </div>
       </article>
       <article class="card cat-urgent">
-        <img src="img/trash-panel.webp" width="{{w_trash_panel}}" height="{{h_trash_panel}}" loading="lazy"
-             alt="Settings, Recently deleted: three deleted notes, each with Restore and Delete.">
+        <img class="for-dark" src="img/site-trash-dark.webp" width="{{w_site_trash_dark}}" height="{{h_site_trash_dark}}" loading="lazy"
+             alt="Recently deleted: three deleted notes, each with the days it has left, Restore and Delete.">
+        <img class="for-light" src="img/site-trash-light.webp" width="{{w_site_trash_light}}" height="{{h_site_trash_light}}" loading="lazy"
+             alt="Recently deleted: three deleted notes, each with the days it has left, Restore and Delete.">
         <div class="card-body">
           <h3>Nothing lost to a slip</h3>
           <p>Deleted notes wait in Recently deleted. Backups move the whole notebook to another
@@ -132,18 +144,15 @@
         carried by shape as well as colour: Save is the one filled button, the open tab stands
         taller.</p>
     </div>
-    <div class="pair">
-      <figure class="shot">
-        <img src="img/main-window.webp" width="{{w_main_window}}" height="{{h_main_window}}" loading="lazy"
-             alt="The main window in the Midnight Purple theme.">
-        <figcaption>Midnight Purple</figcaption>
-      </figure>
-      <figure class="shot">
-        <img src="img/main-window-light.webp" width="{{w_main_window_light}}" height="{{h_main_window_light}}" loading="lazy"
-             alt="The same window in the Soft Lavender theme.">
-        <figcaption>Soft Lavender</figcaption>
-      </figure>
-    </div>
+    <!-- The eight themes as the app offers them, not the hero's window a
+         second time, which is what this section showed before. -->
+    <figure class="shot themes-shot">
+      <img class="for-dark" src="img/site-themes-dark.webp" width="{{w_site_themes_dark}}" height="{{h_site_themes_dark}}" loading="lazy"
+           alt="Settings, Appearance: four dark themes and four light ones, Midnight Purple chosen.">
+      <img class="for-light" src="img/site-themes-light.webp" width="{{w_site_themes_light}}" height="{{h_site_themes_light}}" loading="lazy"
+           alt="Settings, Appearance: four dark themes and four light ones, Soft Lavender chosen.">
+      <figcaption>Settings &rarr; Appearance: one click changes the whole app.</figcaption>
+    </figure>
   </div>
 </section>
 
