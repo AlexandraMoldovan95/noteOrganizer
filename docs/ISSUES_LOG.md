@@ -173,7 +173,7 @@ is in the table below as well.
 | [Two answers to one question](#two-answers-to-one-question) | Two helpers answering one question disagree somewhere — measure them against each other; and a base theme's state map silently overrides what you configured. | 0.89.371 |
 | [The icon drawn as narrow as a letter](#the-icon-drawn-as-narrow-as-a-letter) | An icon's width is the width of whichever font answered for it; where icons must line up, choose them from the range one font draws, and measure the column. | 0.96.392 |
 | [The marker that was only characters](#the-marker-that-was-only-characters) | When a structure is stored as text, every route that edits text edits it: count the routes that reach it, not the ones the feature was written for. | 0.96.394 |
-| [The rescue copy that outlived what it rescued](#the-rescue-copy-that-outlived-what-it-rescued) | A safety net that can be pressed later must know whether it still rescues anything, and must itself be undoable. | Unreleased |
+| [The rescue copy that outlived what it rescued](#the-rescue-copy-that-outlived-what-it-rescued) | A safety net that can be pressed later must know whether it still rescues anything, and must itself be undoable. | 0.96.395 |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -4845,8 +4845,8 @@ selection — not the ones the feature was written for.
 
 ### The rescue copy that outlived what it rescued
 
-*(2026-10-22 · found on the Android app by an agent playing an ordinary user; the desktop did the
-same)*
+*([0.96.395](../CHANGELOG.md#096395--2026-10-23) · 2026-10-22 · found on the Android app by an
+agent playing an ordinary user; the desktop did the same · issue #299)*
 
 **Symptom:** a note's text selected whole and deleted, then brought back with Ctrl+Z. The button
 **↩ Restore previous** stayed. Later edits were made — a line added, words appended, two items
