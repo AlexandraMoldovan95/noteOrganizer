@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.96.395](#096395--2026-10-23) | 2026-10-23 | A click on a list's number puts the cursor after it; "↩ Restore previous" keeps what it replaces and goes once the text is back; an import's question says one note as one. |
 | [0.96.394](#096394--2026-10-22) | 2026-10-22 | A numbered list stays numbered when you delete, type or paste across it, and Backspace after its number comes back with one Ctrl+Z; a new search shows its results from the top. |
 | [0.96.392](#096392--2026-10-21) | 2026-10-21 | A privacy policy in Settings → About, and a section on your privacy in the welcome note; feedback becomes a review in the Microsoft Store; the welcome note's headings start in one column. |
 | [0.95.391](#095391--2026-10-20) | 2026-10-20 | The Trash never empties itself by a length it could not read; a "²" in a date no longer stops a note saving; table merges from the menu keep both texts; Enter, Backspace and bold do what you expect in lists and over a selection. |
@@ -106,6 +107,10 @@ How the numbers themselves are counted is the
 ---
 
 ## [Unreleased]
+
+---
+
+## [0.96.395] — 2026-10-23
 
 ### Fixed
 
