@@ -73,7 +73,7 @@ that have moved, so existing callers — including the over 1,100 `note_organize
 references across the QA scripts — keep working untouched. That's deliberate: it means each extraction is
 a pure move that leaves the whole test suite green, rather than a rewrite.
 
-What remains in the file is ~21,900 lines of genuinely shared surface. It grew again through
+What remains in the file is ~22,000 lines of genuinely shared surface. It grew again through
 the rich-text and tables work even as the pure logic behind those features went into `core/`,
 and dropped by ~2,700 when the note list moved to `ui/note_list.py` (see the
 [case study](#the-list-measured-again)).

@@ -174,7 +174,7 @@ is in the table below as well.
 | [The icon drawn as narrow as a letter](#the-icon-drawn-as-narrow-as-a-letter) | An icon's width is the width of whichever font answered for it; where icons must line up, choose them from the range one font draws, and measure the column. | 0.96.392 |
 | [The marker that was only characters](#the-marker-that-was-only-characters) | When a structure is stored as text, every route that edits text edits it: count the routes that reach it, not the ones the feature was written for. | 0.96.394 |
 | [The rescue copy that outlived what it rescued](#the-rescue-copy-that-outlived-what-it-rescued) | A safety net that can be pressed later must know whether it still rescues anything, and must itself be undoable. | 0.96.395 |
-| [A separator's dashes, read as a width nobody set](#a-separators-dashes-read-as-a-width-nobody-set) | When a format borrows another's syntax, the borrowed form arrives written as the other world writes it: decide whose it is where that is still known — at the way in. | Unreleased |
+| [A separator's dashes, read as a width nobody set](#a-separators-dashes-read-as-a-width-nobody-set) | When a format borrows another's syntax, the borrowed form arrives written as the other world writes it: decide whose it is where that is still known — at the way in. | 0.96.396 |
 | [Photographs of the site's pages, blank below the first screen](#photographs-of-the-sites-pages-blank-below-the-first-screen) | A photograph proves only what was on the screen when it was taken: photograph a page as a reader meets it, and give what changes it checks of its own. | the website |
 
 Smaller lessons, each once a long comment in the code, are collected
@@ -3257,8 +3257,8 @@ that row as it is.
 
 ### A separator's dashes, read as a width nobody set
 
-*(Unreleased · 2026-10-23 · seen in a photograph of the Android app taken for its documentation;
-the desktop did the same)*
+*([0.96.396](../CHANGELOG.md#096396--2026-10-24) · 2026-10-23 · seen in a photograph of the
+Android app taken for its documentation; the desktop did the same)*
 
 **Symptom:** a table's header drawn "How…" instead of "How much", its column barely wider than
 "1500". The note had been written as GitHub's markdown writes a table with a right-aligned
