@@ -102,6 +102,7 @@ recaptured.
 | `import-code.png` | The Import code panel, ideally showing the duplicate-check prompt |
 | `import-backup.png` | The Import notes file picker or its resulting confirmation |
 | `settings-overview.png` | The Settings page: the section list on the left and a section open on the right |
+| `settings-overview-light.png` | The same page on a light theme, its partner on the website (see below) |
 | `theme-picker.png` | Settings → Appearance, with the theme variant cards visible |
 | `site-*-dark.png`, `site-*-light.png` | The website's pictures — see below |
 
@@ -110,13 +111,22 @@ recaptured.
 The fourteen `site-*` pictures are the website's own: its six feature cards
 (`tables`, `checklist`, `calendar`, `repeat`, `search`, `trash`) and its
 themes section (`themes`), each in the dark theme and in the light one, so
-the page shows the one it is in. They are the one deliberate exception to
-*one theme throughout*. The `site-cards` scene of
+the page shows the one it is in. They, and the light partners described
+below, are the deliberate exception to *one theme throughout*. The
+`site-cards` scene of
 `tools/doc_screenshots.py` takes all fourteen: each is cropped close around
 what its card is about, then grown to the card's 16:10 so the card crops
 none of it away. Whole windows shrunk to a card's size, as the cards had
 before 2026-10-24, showed no feature a visitor could make out. Taken on
 2026-10-24 on 0.96.395.
+
+The website shows every picture of the apps in the theme its page is in
+(the owner's rule, 2026-10-24), and its build refuses a page with a
+picture in one theme only. So a picture a published document shows has a
+`NAME-light.png` partner beside it, `NAME.png` being the dark one, as
+`main-window` has: today `settings-overview` (the scene
+`settings-overview-light`) and `settings-before-redesign`, both shown in
+In my words.
 
 ## A picture of an earlier version
 
@@ -134,3 +144,13 @@ pixel or two of the desktop in at the edges and the rounded corners. The
 photo is cropped to the inside of the window, title bar off.
 `tools/doc_screenshots.py` does not retake it: it photographs only the
 current app.
+
+Its light partner, `settings-before-redesign-light.png`, was taken the
+same way on 2026-10-24, from commit `8dc0cf0`, the last before the
+redesign, with the made-up notebook's settings asking for the light
+theme. That code reads `%APPDATA%` on start, to bring an older notebook
+forward, so it was run with `APPDATA` pointed at an empty folder of its
+own, and stopped if it settled anywhere but its scratch folder; its
+start-up notices, which wait for a click, were answered in code. It is
+cropped to the same frame as the dark one, so the two match pixel for
+pixel in where everything sits.

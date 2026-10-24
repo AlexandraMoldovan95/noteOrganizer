@@ -171,6 +171,20 @@ async function js(expression) {
   return r.result.value;
 }
 
+// Asked again every 40ms until [ok] holds of the answer or [ms] run out;
+// the last answer comes back either way. A fixed wait measures the
+// machine's speed as well as the page: a busy computer could fail it with
+// nothing wrong.
+async function until(expression, ok, ms = 5000) {
+  const end = Date.now() + ms;
+  let value = await js(expression);
+  while (!ok(value) && Date.now() < end) {
+    await sleep(40);
+    value = await js(expression);
+  }
+  return value;
+}
+
 async function shot(name, full = false) {
   const params = { format: "png" };
   if (full) {
@@ -240,22 +254,37 @@ try {
   await sleep(100);
   check("Escape closes the phone menu", await js("!document.getElementById('site-nav').classList.contains('open')"));
 
-  // ---------------- The document pages' fade, with motion on ----------------
-  // Kept by the owner's choice (2026-10-24), and held to what the first
-  // version broke: the first screen faded in on every load, printing gave
-  // blank pages, a Contents link landed on text still fading, and a tall
-  // table whose visible slice stayed under the threshold never appeared.
+  // ---------------- The fade, with motion on ----------------
+  // Kept by the owner's choice (2026-10-24), slow and gradual as it first
+  // was -- a quicker one read as no animation at all -- and held to what
+  // that first version broke: printing gave blank pages, a Contents link
+  // landed on text still fading, and a tall table whose visible slice stayed
+  // under the threshold never appeared.
   const HIDDEN_ON_SCREEN = `[...document.querySelectorAll('.doc .wrap > *')].filter((e) => {
       const r = e.getBoundingClientRect();
       return r.bottom > 0 && r.top < innerHeight && parseFloat(getComputedStyle(e).opacity) < 0.99;
     }).length`;
+  // Above the lowest twelfth, where a block counts as arrived.
+  const HIDDEN_ABOVE_LINE = `[...document.querySelectorAll('.doc .wrap > *')].filter((e) => {
+      const r = e.getBoundingClientRect();
+      return r.bottom > 0 && r.top < innerHeight * 0.9 && parseFloat(getComputedStyle(e).opacity) < 0.99;
+    }).length`;
   await viewport(1366, 900, false, "light");
   await go("/how-its-built.html");
-  check("a document page's first screen is shown at once, never faded",
-        await js(HIDDEN_ON_SCREEN) === 0 && await js("!document.querySelector('.doc h1').classList.contains('reveal')"),
-        await js(HIDDEN_ON_SCREEN) + " block(s) on the first screen not shown");
-  check("...while the blocks below it wait to fade in (the fade is still there)",
+  const fading = await js(`(() => { const h = document.querySelector('.doc h1');
+      return { reveal: h.classList.contains('reveal'), s: parseFloat(getComputedStyle(h).transitionDuration) }; })()`);
+  check("a document page's first screen fades in on opening, slowly (0.6s, not the quick .35s tried)",
+        fading.reveal && fading.s >= 0.55, JSON.stringify(fading));
+  const arrived = await until(HIDDEN_ABOVE_LINE, (n) => n === 0);
+  check("...and has all arrived a moment later", arrived === 0, arrived + " block(s) on the first screen still hidden");
+  check("...while the blocks below it wait to fade in as they are scrolled to",
         await js("document.querySelectorAll('.doc .wrap > .reveal:not(.in-view)').length") > 5);
+  await js("window.scrollBy(0, innerHeight * 0.6)");
+  const midway = await until(`[...document.querySelectorAll('.doc .wrap > .reveal.in-view')].filter((e) => {
+      const o = parseFloat(getComputedStyle(e).opacity); return o > 0.02 && o < 0.98; }).length`, (n) => n > 0, 1500);
+  check("...gradually: just after a scroll, the blocks it brought are seen on their way in", midway > 0,
+        midway + " block(s) part-way");
+  await go("/how-its-built.html");
   await page("Emulation.setEmulatedMedia", { media: "print", features: [{ name: "prefers-reduced-motion", value: "no-preference" }] });
   const hiddenInPrint = await js(`[...document.querySelectorAll('.doc .wrap > *')]
       .filter((e) => parseFloat(getComputedStyle(e).opacity) < 0.99).length`);
@@ -268,10 +297,127 @@ try {
         await js(HIDDEN_ON_SCREEN) === 0, await js(HIDDEN_ON_SCREEN) + " block(s) on screen still hidden");
   await go("/testing.html");
   await js("window.scrollTo(0, document.documentElement.scrollHeight)");
-  await sleep(700);
+  const atEnd = await until(HIDDEN_ON_SCREEN, (n) => n === 0);
   check("at a page's end every block on screen has appeared, a tall table's too",
-        await js(HIDDEN_ON_SCREEN) === 0, await js(HIDDEN_ON_SCREEN) + " block(s) on screen still hidden");
+        atEnd === 0, atEnd + " block(s) on screen still hidden");
   await shot("site-testing-desktop-end");
+
+  // The overview: its parts fade in the same way, a row of cards one card
+  // after another -- the owner found the page static (2026-10-24).
+  await go("/index.html");
+  check("the overview's hero is never hidden", await js("!document.querySelector('.hero h1').closest('.reveal')"));
+  const below = await js(`(() => { const cards = [...document.querySelectorAll('.cards .card')]
+      .filter((c) => c.getBoundingClientRect().top > innerHeight * 0.92);
+    return { n: cards.length, waiting: cards.filter((c) => c.matches('.reveal:not(.in-view)')).length }; })()`);
+  check("...its cards below the screen wait to fade in", below.n >= 6 && below.waiting === below.n, JSON.stringify(below));
+  await js("document.getElementById('features').scrollIntoView()");
+  // The delay the browser applies, not the property set for it: a
+  // transition shorthand on .card once reset it to nothing, while the
+  // property still said otherwise. Read in the moment the row has arrived
+  // and before its cards are let go of.
+  const row = await until(`(() => { const cards = [...document.querySelectorAll('.cards .card')].slice(0, 3);
+      return { ready: cards.every((c) => c.classList.contains('in-view')),
+               delays: cards.map((c) => getComputedStyle(c).transitionDelay.split(',')[0].trim()) }; })()`,
+    (v) => v.ready, 4000);
+  check("...and a row of them arrives one card after another", row.ready && new Set(row.delays).size === 3,
+        JSON.stringify(row));
+  const lifted = await until(`(() => { const c = document.querySelector('.cards .card');
+      return { settled: !c.classList.contains('reveal'), delay: getComputedStyle(c).transitionDelay }; })()`,
+    (v) => v.settled);
+  check("...then each is let go of, so its lift under the pointer is not delayed", lifted.settled
+        && lifted.delay.split(",").every((d) => parseFloat(d) === 0), JSON.stringify(lifted));
+
+  // ---------------- Every picture in the page's theme ----------------
+  // The owner's rule (2026-10-24): a dark page shows the apps dark, a light
+  // one light, and the switch changes them with it. A picture with no
+  // theme of its own counts as wrong.
+  const WRONG_THEME = `(() => {
+      const set = document.documentElement.getAttribute('data-theme');
+      const dark = set ? set === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+      const imgs = [...document.querySelectorAll('main img')];
+      const wrong = imgs.filter((i) => {
+        const shown = i.getClientRects().length > 0;
+        if (i.classList.contains('for-dark')) return shown !== dark;
+        if (i.classList.contains('for-light')) return shown === dark;
+        return true;
+      });
+      return { dark, n: imgs.length, wrong: wrong.map((i) => i.getAttribute('src')) };
+    })()`;
+  for (const scheme of ["dark", "light"]) {
+    await viewport(1366, 900, false, scheme, "reduce");
+    for (const p of ["index.html", "android.html", "in-my-words.html"]) {
+      await go("/" + p);
+      await js("document.documentElement.removeAttribute('data-theme')");
+      const seen = await js(WRONG_THEME);
+      check(`${p}, ${scheme}: every picture is shown in the page's theme`, seen.n > 0 && seen.wrong.length === 0,
+            JSON.stringify(seen));
+    }
+  }
+  await go("/index.html");
+  await js("document.documentElement.removeAttribute('data-theme')");
+  await click("#theme-toggle");
+  const switched = await js(WRONG_THEME);
+  check("the theme switch changes the pictures with the page", switched.dark && switched.wrong.length === 0,
+        JSON.stringify(switched));
+  await click("#theme-toggle");
+  // The switch remembers its choice in this browser; forgotten again, so
+  // the pages after this follow the system's setting the walk emulates.
+  await js("localStorage.removeItem('noteorganizer-site-theme')");
+
+  // ---------------- A picture opened large ----------------
+  for (const scheme of ["light", "dark"]) {
+    await viewport(1366, 900, false, scheme, "reduce");
+    await go("/index.html");
+    await js("document.documentElement.removeAttribute('data-theme')");
+    await click(".card a.zoom");
+    const opened = await js(`(() => { const d = document.querySelector('dialog.lightbox');
+        return d && { open: d.open, src: d.querySelector('img').getAttribute('src') }; })()`);
+    check(`${scheme}: a card's picture opens large over the page, in the page's theme`,
+          opened && opened.open && opened.src.endsWith(`-${scheme}.webp`), JSON.stringify(opened));
+    if (scheme === "light") await shot("site-index-picture-open");
+    await page("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+    await page("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+    await sleep(150);
+    check(`${scheme}: ...and Escape closes it`, await js("!document.querySelector('dialog.lightbox').open"));
+  }
+  await go("/android.html");
+  await click(".phone-gallery a.zoom");
+  check("the Android page's pictures open large too, in the page's theme",
+        await js("document.querySelector('dialog.lightbox').open && /-dark\\.webp$/.test(document.querySelector('dialog.lightbox img').getAttribute('src'))"));
+
+  // ---------------- Text as wide as the pictures ----------------
+  // The owner's choice (2026-10-24): one right edge for words and pictures
+  // alike, on every page -- not a narrower measure for the words.
+  await viewport(1366, 900, false, "light", "reduce");
+  await go("/index.html");
+  const rows = await js(`[...document.querySelectorAll('main section')].map((s) => {
+      const p = s.querySelector('.section-head p');
+      const row = s.querySelector('.cards, .phones, .figures');
+      if (!p || !row || s.querySelector('.split')) return null;
+      return { id: s.getAttribute('aria-labelledby'), p: Math.round(p.getBoundingClientRect().right),
+               row: Math.round(row.getBoundingClientRect().right) };
+    }).filter(Boolean)`);
+  check("the overview: each section's words reach as far as its row of pictures",
+        rows.length >= 3 && rows.every((r) => Math.abs(r.p - r.row) <= 2), JSON.stringify(rows));
+  const split = await js(`(() => { const w = document.querySelector('.split'); const cs = getComputedStyle(w);
+      const right = w.getBoundingClientRect().right - parseFloat(cs.paddingRight);
+      const left = w.getBoundingClientRect().left + parseFloat(cs.paddingLeft);
+      return { figure: Math.round(right - w.querySelector('figure').getBoundingClientRect().right),
+               words: Math.round(w.querySelector('.section-head').getBoundingClientRect().left - left) }; })()`);
+  check("...and the themes section fills its row, the words beside the picture",
+        Math.abs(split.figure) <= 2 && Math.abs(split.words) <= 2, JSON.stringify(split));
+  for (const p of ["in-my-words.html", "how-its-built.html", "testing.html", "android.html", "bug-reports.html"]) {
+    await go("/" + p);
+    const narrow = await js(`(() => { const w = document.querySelector('.doc .wrap'); const cs = getComputedStyle(w);
+        const full = w.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+        return [...w.querySelectorAll(':scope > p:not(.source-note):not(.page-actions)')]
+          .filter((e) => e.getBoundingClientRect().width < full - 2).length; })()`);
+    check(`${p}: every paragraph runs the column's full width`, narrow === 0, narrow + " narrower");
+  }
+  await go("/in-my-words.html");
+  const pair = await js(`(() => { const p = document.querySelector('.doc .pair'); const t = document.querySelector('.doc .wrap > p');
+      return p && Math.round(p.getBoundingClientRect().width - t.getBoundingClientRect().width); })()`);
+  check("In my words: the words are as wide as the pictures set side by side", pair === 0, String(pair));
 
   // ---------------- The site's own privacy notice ----------------
   // The apps' privacy policy does not cover this site, so every footer
@@ -696,9 +842,19 @@ try {
   await viewport(1366, 900, false, "light", "reduce");
   await go("/android.html");
   await shot("site-android-desktop-light", true);
-  check("the Android page shows the app's eight pictures, captioned",
-    await js("document.querySelectorAll('.phone-gallery .phone-shot').length") === 8
-    && await js("[...document.querySelectorAll('.phone-gallery figcaption')].every(f => f.textContent.trim().length > 20)"));
+  // Seven screens, each dark and light and captioned in both: four
+  // upright in one row, then three on its side, a row each -- four and then
+  // two upright looked unplaced (the owner, 2026-10-24).
+  check("the Android page shows seven screens, each in both themes and captioned in both",
+    await js("document.querySelectorAll('.phone-gallery .phone-shot').length") === 7
+    && await js("[...document.querySelectorAll('.phone-gallery .phone-shot')].every(f => f.querySelector('img.for-dark') && f.querySelector('img.for-light'))")
+    && await js("[...document.querySelectorAll('.phone-gallery figcaption span')].every(s => s.textContent.trim().length > 20)"));
+  const galleryRows = await js(`(() => { const tops = [...document.querySelectorAll('.phone-gallery .phone-shot')]
+      .map((f) => Math.round(f.getBoundingClientRect().top));
+    const rows = []; tops.forEach((t) => { if (!rows.length || rows[rows.length - 1][0] !== t) rows.push([t, 0]); rows[rows.length - 1][1]++; });
+    return rows.map((r) => r[1]); })()`);
+  check("...four upright on one row, then each one on its side on a row of its own",
+    JSON.stringify(galleryRows) === "[4,1,1,1]", JSON.stringify(galleryRows));
 } catch (err) {
   problems.push("the walk stopped: " + err.message);
 } finally {

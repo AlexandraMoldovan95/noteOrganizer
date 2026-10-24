@@ -854,7 +854,7 @@ def _settings(section):
 
 
 @scene('settings-overview')
-def settings_overview():
+def settings_overview(theme=None):
     """The Settings page: the section list, and one section open.
 
     Statistics rather than General, which holds one blank field and makes
@@ -864,6 +864,25 @@ def settings_overview():
     within the app's own lifetime, though: a "since" a year before the
     first commit read to reviewers as careless demo data.
     """
+    if theme:
+        was = app.theme_name
+        app.set_theme(theme)
+        try:
+            return _settings_overview('settings-overview-' + theme)
+        finally:
+            app.set_theme(was)
+            pump()
+    return _settings_overview('settings-overview')
+
+
+@scene('settings-overview-light')
+def settings_overview_light():
+    """The same page on a light theme: the website shows every picture in
+    the theme the page is in, and In my words shows this one."""
+    settings_overview('light')
+
+
+def _settings_overview(name):
     _demo_notebook()
     _table_note()
     errands = [{'text': 'Call the bank', 'done': True},
@@ -890,7 +909,7 @@ def settings_overview():
     NO.save_setting('first_launch_date', _days_ago(56)[:10])
     try:
         _settings('statistics')
-        capture('settings-overview')
+        capture(name)
     finally:
         NO.save_setting('first_launch_date', since)
         app.hide_settings_page()

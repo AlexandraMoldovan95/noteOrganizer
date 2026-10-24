@@ -221,9 +221,11 @@ a:hover { text-decoration-thickness: 2px; }
   letter-spacing: -.02em;
   text-wrap: balance;
 }
-/* A reading measure of about 70 characters, kept when the hero stacks. */
-.lede { margin: 0 0 18px; font-size: 19px; color: var(--text); max-width: 34em; }
-.byline { margin: 0 0 26px; color: var(--subtext); font-size: 15px; max-width: 38em; }
+/* Text runs the width of its row, as far as the pictures beside and below
+   it: the owner's choice (2026-10-24) over a narrower reading measure,
+   which left every paragraph ending halfway across. */
+.lede { margin: 0 0 18px; font-size: 19px; color: var(--text); }
+.byline { margin: 0 0 26px; color: var(--subtext); font-size: 15px; }
 .actions { display: flex; flex-wrap: wrap; gap: 12px; }
 
 .window {
@@ -249,7 +251,10 @@ a:hover { text-decoration-thickness: 2px; }
 
 /* ---- Sections ---- */
 
-section { padding-block: 44px; }
+/* Room between the sections, so the overview reads as a few calm parts
+   rather than one long run of things. */
+section { padding-block: 64px; }
+@media (max-width: 760px) { section { padding-block: 44px; } }
 .section-head { margin-bottom: 26px; }
 .section-head h2 {
   margin: 0 0 8px;
@@ -258,7 +263,7 @@ section { padding-block: 44px; }
   letter-spacing: -.01em;
   text-wrap: balance;
 }
-.section-head p { margin: 0; color: var(--subtext); max-width: 62ch; }
+.section-head p { margin: 0; color: var(--subtext); }
 
 .band { background: var(--sidebar); border-block: 1px solid var(--line); }
 
@@ -317,9 +322,17 @@ a.card .label::after { content: " \2192"; }
   gap: 18px;
 }
 .shot { margin: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
-/* Taken at 150%: wider than this, the picture would be drawn larger than
-   the app draws itself, and soft. */
-.themes-shot { max-width: 600px; }
+/* The themes section sets its words beside the picture, so the row stays
+   full: the picture is taken at 150%, and wider than about 600px it would
+   be drawn larger than the app draws itself, and soft. */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 600px);
+  gap: 40px;
+  align-items: center;
+}
+.split .section-head { margin-bottom: 0; }
+@media (max-width: 900px) { .split { grid-template-columns: minmax(0, 1fr); gap: 24px; } }
 
 /* The Android app's screens: a phone's own proportions and rounded
    corners, four across on a computer and two on a phone. On the Android
@@ -332,16 +345,18 @@ a.card .label::after { content: " \2192"; }
 }
 .phone-gallery { margin: 8px 0 24px; gap: 14px; }
 .phone-shot { margin: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.phone-shot img {
-  width: 100%;
+/* The frame is drawn on the link that holds the picture (or the pair of
+   them, dark and light): it clips the picture as it leans in on hover. */
+.phone-shot .zoom {
   border: 1px solid var(--line);
   border-radius: 14px;
   box-shadow: var(--shadow);
   background: var(--surface);
 }
+.phone-shot img { width: 100%; }
 .phone-shot figcaption { font-size: 13px; color: var(--subtext); line-height: 1.45; }
 .phone-gallery .phone-shot.wide { grid-column: 1 / -1; }
-.phone-gallery .phone-shot.wide img { border-radius: 12px; }
+.phone-gallery .phone-shot.wide .zoom { border-radius: 12px; }
 @media (max-width: 760px) {
   .phones, .phone-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -410,10 +425,10 @@ a.card .label::after { content: " \2192"; }
 }
 .doc h2 + h3, .doc h1 + h3 { border-top: 0; padding-top: 0; margin-top: 20px; }
 .doc h4, .doc h5, .doc h6 { font-size: 17px; margin: 24px 0 6px; }
-/* Running text keeps a reading measure of about 75 characters; tables and
-   code still take the column's whole width. (They used to fill it too, a
-   flush right edge bought with lines of 100 characters and more.) */
-.doc .wrap > p, .doc .wrap > ul, .doc .wrap > ol, .doc .wrap > blockquote { max-width: 40rem; }
+/* Paragraphs and list items fill the same width as the tables and pictures
+   below them. A reading measure of about 75 characters was tried on
+   2026-10-24 and taken out the same day: the owner found the page tidier
+   with one right edge for text and pictures alike. */
 .doc .wrap > p, .doc .wrap > ul, .doc .wrap > ol { font-size: 17px; }
 .doc p:not(.source-note) { margin: 0 0 16px; line-height: 1.7; }
 .doc li { line-height: 1.6; }
@@ -488,7 +503,7 @@ a.card .label::after { content: " \2192"; }
 
 /* Pictures in a document: opened full size with a click, and two set side
    by side stack on a phone (the .pair grid of the overview). */
-.doc .wrap > p > a > img, .doc figure img { border: 1px solid var(--line); border-radius: 8px; }
+.doc .wrap > p > a > img { border: 1px solid var(--line); border-radius: 8px; }
 .doc .pair { margin: 16px 0; }
 .doc .pair figcaption { padding: 8px 12px; font-size: 13px; color: var(--subtext); border-top: 1px solid var(--line); }
 
@@ -555,24 +570,75 @@ a.card .label::after { content: " \2192"; }
   .doc h2#contents + ul a { transition: color .15s, border-color .15s; }
   .doc h2#contents + ul a::before { transition: transform .15s; }
   /* Each top-level block on a doc page (heading, paragraph, list, table,
-     code block...) fades and lifts in as it is scrolled into view. site.js
-     adds .reveal only to blocks below the first screen, and .in-view once a
-     pixel of one shows; a jump (a Contents link, a page opened at an
-     anchor) or printing shows every block at once (.instant). With JS off
-     or motion reduced, nothing is ever hidden. */
-  .doc .wrap > .reveal {
+     code block...), and each section part and card of the overview, fades
+     and lifts in as it is scrolled into view: site.js adds .reveal, and
+     .in-view once the block's top passes the lowest twelfth of the screen.
+     Blocks that arrive together come one after another (--reveal-delay).
+     Slow on purpose -- a quicker fade (.35s, 8px, at the first pixel) was
+     tried on 2026-10-24 and read as almost no animation at all. A jump (a
+     Contents link, a page opened at an anchor) or printing shows every
+     block at once (.instant). With JS off or motion reduced, nothing is
+     ever hidden. */
+  .reveal {
     opacity: 0;
-    transform: translateY(8px);
-    transition: opacity .35s ease-out, transform .35s ease-out;
+    transform: translateY(16px);
+    transition: opacity .6s ease, transform .6s ease;
+    transition-delay: var(--reveal-delay, 0s);
   }
-  .doc .wrap > .reveal.in-view { opacity: 1; transform: none; }
-  .doc .wrap > .reveal.instant { transition: none; }
+  .reveal.in-view { opacity: 1; transform: none; }
+  .reveal.instant { transition: none; }
+
+  /* A picture on the overview can be opened large: its card lifts a little
+     under the pointer, and the picture leans in. */
+  .card { transition: border-color .15s, transform .25s ease, box-shadow .25s ease; }
+  .card .zoom img { transition: transform .4s ease; }
+  .card:has(.zoom):hover { transform: translateY(-3px); box-shadow: var(--shadow); }
+  .card .zoom:hover img, .card .zoom:focus-visible img { transform: scale(1.04); }
+  .shot .zoom img, .phone-shot .zoom img { transition: transform .4s ease; }
+  .shot .zoom:hover img, .phone-shot .zoom:hover img { transform: scale(1.02); }
+  /* The shorthand above would reset the delay: set again after it. */
+  .reveal.card {
+    transition: opacity .6s ease, transform .6s ease, border-color .15s, box-shadow .25s ease;
+    transition-delay: var(--reveal-delay, 0s);
+  }
 }
+
+/* A picture opened large, over a dimmed page; a click anywhere or Escape
+   closes it. */
+.zoom { display: block; overflow: hidden; cursor: zoom-in; color: inherit; }
+.card .zoom { border-bottom: 1px solid var(--line); }
+.card .zoom img { border-bottom: 0; }
+.lightbox {
+  border: 0;
+  padding: 0;
+  margin: auto;
+  max-width: min(94vw, 1400px);
+  max-height: 92vh;
+  background: transparent;
+  overflow: visible;
+}
+/* Opened, the box takes the keyboard (Escape closes it) and the focus ring
+   with it, around a picture that has nothing in it to press. */
+.lightbox:focus, .lightbox:focus-visible { outline: none; }
+.lightbox::backdrop { background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(3px); }
+.lightbox img {
+  display: block;
+  max-width: min(94vw, 1400px);
+  max-height: 86vh;
+  width: auto;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  background: var(--surface);
+  cursor: zoom-out;
+}
+.lightbox p { margin: 10px 0 0; text-align: center; color: var(--subtext); font-size: 14px; }
 
 /* Printed (or saved as a PDF), a page is its text: every block shown, the
    header, menu and theme switch left off. */
 @media print {
-  .doc .wrap > .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+  .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
   .site-header, .skip, .theme-toggle, .menu-toggle { display: none !important; }
   .band { background: none; }
   a { color: inherit; }

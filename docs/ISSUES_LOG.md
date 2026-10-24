@@ -5032,6 +5032,16 @@ pictures before a full-length photograph, and checks the fade on its own, with m
 first screen shown at once, nothing hidden in print, a Contents jump landing on text already shown,
 every block on screen at a page's end. All four failed against the old code.
 
+**Later the same day:** the owner found the repaired fade "almost instant" — it had been made quicker
+too (.35s and 8px, from the first pixel), and it no longer flowed as she scrolled. The first pace
+came back: 0.6s and 16px, a block arriving once its top passes the screen's lowest twelfth, the
+first screen fading in on opening as before. Of the repairs, the ones a reader never sees stayed:
+print, jumps and anchors show everything; threshold 0 against that line still shows a tall table;
+and a page's last short block, which could sit in the lowest twelfth with nowhere left to scroll,
+arrives at the end of the page. The overview fades the same way now, a row of cards one after
+another. The walk's first-screen check became "fades in slowly, and has all arrived a moment
+later", with one that a block is still on its way in just after a scroll.
+
 **Takeaway:** a photograph proves only what was on the screen when it was taken. A page that
 changes with scrolling or time has to be photographed in the state a reader meets it — and the
 behaviour that changes it needs checks of its own, not the photograph's silence.

@@ -94,6 +94,19 @@ first, so a full-length picture holds the whole page and its pictures; the
 fade their blocks scroll in with has checks of its own, with motion on
 ([why](../docs/ISSUES_LOG.md#photographs-of-the-sites-pages-blank-below-the-first-screen)).
 
+Three choices of the owner's (2026-10-24) are held by checks too, because
+each was undone once by a review that meant well:
+
+- **The fade is slow and gradual**: 0.6 seconds, a block arriving once
+  its top passes the screen's lowest twelfth, a row of cards one after
+  another. A quicker fade read as no animation at all.
+- **Words run as wide as the pictures** on every page, one right edge
+  for both, not a narrower reading measure.
+- **Every picture of an app is shown in the page's theme**, dark on a
+  dark page and light on a light one, switching with it; the build
+  refuses a page with a picture in one theme only. A click opens a
+  picture large over the page.
+
 The share-code check copies the app's package to a temporary folder and runs
 the app's own reader on every code the demo made, and the demo's reader on
 codes the app made (its welcome note, a table, colours). The first run writes
@@ -106,8 +119,8 @@ the apps are published, its overview links to their store pages. The
 other way round, nothing the apps' users see points at it: not the apps,
 not their store pages (whose optional website field stays empty), not
 their privacy policy (the owner's rule, 2026-10-21). The build refuses a
-site whose address appears in the app's sources or in `docs/PRIVACY.md`;
-the Android app, in its own repository, is held to the same by review.
+site whose address appears in either app's sources or in
+`docs/PRIVACY.md`.
 
 So the apps' privacy policy is not one of the site's pages, and does not
 cover it. The site has its own short notice, `src/site-privacy.html`:

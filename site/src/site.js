@@ -79,26 +79,34 @@
         }
       });
     }
-    revealDocSections();
+    revealOnScroll();
+    openPicturesLarge();
   });
 
-  // On a doc page (how it's built, in my words, testing), fade each
-  // top-level block in as it scrolls into view. Skipped entirely when the
-  // visitor's system asks for reduced motion, or when IntersectionObserver
-  // is not available -- either way, every block is just shown as normal.
+  // Fade each block in as it scrolls into view: on a doc page (how it's
+  // built, in my words, testing...) every top-level block, on the overview
+  // each section's heading and each card, picture and figure. Skipped
+  // entirely when the visitor's system asks for reduced motion, or when
+  // IntersectionObserver is not available -- either way, every block is
+  // just shown as normal.
   //
-  // What the first version got wrong, and this one must not: the blocks on
-  // the first screen faded in on every load, the title included; printing
-  // gave blank pages, a Contents link landed on text still fading, and a
-  // tall table whose visible slice never reached 5% stayed invisible.
-  function revealDocSections() {
+  // The first version was slow and gradual, and read well; what it got
+  // wrong, and this one must not: printing gave blank pages, a Contents
+  // link landed on text still fading, and a tall table whose visible slice
+  // never reached 5% of it stayed invisible (hence threshold 0, measured
+  // against the screen less its lowest twelfth).
+  var REVEAL =
+    ".doc .wrap > h1, .doc .wrap > h2, .doc .wrap > h3, .doc .wrap > p, " +
+    ".doc .wrap > ul, .doc .wrap > ol, .doc .wrap > pre, .doc .wrap > blockquote, " +
+    ".doc .wrap > hr, .doc .wrap > .table-wrap, .doc .wrap > .pair, .doc .wrap > .phone-gallery, " +
+    "main > section:not(.hero) .section-head, main > section:not(.hero) .card, " +
+    "main > section:not(.hero) .shot, main > section:not(.hero) .phone-shot, " +
+    "main > section:not(.hero) .figures li, main > section:not(.hero) .actions, " +
+    ".cta > div:first-child";
+  function revealOnScroll() {
     if (!window.IntersectionObserver) return;
     if (!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: no-preference)").matches)) return;
-    var items = Array.prototype.slice.call(document.querySelectorAll(
-      ".doc .wrap > h1, .doc .wrap > h2, .doc .wrap > h3, .doc .wrap > p, " +
-      ".doc .wrap > ul, .doc .wrap > ol, .doc .wrap > pre, .doc .wrap > blockquote, " +
-      ".doc .wrap > hr, .doc .wrap > .table-wrap, .doc .wrap > .pair"
-    ));
+    var items = Array.prototype.slice.call(document.querySelectorAll(REVEAL));
     if (!items.length) return;
     // A jump, or a page opened at an anchor, or printing: every block at
     // once, with no fade to land on.
@@ -107,21 +115,42 @@
       io.disconnect();
     }
     var io = new IntersectionObserver(function (entries) {
-      entries.forEach(function (entry) {
-        if (entry.isIntersecting) {
-          entry.target.classList.add("in-view");
-          io.unobserve(entry.target);
-        }
+      // Blocks that come into view together -- a row of cards, the first
+      // screen on load -- arrive one after another, a tenth of a second
+      // apart, in the order they are read.
+      var arriving = entries.filter(function (entry) { return entry.isIntersecting; })
+        .map(function (entry) { return entry.target; });
+      arriving.sort(function (a, b) {
+        return a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
       });
-    }, { threshold: 0 });
+      arriving.forEach(function (el, i) { arrive(el, Math.min(i, 5) * 100); });
+    }, { rootMargin: "0px 0px -8% 0px", threshold: 0 });
+    // Once it has arrived, a block is let go of: a card's lift under the
+    // pointer must not wait out the delay it arrived with.
+    function arrive(el, delay) {
+      el.style.setProperty("--reveal-delay", delay / 1000 + "s");
+      el.classList.add("in-view");
+      io.unobserve(el);
+      setTimeout(function () {
+        el.classList.remove("reveal", "in-view");
+        el.style.removeProperty("--reveal-delay");
+      }, delay + 700);
+    }
     if (location.hash) return;
-    var fold = window.innerHeight;
     items.forEach(function (el) {
-      var box = el.getBoundingClientRect();
-      if (box.top < fold && box.bottom > 0) return;   // on the first screen: never hidden
       el.classList.add("reveal");
       io.observe(el);
     });
+    // At the very end of a page there is no further to scroll, and a last
+    // short block in the screen's lowest twelfth would wait for ever.
+    window.addEventListener("scroll", function () {
+      var doc = document.documentElement;
+      if (window.scrollY + window.innerHeight < doc.scrollHeight - 2) return;
+      items.forEach(function (el) {
+        if (el.classList.contains("reveal") && !el.classList.contains("in-view") &&
+            el.getBoundingClientRect().top < window.innerHeight) arrive(el, 0);
+      });
+    }, { passive: true });
     // Caught on the click, before the browser jumps: hashchange comes only
     // after it, when the text it lands on would already have shown hidden.
     document.addEventListener("click", function (e) {
@@ -129,5 +158,36 @@
     }, true);
     window.addEventListener("hashchange", showAll);
     window.addEventListener("beforeprint", showAll);
+  }
+
+  // A picture that links to itself opens large over the page instead of
+  // leaving it -- the one the theme shows, where a link holds a dark and a
+  // light one. Without JS, or without <dialog>, the link opens the file.
+  function openPicturesLarge() {
+    var links = document.querySelectorAll("a.zoom, .doc a[href$='.webp']");
+    if (!links.length || typeof HTMLDialogElement !== "function") return;
+    var box = document.createElement("dialog");
+    box.className = "lightbox";
+    box.setAttribute("aria-label", "The picture, large");
+    var big = document.createElement("img");
+    var caption = document.createElement("p");
+    caption.textContent = "Click anywhere or press Escape to close.";
+    box.appendChild(big);
+    box.appendChild(caption);
+    document.body.appendChild(box);
+    box.addEventListener("click", function () { box.close(); });
+    box.addEventListener("close", function () { big.removeAttribute("src"); });
+    Array.prototype.forEach.call(links, function (link) {
+      link.addEventListener("click", function (e) {
+        var shown = Array.prototype.filter.call(link.querySelectorAll("img"), function (img) {
+          return img.offsetParent !== null || img.getClientRects().length;
+        })[0];
+        if (!shown || e.ctrlKey || e.metaKey || e.shiftKey || e.button) return;
+        e.preventDefault();
+        big.src = shown.currentSrc || shown.src;
+        big.alt = shown.alt;
+        box.showModal();
+      });
+    });
   }
 })();

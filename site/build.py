@@ -86,6 +86,13 @@ NAV = [("index.html", "Overview"), ("android.html", "Android"),
 ANDROID_DEFAULT = os.path.join("..", "androidVersion")
 # The Android README's sections the Android page shows, by their headings.
 ANDROID_SECTIONS = ["What it does", "What it is not"]
+# The Android page's pictures, each with its -dark partner: four upright,
+# one row of them, then three on its side, each a row of its own (the
+# owner's choice, 2026-10-24; four and then two upright looked unplaced).
+# The calendar and Settings are shown on its side instead, the calendar
+# with a note open beside it, Settings with Categories open.
+ANDROID_GALLERY = ["01-note-list", "02-a-note", "03-a-table", "04-search",
+                   "08-wide", "09-wide-calendar", "10-wide-settings"]
 
 
 def fail(message):
@@ -227,11 +234,20 @@ class Renderer:
 
     def picture(self, src, alt):
         """A picture of the project's, at its size -- so the text does not
-        jump when it loads -- and a click away from its full size."""
+        jump when it loads -- and a click away from its full size. A
+        picture with a NAME-light partner (NAME itself being the dark one,
+        as main-window and main-window-light are) is shown in the theme the
+        page is in, as every picture on the site is (the owner, 2026-10-24)."""
         name = os.path.splitext(os.path.basename(src))[0]
-        size = ' width="%d" height="%d"' % self.sizes[name] if name in self.sizes else ""
-        return '<a href="%s"><img src="%s" alt="%s"%s loading="lazy"></a>' % (
-            html.escape(src), html.escape(src), alt, size)
+
+        def img(source, key, css=""):
+            size = ' width="%d" height="%d"' % self.sizes[key] if key in self.sizes else ""
+            return '<img%s src="%s" alt="%s"%s loading="lazy">' % (css, html.escape(source), alt, size)
+        shown = img(src, name)
+        if name + "-light" in self.sizes:
+            light = "%s/%s-light.webp" % (os.path.dirname(src), name)
+            shown = img(src, name, ' class="for-dark"') + img(light, name + "-light", ' class="for-light"')
+        return '<a class="zoom" href="%s">%s</a>' % (html.escape(src), shown)
 
     # -- inline --------------------------------------------------------
     def inline(self, text):
@@ -724,25 +740,43 @@ def android_linker(config):
 
 
 def android_page(shell, config, facts, sizes, version):
-    """The Android page: the README's opening, the eight pictures with the
-    captions their own README gives them, its sections, where it stands."""
+    """The Android page: the README's opening, the pictures ANDROID_GALLERY
+    names with the captions their own README gives them, its sections,
+    where it stands."""
     readme = facts["readme"]
     m = re.search(r"^# [^\n]*\n(.*?)^---\s*$", readme, re.M | re.S)
     if not m:
         fail("the Android README no longer opens with a description above a --- line")
     link = android_linker(config)
     parts = ["<h1>Note Organizer for Android</h1>", Renderer(link).render(m.group(1))]
+    # Each screen in the theme the page is in: NN-name in a light theme
+    # beside NN-name-dark, a caption for each (06-dark, the set's one dark
+    # picture, has no light one to pair with, and is not shown).
+    missing = [n for n in ANDROID_GALLERY if "android-" + n not in sizes]
+    if missing:
+        fail("the Android page's pictures are not in the Android repository's "
+             "docs/screenshots: %s (ANDROID_GALLERY in build.py)" % ", ".join(missing))
     figures = []
-    for key in sorted(k for k in sizes if k.startswith("android-")):
-        name = key[len("android-"):]
+    for name in ANDROID_GALLERY:
+        key = "android-" + name
         w, h = sizes[key]
-        caption = Renderer(link).inline(facts["captions"].get(name, ""))
-        alt = re.sub(r"<[^>]+>", "", caption)
         wide = " wide" if w > h else ""
-        figures.append(
-            '<figure class="phone-shot%s"><a href="img/%s.webp"><img src="img/%s.webp" width="%d" '
-            'height="%d" alt="%s" loading="lazy"></a><figcaption>%s</figcaption></figure>'
-            % (wide, key, key, w, h, html.escape(alt), caption))
+
+        def shown(k, css):
+            caption = Renderer(link).inline(facts["captions"].get(k[len("android-"):], ""))
+            alt = re.sub(r"<[^>]+>", "", caption)
+            return ('<img%s src="img/%s.webp" width="%d" height="%d" alt="%s" loading="lazy">'
+                    % (css, k, sizes[k][0], sizes[k][1], html.escape(alt)), caption)
+        if key + "-dark" in sizes:
+            light, light_caption = shown(key, ' class="for-light"')
+            dark, dark_caption = shown(key + "-dark", ' class="for-dark"')
+            pictures = light + dark
+            caption = ('<span class="for-light">%s</span><span class="for-dark">%s</span>'
+                       % (light_caption, dark_caption))
+        else:
+            pictures, caption = shown(key, "")
+        figures.append('<figure class="phone-shot%s"><a class="zoom" href="img/%s.webp">%s</a>'
+                       '<figcaption>%s</figcaption></figure>' % (wide, key, pictures, caption))
     parts.append('<div class="phone-gallery">%s</div>' % "".join(figures))
     for heading in ANDROID_SECTIONS:
         parts.append(Renderer(link).render(readme_section(readme, heading)))
@@ -792,6 +826,15 @@ def check_output():
         if re.search(r"<form\b", text, re.IGNORECASE):
             problems.append("%s: a form, which cannot send: _headers says form-action "
                             "'none', and feedback goes through the stores" % rel)
+        # Every picture of an app is shown in the theme the page is in (the
+        # owner, 2026-10-24): one in a single theme needs its partner taken.
+        for tag in re.findall(r"<img\b[^>]*>", text):
+            src = re.search(r'\bsrc="([^"]+)"', tag)
+            if src and "img/" in src.group(1) and "icon-256" not in src.group(1) \
+                    and not re.search(r'\bclass="for-(dark|light)"', tag):
+                problems.append("%s: %s is shown in one theme only; take its partner "
+                                "(NAME-light, or NN-name-dark for the Android app's)"
+                                % (rel, src.group(1)))
         for attr, href in re.findall(r'\b(href|src)="([^"]+)"', text):
             if re.match(r"^(https?:|mailto:|data:)", href):
                 continue
