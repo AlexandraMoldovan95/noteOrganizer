@@ -128,9 +128,16 @@ listeners.push((msg) => {
   }
 });
 
-async function viewport(width, height, mobile, scheme) {
+// `motion` is the visitor's motion setting. The document pages fade their
+// blocks in as they scroll into view, so a full-length photograph taken
+// with motion on shows a page blank below its first screen -- which every
+// photograph of them did, unnoticed, until 2026-10-24. They are photographed
+// with motion reduced, as a visitor who asks for it sees them, and the
+// fade has checks of its own (below).
+async function viewport(width, height, mobile, scheme, motion = "no-preference") {
   await page("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile });
-  await page("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: scheme }] });
+  await page("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: scheme },
+                                                        { name: "prefers-reduced-motion", value: motion }] });
   await page("Emulation.setTouchEmulationEnabled", { enabled: mobile });
 }
 
@@ -164,9 +171,36 @@ async function js(expression) {
   return r.result.value;
 }
 
+// Asked again every 40ms until [ok] holds of the answer or [ms] run out;
+// the last answer comes back either way. A fixed wait measures the
+// machine's speed as well as the page: a busy computer could fail it with
+// nothing wrong.
+async function until(expression, ok, ms = 5000) {
+  const end = Date.now() + ms;
+  let value = await js(expression);
+  while (!ok(value) && Date.now() < end) {
+    await sleep(40);
+    value = await js(expression);
+  }
+  return value;
+}
+
 async function shot(name, full = false) {
   const params = { format: "png" };
   if (full) {
+    // Scrolled through first, and its pictures waited for: a picture
+    // marked loading="lazy" loads only once it nears the screen, and a
+    // full-length photograph taken from the top showed every one below the
+    // first screen as an empty frame.
+    await js(`(async () => {
+      for (let y = 0; y < document.documentElement.scrollHeight; y += innerHeight) {
+        scrollTo(0, y);
+        await new Promise((r) => setTimeout(r, 60));
+      }
+      scrollTo(0, 0);
+      await Promise.all([...document.images].filter((i) => !i.complete).map((i) =>
+        new Promise((r) => { i.addEventListener("load", r); i.addEventListener("error", r); setTimeout(r, 3000); })));
+    })()`);
     const { cssContentSize } = await page("Page.getLayoutMetrics");
     params.captureBeyondViewport = true;
     params.clip = { x: 0, y: 0, width: cssContentSize.width, height: Math.min(cssContentSize.height, 12000), scale: 1 };
@@ -202,8 +236,8 @@ try {
                                              ["light", 1366, 900, false, "desktop-light"],
                                              ["dark", 390, 844, true, "phone-dark"],
                                              ["light", 390, 844, true, "phone-light"]]) {
-    await viewport(w, h, mobile, scheme);
-    for (const p of ["index.html", "how-its-built.html", "in-my-words.html", "testing.html", "nowhere"]) {
+    await viewport(w, h, mobile, scheme, "reduce");
+    for (const p of ["index.html", "android.html", "how-its-built.html", "in-my-words.html", "testing.html", "nowhere"]) {
       await go("/" + p);
       await noHorizontalScroll(`${p} ${tag}`);
       if (p === "index.html" || (mobile && p !== "nowhere")) await shot(`site-${p.replace(".html", "")}-${tag}`, true);
@@ -215,6 +249,183 @@ try {
   await click("#menu-toggle");
   await shot("site-index-phone-menu-open");
   check("phone menu opens", await js("document.getElementById('site-nav').classList.contains('open')"));
+  await page("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+  await page("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+  await sleep(100);
+  check("Escape closes the phone menu", await js("!document.getElementById('site-nav').classList.contains('open')"));
+
+  // ---------------- The fade, with motion on ----------------
+  // Kept by the owner's choice (2026-10-24), slow and gradual as it first
+  // was -- a quicker one read as no animation at all -- and held to what
+  // that first version broke: printing gave blank pages, a Contents link
+  // landed on text still fading, and a tall table whose visible slice stayed
+  // under the threshold never appeared.
+  const HIDDEN_ON_SCREEN = `[...document.querySelectorAll('.doc .wrap > *')].filter((e) => {
+      const r = e.getBoundingClientRect();
+      return r.bottom > 0 && r.top < innerHeight && parseFloat(getComputedStyle(e).opacity) < 0.99;
+    }).length`;
+  // Above the lowest twelfth, where a block counts as arrived.
+  const HIDDEN_ABOVE_LINE = `[...document.querySelectorAll('.doc .wrap > *')].filter((e) => {
+      const r = e.getBoundingClientRect();
+      return r.bottom > 0 && r.top < innerHeight * 0.9 && parseFloat(getComputedStyle(e).opacity) < 0.99;
+    }).length`;
+  await viewport(1366, 900, false, "light");
+  await go("/how-its-built.html");
+  const fading = await js(`(() => { const h = document.querySelector('.doc h1');
+      return { reveal: h.classList.contains('reveal'), s: parseFloat(getComputedStyle(h).transitionDuration) }; })()`);
+  check("a document page's first screen fades in on opening, slowly (0.6s, not the quick .35s tried)",
+        fading.reveal && fading.s >= 0.55, JSON.stringify(fading));
+  const arrived = await until(HIDDEN_ABOVE_LINE, (n) => n === 0);
+  check("...and has all arrived a moment later", arrived === 0, arrived + " block(s) on the first screen still hidden");
+  check("...while the blocks below it wait to fade in as they are scrolled to",
+        await js("document.querySelectorAll('.doc .wrap > .reveal:not(.in-view)').length") > 5);
+  await js("window.scrollBy(0, innerHeight * 0.6)");
+  const midway = await until(`[...document.querySelectorAll('.doc .wrap > .reveal.in-view')].filter((e) => {
+      const o = parseFloat(getComputedStyle(e).opacity); return o > 0.02 && o < 0.98; }).length`, (n) => n > 0, 1500);
+  check("...gradually: just after a scroll, the blocks it brought are seen on their way in", midway > 0,
+        midway + " block(s) part-way");
+  await go("/how-its-built.html");
+  await page("Emulation.setEmulatedMedia", { media: "print", features: [{ name: "prefers-reduced-motion", value: "no-preference" }] });
+  const hiddenInPrint = await js(`[...document.querySelectorAll('.doc .wrap > *')]
+      .filter((e) => parseFloat(getComputedStyle(e).opacity) < 0.99).length`);
+  check("printed, a document page hides nothing", hiddenInPrint === 0, hiddenInPrint + " block(s) hidden in print");
+  await viewport(1366, 900, false, "light");
+  await go("/how-its-built.html");
+  await click(".doc h2#contents + ul li:nth-child(4) a");
+  await sleep(60);
+  check("a Contents link lands on text already shown, not fading in",
+        await js(HIDDEN_ON_SCREEN) === 0, await js(HIDDEN_ON_SCREEN) + " block(s) on screen still hidden");
+  await go("/testing.html");
+  await js("window.scrollTo(0, document.documentElement.scrollHeight)");
+  const atEnd = await until(HIDDEN_ON_SCREEN, (n) => n === 0);
+  check("at a page's end every block on screen has appeared, a tall table's too",
+        atEnd === 0, atEnd + " block(s) on screen still hidden");
+  await shot("site-testing-desktop-end");
+
+  // The overview: its parts fade in the same way, a row of cards one card
+  // after another -- the owner found the page static (2026-10-24).
+  await go("/index.html");
+  check("the overview's hero is never hidden", await js("!document.querySelector('.hero h1').closest('.reveal')"));
+  const below = await js(`(() => { const cards = [...document.querySelectorAll('.cards .card')]
+      .filter((c) => c.getBoundingClientRect().top > innerHeight * 0.92);
+    return { n: cards.length, waiting: cards.filter((c) => c.matches('.reveal:not(.in-view)')).length }; })()`);
+  check("...its cards below the screen wait to fade in", below.n >= 6 && below.waiting === below.n, JSON.stringify(below));
+  await js("document.getElementById('features').scrollIntoView()");
+  // The delay the browser applies, not the property set for it: a
+  // transition shorthand on .card once reset it to nothing, while the
+  // property still said otherwise. Read in the moment the row has arrived
+  // and before its cards are let go of.
+  const row = await until(`(() => { const cards = [...document.querySelectorAll('.cards .card')].slice(0, 3);
+      return { ready: cards.every((c) => c.classList.contains('in-view')),
+               delays: cards.map((c) => getComputedStyle(c).transitionDelay.split(',')[0].trim()) }; })()`,
+    (v) => v.ready, 4000);
+  check("...and a row of them arrives one card after another", row.ready && new Set(row.delays).size === 3,
+        JSON.stringify(row));
+  const lifted = await until(`(() => { const c = document.querySelector('.cards .card');
+      return { settled: !c.classList.contains('reveal'), delay: getComputedStyle(c).transitionDelay }; })()`,
+    (v) => v.settled);
+  check("...then each is let go of, so its lift under the pointer is not delayed", lifted.settled
+        && lifted.delay.split(",").every((d) => parseFloat(d) === 0), JSON.stringify(lifted));
+
+  // ---------------- Every picture in the page's theme ----------------
+  // The owner's rule (2026-10-24): a dark page shows the apps dark, a light
+  // one light, and the switch changes them with it. A picture with no
+  // theme of its own counts as wrong.
+  const WRONG_THEME = `(() => {
+      const set = document.documentElement.getAttribute('data-theme');
+      const dark = set ? set === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+      const imgs = [...document.querySelectorAll('main img')];
+      const wrong = imgs.filter((i) => {
+        const shown = i.getClientRects().length > 0;
+        if (i.classList.contains('for-dark')) return shown !== dark;
+        if (i.classList.contains('for-light')) return shown === dark;
+        return true;
+      });
+      return { dark, n: imgs.length, wrong: wrong.map((i) => i.getAttribute('src')) };
+    })()`;
+  for (const scheme of ["dark", "light"]) {
+    await viewport(1366, 900, false, scheme, "reduce");
+    for (const p of ["index.html", "android.html", "in-my-words.html"]) {
+      await go("/" + p);
+      await js("document.documentElement.removeAttribute('data-theme')");
+      const seen = await js(WRONG_THEME);
+      check(`${p}, ${scheme}: every picture is shown in the page's theme`, seen.n > 0 && seen.wrong.length === 0,
+            JSON.stringify(seen));
+    }
+  }
+  await go("/index.html");
+  await js("document.documentElement.removeAttribute('data-theme')");
+  await click("#theme-toggle");
+  const switched = await js(WRONG_THEME);
+  check("the theme switch changes the pictures with the page", switched.dark && switched.wrong.length === 0,
+        JSON.stringify(switched));
+  await click("#theme-toggle");
+  // The switch remembers its choice in this browser; forgotten again, so
+  // the pages after this follow the system's setting the walk emulates.
+  await js("localStorage.removeItem('noteorganizer-site-theme')");
+
+  // ---------------- A picture opened large ----------------
+  for (const scheme of ["light", "dark"]) {
+    await viewport(1366, 900, false, scheme, "reduce");
+    await go("/index.html");
+    await js("document.documentElement.removeAttribute('data-theme')");
+    await click(".card a.zoom");
+    const opened = await js(`(() => { const d = document.querySelector('dialog.lightbox');
+        return d && { open: d.open, src: d.querySelector('img').getAttribute('src') }; })()`);
+    check(`${scheme}: a card's picture opens large over the page, in the page's theme`,
+          opened && opened.open && opened.src.endsWith(`-${scheme}.webp`), JSON.stringify(opened));
+    if (scheme === "light") await shot("site-index-picture-open");
+    await page("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+    await page("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+    await sleep(150);
+    check(`${scheme}: ...and Escape closes it`, await js("!document.querySelector('dialog.lightbox').open"));
+    // The hero's window too: the whole app made small, where the large
+    // picture helps most (the owner, 2026-10-24).
+    await click(".hero a.zoom");
+    const hero = await js("document.querySelector('dialog.lightbox img').getAttribute('src')");
+    check(`${scheme}: the hero's window opens large too, in the page's theme`,
+          await js("document.querySelector('dialog.lightbox').open")
+          && hero.endsWith(scheme === "dark" ? "main-window.webp" : "main-window-light.webp"), hero);
+    await js("document.querySelector('dialog.lightbox').close()");
+  }
+  await go("/android.html");
+  await click(".phone-gallery a.zoom");
+  check("the Android page's pictures open large too, in the page's theme",
+        await js("document.querySelector('dialog.lightbox').open && /-dark\\.webp$/.test(document.querySelector('dialog.lightbox img').getAttribute('src'))"));
+
+  // ---------------- Text as wide as the pictures ----------------
+  // The owner's choice (2026-10-24): one right edge for words and pictures
+  // alike, on every page -- not a narrower measure for the words.
+  await viewport(1366, 900, false, "light", "reduce");
+  await go("/index.html");
+  const rows = await js(`[...document.querySelectorAll('main section')].map((s) => {
+      const p = s.querySelector('.section-head p');
+      const row = s.querySelector('.cards, .phones, .figures');
+      if (!p || !row || s.querySelector('.split')) return null;
+      return { id: s.getAttribute('aria-labelledby'), p: Math.round(p.getBoundingClientRect().right),
+               row: Math.round(row.getBoundingClientRect().right) };
+    }).filter(Boolean)`);
+  check("the overview: each section's words reach as far as its row of pictures",
+        rows.length >= 3 && rows.every((r) => Math.abs(r.p - r.row) <= 2), JSON.stringify(rows));
+  const split = await js(`(() => { const w = document.querySelector('.split'); const cs = getComputedStyle(w);
+      const right = w.getBoundingClientRect().right - parseFloat(cs.paddingRight);
+      const left = w.getBoundingClientRect().left + parseFloat(cs.paddingLeft);
+      return { figure: Math.round(right - w.querySelector('figure').getBoundingClientRect().right),
+               words: Math.round(w.querySelector('.section-head').getBoundingClientRect().left - left) }; })()`);
+  check("...and the themes section fills its row, the words beside the picture",
+        Math.abs(split.figure) <= 2 && Math.abs(split.words) <= 2, JSON.stringify(split));
+  for (const p of ["in-my-words.html", "how-its-built.html", "testing.html", "android.html", "bug-reports.html"]) {
+    await go("/" + p);
+    const narrow = await js(`(() => { const w = document.querySelector('.doc .wrap'); const cs = getComputedStyle(w);
+        const full = w.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+        return [...w.querySelectorAll(':scope > p:not(.source-note):not(.page-actions)')]
+          .filter((e) => e.getBoundingClientRect().width < full - 2).length; })()`);
+    check(`${p}: every paragraph runs the column's full width`, narrow === 0, narrow + " narrower");
+  }
+  await go("/in-my-words.html");
+  const pair = await js(`(() => { const p = document.querySelector('.doc .pair'); const t = document.querySelector('.doc .wrap > p');
+      return p && Math.round(p.getBoundingClientRect().width - t.getBoundingClientRect().width); })()`);
+  check("In my words: the words are as wide as the pictures set side by side", pair === 0, String(pair));
 
   // ---------------- The site's own privacy notice ----------------
   // The apps' privacy policy does not cover this site, so every footer
@@ -251,6 +462,11 @@ try {
     await js("!!document.querySelector('.hero h1')"), await js("location.href"));
   await follow(".hero .btn-primary");
   check("...and from there the demo opens", (await js("document.querySelectorAll('.note-card').length")) > 0,
+    await js("location.href"));
+  await go(fileUrl("index.html"));
+  await follow("a.btn-primary[href='android-demo/index.html']");
+  check("from the folder, the Android demo opens too, the desktop demo's rules loaded beside it",
+    (await js("document.querySelectorAll('.card').length")) > 0 && await js("!!window.NO_DEMO && !window.NO_DEMO.state()"),
     await js("location.href"));
 
   // ---------------- The demo, desktop ----------------
@@ -520,6 +736,133 @@ try {
   await sleep(250);
   await shot("demo-phone-repeat-full", true);
   await click("#import-code").catch(() => {});
+
+  // ---------------- The Android demo ----------------
+  // Its own screens over the desktop demo's rules (window.NO_DEMO), its
+  // own notebook -- and share codes that cross between the two, as
+  // between the apps.
+  const cardWith = (words) => `[...document.querySelectorAll('.card')].find(c => c.textContent.includes(${JSON.stringify(words)}))`;
+  await viewport(390, 844, true, "light");
+  await go("/android-demo/index.html");
+  await js("localStorage.removeItem('noteorganizer-android-demo-v1')");
+  await go("/android-demo/index.html");
+  await noHorizontalScroll("android demo list");
+  await shot("android-phone-list");
+  check("the Android demo opens on its own sample notebook, five notes",
+    await js("document.querySelectorAll('.card').length") === 5, String(await js("document.querySelectorAll('.card').length")));
+  check("...with no name set, the list is headed with the app's name",
+    await js("document.querySelector('.greeting').textContent") === "Note Organizer");
+  check("a card's preview leaves its table out, as the phone's does, and badges it",
+    await js(`(() => { const c = ${cardWith("September expenses")}; const p = c.querySelector('.c-preview');
+      return (!p || !p.textContent.includes('1500')) && c.textContent.includes('1 table'); })()`));
+  check("...and it leaves the desktop demo's notebook alone",
+    await js("JSON.parse(localStorage.getItem('noteorganizer-demo-v1') || '{\"notes\":[]}').notes.some(n => n.title === 'Shopping list')"));
+  await typeInto("#search", "boat");
+  check("search narrows the cards to the one that says it, an untitled note by its first line",
+    await js("document.querySelectorAll('.card').length") === 1 && await js(`!!${cardWith("boat trip")}`));
+  await js("const s = document.getElementById('search'); s.value = ''; s.dispatchEvent(new Event('input'))");
+  await js(`${cardWith("Home-made bread")}.click()`);
+  await sleep(200);
+  await noHorizontalScroll("android demo note");
+  await shot("android-phone-note");
+  check("a note opens on the whole screen, its checklist below it and the format bar under it",
+    await js("document.getElementById('ed-title').value") === "Home-made bread"
+    && await js("document.querySelectorAll('.cl-row').length") === 3
+    && await js("!!document.getElementById('fmt') && document.getElementById('navbar').hidden"));
+  check("its date reads day first, as the app shows it, not in the browser's own order",
+    /\d{2}\.\d{2}\.\d{4}/.test(await js("document.querySelector('.date-chip').textContent")),
+    await js("document.querySelector('.date-chip').textContent"));
+  await js("document.getElementById('ed-title').focus(); document.getElementById('ed-title').setSelectionRange(99, 99)");
+  await page("Input.insertText", { text: " for Sunday" });
+  await sleep(1100);
+  check("typing saves itself, and says so", await js("document.getElementById('ed-status').textContent") === "Auto-saved");
+  await js("[...document.querySelectorAll('.ed-top .icon-btn')].find(b => b.getAttribute('aria-label') === 'More').click()");
+  await sleep(150);
+  await js("[...document.querySelectorAll('.menu-item')].find(b => b.textContent.includes('Add comments')).click()");
+  await sleep(150);
+  check("⋮ adds comments under the note", await js("!!document.getElementById('ed-comments')"));
+  await go("/android-demo/index.html");
+  check("after a reload the note is open again, its title as typed",
+    await js("document.getElementById('ed-title') && document.getElementById('ed-title').value") === "Home-made bread for Sunday");
+  await js("[...document.querySelectorAll('.ed-top .icon-btn')].find(b => b.getAttribute('aria-label') === 'Share').click()");
+  await sleep(150);
+  await js("[...document.querySelectorAll('.sheet .btn')].find(b => b.textContent === 'Make a share code').click()");
+  await sleep(400);
+  const breadCode = await js("(document.querySelector('.sheet .code-area') || {}).value || ''");
+  const breadBack = await js(`__demo.decodeShareCode(${JSON.stringify(breadCode)}).then(n => ({ title: n[0].title, items: n[0].checklist.length }), e => ({ error: e.message }))`);
+  check("Share makes a share code that reads back", breadBack.title === "Home-made bread for Sunday" && breadBack.items === 3,
+    JSON.stringify(breadBack));
+  await js("document.querySelector('.scrim').click()");
+  await js("[...document.querySelectorAll('.ed-top .icon-btn')].find(b => b.getAttribute('aria-label') === 'Back to the notes').click()");
+  await sleep(150);
+  check("Back returns to the list and its bar", await js("!document.getElementById('navbar').hidden && document.querySelectorAll('.card').length === 5"));
+  await click("#navbar [data-tab=calendar]");
+  await noHorizontalScroll("android demo calendar");
+  await shot("android-phone-calendar");
+  check("the calendar marks the days a repeating note falls on", await js("document.querySelectorAll('.cal-dots span').length") >= 4,
+    String(await js("document.querySelectorAll('.cal-dots span').length")));
+  await click("#navbar [data-tab=settings]");
+  await js("[...document.querySelectorAll('.set-row')].find(b => b.textContent.includes('Appearance')).click()");
+  await js("[...document.querySelectorAll('.seg button')].find(b => b.textContent === 'Dark').click()");
+  await sleep(150);
+  await shot("android-phone-appearance-dark");
+  check("Light | Dark switches the whole app to the dark side of its theme",
+    await js("NO_APP.darkThemes.includes(__android.state().theme) && document.documentElement.style.colorScheme === 'dark'"));
+  // Codes both ways: the desktop demo's into this one, and this one's into the desktop demo.
+  const standupCode = codes["Team stand-up"];
+  await js("document.querySelector('.page-title .icon-btn').click()");
+  await js("[...document.querySelectorAll('.set-row')].find(b => b.textContent.includes('Import')).click()");
+  await js(`document.querySelector('.code-area').value = ${JSON.stringify(standupCode)}`);
+  await js("[...document.querySelectorAll('.btn')].find(b => b.textContent === 'Import').click()");
+  await sleep(500);
+  const imported = await js("(() => { const n = __android.state().notes.find(x => x.title === 'Team stand-up'); return n ? { freq: n.recurrence.freq, days: n.recurrence.weekdays } : null; })()");
+  check("a share code from the desktop demo opens in the Android demo, its repeat with it",
+    imported && imported.freq === "weekly" && JSON.stringify(imported.days) === "[0]", JSON.stringify(imported));
+  const androidCodes = await js(`(async () => {
+    const out = {};
+    for (const n of __android.state().notes) if (n.title !== 'Team stand-up') out[n.title] = await __demo.encodeShareCode([n]);
+    return out;
+  })()`);
+  const allCodes = Object.assign(JSON.parse(fs.readFileSync(path.join(OUT, "share_codes_from_demo.json"), "utf8")), androidCodes);
+  fs.writeFileSync(path.join(OUT, "share_codes_from_demo.json"), JSON.stringify(allCodes, null, 1));
+  check("...and the Android demo's own notes make codes for the app's reader", Object.keys(androidCodes).length === 5,
+    Object.keys(androidCodes).join(", "));
+  await js("[...document.querySelectorAll('#navbar [data-tab]')].find(b => b.dataset.tab === 'settings').click()");
+  await js("[...document.querySelectorAll('.set-row')].find(b => b.textContent.includes('About')).click()");
+  check("the Android demo's About leads to the site's privacy notice",
+    await js("!!document.querySelector(\".about a[href='../site-privacy.html']\")"));
+  await viewport(1366, 900, false, "light");
+  await go("/demo/");
+  const crossed = await js(`(async () => {
+    __demo.importShared(await __demo.decodeShareCode(${JSON.stringify(breadCode)}));
+    const n = __demo.state().notes.find(x => x.title === 'Home-made bread for Sunday');
+    return n ? n.checklist.length : -1;
+  })()`);
+  check("a share code from the Android demo opens in the desktop demo, its checklist with it", crossed === 3, String(crossed));
+  await go("/android-demo/index.html");
+  await noHorizontalScroll("android demo on a computer");
+  await shot("android-desktop");
+  check("on a computer the Android demo is drawn as a phone, with a word beside it",
+    await js("document.getElementById('phone').getBoundingClientRect().width") < 440
+    && await js("getComputedStyle(document.querySelector('.beside')).display !== 'none'"));
+  // Photographed with motion reduced, as the document pages are: the fade
+  // caught the page's last block half-way in.
+  await viewport(1366, 900, false, "light", "reduce");
+  await go("/android.html");
+  await shot("site-android-desktop-light", true);
+  // Seven screens, each dark and light and captioned in both: four
+  // upright in one row, then three on its side, a row each -- four and then
+  // two upright looked unplaced (the owner, 2026-10-24).
+  check("the Android page shows seven screens, each in both themes and captioned in both",
+    await js("document.querySelectorAll('.phone-gallery .phone-shot').length") === 7
+    && await js("[...document.querySelectorAll('.phone-gallery .phone-shot')].every(f => f.querySelector('img.for-dark') && f.querySelector('img.for-light'))")
+    && await js("[...document.querySelectorAll('.phone-gallery figcaption span')].every(s => s.textContent.trim().length > 20)"));
+  const galleryRows = await js(`(() => { const tops = [...document.querySelectorAll('.phone-gallery .phone-shot')]
+      .map((f) => Math.round(f.getBoundingClientRect().top));
+    const rows = []; tops.forEach((t) => { if (!rows.length || rows[rows.length - 1][0] !== t) rows.push([t, 0]); rows[rows.length - 1][1]++; });
+    return rows.map((r) => r[1]); })()`);
+  check("...four upright on one row, then each one on its side on a row of its own",
+    JSON.stringify(galleryRows) === "[4,1,1,1]", JSON.stringify(galleryRows));
 } catch (err) {
   problems.push("the walk stopped: " + err.message);
 } finally {

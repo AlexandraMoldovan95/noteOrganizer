@@ -72,7 +72,9 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
-html { -webkit-text-size-adjust: 100%; }
+/* An in-page link lands its heading below the sticky header (61px), not
+   under it. */
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: 76px; }
 
 body {
   margin: 0;
@@ -148,7 +150,7 @@ a:hover { text-decoration-thickness: 2px; }
   align-items: center;
   justify-content: center;
   flex: none;
-  width: 38px; height: 38px;
+  width: 44px; height: 44px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
@@ -164,7 +166,7 @@ a:hover { text-decoration-thickness: 2px; }
   .menu-toggle {
     display: inline-flex; align-items: center; justify-content: center;
     margin-left: auto;
-    width: 38px; height: 38px;
+    width: 44px; height: 44px;
     border: 1px solid var(--line); border-radius: 8px;
     background: var(--surface); color: var(--text); font-size: 18px; cursor: pointer;
   }
@@ -210,6 +212,7 @@ a:hover { text-decoration-thickness: 2px; }
   letter-spacing: .08em;
   text-transform: uppercase;
   color: var(--accent-text);
+  text-wrap: balance;
 }
 .hero h1 {
   margin: 0 0 16px;
@@ -218,6 +221,9 @@ a:hover { text-decoration-thickness: 2px; }
   letter-spacing: -.02em;
   text-wrap: balance;
 }
+/* Text runs the width of its row, as far as the pictures beside and below
+   it: the owner's choice (2026-10-24) over a narrower reading measure,
+   which left every paragraph ending halfway across. */
 .lede { margin: 0 0 18px; font-size: 19px; color: var(--text); }
 .byline { margin: 0 0 26px; color: var(--subtext); font-size: 15px; }
 .actions { display: flex; flex-wrap: wrap; gap: 12px; }
@@ -245,7 +251,10 @@ a:hover { text-decoration-thickness: 2px; }
 
 /* ---- Sections ---- */
 
-section { padding-block: 44px; }
+/* Room between the sections, so the overview reads as a few calm parts
+   rather than one long run of things. */
+section { padding-block: 64px; }
+@media (max-width: 760px) { section { padding-block: 44px; } }
 .section-head { margin-bottom: 26px; }
 .section-head h2 {
   margin: 0 0 8px;
@@ -281,7 +290,10 @@ section { padding-block: 44px; }
 .card p { margin: 0; color: var(--subtext); font-size: 15px; }
 .card .label { margin-top: auto; padding-top: 6px; font-size: 13px; font-weight: 600; color: var(--label, var(--label-general)); }
 
-.cards.spaced { margin-top: 22px; }
+/* The three page cards stay a row of three, or stack: two and one left a
+   card alone on its row between about 760 and 1056px. */
+.cards.spaced { margin-top: 22px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 760px) { .cards.spaced { grid-template-columns: minmax(0, 1fr); } }
 
 /* The hero shows the window in the theme the page is in. */
 .for-light { display: none; }
@@ -301,6 +313,8 @@ section { padding-block: 44px; }
 a.card { color: inherit; text-decoration: none; }
 a.card:hover { border-color: var(--accent); border-left-color: var(--stripe, var(--cat-general)); }
 a.card:hover h3 { color: var(--accent-text); }
+/* A card that is a link says so at rest too: a phone has no hover. */
+a.card .label::after { content: " \2192"; }
 
 .pair {
   display: grid;
@@ -308,12 +322,51 @@ a.card:hover h3 { color: var(--accent-text); }
   gap: 18px;
 }
 .shot { margin: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+/* The themes section sets its words beside the picture, so the row stays
+   full: the picture is taken at 150%, and wider than about 600px it would
+   be drawn larger than the app draws itself, and soft. */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 600px);
+  gap: 40px;
+  align-items: center;
+}
+.split .section-head { margin-bottom: 0; }
+@media (max-width: 900px) { .split { grid-template-columns: minmax(0, 1fr); gap: 24px; } }
+
+/* The Android app's screens: a phone's own proportions and rounded
+   corners, four across on a computer and two on a phone. On the Android
+   page, the picture of the phone on its side takes a row of its own. */
+.phones, .phone-gallery {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+  margin: 0;
+}
+.phone-gallery { margin: 8px 0 24px; gap: 14px; }
+.phone-shot { margin: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+/* The frame is drawn on the link that holds the picture (or the pair of
+   them, dark and light): it clips the picture as it leans in on hover. */
+.phone-shot .zoom {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  background: var(--surface);
+}
+.phone-shot img { width: 100%; }
+.phone-shot figcaption { font-size: 13px; color: var(--subtext); line-height: 1.45; }
+.phone-gallery .phone-shot.wide { grid-column: 1 / -1; }
+.phone-gallery .phone-shot.wide .zoom { border-radius: 12px; }
+@media (max-width: 760px) {
+  .phones, .phone-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.actions.spaced { margin-top: 26px; }
 @media (max-width: 700px) { .pair { grid-template-columns: minmax(0, 1fr); } }
 
-/* The figures strip. */
+/* The figures strip: four across, or two by two -- never three and one. */
 .figures {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
   margin: 0;
   padding: 0;
@@ -333,16 +386,7 @@ a.card:hover h3 { color: var(--accent-text); }
   color: var(--accent-text);
 }
 .figures span { font-size: 14px; color: var(--subtext); }
-
-.honest {
-  border-left: 4px solid var(--accent);
-  background: var(--surface);
-  border-radius: 0 8px 8px 0;
-  padding: 14px 18px;
-  max-width: 46em;
-  color: var(--text);
-}
-.honest p { margin: 0; }
+@media (max-width: 760px) { .figures { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 .cta {
   display: flex;
@@ -381,7 +425,11 @@ a.card:hover h3 { color: var(--accent-text); }
 }
 .doc h2 + h3, .doc h1 + h3 { border-top: 0; padding-top: 0; margin-top: 20px; }
 .doc h4, .doc h5, .doc h6 { font-size: 17px; margin: 24px 0 6px; }
-/* paragraphs and list items fill the same width as the tables below them */
+/* Paragraphs and list items fill the same width as the tables and pictures
+   below them. A reading measure of about 75 characters was tried on
+   2026-10-24 and taken out the same day: the owner found the page tidier
+   with one right edge for text and pictures alike. */
+.doc .wrap > p, .doc .wrap > ul, .doc .wrap > ol { font-size: 17px; }
 .doc p:not(.source-note) { margin: 0 0 16px; line-height: 1.7; }
 .doc li { line-height: 1.6; }
 .doc li + li { margin-top: 4px; }
@@ -423,13 +471,45 @@ a.card:hover h3 { color: var(--accent-text); }
 .doc pre code { background: none; border: 0; padding: 0; }
 .doc blockquote { margin: 16px 0; padding: 4px 16px; border-left: 4px solid var(--accent); color: var(--subtext); }
 .doc hr { border: 0; border-top: 1px solid var(--line); margin: 32px 0; }
-.doc .offsite { border-bottom: 1px dotted var(--subtext); }
+/* A mention of a document not published here is plain text, as the page's
+   closing note says: a dotted line looked like a link that went nowhere. */
+.doc .offsite { color: inherit; }
 
-.table-wrap { overflow-x: auto; margin: 16px 0; border: 1px solid var(--line); border-radius: 8px; }
+/* A table wider than the screen scrolls inside its frame, and says so: a
+   shadow shows at an edge while there is more to see that way (the two
+   "local" covers scroll with the table and hide the shadow at its ends). */
+.table-wrap {
+  overflow-x: auto;
+  margin: 16px 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background:
+    linear-gradient(to right, var(--surface) 30%, transparent) left / 40px 100% no-repeat local,
+    linear-gradient(to left, var(--surface) 30%, transparent) right / 40px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, color-mix(in srgb, var(--text) 22%, transparent), transparent) left / 14px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--text) 22%, transparent), transparent) right / 14px 100% no-repeat scroll,
+    var(--surface);
+}
 .table-wrap table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
-.table-wrap th, .table-wrap td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); min-width: 120px; }
+.table-wrap th, .table-wrap td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); min-width: 6em; }
 .table-wrap th { background: var(--sidebar); font-weight: 600; }
 .table-wrap tr:last-child td { border-bottom: 0; }
+/* A column of figures reads right-aligned, its digits in step; a short
+   table of two columns is as wide as it needs, not the page's width. */
+.table-wrap .num { text-align: right; font-variant-numeric: tabular-nums; min-width: 0; white-space: nowrap; }
+.table-wrap.narrow { display: inline-block; max-width: 100%; vertical-align: top; }
+.table-wrap.narrow table { width: auto; }
+.table-wrap.narrow th, .table-wrap.narrow td { padding-right: 24px; }
+
+/* Pictures in a document: opened full size with a click, and two set side
+   by side stack on a phone (the .pair grid of the overview). */
+.doc .wrap > p > a > img { border: 1px solid var(--line); border-radius: 8px; }
+.doc .pair { margin: 16px 0; }
+.doc .pair figcaption { padding: 8px 12px; font-size: 13px; color: var(--subtext); border-top: 1px solid var(--line); }
+
+/* The buttons that close a short page keep their distance from the note
+   above them, and from each other when they wrap. */
+.doc .page-actions { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 12px; }
 
 .source-note {
   margin: 48px 0 0;
@@ -473,29 +553,93 @@ a.card:hover h3 { color: var(--accent-text); }
   font-size: 12px;
   color: var(--accent-text);
 }
-.doc h2#contents + ul a:hover {
-  padding-left: 14px;
-  color: var(--accent-text);
-  border-color: var(--accent);
-}
+/* On hover the number slides, the line does not reflow. */
+.doc h2#contents + ul a:hover { color: var(--accent-text); border-color: var(--accent); }
+.doc h2#contents + ul a:hover::before { transform: translateX(6px); }
 
 /* ---- Footer ---- */
 
 .site-footer { border-top: 1px solid var(--line); padding-block: 28px 40px; color: var(--subtext); font-size: 14px; }
 .site-footer .wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; }
 .site-footer p { margin: 0; }
+/* A tap target of a comfortable size, the line's look unchanged. */
+.site-footer a { display: inline-block; padding: 10px 4px; margin: -10px -4px; }
 
 @media (prefers-reduced-motion: no-preference) {
   .btn, .card, .theme-toggle { transition: border-color .15s, filter .15s, color .15s; }
-  .doc h2#contents + ul a { transition: padding-left .15s, color .15s, border-color .15s; }
+  .doc h2#contents + ul a { transition: color .15s, border-color .15s; }
+  .doc h2#contents + ul a::before { transition: transform .15s; }
   /* Each top-level block on a doc page (heading, paragraph, list, table,
-     code block...) fades and lifts in as it is scrolled into view.
-     site.js adds .reveal up front and .in-view once it has been seen;
-     with JS off or motion reduced, nothing is ever hidden. */
-  .doc .wrap > .reveal {
+     code block...), and each section part and card of the overview, fades
+     and lifts in as it is scrolled into view: site.js adds .reveal, and
+     .in-view once the block's top passes the lowest twelfth of the screen.
+     Blocks that arrive together come one after another (--reveal-delay).
+     Slow on purpose -- a quicker fade (.35s, 8px, at the first pixel) was
+     tried on 2026-10-24 and read as almost no animation at all. A jump (a
+     Contents link, a page opened at an anchor) or printing shows every
+     block at once (.instant). With JS off or motion reduced, nothing is
+     ever hidden. */
+  .reveal {
     opacity: 0;
     transform: translateY(16px);
     transition: opacity .6s ease, transform .6s ease;
+    transition-delay: var(--reveal-delay, 0s);
   }
-  .doc .wrap > .reveal.in-view { opacity: 1; transform: none; }
+  .reveal.in-view { opacity: 1; transform: none; }
+  .reveal.instant { transition: none; }
+
+  /* A picture on the overview can be opened large: its card lifts a little
+     under the pointer, and the picture leans in. */
+  .card { transition: border-color .15s, transform .25s ease, box-shadow .25s ease; }
+  .card .zoom img { transition: transform .4s ease; }
+  .card:has(.zoom):hover { transform: translateY(-3px); box-shadow: var(--shadow); }
+  .card .zoom:hover img, .card .zoom:focus-visible img { transform: scale(1.04); }
+  .shot .zoom img, .phone-shot .zoom img, .window .zoom img { transition: transform .4s ease; }
+  .shot .zoom:hover img, .phone-shot .zoom:hover img, .window .zoom:hover img { transform: scale(1.02); }
+  /* The shorthand above would reset the delay: set again after it. */
+  .reveal.card {
+    transition: opacity .6s ease, transform .6s ease, border-color .15s, box-shadow .25s ease;
+    transition-delay: var(--reveal-delay, 0s);
+  }
+}
+
+/* A picture opened large, over a dimmed page; a click anywhere or Escape
+   closes it. */
+.zoom { display: block; overflow: hidden; cursor: zoom-in; color: inherit; }
+.card .zoom { border-bottom: 1px solid var(--line); }
+.card .zoom img { border-bottom: 0; }
+.lightbox {
+  border: 0;
+  padding: 0;
+  margin: auto;
+  max-width: min(94vw, 1400px);
+  max-height: 92vh;
+  background: transparent;
+  overflow: visible;
+}
+/* Opened, the box takes the keyboard (Escape closes it) and the focus ring
+   with it, around a picture that has nothing in it to press. */
+.lightbox:focus, .lightbox:focus-visible { outline: none; }
+.lightbox::backdrop { background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(3px); }
+.lightbox img {
+  display: block;
+  max-width: min(94vw, 1400px);
+  max-height: 86vh;
+  width: auto;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  background: var(--surface);
+  cursor: zoom-out;
+}
+.lightbox p { margin: 10px 0 0; text-align: center; color: var(--subtext); font-size: 14px; }
+
+/* Printed (or saved as a PDF), a page is its text: every block shown, the
+   header, menu and theme switch left off. */
+@media print {
+  .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+  .site-header, .skip, .theme-toggle, .menu-toggle { display: none !important; }
+  .band { background: none; }
+  a { color: inherit; }
 }

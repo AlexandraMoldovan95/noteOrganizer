@@ -1,29 +1,37 @@
 # Note Organizer — the website
 
-A small website for Note Organizer: a page that presents the app, a web demo
-anyone can try in a browser (computer or phone), and the project's key
-documents as pages of their own. It is a static site, ready for Netlify.
+A small website for Note Organizer, for Windows and for Android: a page that
+presents both apps, a page for the Android app, a web demo of each that anyone
+can try in a browser (computer or phone), and the project's key documents as
+pages of their own. It is a static site, ready for Netlify.
 
-**The demo is a re-creation.** The real app is a Windows program in Python and
-Tkinter, which a browser cannot run. The demo imitates its interface in HTML
-and JavaScript, says so on every screen, and keeps what a visitor types in
-that visitor's own browser.
+**The demos are re-creations.** The real apps are a Windows program in Python
+and Tkinter and a native Android app in Kotlin, which a browser cannot run.
+Each demo imitates its app's interface in HTML and JavaScript, says so on
+every screen, and keeps what a visitor types in that visitor's own browser.
+The Android demo draws its own screens over the desktop demo's rules: it
+loads `demo/demo.js`, which starts its own screens only on its own page and
+lends the rest (`window.NO_DEMO`) — the palettes, dates and repeats, a
+note's body to HTML and back, and share codes in the app's format, so a code
+made in one demo opens in the other, as between the apps.
 
-The site lives in the app's repository, in this `site/` folder, so it has a
-history and builds from the same commit as the app it presents. The commands
-below are run from the repository's root. The test suite does not run for a
-change that only touches `site/`.
+The site lives in the desktop app's repository, in this `site/` folder, so it
+has a history and builds from the same commit as the app it presents. The
+Android app keeps its own repository; the build reads it, beside this one,
+for its screenshots, the description in its README and its version, and
+never writes to it. The commands below are run from the repository's root.
+The test suite does not run for a change that only touches `site/`.
 
 ## What is in this folder
 
 | Path | What it is |
 |---|---|
 | `public/` | **The finished site — this is what goes to Netlify.** Never edit it by hand: the build replaces it. Not in git: the build makes it again whenever it is needed. |
-| `src/` | The source: the overview page, the page template, the site's privacy notice, the styles, the demo, the Netlify headers. |
-| `build.py` | Turns `src/` plus the app's repository into `public/`. |
-| `site.json` | Two settings: the site's address and, later, the repository's address. |
-| `tools/check_demo.mjs` | Walks the built site in a real browser (Edge), on a computer and on a phone, and photographs it. |
-| `tools/verify_share_codes.py` | Holds the demo's share codes to the app's own code, both ways. |
+| `src/` | The source: the overview page, the page template, the site's privacy notice, the styles, the desktop demo (`demo/`), the Android demo (`android-demo/`), the Netlify headers. |
+| `build.py` | Turns `src/` plus the two apps' repositories into `public/`. The Android page is made here, from the Android repository's README and screenshots. |
+| `site.json` | The site's address; where the Android repository is (`android_repo`, beside this one by default); and, later, each repository's public address (`repo_url`, `android_repo_url`). |
+| `tools/check_demo.mjs` | Walks the built site in a real browser (Edge), both demos included, on a computer and on a phone, and photographs it. |
+| `tools/verify_share_codes.py` | Holds both demos' share codes to the app's own code, both ways. |
 | `netlify.toml` | Only for a deploy connected to Git, later (with `site` as the base directory). A drag-and-drop deploy ignores it. |
 
 ## Put it online the first time
@@ -81,6 +89,23 @@ send, presses what a visitor presses (opening notes, ticking a checklist,
 searching, writing a new note, reloading, deleting and restoring, the
 calendar, the themes, the phone layout) and fails on any error. It saves
 photographs in the folder you name: look at them, the phone ones especially.
+The document pages are photographed with motion reduced and scrolled through
+first, so a full-length picture holds the whole page and its pictures; the
+fade their blocks scroll in with has checks of its own, with motion on
+([why](../docs/ISSUES_LOG.md#photographs-of-the-sites-pages-blank-below-the-first-screen)).
+
+Three choices of the owner's (2026-10-24) are held by checks too, because
+each was undone once by a review that meant well:
+
+- **The fade is slow and gradual**: 0.6 seconds, a block arriving once
+  its top passes the screen's lowest twelfth, a row of cards one after
+  another. A quicker fade read as no animation at all.
+- **Words run as wide as the pictures** on every page, one right edge
+  for both, not a narrower reading measure.
+- **Every picture of an app is shown in the page's theme**, dark on a
+  dark page and light on a light one, switching with it; the build
+  refuses a page with a picture in one theme only. A click opens a
+  picture large over the page.
 
 The share-code check copies the app's package to a temporary folder and runs
 the app's own reader on every code the demo made, and the demo's reader on
@@ -94,8 +119,8 @@ the apps are published, its overview links to their store pages. The
 other way round, nothing the apps' users see points at it: not the apps,
 not their store pages (whose optional website field stays empty), not
 their privacy policy (the owner's rule, 2026-10-21). The build refuses a
-site whose address appears in the app's sources or in `docs/PRIVACY.md`;
-the Android app, in its own repository, is held to the same by review.
+site whose address appears in either app's sources or in
+`docs/PRIVACY.md`.
 
 So the apps' privacy policy is not one of the site's pages, and does not
 cover it. The site has its own short notice, `src/site-privacy.html`:
@@ -106,11 +131,15 @@ checks both, and that the notice says those things. The site has no form
 either — feedback is a review in the stores — and `_headers` says so
 (`form-action 'none'`); the build refuses a page with a `<form>` in it.
 
-## When the repository becomes public
+## When a repository becomes public
 
-Put its address in `site.json` (`"repo_url": "https://github.com/..."`) and
-rebuild: every mention of a document that is not published on the site
-becomes a link to it on GitHub.
+Put its address in `site.json` and rebuild. For the desktop app's,
+`"repo_url": "https://github.com/..."`: every mention of a document that is
+not published on the site becomes a link to it on GitHub. For the Android
+app's, `"android_repo_url"`: the Android page names it as a link, and its
+mentions of the phone's documents become links too. Until then the pages say
+that each app has a repository of its own, and link neither: a link to a
+private repository shows a visitor GitHub's "not found" page.
 
 ## Linking to it from somewhere else
 

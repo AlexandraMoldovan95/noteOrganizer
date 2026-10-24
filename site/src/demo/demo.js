@@ -496,10 +496,13 @@
   var S = null;
   var storageOk = true;
 
-  function blankNote(extra) {
+  // `into` is another demo's notebook: the Android demo keeps its own, and
+  // makes its notes and takes in share codes by these same rules.
+  function blankNote(extra, into) {
+    var T = into || S;
     var now = Date.now();
     var n = {
-      id: S ? S.nextId++ : 0, uid: uuid(), title: "", html: "", comments: "",
+      id: T ? T.nextId++ : 0, uid: uuid(), title: "", html: "", comments: "",
       category: PROTECTED, date: "", color: "", recurrence: normRec({}),
       checklist: [], pinned: false, created: now, updated: now
     };
@@ -1312,18 +1315,27 @@
 
   function toolbar() {
     var bar = el("div", { class: "toolbar", id: "toolbar", role: "toolbar", "aria-label": "Formatting" });
+    // The tools in groups that wrap as a whole: as loose siblings, a narrow
+    // bar broke a group in two -- left-align ending one row, centre and
+    // right starting the next, separators at the start of rows.
+    var group = null;
+    function newGroup() {
+      group = el("span", { class: "tb-group" });
+      bar.appendChild(group);
+    }
     function tool(label, title, onPress, extra) {
       var b = el("button", Object.assign({ type: "button", class: "tb", title: title, "aria-label": title }, extra || {}), label);
       // Pressing a tool must not take the selection out of the note.
       b.addEventListener("mousedown", function (e) { e.preventDefault(); });
       b.addEventListener("click", onPress);
-      bar.appendChild(b);
+      group.appendChild(b);
       return b;
     }
+    newGroup();
     TOOLS.forEach(function (t) {
       tool(t[1], t[2], function () { exec(t[0]); }, { class: "tb " + t[3], "data-state": t[0], "aria-pressed": "false" });
     });
-    bar.appendChild(el("span", { class: "sep" }));
+    newGroup();
     // Font and size, as the app's two lists: "Default" first, which is the
     // editor's own and stores nothing.
     function chooser(id, title, choices, show, pick) {
@@ -1341,7 +1353,7 @@
     chooser("tb-family", "Font", A.fontFamilies,
       function (item, f) { item.style.fontFamily = '"' + f + '"'; }, applyFontFamily);
     chooser("tb-size", "Font size", A.fontSizes, function () {}, applyFontSize);
-    bar.appendChild(el("span", { class: "sep" }));
+    newGroup();
     var colourBtn = tool(el("span", null, "A", el("span", { class: "bar", vars: { "--bar": "#e63946" } })), "Text colour", function () {
       rememberRange();
       popup(swatchGrid(A.noteColors, null, function (c) { exec("foreColor", c); },
@@ -1354,17 +1366,17 @@
         el("button", { type: "button", class: "menu-item", onclick: function () { closePopup(); clearInline("background-color"); } }, "No highlight")),
         markBtn, { role: "dialog" });
     });
-    bar.appendChild(el("span", { class: "sep" }));
+    newGroup();
     tool("•", "Bulleted list", function () { exec("insertUnorderedList"); }, { "data-state": "insertUnorderedList", "aria-pressed": "false" });
     tool("1.", "Numbered list", function () { exec("insertOrderedList"); }, { "data-state": "insertOrderedList", "aria-pressed": "false" });
-    bar.appendChild(el("span", { class: "sep" }));
+    newGroup();
     tool(icon("left"), "Align left", function () { exec("justifyLeft"); }, { "data-state": "justifyLeft", "aria-pressed": "false" });
     tool(icon("center"), "Centre", function () { exec("justifyCenter"); }, { "data-state": "justifyCenter", "aria-pressed": "false" });
     tool(icon("right"), "Align right", function () { exec("justifyRight"); }, { "data-state": "justifyRight", "aria-pressed": "false" });
-    bar.appendChild(el("span", { class: "sep" }));
+    newGroup();
     tool(icon("outdent"), "Indent less", function () { changeIndent(-1); });
     tool(icon("indent"), "Indent more", function () { changeIndent(1); });
-    bar.appendChild(el("span", { class: "sep" }));
+    newGroup();
     tool(icon("table"), "Insert a table", insertTable);
     var emojiBtn = tool("\u{1F642}", "Insert emoji", function () { rememberRange(); emojiPicker(emojiBtn, "body"); });
     tool(icon(isDark() ? "sun" : "moon"), isDark() ? "Switch to the light theme" : "Switch to the dark theme",
@@ -2417,13 +2429,16 @@
 
   function str(v, max) { return typeof v === "string" ? v.slice(0, max || 100000) : ""; }
 
-  function importShared(shared) {
+  // Into this demo's notebook, which is saved and redrawn; or `into` another
+  // demo's, which saves and redraws its own.
+  function importShared(shared, into) {
+    var T = into || S;
     var added = 0, updated = 0;
     shared.forEach(function (sn) {
       var catName = str(sn.category, 40).trim() || PROTECTED;
-      if (!S.categories.some(function (c) { return c.name === catName; })) {
-        var used = S.categories.map(function (c) { return c.color; });
-        S.categories.push({ name: catName, color: A.paletteColors.filter(function (c) { return used.indexOf(c) < 0; })[0] || A.paletteColors[0] });
+      if (!T.categories.some(function (c) { return c.name === catName; })) {
+        var used = T.categories.map(function (c) { return c.color; });
+        T.categories.push({ name: catName, color: A.paletteColors.filter(function (c) { return used.indexOf(c) < 0; })[0] || A.paletteColors[0] });
       }
       var date = readDate(str(sn.date, 40));
       var fields = {
@@ -2439,21 +2454,23 @@
           .map(function (c) { return { text: c.text.slice(0, 500), done: !!c.done }; })
       };
       var uid = str(sn.uid, 100).trim();
-      var mine = uid ? S.notes.filter(function (n) { return n.uid === uid; })[0] : null;
+      var mine = uid ? T.notes.filter(function (n) { return n.uid === uid; })[0] : null;
       if (mine) {
         Object.keys(fields).forEach(function (k) { mine[k] = fields[k]; });
         mine.updated = Date.now();
         updated++;
       } else {
-        var n = blankNote(fields);
+        var n = blankNote(fields, T);
         if (uid) n.uid = uid;
-        S.notes.push(n);
-        S.ui.openId = n.id;
+        T.notes.push(n);
+        T.ui.openId = n.id;
         added++;
       }
     });
-    persist();
-    renderAll();
+    if (!into) {
+      persist();
+      renderAll();
+    }
     var parts = [];
     if (added) parts.push("Imported " + plural(added, "note"));
     if (updated) parts.push((added ? "updated " : "Updated ") + plural(updated, "note") + " already here");
@@ -2617,14 +2634,25 @@
     persist();
   }
 
-  // Exposed for the demo's own checks (tools/check_demo.mjs), not used by the page.
-  window.__demo = {
+  // The rules this demo keeps, for the Android demo, which loads this file
+  // and draws its own screens -- one copy of the palettes' arithmetic, the
+  // dates and repeats, the share codes, a note's body to HTML and back --
+  // and for the checks (tools/check_demo.mjs), as window.__demo.
+  window.NO_DEMO = window.__demo = {
     encodeShareCode: encodeShareCode, decodeShareCode: decodeShareCode,
     htmlToBody: htmlToBody, bodyToHtml: bodyToHtml, occurrences: occurrences,
+    nextOccurrence: nextOccurrence, normRec: normRec,
     describeRec: describeRec, readDate: readDate, legibleOn: legibleOn, lettersOn: lettersOn,
-    state: function () { return S; }, importShared: importShared,
-    iso: iso, parseIso: parseIso
+    blend: blend, applyTheme: applyTheme, partnerTheme: partnerTheme,
+    state: function () { return S; }, importShared: importShared, blankNote: blankNote,
+    sanitizeHtml: sanitizeHtml, plainText: plainText, sortNotes: sortNotes,
+    el: el, icon: icon, plural: plural, uuid: uuid,
+    iso: iso, parseIso: parseIso, showDate: showDate, longDate: longDate,
+    today: today, addDays: addDays, weekday: weekday,
+    WEEKDAYS: WEEKDAYS, WEEKDAYS_LONG: WEEKDAYS_LONG, MONTHS: MONTHS, SORTS: SORTS,
+    TRASH_DAYS: TRASH_DAYS, PROTECTED: PROTECTED
   };
 
-  init();
+  // The desktop's screens only on its own page: the Android demo has no #app.
+  if (document.getElementById("app")) init();
 })();

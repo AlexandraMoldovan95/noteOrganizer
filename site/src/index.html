@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Note Organizer</title>
-<meta name="description" content="An offline notes app for Windows: rich notes, tables, checklists, repeating notes and a calendar. Built by Alexandra Moldovan with an AI coding agent. Try the web demo in your browser.">
+<meta name="description" content="An offline notes app for Windows, with an Android version on its way: rich notes, tables, checklists, repeating notes and a calendar. Built by Alexandra Moldovan with an AI coding agent. Try both in your browser.">
 {{og}}
 <link rel="icon" href="favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
@@ -29,11 +29,12 @@
 <section class="hero">
   <div class="wrap">
     <div>
-      <p class="eyebrow">Windows desktop app · Python + Tkinter · offline</p>
-      <h1>Note Organizer</h1>
+      <p class="eyebrow">Note Organizer · Windows, and Android · offline</p>
+      <h1>Notes that stay on your own device</h1>
       <p class="lede">A notes app that keeps everything on your own computer: rich notes with
         tables and checklists, notes that repeat, and a calendar that shows them. No account,
-        no cloud, no network calls.</p>
+        no cloud, no network calls. An Android version, made to the same rules, is on its way
+        to Google Play.</p>
       <p class="byline">Built by me, Alexandra Moldovan, with Claude Code, an AI coding agent. I
         decide what the app does, test it by hand and approve every change; the agent writes
         most of the code.</p>
@@ -42,10 +43,12 @@
       </div>
     </div>
     <figure class="window">
-      <img class="for-dark" src="img/main-window.webp" width="{{w_main_window}}" height="{{h_main_window}}"
-           alt="The Note Organizer window: the note list on the left, a note with a meal-plan table open on the right.">
-      <img class="for-light" src="img/main-window-light.webp" width="{{w_main_window_light}}" height="{{h_main_window_light}}" loading="lazy"
-           alt="The Note Organizer window: the note list on the left, a note with a meal-plan table open on the right.">
+      <a class="zoom" href="img/main-window.webp">
+        <img class="for-dark" src="img/main-window.webp" width="{{w_main_window}}" height="{{h_main_window}}"
+             alt="The Note Organizer window: the note list on the left, a note with a meal-plan table open on the right.">
+        <img class="for-light" src="img/main-window-light.webp" width="{{w_main_window_light}}" height="{{h_main_window_light}}" loading="lazy"
+             alt="The Note Organizer window: the note list on the left, a note with a meal-plan table open on the right.">
+      </a>
       <figcaption>The real app, version {{version}}. Every picture on this site is a capture of it.</figcaption>
     </figure>
   </div>
@@ -60,8 +63,12 @@
     </div>
     <div class="cards">
       <article class="card cat-general">
-        <img src="img/tables.webp" width="{{w_tables}}" height="{{h_tables}}" loading="lazy"
-             alt="A table inside a note, with a header row and four rows of meals.">
+        <a class="zoom" href="img/site-tables-dark.webp">
+          <img class="for-dark" src="img/site-tables-dark.webp" width="{{w_site_tables_dark}}" height="{{h_site_tables_dark}}" loading="lazy"
+               alt="A table inside a note: a header row, and lunch and dinner for four days.">
+          <img class="for-light" src="img/site-tables-light.webp" width="{{w_site_tables_light}}" height="{{h_site_tables_light}}" loading="lazy"
+               alt="A table inside a note: a header row, and lunch and dinner for four days.">
+        </a>
         <div class="card-body">
           <h3>Rich notes and tables</h3>
           <p>Bold, italic, colours, highlights, headings and lists, and tables you edit in place,
@@ -70,8 +77,12 @@
         </div>
       </article>
       <article class="card cat-personal">
-        <img src="img/checklist.webp" width="{{w_checklist}}" height="{{h_checklist}}" loading="lazy"
-             alt="A checklist with four items, two of them ticked and struck through.">
+        <a class="zoom" href="img/site-checklist-dark.webp">
+          <img class="for-dark" src="img/site-checklist-dark.webp" width="{{w_site_checklist_dark}}" height="{{h_site_checklist_dark}}" loading="lazy"
+               alt="A checklist of four items, two ticked and struck through, with arrows to reorder them.">
+          <img class="for-light" src="img/site-checklist-light.webp" width="{{w_site_checklist_light}}" height="{{h_site_checklist_light}}" loading="lazy"
+               alt="A checklist of four items, two ticked and struck through, with arrows to reorder them.">
+        </a>
         <div class="card-body">
           <h3>A checklist under every note</h3>
           <p>With a count of what is done. The arrows that reorder items sit beside the boxes,
@@ -80,8 +91,12 @@
         </div>
       </article>
       <article class="card cat-work">
-        <img src="img/calendar-view.webp" width="{{w_calendar_view}}" height="{{h_calendar_view}}" loading="lazy"
-             alt="The calendar for September 2026, with a weekly stand-up on every Monday and three other notes.">
+        <a class="zoom" href="img/site-calendar-dark.webp">
+          <img class="for-dark" src="img/site-calendar-dark.webp" width="{{w_site_calendar_dark}}" height="{{h_site_calendar_dark}}" loading="lazy"
+               alt="The calendar's September, Monday to Thursday: a weekly stand-up on each Monday, a dentist and a board review.">
+          <img class="for-light" src="img/site-calendar-light.webp" width="{{w_site_calendar_light}}" height="{{h_site_calendar_light}}" loading="lazy"
+               alt="The calendar's September, Monday to Thursday: a weekly stand-up on each Monday, a dentist and a board review.">
+        </a>
         <div class="card-body">
           <h3>A calendar that shows your notes</h3>
           <p>Give a note a date and it appears on its day. Mark a day with a colour or an emoji,
@@ -90,8 +105,12 @@
         </div>
       </article>
       <article class="card cat-work">
-        <img src="img/recurrence-setup.webp" width="{{w_recurrence_setup}}" height="{{h_recurrence_setup}}" loading="lazy"
-             alt="A note set to repeat every week on Monday, never ending.">
+        <a class="zoom" href="img/site-repeat-dark.webp">
+          <img class="for-dark" src="img/site-repeat-dark.webp" width="{{w_site_repeat_dark}}" height="{{h_site_repeat_dark}}" loading="lazy"
+               alt="A note's Repeat settings: weekly, every week on Monday, ending never.">
+          <img class="for-light" src="img/site-repeat-light.webp" width="{{w_site_repeat_light}}" height="{{h_site_repeat_light}}" loading="lazy"
+               alt="A note's Repeat settings: weekly, every week on Monday, ending never.">
+        </a>
         <div class="card-body">
           <h3>Notes that repeat</h3>
           <p>Daily, weekly, monthly or yearly, on the weekdays you choose, ending never, on a date
@@ -100,8 +119,12 @@
         </div>
       </article>
       <article class="card cat-ideas">
-        <img src="img/search-and-sort.webp" width="{{w_search_and_sort}}" height="{{h_search_and_sort}}" loading="lazy"
-             alt="The note list narrowed by a search for the word team, sorted by calendar date.">
+        <a class="zoom" href="img/site-search-dark.webp">
+          <img class="for-dark" src="img/site-search-dark.webp" width="{{w_site_search_dark}}" height="{{h_site_search_dark}}" loading="lazy"
+               alt="The note list narrowed by a search for the word team, sorted by calendar date.">
+          <img class="for-light" src="img/site-search-light.webp" width="{{w_site_search_light}}" height="{{h_site_search_light}}" loading="lazy"
+               alt="The note list narrowed by a search for the word team, sorted by calendar date.">
+        </a>
         <div class="card-body">
           <h3>Search, sort and group</h3>
           <p>One search box looks through every note at once. Sort, show a single category, group
@@ -110,8 +133,12 @@
         </div>
       </article>
       <article class="card cat-urgent">
-        <img src="img/trash-panel.webp" width="{{w_trash_panel}}" height="{{h_trash_panel}}" loading="lazy"
-             alt="Settings, Recently deleted: three deleted notes, each with Restore and Delete.">
+        <a class="zoom" href="img/site-trash-dark.webp">
+          <img class="for-dark" src="img/site-trash-dark.webp" width="{{w_site_trash_dark}}" height="{{h_site_trash_dark}}" loading="lazy"
+               alt="Recently deleted: three deleted notes, each with the days it has left, Restore and Delete.">
+          <img class="for-light" src="img/site-trash-light.webp" width="{{w_site_trash_light}}" height="{{h_site_trash_light}}" loading="lazy"
+               alt="Recently deleted: three deleted notes, each with the days it has left, Restore and Delete.">
+        </a>
         <div class="card-body">
           <h3>Nothing lost to a slip</h3>
           <p>Deleted notes wait in Recently deleted. Backups move the whole notebook to another
@@ -124,7 +151,7 @@
 </section>
 
 <section aria-labelledby="themes">
-  <div class="wrap">
+  <div class="wrap split">
     <div class="section-head">
       <h2 id="themes">{{theme_count}} themes, light and dark, all readable</h2>
       <p>{{theme_names}}. Every coloured word and button meets the WCAG AA contrast level in all
@@ -132,22 +159,78 @@
         carried by shape as well as colour: Save is the one filled button, the open tab stands
         taller.</p>
     </div>
-    <div class="pair">
-      <figure class="shot">
-        <img src="img/main-window.webp" width="{{w_main_window}}" height="{{h_main_window}}" loading="lazy"
-             alt="The main window in the Midnight Purple theme.">
-        <figcaption>Midnight Purple</figcaption>
+    <!-- The eight themes as the app offers them, not the hero's window a
+         second time, which is what this section showed before. -->
+    <figure class="shot">
+      <a class="zoom" href="img/site-themes-dark.webp">
+        <img class="for-dark" src="img/site-themes-dark.webp" width="{{w_site_themes_dark}}" height="{{h_site_themes_dark}}" loading="lazy"
+             alt="Settings, Appearance: four dark themes and four light ones, Midnight Purple chosen.">
+        <img class="for-light" src="img/site-themes-light.webp" width="{{w_site_themes_light}}" height="{{h_site_themes_light}}" loading="lazy"
+             alt="Settings, Appearance: four dark themes and four light ones, Soft Lavender chosen.">
+      </a>
+      <figcaption>Settings &rarr; Appearance: one click changes the whole app.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="band" aria-labelledby="android">
+  <div class="wrap">
+    <div class="section-head">
+      <h2 id="android">On your Android device too</h2>
+      <p>A native Android app for phones and tablets, written in Kotlin, keeps notes in exactly
+        the desktop's format. A note or the whole notebook moves between the two by share code or
+        backup, when you send it: nothing syncs by itself, and a note that comes back replaces
+        yours only if you say so. Version {{android_version}}, on its way to Google Play; its code
+        lives in a repository of its own.</p>
+    </div>
+    <!-- Each screen in the theme the page is in: Soft Lavender on a light
+         page, Midnight Purple on a dark one. -->
+    <div class="phones">
+      <figure class="phone-shot">
+        <a class="zoom" href="img/android-01-note-list.webp">
+          <img class="for-light" src="img/android-01-note-list.webp" width="{{w_android_01_note_list}}" height="{{h_android_01_note_list}}" loading="lazy"
+               alt="The Android app's note list: a greeting, search, sort and show, and the note cards.">
+          <img class="for-dark" src="img/android-01-note-list-dark.webp" width="{{w_android_01_note_list_dark}}" height="{{h_android_01_note_list_dark}}" loading="lazy"
+               alt="The Android app's note list: a greeting, search, sort and show, and the note cards.">
+        </a>
+        <figcaption>The note list</figcaption>
       </figure>
-      <figure class="shot">
-        <img src="img/main-window-light.webp" width="{{w_main_window_light}}" height="{{h_main_window_light}}" loading="lazy"
-             alt="The same window in the Soft Lavender theme.">
-        <figcaption>Soft Lavender</figcaption>
+      <figure class="phone-shot">
+        <a class="zoom" href="img/android-02-a-note.webp">
+          <img class="for-light" src="img/android-02-a-note.webp" width="{{w_android_02_a_note}}" height="{{h_android_02_a_note}}" loading="lazy"
+               alt="A note open on the phone, its first line bold and its checklist below.">
+          <img class="for-dark" src="img/android-02-a-note-dark.webp" width="{{w_android_02_a_note_dark}}" height="{{h_android_02_a_note_dark}}" loading="lazy"
+               alt="A note open on the phone, its first line bold and its checklist below.">
+        </a>
+        <figcaption>A note and its checklist</figcaption>
       </figure>
+      <figure class="phone-shot">
+        <a class="zoom" href="img/android-03-a-table.webp">
+          <img class="for-light" src="img/android-03-a-table.webp" width="{{w_android_03_a_table}}" height="{{h_android_03_a_table}}" loading="lazy"
+               alt="A table in a note on the phone, drawn as a grid, its figures right-aligned.">
+          <img class="for-dark" src="img/android-03-a-table-dark.webp" width="{{w_android_03_a_table_dark}}" height="{{h_android_03_a_table_dark}}" loading="lazy"
+               alt="A table in a note on the phone, drawn as a grid, its figures right-aligned.">
+        </a>
+        <figcaption>A table</figcaption>
+      </figure>
+      <figure class="phone-shot">
+        <a class="zoom" href="img/android-07-calendar.webp">
+          <img class="for-light" src="img/android-07-calendar.webp" width="{{w_android_07_calendar}}" height="{{h_android_07_calendar}}" loading="lazy"
+               alt="The calendar on the phone, a repeating note's days marked with dots.">
+          <img class="for-dark" src="img/android-07-calendar-dark.webp" width="{{w_android_07_calendar_dark}}" height="{{h_android_07_calendar_dark}}" loading="lazy"
+               alt="The calendar on the phone, a repeating note's days marked with dots.">
+        </a>
+        <figcaption>The calendar</figcaption>
+      </figure>
+    </div>
+    <div class="actions spaced">
+      <a class="btn btn-primary" href="android-demo/index.html">Try the Android demo</a>
+      <a class="btn" href="android.html">About the Android app</a>
     </div>
   </div>
 </section>
 
-<section class="band" aria-labelledby="made">
+<section aria-labelledby="made">
   <div class="wrap">
     <div class="section-head">
       <h2 id="made">Built with an AI agent, checked by tools and by hand</h2>
@@ -190,15 +273,20 @@
   </div>
 </section>
 
-<section aria-labelledby="try">
+<section class="band" aria-labelledby="try">
   <div class="wrap cta">
     <div>
       <h2 id="try">Try it, without installing anything</h2>
-      <p>The demo is a re-creation of the app's interface in HTML and JavaScript, so you can click
-        through the everyday parts in a browser, on a computer or a phone. The real app is a
-        Windows program in Python and Tkinter. What you type in the demo stays in your browser.</p>
+      <p>Two demos re-create the apps' interfaces in HTML and JavaScript, so you can click through
+        the everyday parts in a browser, on a computer or a phone. The real apps are a Windows
+        program in Python and Tkinter and an Android app in Kotlin. What you type in a demo stays
+        in your browser, and a share code moves a note from one demo to the other, as between the
+        apps.</p>
     </div>
-    <a class="btn btn-primary" href="demo/index.html">Open the demo</a>
+    <div class="actions">
+      <a class="btn btn-primary" href="demo/index.html">The desktop demo</a>
+      <a class="btn" href="android-demo/index.html">The Android demo</a>
+    </div>
   </div>
 </section>
 
