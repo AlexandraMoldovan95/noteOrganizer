@@ -4433,6 +4433,24 @@ check(f"a big deletion's copy is spent once Undo has brought the words back, "
       _ud_kept and _ud.get('_prev') is None
       and _ud.get('body', '').rstrip('\n') == 'a long text that a slip of the hand is about to delete whole'
       and not app.restore_prev_btn.winfo_ismapped())
+# ...and the same note wiped again, a new line typed before the autosave
+# (the owner's test case 692, 2026-10-24). A short note's text, replaced,
+# shrank by under 40 characters, and the copy was decided by how much
+# shorter the text got: no copy, no button, the words gone. It is decided
+# by what of the old text is gone now (rescue_copy_due).
+app.title_entry.delete(0, 'end')
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'Buy milk\nCall mom\nPay the rent')
+app.save_current_note(auto=False); app.update()
+app.body_text.edit_separator()
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'A new line')
+app._flush_autosave(); app.update()
+_rp = app.find_note(_ud_id) or {}
+check(f"a short note replaced by a new line before the autosave keeps its words "
+      f"for Restore previous, the button there ({(_rp.get('_prev') or {}).get('body')!r})",
+      (_rp.get('_prev') or {}).get('body') == 'Buy milk\nCall mom\nPay the rent'
+      and app.restore_prev_btn.winfo_ismapped())
 
 # ============================================================
 # UNDO ON THE DELETE TOAST: THE OCCURRENCE HALF

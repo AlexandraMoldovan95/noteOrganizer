@@ -109,6 +109,23 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+### Fixed
+
+- **Restore previous keeps a note's words when they are replaced, not only when they shrink.**
+  Select all and type a new line before the autosave, in a note of a few short lines, and the old
+  text was gone with no **↩ Restore previous**: the copy was made when the text got shorter by
+  more than 40 characters, and a short note replaced by a line does not. A paragraph replaced by
+  one as long did not get shorter at all. The copy is now decided by how much of the old text is
+  gone: emptied, a big part of it, or most of a short note. Found by the owner walking test case
+  692 on 0.96.396.
+
+### Testing
+
+- `test_note_identity` holds `rescue_copy_due`: a short note replaced, a paragraph replaced by one
+  as long, an emptied note and a big deletion keep a copy; a word changed, words added, a tiny note
+  retyped and a title renamed keep none. qa7 walks the owner's steps: a short note wiped and a new
+  line typed before the autosave, its words kept and the button shown. Mutants RD01–RD03.
+
 ---
 
 ## [0.96.396] — 2026-10-24

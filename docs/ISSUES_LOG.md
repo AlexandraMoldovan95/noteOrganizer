@@ -175,6 +175,7 @@ is in the table below as well.
 | [The marker that was only characters](#the-marker-that-was-only-characters) | When a structure is stored as text, every route that edits text edits it: count the routes that reach it, not the ones the feature was written for. | 0.96.394 |
 | [The rescue copy that outlived what it rescued](#the-rescue-copy-that-outlived-what-it-rescued) | A safety net that can be pressed later must know whether it still rescues anything, and must itself be undoable. | 0.96.395 |
 | [A separator's dashes, read as a width nobody set](#a-separators-dashes-read-as-a-width-nobody-set) | When a format borrows another's syntax, the borrowed form arrives written as the other world writes it: decide whose it is where that is still known — at the way in. | 0.96.396 |
+| [The safety net that measured the wrong thing](#the-safety-net-that-measured-the-wrong-thing) | A guard has to measure the harm itself, not something that usually moves with it: a proxy holds until the day the two part ways. | Unreleased |
 | [Photographs of the site's pages, blank below the first screen](#photographs-of-the-sites-pages-blank-below-the-first-screen) | A photograph proves only what was on the screen when it was taken: photograph a page as a reader meets it, and give what changes it checks of its own. | the website |
 
 Smaller lessons, each once a long comment in the code, are collected
@@ -4901,6 +4902,33 @@ would only mislead. The question says the text is kept only when it will be.
 
 **Takeaway:** a safety net that can be pressed later must know whether it still rescues
 anything — and pressing it must leave a way back, or the net becomes the fall.
+
+### The safety net that measured the wrong thing
+
+*(Unreleased · 2026-10-24 · found by the owner walking test case 692 on the 0.96.396 `.exe`; the
+Android app did the same)*
+
+**Symptom:** a note of three short lines, selected whole and deleted, then a new line typed before
+the autosave ran. No **↩ Restore previous**, and the three lines were gone. Wiped and left until
+the autosave, the same note kept its copy.
+
+**Root cause:** the copy was made when the text got *shorter* by more than 40 characters, and by
+30% of it or 200 characters — or was emptied. Thirty characters replaced by ten shrink by twenty:
+under the bar, no copy. The rule measured how much shorter the text was, while what it guards
+against is how much of it is *gone*, and the two part ways whenever something new is written in
+its place. A paragraph of 300 characters replaced by one as long did not get shorter at all, in
+a note of any length. The emptied-note rule of 2026-09 had caught one case of the same mismatch,
+the emptied short note, and left the rest.
+
+**Fix:** `rescue_copy_due` counts what of the old text is gone — its length less the longest start
+and end the old and new text share (`text_lost`) — with the same bars as before, plus one for
+most of a short note: 70% of it, 15 characters at least. A word changed, words added, a tiny note
+retyped and a title renamed still keep no copy. The Android app's `updateNote`, which follows the
+desktop's thresholds by design, takes the same rule.
+
+**Takeaway:** a guard has to measure the harm itself, not something that usually moves with it. A
+proxy holds until the day the two part ways — and a safety net is exactly where that day costs
+the most.
 
 ### Nine regressions in fifteen fixes
 

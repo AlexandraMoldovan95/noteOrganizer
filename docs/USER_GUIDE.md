@@ -91,12 +91,13 @@ whatever you were working on first, so there's no tab-juggling and no risk of lo
 
 Notes save automatically a moment after you stop typing (look for the "Auto-saved" status), and
 always save immediately when you switch to a different note. There is a safety net under the
-autosave, too: if a note's text suddenly shrinks drastically (an accidental select-all-and-type,
-say), the app quietly keeps the earlier version and an **↩ Restore previous** button appears in
-the editor — one click (past a warning that pre-selects No) brings the old text back whole,
-tables redrawn and all. What it replaces is kept in turn, so pressing it again brings that back:
-nothing written since is lost. If you take the shrink back yourself with Ctrl+Z, the button goes
-away once the note is saved, as there is nothing left to rescue.
+autosave, too: if much of a note's text suddenly goes — emptied, a big part deleted, or replaced
+by something else (an accidental select-all-and-type, say) — the app quietly keeps the earlier
+version and an **↩ Restore previous** button appears in the editor — one click (past a warning
+that pre-selects No) brings the old text back whole, tables redrawn and all. What it replaces is
+kept in turn, so pressing it again brings that back: nothing written since is lost. If you take
+the change back yourself with Ctrl+Z, the button goes away once the note is saved, as there is
+nothing left to rescue.
 
 Closing the app works the same way:
 anything still unsaved is saved on the way out, silently — no "unsaved changes" question, because

@@ -5057,5 +5057,37 @@
     "must_fail": ["a paste out of a table being typed forgets them as well"],
     "suites": ["qa1"],
     "expect": "killed"
+  },
+  {
+    "id": "RD01",
+    "about": "most of a short note replaced keeps no rescue copy (test case 692)",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "    return lost >= 15 and lost >= old_len * 0.7\n",
+               "replace": "    return False\n"}],
+    "must_fail": ["a short note replaced by a new line keeps a copy (test case 692)",
+                  "a short note replaced by a new line before the autosave keeps its words"],
+    "suites": ["test_note_identity", "qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "RD02",
+    "about": "what a save loses is counted as how much shorter the text got",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "    return len(old) - start - end\n",
+               "replace": "    return max(0, len(old) - len(new))\n"}],
+    "must_fail": ["text_lost counts what neither end keeps",
+                  "a paragraph replaced by another as long keeps a copy"],
+    "suites": ["test_note_identity"],
+    "expect": "killed"
+  },
+  {
+    "id": "RD03",
+    "about": "the save keeps a copy only of an emptied note, never asking rescue_copy_due",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                elif rescue_due:\n",
+               "replace": "                elif not body and not title and (note.get(\"body\") or note.get(\"title\")):\n"}],
+    "must_fail": ["a short note replaced by a new line before the autosave keeps its words"],
+    "suites": ["qa7"],
+    "expect": "killed"
   }
 ]

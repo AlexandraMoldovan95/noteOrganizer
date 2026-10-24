@@ -242,8 +242,12 @@ runs.
 
 ### The rescue copy: kept while it rescues, swapped when used
 
-A drastic shrink, a repeat turned off with days of its own, or an update from a code or a backup
+A big loss of text, a repeat turned off with days of its own, or an update from a code or a backup
 keeps the version it replaces in the note's `_prev`, which **↩ Restore previous** brings back.
+The loss is counted by what of the old text is gone, not by how much shorter the text became
+(`rescue_copy_due`, 2026-10-24): emptied, more than 40 characters and 30% or 200 of them, or most
+of a short note. Measured as a shrink, a short note replaced by a new line, and a paragraph
+replaced by one as long, kept nothing.
 Two rules, both from 2026-10-22 and both the owner's call on both apps, keep that copy from ever
 costing words. A save that holds again everything the copy kept spends it (`rescue_copy_spent`):
 a shrink taken back with Ctrl+Z left the button in place, and pressed later it put the old
