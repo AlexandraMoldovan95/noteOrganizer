@@ -252,7 +252,9 @@ included, and a copy from Google Docs bold only where the document is.
 
 - **Ctrl+Shift+V** pastes the words on their own, with none of the styling — and no bullets
   either, even when the thing you copied from puts bullet characters into its own plain-text
-  version. There is a **Paste without formatting** entry on the right-click menu too.
+  version. A table stays a table: cells copied from a note's table come back as that table, its
+  boxes still boxes, only without the cells' colours and bold. There is a **Paste without
+  formatting** entry on the right-click menu too.
 - Copying works the same way outwards: select part of a note, copy it, and paste it into an email
   or a document, and it arrives still formatted, its font sizes and typefaces included. Copying
   between two notes keeps everything.

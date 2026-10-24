@@ -7835,6 +7835,38 @@ check('our own table copy pastes below the Source line, not into it',
 _stub_clipboard()
 set_body('')
 
+# ...and pasted by Ctrl+Shift+V (the owner's test case 693, 2026-10-24):
+# the plain paste read only the clipboard's text, and our cell copy's text
+# is tabs, for a spreadsheet -- the cells came in as tabs, a box as "[x]",
+# where Ctrl+V rebuilt the table. Plain, it is the table again, without
+# the cells' colours.
+set_body('| Done | Item |' + chr(10) + '| --- | --- |' + chr(10) + '| [x] | Milk |')
+app._render_table_grids()
+app.update()
+_kP = app.body_text.get('3.0', '3.end').index('Milk')
+app.body_text.tag_add(
+    app._ensure_color_tag(app.body_text, 'text_color', '#d32f2f'),
+    '3.%d' % (_kP + app._col_base(3)), '3.%d' % (_kP + app._col_base(3) + 4))
+_iP = app._grid_at_line(1)
+app._grid_select_range(_iP, (0, 0), (1, 1))
+_stub_clipboard(loopback=True)
+app._grid_copy_selection({'info': _iP, 'box': (0, 0, 1, 1)})
+app._grid_clear_selection()
+set_body('')
+app.update()
+app._paste_plain()
+app.update()
+_bodyP = app.body_text.get('1.0', 'end-1c')
+_atP = app.body_text.search('Milk', '1.0', 'end', elide=True)   # under the drawn grid
+_tagsP = ([t for t in app.body_text.tag_names(_atP) if t.startswith('text_color')]
+          if _atP else ['no Milk'])
+check(f"cells copied from a table and pasted by Ctrl+Shift+V come back a table, "
+      f"its box a box, without the cells' colours ({_bodyP!r}; {_tagsP})",
+      len(core_tables.find_blocks(_bodyP)) == 1 and chr(9) not in _bodyP
+      and '[x]' in _bodyP and not _tagsP and len(app._table_grids) == 1)
+_stub_clipboard()
+set_body('')
+
 # The HTML clipboard follows the file export's rules: a <th> header,
 # real merges (not literal markers), a hidden column stays home, the
 # checkbox leaves as a glyph. The TSV stays complete -- internal

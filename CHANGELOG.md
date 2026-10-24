@@ -118,6 +118,11 @@ How the numbers themselves are counted is the
   one as long did not get shorter at all. The copy is now decided by how much of the old text is
   gone: emptied, a big part of it, or most of a short note. Found by the owner walking test case
   692 on 0.96.396.
+- **Cells copied from a table and pasted with Ctrl+Shift+V come back as the table.** They came in
+  as words separated by tabs, a ticked box as "[x]": the cells' plain text is written that way for
+  a spreadsheet, and the plain paste read nothing else, while Ctrl+V, from the same copy, rebuilt
+  the table. Now the plain paste rebuilds it too, without the cells' colours and bold. Found by the
+  owner testing beside case 693 on 0.96.396.
 
 ### Testing
 
@@ -125,6 +130,8 @@ How the numbers themselves are counted is the
   as long, an emptied note and a big deletion keep a copy; a word changed, words added, a tiny note
   retyped and a title renamed keep none. qa7 walks the owner's steps: a short note wiped and a new
   line typed before the autosave, its words kept and the button shown. Mutants RD01–RD03.
+- qa1 copies a table's cells, one coloured, and pastes them with Ctrl+Shift+V: a table again, its
+  box a box, no tab left and no colour brought. Mutants PP01–PP02.
 
 ---
 

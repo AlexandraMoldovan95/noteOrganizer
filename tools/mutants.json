@@ -5089,5 +5089,25 @@
     "must_fail": ["a short note replaced by a new line before the autosave keeps its words"],
     "suites": ["qa7"],
     "expect": "killed"
+  },
+  {
+    "id": "PP01",
+    "about": "Ctrl+Shift+V pastes this app's own cell copy as tabs (test case 693)",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                and self._paste_tsv_as_table(raw=text, plain=True)):\n            return \"break\"\n",
+               "replace": "                and False):\n            return \"break\"\n"}],
+    "must_fail": ["cells copied from a table and pasted by Ctrl+Shift+V come back a table"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "PP02",
+    "about": "Ctrl+Shift+V brings the copied cells' colours with the table",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                and self._paste_tsv_as_table(raw=text, plain=True)):\n",
+               "replace": "                and self._paste_tsv_as_table(raw=text)):\n"}],
+    "must_fail": ["cells copied from a table and pasted by Ctrl+Shift+V come back a table"],
+    "suites": ["qa1"],
+    "expect": "killed"
   }
 ]

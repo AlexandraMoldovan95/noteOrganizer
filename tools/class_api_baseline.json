@@ -500,7 +500,7 @@
   "_paste_table_aware": "(self, text_widget)",
   "_paste_text_forgetting_widths": "(self)",
   "_paste_text_leaving_table": "(self)",
-  "_paste_tsv_as_table": "(self, raw=None)",
+  "_paste_tsv_as_table": "(self, raw=None, plain=False)",
   "_pending_style_text_length": "(self)",
   "_persist_day_colors": "(self)",
   "_persist_day_emoji": "(self)",

@@ -176,6 +176,7 @@ is in the table below as well.
 | [The rescue copy that outlived what it rescued](#the-rescue-copy-that-outlived-what-it-rescued) | A safety net that can be pressed later must know whether it still rescues anything, and must itself be undoable. | 0.96.395 |
 | [A separator's dashes, read as a width nobody set](#a-separators-dashes-read-as-a-width-nobody-set) | When a format borrows another's syntax, the borrowed form arrives written as the other world writes it: decide whose it is where that is still known — at the way in. | 0.96.396 |
 | [The safety net that measured the wrong thing](#the-safety-net-that-measured-the-wrong-thing) | A guard has to measure the harm itself, not something that usually moves with it: a proxy holds until the day the two part ways. | Unreleased |
+| [The plain paste that read only the spreadsheet's copy](#the-plain-paste-that-read-only-the-spreadsheets-copy) | A copy written in several forms has one that is the thing itself: every paste, plain included, starts from it and drops only what it promises to. | Unreleased |
 | [Photographs of the site's pages, blank below the first screen](#photographs-of-the-sites-pages-blank-below-the-first-screen) | A photograph proves only what was on the screen when it was taken: photograph a page as a reader meets it, and give what changes it checks of its own. | the website |
 
 Smaller lessons, each once a long comment in the code, are collected
@@ -4929,6 +4930,30 @@ desktop's thresholds by design, takes the same rule.
 **Takeaway:** a guard has to measure the harm itself, not something that usually moves with it. A
 proxy holds until the day the two part ways — and a safety net is exactly where that day costs
 the most.
+
+### The plain paste that read only the spreadsheet's copy
+
+*(Unreleased · 2026-10-24 · found by the owner beside test case 693 on the 0.96.396 `.exe`; the
+Android app has no cell copy)*
+
+**Symptom:** a table's cells selected in its grid, copied, and pasted into a new note. Ctrl+V
+brought the table back. Ctrl+Shift+V brought words separated by tabs, a ticked box as "[x]". The
+same paste of a text selection holding the table, which test case 693 walks, was fine.
+
+**Root cause:** a cell copy writes three things: tab-separated text, for a spreadsheet; HTML, for
+a document; and the app's own record of the cells, styles and place included. Ctrl+V recognises
+its own copy and rebuilds the table from it. Ctrl+Shift+V reads the plain text alone, by design —
+and for this copy the plain text is the spreadsheet's form, not the note's.
+
+**Fix:** when the plain text is exactly what this app's own cell copy wrote, Ctrl+Shift+V builds
+the table from it as Ctrl+V does (`_paste_tsv_as_table(plain=True)`), leaving out the cells'
+colours, bold and the table's place on the page — the formatting a plain paste promises to drop.
+Tabs from anywhere else still paste as text: there Ctrl+Shift+V stays the way to get words when
+Ctrl+V would make a table.
+
+**Takeaway:** a copy written in several forms for several readers has one form that is the
+thing itself; every paste of it, plain included, has to start from that one, and drop only what
+it promises to drop.
 
 ### Nine regressions in fifteen fixes
 
