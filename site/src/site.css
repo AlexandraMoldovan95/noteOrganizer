@@ -594,8 +594,8 @@ a.card .label::after { content: " \2192"; }
   .card .zoom img { transition: transform .4s ease; }
   .card:has(.zoom):hover { transform: translateY(-3px); box-shadow: var(--shadow); }
   .card .zoom:hover img, .card .zoom:focus-visible img { transform: scale(1.04); }
-  .shot .zoom img, .phone-shot .zoom img { transition: transform .4s ease; }
-  .shot .zoom:hover img, .phone-shot .zoom:hover img { transform: scale(1.02); }
+  .shot .zoom img, .phone-shot .zoom img, .window .zoom img { transition: transform .4s ease; }
+  .shot .zoom:hover img, .phone-shot .zoom:hover img, .window .zoom:hover img { transform: scale(1.02); }
   /* The shorthand above would reset the delay: set again after it. */
   .reveal.card {
     transition: opacity .6s ease, transform .6s ease, border-color .15s, box-shadow .25s ease;

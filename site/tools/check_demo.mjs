@@ -379,6 +379,14 @@ try {
     await page("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
     await sleep(150);
     check(`${scheme}: ...and Escape closes it`, await js("!document.querySelector('dialog.lightbox').open"));
+    // The hero's window too: the whole app made small, where the large
+    // picture helps most (the owner, 2026-10-24).
+    await click(".hero a.zoom");
+    const hero = await js("document.querySelector('dialog.lightbox img').getAttribute('src')");
+    check(`${scheme}: the hero's window opens large too, in the page's theme`,
+          await js("document.querySelector('dialog.lightbox').open")
+          && hero.endsWith(scheme === "dark" ? "main-window.webp" : "main-window-light.webp"), hero);
+    await js("document.querySelector('dialog.lightbox').close()");
   }
   await go("/android.html");
   await click(".phone-gallery a.zoom");
