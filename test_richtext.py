@@ -1052,6 +1052,25 @@ check(f"a lone cell's line breaks are lines, and what follows keeps its line ({_
       _t == "a\nb\nc\nd" and {"line": 3, "align": "center"} in _p)
 check("a table of two columns keeps its frame",
       html_to_note("<table><tr><td>a</td><td>b</td></tr></table>")[0].startswith("| a"))
+# Every span and line moved past every cut, walked one by one, froze a long
+# styled column for tens of seconds inside the paste caps; halved, a few
+# hundredths. The bound is wide on purpose: two seconds against fifteen.
+import time as _time
+from noteorganizer.core.richtext import _unframe_lone_cells
+_uc_rows, _uc_at, _uc_text = [], 0, []
+for _i in range(20_000):
+    _uc_row = "| r%d |" % _i
+    _uc_rows.append((_uc_at, _uc_at + len(_uc_row)))
+    _uc_text.append(_uc_row + "\n")
+    _uc_at += len(_uc_row) + 1
+_uc_started = _time.perf_counter()
+_uc_out, _uc_moved, _uc_line = _unframe_lone_cells("".join(_uc_text), _uc_rows)
+_uc_last = [_uc_moved(_uc_rows[-1 - _i][0] + 2) for _i in range(2_000)][0]
+_uc_took = _time.perf_counter() - _uc_started
+check(f"a column of 20,000 lone cells comes out whole, its offsets moved "
+      f"by halving ({_uc_took:.2f} s)",
+      _uc_out.endswith("r19999\n") and _uc_out[_uc_last:].startswith("r19999")
+      and _uc_took < 2.0)
 
 print()
 print(f"FAILURES: {fails if fails else 'none'}")

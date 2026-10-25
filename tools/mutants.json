@@ -5147,8 +5147,8 @@
     "id": "XL04",
     "about": "a lone cell's styles stay where the pipes had them",
     "edits": [{"file": "noteorganizer/core/richtext.py",
-               "find": "            gone += min(pos, b) - a\n        return pos - gone\n",
-               "replace": "            gone += min(pos, b) - a\n        return pos\n"}],
+               "find": "        return pos - before[i - 1] - (min(pos, cuts[i - 1][1]) - starts[i - 1]) if i else pos\n",
+               "replace": "        return pos\n"}],
     "must_fail": ["a lone cell's colour stays on its words"],
     "suites": ["test_richtext"],
     "expect": "killed"
@@ -5157,9 +5157,19 @@
     "id": "XL05",
     "about": "lines after a lone cell's line breaks keep their old numbers",
     "edits": [{"file": "noteorganizer/core/richtext.py",
-               "find": "            lambda n: n + sum(1 for row_line in breaks if row_line < n))\n",
-               "replace": "            lambda n: n)\n"}],
+               "find": "    return (\"\".join(kept), moved, lambda n: n + bisect.bisect_left(breaks, n))\n",
+               "replace": "    return (\"\".join(kept), moved, lambda n: n)\n"}],
     "must_fail": ["a lone cell's line breaks are lines, and what follows keeps its line"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
+  },
+  {
+    "id": "XL07",
+    "about": "a lone cell's offsets moved by walking every cut, not halving (a long styled column froze)",
+    "edits": [{"file": "noteorganizer/core/richtext.py",
+               "find": "    def moved(pos):\n        i = bisect.bisect_left(starts, pos)\n",
+               "replace": "    def moved(pos):\n        gone = 0\n        for a, b in cuts:\n            if pos <= a:\n                break\n            gone += min(pos, b) - a\n        return pos - gone\n        i = bisect.bisect_left(starts, pos)\n"}],
+    "must_fail": ["a column of 20,000 lone cells comes out whole, its offsets moved by halving"],
     "suites": ["test_richtext"],
     "expect": "killed"
   },

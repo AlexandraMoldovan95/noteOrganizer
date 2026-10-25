@@ -516,14 +516,17 @@ def _unframe_lone_cells(text, rows):
             breaks.append(line)
             at = text.find(tables.LINE_BREAK, at + len(tables.LINE_BREAK), last)
         cuts.append((last, end))
+    # Looked up by halving, not walked: a long column of styled cells has a
+    # cut for every row and a span in most, and walking every cut for every
+    # span froze the paste for tens of seconds inside the caps.
+    starts = [a for a, _b in cuts]
+    before = [0]                        # characters cut before each cut
+    for a, b in cuts:
+        before.append(before[-1] + b - a)
 
     def moved(pos):
-        gone = 0
-        for a, b in cuts:
-            if pos <= a:
-                break
-            gone += min(pos, b) - a
-        return pos - gone
+        i = bisect.bisect_left(starts, pos)
+        return pos - before[i - 1] - (min(pos, cuts[i - 1][1]) - starts[i - 1]) if i else pos
 
     if swaps:
         chars = list(text)
@@ -535,8 +538,7 @@ def _unframe_lone_cells(text, rows):
         kept.append(text[at:a])
         at = b
     kept.append(text[at:])
-    return ("".join(kept), moved,
-            lambda n: n + sum(1 for row_line in breaks if row_line < n))
+    return ("".join(kept), moved, lambda n: n + bisect.bisect_left(breaks, n))
 
 
 def html_to_note(fragment, report=None):
