@@ -1052,6 +1052,12 @@ check(f"a lone cell's line breaks are lines, and what follows keeps its line ({_
       _t == "a\nb\nc\nd" and {"line": 3, "align": "center"} in _p)
 check("a table of two columns keeps its frame",
       html_to_note("<table><tr><td>a</td><td>b</td></tr></table>")[0].startswith("| a"))
+# Chrome puts a non-breaking space at each edge of a bold word or a link; in
+# a note it is a space, or a search for the words either side finds nothing.
+_t, _s, _p = html_to_note("<p>The&nbsp;<b>Burj Khalifa</b>&nbsp;is tall, a&nbsp;&nbsp;b</p>")
+check(f"a page's non-breaking spaces come in as spaces, as many as there were ({_t!r})",
+      _t == "The Burj Khalifa is tall, a  b"
+      and {"start": 4, "end": 16, "style": "bold"} in _s)
 # Every span and line moved past every cut, walked one by one, froze a long
 # styled column for tens of seconds inside the paste caps; halved, a few
 # hundredths. The bound is wide on purpose: two seconds against fifteen.

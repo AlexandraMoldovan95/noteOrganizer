@@ -470,6 +470,10 @@ class _Reader(HTMLParser):
             cleaned = re.sub(r" *\n *", "\n", cleaned)
         else:
             cleaned = re.sub(r"[ \t\r\n]+", " ", data)
+        # A page's non-breaking spaces are plain ones in a note: Chrome writes
+        # one at each edge of a bold word or a link, and a search for the
+        # words either side found nothing (2026-10-25).
+        cleaned = cleaned.replace("\xa0", " ")
         if self.cell_depth:
             # The export draws a checkbox cell as its glyph; coming back,
             # the glyph is the checkbox again. Only inside a cell -- the

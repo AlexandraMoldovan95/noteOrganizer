@@ -132,6 +132,10 @@ How the numbers themselves are counted is the
 - **A single cell or a single column copied as a table pastes as its words.** It came in framed in
   pipes, "| rent |", which is no table here, since a table has two columns at least. From Excel or
   from a web page alike.
+- **Words pasted from a web page are found by search.** A browser puts a non-breaking space at
+  each edge of a bold word or a link, and those came into the note as they were: it looked the
+  same, but a search for the words either side found nothing. They come in as plain spaces now.
+  Noticed while testing the owner's case 94 on the phone.
 
 ### Testing
 
@@ -145,7 +149,8 @@ How the numbers themselves are counted is the
   table, and holds a row of one cell coming in as its words, its colour and line breaks with it;
   qa1 pastes Excel's row and single cell into a note, qa9 Excel's rows into the template editor,
   and qa1's copy-and-paste-back checks now go through the same wrapping and cutting as Windows.
-  Mutants XL01–XL06.
+  Mutants XL01–XL07, XL07 timing a column of 20,000 lone cells. `test_richtext` also holds a
+  page's non-breaking spaces coming in as spaces, as many as there were. Mutant NB01.
 
 ---
 

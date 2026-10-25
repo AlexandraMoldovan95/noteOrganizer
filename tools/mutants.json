@@ -5174,6 +5174,16 @@
     "expect": "killed"
   },
   {
+    "id": "NB01",
+    "about": "a page's non-breaking spaces stay in the note (a search for the words around a bold one fails)",
+    "edits": [{"file": "noteorganizer/core/richtext.py",
+               "find": "        cleaned = cleaned.replace(\"\\xa0\", \" \")\n",
+               "replace": ""}],
+    "must_fail": ["a page's non-breaking spaces come in as spaces, as many as there were"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
+  },
+  {
     "id": "XL06",
     "about": "a lone cell's line break marker is cut without becoming a line",
     "edits": [{"file": "noteorganizer/core/richtext.py",
