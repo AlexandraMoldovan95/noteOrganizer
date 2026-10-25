@@ -624,7 +624,7 @@ check("a styled VOID tag opens no span at all (no end tag ever comes)",
 
 # ---- A <br> inside a cell survives the round-trip (audit Z04-F02) ----
 from noteorganizer.core import tables as _tbl
-_t, _s, _p = html_to_note("<table><tr><td>a<br>b</td></tr></table>")
+_t, _s, _p = html_to_note("<table><tr><td>a<br>b</td><td>c</td></tr></table>")
 check("a cell's line break arrives as the cell break marker, not a space",
       _tbl.LINE_BREAK in _t and "a" + _tbl.LINE_BREAK + "b"
       in _t.replace(" ", ""))
@@ -982,6 +982,76 @@ check("a deletion that reaches no list is left alone, as is one inside an "
       "item's words",
       _ldr(["plain words", "more words"], (0, 2), (1, 2)) is None
       and _ldr(["1. one", "2. two"], (1, 4), (1, 5)) is None)
+
+# ---- A table copied from Excel (clipboard.fragment_of) ----
+# Excel puts the CF_HTML markers inside the table: around one row's cells
+# (the owner's copy of a test-plan row, 2026-10-25, its paths left out), or
+# around rows. Cut out alone, the cells had no row and pasted as loose text.
+from noteorganizer.core import clipboard as _clip
+_XL_HEAD = (
+    "Version:1.0\r\nStartHTML:0000000190\r\nEndHTML:0000002768\r\n"
+    "StartFragment:0000002498\r\nEndFragment:0000002708\r\n\r\n"
+    '<html xmlns:x="urn:schemas-microsoft-com:office:excel">\r\n<head>\r\n'
+    "<meta name=ProgId content=Excel.Sheet>\r\n<!--[if !mso]>\r\n<style>\r\n"
+    "v\\:* {behavior:url(#default#VML);}\r\n</style>\r\n<![endif]-->\r\n"
+    '<style>\r\n<!--table\r\n\t{mso-displayed-decimal-separator:"\\.";}\r\n'
+    ".xl66\r\n\t{font-weight:700;}\r\n-->\r\n</style>\r\n</head>\r\n\r\n"
+    "<body link=blue vlink=purple>\r\n\r\n"
+    "<table border=0 cellpadding=0 cellspacing=0 width=308 style='border-collapse:\r\n"
+    " collapse;width:231pt'>\r\n <col width=73 style='width:55pt'>\r\n"
+    " <col width=235 style='width:176pt'>\r\n")
+_XL_TAIL = "\r\n</table>\r\n\r\n</body>\r\n\r\n</html>"
+_xl_row = (_XL_HEAD + " <tr height=140 style='height:105.0pt'>\r\n<!--StartFragment-->\r\n"
+           "  <td height=140 class=xl66 align=left width=73 style='height:105.0pt;\r\n"
+           "  width:55pt'>High</td>\r\n  <td class=xl65 align=left width=235 "
+           "style='border-left:none;width:176pt'>The\r\n  app open on the phone.</td>\r\n"
+           "<!--EndFragment-->\r\n </tr>" + _XL_TAIL)
+_xl_frag = _clip.fragment_of(_xl_row)
+_xl_text = html_to_note(_xl_frag)[0]
+check(f"a row copied from Excel comes back inside its row and table ({_xl_frag[:11]!r})",
+      _xl_frag.startswith("<table><tr>") and _xl_frag.endswith("</tr></table>"))
+check(f"...and reads as one table row, its words whole ({_xl_text!r})",
+      _tbl.find_blocks(_xl_text) == [(0, 0)]
+      and _tbl.split_row(_xl_text) == ["High", "The app open on the phone."])
+_xl_rows = (_XL_HEAD + "<!--StartFragment-->\r\n <tr>\r\n  <td>What</td>\r\n  <td>How much</td>\r\n"
+            " </tr>\r\n <tr>\r\n  <td>rent</td>\r\n  <td align=right>1500</td>\r\n </tr>\r\n"
+            "<!--EndFragment-->" + _XL_TAIL)
+_xl_frag = _clip.fragment_of(_xl_rows)
+_xl_text = html_to_note(_xl_frag)[0]
+check(f"rows copied without their table come back inside it ({_xl_text!r})",
+      _xl_frag.startswith("<table>") and "<tr>" not in _xl_frag[:7]
+      and _tbl.find_blocks(_xl_text) == [(0, 1)])
+_own_frag = '<p><b>x</b> y</p><table><tr><td>a</td><td>b</td></tr></table>'
+check("our own copy's fragment comes back exactly as it was written",
+      _clip.fragment_of(_clip._wrap_html(_own_frag).decode("utf-8")) == _own_frag)
+check("a browser's copy, its table inside the markers, comes back as it was",
+      _clip.fragment_of("<html><body>\r\n<!--StartFragment--><table><tr><td>a</td>"
+                        "<td>b</td></tr></table><!--EndFragment-->\r\n</body></html>")
+      == "<table><tr><td>a</td><td>b</td></tr></table>")
+check("rows and cells left open, as HTML allows, end where the next begins",
+      _clip.fragment_of("<html><body><table><tr><td>a<td>b<tr><!--StartFragment-->"
+                        "<td>c</td><!--EndFragment--></table></body></html>")
+      == "<table><tr><td>c</td></tr></table>")
+check("a document without markers still gives its body",
+      _clip.fragment_of("<html><body><p>x</p></body></html>") == "<p>x</p></body></html>")
+
+# ---- A row of one cell is no table here: its words come alone ----
+check("one cell copied as a table pastes as its words",
+      html_to_note("<table><tr><td>rent</td></tr></table>")[0] == "rent")
+check("one column pastes as its words, one cell a line, an empty one empty",
+      html_to_note("<table><tr><td>rent</td></tr><tr><td></td></tr>"
+                   "<tr><td>food</td></tr></table>")[0] == "rent\n\nfood")
+_t, _s, _p = html_to_note('<table><tr><td> <span style="color:#ff0000">rent</span>'
+                          ' due</td></tr></table>')
+check(f"a lone cell's colour stays on its words ({_t!r}, {_s})",
+      _t == "rent due" and any(s["style"] == "text_color" and s["start"] == 0
+                               and s["end"] == 4 for s in _s))
+_t, _s, _p = html_to_note('<table><tr><td>a<br>b</td></tr><tr><td>c</td></tr></table>'
+                          '<p style="text-align:center">d</p>')
+check(f"a lone cell's line breaks are lines, and what follows keeps its line ({_t!r}, {_p})",
+      _t == "a\nb\nc\nd" and {"line": 3, "align": "center"} in _p)
+check("a table of two columns keeps its frame",
+      html_to_note("<table><tr><td>a</td><td>b</td></tr></table>")[0].startswith("| a"))
 
 print()
 print(f"FAILURES: {fails if fails else 'none'}")

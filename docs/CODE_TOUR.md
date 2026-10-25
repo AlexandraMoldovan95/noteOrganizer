@@ -615,7 +615,9 @@ function returns None rather than failing when it cannot work, leaves all
 the actual decisions — what maps to what, how lists nest, where offsets
 land — in a module that turns strings into strings and can be tested
 anywhere. That is `test_richtext.py`, which needs no window and no
-clipboard.
+clipboard. The one decision `clipboard.py` makes, which part of Windows'
+document was copied (`fragment_of`), is a string function too, and is
+tested there.
 
 **Two things that map more neatly than you might expect.** An `<li>`
 becomes a line starting `"• "` plus a `paragraphs` entry, which is exactly

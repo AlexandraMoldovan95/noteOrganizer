@@ -5109,5 +5109,68 @@
     "must_fail": ["cells copied from a table and pasted by Ctrl+Shift+V come back a table"],
     "suites": ["qa1"],
     "expect": "killed"
+  },
+  {
+    "id": "XL01",
+    "about": "the CF_HTML fragment is cut out without the table or row its markers sit in (a row copied from Excel)",
+    "edits": [{"file": "noteorganizer/core/clipboard.py",
+               "find": "    return (\"\".join(\"<%s>\" % tag for tag in reader.open) + fragment\n            + \"\".join(\"</%s>\" % tag for tag in reversed(reader.open)))\n",
+               "replace": "    return fragment\n"}],
+    "must_fail": ["a row copied from Excel comes back inside its row and table",
+                  "a row copied from Excel pastes as a table row, its words whole",
+                  "a table copied from Excel lands as pipe rows"],
+    "suites": ["test_richtext", "qa1", "qa9"],
+    "expect": "killed"
+  },
+  {
+    "id": "XL02",
+    "about": "a row or cell left open before the markers is never ended by the next",
+    "edits": [{"file": "noteorganizer/core/clipboard.py",
+               "find": "        while self.open and self.open[-1] in _ENDS.get(tag, ()):\n",
+               "replace": "        while False:\n"}],
+    "must_fail": ["rows and cells left open, as HTML allows, end where the next begins"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
+  },
+  {
+    "id": "XL03",
+    "about": "a row of one cell keeps its pipes (one cell or column from Excel)",
+    "edits": [{"file": "noteorganizer/core/richtext.py",
+               "find": "            if self._row_cells == 1:\n",
+               "replace": "            if False:\n"}],
+    "must_fail": ["one cell copied as a table pastes as its words",
+                  "one cell copied from Excel pastes as its word, no pipes"],
+    "suites": ["test_richtext", "qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "XL04",
+    "about": "a lone cell's styles stay where the pipes had them",
+    "edits": [{"file": "noteorganizer/core/richtext.py",
+               "find": "            gone += min(pos, b) - a\n        return pos - gone\n",
+               "replace": "            gone += min(pos, b) - a\n        return pos\n"}],
+    "must_fail": ["a lone cell's colour stays on its words"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
+  },
+  {
+    "id": "XL05",
+    "about": "lines after a lone cell's line breaks keep their old numbers",
+    "edits": [{"file": "noteorganizer/core/richtext.py",
+               "find": "            lambda n: n + sum(1 for row_line in breaks if row_line < n))\n",
+               "replace": "            lambda n: n)\n"}],
+    "must_fail": ["a lone cell's line breaks are lines, and what follows keeps its line"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
+  },
+  {
+    "id": "XL06",
+    "about": "a lone cell's line break marker is cut without becoming a line",
+    "edits": [{"file": "noteorganizer/core/richtext.py",
+               "find": "            chars[at] = \"\\n\"\n",
+               "replace": "            pass\n"}],
+    "must_fail": ["a lone cell's line breaks are lines, and what follows keeps its line"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
   }
 ]

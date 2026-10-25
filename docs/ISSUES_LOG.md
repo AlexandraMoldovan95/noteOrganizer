@@ -177,6 +177,7 @@ is in the table below as well.
 | [A separator's dashes, read as a width nobody set](#a-separators-dashes-read-as-a-width-nobody-set) | When a format borrows another's syntax, the borrowed form arrives written as the other world writes it: decide whose it is where that is still known — at the way in. | 0.96.396 |
 | [The safety net that measured the wrong thing](#the-safety-net-that-measured-the-wrong-thing) | A guard has to measure the harm itself, not something that usually moves with it: a proxy holds until the day the two part ways. | Unreleased |
 | [The plain paste that read only the spreadsheet's copy](#the-plain-paste-that-read-only-the-spreadsheets-copy) | A copy written in several forms has one that is the thing itself: every paste, plain included, starts from it and drops only what it promises to. | Unreleased |
+| [The row Excel marked inside its own table](#the-row-excel-marked-inside-its-own-table) | A stand-in for another program must say what that program says, not what we expect it to. | Unreleased |
 | [Photographs of the site's pages, blank below the first screen](#photographs-of-the-sites-pages-blank-below-the-first-screen) | A photograph proves only what was on the screen when it was taken: photograph a page as a reader meets it, and give what changes it checks of its own. | the website |
 
 Smaller lessons, each once a long comment in the code, are collected
@@ -4954,6 +4955,39 @@ Ctrl+V would make a table.
 **Takeaway:** a copy written in several forms for several readers has one form that is the
 thing itself; every paste of it, plain included, has to start from that one, and drop only what
 it promises to drop.
+
+### The row Excel marked inside its own table
+
+*(Unreleased · 2026-10-25 · found by the owner on 0.96.396, beside test case 693; the cause read
+from her clipboard, once, with her leave)*
+
+**Symptom:** one row of the test plan copied in Excel and pasted into a note with Ctrl+V came in as
+loose text: "| High", then "| The", then "app open on the phone." — the second cell broken where
+Excel had wrapped it. The guide said a table copied from Excel lands as a real table, and every
+check of that passed.
+
+**Root cause:** the HTML on the Windows clipboard is a whole document with two markers around what
+was copied, and the app read only what lay between them. Excel puts the markers inside its table:
+around the rows, and for a single row around its cells. Between them, then, were two cells with no
+row and no table, and the reader writes a row's closing pipe only at the row's end, so the line
+was no table row. With no block tag in sight, the reader also took the markup's own line breaks
+for a PDF's real ones. The template editor and a paste over selected cells look for `<table>`
+between the markers before anything else, so they never saw a table in a copy from Excel either.
+The checks had never seen what Excel writes: they handed the paste a fragment holding `<table>`,
+as a web page writes it, and the cutting itself runs only on Windows, where no check reached it.
+
+Testing the paste found one more: a table of one column, or one cell, came in framed —
+"| rent |" — which is no table here, a table having two columns at least.
+
+**Fix:** `fragment_of` reads the document up to the start marker and opens again, around the
+fragment, the table, row, cell or list still open there, closing them after it; formatting open
+there is left out, since only structure changes what the text is. Our own copy, marked straight
+inside `<body>`, comes back exactly as written, which is how a paste still knows it. A row of one
+cell is written as the cell's words alone, its line breaks real lines.
+
+**Takeaway:** a stand-in for another program must say what that program says, not what we expect
+it to. The checks were written from how a web page puts a table on the clipboard, and passed all
+along while Excel, the program the guide named, wrote something else.
 
 ### Nine regressions in fifteen fixes
 

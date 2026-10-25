@@ -21,6 +21,7 @@ down with it.
 """
 
 import sys
+from html.parser import HTMLParser
 
 _WINDOWS = sys.platform == "win32"
 
@@ -99,7 +100,8 @@ def read_html():
 
     Only the fragment between the markers is returned -- the surrounding
     document is whatever the source application wrapped it in, and none of
-    it is part of what was copied.
+    it is part of what was copied -- save the table or list the markers sit
+    in, which is (fragment_of).
     """
     if not _WINDOWS:
         return None
@@ -111,15 +113,62 @@ def read_html():
             raw = _read_format(fmt) if fmt else None
         if not raw:
             return None
-        text = raw.decode("utf-8", "replace").rstrip("\x00")
-        start, end = text.find(_START_MARK), text.find(_END_MARK)
-        if start != -1 and end != -1 and end > start:
-            return text[start + len(_START_MARK):end]
-        # Some applications omit the markers and give the whole document.
-        body = text.lower().find("<body")
-        return text[text.find(">", body) + 1:] if body != -1 else text
+        return fragment_of(raw.decode("utf-8", "replace").rstrip("\x00"))
     except Exception:
         return None
+
+
+# The elements whose absence changes what a fragment's text means: a cell
+# outside a row, a row outside a table, an item outside its list.
+_STRUCTURE = ("table", "tr", "td", "th", "ul", "ol")
+# A row or cell begun ends the open one of its kind, as HTML has it.
+_ENDS = {"tr": ("tr", "td", "th"), "td": ("td", "th"), "th": ("td", "th")}
+
+
+class _OpenAtMarker(HTMLParser):
+    """The structural elements still open where a document's text ends."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.open = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag not in _STRUCTURE:
+            return
+        while self.open and self.open[-1] in _ENDS.get(tag, ()):
+            self.open.pop()
+        self.open.append(tag)
+
+    def handle_endtag(self, tag):
+        if tag in self.open:
+            while self.open.pop() != tag:
+                pass
+
+
+def fragment_of(document):
+    """The fragment a CF_HTML *document* marks, inside the structure its
+    markers sit in.
+
+    Excel puts the markers inside the table: around the rows, and for one
+    row around its cells -- so the fragment alone was cells with no row, and
+    a row copied from Excel pasted as loose text (2026-10-25). The table,
+    row, cell or list open at the start marker is opened again around the
+    fragment and closed after it. Formatting open there is left out: only
+    structure changes what the text is.
+    """
+    start, end = document.find(_START_MARK), document.find(_END_MARK)
+    if start == -1 or end == -1 or end <= start:
+        # Some applications omit the markers and give the whole document.
+        body = document.lower().find("<body")
+        return document[document.find(">", body) + 1:] if body != -1 else document
+    fragment = document[start + len(_START_MARK):end]
+    reader = _OpenAtMarker()
+    try:
+        reader.feed(document[:start])
+    except Exception:
+        return fragment
+    return ("".join("<%s>" % tag for tag in reader.open) + fragment
+            + "".join("</%s>" % tag for tag in reversed(reader.open)))
 
 
 def read_text():

@@ -525,7 +525,11 @@ That work is split deliberately across two modules:
 - **`core/clipboard.py`** is the platform part, and is kept as small as possible: open the
   clipboard, read or write one format, close it. Every function returns None or does nothing
   off Windows, or when the clipboard is momentarily held by another program, so a paste that
-  cannot find rich content simply falls back to the plain-text paste the app always did.
+  cannot find rich content simply falls back to the plain-text paste the app always did. Its one
+  decision, cutting the copied part out of the document Windows keeps, is a pure function
+  (`fragment_of`) tested with the conversion: Excel marks that part inside its own table, so the
+  table, row or list it sits in is read with it
+  ([the story](ISSUES_LOG.md#the-row-excel-marked-inside-its-own-table)).
 - **`core/richtext.py`** is the conversion, and knows nothing about clipboards. It turns HTML
   into a note's text, spans and paragraph entries, and back again — strings in, strings out.
 

@@ -206,7 +206,26 @@ NO.clipboard.read_html = lambda: (
 _body9.delete('1.0', 'end')
 _took9 = app._paste_table_aware(_body9)
 _lines9 = [l for l in _body9.get('1.0', 'end-1c').split('\n') if l]
-check(f'a pasted Excel/web table lands as pipe rows ({_lines9[:1]})',
+check(f'a table pasted from a page or Word lands as pipe rows ({_lines9[:1]})',
+      _took9 == 'break' and len(_lines9) == 2
+      and _lines9[0].count('|') == 3 and 'Column1' in _lines9[0])
+# What Excel writes: its markers inside the table, around the rows. Cut out
+# alone the rows had no <table>, which this paste looks for first, and the
+# words came in without their table (2026-10-25). Cut as read_html cuts it.
+NO.clipboard.read_html = lambda: NO.clipboard.fragment_of(
+    'Version:1.0\r\nStartHTML:0000000105\r\nEndHTML:0000000999\r\n'
+    'StartFragment:0000000500\r\nEndFragment:0000000700\r\n\r\n'
+    '<html>\r\n<head>\r\n<style>\r\n<!--table\r\n\t{mso-displayed-decimal-'
+    'separator:"\\.";}\r\n-->\r\n</style>\r\n</head>\r\n<body link=blue>\r\n'
+    "<table border=0 cellpadding=0 cellspacing=0>\r\n <col width=64 span=2>\r\n"
+    '<!--StartFragment-->\r\n <tr height=20>\r\n  <td>Column1</td>\r\n'
+    '  <td>Column2</td>\r\n </tr>\r\n <tr height=20>\r\n  <td align=right>2</td>\r\n'
+    '  <td align=right>3</td>\r\n </tr>\r\n<!--EndFragment-->\r\n</table>\r\n'
+    '</body>\r\n</html>')
+_body9.delete('1.0', 'end')
+_took9 = app._paste_table_aware(_body9)
+_lines9 = [l for l in _body9.get('1.0', 'end-1c').split('\n') if l]
+check(f'a table copied from Excel lands as pipe rows ({_lines9[:1]})',
       _took9 == 'break' and len(_lines9) == 2
       and _lines9[0].count('|') == 3 and 'Column1' in _lines9[0])
 NO.clipboard.read_html = lambda: '<p>just text</p>'

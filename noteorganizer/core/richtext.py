@@ -195,6 +195,9 @@ class _Reader(HTMLParser):
         self._lists = []         # ('bullet'|'number', count so far)
         self._line = 0
         self._line_has_text = False
+        self._row_cells = 0      # cells written on the row being read
+        self._row_from = 0       # where that row's first cell begins
+        self.lone_cells = []     # (start, end) of each row of one cell
 
     # -- helpers ---------------------------------------------------------
     def _at_line_start(self):
@@ -246,6 +249,13 @@ class _Reader(HTMLParser):
             self.length -= len(self.text[-1]) - len(trimmed)
             self.text[-1] = trimmed
 
+    def _cell(self, chunk):
+        """Write one cell's opening, counted for its row (lone_cells)."""
+        if not self._row_cells:
+            self._row_from = self.length
+        self._row_cells += 1
+        self._add(chunk)
+
     def _newline(self):
         self._trim_line_end()
         if self.length and not self.text[-1].endswith("\n"):
@@ -280,7 +290,7 @@ class _Reader(HTMLParser):
         if not pending or self._tbl_col not in pending:
             return False
         left, marker = pending[self._tbl_col]
-        self._add(tables.CELL + " " + marker + " ")
+        self._cell(tables.CELL + " " + marker + " ")
         if left - 1 > 0:
             pending[self._tbl_col][0] = left - 1
         else:
@@ -340,7 +350,7 @@ class _Reader(HTMLParser):
             # two-plus on both sides as centred.
             lead = ("  " if self._tbl_cell_align in ("center", "right")
                     else " ")
-            self._add(tables.CELL + lead)
+            self._cell(tables.CELL + lead)
         elif tag in _BLOCK_TAGS:
             if self.cell_depth:
                 # A <br> inside a cell is the cell's own line break — the
@@ -417,7 +427,7 @@ class _Reader(HTMLParser):
             # the anchor, "<" under the rest of its width, so the rectangle
             # reads back unambiguously.
             for _ in range(span_c - 1):
-                self._add(tables.CELL + " " + tables.MERGE_LEFT + " ")
+                self._cell(tables.CELL + " " + tables.MERGE_LEFT + " ")
             if span_r > 1:
                 pending = getattr(self, "_tbl_pending", None)
                 if pending is None:
@@ -439,11 +449,14 @@ class _Reader(HTMLParser):
                     if cover < self._tbl_col:
                         continue
                     while self._tbl_col < cover:
-                        self._add(tables.CELL + "  ")
+                        self._cell(tables.CELL + "  ")
                         self._tbl_col += 1
                     self._owed_merge_cell()
             # The row's closing pipe, before the newline _BLOCK_TAGS gives it.
             self._add(tables.CELL)
+            if self._row_cells == 1:
+                self.lone_cells.append((self._row_from, self.length))
+            self._row_cells = 0
             self._newline()
         elif tag in _BLOCK_TAGS:
             if not self.cell_depth:
@@ -472,6 +485,58 @@ class _Reader(HTMLParser):
 _BLOCK_TAG_RE = re.compile(
     r"<\s*/?\s*(?:" + "|".join(sorted(_BLOCK_TAGS | {"li", "ul", "ol", "table"}))
     + r")\b", re.I)
+
+
+def _unframe_lone_cells(text, rows):
+    """*text* with each row of one cell -- *rows*, the (start, end) of its
+    "| ... |" -- written as the cell's words alone, its line breaks real
+    lines; with a function moving an offset into *text* to where it now
+    falls, and one moving a line number. A row of one cell is no table here
+    (tables._MIN_CELLS): left framed, one cell or one column copied from
+    Excel or a page pasted as "| rent |"."""
+    cuts, breaks, line, seen = [], [], 0, 0
+    swaps = []                          # each break's "<", now its "\n"
+    for start, end in rows:
+        row = text[start:end]
+        if len(row) < 2 or row[0] != tables.CELL or row[-1] != tables.CELL:
+            continue                    # cut short by MAX_PASTE_CHARS
+        line += text.count("\n", seen, start)
+        seen = start
+        inner = row[1:-1]
+        if not inner.strip(" "):
+            cuts.append((start, end))
+            continue
+        first = start + 1 + len(inner) - len(inner.lstrip(" "))
+        last = end - 1 - len(inner) + len(inner.rstrip(" "))
+        cuts.append((start, first))
+        at = text.find(tables.LINE_BREAK, first, last)
+        while at != -1:
+            swaps.append(at)
+            cuts.append((at + 1, at + len(tables.LINE_BREAK)))
+            breaks.append(line)
+            at = text.find(tables.LINE_BREAK, at + len(tables.LINE_BREAK), last)
+        cuts.append((last, end))
+
+    def moved(pos):
+        gone = 0
+        for a, b in cuts:
+            if pos <= a:
+                break
+            gone += min(pos, b) - a
+        return pos - gone
+
+    if swaps:
+        chars = list(text)
+        for at in swaps:
+            chars[at] = "\n"
+        text = "".join(chars)
+    kept, at = [], 0
+    for a, b in cuts:
+        kept.append(text[at:a])
+        at = b
+    kept.append(text[at:])
+    return ("".join(kept), moved,
+            lambda n: n + sum(1 for row_line in breaks if row_line < n))
 
 
 def html_to_note(fragment, report=None):
@@ -504,10 +569,12 @@ def html_to_note(fragment, report=None):
         report["text_cut"] = reader.text_cut
         report["styles_cut"] = reader.styles_cut
 
-    text = "".join(reader.text).strip("\n")
-    dropped = len("".join(reader.text)) - len("".join(reader.text).lstrip("\n"))
-    spans = [dict(s, start=max(0, s["start"] - dropped),
-                  end=max(0, s["end"] - dropped)) for s in reader.spans]
+    joined, moved, line_moved = _unframe_lone_cells("".join(reader.text),
+                                                    reader.lone_cells)
+    text = joined.strip("\n")
+    dropped = len(joined) - len(joined.lstrip("\n"))
+    spans = [dict(s, start=max(0, moved(s["start"]) - dropped),
+                  end=max(0, moved(s["end"]) - dropped)) for s in reader.spans]
     spans = [s for s in spans if s["end"] > s["start"] and s["start"] < len(text)]
     for span in spans:
         span["end"] = min(span["end"], len(text))
@@ -528,7 +595,7 @@ def html_to_note(fragment, report=None):
         # of it, but the spans have to be moved by however much it removed.
         text, table_shifts = tables.align(text)
         spans = shift_spans(spans, table_shifts)
-    paragraphs = [dict(p) for p in reader.paragraphs]
+    paragraphs = [dict(p, line=line_moved(p["line"])) for p in reader.paragraphs]
     return (text,
             normalize_formatting(spans),
             normalize_paragraphs(paragraphs, len(text.split("\n"))))
