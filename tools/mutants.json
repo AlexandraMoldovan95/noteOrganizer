@@ -5057,5 +5057,140 @@
     "must_fail": ["a paste out of a table being typed forgets them as well"],
     "suites": ["qa1"],
     "expect": "killed"
+  },
+  {
+    "id": "RD01",
+    "about": "most of a short note replaced keeps no rescue copy (test case 692)",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "    return lost >= 15 and lost >= old_len * 0.7\n",
+               "replace": "    return False\n"}],
+    "must_fail": ["a short note replaced by a new line keeps a copy (test case 692)",
+                  "a short note replaced by a new line before the autosave keeps its words"],
+    "suites": ["test_note_identity", "qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "RD02",
+    "about": "what a save loses is counted as how much shorter the text got",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "    return len(old) - start - end\n",
+               "replace": "    return max(0, len(old) - len(new))\n"}],
+    "must_fail": ["text_lost counts what neither end keeps",
+                  "a paragraph replaced by another as long keeps a copy"],
+    "suites": ["test_note_identity"],
+    "expect": "killed"
+  },
+  {
+    "id": "RD03",
+    "about": "the save keeps a copy only of an emptied note, never asking rescue_copy_due",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                elif rescue_due:\n",
+               "replace": "                elif not body and not title and (note.get(\"body\") or note.get(\"title\")):\n"}],
+    "must_fail": ["a short note replaced by a new line before the autosave keeps its words"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "PP01",
+    "about": "Ctrl+Shift+V pastes this app's own cell copy as tabs (test case 693)",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                and self._paste_tsv_as_table(raw=text, plain=True)):\n            return \"break\"\n",
+               "replace": "                and False):\n            return \"break\"\n"}],
+    "must_fail": ["cells copied from a table and pasted by Ctrl+Shift+V come back a table"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "PP02",
+    "about": "Ctrl+Shift+V brings the copied cells' colours with the table",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                and self._paste_tsv_as_table(raw=text, plain=True)):\n",
+               "replace": "                and self._paste_tsv_as_table(raw=text)):\n"}],
+    "must_fail": ["cells copied from a table and pasted by Ctrl+Shift+V come back a table"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "XL01",
+    "about": "the CF_HTML fragment is cut out without the table or row its markers sit in (a row copied from Excel)",
+    "edits": [{"file": "noteorganizer/core/clipboard.py",
+               "find": "    return (\"\".join(\"<%s>\" % tag for tag in reader.open) + fragment\n            + \"\".join(\"</%s>\" % tag for tag in reversed(reader.open)))\n",
+               "replace": "    return fragment\n"}],
+    "must_fail": ["a row copied from Excel comes back inside its row and table",
+                  "a row copied from Excel pastes as a table row, its words whole",
+                  "a table copied from Excel lands as pipe rows"],
+    "suites": ["test_richtext", "qa1", "qa9"],
+    "expect": "killed"
+  },
+  {
+    "id": "XL02",
+    "about": "a row or cell left open before the markers is never ended by the next",
+    "edits": [{"file": "noteorganizer/core/clipboard.py",
+               "find": "        while self.open and self.open[-1] in _ENDS.get(tag, ()):\n",
+               "replace": "        while False:\n"}],
+    "must_fail": ["rows and cells left open, as HTML allows, end where the next begins"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
+  },
+  {
+    "id": "XL03",
+    "about": "a row of one cell keeps its pipes (one cell or column from Excel)",
+    "edits": [{"file": "noteorganizer/core/richtext.py",
+               "find": "            if self._row_cells == 1:\n",
+               "replace": "            if False:\n"}],
+    "must_fail": ["one cell copied as a table pastes as its words",
+                  "one cell copied from Excel pastes as its word, no pipes"],
+    "suites": ["test_richtext", "qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "XL04",
+    "about": "a lone cell's styles stay where the pipes had them",
+    "edits": [{"file": "noteorganizer/core/richtext.py",
+               "find": "        return pos - before[i - 1] - (min(pos, cuts[i - 1][1]) - starts[i - 1]) if i else pos\n",
+               "replace": "        return pos\n"}],
+    "must_fail": ["a lone cell's colour stays on its words"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
+  },
+  {
+    "id": "XL05",
+    "about": "lines after a lone cell's line breaks keep their old numbers",
+    "edits": [{"file": "noteorganizer/core/richtext.py",
+               "find": "    return (\"\".join(kept), moved, lambda n: n + bisect.bisect_left(breaks, n))\n",
+               "replace": "    return (\"\".join(kept), moved, lambda n: n)\n"}],
+    "must_fail": ["a lone cell's line breaks are lines, and what follows keeps its line"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
+  },
+  {
+    "id": "XL07",
+    "about": "a lone cell's offsets moved by walking every cut, not halving (a long styled column froze)",
+    "edits": [{"file": "noteorganizer/core/richtext.py",
+               "find": "    def moved(pos):\n        i = bisect.bisect_left(starts, pos)\n",
+               "replace": "    def moved(pos):\n        gone = 0\n        for a, b in cuts:\n            if pos <= a:\n                break\n            gone += min(pos, b) - a\n        return pos - gone\n        i = bisect.bisect_left(starts, pos)\n"}],
+    "must_fail": ["a column of 20,000 lone cells comes out whole, its offsets moved by halving"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
+  },
+  {
+    "id": "NB01",
+    "about": "a page's non-breaking spaces stay in the note (a search for the words around a bold one fails)",
+    "edits": [{"file": "noteorganizer/core/richtext.py",
+               "find": "        cleaned = cleaned.replace(\"\\xa0\", \" \")\n",
+               "replace": ""}],
+    "must_fail": ["a page's non-breaking spaces come in as spaces, as many as there were"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
+  },
+  {
+    "id": "XL06",
+    "about": "a lone cell's line break marker is cut without becoming a line",
+    "edits": [{"file": "noteorganizer/core/richtext.py",
+               "find": "            chars[at] = \"\\n\"\n",
+               "replace": "            pass\n"}],
+    "must_fail": ["a lone cell's line breaks are lines, and what follows keeps its line"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
   }
 ]

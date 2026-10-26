@@ -2460,7 +2460,11 @@ def _stub_clipboard(html=None, text=None, loopback=False):
     # the suite never exercised the Windows route order, and the pasted
     # table gluing itself onto the "Source:" line shipped unseen.
     if loopback:
-        NO.clipboard.read_html = lambda: _written.get('html')
+        # Wrapped as Windows keeps it and cut as read_html cuts it: our own
+        # copy is known by its fragment coming back exactly as written.
+        NO.clipboard.read_html = lambda: (NO.clipboard.fragment_of(
+            NO.clipboard._wrap_html(_written['html']).decode('utf-8'))
+            if _written.get('html') else None)
         NO.clipboard.read_text = lambda: _written.get('text')
     else:
         NO.clipboard.read_html = lambda: html
@@ -2775,6 +2779,39 @@ check('whose cells hold the pasted values',
        for r in range(3)]
       == [['Name', 'Qty'], ['Milk', '2'], ['Eggs and bread', '12']])
 check('the text around the table is not', not _mono(1) and not _mono(5))
+
+# What Excel writes: its markers inside the table -- for one row, around the
+# cells -- so the fragment alone was cells with no row, and a row copied
+# from Excel pasted as loose text, "The" and "app open on the phone." on
+# lines of their own (the owner, 2026-10-25). Cut as read_html cuts it.
+_xl_doc = ('Version:1.0\r\nStartHTML:0000000105\r\nEndHTML:0000000999\r\n'
+           'StartFragment:0000000500\r\nEndFragment:0000000700\r\n\r\n'
+           '<html xmlns:x="urn:schemas-microsoft-com:office:excel">\r\n<head>\r\n'
+           '<style>\r\n<!--table\r\n\t{mso-displayed-decimal-separator:"\\.";}\r\n'
+           '-->\r\n</style>\r\n</head>\r\n<body link=blue vlink=purple>\r\n'
+           "<table border=0 cellpadding=0 cellspacing=0 width=308>\r\n"
+           " <col width=73 style='width:55pt'>\r\n"
+           " <tr height=140 style='height:105.0pt'>\r\n<!--StartFragment-->\r\nCELLS\r\n"
+           '<!--EndFragment-->\r\n </tr>\r\n</table>\r\n</body>\r\n</html>')
+_stub_clipboard(html=NO.clipboard.fragment_of(_xl_doc.replace(
+    'CELLS', "  <td height=140 class=xl66 align=left width=73>High</td>\r\n"
+             "  <td class=xl65 align=left width=235 style='border-left:none'>The\r\n"
+             "  app open on the phone.</td>")),
+    text='High\tThe app open on the phone.\r\n')
+set_body('')
+app._on_body_paste()
+app.update()
+_xl_lines = body().split('\n')
+check(f'a row copied from Excel pastes as a table row, its words whole ({_xl_lines!r})',
+      core_tables.split_row(_xl_lines[0]) == ['High', 'The app open on the phone.']
+      and app._grid_at_line(1) is not None)
+_stub_clipboard(html=NO.clipboard.fragment_of(_xl_doc.replace(
+    'CELLS', "  <td height=140 class=xl66 align=left width=73>rent</td>")), text='rent\r\n')
+set_body('')
+app._on_body_paste()
+app.update()
+check(f'one cell copied from Excel pastes as its word, no pipes ({body()!r})',
+      body().strip('\n') == 'rent')
 _face = NO.tkfont.Font(root=app,
                        font=app.body_text.tag_cget(app.TABLE_TAG, 'font'))
 check(f'the face is a monospace one '
@@ -7832,6 +7869,38 @@ _bodyW = app.body_text.get('1.0', 'end-1c').split(chr(10))
 check('our own table copy pastes below the Source line, not into it',
       _bodyW[_lnW - 1] == 'Source: '
       and len(core_tables.find_blocks(chr(10).join(_bodyW))) == 2)
+_stub_clipboard()
+set_body('')
+
+# ...and pasted by Ctrl+Shift+V (the owner's test case 693, 2026-10-24):
+# the plain paste read only the clipboard's text, and our cell copy's text
+# is tabs, for a spreadsheet -- the cells came in as tabs, a box as "[x]",
+# where Ctrl+V rebuilt the table. Plain, it is the table again, without
+# the cells' colours.
+set_body('| Done | Item |' + chr(10) + '| --- | --- |' + chr(10) + '| [x] | Milk |')
+app._render_table_grids()
+app.update()
+_kP = app.body_text.get('3.0', '3.end').index('Milk')
+app.body_text.tag_add(
+    app._ensure_color_tag(app.body_text, 'text_color', '#d32f2f'),
+    '3.%d' % (_kP + app._col_base(3)), '3.%d' % (_kP + app._col_base(3) + 4))
+_iP = app._grid_at_line(1)
+app._grid_select_range(_iP, (0, 0), (1, 1))
+_stub_clipboard(loopback=True)
+app._grid_copy_selection({'info': _iP, 'box': (0, 0, 1, 1)})
+app._grid_clear_selection()
+set_body('')
+app.update()
+app._paste_plain()
+app.update()
+_bodyP = app.body_text.get('1.0', 'end-1c')
+_atP = app.body_text.search('Milk', '1.0', 'end', elide=True)   # under the drawn grid
+_tagsP = ([t for t in app.body_text.tag_names(_atP) if t.startswith('text_color')]
+          if _atP else ['no Milk'])
+check(f"cells copied from a table and pasted by Ctrl+Shift+V come back a table, "
+      f"its box a box, without the cells' colours ({_bodyP!r}; {_tagsP})",
+      len(core_tables.find_blocks(_bodyP)) == 1 and chr(9) not in _bodyP
+      and '[x]' in _bodyP and not _tagsP and len(app._table_grids) == 1)
 _stub_clipboard()
 set_body('')
 

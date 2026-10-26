@@ -23,8 +23,10 @@ from noteorganizer.core.model import (
     apply_shared_update,
     copy_replaced_by_restore,
     find_by_uid,
+    rescue_copy_due,
     rescue_copy_spent,
     split_by_identity,
+    text_lost,
     new_note_uid,
     normalize_note,
 )
@@ -327,6 +329,36 @@ check('...the fields an update brings back with it',
 check('...but nothing over an emptied note, or words the restored text holds',
       copy_replaced_by_restore({"title": "t", "body": ""}, _kept) is None
       and copy_replaced_by_restore({"title": "t", "body": "a long text"}, _kept) is None)
+
+# ---- when a save keeps a rescue copy: by what is gone (2026-10-24) ----
+#
+# Counted by how much SHORTER the text got, a short note replaced by a new
+# line before the autosave (the owner's test case 692) and a paragraph
+# replaced by one as long kept no copy, and their words were gone.
+_short = "Buy milk\nCall mom\nPay the rent"
+_para = "x" * 200 + "\n" + "an old paragraph of three hundred characters " * 6 + "\n" + "y" * 100
+check('text_lost counts what neither end keeps',
+      text_lost("abcdef", "abXYef") == 2 and text_lost("abc", "abc") == 0
+      and text_lost("abc", "") == 3 and text_lost("", "new") == 0)
+check('a short note replaced by a new line keeps a copy (test case 692)',
+      rescue_copy_due("", _short, "", "A new line"))
+check('a paragraph replaced by another as long keeps a copy',
+      rescue_copy_due("t", _para, "t", _para.replace("an old paragraph", "a new paragraph!")
+                      .replace("of three hundred characters", "freshly typed in place of it.")))
+check('an emptied note keeps a copy, however short',
+      rescue_copy_due("", "milk", "", ""))
+check('a big deletion keeps one, as it always did',
+      rescue_copy_due("t", _long * 3, "t", _long))
+check('a word changed keeps none',
+      not rescue_copy_due("", _short, "", _short.replace("mom", "dad")))
+check('...nor words added, at the end or in the middle',
+      not rescue_copy_due("", _short, "", _short + "\nWater the plants")
+      and not rescue_copy_due("", _short, "", _short.replace("Call", "Please call")))
+check('...nor a tiny note retyped, or a title renamed',
+      not rescue_copy_due("", "Milk", "", "Eggs")
+      and not rescue_copy_due("Shopping", _short, "Groceries", _short))
+check('...nor a first save of a new note',
+      not rescue_copy_due("", "", "Title", "text"))
 
 # ---- the identity has to survive the app closing ----
 #

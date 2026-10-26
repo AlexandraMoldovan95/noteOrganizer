@@ -242,8 +242,12 @@ runs.
 
 ### The rescue copy: kept while it rescues, swapped when used
 
-A drastic shrink, a repeat turned off with days of its own, or an update from a code or a backup
+A big loss of text, a repeat turned off with days of its own, or an update from a code or a backup
 keeps the version it replaces in the note's `_prev`, which **↩ Restore previous** brings back.
+The loss is counted by what of the old text is gone, not by how much shorter the text became
+(`rescue_copy_due`, 2026-10-24): emptied, more than 40 characters and 30% or 200 of them, or most
+of a short note. Measured as a shrink, a short note replaced by a new line, and a paragraph
+replaced by one as long, kept nothing.
 Two rules, both from 2026-10-22 and both the owner's call on both apps, keep that copy from ever
 costing words. A save that holds again everything the copy kept spends it (`rescue_copy_spent`):
 a shrink taken back with Ctrl+Z left the button in place, and pressed later it put the old
@@ -521,7 +525,11 @@ That work is split deliberately across two modules:
 - **`core/clipboard.py`** is the platform part, and is kept as small as possible: open the
   clipboard, read or write one format, close it. Every function returns None or does nothing
   off Windows, or when the clipboard is momentarily held by another program, so a paste that
-  cannot find rich content simply falls back to the plain-text paste the app always did.
+  cannot find rich content simply falls back to the plain-text paste the app always did. Its one
+  decision, cutting the copied part out of the document Windows keeps, is a pure function
+  (`fragment_of`) tested with the conversion: Excel marks that part inside its own table, so the
+  table, row or list it sits in is read with it
+  ([the story](ISSUES_LOG.md#the-row-excel-marked-inside-its-own-table)).
 - **`core/richtext.py`** is the conversion, and knows nothing about clipboards. It turns HTML
   into a note's text, spans and paragraph entries, and back again — strings in, strings out.
 

@@ -91,12 +91,13 @@ whatever you were working on first, so there's no tab-juggling and no risk of lo
 
 Notes save automatically a moment after you stop typing (look for the "Auto-saved" status), and
 always save immediately when you switch to a different note. There is a safety net under the
-autosave, too: if a note's text suddenly shrinks drastically (an accidental select-all-and-type,
-say), the app quietly keeps the earlier version and an **↩ Restore previous** button appears in
-the editor — one click (past a warning that pre-selects No) brings the old text back whole,
-tables redrawn and all. What it replaces is kept in turn, so pressing it again brings that back:
-nothing written since is lost. If you take the shrink back yourself with Ctrl+Z, the button goes
-away once the note is saved, as there is nothing left to rescue.
+autosave, too: if much of a note's text suddenly goes — emptied, a big part deleted, or replaced
+by something else (an accidental select-all-and-type, say) — the app quietly keeps the earlier
+version and an **↩ Restore previous** button appears in the editor — one click (past a warning
+that pre-selects No) brings the old text back whole, tables redrawn and all. What it replaces is
+kept in turn, so pressing it again brings that back: nothing written since is lost. If you take
+the change back yourself with Ctrl+Z, the button goes away once the note is saved, as there is
+nothing left to rescue.
 
 Closing the app works the same way:
 anything still unsaved is saved on the way out, silently — no "unsaved changes" question, because
@@ -251,7 +252,9 @@ included, and a copy from Google Docs bold only where the document is.
 
 - **Ctrl+Shift+V** pastes the words on their own, with none of the styling — and no bullets
   either, even when the thing you copied from puts bullet characters into its own plain-text
-  version. There is a **Paste without formatting** entry on the right-click menu too.
+  version. A table stays a table: cells copied from a note's table come back as that table, its
+  boxes still boxes, only without the cells' colours and bold. There is a **Paste without
+  formatting** entry on the right-click menu too.
 - Copying works the same way outwards: select part of a note, copy it, and paste it into an email
   or a document, and it arrives still formatted, its font sizes and typefaces included. Copying
   between two notes keeps everything.
@@ -310,8 +313,10 @@ A table works the way a spreadsheet has taught your hands to expect:
   **Ctrl+V** somewhere else pastes it in the same shape.
 - Copying works with the outside world in both directions: cells copied here paste into Excel as
   cells and into Word as a real table with visible borders, and a table copied from Excel or a web
-  page lands here as a real table. So does a table written as markdown text, from a chat or a
-  `.md` file, its columns as wide as its words: the dashes under its header set no width here.
+  page lands here as a real table, a single row of it too. So does a table written as markdown
+  text, from a chat or a `.md` file, its columns as wide as its words: the dashes under its header
+  set no width here. A single column or a single cell comes in as its words, one cell to a line:
+  a table here has two columns at least.
 - Copied cells keep how they look — highlights, coloured and bold words, sizes, each cell's
   alignment — in Word, in a duplicate pasted under the table, and pasted into another table's
   cells.

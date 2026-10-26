@@ -370,6 +370,7 @@ from noteorganizer.core.model import (
     _note_str,
     normalize_note,
     rescue_copy_spent,
+    rescue_copy_due,
     copy_replaced_by_restore,
     find_by_uid,
     split_by_identity,
@@ -7471,7 +7472,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return True
 
     @_undo_atom
-    def _paste_tsv_as_table(self, raw=None):
+    def _paste_tsv_as_table(self, raw=None, plain=False):
         """Tab-separated clipboard text pasted into the body becomes a
         real table.
 
@@ -7482,7 +7483,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         showing as text, "nothing happens or <br> <br> appears" in the
         field report. Same shape arrives from a spreadsheet copied as
         plain text, so both now land as a grid. Single cells (no tab)
-        keep pasting as ordinary text.
+        keep pasting as ordinary text. *plain* (Ctrl+Shift+V): the table
+        comes back without the copied cells' styles or its place on the page.
         """
         if raw is None:
             raw = clipboard.read_text()
@@ -7561,7 +7563,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         rows = [rows[0], separator] + rows[1:]
         aligns = [aligns[0], [core_tables.ALIGN_LEFT] * ncols] + aligns[1:]
         lines = core_tables.format_table(rows, aligns)
-        clip_place = getattr(self, "_grid_cell_clip_place", None) if own else None
+        clip_place = getattr(self, "_grid_cell_clip_place", None) if own and not plain else None
         # The grids come down before anything is written, selection or not:
         # torn down by the drawing at the end, inside this unit, they split
         # it -- the paste one step, where the windows sit another on top --
@@ -7594,7 +7596,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         ins_line = int(b.index("insert").split(".")[0])
         b.insert("insert lineend", prefix + "\n".join(lines) + "\n")
         first_new = ins_line + (1 if prefix else 0)
-        if own and getattr(self, "_grid_cell_clip_styles", None):
+        if own and not plain and getattr(self, "_grid_cell_clip_styles", None):
             # The copied cells' own styles, on the same cells again.
             self._grid_lay_cell_styles(first_new, lines, self._grid_cell_clip_styles)
         if clip_place in ("center", "right"):
@@ -7642,6 +7644,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 text = self.body_text.clipboard_get()
             except tk.TclError:
                 return "break"
+        # This app's own copy of table cells is a table: its plain text is
+        # tabs, for a spreadsheet, and pasted as that the boxes read "[x]"
+        # where Ctrl+V rebuilt the table (2026-10-24, test case 693).
+        own_cells = getattr(self, "_grid_cell_clip_text", None)
+        if (own_cells and "\t" in own_cells
+                and text.replace("\r\n", "\n").replace("\r", "\n") == own_cells
+                and self._paste_tsv_as_table(raw=text, plain=True)):
+            return "break"
         # Plenty of sources write their own bullets into the plain text they
         # offer, and a marker in the text is what makes a line a list line
         # here -- so pasting it verbatim produced the very formatting this
@@ -20881,25 +20891,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 announce = auto
             else:
                 # Before overwriting, keep a one-step backup of the OLD version
-                # if the user just removed a lot of text — either a big fraction
-                # (>30%) OR a large absolute amount (200+ chars). This catches
-                # "I accidentally deleted a chunk" even in a very long note.
-                old_len = len(note.get("body", "")) + len(note.get("title", ""))
-                new_len = len(body) + len(title)
-                removed = old_len - new_len
-                big_fraction = old_len > 0 and new_len < old_len * 0.7
-                big_absolute = removed >= 200
-                # Emptied completely counts however short it was. The
-                # thresholds above were written when an empty save could
-                # not happen at all -- the guard refused it -- so they
-                # only ever had to catch a drastic SHRINK. Now that
-                # clearing a saved note is a legitimate edit on every
-                # route, a short one (a 17-character shopping list, say)
-                # slipped under all three and was written to disk with no
-                # rescue copy, nothing in the Trash, and the undo history
-                # reset by the note switch that persisted it. The case
-                # that most needs the safety net had none.
-                emptied = old_len > 0 and new_len == 0
+                # if a lot of the old text is gone -- emptied, a big part of
+                # it, or most of a short note -- counted by what is gone,
+                # not by how much shorter it got (rescue_copy_due). An
+                # emptied note counts however short it was: a 17-character
+                # shopping list cleared once went to disk with no copy.
+                rescue_due = rescue_copy_due(note.get("title", ""), note.get("body", ""),
+                                             title, body)
                 # The repeat going off takes every day's own text with it
                 # (below): kept whole, with the repeat and the days, so
                 # Restore previous brings the series back as it was.
@@ -20907,8 +20905,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     note, recurrence)
                 if days_lost:
                     note["_prev"] = self._turn_off_rescue_copy(note)
-                elif (emptied
-                        or (removed > 40 and (big_fraction or big_absolute))):
+                elif rescue_due:
                     note["_prev"] = {
                         "title": note.get("title", ""),
                         "body": note.get("body", ""),

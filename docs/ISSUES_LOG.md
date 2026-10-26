@@ -175,6 +175,9 @@ is in the table below as well.
 | [The marker that was only characters](#the-marker-that-was-only-characters) | When a structure is stored as text, every route that edits text edits it: count the routes that reach it, not the ones the feature was written for. | 0.96.394 |
 | [The rescue copy that outlived what it rescued](#the-rescue-copy-that-outlived-what-it-rescued) | A safety net that can be pressed later must know whether it still rescues anything, and must itself be undoable. | 0.96.395 |
 | [A separator's dashes, read as a width nobody set](#a-separators-dashes-read-as-a-width-nobody-set) | When a format borrows another's syntax, the borrowed form arrives written as the other world writes it: decide whose it is where that is still known — at the way in. | 0.96.396 |
+| [The safety net that measured the wrong thing](#the-safety-net-that-measured-the-wrong-thing) | A guard has to measure the harm itself, not something that usually moves with it: a proxy holds until the day the two part ways. | Unreleased |
+| [The plain paste that read only the spreadsheet's copy](#the-plain-paste-that-read-only-the-spreadsheets-copy) | A copy written in several forms has one that is the thing itself: every paste, plain included, starts from it and drops only what it promises to. | Unreleased |
+| [The row Excel marked inside its own table](#the-row-excel-marked-inside-its-own-table) | A stand-in for another program must say what that program says, not what we expect it to. | Unreleased |
 | [Photographs of the site's pages, blank below the first screen](#photographs-of-the-sites-pages-blank-below-the-first-screen) | A photograph proves only what was on the screen when it was taken: photograph a page as a reader meets it, and give what changes it checks of its own. | the website |
 
 Smaller lessons, each once a long comment in the code, are collected
@@ -4901,6 +4904,90 @@ would only mislead. The question says the text is kept only when it will be.
 
 **Takeaway:** a safety net that can be pressed later must know whether it still rescues
 anything — and pressing it must leave a way back, or the net becomes the fall.
+
+### The safety net that measured the wrong thing
+
+*(Unreleased · 2026-10-24 · found by the owner walking test case 692 on the 0.96.396 `.exe`; the
+Android app did the same)*
+
+**Symptom:** a note of three short lines, selected whole and deleted, then a new line typed before
+the autosave ran. No **↩ Restore previous**, and the three lines were gone. Wiped and left until
+the autosave, the same note kept its copy.
+
+**Root cause:** the copy was made when the text got *shorter* by more than 40 characters, and by
+30% of it or 200 characters — or was emptied. Thirty characters replaced by ten shrink by twenty:
+under the bar, no copy. The rule measured how much shorter the text was, while what it guards
+against is how much of it is *gone*, and the two part ways whenever something new is written in
+its place. A paragraph of 300 characters replaced by one as long did not get shorter at all, in
+a note of any length. The emptied-note rule of 2026-09 had caught one case of the same mismatch,
+the emptied short note, and left the rest.
+
+**Fix:** `rescue_copy_due` counts what of the old text is gone — its length less the longest start
+and end the old and new text share (`text_lost`) — with the same bars as before, plus one for
+most of a short note: 70% of it, 15 characters at least. A word changed, words added, a tiny note
+retyped and a title renamed still keep no copy. The Android app's `updateNote`, which follows the
+desktop's thresholds by design, takes the same rule.
+
+**Takeaway:** a guard has to measure the harm itself, not something that usually moves with it. A
+proxy holds until the day the two part ways — and a safety net is exactly where that day costs
+the most.
+
+### The plain paste that read only the spreadsheet's copy
+
+*(Unreleased · 2026-10-24 · found by the owner beside test case 693 on the 0.96.396 `.exe`; the
+Android app has no cell copy)*
+
+**Symptom:** a table's cells selected in its grid, copied, and pasted into a new note. Ctrl+V
+brought the table back. Ctrl+Shift+V brought words separated by tabs, a ticked box as "[x]". The
+same paste of a text selection holding the table, which test case 693 walks, was fine.
+
+**Root cause:** a cell copy writes three things: tab-separated text, for a spreadsheet; HTML, for
+a document; and the app's own record of the cells, styles and place included. Ctrl+V recognises
+its own copy and rebuilds the table from it. Ctrl+Shift+V reads the plain text alone, by design —
+and for this copy the plain text is the spreadsheet's form, not the note's.
+
+**Fix:** when the plain text is exactly what this app's own cell copy wrote, Ctrl+Shift+V builds
+the table from it as Ctrl+V does (`_paste_tsv_as_table(plain=True)`), leaving out the cells'
+colours, bold and the table's place on the page — the formatting a plain paste promises to drop.
+Tabs from anywhere else still paste as text: there Ctrl+Shift+V stays the way to get words when
+Ctrl+V would make a table.
+
+**Takeaway:** a copy written in several forms for several readers has one form that is the
+thing itself; every paste of it, plain included, has to start from that one, and drop only what
+it promises to drop.
+
+### The row Excel marked inside its own table
+
+*(Unreleased · 2026-10-25 · found by the owner on 0.96.396, beside test case 693; the cause read
+from her clipboard, once, with her leave)*
+
+**Symptom:** one row of the test plan copied in Excel and pasted into a note with Ctrl+V came in as
+loose text: "| High", then "| The", then "app open on the phone." — the second cell broken where
+Excel had wrapped it. The guide said a table copied from Excel lands as a real table, and every
+check of that passed.
+
+**Root cause:** the HTML on the Windows clipboard is a whole document with two markers around what
+was copied, and the app read only what lay between them. Excel puts the markers inside its table:
+around the rows, and for a single row around its cells. Between them, then, were two cells with no
+row and no table, and the reader writes a row's closing pipe only at the row's end, so the line
+was no table row. With no block tag in sight, the reader also took the markup's own line breaks
+for a PDF's real ones. The template editor and a paste over selected cells look for `<table>`
+between the markers before anything else, so they never saw a table in a copy from Excel either.
+The checks had never seen what Excel writes: they handed the paste a fragment holding `<table>`,
+as a web page writes it, and the cutting itself runs only on Windows, where no check reached it.
+
+Testing the paste found one more: a table of one column, or one cell, came in framed —
+"| rent |" — which is no table here, a table having two columns at least.
+
+**Fix:** `fragment_of` reads the document up to the start marker and opens again, around the
+fragment, the table, row, cell or list still open there, closing them after it; formatting open
+there is left out, since only structure changes what the text is. Our own copy, marked straight
+inside `<body>`, comes back exactly as written, which is how a paste still knows it. A row of one
+cell is written as the cell's words alone, its line breaks real lines.
+
+**Takeaway:** a stand-in for another program must say what that program says, not what we expect
+it to. The checks were written from how a web page puts a table on the clipboard, and passed all
+along while Excel, the program the guide named, wrote something else.
 
 ### Nine regressions in fifteen fixes
 

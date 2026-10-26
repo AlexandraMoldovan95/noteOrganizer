@@ -109,6 +109,49 @@ How the numbers themselves are counted is the
 
 ## [Unreleased]
 
+### Fixed
+
+- **Restore previous keeps a note's words when they are replaced, not only when they shrink.**
+  Select all and type a new line before the autosave, in a note of a few short lines, and the old
+  text was gone with no **↩ Restore previous**: the copy was made when the text got shorter by
+  more than 40 characters, and a short note replaced by a line does not. A paragraph replaced by
+  one as long did not get shorter at all. The copy is now decided by how much of the old text is
+  gone: emptied, a big part of it, or most of a short note. Found by the owner walking test case
+  692 on 0.96.396.
+- **Cells copied from a table and pasted with Ctrl+Shift+V come back as the table.** They came in
+  as words separated by tabs, a ticked box as "[x]": the cells' plain text is written that way for
+  a spreadsheet, and the plain paste read nothing else, while Ctrl+V, from the same copy, rebuilt
+  the table. Now the plain paste rebuilds it too, without the cells' colours and bold. Found by the
+  owner testing beside case 693 on 0.96.396.
+- **A row copied from Excel pastes as a table row.** It came in as loose text, a cell's words
+  broken over lines where the cell had wrapped them. Excel marks what was copied inside its table,
+  around one row's cells, and the app read the marked part alone: cells with no row. The table or
+  row the copy sits in is now read with it. The template editor's paste and a paste over selected
+  cells looked for a table in that part first, and so never found one in a copy from Excel at all.
+  Found by the owner on 0.96.396, beside case 693.
+- **A single cell or a single column copied as a table pastes as its words.** It came in framed in
+  pipes, "| rent |", which is no table here, since a table has two columns at least. From Excel or
+  from a web page alike.
+- **Words pasted from a web page are found by search.** A browser puts a non-breaking space at
+  each edge of a bold word or a link, and those came into the note as they were: it looked the
+  same, but a search for the words either side found nothing. They come in as plain spaces now.
+  Noticed while testing the owner's case 94 on the phone.
+
+### Testing
+
+- `test_note_identity` holds `rescue_copy_due`: a short note replaced, a paragraph replaced by one
+  as long, an emptied note and a big deletion keep a copy; a word changed, words added, a tiny note
+  retyped and a title renamed keep none. qa7 walks the owner's steps: a short note wiped and a new
+  line typed before the autosave, its words kept and the button shown. Mutants RD01–RD03.
+- qa1 copies a table's cells, one coloured, and pastes them with Ctrl+Shift+V: a table again, its
+  box a box, no tab left and no colour brought. Mutants PP01–PP02.
+- `test_richtext` reads documents written as Excel writes them, a row and rows marked inside the
+  table, and holds a row of one cell coming in as its words, its colour and line breaks with it;
+  qa1 pastes Excel's row and single cell into a note, qa9 Excel's rows into the template editor,
+  and qa1's copy-and-paste-back checks now go through the same wrapping and cutting as Windows.
+  Mutants XL01–XL07, XL07 timing a column of 20,000 lone cells. `test_richtext` also holds a
+  page's non-breaking spaces coming in as spaces, as many as there were. Mutant NB01.
+
 ---
 
 ## [0.96.396] — 2026-10-24

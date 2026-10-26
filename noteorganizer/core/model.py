@@ -242,6 +242,39 @@ def rescue_copy_spent(note):
                for key in prev if key not in PREV_TEXT_FIELDS)
 
 
+def text_lost(old, new):
+    """How many characters of *old* *new* does not keep at either end: its
+    length less the longest start the two share and, of what follows, the
+    longest end. Words kept in the middle count as lost, so the measure
+    errs towards keeping a copy."""
+    limit = min(len(old), len(new))
+    start = 0
+    while start < limit and old[start] == new[start]:
+        start += 1
+    end = 0
+    while end < limit - start and old[-1 - end] == new[-1 - end]:
+        end += 1
+    return len(old) - start - end
+
+
+def rescue_copy_due(old_title, old_body, title, body):
+    """Whether a save of *title* and *body* over *old_title* and *old_body*
+    keeps the old text as the rescue copy "↩ Restore previous" brings back:
+    emptied; more than 40 characters gone, 30% of it or 200; or most of a
+    short note, 70% and 15 characters at least. Counted by what is gone, not
+    by how much shorter the text got. ISSUES_LOG: "The safety net that
+    measured the wrong thing"."""
+    old_len = len(old_title) + len(old_body)
+    if old_len == 0:
+        return False
+    if len(title) + len(body) == 0:
+        return True
+    lost = text_lost(old_title, title) + text_lost(old_body, body)
+    if lost > 40 and (lost >= old_len * 0.3 or lost >= 200):
+        return True
+    return lost >= 15 and lost >= old_len * 0.7
+
+
 def copy_replaced_by_restore(note, prev):
     """What "↩ Restore previous" keeps of the version it replaces, to be
     the rescue copy in its turn -- its text, and each other field *prev*
