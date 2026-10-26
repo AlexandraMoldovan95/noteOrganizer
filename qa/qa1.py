@@ -2213,11 +2213,16 @@ _readout = str(app.word_count_lbl.cget('text'))
 check(f'the editor shows the estimate under the counts ({_readout!r})',
       '400 words' in _readout and 'to read' in _readout
       and '\n' in _readout)
+_bold_top = app._fmt_bar.winfo_rooty()
 set_body('')
 app.update_word_count()
 app.update()
 check('an empty note shows no readout at all',
       str(app.word_count_lbl.cget('text')) == '')
+# The readout's two lines set its row's height, and the toolbar under it
+# jumped up when they went -- as the note on screen went to the Trash.
+check('...and the toolbar under it stays where it was',
+      app._fmt_bar.winfo_rooty() == _bold_top)
 
 # ---- TITLE LENGTH CAP ----
 # Not about storage or layout -- the note list already truncates to 60 for

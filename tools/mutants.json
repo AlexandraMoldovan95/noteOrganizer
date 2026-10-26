@@ -3047,6 +3047,20 @@
     "note": "Killed on Windows, where the app runs: Linux's mktime reaches 1900, so the fallback is never taken there and the check holds either way."
   },
   {
+    "id": "WC01",
+    "about": "the words readout is as tall as its text, so the toolbar jumps when the editor empties",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                                       anchor=\"e\", justify=\"right\", height=2)\n",
+        "replace": "                                       anchor=\"e\", justify=\"right\")\n"
+      }
+    ],
+    "must_fail": ["...and the toolbar under it stays where it was"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
     "id": "SF01",
     "about": "the startup purge deletes files that living notes and kept entries still use",
     "edits": [
