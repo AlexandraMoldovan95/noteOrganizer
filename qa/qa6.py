@@ -1672,6 +1672,32 @@ check('retention: answering Yes moves the label',
 check('retention: answering Yes moves the subtitle',
       'Kept for 7 days' in str(app._trash_subtitle_lbl.cget('text')))
 
+
+def _rt_row_lines():
+    out, stack = [], [app.settings_trash_panel]
+    while stack:
+        w = stack.pop()
+        try:
+            if w.winfo_class() == 'Label' and 'left' in str(w.cget('text')):
+                out.append(str(w.cget('text')))
+        except Exception:
+            pass
+        stack.extend(w.winfo_children())
+    return out
+
+
+# Every row quotes the window too. Only the subtitle followed the choice:
+# yesterday's note went on saying "29 day(s) left" under a 7-day window
+# until the panel was opened again (2026-10-26). Asked of the app rather
+# than written as 6: on the day the clocks spring forward, "a day ago" by
+# the wall clock is 23 real hours, and the row rightly says 7.
+_rt_left = app._days_left_in_trash(_RT_RECENT['deleted_at'])
+check("retention: ...and a row's days left follow the new window at once",
+      _rt_left in (6, 7)
+      and any('%d day(s) left' % _rt_left in t for t in _rt_row_lines())
+      and not any('%d day(s) left' % (_rt_left + 23) in t
+                  for t in _rt_row_lines()))
+
 # The preview and the purge must be the same judgement. A dialog that
 # counts with one rule while the purge deletes by another is a dialog
 # that lies.

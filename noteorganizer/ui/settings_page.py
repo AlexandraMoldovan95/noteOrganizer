@@ -1564,11 +1564,15 @@ class SettingsPageMixin:
                     return
             choose_trash_window(days)
             # The subtitle above quotes the window -- keep it honest
-            # without rebuilding the panel under the dropdown's feet.
+            # without rebuilding the panel under the dropdown's feet. Every
+            # row quotes it too, its "days left" worked out as it is drawn:
+            # the rows alone are drawn again, or they went on counting the
+            # old window until the panel was opened again (2026-10-26).
             try:
                 self._trash_subtitle_lbl.config(text=self._trash_window_line())
             except (tk.TclError, AttributeError):
                 pass
+            redraw()
 
         self._build_themed_dropdown(
             row, self.trash_retention_var,

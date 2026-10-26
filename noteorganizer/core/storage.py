@@ -12,7 +12,8 @@ writer goes through one atomic helper. docs/CODE_TOUR.md walks through it.
 import json
 import os
 import shutil
-from datetime import datetime, timedelta
+import time
+from datetime import datetime
 
 from . import diagnostics, paths
 # normalize_template validates a template's rich-text spans and its
@@ -294,7 +295,7 @@ def _delete_attachment_files(notes_or_entries, spare=()):
 
 
 def _trash_cutoff(days=None):
-    """The moment an entry has to predate to count as expired.
+    """The moment (real seconds) an entry has to predate to have expired.
 
     `days=None` means the window currently in force, and gives None while
     that window is not known: then nothing has expired. A number being
@@ -309,7 +310,37 @@ def _trash_cutoff(days=None):
         window = TRASH_RETENTION_DAYS
     else:
         window = max(1, min(days, 365))
-    return datetime.now() - timedelta(days=window)
+    return _now_epoch() - window * 86400
+
+
+def _now_epoch():
+    """Now, in real seconds. One name, so a test can stand the clock still."""
+    return time.time()
+
+
+def _local_epoch(when):
+    """A local wall-clock moment, in real seconds: mktime places it with the
+    offset in force on THAT day, not today's."""
+    return time.mktime(when.timetuple())
+
+
+def _deleted_epoch(stamp):
+    """When a Trash entry was deleted, in real seconds; None if its stamp is
+    unreadable. The stamp is wall-clock time, and an age measured on the
+    wall clock is an hour off across a change to or from summer time -- in
+    spring the purge took notes an hour before the window was up. Counted
+    in real time, as the Android app counts (2026-10-26)."""
+    try:
+        when = datetime.strptime(stamp or "", "%Y-%m-%d %H:%M:%S")
+    except (ValueError, TypeError):
+        return None
+    try:
+        return _local_epoch(when)
+    except (OverflowError, OSError, ValueError):
+        # Before 1970 (Windows' mktime refuses it) or past its reach: a
+        # hand-edited stamp, outside every window. Read as UTC, so it is
+        # past or not as it always was, never kept for good as unreadable.
+        return (when - datetime(1970, 1, 1)).total_seconds()
 
 
 def _trash_entry_is_past(entry, cutoff):
@@ -320,12 +351,8 @@ def _trash_entry_is_past(entry, cutoff):
     known (cutoff None): better kept too long than early."""
     if cutoff is None or not isinstance(entry, dict):
         return False
-    try:
-        when = datetime.strptime(entry.get("deleted_at", "") or "",
-                                 "%Y-%m-%d %H:%M:%S")
-    except (ValueError, TypeError):
-        return False
-    return when < cutoff
+    when = _deleted_epoch(entry.get("deleted_at", ""))
+    return when is not None and when < cutoff
 
 
 def trash_entries_past_window(trash, days=None):
@@ -644,14 +671,14 @@ def move_notes_to_trash(trash, notes_to_trash):
 def days_left_in_trash(deleted_at):
     """How many days until this trashed note auto-purges. None if unknown --
     the stamp unreadable, or the window (then it never purges by itself)."""
-    try:
-        when = datetime.strptime(deleted_at, "%Y-%m-%d %H:%M:%S")
-    except (ValueError, TypeError):
+    when = _deleted_epoch(deleted_at)
+    if when is None:
         return None
     window = trash_retention_days()
     if window is None:
         return None
-    elapsed = (datetime.now() - when).days
+    # Real days, by the purge's own clock, so the row and the purge agree.
+    elapsed = int((_now_epoch() - when) // 86400)
     return max(0, window - elapsed)
 
 

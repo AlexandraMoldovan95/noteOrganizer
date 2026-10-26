@@ -1010,6 +1010,61 @@ for _name in os.listdir(os.path.dirname(_paths.SETTINGS_FILE)):
         if _heldW == b"{not json":
             os.remove(_pathW)
 
+# ---- The window is counted in real time, not on the wall clock ----
+# deleted_at is wall-clock time, and an age measured on the wall clock is
+# an hour off across a change to summer time: in spring the purge took a
+# note an hour before its window was up, where the phone (counting real
+# time) kept it. A zone that springs forward on 29 March at 03:00 is
+# played here, since the machine's own may have none -- CI's is UTC.
+import calendar as _calD
+_settings_heldD = None
+if os.path.exists(_paths.SETTINGS_FILE):
+    with open(_paths.SETTINGS_FILE, "rb") as _f:
+        _settings_heldD = _f.read()
+
+
+def _zoneD(when):
+    hours = 3 if when >= _dtT.datetime(2026, 3, 29, 3) else 2
+    return _calD.timegm(when.timetuple()) - hours * 3600
+
+
+_clockD = (_storage._now_epoch, _storage._local_epoch)
+_storage._local_epoch = _zoneD
+_storage._now_epoch = lambda: _zoneD(_dtT.datetime(2026, 3, 31, 12, 30))
+try:
+    _storage.save_settings({"trash_retention_days": 30})
+    # 30 days and half an hour ago on the wall clock, half an hour short
+    # of 30 days in real time; and one that is really past.
+    _shyD = {"id": 11, "deleted_at": "2026-03-01 12:00:00", "attachments": []}
+    _pastD = {"id": 12, "deleted_at": "2026-03-01 11:00:00", "attachments": []}
+    _keptD, _nD = _storage.purge_expired_trash([dict(_shyD), dict(_pastD)], [])
+    check("across the spring clock change, a note not yet 30 real days in the Trash is kept",
+          [e["id"] for e in _keptD] == [11] and _nD == 1)
+    check("...and the shorter-window warning names what the purge removes",
+          [e["id"] for e in _storage.trash_entries_past_window([_shyD, _pastD], 30)] == [12])
+    # 3 days on the wall clock, 2 days and 23.5 hours really: 28 left.
+    check("...and the days left are counted in real days too",
+          _storage.days_left_in_trash("2026-03-28 12:00:00") == 28)
+    # The control: with no clock change in between, the same 30 days and
+    # half an hour IS past, so the keeping above is the change's doing.
+    _storage._local_epoch = lambda when: _calD.timegm(when.timetuple()) - 3 * 3600
+    check("...while with no clock change in between, the same note is past",
+          _storage.purge_expired_trash([dict(_shyD)], [])[1] == 1)
+finally:
+    _storage._now_epoch, _storage._local_epoch = _clockD
+    # On the real clock: a hand-edited stamp before 1970, which Windows'
+    # mktime refuses, is still past every window -- not kept for good as
+    # unreadable.
+    check("a deleted_at before 1970 is still past the window",
+          len(_storage.trash_entries_past_window(
+              [{"id": 13, "deleted_at": "1900-01-01 00:00:00"}], 365)) == 1)
+    if _settings_heldD is None:
+        if os.path.exists(_paths.SETTINGS_FILE):
+            os.remove(_paths.SETTINGS_FILE)
+    else:
+        with open(_paths.SETTINGS_FILE, "wb") as _f:
+            _f.write(_settings_heldD)
+
 # ---- Attachment deletion can't escape the attachments folder ----
 # A crafted share code (or hand-edited data) could carry an attachment
 # whose stored_as is "../../file" — permanent deletion used to join it
