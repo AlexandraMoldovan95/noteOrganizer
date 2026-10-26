@@ -122,5 +122,5 @@ a bug no script noticed until one was written for it.
 
 ---
 
-These four are a sample. The other 585 cases follow the same template and live in the full
+These four are a sample. The other 591 cases follow the same template and live in the full
 spreadsheet, walked by hand before every release.

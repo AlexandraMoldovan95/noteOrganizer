@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.97.405](#097405--2026-10-27) | 2026-10-27 | The Trash selects all its notes, and deletes the ticked ones for good; its rows follow a new window at once and count real time; the editor's toolbar holds still as a note empties. |
 | [0.96.401](#096401--2026-10-26) | 2026-10-26 | "↩ Restore previous" keeps a note's words when they are replaced, not only shrunk; a table copied from Excel, or its cells copied here and pasted with Ctrl+Shift+V, comes in as a table; words pasted from a web page are found by search. |
 | [0.96.396](#096396--2026-10-24) | 2026-10-24 | A table pasted as markdown text, from a chat or a `.md` file, fits its words instead of arriving with its columns cut short. |
 | [0.96.395](#096395--2026-10-23) | 2026-10-23 | A click on a list's number puts the cursor after it; "↩ Restore previous" keeps what it replaces and goes once the text is back; an import's question says one note as one. |
@@ -105,6 +106,46 @@ How the numbers themselves are counted is the
 | [0.3.0](#030--tags-removed-categories-as-the-sole-organization-system) | — | Tags come out entirely, leaving categories as the app's one organization system. |
 | [0.2.0](#020--inline-ui-overhaul--data-resilience) | — | Every OS-native popup becomes an in-app themed one, and the calendar grows richer. |
 | [0.1.0](#010--core-application) | — | The founding feature set — notes, recurrence, calendar, templates, sharing, themes. |
+
+---
+
+## [0.97.405] — 2026-10-27
+
+### Added
+
+- **The Trash selects all its notes, and deletes the ticked ones permanently.** Settings →
+  Recently deleted has Select all above its rows — the whole Trash, the rows under "Show more"
+  too — turning into Unselect all once everything is ticked, and "Delete N selected
+  permanently" under "↩ Restore N selected". Keep a few and delete the rest, or restore it all,
+  without a tick per row. The delete asks first, naming the count, the attached files and any
+  repeating series, and spares a file another note still uses. Asked for by the owner.
+
+### Fixed
+
+- **A new window changes every Trash row's days left at once.** Choosing 7 days moved the
+  subtitle to "Kept for 7 days" while every row went on saying "30 day(s) left" until the panel
+  was opened again. Issue #313.
+- **The Trash counts a note's time in it by the clock's real time.** Measured on the wall clock,
+  an age was an hour off across a change to summer time: in spring a note was removed an hour
+  before its window was up. The phone app already counted real time. Issue #314.
+- **The editor's toolbar holds still as the note on screen empties.** The words readout beside
+  "Note" is two lines with text and none without, and the toolbar and the note's box jumped up
+  when the editor emptied — a deleted note, + New Note — and down at the first letter. Seen as a
+  flicker after deleting every note at once. Issue #315.
+- **An emptied Trash no longer offers to restore what was ticked.** Emptied with rows ticked,
+  "↩ Restore 1 selected" stayed over the empty Trash and did nothing. Issue #316.
+
+### Testing
+
+- `test_data_safety` plays a zone that springs forward on 29 March, with a control that has no
+  change, and a stamp before 1970. Mutants TW15–TW17. qa6 reads a row's days left right after a
+  new window is picked (TW14).
+- qa6 walks 30 Trash entries, five under "Show more": Select all, a row unticked, Unselect all,
+  an Undo taking entries back under the panel, two kept and the rest deleted (No, then Yes), and
+  Empty trash with a row ticked. Mutants SA01–SA06.
+- qa1 holds the toolbar where it was as the editor empties. Mutant WC01.
+- Measured, nothing to fix: deleting 500, 1,000 and 2,000 notes at once, every step — the move,
+  the Trash panel, Undo, Empty trash, a start over a full Trash — under a quarter of a second.
 
 ---
 

@@ -178,6 +178,8 @@ is in the table below as well.
 | [The safety net that measured the wrong thing](#the-safety-net-that-measured-the-wrong-thing) | A guard has to measure the harm itself, not something that usually moves with it: a proxy holds until the day the two part ways. | 0.96.401 |
 | [The plain paste that read only the spreadsheet's copy](#the-plain-paste-that-read-only-the-spreadsheets-copy) | A copy written in several forms has one that is the thing itself: every paste, plain included, starts from it and drops only what it promises to. | 0.96.401 |
 | [The row Excel marked inside its own table](#the-row-excel-marked-inside-its-own-table) | A stand-in for another program must say what that program says, not what we expect it to. | 0.96.401 |
+| [The Trash that counted on the wall clock](#the-trash-that-counted-on-the-wall-clock) | An age is the distance between two moments, not between two clock readings; a rule that deletes must count the moments. | 0.97.405 |
+| [The flicker that was a word count](#the-flicker-that-was-a-word-count) | A label whose text can come and go sizes its row by what it says; give it the height of its tallest state. | 0.97.405 |
 | [Photographs of the site's pages, blank below the first screen](#photographs-of-the-sites-pages-blank-below-the-first-screen) | A photograph proves only what was on the screen when it was taken: photograph a page as a reader meets it, and give what changes it checks of its own. | the website |
 
 Smaller lessons, each once a long comment in the code, are collected
@@ -1923,6 +1925,38 @@ at all, since there are no notes to ask.
 one into the other on its next write erases the difference before anyone can act on it. Carry
 the not-knowing in the data until a person resolves it.
 
+### The Trash that counted on the wall clock
+
+*([0.97.405](../CHANGELOG.md#097405--2026-10-27) · 2026-10-26 · found answering the owner's
+question, on both apps · issues #313, #314)*
+
+**Symptom:** the owner deleted every note on both apps and asked one thing: if she sets 90 days,
+do notes stay 90 days, and 30 for 30? A probe for each window (7, 14, 30, 60, 90) put entries in
+the Trash at its edges, picked the window, started the app again and read `trash.json` back.
+Both apps kept exactly what they should. The phone's probe failed once anyway: with entries an
+hour either side of the window, the one an hour short of 30 days was gone. It was the day after
+the clocks went back. Beside it, on the desktop, the Trash panel's rows went on quoting the old
+window after a new one was picked, while the subtitle above them said the new one.
+
+**Root cause:** `deleted_at` is a wall-clock stamp, and the desktop measured an entry's age by
+subtracting two wall-clock readings. Across a change to summer time those differ from the time
+that really passed by an hour: in spring a note was purged an hour before its window was up, in
+autumn kept an hour longer. The phone counted real time and was right; its probe had built its
+"an hour short" on the wall clock, the same mistake from the other side. The rows were a second
+reader of the window: the window change rewrote the subtitle in place and left the rows, which
+work out their "days left" only as they are drawn.
+
+**Fix:** the purge, the shorter-window warning and the rows' days left count real seconds now
+— each stamp placed by the offset in force on its own day (`time.mktime`), now as `time.time()`
+— through one reader of the stamp, `_deleted_epoch`. A stamp before 1970, which Windows'
+`mktime` refuses, is read as UTC, so it stays past as it always was rather than being kept for
+good as unreadable. A new window redraws the rows with the subtitle. `test_data_safety` plays a
+zone that springs forward on 29 March, with a control that has no change; the probe's margins
+became two hours.
+
+**Takeaway:** an age is the distance between two moments, not between two clock readings; the
+two part by an hour twice a year, and a rule that deletes must count the moments.
+
 
 ## Tk & platform gotchas
 
@@ -2530,6 +2564,32 @@ the call that settles the line — was fixed in its near-twin instead: two metho
 few lines, one named in the commit message, the other edited. The next round found the
 untouched one by the symptom it left (a cell's bold half lost on Ctrl+Z). The sweep that would
 have caught it is mechanical: list every reader of the value, not the ones memory offers.
+
+### The flicker that was a word count
+
+*([0.97.405](../CHANGELOG.md#097405--2026-10-27) · 2026-10-26 · seen by the owner after deleting
+every note at once · issue #315)*
+
+**Symptom:** right after moving all her notes to the Trash, the editor's menu flickered, and the
+app felt slow until she reached the Trash. She asked whether a person deleting hundreds of notes
+at once would meet the same.
+
+**Root cause:** not the delete. Measured at 500, 1,000 and 2,000 notes, the move, opening the
+Trash, Undo, Empty trash and a start over a full Trash each took under a quarter of a second, and
+nothing brought the screen up to date in the middle of the delete (the slowness that day was the
+machine, busy with an emulator). A second probe recorded where every widget of the editor stood
+before the delete and after it: one row had shrunk from 32 pixels to 21, and everything under it
+had moved up by the difference. That row holds "Note" and the words readout — "46 words · 223
+characters" with "under a minute to read" on a second line, and nothing at all for an empty
+note. Tk sizes a row to its tallest widget, so the toolbar and the note's box jumped whenever
+the editor went from written to empty (a deleted note, + New Note) and back at the first letter.
+
+**Fix:** the readout is two lines tall whether it says anything or not (`height=2`); qa1 holds
+the toolbar's place as the editor empties, and photographs before and after a delete show it
+still.
+
+**Takeaway:** a label whose text can come and go sizes its row by what it says at the moment;
+give it the height of its tallest state, or the layout moves with the words.
 
 ## Editor & input interaction
 
