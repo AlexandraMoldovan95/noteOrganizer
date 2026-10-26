@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.96.401](#096401--2026-10-26) | 2026-10-26 | "↩ Restore previous" keeps a note's words when they are replaced, not only shrunk; a table copied from Excel, or its cells copied here and pasted with Ctrl+Shift+V, comes in as a table; words pasted from a web page are found by search. |
 | [0.96.396](#096396--2026-10-24) | 2026-10-24 | A table pasted as markdown text, from a chat or a `.md` file, fits its words instead of arriving with its columns cut short. |
 | [0.96.395](#096395--2026-10-23) | 2026-10-23 | A click on a list's number puts the cursor after it; "↩ Restore previous" keeps what it replaces and goes once the text is back; an import's question says one note as one. |
 | [0.96.394](#096394--2026-10-22) | 2026-10-22 | A numbered list stays numbered when you delete, type or paste across it, and Backspace after its number comes back with one Ctrl+Z; a new search shows its results from the top. |
@@ -107,7 +108,7 @@ How the numbers themselves are counted is the
 
 ---
 
-## [Unreleased]
+## [0.96.401] — 2026-10-26
 
 ### Fixed
 

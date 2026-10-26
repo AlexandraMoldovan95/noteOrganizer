@@ -1,7 +1,7 @@
 # How it's tested
 
 An excerpt from the manual test plan, a spreadsheet,
-[`qa/NoteOrganizer_TestPlan.xlsx`](../qa/NoteOrganizer_TestPlan.xlsx): **586 cases**. I walk it
+[`qa/NoteOrganizer_TestPlan.xlsx`](../qa/NoteOrganizer_TestPlan.xlsx): **589 cases**. I walk it
 by hand on the packaged `.exe` before a release - a case passes only when I've seen it pass.
 
 ## How the plan is used
@@ -20,8 +20,8 @@ by hand on the packaged `.exe` before a release - a case passes only when I've s
 
 | Priority | Cases |
 |---|---:|
-| High | 179 |
-| Medium | 287 |
+| High | 180 |
+| Medium | 289 |
 | Low | 120 |
 
 ### The six largest areas
@@ -30,14 +30,14 @@ by hand on the packaged `.exe` before a release - a case passes only when I've s
 |---|---:|
 | Editor | 70 |
 | Notes | 63 |
-| Tables | 53 |
+| Tables | 54 |
 | Recurrence | 47 |
 | Calendar | 46 |
 | Settings | 43 |
 
 ## The test case template, filled out four times
 
-Every one of the 586 cases uses the same template: area, priority, preconditions, numbered
+Every one of the 589 cases uses the same template: area, priority, preconditions, numbered
 steps, expected result, status, and what automation covers. **The four below are a small sample
 of that full list** - not the only ones, just quick to picture without seeing the app:
 
@@ -122,5 +122,5 @@ a bug no script noticed until one was written for it.
 
 ---
 
-These four are a sample. The other 581 cases follow the same template and live in the full
+These four are a sample. The other 585 cases follow the same template and live in the full
 spreadsheet, walked by hand before every release.

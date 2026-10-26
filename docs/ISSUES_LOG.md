@@ -175,9 +175,9 @@ is in the table below as well.
 | [The marker that was only characters](#the-marker-that-was-only-characters) | When a structure is stored as text, every route that edits text edits it: count the routes that reach it, not the ones the feature was written for. | 0.96.394 |
 | [The rescue copy that outlived what it rescued](#the-rescue-copy-that-outlived-what-it-rescued) | A safety net that can be pressed later must know whether it still rescues anything, and must itself be undoable. | 0.96.395 |
 | [A separator's dashes, read as a width nobody set](#a-separators-dashes-read-as-a-width-nobody-set) | When a format borrows another's syntax, the borrowed form arrives written as the other world writes it: decide whose it is where that is still known — at the way in. | 0.96.396 |
-| [The safety net that measured the wrong thing](#the-safety-net-that-measured-the-wrong-thing) | A guard has to measure the harm itself, not something that usually moves with it: a proxy holds until the day the two part ways. | Unreleased |
-| [The plain paste that read only the spreadsheet's copy](#the-plain-paste-that-read-only-the-spreadsheets-copy) | A copy written in several forms has one that is the thing itself: every paste, plain included, starts from it and drops only what it promises to. | Unreleased |
-| [The row Excel marked inside its own table](#the-row-excel-marked-inside-its-own-table) | A stand-in for another program must say what that program says, not what we expect it to. | Unreleased |
+| [The safety net that measured the wrong thing](#the-safety-net-that-measured-the-wrong-thing) | A guard has to measure the harm itself, not something that usually moves with it: a proxy holds until the day the two part ways. | 0.96.401 |
+| [The plain paste that read only the spreadsheet's copy](#the-plain-paste-that-read-only-the-spreadsheets-copy) | A copy written in several forms has one that is the thing itself: every paste, plain included, starts from it and drops only what it promises to. | 0.96.401 |
+| [The row Excel marked inside its own table](#the-row-excel-marked-inside-its-own-table) | A stand-in for another program must say what that program says, not what we expect it to. | 0.96.401 |
 | [Photographs of the site's pages, blank below the first screen](#photographs-of-the-sites-pages-blank-below-the-first-screen) | A photograph proves only what was on the screen when it was taken: photograph a page as a reader meets it, and give what changes it checks of its own. | the website |
 
 Smaller lessons, each once a long comment in the code, are collected
@@ -4907,8 +4907,8 @@ anything — and pressing it must leave a way back, or the net becomes the fall.
 
 ### The safety net that measured the wrong thing
 
-*(Unreleased · 2026-10-24 · found by the owner walking test case 692 on the 0.96.396 `.exe`; the
-Android app did the same)*
+*([0.96.401](../CHANGELOG.md#096401--2026-10-26) · 2026-10-24 · found by the owner walking test case 692 on the 0.96.396 `.exe`; the
+Android app did the same · issue #307)*
 
 **Symptom:** a note of three short lines, selected whole and deleted, then a new line typed before
 the autosave ran. No **↩ Restore previous**, and the three lines were gone. Wiped and left until
@@ -4934,8 +4934,8 @@ the most.
 
 ### The plain paste that read only the spreadsheet's copy
 
-*(Unreleased · 2026-10-24 · found by the owner beside test case 693 on the 0.96.396 `.exe`; the
-Android app has no cell copy)*
+*([0.96.401](../CHANGELOG.md#096401--2026-10-26) · 2026-10-24 · found by the owner beside test case 693 on the 0.96.396 `.exe`; the
+Android app has no cell copy · issue #308)*
 
 **Symptom:** a table's cells selected in its grid, copied, and pasted into a new note. Ctrl+V
 brought the table back. Ctrl+Shift+V brought words separated by tabs, a ticked box as "[x]". The
@@ -4958,8 +4958,8 @@ it promises to drop.
 
 ### The row Excel marked inside its own table
 
-*(Unreleased · 2026-10-25 · found by the owner on 0.96.396, beside test case 693; the cause read
-from her clipboard, once, with her leave)*
+*([0.96.401](../CHANGELOG.md#096401--2026-10-26) · 2026-10-25 · found by the owner on 0.96.396, beside test case 693; the cause read
+from her clipboard, once, with her leave · issue #309)*
 
 **Symptom:** one row of the test plan copied in Excel and pasted into a note with Ctrl+V came in as
 loose text: "| High", then "| The", then "app open on the phone." — the second cell broken where
