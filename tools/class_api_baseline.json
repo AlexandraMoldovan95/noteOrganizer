@@ -30,6 +30,7 @@
   "_astral_span_at": "(s, iu, before)",
   "_attach_dup_preview": "(self, widget, note)",
   "_attach_tooltip": "(self, widget, title, detail='')",
+  "_attached_files_words": "(entries)",
   "_autosave_now": "(self)",
   "_begin_list_restore": "(self)",
   "_bind_click_outside": "(self, pop)",

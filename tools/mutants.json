@@ -3047,6 +3047,90 @@
     "note": "Killed on Windows, where the app runs: Linux's mktime reaches 1900, so the fallback is never taken there and the check holds either way."
   },
   {
+    "id": "SA01",
+    "about": "Select all in the Trash ticks only the rows drawn, not those under Show more",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                if var is None:\n                    var = tk.IntVar(value=0)\n                    self._trash_sel[key] = var\n                var.set(0 if everything else 1)\n",
+        "replace": "                if var is None:\n                    continue\n                var.set(0 if everything else 1)\n"
+      }
+    ],
+    "must_fail": ["...and counts the rows not drawn yet"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SA02",
+    "about": "the Trash's Select all never turns into Unselect all",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                        text=\"Unselect all\" if len(picked) == len(self.trash)\n",
+        "replace": "                        text=\"Unselect all\" if False\n"
+      }
+    ],
+    "must_fail": ["...and then offers Unselect all"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SA03",
+    "about": "a permanent delete in the Trash takes a file a living note still uses",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                gone, spare=attachment_names_in(list(self.notes) + kept))\n",
+        "replace": "                gone, spare=set())\n"
+      }
+    ],
+    "must_fail": ["...a file a living note uses stays, one only the deleted used goes"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SA04",
+    "about": "Delete selected permanently deletes without asking",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "            if self.ask_yes_no(\n                \"Delete permanently\",\n                f\"Permanently delete {count} selected \"\n",
+        "replace": "            if True or self.ask_yes_no(\n                \"Delete permanently\",\n                f\"Permanently delete {count} selected \"\n"
+      }
+    ],
+    "must_fail": ["...and answering No deletes nothing"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SA05",
+    "about": "an emptied Trash keeps offering to restore what was ticked",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                # over an empty Trash, and did nothing.\n                refresh_restore_btn()\n",
+        "replace": "                # over an empty Trash, and did nothing.\n"
+      }
+    ],
+    "must_fail": ["Empty trash with a row ticked leaves no Restore, Delete or Select all over an empty Trash"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SA06",
+    "about": "Delete selected stays on screen once nothing is ticked",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                else:\n                    for button in (restore_btn, delete_btn):\n                        if self._is_placed(button):\n",
+        "replace": "                else:\n                    for button in (restore_btn,):\n                        if self._is_placed(button):\n"
+      }
+    ],
+    "must_fail": ["Unselect all clears every tick, and the buttons that act on them go"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
     "id": "WC01",
     "about": "the words readout is as tall as its text, so the toolbar jumps when the editor empties",
     "edits": [
