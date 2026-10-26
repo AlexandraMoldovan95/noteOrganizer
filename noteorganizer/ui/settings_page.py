@@ -1487,12 +1487,7 @@ class SettingsPageMixin:
         """
         count = len(doomed)
         noun = "note" if count == 1 else "notes"
-        files = sum(len(entry.get("attachments") or []) for entry in doomed
-                    if isinstance(entry, dict))
-        attached = ""
-        if files:
-            attached = (f", along with {files} attached "
-                        f"{'file' if files == 1 else 'files'}")
+        attached = self._attached_files_words(doomed)
         # `current` is None while the window before could not be read:
         # there is no "instead of" to name, and nothing was going before.
         instead = "" if current is None else f" instead of {current}"
@@ -1503,6 +1498,16 @@ class SettingsPageMixin:
             f"the app starts{attached}. This can't be undone."
             + self._series_warning(doomed)
         )
+
+    @staticmethod
+    def _attached_files_words(entries):
+        """", along with N attached files" for Trash entries about to go
+        for good, or "" when they carry none: the files leave the disk too."""
+        files = sum(len(entry.get("attachments") or []) for entry in entries
+                    if isinstance(entry, dict))
+        if not files:
+            return ""
+        return f", along with {files} attached {'file' if files == 1 else 'files'}"
 
     @staticmethod
     def _trash_window_line():
@@ -1564,11 +1569,15 @@ class SettingsPageMixin:
                     return
             choose_trash_window(days)
             # The subtitle above quotes the window -- keep it honest
-            # without rebuilding the panel under the dropdown's feet.
+            # without rebuilding the panel under the dropdown's feet. Every
+            # row quotes it too, its "days left" worked out as it is drawn:
+            # the rows alone are drawn again, or they went on counting the
+            # old window until the panel was opened again (2026-10-26).
             try:
                 self._trash_subtitle_lbl.config(text=self._trash_window_line())
             except (tk.TclError, AttributeError):
                 pass
+            redraw()
 
         self._build_themed_dropdown(
             row, self.trash_retention_var,
@@ -1635,19 +1644,79 @@ class SettingsPageMixin:
                     and self._trash_sel[_trash_tick_key(e)].get()]
 
         def refresh_restore_btn():
+            """The buttons that act on the ticks, and Select all's word."""
             picked = ticked_entries()
             try:
                 if picked:
                     restore_btn.configure(
                         text="↩ Restore %d selected" % len(picked),
                         state="normal")
-                    if not self._is_placed(restore_btn):
-                        restore_btn.pack(fill="x", padx=12, pady=(6, 0),
-                                         ipady=4, before=empty_holder)
-                elif self._is_placed(restore_btn):
-                    restore_btn.pack_forget()
+                    delete_btn.configure(
+                        text="Delete %d selected permanently" % len(picked))
+                    for button in (restore_btn, delete_btn):
+                        if not self._is_placed(button):
+                            button.pack(fill="x", padx=12, pady=(6, 0),
+                                        ipady=4, before=empty_holder)
+                else:
+                    for button in (restore_btn, delete_btn):
+                        if self._is_placed(button):
+                            button.pack_forget()
+                # It says what a press will do, as the note list's does.
+                if self.trash:
+                    select_btn.configure(
+                        text="Unselect all" if len(picked) == len(self.trash)
+                        else "Select all")
+                    if not self._is_placed(select_btn):
+                        select_btn.pack(anchor="e", padx=12, pady=(0, 4),
+                                        ipadx=4, before=wrap)
+                elif self._is_placed(select_btn):
+                    select_btn.pack_forget()
             except tk.TclError:
                 pass
+
+        def toggle_all():
+            # Every entry in the Trash, drawn or not: paging is only there
+            # to open the panel fast, and hides nothing the way a filter
+            # does. The buttons name the count (the owner's call, 2026-10-26).
+            everything = len(ticked_entries()) == len(self.trash)
+            for entry in self.trash:
+                key = _trash_tick_key(entry)
+                var = self._trash_sel.get(key)
+                if var is None:
+                    var = tk.IntVar(value=0)
+                    self._trash_sel[key] = var
+                var.set(0 if everything else 1)
+            refresh_restore_btn()
+
+        def destroy(named):
+            """These entries gone for good, and their files -- but not a file
+            a note or a kept entry still uses. What the question named is
+            what goes: an entry a toast's Undo took back meanwhile stays."""
+            named_ids = {id(e) for e in named}
+            gone = [e for e in self.trash if id(e) in named_ids]
+            kept = [e for e in self.trash if id(e) not in named_ids]
+            _delete_attachment_files(
+                gone, spare=attachment_names_in(list(self.notes) + kept))
+            self.trash = kept
+            save_trash(self.trash)
+
+        def delete_selected():
+            named = ticked_entries()
+            if not named:
+                return
+            count = len(named)
+            if self.ask_yes_no(
+                "Delete permanently",
+                f"Permanently delete {count} selected "
+                f"{'note' if count == 1 else 'notes'}"
+                f"{self._attached_files_words(named)}? This can't be undone."
+                + self._series_warning(named),
+                icon="warning", default="no"
+            ):
+                destroy(named)
+                self.set_status("Deleted %d note%s permanently"
+                                % (count, "" if count == 1 else "s"))
+            redraw()
 
         def restore_selected():
             picked = ticked_entries()
@@ -1731,6 +1800,9 @@ class SettingsPageMixin:
                 tk.Label(rows, text="Trash is empty.", bg=self.colors["card"],
                          fg=self.colors["subtext"], font=("Segoe UI", 10)).pack(pady=20)
                 wheel_on_rows()
+                # Emptied with notes ticked, "Restore 3 selected" stayed up
+                # over an empty Trash, and did nothing.
+                refresh_restore_btn()
                 return
             draw_rows(ordered_trash(), 0)
             wheel_on_rows()
@@ -1750,13 +1822,7 @@ class SettingsPageMixin:
                 "This can't be undone." + self._series_warning(named),
                 icon="warning", default="no"
             ):
-                named_ids = {id(e) for e in named}
-                gone = [e for e in self.trash if id(e) in named_ids]
-                kept = [e for e in self.trash if id(e) not in named_ids]
-                _delete_attachment_files(
-                    gone, spare=attachment_names_in(list(self.notes) + kept))
-                self.trash = kept
-                save_trash(self.trash)
+                destroy(named)
                 shown_count["n"] = PAGE_SIZE
                 redraw()
 
@@ -1774,6 +1840,16 @@ class SettingsPageMixin:
             parent, text="↩ Restore selected", command=restore_selected,
             relief="flat", cursor="hand2", font=("Segoe UI", 9, "bold"),
             bg=self.colors["accent"], fg=self._on_fill("accent"))
+        # Cannot be undone, so it is outlined in `danger` as Empty trash is:
+        # filled, under thirty ticks, it was the heaviest thing on the page.
+        # With Select all, it keeps a few and deletes the rest.
+        delete_btn = self._settings_big_button(
+            parent, "Delete selected permanently", delete_selected, kind="danger")
+        # Above the rows, shown while the Trash holds anything.
+        select_btn = tk.Button(
+            parent, text="Select all", command=toggle_all, relief="flat",
+            cursor="hand2", font=("Segoe UI", 8), bd=0,
+            bg=self.colors["card"], fg=self.colors["text"])
         empty_holder = self._settings_big_button(
             parent, "Empty trash", empty_trash, kind="danger")
         empty_holder.pack(fill="x", padx=12, pady=(4, 10), ipady=5)

@@ -1672,6 +1672,32 @@ check('retention: answering Yes moves the label',
 check('retention: answering Yes moves the subtitle',
       'Kept for 7 days' in str(app._trash_subtitle_lbl.cget('text')))
 
+
+def _rt_row_lines():
+    out, stack = [], [app.settings_trash_panel]
+    while stack:
+        w = stack.pop()
+        try:
+            if w.winfo_class() == 'Label' and 'left' in str(w.cget('text')):
+                out.append(str(w.cget('text')))
+        except Exception:
+            pass
+        stack.extend(w.winfo_children())
+    return out
+
+
+# Every row quotes the window too. Only the subtitle followed the choice:
+# yesterday's note went on saying "29 day(s) left" under a 7-day window
+# until the panel was opened again (2026-10-26). Asked of the app rather
+# than written as 6: on the day the clocks spring forward, "a day ago" by
+# the wall clock is 23 real hours, and the row rightly says 7.
+_rt_left = app._days_left_in_trash(_RT_RECENT['deleted_at'])
+check("retention: ...and a row's days left follow the new window at once",
+      _rt_left in (6, 7)
+      and any('%d day(s) left' % _rt_left in t for t in _rt_row_lines())
+      and not any('%d day(s) left' % (_rt_left + 23) in t
+                  for t in _rt_row_lines()))
+
 # The preview and the purge must be the same judgement. A dialog that
 # counts with one rule while the purge deletes by another is a dialog
 # that lies.
@@ -2245,13 +2271,18 @@ def _c14_button(text):
                  if text.lower() in str(b.cget('text')).lower()), None)
 
 
+# "selected" is on Delete N selected too since 2026-10-26: the bulk Restore
+# is the one with the arrow, which no row's own Restore has.
+_C14_RESTORE = '↩ restore'
+
+
 check('no Restore-selected button while nothing is ticked',
-      _c14_button('selected') is None
-      or not _c14_button('selected').winfo_ismapped())
+      _c14_button(_C14_RESTORE) is None
+      or not _c14_button(_C14_RESTORE).winfo_ismapped())
 # Tick two of the four.
 _c14_ticks[0].invoke(); _c14_ticks[2].invoke()
 app.update()
-_c14_restore = _c14_button('selected')
+_c14_restore = _c14_button(_C14_RESTORE)
 check('ticking notes offers to restore them',
       _c14_restore is not None and _c14_restore.winfo_ismapped())
 check(f'and the button says how many '
@@ -2291,7 +2322,7 @@ check(f'and the two restored are the ones that were ticked '
       sorted(n['body'] for n in app.notes) == _c14_want_bodies)
 check(f'while the untouched two are still in the trash ({_c14_left})',
       sorted(e['id'] for e in app.trash) == _c14_left)
-_c14_after = _c14_button('selected')
+_c14_after = _c14_button(_C14_RESTORE)
 check('and the offer goes away once nothing is ticked',
       _c14_after is None or not _c14_after.winfo_ismapped())
 # The destructive neighbour still works and still asks -- restoring must
@@ -2331,7 +2362,7 @@ if len(_sid_ticks) == 2:
     _sid_picked = next((t for t in ('Old draft', 'Second draft')
                         if any(t in s for s in _sid_titles)), None)
     _sid_ticks[0].invoke(); app.update()
-_sid_btn = _c14_button('selected')
+_sid_btn = _c14_button(_C14_RESTORE)
 check(f'ticking one of two rows that share an id ticks only that row '
       f'({_sid_ticked()}, {_sid_btn and str(_sid_btn.cget("text"))!r})',
       _sid_ticked() == [1, 0] and _sid_btn is not None
@@ -2344,6 +2375,147 @@ check(f'...and Restore selected brings back only the ticked note ({_sid_picked})
       and [e['title'] for e in app.trash]
       == [t for t in ('Old draft', 'Second draft') if t != _sid_picked])
 app.trash = []
+app.notes = []
+app.save_notes(); NO.save_trash(app.trash)
+
+# ---- Select all, and Delete selected permanently ----
+# Asked for by the owner (2026-10-26): keeping a few of a long Trash and
+# deleting the rest, or restoring all of it, was a tick per row. Select all
+# takes the whole Trash, the rows not drawn yet too -- paging hides nothing
+# the way a filter does -- and the buttons name the count. 30 entries, so
+# five wait under "Show more"; one shares its file with a living note, one
+# carries a file of its own, one is a series.
+_sa_ask = app.ask_yes_no
+_sa_files = {'sa_shared.txt': None, 'sa_own.txt': None}
+os.makedirs(NO.ATTACHMENTS_DIR, exist_ok=True)
+for _sa_name in _sa_files:
+    _sa_files[_sa_name] = os.path.join(NO.ATTACHMENTS_DIR, _sa_name)
+    with open(_sa_files[_sa_name], 'w') as _sa_fh:
+        _sa_fh.write('x')
+app.notes = [{'id': 1, 'title': 'Living', 'body': 'uses the shared file',
+              'category': 'General', 'uid': 'sa-living',
+              'attachments': [{'filename': 'a.txt', 'stored_as': 'sa_shared.txt'}]}]
+app.save_notes()
+app.trash = [{'id': 100 + i, 'title': 'Trashed %02d' % i, 'body': 'b%d' % i,
+              'category': 'General', 'uid': 'sa-%d' % i,
+              'deleted_at': '2026-10-%02d 09:00:00' % (1 + i % 25)}
+             for i in range(30)]
+app.trash[0]['attachments'] = [{'filename': 'a.txt', 'stored_as': 'sa_shared.txt'}]
+app.trash[1]['attachments'] = [{'filename': 'o.txt', 'stored_as': 'sa_own.txt'}]
+app.trash[2]['recurrence'] = {'freq': 'weekly'}
+app.trash[2]['date'] = '2026-10-05'
+NO.save_trash(app.trash)
+app.show_settings_page(); app.update()
+app.toggle_settings_panel('trash'); app.update()
+
+
+def _sa_ticked():
+    return [int(app.getvar(str(t.cget('variable'))))
+            for t in _c14_widgets(app.settings_trash_panel, tk.Checkbutton)]
+
+
+def _sa_words(text):
+    button = _c14_button(text)
+    return str(button.cget('text')) if button is not None and button.winfo_ismapped() else None
+
+
+def _sa_press(text):
+    """Press the button whose words hold `text`. A button a mutant took away
+    is a FAIL in the checks after it, never a crash before the footer."""
+    button = _c14_button(text)
+    if button is None or not button.winfo_ismapped():
+        return False
+    button.invoke()
+    app.update()
+    return True
+
+
+_sa_btn = _c14_button('select all')
+check('Select all is offered over a Trash that holds notes',
+      _sa_btn is not None and _sa_btn.winfo_ismapped()
+      and str(_sa_btn.cget('text')) == 'Select all')
+check('fixture: a page of 25 rows drawn of the 30', len(_sa_ticked()) == 25)
+_sa_press('select all')
+check(f"Select all ticks every row drawn ({_sa_ticked().count(1)} of {len(_sa_ticked())})",
+      _sa_ticked() and all(_sa_ticked()))
+check(f"...and counts the rows not drawn yet ({_sa_words(_C14_RESTORE)!r}, "
+      f"{_sa_words('permanently')!r})",
+      _sa_words(_C14_RESTORE) == '↩ Restore 30 selected'
+      and _sa_words('permanently') == 'Delete 30 selected permanently')
+check('...and then offers Unselect all', _sa_words('select all') == 'Unselect all')
+_sa_press('more')
+check(f'the rows Show more draws come ticked ({len(_sa_ticked())} rows)',
+      len(_sa_ticked()) == 30 and all(_sa_ticked()))
+_sa_rows = _c14_widgets(app.settings_trash_panel, tk.Checkbutton)
+if len(_sa_rows) > 3:
+    _sa_rows[3].invoke(); app.update()
+check(f"a row unticked by hand: Select all again, 29 counted ({_sa_words(_C14_RESTORE)!r})",
+      _sa_words('select all') == 'Select all'
+      and _sa_words(_C14_RESTORE) == '↩ Restore 29 selected')
+_sa_press('select all')
+check('Select all over a part-ticked Trash ticks the rest',
+      all(_sa_ticked()) and _sa_words(_C14_RESTORE) == '↩ Restore 30 selected')
+_sa_press('unselect all')
+check('Unselect all clears every tick, and the buttons that act on them go',
+      not any(_sa_ticked()) and _sa_words(_C14_RESTORE) is None
+      and _sa_words('permanently') is None and _sa_words('select all') == 'Select all')
+
+# A toast's Undo takes entries out of the Trash under the panel: the count
+# follows what is still there.
+if _sa_words('select all') == 'Select all':
+    _sa_press('select all')
+_sa_held = app.trash[-3:]
+app.trash = app.trash[:-3]
+app._refresh_open_trash_panel(); app.update()
+check(f"entries an Undo took back leave the count ({_sa_words(_C14_RESTORE)!r})",
+      _sa_words(_C14_RESTORE) == '↩ Restore 27 selected'
+      and _sa_words('select all') == 'Unselect all')
+app.trash = app.trash + _sa_held
+NO.save_trash(app.trash)
+app._refresh_open_trash_panel(); app.update()
+if _sa_ticked() and all(_sa_ticked()):
+    _sa_press('select all')
+
+# Keep two, delete the rest: Select all, untick two, Delete selected.
+_sa_press('select all')
+_sa_keep = []
+for _sa_tick in _c14_widgets(app.settings_trash_panel, tk.Checkbutton):
+    _sa_title = ' '.join(str(l.cget('text')) for l in _c14_widgets(_sa_tick.master, tk.Label))
+    if 'Trashed 05' in _sa_title or 'Trashed 06' in _sa_title:
+        _sa_tick.invoke()
+        _sa_keep.append(_sa_title)
+app.update()
+_rt_answer(False)
+_rt_asked.clear()
+_sa_press('permanently')
+check(f"Delete selected asks first, naming the count and the file ({_rt_asked.get('msg', '')[:90]!r})",
+      'Permanently delete 28 selected notes, along with 2 attached files?' in _rt_asked.get('msg', '')
+      and "can't be undone" in _rt_asked.get('msg', '')
+      and _rt_asked.get('kw', {}).get('default') == 'no')
+check('...and names the series among them',
+      'repeat' in _rt_asked.get('msg', '').lower())
+check('...and answering No deletes nothing', len(app.trash) == 30)
+_rt_answer(True)
+_sa_press('permanently')
+check(f"answering Yes deletes the 28 and keeps the two unticked ({[e['title'] for e in app.trash]})",
+      sorted(e['title'] for e in app.trash) == ['Trashed 05', 'Trashed 06']
+      and sorted(e['title'] for e in NO.load_trash()) == ['Trashed 05', 'Trashed 06'])
+check('...a file a living note uses stays, one only the deleted used goes',
+      os.path.exists(_sa_files['sa_shared.txt']) and not os.path.exists(_sa_files['sa_own.txt']))
+check('...and nothing is left ticked, so nothing is offered',
+      not any(_sa_ticked()) and _sa_words(_C14_RESTORE) is None and _sa_words('permanently') is None)
+
+# Empty trash with rows ticked: the offers go with the rows.
+_c14_ticks2 = _c14_widgets(app.settings_trash_panel, tk.Checkbutton)
+if _c14_ticks2:
+    _c14_ticks2[0].invoke(); app.update()
+_sa_press('Empty trash')
+check('Empty trash with a row ticked leaves no Restore, Delete or Select all over an empty Trash',
+      app.trash == [] and _sa_words(_C14_RESTORE) is None
+      and _sa_words('permanently') is None and _sa_words('select all') is None)
+app.ask_yes_no = _sa_ask
+if os.path.exists(_sa_files['sa_shared.txt']):
+    os.remove(_sa_files['sa_shared.txt'])
 app.notes = []
 app.save_notes(); NO.save_trash(app.trash)
 

@@ -14521,8 +14521,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.track_theme(body_label, bg="bg", fg="subtext")
         body_label.pack(side="left")
 
+        # Two lines tall even when empty: the row took its height from the
+        # readout, so the toolbar and the note jumped 11px whenever the
+        # editor went from empty to written (a first letter, a delete).
         self.word_count_lbl = tk.Label(body_header, text="", font=("Segoe UI", 8),
-                                       anchor="e", justify="right")
+                                       anchor="e", justify="right", height=2)
         self.track_theme(self.word_count_lbl, bg="bg", fg="subtext")
         self.word_count_lbl.pack(side="right")
 
