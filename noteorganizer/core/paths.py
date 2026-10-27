@@ -472,15 +472,14 @@ def run_migrations(app_dir):
                 pass
 
         # Copied, not moved: the AppData copy stays where it is (the purge
-        # never touches that folder), and the installed app goes on
-        # reading it. The message used to say "moved", and the entry file
-        # added that the two "can never drift apart" -- when from here on
-        # they are two notebooks that do exactly that.
+        # never touches that folder). The message used to say "moved", and
+        # the entry file added that the two "can never drift apart" -- when
+        # from here on they are two notebooks that do exactly that.
         message = (
-            f"Copied your notebook into the app folder:\n{app_dir}\n\n"
+            f"Copied your notebook into this folder:\n{app_dir}\n\n"
             f"Brought {moved} note(s) from:\n{appdata_dir}\n\n"
-            "The installed app keeps its own notebook there, so changes "
-            "made here will not appear in it, or the other way round."
+            "The notebook there is kept as it was, so changes made here "
+            "will not appear in it, or the other way round."
         )
         if displaced:
             message += (
@@ -524,7 +523,7 @@ def run_migrations(app_dir):
         _copy_attachments(d, attachments_path)
 
     message = (
-        f"Your notes now live in the app folder:\n{app_dir}\n\n"
+        f"Your notes now live in this folder:\n{app_dir}\n\n"
         f"Imported {best_count} note(s) from:\n{best_dir}"
     )
     if os.path.normcase(os.path.abspath(best_dir)) in _durable_stores():
@@ -634,8 +633,8 @@ def _looks_like_our_settings(path):
 
 
 def purge_stale_copies(app_dir):
-    """Delete leftover data in folders the app no longer reads from, so there
-    is exactly one notebook on disk.
+    """Delete leftover data in folders the app no longer reads from -- an
+    old dist copy, say -- so no stale notebook lingers beside the real one.
 
     Deletion only happens when ALL of these hold:
       - the local notes file exists and is readable

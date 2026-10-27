@@ -1761,8 +1761,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "Removed leftover copies of your notes from:\n"
                 f"{listed}\n\n"
                 "Each one was checked first — nothing was deleted unless every "
-                "note and attachment in it already existed in the app folder. "
-                "There is now exactly one notebook on disk."
+                "note and attachment in it already existed in your notes folder."
             )
 
         # Only speak if the pass actually DID something. On a fresh
