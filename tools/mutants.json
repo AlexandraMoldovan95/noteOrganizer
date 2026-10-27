@@ -1266,6 +1266,76 @@
     "expect": "killed"
   },
   {
+    "id": "KC01",
+    "about": "the arrows do not move the keyboard's day on the month",
+    "edits": [{"file": "noteorganizer/ui/calendar_view.py",
+               "find": "            self.cal_canvas.bind(seq, lambda e, d=days: self._cal_key_step(d))\n",
+               "replace": "            pass\n"}],
+    "must_fail": ["with the keyboard on the month a ring is drawn round its first day"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "KC02",
+    "about": "an arrow off the month's edge goes to a day not drawn",
+    "edits": [{"file": "noteorganizer/ui/calendar_view.py",
+               "find": "        if (to.year, to.month) != (self.cal_year, self.cal_month):\n",
+               "replace": "        if False:\n"}],
+    "must_fail": ["an arrow off the month's edge turns to the next one"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "KC03",
+    "about": "a change of month sends the keyboard's day back to the first",
+    "edits": [{"file": "noteorganizer/ui/calendar_view.py",
+               "find": "            key = days[min(was.day, len(days)) - 1]\n",
+               "replace": "            key = days[0]\n"}],
+    "must_fail": ["Page Down keeps the ring on the same day of the month"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "KC04",
+    "about": "no ring shows which day the keyboard is on",
+    "edits": [{"file": "noteorganizer/ui/calendar_view.py",
+               "find": "            if not getattr(self, \"_cal_has_keyboard\", False):\n",
+               "replace": "            if True:\n"}],
+    "must_fail": ["with the keyboard on the month a ring is drawn round its first day"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "KC05",
+    "about": "Return on the month opens nothing",
+    "edits": [{"file": "noteorganizer/ui/calendar_view.py",
+               "find": "        if day:\n            self.open_day_popup(day)\n",
+               "replace": "        if day:\n            pass\n"}],
+    "must_fail": ["Return opens the day, as a click does"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "KC06",
+    "about": "Shift+F10 on the month opens no menu",
+    "edits": [{"file": "noteorganizer/ui/calendar_view.py",
+               "find": "        if rec is None:\n            return \"break\"\n        cv = self.cal_canvas\n",
+               "replace": "        return \"break\"\n        cv = self.cal_canvas\n"}],
+    "must_fail": ["Shift+F10 opens the day's right-click menu, at the day"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "KC07",
+    "about": "the day's colour palette, asked for from the keyboard, leaves it on the month",
+    "edits": [{"file": "noteorganizer/ui/calendar_view.py",
+               "find": "                                 keyboard_from=getattr(event, \"widget\", None))\n",
+               "replace": "                                 keyboard_from=None)\n"}],
+    "must_fail": ["\"Color this day...\" from the keyboard opens the palette with the keyboard"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
     "id": "A01",
     "about": "a highlight given in an open cell reaches the note only when the cell closes",
     "edits": [

@@ -4923,6 +4923,94 @@ if _kc_close and _kc_take(_kc_close[0]):
 check('the reminder\'s ✕ is a Tab stop, and Space closes the reminder',
       bool(_kc_close) and str(_kc_close[0].cget('takefocus')) == '1'
       and not app._is_placed(app.reminder_bar))
+
+# The month itself: one canvas bound to the mouse alone, so the keyboard
+# could only change month, never reach a day.
+app.notebook.select(app.TAB_CALENDAR)
+app.close_day_panel()
+app.cal_year, app.cal_month = 2030, 6
+app._cal_key_day = None
+app.render_calendar()
+_kc_settle()
+_kc_cv = app.cal_canvas
+
+
+def _kc_ring_on():
+    """The day the keyboard's ring is drawn round, read from the drawing."""
+    items = _kc_cv.find_withtag('cal_key')
+    if len(items) != 1 or str(_kc_cv.itemcget(items[0], 'outline')).lower() \
+            != app._focus_ring().lower():
+        return None
+    box = tuple(int(round(v)) for v in _kc_cv.coords(items[0]))
+    for date_str, rec in app._cal_cells.items():
+        if box == (rec['x0'] - 2, rec['y0'] - 2, rec['x1'] + 2, rec['y1'] + 2):
+            return date_str
+    return None
+
+
+def _kc_key(key):
+    if _kc_take(_kc_cv):
+        _kc_cv.event_generate(key)
+        _kc_settle()
+
+
+_kc_chain, _kc_at = [], str(app._history_toggle_btn)
+for _ in range(20):
+    _kc_at = str(app.tk.call('tk_focusNext', _kc_at))
+    _kc_chain.append(_kc_at)
+check('the month is a Tab stop, reached from the calendar\'s header',
+      str(_kc_cv) in _kc_chain)
+_kc_take(_kc_cv)
+_kc_settle()
+_kc_first = _kc_ring_on()
+_kc_steps = []
+for _kc_k in ('<Right>', '<Down>', '<Left>', '<Up>'):
+    _kc_key(_kc_k)
+    _kc_steps.append(_kc_ring_on())
+check(f'with the keyboard on the month a ring is drawn round its first day, and '
+      f'the arrows walk it a day and a week ({_kc_first}, {_kc_steps})',
+      _kc_first == '2030-06-01'
+      and _kc_steps == ['2030-06-02', '2030-06-09', '2030-06-08', '2030-06-01'])
+_kc_key('<Left>')
+check(f'an arrow off the month\'s edge turns to the next one '
+      f'({app.cal_year}-{app.cal_month}, {_kc_ring_on()})',
+      (app.cal_year, app.cal_month) == (2030, 5) and _kc_ring_on() == '2030-05-31')
+_kc_key('<Next>')
+check(f'Page Down keeps the ring on the same day of the month, as far as the '
+      f'month goes ({_kc_ring_on()})', _kc_ring_on() == '2030-06-30')
+_kc_key('<Return>')
+check(f'Return opens the day, as a click does ({app.selected_day}, '
+      f'{app._day_panel_mode})',
+      app.selected_day == '2030-06-30' and app._day_panel_mode == 'list')
+_kc_menus = []
+app.show_day_context_menu = lambda e, d: _kc_menus.append((d, e.widget))
+try:
+    _kc_key('<Shift-F10>')
+finally:
+    del app.show_day_context_menu
+check(f'Shift+F10 opens the day\'s right-click menu, at the day ({_kc_menus})',
+      _kc_menus == [('2030-06-30', _kc_cv)])
+# The menu's colour palette, asked for from the keyboard, takes it.
+_kc_asked = []
+_kc_real_focus_set = tk.Misc.focus_set
+tk.Misc.focus_set = lambda self: (_kc_asked.append(self), _kc_real_focus_set(self))[1]
+try:
+    if _kc_take(_kc_cv):
+        # The event the day's menu hands its "Color this day..." entry.
+        app._color_day('2030-06-30', type('E', (), {
+            'widget': _kc_cv, 'x_root': _kc_cv.winfo_rootx() + 10,
+            'y_root': _kc_cv.winfo_rooty() + 10})())
+        _kc_settle()
+finally:
+    tk.Misc.focus_set = _kc_real_focus_set
+_kc_pop = app._mini_popup
+check(f'"Color this day..." from the keyboard opens the palette with the keyboard '
+      f'in it ({_kc_asked[-1:]})',
+      _kc_pop is not None and any(str(w).startswith(str(_kc_pop) + '.')
+                                  for w in _kc_asked))
+app._dismiss_mini_popup()
+app.close_day_panel()
+_kc_settle()
 app.notebook.select(app.TAB_NOTES)
 app.notes = []
 app.save_notes()

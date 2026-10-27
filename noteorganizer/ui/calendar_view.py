@@ -40,6 +40,7 @@ import re
 import tkinter as tk
 from tkinter import ttk
 from datetime import datetime, timedelta, date as date_cls
+from types import SimpleNamespace
 
 from ..core.model import (
     _darken_hex,
@@ -349,6 +350,22 @@ class CalendarViewMixin:
         self.cal_canvas.bind("<Button-3>", self._cal_right_pressed)
         self.cal_canvas.bind("<Motion>", self._cal_pointer_moved)
         self.cal_canvas.bind("<Leave>", self._cal_pointer_left)
+        # The keyboard's way round the month, as the note list has its own:
+        # a ring on one day, the arrows move it, Return opens the day.
+        self.cal_canvas.configure(takefocus=1)
+        self._cal_key_day = None
+        for seq, days in (("<Left>", -1), ("<Right>", 1), ("<Up>", -7), ("<Down>", 7)):
+            self.cal_canvas.bind(seq, lambda e, d=days: self._cal_key_step(d))
+        for seq in ("<Return>", "<space>", "<KP_Enter>"):
+            self.cal_canvas.bind(seq, self._cal_key_open)
+        for seq in ("<Shift-F10>", "<App>", "<Menu>"):
+            try:
+                self.cal_canvas.bind(seq, self._cal_key_menu)
+            except tk.TclError:
+                pass        # a keysym this platform does not have
+        self._cal_has_keyboard = False
+        self.cal_canvas.bind("<FocusIn>", lambda e: self._cal_keyboard_here(True), add="+")
+        self.cal_canvas.bind("<FocusOut>", lambda e: self._cal_keyboard_here(False), add="+")
         # The wheel scrolls the calendar's own area, as it did over the old
         # cells; bound once, since the canvas outlives every render.
         self._bind_mousewheel_recursive(self.cal_grid_frame, self.cal_scroll_canvas)
@@ -458,6 +475,7 @@ class CalendarViewMixin:
     def go_to_today(self):
         today = datetime.now()
         self.cal_year, self.cal_month = today.year, today.month
+        self._cal_key_day = today.strftime("%Y-%m-%d")
         self.render_calendar()
 
     def _cal_note_font_size(self):
@@ -710,6 +728,97 @@ class CalendarViewMixin:
         try:
             if int(self.cal_grid_frame.cget("height")) != total:
                 self.cal_grid_frame.configure(height=total)
+        except tk.TclError:
+            pass
+        self._cal_paint_key_ring()
+
+    # ---- The keyboard on the month ----
+
+    def _cal_keyboard_here(self, here):
+        """The canvas took or lost the keyboard: its ring follows."""
+        self._cal_has_keyboard = here
+        self._cal_paint_key_ring()
+
+    def _cal_key_date(self):
+        """The day the keyboard is on in the month shown: the one it was
+        left on; after a change of month, the same day of the month; else
+        the open day, today, or the first."""
+        cells = getattr(self, "_cal_cells", None) or {}
+        if not cells:
+            return None
+        key = getattr(self, "_cal_key_day", None)
+        if key in cells:
+            return key
+        days = sorted(cells)
+        was = parse_date(key) if key else None
+        if was is not None:
+            key = days[min(was.day, len(days)) - 1]
+        else:
+            today = datetime.now().strftime("%Y-%m-%d")
+            key = next((d for d in (self.selected_day, today) if d in cells),
+                       days[0])
+        self._cal_key_day = key
+        return key
+
+    def _cal_key_step(self, days):
+        """An arrow: the ring goes a day, or a week, that way -- into the
+        next month or the last one when it runs off this one."""
+        here = self._cal_key_date()
+        day = parse_date(here) if here else None
+        if day is None:
+            return "break"
+        try:
+            to = day + timedelta(days=days)
+        except OverflowError:
+            return "break"
+        self._cal_key_day = to.isoformat()
+        if (to.year, to.month) != (self.cal_year, self.cal_month):
+            self.cal_year, self.cal_month = to.year, to.month
+            self.render_calendar()
+        self._cal_paint_key_ring()
+        rec = self._cal_cells.get(self._cal_key_day)
+        if rec is not None:
+            self._bring_into_sight(self.cal_canvas, part=(rec["y0"], rec["y1"]))
+        return "break"
+
+    def _cal_key_open(self, _event=None):
+        """Return or Space: the day opens, as a click on it does."""
+        day = self._cal_key_date()
+        if day:
+            self.open_day_popup(day)
+        return "break"
+
+    def _cal_key_menu(self, _event=None):
+        """Shift+F10 or the menu key: the day's right-click menu, at it."""
+        day = self._cal_key_date()
+        rec = self._cal_cells.get(day) if day else None
+        if rec is None:
+            return "break"
+        cv = self.cal_canvas
+        x, y = rec["x0"] + 6, rec["y1"] - 6
+        self.show_day_context_menu(
+            SimpleNamespace(widget=cv, x=x, y=y, x_root=cv.winfo_rootx() + x,
+                            y_root=cv.winfo_rooty() + y), day)
+        return "break"
+
+    def _cal_paint_key_ring(self):
+        """The keyboard's ring round its day, in the gap between the cells,
+        while the canvas holds the keyboard; the open day's own outline
+        is drawn inside the cell, in the accent."""
+        cv = getattr(self, "cal_canvas", None)
+        if cv is None:
+            return
+        try:
+            cv.delete("cal_key")
+            if not getattr(self, "_cal_has_keyboard", False):
+                return
+            rec = self._cal_cells.get(self._cal_key_date())
+            if rec is None:
+                return
+            cv.create_rectangle(rec["x0"] - 2, rec["y0"] - 2,
+                                rec["x1"] + 2, rec["y1"] + 2,
+                                outline=self._focus_ring(), width=self.px(2),
+                                tags=("cal_key",))
         except tk.TclError:
             pass
 

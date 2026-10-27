@@ -479,6 +479,23 @@ if len(_cells) > 1:
 app.update()
 app.update_idletasks()
 """),
+    # The month with the keyboard on it, its ring on the 15th: drawn in the
+    # gap round the day, apart from the open day's outline inside it.
+    ("26-the-month-walked-by-the-keyboard", """
+app._dismiss_mini_popup()
+app.hide_settings_page()
+app.notebook.select(app.TAB_CALENDAR)
+app.update()
+app.cal_year, app.cal_month = 2026, 9
+app._cal_key_day = '2026-09-15'
+app.render_calendar()
+app.update()
+app.focus_force()
+app.update()
+app.cal_canvas.focus_set()
+app.update()
+app.update_idletasks()
+"""),
 ]
 
 SEED = [

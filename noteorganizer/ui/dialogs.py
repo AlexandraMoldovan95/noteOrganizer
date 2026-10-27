@@ -1592,17 +1592,18 @@ class DialogsMixin:
         if target is not None:
             self._bring_into_sight(target)
 
-    def _bring_into_sight(self, widget):
+    def _bring_into_sight(self, widget, part=None):
         """Scroll each canvas holding *widget* on a page just far enough to
-        show it, innermost first: the editor, Settings and its menu, and the
-        Trash, Share and emoji lists are frames drawn on canvases."""
+        show it -- or *part*, a (top, bottom) span of it -- innermost first:
+        the editor, Settings, the calendar and the Trash, Share and emoji
+        lists are frames drawn on canvases."""
         try:
             child = widget
             while child is not None and not isinstance(child, (tk.Tk, tk.Toplevel)):
                 parent = child.master
                 if (isinstance(parent, tk.Canvas) and isinstance(child, tk.Frame)
                         and child.winfo_manager() == "canvas"):
-                    self._show_on_canvas(parent, child, widget)
+                    self._show_on_canvas(parent, child, widget, part)
                 child = parent
         except (tk.TclError, AttributeError, ValueError, TypeError):
             pass
@@ -1633,9 +1634,9 @@ class DialogsMixin:
             w = parent
         return total
 
-    def _show_on_canvas(self, canvas, page, widget):
-        """Scroll *canvas*, which draws *page*, until *widget* is inside its
-        view with a small margin -- the least movement that shows it."""
+    def _show_on_canvas(self, canvas, page, widget, part=None):
+        """Scroll *canvas*, which draws *page*, until *widget* (or *part* of
+        it) is inside its view with a small margin -- the least movement."""
         item = self._canvas_window_item(canvas, page)
         if item is None:
             return
@@ -1651,8 +1652,11 @@ class DialogsMixin:
             if view <= 1 or span <= view:
                 continue
             near = box[i] + self._offset_within(widget, page, axis)
-            far = near + (widget.winfo_height() if axis == "y"
-                          else widget.winfo_width())
+            if axis == "y" and part is not None:
+                near, far = near + part[0], near + part[1]
+            else:
+                far = near + (widget.winfo_height() if axis == "y"
+                              else widget.winfo_width())
             shown = canvas.canvasy(0) if axis == "y" else canvas.canvasx(0)
             if near - margin < shown:
                 start = near - margin

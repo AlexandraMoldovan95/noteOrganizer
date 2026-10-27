@@ -1076,6 +1076,9 @@ keys that only mean something inside a list, in the find bar, or on the note lis
 | **Page Up** / **Page Down** | Calendar tab | Previous / next month. |
 | **Ctrl+Page Up** / **Ctrl+Page Down** | Calendar tab | Previous / next year. |
 | **Home** | Calendar tab | Jumps back to today. |
+| **Arrow keys** | the month, after Tab reaches it | Moves its ring a day, or a week; off the month's edge, into the next month or the last. |
+| **Enter** / **Space** | the month | Opens the day with the ring, as a click does. |
+| **Shift+F10** or the menu key | the month | Opens that day's right-click menu: add a note, colour or mark the day. |
 | **Enter** / **Shift+F10** | a note in an open day's list, or a row of History | Opens it, or its right-click menu. |
 | **Enter** | a question | Presses the highlighted button. |
 | **Esc** | a question | Gives the safe answer (No, Cancel). |

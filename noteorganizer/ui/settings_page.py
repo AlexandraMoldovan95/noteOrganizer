@@ -3923,6 +3923,11 @@ class SettingsPageMixin:
             ("Page Up  /  Page Down", "Previous / next month."),
             ("Ctrl+Page Up  /  Ctrl+Page Down", "Previous / next year."),
             ("Home", "Jump back to today."),
+            ("Arrow keys", "With Tab on the month: move its ring a day, or a "
+                           "week, into the next month or the last."),
+            ("Enter  /  Space", "Open the day with the ring, as a click does."),
+            ("Shift+F10", "That day's right-click menu: add a note, colour or "
+                          "mark the day."),
             ("Enter  /  Shift+F10", "On a note in an open day's list, or a "
                                     "row of History: open it, or its "
                                     "right-click menu."),
