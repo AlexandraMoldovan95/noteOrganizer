@@ -190,7 +190,11 @@ class _Reader(HTMLParser):
         self.length = 0
         self.spans = []
         self.paragraphs = []
-        self._open = []          # (style, value, start offset)
+        # style -> [(value, start offset, order opened)], the latest last. One
+        # list per style: a close searching one shared list behind every
+        # other open style was quadratic; 195 KB of misnested HTML took 8.9 s.
+        self._open = {}
+        self._opened = 0
         self._implied = {}       # tag -> [whether each open one took its style]
         self._lists = []         # ('bullet'|'number', count so far)
         self._line = 0
@@ -263,18 +267,22 @@ class _Reader(HTMLParser):
             self._line += 1
             self._line_has_text = False
 
+    def _open_style(self, style, value=None):
+        self._opened += 1
+        self._open.setdefault(style, []).append((value, self.length, self._opened))
+
     def _close(self, style):
-        for i in range(len(self._open) - 1, -1, -1):
-            if self._open[i][0] == style:
-                name, value, start = self._open.pop(i)
-                if self.length > start and len(self.spans) >= MAX_PASTE_SPANS:
-                    self.styles_cut = True
-                elif self.length > start:
-                    span = {"start": start, "end": self.length, "style": name}
-                    if value is not None:
-                        span["value"] = value
-                    self.spans.append(span)
-                return
+        opened = self._open.get(style)
+        if not opened:
+            return
+        value, start, _order = opened.pop()
+        if self.length > start and len(self.spans) >= MAX_PASTE_SPANS:
+            self.styles_cut = True
+        elif self.length > start:
+            span = {"start": start, "end": self.length, "style": style}
+            if value is not None:
+                span["value"] = value
+            self.spans.append(span)
 
     # -- parser callbacks ------------------------------------------------
     @staticmethod
@@ -316,7 +324,7 @@ class _Reader(HTMLParser):
             kept = not ((implied == "bold" and bold is False)
                         or (implied == "italic" and italic is False))
             if kept:
-                self._open.append((implied, None, self.length))
+                self._open_style(implied)
             self._implied.setdefault(tag, []).append(kept)
         if tag in ("ul", "ol"):
             if len(self._lists) < MAX_INDENT:
@@ -374,13 +382,13 @@ class _Reader(HTMLParser):
                            ("background-color", "highlight")):
             hex_value = _as_hex(style.get(prop))
             if hex_value and _is_meaningful(hex_value, name):
-                self._open.append((name, hex_value, self.length))
+                self._open_style(name, hex_value)
                 opened.append(name)
         if bold:
-            self._open.append(("bold", None, self.length))
+            self._open_style("bold")
             opened.append("bold")
         if italic:
-            self._open.append(("italic", None, self.length))
+            self._open_style("italic")
             opened.append("italic")
         if opened:
             # Remember exactly which style spans THIS tag opened, so its
@@ -569,7 +577,9 @@ def html_to_note(fragment, report=None):
         # html.parser is forgiving, but a pasted page is arbitrary input and
         # a failed paste must never take the editor with it.
         return "", [], []
-    for name, _value, _start in list(reader._open):
+    # What the page left open closes at its end, in the order it opened.
+    for _order, name in sorted((entry[2], name) for name, entries in reader._open.items()
+                               for entry in entries):
         reader._close(name)
     if report is not None:
         report["text_cut"] = reader.text_cut

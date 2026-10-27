@@ -5725,6 +5725,16 @@
     "expect": "killed"
   },
   {
+    "id": "HN01",
+    "about": "each closing tag searches every style still open, as one shared list did",
+    "edits": [{"file": "noteorganizer/core/richtext.py",
+               "find": "        opened = self._open.get(style)\n",
+               "replace": "        _all = [e for es in self._open.values() for e in es]\n        opened = self._open.get(style)\n"}],
+    "must_fail": ["misnested markup is read in one pass"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
+  },
+  {
     "id": "MG04",
     "about": "the old store's Trash and templates wait on a settings file that may be unreadable",
     "edits": [{"file": "noteorganizer/core/paths.py",

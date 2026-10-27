@@ -1077,6 +1077,16 @@ check(f"a column of 20,000 lone cells comes out whole, its offsets moved "
       f"by halving ({_uc_took:.2f} s)",
       _uc_out.endswith("r19999\n") and _uc_out[_uc_last:].startswith("r19999")
       and _uc_took < 2.0)
+# Misnested markup: 20,000 bolds, 20,000 italics, then the bolds closed --
+# each close searched one shared list behind every open italic. 195 KB took
+# 8.9 s on Linux; the bound is wide on purpose, as above.
+from noteorganizer.core.richtext import html_to_note as _mn_read
+_mn_html = "Hello " + "<b>" * 20_000 + "<i>" * 20_000 + "world" + "</b>" * 20_000
+_mn_started = _time.perf_counter()
+_mn_text, _mn_spans, _mn_paras = _mn_read(_mn_html)
+_mn_took = _time.perf_counter() - _mn_started
+check(f"misnested markup is read in one pass ({_mn_took:.2f} s), its text whole",
+      _mn_text == "Hello world" and _mn_took < 2.0)
 
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
