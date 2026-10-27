@@ -293,7 +293,9 @@ def evaluate_calculator_expression(expr):
             # a calculator display has no honest way to show inf/nan.
             return None
         return result
-    except CalcError:
+    except (CalcError, RecursionError):
+        # RecursionError: 200 nested brackets, or a thousand signs, outran
+        # the parser's own recursion and reached the window's error toast.
         return None
 
 

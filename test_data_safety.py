@@ -1825,6 +1825,12 @@ try:
     check("the failed write lands in crash_log.txt",
           os.path.exists(_wf_log)
           and "write failure" in open(_wf_log, encoding="utf-8").read())
+    # The file's name and the kind of error, never its folder: the folder's
+    # path holds the person's name (core/diagnostics' own promise).
+    _wf_said = open(_wf_log, encoding="utf-8").read()
+    check("the crash log names the file that failed, not the folder it is in",
+          "trash.json" in _wf_said and _wf_dir not in _wf_said
+          and os.path.basename(_wf_dir) not in _wf_said)
     check("the failed write reaches the on_write_failure callback",
           len(_wf_calls) == 1 and "trash.json" in _wf_calls[0])
     _storage.on_write_failure = lambda *a: (_ for _ in ()).throw(RuntimeError)

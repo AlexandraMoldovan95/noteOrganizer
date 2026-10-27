@@ -112,6 +112,23 @@ check('negative whole number displays cleanly', fmt(-10.0) == '-10')
 check('fraction displays as-is', fmt(2.5) == '2.5')
 check('float noise from 0.1+0.2 displays as clean 0.3', fmt(ev('0.1+0.2')) == '0.3')
 
+# Brackets 200 deep, or a thousand signs, outran the parser's recursion: the
+# RecursionError reached the window's error toast, and the display was not
+# set to Error.
+def _deep(expression):
+    """The answer, or "raised": a raise is the failure this guards, and it
+    must be one red check, not a crash that ends the suite before its footer."""
+    try:
+        return ev(expression)
+    except RecursionError:
+        return "raised"
+
+
+check('200 nested brackets give no answer rather than an error',
+      _deep('(' * 200 + '1' + ')' * 200) is None)
+check('a thousand minus signs give no answer rather than an error',
+      _deep('-' * 1000 + '1') is None)
+
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
 

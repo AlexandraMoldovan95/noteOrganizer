@@ -11589,6 +11589,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     state["error"] = f"Couldn't read the notes in that backup:\n{e}"
                     state["done"] = True
                     return
+                if not isinstance(imported_notes, list):
+                    # null or a number raised on the main thread after the
+                    # import's state was cleared, so its cleanup never ran.
+                    state["error"] = "This .zip doesn't look like a Note Organizer backup."
+                    state["done"] = True
+                    return
                 state["imported_notes"] = imported_notes
                 # Templates and trash ride along when the backup has them
                 # (older backups don't — both stay optional, and a bad

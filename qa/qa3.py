@@ -3161,6 +3161,17 @@ def _dz_import(members):
     return said
 
 
+# A notebook that parses but is not a list (null, a number): it raised on the
+# main thread after the import's state was cleared, and its cleanup -- the
+# unpacked folder, the files it copied -- never ran.
+for _nl_value in (b'null', b'7', b'{"title": "x"}'):
+    app.notes = []; app.save_notes()
+    _nl_said = _dz_import({'notes_data.json': _nl_value})
+    check(f'a backup whose notebook is {_nl_value!r} says it is not a backup '
+          f'({[m.split(chr(10))[0] for _t, m in _nl_said]})',
+          app.notes == [] and app._import_state is None
+          and any("doesn't look like a Note Organizer backup" in m for _t, m in _nl_said))
+
 for _dz_how, _dz_bytes in _dz_damage.items():
     for _dz_extra in ('templates.json', 'trash.json', 'settings.json'):
         app.notes = []; app.save_notes()

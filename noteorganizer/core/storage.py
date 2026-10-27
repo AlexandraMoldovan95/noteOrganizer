@@ -590,7 +590,11 @@ on_write_failure = None
 
 
 def _report_write_failure(path, exc):
-    diagnostics.append_crash_log("write failure", "%s\n%r" % (path, exc))
+    # The file's name and the error's kind, never its folder: the path holds
+    # the person's name, and an OSError's own text repeats the path.
+    diagnostics.append_crash_log("write failure", "%s: %s (errno %s, %s)" % (
+        os.path.basename(path), type(exc).__name__, getattr(exc, "errno", None),
+        getattr(exc, "strerror", None)))
     cb = on_write_failure
     if cb is not None:
         try:

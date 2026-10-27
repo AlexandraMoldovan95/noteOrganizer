@@ -4831,8 +4831,8 @@
     "id": "FB05",
     "about": "a place writes crash_log.txt by hand again, in its own format and without the details",
     "edits": [{"file": "noteorganizer/core/storage.py",
-               "find": "    diagnostics.append_crash_log(\"write failure\", \"%s\\n%r\" % (path, exc))\n",
-               "replace": "    open(os.path.join(paths.APP_DIR, \"crash_log.txt\"), \"a\").write(\"%s\\n%r\" % (path, exc))\n"}],
+               "find": "    diagnostics.append_crash_log(\"write failure\", \"%s: %s (errno %s, %s)\" % (\n",
+               "replace": "    open(os.path.join(paths.APP_DIR, \"crash_log.txt\"), \"a\").write(\"%s: %s (errno %s, %s)\" % (\n"}],
     "must_fail": ["crash_log.txt is written in one place only"],
     "suites": ["test_data_safety"],
     "expect": "killed"
@@ -5732,6 +5732,36 @@
                "replace": "        _all = [e for es in self._open.values() for e in es]\n        opened = self._open.get(style)\n"}],
     "must_fail": ["misnested markup is read in one pass"],
     "suites": ["test_richtext"],
+    "expect": "killed"
+  },
+  {
+    "id": "LG01",
+    "about": "the crash log names the data file's whole path, the person's name in it",
+    "edits": [{"file": "noteorganizer/core/storage.py",
+               "find": "        os.path.basename(path), type(exc).__name__, getattr(exc, \"errno\", None),\n",
+               "replace": "        path, type(exc).__name__, getattr(exc, \"errno\", None),\n"}],
+    "must_fail": ["the crash log names the file that failed, not the folder it is in"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "CR01",
+    "about": "the calculator lets its recursion overflow reach the window",
+    "edits": [{"file": "noteorganizer/core/calculator.py",
+               "find": "    except (CalcError, RecursionError):\n",
+               "replace": "    except CalcError:\n"}],
+    "must_fail": ["200 nested brackets give no answer rather than an error"],
+    "suites": ["test_calculator"],
+    "expect": "killed"
+  },
+  {
+    "id": "NA01",
+    "about": "a backup whose notebook is not a list goes on to the main thread",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                if not isinstance(imported_notes, list):\n",
+               "replace": "                if False:\n"}],
+    "must_fail": ["a backup whose notebook is b'null' says it is not a backup"],
+    "suites": ["qa3"],
     "expect": "killed"
   },
   {
