@@ -739,6 +739,7 @@
   "_toggle_note_selected": "(self, note_id, now_selected)",
   "_toggle_selection_mode": "(self)",
   "_toggles_its_popup": "(self, btn, open_popup)",
+  "_too_big_to_preview": "(self, path)",
   "_top_up_list": "(self)",
   "_trash_window_line": "()",
   "_trim_fmt_journal": "(self, journal)",
