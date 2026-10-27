@@ -1128,6 +1128,144 @@
     "expect": "killed"
   },
   {
+    "id": "KB01",
+    "about": "a row's drawn icons (rename, delete, a template's edit) are the mouse's alone",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "        if keys:\n            self._pressable(c, keys)\n",
+               "replace": "        if False:\n            self._pressable(c, keys)\n"}],
+    "must_fail": ["every control a click acts on, on every page, is a Tab stop or inside one",
+                  "Space on a category's pencil renames it"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "KB02",
+    "about": "the theme tiles are out of Tab's reach",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "            self._pressable(edge, lambda n=name: self._pick_theme_by_key(n))\n",
+               "replace": ""}],
+    "must_fail": ["every control a click acts on, on every page, is a Tab stop or inside one",
+                  "a theme tile is a Tab stop ringed in the keyboard's colour"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "KB03",
+    "about": "a theme chosen from the keyboard leaves the keyboard on the tile its choice destroyed",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "            found[0].focus_set()\n",
+               "replace": "            pass\n"},
+              {"file": "noteorganizer/ui/dialogs.py",
+               "find": "        page again took the control with it, or hid it (a bar it closed),\n        and the keyboard fell to nothing. It goes to what stands in that\n        control's place now, or to the next control on.\"\"\"\n",
+               "replace": "        page again took the control with it, or hid it (a bar it closed),\n        and the keyboard fell to nothing. It goes to what stands in that\n        control's place now, or to the next control on.\"\"\"\n        return\n"}],
+    "note": "Two edits: the tile is put back twice over, by name here and by its place in the page (_keyboard_stays); with the first alone the second still finds it, as it should.",
+    "must_fail": ["...and the keyboard is on that tile, drawn again in the new theme"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "KB04",
+    "about": "the Light/Dark switch is out of Tab's reach",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "            self._pressable(b, lambda m=mode: self._pick_settings_mode(m))\n",
+               "replace": ""}],
+    "must_fail": ["Space on the Light/Dark switch flips the theme"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "KB05",
+    "about": "the alignment buttons are the mouse's alone",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self._pressable(canvas, lambda a=align: self._set_paragraph_align(a))\n",
+               "replace": ""}],
+    "must_fail": ["an alignment button is a Tab stop",
+                  "Space on Align right aligns the line the caret is on"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "KB06",
+    "about": "the sidebar's arrow is the mouse's alone",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self._pressable(self.sidebar_toggle, self.toggle_sidebar)\n",
+               "replace": ""}],
+    "must_fail": ["Return on the sidebar's arrow folds the sidebar away and back"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "KB07",
+    "about": "Ctrl+Z in a text box takes the toast's offer instead of undoing the typing",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            if isinstance(widget, str) or widget.winfo_class() in self._TYPING_CLASSES:\n",
+               "replace": "            if isinstance(widget, str):\n"}],
+    "must_fail": ["...but in a text box Ctrl+Z is the box's own, and the offer stays"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "KB08",
+    "about": "the toast goes from under the keyboard on its Undo",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            if held and self._toast_action is not None:\n",
+               "replace": "            if False:\n"}],
+    "must_fail": ["while the keyboard is on Undo the toast waits for it"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "KB09",
+    "about": "no key takes the delete toast's offer",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        for _key in (\"<Control-z>\", \"<Control-Z>\"):\n            self.bind_all(_key, self._toast_undo_key, add=\"+\")\n",
+               "replace": ""}],
+    "must_fail": ["Ctrl+Z on the note list, while the toast offers Undo, takes the offer"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "KB10",
+    "about": "an open day's note rows are the mouse's alone",
+    "edits": [{"file": "noteorganizer/ui/calendar_view.py",
+               "find": "            self._pressable(row, lambda n=base_note, d=date_str:\n                            self.show_day_note(n, d), menu=_context)\n",
+               "replace": ""}],
+    "must_fail": ["Shift+F10 on a day's note row opens that note's menu",
+                  "Return on a day's note row opens the note in the day's panel"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "KB11",
+    "about": "the History register's rows are the mouse's alone",
+    "edits": [{"file": "noteorganizer/ui/calendar_view.py",
+               "find": "            self._pressable(row, command, menu=context_cmd)\n",
+               "replace": ""}],
+    "must_fail": ["Return on a History row opens its day on the month"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "KB12",
+    "about": "Shift+F10 on a drawn row opens nothing",
+    "edits": [{"file": "noteorganizer/ui/dialogs.py",
+               "find": "        menu(at)\n        return \"break\"\n",
+               "replace": "        return \"break\"\n"}],
+    "must_fail": ["Shift+F10 on a day's note row opens that note's menu"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "KB13",
+    "about": "the Settings menu's glyphs name no way in for the keyboard",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "        icon._key_route = btn       # the keyboard's way to what it does\n",
+               "replace": ""}],
+    "must_fail": ["every control a click acts on, on every page, is a Tab stop or inside one"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
     "id": "A01",
     "about": "a highlight given in an open cell reaches the note only when the cell closes",
     "edits": [

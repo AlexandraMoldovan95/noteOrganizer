@@ -4834,6 +4834,100 @@ check('...and the day shows the change when the Calendar is shown again',
       len(_dp_rebuilt) >= 1
       and any('DayPanelRenamed' in t for t in find_all_labels(app.day_panel)))
 
+# ---- KEYBOARD: a day's list, the History register and the reminder ----
+# Their rows and words were bound to the mouse alone: an open day's notes
+# could not be opened from the keyboard, nor a History row, nor today's
+# reminder answered.
+import time as _kc_time
+
+
+def _kc_settle(n=6):
+    for _ in range(n):
+        app.update()
+        _kc_time.sleep(0.02)
+
+
+def _kc_take(w, cap_s=2.0):
+    """A PRECONDITION: the keyboard forced onto *w*, and Tk agreeing."""
+    w.focus_force()
+    t0 = _kc_time.time()
+    while _kc_time.time() - t0 < cap_s:
+        try:
+            if app.focus_get() is w:
+                return True
+        except (KeyError, tk.TclError):
+            pass
+        app.update()
+        _kc_time.sleep(0.02)
+    return False
+
+
+def _kc_rows(top):
+    found = []
+
+    def walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Frame) and getattr(c, '_key_press', None):
+                found.append(c)
+            walk(c)
+    walk(top)
+    return found
+
+
+app.new_note()
+app.notes = [{'id': 901, 'title': 'KeyDay', 'body': 'x', 'category': 'General',
+              'date': '2026-10-02', 'created': '2026-01-01 00:00',
+              'updated': '2026-01-01 00:00', 'checklist': [], 'attachments': []}]
+app.save_notes()
+app.notebook.select(app.TAB_CALENDAR)
+app.cal_year, app.cal_month = 2026, 10
+app.render_calendar()
+_kc_settle()
+app.open_day_popup('2026-10-02')
+_kc_settle()
+_kc_list = _kc_rows(app.day_panel)
+_kc_menus = []
+app.show_note_context_menu = lambda e, n, occurrence_date=None: _kc_menus.append(
+    (n.get('title'), occurrence_date))
+try:
+    if _kc_list and _kc_take(_kc_list[0]):
+        _kc_list[0].event_generate('<Shift-F10>')
+        _kc_settle()
+finally:
+    del app.show_note_context_menu
+check(f'Shift+F10 on a day\'s note row opens that note\'s menu, as a right-click '
+      f'does ({_kc_menus})', _kc_menus == [('KeyDay', '2026-10-02')])
+_kc_list = _kc_rows(app.day_panel)
+if _kc_list and _kc_take(_kc_list[0]):
+    _kc_list[0].event_generate('<Return>')
+    _kc_settle()
+check(f'Return on a day\'s note row opens the note in the day\'s panel '
+      f'({app._day_panel_mode})', bool(_kc_list) and app._day_panel_mode == 'note')
+app._toggle_calendar_history()
+_kc_settle(10)
+_kc_hist = _kc_rows(app._history_rows)
+if _kc_hist and _kc_take(_kc_hist[0]):
+    _kc_hist[0].event_generate('<Return>')
+    _kc_settle()
+check(f'Return on a History row opens its day on the month '
+      f'({app._history_visible}, {app.selected_day})',
+      bool(_kc_hist) and not app._history_visible
+      and app.selected_day == '2026-10-02')
+app._render_reminder_bar(1, '2026-10-02')
+_kc_settle()
+_kc_close = [w for w in app.reminder_bar.winfo_children()
+             if isinstance(w, tk.Label) and str(w.cget('text')) == '✕']
+if _kc_close and _kc_take(_kc_close[0]):
+    _kc_close[0].event_generate('<space>')
+    _kc_settle()
+check('the reminder\'s ✕ is a Tab stop, and Space closes the reminder',
+      bool(_kc_close) and str(_kc_close[0].cget('takefocus')) == '1'
+      and not app._is_placed(app.reminder_bar))
+app.notebook.select(app.TAB_NOTES)
+app.notes = []
+app.save_notes()
+_kc_settle()
+
 print(f"=== QA7 FAILURES: {fails if fails else 'NONE'} ===")
 
 sys.exit(1 if fails else 0)

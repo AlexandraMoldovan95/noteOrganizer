@@ -978,9 +978,11 @@ class DialogsMixin:
             self._bind_click_outside(pop)
         # *keyboard_from* is the opener of a popup placed at a point, not on
         # a widget: the calendar's day, its menu opened from the keyboard.
-        opener = anchor_widget if anchor_widget is not None else keyboard_from
-        if self._opened_from_keyboard(opener):
-            self._keyboard_into_popup(pop, opener)
+        for opener in (anchor_widget, keyboard_from,
+                       getattr(self, "_key_pressing", None)):
+            if self._opened_from_keyboard(opener):
+                self._keyboard_into_popup(pop, opener)
+                break
 
     def _place_mini_popup(self, pop, anchor_widget=None, anchor_xy=None,
                           keyboard_from=None):
@@ -1295,24 +1297,43 @@ class DialogsMixin:
         widget.configure(takefocus=1)
         return widget
 
-    def _ring_round(self, widget, rest):
-        """The keyboard's ring as *widget*'s one-pixel border, drawn in
-        *rest* -- the colour around it -- while the keyboard is elsewhere."""
+    def _ring_round(self, widget, rest=None, on=None, width=1):
+        """The keyboard's ring as *widget*'s border, drawn in *rest* -- the
+        colour around it, or with None its own fill -- while the keyboard is
+        elsewhere, and in *on* (the theme's ring if None) while it is there."""
         widget._ring_rest = rest
-        widget.configure(highlightthickness=1, highlightbackground=rest,
-                         highlightcolor=self._focus_ring())
+        widget._ring_on = on
+        widget.configure(highlightthickness=width,
+                         highlightbackground=(rest if rest is not None
+                                              else widget.cget("bg")),
+                         highlightcolor=on or self._focus_ring())
         return widget
 
     def _ring_shown(self, widget, on):
         """Both border colours, as the keyboard comes and goes: Windows draws
         no focus colour round a label, only its resting one."""
-        rest = getattr(widget, "_ring_rest", None)
-        if rest is None:
+        if not hasattr(widget, "_ring_rest"):
             return
         try:
-            widget.configure(highlightbackground=self._focus_ring() if on else rest)
+            if on:
+                colour = widget._ring_on or self._focus_ring()
+            else:
+                colour = (widget._ring_rest if widget._ring_rest is not None
+                          else widget.cget("bg"))
+            widget.configure(highlightbackground=colour, highlightcolor=colour)
         except tk.TclError:
             pass
+
+    def _fill(self, widget, colour):
+        """A new fill for a control whose ring rests in its own fill (a
+        hover, a pressed look): the ring follows, unless it is showing."""
+        widget.configure(bg=colour)
+        if getattr(widget, "_ring_rest", "") is None:
+            try:
+                held = str(self.tk.call("focus")) == str(widget)
+            except tk.TclError:
+                held = False
+            self._ring_shown(widget, held)     # a new theme's ring, if held
 
     def _button_choice(self, button, current=False):
         """A Tk button that is one choice of a popup -- a swatch, a day, a
@@ -1327,7 +1348,13 @@ class DialogsMixin:
         if press is None:
             return None
         place = self._place_of(widget)
-        press()
+        # A popup this press opens -- wherever it is anchored -- was asked
+        # for from the keyboard (_place_dropdown_popup).
+        self._key_pressing = widget
+        try:
+            press()
+        finally:
+            self._key_pressing = None
         self.after_idle(lambda: self._keyboard_stays(widget, place))
         return "break"
 
@@ -1401,7 +1428,8 @@ class DialogsMixin:
             now = str(self.tk.call("focus"))
             if now not in ("", ".") and not (
                     gone and (now == gone or now.startswith(gone + "."))):
-                return self.nametowidget(now).winfo_exists() == 0
+                held = self.nametowidget(now)
+                return not (held.winfo_exists() and held.winfo_viewable())
         except KeyError:
             return True
         except tk.TclError:
@@ -1410,10 +1438,11 @@ class DialogsMixin:
 
     def _keyboard_stays(self, widget, place):
         """After a press from the keyboard: a press that drew its list or
-        page again took the control with it, and the keyboard fell to the
-        window. It goes to what stands in that control's place now."""
+        page again took the control with it, or hid it (a bar it closed),
+        and the keyboard fell to nothing. It goes to what stands in that
+        control's place now, or to the next control on."""
         try:
-            if widget.winfo_exists():
+            if widget.winfo_exists() and widget.winfo_viewable():
                 return
         except tk.TclError:
             pass

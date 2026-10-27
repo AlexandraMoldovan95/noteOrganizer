@@ -634,6 +634,10 @@ them come back.
 The banner stays for eight seconds, which is long enough to read it and decide. After that
 it fades, and the note is still in the Trash below.
 
+From the keyboard, **Ctrl+Z** takes the offer while the banner is up, as long as the keyboard
+is not in a text box (there, Ctrl+Z undoes your typing). The Undo can also be reached with Tab,
+and the banner waits while the keyboard is on it.
+
 Undo is the **only** way back for one other thing: removing a single day from a repeating
 note. That day is not kept anywhere you can reach — so if the banner has gone, the way to
 bring the day back is to set the repeat up again.
@@ -1036,6 +1040,8 @@ keys that only mean something inside a list, in the find bar, or on the note lis
 | **Ctrl+N** | anywhere | Starts a new note. |
 | **Ctrl+S** | anywhere | Saves the note you're editing. |
 | **Ctrl+F** | anywhere | Opens the find bar for searching within the current note. |
+| **Ctrl+Z** | right after a delete, outside a text box | Takes the delete back, as the banner's **Undo** does. The banner stays while the keyboard is on its Undo. |
+| **Space** / **Enter** | anywhere | Presses what the keyboard is on — a drawn button too: a theme, an alignment, a category's rename, colour or delete, the sidebar's ‹. |
 | **Ctrl+B** / **Ctrl+I** / **Ctrl+U** / **Ctrl+D** | editor | Bold / Italic / Underline / Strikethrough. |
 | **Ctrl+V** | editor | Pastes — the bold, the colours and the lists come with it. |
 | **Ctrl+Shift+V** | editor | Pastes the words on their own, with none of the styling. |
@@ -1070,6 +1076,7 @@ keys that only mean something inside a list, in the find bar, or on the note lis
 | **Page Up** / **Page Down** | Calendar tab | Previous / next month. |
 | **Ctrl+Page Up** / **Ctrl+Page Down** | Calendar tab | Previous / next year. |
 | **Home** | Calendar tab | Jumps back to today. |
+| **Enter** / **Shift+F10** | a note in an open day's list, or a row of History | Opens it, or its right-click menu. |
 | **Enter** | a question | Presses the highlighted button. |
 | **Esc** | a question | Gives the safe answer (No, Cancel). |
 | **Tab** / **Shift+Tab** | a question | Moves between the question's own buttons, and comes back round. |

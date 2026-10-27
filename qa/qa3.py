@@ -3421,6 +3421,51 @@ app.hide_settings_page()
 app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
 _kt_settle()
 
+# ---- KEYBOARD: the delete toast's Undo ----
+# A label bound to the mouse alone, gone after eight seconds: from the
+# keyboard a delete could not be taken back where it was made.
+app.notebook.select(app.TAB_NOTES)
+_kz_note = _undo_seed('KeyUndoMe')
+app.refresh_note_list(); _kt_settle()
+app._delete_note(_kz_note, None); _kt_settle(2)
+check('fixture: the delete went to the Trash, and the toast offers Undo',
+      'KeyUndoMe' in _trash_titles() and app._toast_action is not None)
+if _kt_take(app.canvas):
+    app.canvas.event_generate('<Control-z>')
+    _kt_settle()
+check('Ctrl+Z on the note list, while the toast offers Undo, takes the offer',
+      'KeyUndoMe' in _titles() and 'KeyUndoMe' not in _trash_titles()
+      and app._toast_action is None)
+_kz_back = next((n for n in app.notes if n.get('title') == 'KeyUndoMe'), None)
+if _kz_back is not None:
+    app._delete_note(_kz_back, None)
+    _kt_settle(2)
+if _kt_take(app.title_entry):
+    app.title_entry.event_generate('<Control-z>')
+    _kt_settle()
+check('...but in a text box Ctrl+Z is the box\'s own, and the offer stays',
+      'KeyUndoMe' in _trash_titles() and app._toast_action is not None)
+check('the toast\'s Undo is a Tab stop',
+      str(app.toast_action_lbl.cget('takefocus')) == '1')
+_kz_waited = False
+if app._toast_hide_job is not None and _kt_take(app.toast_action_lbl):
+    # Its timer's own callback, run now: with the keyboard on Undo it waits.
+    _kz_job = app._toast_hide_job
+    _kz_script = app.tk.splitlist(app.tk.call('after', 'info', _kz_job))[0]
+    app.tk.eval(_kz_script)
+    app.tk.call('after', 'cancel', _kz_job)     # it ran; Tcl's copy must not
+    _kt_settle(2)
+    _kz_waited = bool(app.toast_frame.winfo_ismapped()) and app._toast_action is not None
+    app.toast_action_lbl.event_generate('<space>')
+    _kt_settle()
+check(f'while the keyboard is on Undo the toast waits for it ({_kz_waited}), '
+      f'and Space takes the offer',
+      _kz_waited and 'KeyUndoMe' in _titles() and 'KeyUndoMe' not in _trash_titles())
+app._hide_toast()
+app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
+app.refresh_note_list()
+_kt_settle()
+
 
 print()
 print(f"=== QA3 FAILURES: {fails if fails else 'NONE'} ===")

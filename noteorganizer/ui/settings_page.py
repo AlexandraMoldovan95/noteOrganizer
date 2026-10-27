@@ -785,7 +785,8 @@ class SettingsPageMixin:
 
         self._icon_button(row, "trash", delete, danger=True, bg_key="sidebar"
                           ).pack(side="right", padx=(1, 6))
-        edit_btn = self._icon_button(row, "pencil", bg_key="sidebar")
+        edit_btn = self._icon_button(row, "pencil", bg_key="sidebar",
+                                     keys=lambda: edit())
 
         def edit(_e=None):
             # Another template's editor, half written, stayed open: this
@@ -2197,6 +2198,12 @@ class SettingsPageMixin:
 
             for w in (edge, cell, sw, lbl):
                 w.bind("<Button-1>", lambda e, n=name: self.set_theme(n))
+            # From the keyboard: the tile's edge is its ring, in the
+            # keyboard's colour while the keyboard is on it.
+            edge._theme_name = name
+            self._pressable(edge, lambda n=name: self._pick_theme_by_key(n))
+            edge.bind("<FocusIn>", lambda e, w=edge: w.configure(bg=self._focus_ring()))
+            edge.bind("<FocusOut>", lambda e, w=edge, c=edge_col: w.configure(bg=c))
 
         # Each preview canvas otherwise swallows the mouse wheel itself (a
         # plain Tk quirk: Canvas has a built-in default scroll binding, so it
@@ -2458,6 +2465,7 @@ class SettingsPageMixin:
             # the window's click-outside must not ask them a second time.
             w.bind("<Button-1>",
                    lambda _e: None if self.hide_settings_page() else "break")
+            w._key_route = back_lbl     # the keyboard's way to the same
 
         def _back_hover(on, _ws=(back_row, back_ico, back_lbl)):
             c = self.colors["card"] if on else self.colors["sidebar"]
@@ -2644,6 +2652,7 @@ class SettingsPageMixin:
         self._settings_nav_buttons[key] = btn
         self._settings_nav_rails[key] = rail
         self._settings_nav_icons[key] = icon
+        icon._key_route = btn       # the keyboard's way to what it does
 
     # Each glyph is drawn as plain geometry in a 16x16 box rather than set as
     # a character or loaded as an image. That is what lets it take the theme's
@@ -2922,7 +2931,7 @@ class SettingsPageMixin:
 
     def _icon_button(self, parent, kind, command=None, danger=False,
                      bg_key="card", tip=None, removes_row=False,
-                     takes_event=False):
+                     takes_event=False, keys=None):
         """A small drawn-glyph button for a list row.
 
         ``removes_row`` is for a button that takes its own row away, or
@@ -2940,7 +2949,8 @@ class SettingsPageMixin:
         follows whatever theme is on.
 
         Passing no ``command`` makes it a plain indicator (the padlock on a
-        protected category), not something clickable.
+        protected category), not something clickable -- unless ``keys``, the
+        keyboard's press for an icon whose click the caller binds itself.
         """
         size = self.ROW_ICON_SIZE
         # Faint at rest even for destructive actions: the reference colours
@@ -2948,10 +2958,17 @@ class SettingsPageMixin:
         # red warnings before anyone has reached for anything.
         base = self.colors["subtext"]
         pad = 6
-        c = tk.Canvas(parent, width=self.px(size + pad * 2),
-                      height=self.px(size + pad * 2),
+        # A press from the keyboard too, but not for a glyph whose halves do
+        # different things: its row's box has Alt+Up and Alt+Down for that.
+        if keys is None and command is not None and not takes_event:
+            keys = command
+        ring = 2 if keys else 0     # the ring's pixels, on the canvas's edge
+        c = tk.Canvas(parent, width=self.px(size + pad * 2) - ring,
+                      height=self.px(size + pad * 2) - ring,
                       highlightthickness=0, bd=0, bg=self.colors[bg_key],
                       cursor="hand2" if command else "")
+        if keys:
+            self._ring_round(c)
         # A canvas has no text to search for the way a Button does, so record
         # which glyph this is. The QA scripts locate row actions by it, and it
         # keeps them from depending on how a given icon happens to be drawn.
@@ -2977,15 +2994,17 @@ class SettingsPageMixin:
                         else self._surface("inset"))
 
             def _on(_e):
-                c.configure(bg=hover_bg)
+                self._fill(c, hover_bg)
                 paint(hot)
 
             def _off(_e):
-                c.configure(bg=rest_bg)
+                self._fill(c, rest_bg)
                 paint(base)
 
             c.bind("<Enter>", _on)
             c.bind("<Leave>", _off)
+        if keys:
+            self._pressable(c, keys)
         # After the hover bindings above, and with add="+" inside the helper,
         # so the glyph still lights up while the words appear. The padlock
         # gets one too although it takes no command: "why can't I rename this
@@ -3063,11 +3082,15 @@ class SettingsPageMixin:
         inner.pack(padx=1, pady=1)
         self._settings_mode_buttons = {}
         for mode, glyph in (("dark", "moon"), ("light", "sun")):
-            b = tk.Canvas(inner, width=self.px(26), height=self.px(20),
+            # Two pixels less: the keyboard's ring, resting in the canvas's
+            # own fill, is the outermost pixel, where nothing is drawn.
+            b = tk.Canvas(inner, width=self.px(26) - 2, height=self.px(20) - 2,
                           highlightthickness=0, bd=0,
                           bg=self.colors["sidebar"], cursor="hand2")
+            self._ring_round(b)
             b.pack(side="left")
             b.bind("<Button-1>", lambda _e, m=mode: self._pick_settings_mode(m))
+            self._pressable(b, lambda m=mode: self._pick_settings_mode(m))
             # Two drawn shapes at the very bottom of the nav, with nothing
             # written near them. They do not go through _icon_button, so the
             # words are attached here.
@@ -3077,6 +3100,26 @@ class SettingsPageMixin:
                 "under Appearance." % ("dark" if mode == "dark" else "light"))
             self._settings_mode_buttons[mode] = b
         self._refresh_mode_toggle()
+
+    def _pick_theme_by_key(self, name):
+        """A theme tile pressed from the keyboard: the theme changes, the
+        page is drawn again in it, and the keyboard is on that theme's tile."""
+        self.set_theme(name)
+        found = []
+
+        def walk(w):
+            for c in w.winfo_children():
+                if getattr(c, "_theme_name", None) == name:
+                    found.append(c)
+                walk(c)
+        try:
+            walk(self.theme_picker_frame)
+        except (tk.TclError, AttributeError):
+            return
+        if found:
+            found[0].focus_set()
+            found[0].update_idletasks()       # the page drawn again, laid out
+            self._bring_into_sight(found[0])
 
     def _pick_settings_mode(self, mode):
         """Switch to the remembered theme for this mode, if not already on it."""
@@ -3097,7 +3140,7 @@ class SettingsPageMixin:
                 c.delete("all")
                 bg = self.colors["card"] if active else self.colors["sidebar"]
                 fg = self.colors["accent_text"] if active else self.colors["subtext"]
-                c.configure(bg=bg)
+                self._fill(c, bg)
                 if mode == "dark":
                     c.create_oval(8, 5, 18, 15, outline=fg, width=1.5)
                     c.create_oval(11, 3, 22, 14, outline=bg, fill=bg, width=0)
@@ -3207,8 +3250,11 @@ class SettingsPageMixin:
         row = tk.Frame(parent, bg=self.colors["card"])
         row.pack(fill="x", pady=3)
 
-        swatch = tk.Frame(row, bg=color, width=22, height=22, cursor="hand2")
-        swatch.pack(side="left", padx=8, pady=8)
+        # 26 with a two-pixel ring that rests in the row's colour: the colour
+        # is the 22 it always was, and the padding gives the ring its room.
+        swatch = tk.Frame(row, bg=color, width=26, height=26, cursor="hand2")
+        self._ring_round(swatch, self.colors["card"], width=2)
+        swatch.pack(side="left", padx=6, pady=6)
         swatch.pack_propagate(False)
 
         count = self.count_notes_in_category(name)
@@ -3234,6 +3280,7 @@ class SettingsPageMixin:
 
         # Click the swatch itself to recolor (no separate button, no OS dialog).
         swatch.bind("<Button-1>", lambda e: recolor())
+        self._pressable(swatch, recolor)
 
         def rename():
             def do_rename(new):
@@ -3797,6 +3844,13 @@ class SettingsPageMixin:
             ("Ctrl+F", "Find in the current note — searches its text and "
                        "its tables; Enter / Shift+Enter step the matches."),
         )),
+        ("Anywhere", (
+            ("Space  /  Enter", "Press what the keyboard is on — a drawn "
+                                "button too: a theme, an alignment, a "
+                                "category's rename or colour."),
+            ("Ctrl+Z", "Right after a delete, with the keyboard outside a "
+                       "text box: take it back, as the banner's Undo does."),
+        )),
         ("Text formatting", (
             ("Ctrl+B", "Bold the selection — or with nothing selected, "
                        "bold whatever you type next."),
@@ -3869,6 +3923,9 @@ class SettingsPageMixin:
             ("Page Up  /  Page Down", "Previous / next month."),
             ("Ctrl+Page Up  /  Ctrl+Page Down", "Previous / next year."),
             ("Home", "Jump back to today."),
+            ("Enter  /  Shift+F10", "On a note in an open day's list, or a "
+                                    "row of History: open it, or its "
+                                    "right-click menu."),
         )),
     )
 

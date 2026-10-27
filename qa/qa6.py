@@ -4158,6 +4158,175 @@ app._set_editor_font(size=_ks_size)
 app.hide_settings_page()
 _kv_settle()
 
+# ---- KEYBOARD: every control a click acts on, Tab reaches ----
+# Canvases, labels and frames of labels bound only to the mouse were out of
+# Tab's reach: a category's rename, colour and delete, a template's edit,
+# the themes, Light/Dark, the alignment, the sidebar's arrow. Asked of every
+# page: a widget a click acts on is a Tab stop, inside one, or names the
+# Tab stop that does the same (_key_route). The tooltip's own click, which
+# only hides the tip, acts on nothing.
+_kb_hide = str(getattr(app, '_hide_tooltip_command', '')) or None
+
+
+def _kb_tab_chain():
+    seen, at = [], str(app)
+    for _ in range(800):
+        at = str(app.tk.call('tk_focusNext', at))
+        if not at or at in seen:
+            break
+        seen.append(at)
+    return set(seen)
+
+
+def _kb_clicked(w):
+    own = [str(w.bind(s)).strip() for s in ('<Button-1>', '<ButtonPress-1>',
+                                             '<ButtonRelease-1>') if w.bind(s)]
+    acts = [o for o in own if o.lstrip('+').strip() != _kb_hide]
+    return (bool(acts) or isinstance(w, (tk.Button, tk.Checkbutton, tk.Radiobutton))
+            or str(w.cget('cursor')) == 'hand2')
+
+
+def _kb_unreachable(top):
+    chain = _kb_tab_chain()
+    out = []
+
+    def walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Toplevel) or not c.winfo_viewable():
+                continue
+            if _kb_clicked(c):
+                route = getattr(c, '_key_route', None)
+                anc, ok = c, route is not None and str(route) in chain
+                while anc is not None and not ok:
+                    ok = str(anc) in chain
+                    anc = anc.master
+                if not ok:
+                    text = str(c.cget('text'))[:20] if 'text' in c.keys() else ''
+                    out.append(f"{c.winfo_class()} {text!r}"
+                               f"{' ' + c._icon_kind if hasattr(c, '_icon_kind') else ''}")
+            walk(c)
+    walk(top)
+    return sorted(set(out))
+
+
+NO.CATEGORY_COLORS.setdefault('Work', '#7c5cff')
+app.templates = [{'name': 'KbTemplate', 'title': 'x', 'body': 'y', 'category': 'General'}]
+app.notes = [{'id': 801, 'title': 'KbNote', 'body': 'x', 'category': 'Work',
+              'date': '2026-10-02', 'created': '2026-01-01 00:00',
+              'updated': '2026-01-01 00:00', 'checklist': [], 'attachments': []}]
+app.trash = [{'id': 802, 'uid': 'kb-t', 'title': 'KbGone', 'body': 'x', 'category': 'General',
+              'deleted_at': '2026-10-20 10:00:00'}]
+app.save_notes(); NO.save_trash(app.trash)
+app.refresh_note_list()
+app.notebook.select(app.TAB_NOTES)
+app.open_note_in_tab(app.notes[0])
+_kv_settle(10)
+_kb_where = {'the notes page': _kb_unreachable(app)}
+app.notebook.select(app.TAB_CALENDAR)
+app.cal_year, app.cal_month = 2026, 10
+app.render_calendar()
+_kv_settle(10)
+app.open_day_popup('2026-10-02')
+_kv_settle(10)
+_kb_where['the calendar, a day open'] = _kb_unreachable(app)
+app._toggle_calendar_history()
+_kv_settle(10)
+_kb_where['the History register'] = _kb_unreachable(app)
+app._toggle_calendar_history()
+app.notebook.select(app.TAB_NOTES)
+app.show_settings_page()
+for _kb_key, _kb_label, _b, _e in app.SETTINGS_SECTIONS:
+    app.toggle_settings_panel(_kb_key)
+    _kv_settle(6)
+    _kb_where['Settings, ' + _kb_label] = _kb_unreachable(app.settings_page)
+_kb_missing = {k: v for k, v in _kb_where.items() if v}
+check(f'every control a click acts on, on every page, is a Tab stop or inside one '
+      f'({len(_kb_where)} pages; out of reach: {_kb_missing})', not _kb_missing)
+
+# The drawn ones press from the keyboard too, and the keyboard stays where
+# a press that redraws the list put it back.
+app.toggle_settings_panel('categories')
+_kv_settle(10)
+
+
+def _kb_icons(kind):
+    found = []
+
+    def walk(w):
+        for c in w.winfo_children():
+            if getattr(c, '_icon_kind', None) == kind and getattr(c, '_key_press', None):
+                found.append(c)
+            walk(c)
+    walk(app.settings_content)
+    return found
+
+
+_kb_renamed = []
+_kb_real_rename = app._show_inline_rename
+app._show_inline_rename = lambda anchor, current, on_save: _kb_renamed.append(current)
+try:
+    _kb_pencil = _kb_icons('pencil')
+    if _kb_pencil and _take_focus(_kb_pencil[0]):
+        _kb_pencil[0].event_generate('<space>')
+        _kv_settle()
+finally:
+    del app._show_inline_rename
+_kb_first = [k for k in NO.CATEGORY_COLORS if k != NO.PROTECTED_CATEGORY][:1]
+check(f'Space on a category\'s pencil renames it, as a click does ({_kb_renamed})',
+      _kb_first and _kb_renamed == _kb_first)
+app.toggle_settings_panel('appearance')
+_kv_settle(10)
+_kb_theme = app.theme_name
+_kb_ring = False
+
+
+def _kb_theme_tiles():
+    found = []
+
+    def walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Frame) and getattr(c, '_key_press', None):
+                found.append(c)
+            walk(c)
+    walk(app.theme_picker_frame)
+    return found
+
+
+_kb_tiles = _kb_theme_tiles()
+_kb_target = _kb_tiles[1] if len(_kb_tiles) > 1 else None
+if _kb_target is not None and _take_focus(_kb_target):
+    _kv_settle(2)       # its <FocusIn>, which Tk may hand over after the focus
+    _kb_ring = str(_kb_target.cget('bg')).lower() == app._focus_ring().lower()
+    _kb_target.event_generate('<Return>')
+    _kv_settle(10)
+_kb_after = _kb_theme_tiles()
+_kb_held = None
+try:
+    _kb_held = app.nametowidget(str(app.tk.call('focus', '-lastfor', app)))
+except (KeyError, tk.TclError):
+    pass
+check(f'a theme tile is a Tab stop ringed in the keyboard\'s colour, and Return '
+      f'chooses it ({_kb_ring}, {_kb_theme} -> {app.theme_name})',
+      _kb_target is not None and _kb_ring and app.theme_name != _kb_theme)
+check(f'...and the keyboard is on that tile, drawn again in the new theme '
+      f'({_kb_held}; {[getattr(w, "_theme_name", None) for w in _kb_after[:2]]})',
+      len(_kb_after) > 1 and _kb_held is _kb_after[1])
+app.set_theme(_kb_theme)
+_kv_settle(6)
+_kb_mode = app.theme_name in NO.DARK_THEMES
+_kb_switch = app._settings_mode_buttons['light' if _kb_mode else 'dark']
+if _take_focus(_kb_switch):
+    _kb_switch.event_generate('<space>')
+    _kv_settle(6)
+check('Space on the Light/Dark switch flips the theme',
+      (app.theme_name in NO.DARK_THEMES) != _kb_mode)
+app.set_theme(_kb_theme)
+app.hide_settings_page()
+app.notes = []; app.trash = []; app.templates = []
+app.save_notes(); NO.save_trash(app.trash)
+app.refresh_note_list()
+_kv_settle()
+
 
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")

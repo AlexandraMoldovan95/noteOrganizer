@@ -8116,9 +8116,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         font says "align right", and because canvas items can be recoloured
         on a theme switch.
         """
-        canvas = tk.Canvas(parent, width=self.px(24), height=self.px(20),
+        # Two pixels less: the keyboard's ring is the outermost pixel, resting
+        # in the canvas's own fill, where no bar is drawn.
+        canvas = tk.Canvas(parent, width=self.px(24) - 2, height=self.px(20) - 2,
                            highlightthickness=0, bd=0, cursor="hand2",
                            relief="flat")
+        self._ring_round(canvas)
         for row, width in enumerate((15, 9, 15, 9)):
             y = 5 + row * 3.5
             if align == "left":
@@ -8131,6 +8134,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._scale_drawing(canvas, "bar")
         canvas.bind("<Button-1>",
                     lambda e, a=align: self._set_paragraph_align(a))
+        self._pressable(canvas, lambda a=align: self._set_paragraph_align(a))
         return canvas
 
     def _set_button_pressed(self, btn, active):
@@ -8141,7 +8145,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """
         bg = self.colors["accent"] if active else self.colors["sidebar"]
         fg = self._on_fill("accent") if active else self.colors["text"]
-        btn.configure(relief="sunken" if active else "flat", bg=bg)
+        btn.configure(relief="sunken" if active else "flat")
+        self._fill(btn, bg)
         if isinstance(btn, tk.Canvas):
             btn.itemconfigure("bar", fill=fg)
         else:
@@ -13708,11 +13713,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # a widget nobody sees between showings.
         self.toast_action_lbl = tk.Label(
             self.toast_frame, font=("Segoe UI", 9, "bold", "underline"),
-            bg=self.colors["success"], fg=self._on_fill("success"), padx=0, pady=6,
+            bg=self.colors["success"], fg=self._on_fill("success"), padx=0, pady=5,
             cursor="hand2")
         self._toast_action = None
         self.toast_action_lbl.bind(
             "<Button-1>", lambda _e: self._run_toast_action())
+        # A Tab stop (its ring the pixel of padding it gave up), and Ctrl+Z
+        # outside a text box while it is offered (_toast_undo_key).
+        self._ring_round(self.toast_action_lbl)
+        self._pressable(self.toast_action_lbl, self._run_toast_action_by_key)
+        for _key in ("<Control-z>", "<Control-Z>"):
+            self.bind_all(_key, self._toast_undo_key, add="+")
         self._toast_hide_job = None
         # Not placed yet — shown on demand by _show_toast().
 
@@ -14276,6 +14287,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._sidebar_hidden = False
         self.sidebar_toggle = tk.Frame(parent, width=self.px(16), cursor="hand2")
         self.track_theme(self.sidebar_toggle, bg="card")
+        # A Tab stop, its ring resting in its own fill (its width holds it).
+        self._ring_round(self.sidebar_toggle)
+        self.track_theme(self.sidebar_toggle, highlightbackground="card")
         self.sidebar_toggle.pack(side="left", fill="y")
         self.sidebar_toggle.pack_propagate(False)
         self.sidebar_toggle_lbl = tk.Label(
@@ -14285,6 +14299,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.sidebar_toggle_lbl.pack(expand=True)
         for w in (self.sidebar_toggle, self.sidebar_toggle_lbl):
             w.bind("<Button-1>", lambda e: self.toggle_sidebar())
+        self._pressable(self.sidebar_toggle, self.toggle_sidebar)
 
         # --- Right side: open-note tab strip + editor panel ---
         right_side = tk.Frame(parent)
@@ -14794,7 +14809,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         for align, tip in (("left", "Align left"), ("center", "Centre"),
                            ("right", "Align right")):
             btn = self._make_align_button(format_bar, align)
-            self.track_theme(btn, bg="sidebar")
+            self.track_theme(btn, bg="sidebar", highlightbackground="sidebar")
             self._add_fmt_item(btn, padx=(0, 4))
             self._attach_tooltip(
                 btn, tip,
@@ -21924,6 +21939,35 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if action is not None:
             action()
 
+    def _run_toast_action_by_key(self):
+        """The toast's Undo pressed from the keyboard: the banner goes, and
+        the keyboard with it, so it lands on the list -- or the tabs."""
+        self._run_toast_action()
+        if getattr(self, "_settings_open", False):
+            return
+        try:
+            on_notes = self.notebook.index("current") == self.TAB_NOTES
+        except tk.TclError:
+            return
+        (self.canvas if on_notes else self.notebook).focus_set()
+
+    def _toast_undo_key(self, event):
+        """Ctrl+Z, while the toast offers an Undo and the keyboard is not in
+        a text box (whose own Ctrl+Z undoes its typing): takes the offer.
+        Eight seconds is short to reach the banner by Tab."""
+        if (getattr(self, "_toast_action", None) is None
+                or getattr(self, "_toast_hide_job", None) is None
+                or self._a_dialog_is_asking()):
+            return None
+        widget = getattr(event, "widget", None)
+        try:
+            if isinstance(widget, str) or widget.winfo_class() in self._TYPING_CLASSES:
+                return None
+        except (tk.TclError, AttributeError):
+            return None
+        self._run_toast_action()
+        return "break"
+
     def _hide_toast(self):
         try:
             self.toast_frame.place_forget()
@@ -21986,9 +22030,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.toast_lbl.configure(text=f"{mark}  {text}", bg=color,
                                      fg=letters_on(color))
             if action is not None:
-                # Recoloured here, not tracked: see where it is built.
+                # Recoloured here, not tracked: see where it is built. Its
+                # ring is drawn in the banner's own words' colour.
+                self.toast_action_lbl._ring_on = letters_on(color)
                 self.toast_action_lbl.configure(text=action_text, bg=color,
                                                 fg=letters_on(color), padx=0)
+                self._fill(self.toast_action_lbl, color)
                 self.toast_action_lbl.pack(side="left", padx=(0, 14))
             else:
                 self.toast_action_lbl.pack_forget()
@@ -22005,6 +22052,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         def hide():
             self._toast_hide_job = None
+            # Not from under the keyboard: someone who Tabbed to Undo is
+            # reading it, and it waits for them.
+            try:
+                held = str(self.tk.call("focus")) == str(self.toast_action_lbl)
+            except tk.TclError:
+                held = False
+            if held and self._toast_action is not None:
+                self._toast_hide_job = self.after(1000, hide)
+                return
             self._hide_toast()
 
         self._toast_hide_job = self.after(8000 if action else 1800, hide)

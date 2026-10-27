@@ -15515,7 +15515,9 @@ try:
     _kp_text = str(_kp_cell.cget('text')) if _kp_cell is not None else '?'
     # Windows draws no focus colour round a label, only its resting one,
     # so the ring is both (a photograph found it missing).
-    _kp_ringed = (_kp_cell is not None and focus_settles_on(_kp_cell)
+    _kp_arrived = _kp_cell is not None and focus_settles_on(_kp_cell)
+    _kp_settle(2)       # its <FocusIn>, which Tk may hand over after the focus
+    _kp_ringed = (_kp_arrived
                   and str(_kp_cell.cget('highlightbackground')).lower()
                   == app._focus_ring().lower()
                   and str(_kp_em[0].cget('highlightbackground')).lower()
@@ -15572,6 +15574,34 @@ finally:
     app._dismiss_mini_popup()
 app.new_note()
 _kp_settle()
+
+# ---- KEYBOARD: the alignment buttons and the sidebar's arrow ----
+# Drawn on canvases and a frame, bound to the mouse alone: no key aligned a
+# paragraph, and the sidebar could be folded away only by a click.
+set_body('aligned by a key')
+app.body_text.mark_set('insert', '1.3')
+_ka_right = app._align_buttons['right']
+check('an alignment button is a Tab stop, ringed while the keyboard is on it',
+      str(_ka_right.cget('takefocus')) == '1'
+      and int(str(_ka_right.cget('highlightthickness'))) == 1)
+if take_focus(_ka_right):
+    _ka_right.event_generate('<space>')
+    _kp_settle()
+check(f'Space on Align right aligns the line the caret is on '
+      f'({app._paragraph_align_of(app.body_text, 1)})',
+      app._paragraph_align_of(app.body_text, 1) == 'right')
+_ka_shown = not app._sidebar_hidden
+if take_focus(app.sidebar_toggle):
+    app.sidebar_toggle.event_generate('<Return>')
+    _kp_settle()
+_ka_folded = app._sidebar_hidden
+if take_focus(app.sidebar_toggle):
+    app.sidebar_toggle.event_generate('<Return>')
+    _kp_settle()
+check(f'Return on the sidebar\'s arrow folds the sidebar away and back '
+      f'({_ka_shown}, {_ka_folded}, {app._sidebar_hidden})',
+      _ka_shown and _ka_folded and not app._sidebar_hidden)
+set_body('')
 
 # ---- CLOSING SAVES SILENTLY (dead last: it destroys the app) ----
 # The quit-time "Unsaved notes" ask could only ever cover the last

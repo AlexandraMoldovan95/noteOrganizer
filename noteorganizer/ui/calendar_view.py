@@ -1010,7 +1010,11 @@ class CalendarViewMixin:
             bg=self.colors["accent"], fg=self._on_fill("accent"), font=("Segoe UI", 9, "bold"),
             anchor="w", cursor="hand2"
         )
-        msg.pack(side="left", padx=14, pady=6)
+        # Both words are Tab stops, ringed in the bar's own words' colour;
+        # a pixel of padding each gives the ring its room.
+        self._ring_round(msg, on=self._on_fill("accent"))
+        msg.pack(side="left", padx=13, pady=5)
+        self._pressable(msg, lambda: self._open_today_from_reminder(today))
         # Clicking the text jumps to today's notes in the calendar. Kept on
         # a half-written template ("Save changes?" answered Cancel), the
         # click stops here: the window's click-outside, still to run for
@@ -1022,8 +1026,10 @@ class CalendarViewMixin:
         close = tk.Label(self.reminder_bar, text="✕", bg=self.colors["accent"],
                          fg=self._on_fill("accent"), font=("Segoe UI", 10, "bold"),
                          cursor="hand2")
-        close.pack(side="right", padx=12)
+        self._ring_round(close, on=self._on_fill("accent"))
+        close.pack(side="right", padx=11)
         close.bind("<Button-1>", lambda e: self.dismiss_reminder())
+        self._pressable(close, self.dismiss_reminder)
 
     def _open_today_from_reminder(self, today):
         """The bar's click lands on the day it names, on screen: on its own
@@ -1253,6 +1259,9 @@ class CalendarViewMixin:
 
         for base_note, (title_text, icons, color) in rows:
             row = tk.Frame(inner, bg=self.colors["card"], cursor="hand2")
+            # The keyboard's ring rests in the row's own fill; the title's
+            # padding gives back the pixel it takes.
+            self._ring_round(row)
             row.pack(fill="x", pady=3)
             stripe = tk.Frame(row, bg=color, width=4)
             stripe.pack(side="left", fill="y")
@@ -1270,7 +1279,7 @@ class CalendarViewMixin:
                            anchor="w")
             _fit_title(self, lbl, "", title_text, icons,
                        self._cal_font(("Segoe UI", 10, "bold"))[0])
-            lbl.pack(side="left", fill="x", expand=True, padx=10, pady=8)
+            lbl.pack(side="left", fill="x", expand=True, padx=10, pady=7)
 
             def _open(e, n=base_note, d=date_str):
                 self.show_day_note(n, d)
@@ -1281,6 +1290,8 @@ class CalendarViewMixin:
             for w in (row, stripe, lbl):
                 w.bind("<Button-1>", _open)
                 w.bind("<Button-3>", _context)
+            self._pressable(row, lambda n=base_note, d=date_str:
+                            self.show_day_note(n, d), menu=_context)
 
         # Bind the wheel now that every note row exists.
         self._bind_mousewheel_recursive(inner, canvas)
@@ -1649,15 +1660,17 @@ class CalendarViewMixin:
             """`parts` is (before the title, the title, after it): only the
             title gives way when the row is too narrow for all three."""
             row = tk.Frame(parent, bg=self.colors["card"], cursor="hand2")
+            self._ring_round(row)       # the title's padding holds its pixel
             row.pack(fill="x", pady=1, padx=(indent, 0))
             lbl = tk.Label(row, anchor="w", bg=self.colors["card"], fg=fg)
             _fit_title(self, lbl, *parts, self._cal_font(
                 ("Segoe UI", 9, "bold" if bold else "normal"))[0])
-            lbl.pack(side="left", fill="x", expand=True, padx=10, ipady=4)
+            lbl.pack(side="left", fill="x", expand=True, padx=10, ipady=3)
             for w in (row, lbl):
                 w.bind("<Button-1>", lambda e: command())
                 if context_cmd is not None:
                     w.bind("<Button-3>", context_cmd)
+            self._pressable(row, command, menu=context_cmd)
             return row
 
         # Each row's note, found once for the whole render rather than by a
