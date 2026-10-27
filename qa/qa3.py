@@ -3209,6 +3209,39 @@ finally:
 app.notes = []; app.save_notes()
 app.trash = []; NO.save_trash(app.trash)
 
+# Closing after a save that failed (a full disk, a file another program
+# holds) tries once more and, failing again, asks before it throws away
+# what only the screen holds. It used to close at once.
+_cs_note = NO.normalize_note({'id': 1, 'title': 'Draft', 'body': 'old words'})
+app.notes = [_cs_note]; app.save_notes()
+app.open_note_in_tab(_cs_note); app.update()
+_cs_asked, _cs_closed = [], []
+_cs_real = (app.ask_yes_no, app.show_error, app.destroy)
+app.ask_yes_no = lambda *a, **k: (_cs_asked.append(a[0] if a else ''), False)[1]
+app.show_error = lambda *a, **k: None
+app.destroy = lambda: _cs_closed.append(True)
+os.makedirs(NO.DATA_FILE + '.tmp')
+try:
+    app.body_text.insert('end', ' new words')
+    app.on_app_close(); app.update()
+    check('a close after a failed save asks, and No keeps the window open',
+          _cs_asked == ['Close without saving?'] and not _cs_closed)
+    os.rmdir(NO.DATA_FILE + '.tmp')
+    _cs_asked.clear()
+    app.on_app_close(); app.update()
+    _cs_disk = json.load(open(NO.DATA_FILE, encoding='utf-8'))
+    check('...and once the disk takes it, the close saves without asking '
+          f'({[n.get("body") for n in _cs_disk]})',
+          not _cs_asked and _cs_closed
+          and any('new words' in (n.get('body') or '') for n in _cs_disk))
+finally:
+    if os.path.isdir(NO.DATA_FILE + '.tmp'):
+        os.rmdir(NO.DATA_FILE + '.tmp')
+    app.ask_yes_no, app.show_error = _cs_real[0], _cs_real[1]
+    del app.destroy
+    app._notes_unsaved = False
+app.notes = []; app.save_notes()
+
 
 print()
 print(f"=== QA3 FAILURES: {fails if fails else 'NONE'} ===")

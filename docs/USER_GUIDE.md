@@ -989,9 +989,12 @@ startup exactly what happened and where the preserved copy sits — so you can r
 recent backup while the broken file stays available for repair. The same quiet preserve-aside
 protects the trash, templates and settings files.
 
-Failed *saves* speak up too: if a data file can't be written (a read-only folder, a full disk),
-an error message names the file instead of pretending the save worked, and a technical trace
-lands in `crash_log.txt` beside your data — worth attaching if you ever report a problem.
+Failed *saves* speak up too: if a data file can't be written (a full disk, a file another program
+holds), an error message names the file instead of pretending the save worked, and a technical
+trace lands in `crash_log.txt` beside your data — worth attaching if you ever report a problem.
+While your latest changes are still unsaved, closing the app tries once more and then asks
+before it closes, so they are not lost without a word. A delete the Trash can't hold deletes
+nothing and says so.
 
 ---
 

@@ -184,6 +184,7 @@ is in the table below as well.
 | [A file with two names](#a-file-with-two-names) | When a check and the action after it each name a file, they must name it the same way: resolve once, compare what was resolved. | next |
 | [A delete that trusted the Trash](#a-delete-that-trusted-the-trash) | An order that is safe only if the first step worked needs the first step's answer. | next |
 | [The number too big to start](#the-number-too-big-to-start) | Code that runs before the window exists takes the safe answer for whatever it cannot read. | next |
+| [The close that outran a failed save](#the-close-that-outran-a-failed-save) | A warning that something will be lost is a promise to stop before losing it. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -2033,6 +2034,28 @@ minus infinity, NaN and deep nesting; nothing on the start-up path raises now.
 **Takeaway:** a value from a file is any value its format can carry, infinity and depth
 included. Code that runs before the window exists must take the safe answer — keep, skip,
 default — for whatever it cannot read.
+
+### The close that outran a failed save
+
+*(2026-10-27 · found by the final audit's break-it round)*
+
+**Symptom:** with the disk full, closing the window showed "Couldn't save your notes … recent
+changes may be lost when you close the app" — and then closed, losing them. The message also
+said to move the app to Documents, advice from when the notebook lived beside it.
+
+**Root cause:** the close saves whatever is unsaved on its way out, and stops only for the one
+question that means "take me back" (a date it could not store). A save that failed to write
+showed its error and returned; the close went on to `destroy()`. The words were in the widgets
+and in memory, and nowhere else.
+
+**Fix:** `save_notes` remembers whether its last write failed. The close tries once more — the
+disk may have room by then — and if that fails too, asks "Close without saving?", No being the
+answer Enter and Escape give. The error says what usually causes it (a full disk, a program
+holding the file) and that the changes are still on screen. qa3 fills the way with a folder
+where the write's temporary file goes; mutants CS01 and CS02.
+
+**Takeaway:** a warning that something will be lost is a promise to stop before losing it. If the
+next step is the loss, the warning has to be a question.
 
 
 ## Tk & platform gotchas

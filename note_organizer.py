@@ -1874,18 +1874,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         turning that into a dialog is this layer's job.
         """
         ok, exc = core_save_notes(self.notes)
+        # Remembered for the close, which must not throw away what only the
+        # screen still holds (ISSUES_LOG: "The close that outran a failed save").
+        self._notes_unsaved = not ok
         if ok:
             return True
         self.show_error(
             "Couldn't save your notes",
-            "Your notes could not be written to disk, so recent changes may "
-            "be lost when you close the app.\n\n"
+            "Your notes could not be written to disk. What you changed since "
+            "the last save is still on screen, so keep the app open until it "
+            "can be saved.\n\n"
             f"Location:\n{DATA_FILE}\n\n"
             f"Reason: {exc}\n\n"
-            "This usually means the app is in a read-only folder (like "
-            "Program Files or a location that needs admin rights). Move the "
-            "app to your Documents or Desktop, or use Export to save a copy "
-            "somewhere you can write to."
+            "Usually the disk is full, or another program (a backup or sync "
+            "tool, an antivirus) is holding the file. Free some space or "
+            "close that program, then make any change and it saves again. "
+            "Settings → Backup can also export a copy somewhere else."
         )
         return False
 
@@ -21731,6 +21735,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # autosaves along the way have the rest.
                 self._log_swallowed("close: per-tab final save")
                 continue
+        # The last write failed: try once more (the disk may have room now),
+        # and if it fails again, closing would lose what only the screen has.
+        if getattr(self, "_notes_unsaved", False):
+            ok, _exc = core_save_notes(self.notes)
+            self._notes_unsaved = not ok
+        if getattr(self, "_notes_unsaved", False) and not self.ask_yes_no(
+                "Close without saving?",
+                "Your latest changes could not be saved, so they are only on "
+                "the screen. Close anyway and lose them?",
+                icon="warning", default="no"):
+            return
         # A backup export/import may still be writing on its worker thread;
         # destroy() would kill it mid-file. Wait (capped) for it to finish,
         # then do what its completion would have done on the main thread.

@@ -5549,5 +5549,25 @@
     "must_fail": ["a leftover notebook too deep to sign is kept, never a crash"],
     "suites": ["test_data_safety"],
     "expect": "killed"
+  },
+  {
+    "id": "CS01",
+    "about": "closing after a failed save closes at once, the typing lost",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if getattr(self, \"_notes_unsaved\", False) and not self.ask_yes_no(\n",
+               "replace": "        if False and not self.ask_yes_no(\n"}],
+    "must_fail": ["a close after a failed save asks, and No keeps the window open"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "CS02",
+    "about": "the close does not try the failed save once more",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if getattr(self, \"_notes_unsaved\", False):\n            ok, _exc = core_save_notes(self.notes)\n            self._notes_unsaved = not ok\n",
+               "replace": ""}],
+    "must_fail": ["...and once the disk takes it, the close saves without asking"],
+    "suites": ["qa3"],
+    "expect": "killed"
   }
 ]
