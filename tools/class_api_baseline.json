@@ -714,6 +714,7 @@
   "_tab_ring_colour": "(self)",
   "_tab_ring_if_tabbed_to": "(self, event, backwards=False)",
   "_table_block_at": "(self, line_no)",
+  "_table_too_big_to_draw": "(self, lines, first0, last0)",
   "_tag_add_no_newline": "(text_widget, tag, start, end)",
   "_take_known_notes": "(self, incoming, source)",
   "_take_pending_checklist_item": "(self)",

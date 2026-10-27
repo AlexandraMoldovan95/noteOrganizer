@@ -186,6 +186,7 @@ is in the table below as well.
 | [The number too big to start](#the-number-too-big-to-start) | Code that runs before the window exists takes the safe answer for whatever it cannot read. | next |
 | [The close that outran a failed save](#the-close-that-outran-a-failed-save) | A warning that something will be lost is a promise to stop before losing it. | next |
 | [The preview that kept every frame](#the-preview-that-kept-every-frame) | A limit has to hold while the thing it limits is being built, not only once it is finished. | next |
+| [The table drawn whole](#the-table-drawn-whole) | Anything drawn whole needs a size past which it is not drawn; outside content chooses the size. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -2079,6 +2080,29 @@ offered to the program the computer opens images with instead. qa7 plays each; m
 
 **Takeaway:** a limit has to hold while the thing it limits is being built, not only once it is
 finished.
+
+### The table drawn whole
+
+*(2026-10-27 · found by the final audit's break-it round)*
+
+**Symptom:** a note holding a 300×300 table — 2.9 KB as a share code — froze the app for about
+40 seconds each time it opened. A 1,000-row table killed the app on Linux outright: "X Error …
+BadAlloc … X_CreatePixmap", no traceback.
+
+**Root cause:** a table is drawn as a grid of real cells, every cell at once, on one canvas as tall
+as the table. Nothing limited either. 90,000 cells meant 90,000 rounds of measuring and drawing;
+1,000 rows at 34 pixels passed the 32,767 pixels a window may be, and the canvas could not be
+made. On Windows the result is unmeasured, which is reason enough not to find out on someone's
+notes.
+
+**Fix:** a table past 400 rows or 3,000 cells stays as its text — the pipe rows it is stored as,
+searchable and editable like any line — and the status line says why. The note's data does not
+change; 400 rows stay under the canvas limit at 225%. qa1 draws a 40×5 table and keeps a 401-row
+and a 3,100-cell one as text; mutants TD01 and TD02. The phone's app draws the same way and got
+the same kind of limit.
+
+**Takeaway:** anything drawn whole needs a size past which it is not drawn. Outside content
+chooses the size.
 
 
 ## Tk & platform gotchas

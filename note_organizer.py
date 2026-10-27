@@ -2711,8 +2711,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 blocks.append((first0, kept0 - 1))
             if kept0 < last0:
                 blocks.append((kept0 + 1, last0))
+        lines = text.split("\n")
+        too_big = [b for b in blocks if self._table_too_big_to_draw(lines, *b)]
+        blocks = [b for b in blocks if b not in too_big]
         for first0, last0 in blocks:
             self._build_table_grid(first0 + 1, last0 + 1)
+        if too_big:
+            self.set_status("A table this large is shown as its text, so the note "
+                            "stays quick to open")
         # There is always a line under the last table, or the caret guard
         # would have nowhere to put the caret and writing could never
         # continue past it (_add_line_under_last_table).
@@ -3979,6 +3985,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except tk.TclError:
             pass
         return "break"
+
+    # A table past either is left as its text. Drawn, every cell is made at
+    # once: a 300x300 table froze the app for 40 s, and a 1,000-row one
+    # passed the 32,767-pixel canvas and killed it (ISSUES_LOG: "The table
+    # drawn whole"). 400 rows stay under it at 225%.
+    MAX_DRAWN_TABLE_ROWS = 400
+    MAX_DRAWN_TABLE_CELLS = 3000
+
+    def _table_too_big_to_draw(self, lines, first0, last0):
+        """Whether the table on lines *first0*..*last0* (0-based) is past
+        what is drawn as a grid."""
+        rows = last0 - first0 + 1
+        if rows > self.MAX_DRAWN_TABLE_ROWS:
+            return True
+        widest = max((len(core_tables.split_row(lines[i]))
+                      for i in range(first0, min(last0 + 1, len(lines)))), default=0)
+        return (rows > self.MAX_DRAWN_TABLE_ROWS
+                or rows * widest > self.MAX_DRAWN_TABLE_CELLS)
 
     def _build_table_grid(self, first, last):
         b = self.body_text

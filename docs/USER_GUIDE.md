@@ -294,7 +294,8 @@ nearest one would claim the note is set in something it never was.*
 The table button on the toolbar opens a small size grid — sweep across it to choose how many rows
 and columns, and a table appears at the cursor with the first cell ready to type into. (Tables
 start at two columns: a single-column row of pipes reads as ordinary text, not a table, so the
-picker never offers one.)
+picker never offers one.) A very large table — over 400 rows, or 3,000 cells — is shown as its
+text, the rows of `|` it is kept as, so the note stays quick to open; nothing in it changes.
 
 ![A table in a note, with a highlighted header row](screenshots/tables.png)
 

@@ -20,6 +20,13 @@ def main():
     with io.open(os.path.join(ROOT, "tools", "mutants.json"), encoding="utf-8") as fh:
         entries = json.load(fh)
     sources, lost = {}, []
+    # An id is how a mutant is asked for: two with one id, and mutate.py ran
+    # both under it without a word (TB01 was given twice, 2026-10-27).
+    seen = set()
+    for entry in entries:
+        if entry["id"] in seen:
+            lost.append("%s: the id is used twice in the catalogue" % entry["id"])
+        seen.add(entry["id"])
     for entry in entries:
         for edit in entry["edits"]:
             path = os.path.join(ROOT, edit["file"])
@@ -38,7 +45,8 @@ def main():
               "code as it is now, or drop it with the check it guarded."
               % len(lost))
         return 1
-    print("Every one of the %d mutants finds the code it mutates." % len(entries))
+    print("Every one of the %d mutants has its own id and finds the code it mutates."
+          % len(entries))
     return 0
 
 

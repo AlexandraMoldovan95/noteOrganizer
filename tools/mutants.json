@@ -5631,5 +5631,25 @@
     "must_fail": ["a long animation keeps only the frames that fit, at their own size"],
     "suites": ["qa7"],
     "expect": "killed"
+  },
+  {
+    "id": "TD01",
+    "about": "a table of any number of rows is drawn as a grid",
+    "edits": [{"file": "note_organizer.py",
+               "find": "    MAX_DRAWN_TABLE_ROWS = 400\n",
+               "replace": "    MAX_DRAWN_TABLE_ROWS = 400000\n"}],
+    "must_fail": ["a 401x2 table is kept as its text"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "TD02",
+    "about": "a table of any number of cells is drawn as a grid",
+    "edits": [{"file": "note_organizer.py",
+               "find": "    MAX_DRAWN_TABLE_CELLS = 3000\n",
+               "replace": "    MAX_DRAWN_TABLE_CELLS = 3000000\n"}],
+    "must_fail": ["a 100x31 table is kept as its text"],
+    "suites": ["qa1"],
+    "expect": "killed"
   }
 ]

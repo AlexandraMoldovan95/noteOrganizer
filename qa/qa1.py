@@ -2785,6 +2785,25 @@ check('whose cells hold the pasted values',
       == [['Name', 'Qty'], ['Milk', '2'], ['Eggs and bread', '12']])
 check('the text around the table is not', not _mono(1) and not _mono(5))
 
+# A table past what is drawn stays its text. Drawn, every cell was made at
+# once: a 300x300 table froze the app for 40 s, and a 1,000-row one passed
+# the 32,767-pixel canvas and killed it on Linux. Either limit keeps it text.
+import time as _tb_time
+for _tb_rows, _tb_cols, _tb_drawn in ((401, 2, False), (100, 31, False), (40, 5, True)):
+    _tb_lines = (['| ' + ' | '.join('h%d' % c for c in range(_tb_cols)) + ' |',
+                  '|' + '---|' * _tb_cols]
+                 + ['| ' + ' | '.join('%d' % r for _c in range(_tb_cols)) + ' |'
+                    for r in range(_tb_rows - 2)])
+    _tb_started = _tb_time.time()
+    set_body('Big\n' + '\n'.join(_tb_lines) + '\nafter')
+    app._render_table_grids(); app.update()
+    _tb_took = _tb_time.time() - _tb_started
+    check(f'a {_tb_rows}x{_tb_cols} table is {"drawn" if _tb_drawn else "kept as its text"} '
+          f'({_tb_took:.2f} s)',
+          (app._grid_at_line(2) is not None) == _tb_drawn
+          and body().split('\n')[1] == _tb_lines[0])
+set_body('')
+
 # What Excel writes: its markers inside the table -- for one row, around the
 # cells -- so the fragment alone was cells with no row, and a row copied
 # from Excel pasted as loose text, "The" and "app open on the phone." on
