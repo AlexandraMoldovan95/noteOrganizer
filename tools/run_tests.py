@@ -290,6 +290,9 @@ def main(argv):
     print(f"running : {len(statics) + len(scripts)} check(s)\n")
 
     broken = []
+    # Every check a suite runs prints one PASS or FAIL line: counted here, so
+    # the docs' "how many checks" is a measurement, not a recollection.
+    counted = {"unit": 0, "qa": 0}
     # Static first: they take a moment and catch the kind of mistake that
     # would otherwise be reported only after a minute of GUI tests.
     for label, cmd in statics:
@@ -306,7 +309,9 @@ def main(argv):
         for script in scripts:
             code, failed, took, output = run_one(scratch, script)
             ok = (code == 0 and not failed)
-            print(f"  {'PASS' if ok else 'FAIL'}  {script:<32} {took:5.1f}s")
+            ran = sum(1 for l in output.splitlines() if l.startswith(("PASS ", "FAIL ")))
+            counted["qa" if script.startswith("qa") else "unit"] += ran
+            print(f"  {'PASS' if ok else 'FAIL'}  {script:<32} {took:5.1f}s {ran:6,} checks")
             if not ok:
                 broken.append(script)
                 for line in (failed if all_failures else failed[:8]):
@@ -352,6 +357,9 @@ def main(argv):
             shutil.rmtree(scratch, ignore_errors=True)
 
     print()
+    if scripts:
+        print(f"Individual checks run: {sum(counted.values()):,} (unit suites "
+              f"{counted['unit']:,}, qa suite {counted['qa']:,}).")
     if broken:
         print(f"{len(broken)} check(s) failed: {', '.join(broken)}")
         return 1
