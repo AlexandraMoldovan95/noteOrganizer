@@ -1063,6 +1063,16 @@ check("an unserializable note reports (False, exc) instead of raising",
       _ok3 is False and isinstance(_exc3, TypeError))
 check("and cleans up its .tmp too",
       not os.path.exists(_paths.DATA_FILE + ".tmp"))
+# The new file is on the disk before it replaces the old: a power cut just
+# after a replace could otherwise leave an empty notes file.
+_synced = []
+_real_fsync = _storage.os.fsync
+_storage.os.fsync = lambda fd: (_synced.append(fd), _real_fsync(fd))[1]
+try:
+    _storage.save_notes([{"id": 994, "title": "synced"}])
+finally:
+    _storage.os.fsync = _real_fsync
+check("a save is flushed to the disk before it replaces the file", len(_synced) == 1)
 _storage.save_notes([])
 
 # ---- Purge deletes the files of what it purges ----

@@ -5671,5 +5671,15 @@
     "must_fail": ["...and a window chosen here stays"],
     "suites": ["qa3"],
     "expect": "killed"
+  },
+  {
+    "id": "FS01",
+    "about": "a data file replaces the old one before its bytes are on the disk",
+    "edits": [{"file": "noteorganizer/core/storage.py",
+               "find": "            f.flush()\n            os.fsync(f.fileno())\n",
+               "replace": ""}],
+    "must_fail": ["a save is flushed to the disk before it replaces the file"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
   }
 ]

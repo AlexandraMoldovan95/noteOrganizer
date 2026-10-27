@@ -627,6 +627,10 @@ def _write_json_atomic(path, value):
             # One string, one write: json.dump streams the same bytes in
             # thousands of pieces, twice the time at 1,000 notes (36 ms to 18).
             f.write(text)
+            # On the disk before the rename: a power cut just after a replace
+            # could otherwise leave an empty file where the notes were.
+            f.flush()
+            os.fsync(f.fileno())
         # Atomic replace: a crash mid-write can't corrupt the real file,
         # it either fully updates or stays as it was.
         os.replace(tmp_path, path)
