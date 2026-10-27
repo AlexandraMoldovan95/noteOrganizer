@@ -3131,6 +3131,65 @@
     "expect": "killed"
   },
   {
+    "id": "NP01",
+    "about": "the built app keeps its notebook in AppData again, which the Store's package deletes on uninstall",
+    "edits": [
+      {
+        "file": "noteorganizer/core/paths.py",
+        "find": "        home = get_user_notebook_dir()\n        if _is_writable(home):\n            return home, None\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": ["the built app keeps its notebook in the profile, beside Documents"],
+    "suites": ["test_data_safety"],
+    "expect": "killed",
+    "note": "Killed on Windows, where the app runs; elsewhere the profile folder is the AppData equivalent and the check is a different one."
+  },
+  {
+    "id": "NP02",
+    "about": "the built app lets the notebook in AppData replace the one it has",
+    "edits": [
+      {
+        "file": "noteorganizer/core/paths.py",
+        "find": "    if (not getattr(sys, \"frozen\", False)\n            and not already_done\n",
+        "replace": "    if (not already_done\n"
+      }
+    ],
+    "must_fail": ["a notebook the built app has is never replaced by AppData's"],
+    "suites": ["test_data_safety"],
+    "expect": "killed",
+    "note": "Killed on Windows, where the app runs."
+  },
+  {
+    "id": "NP03",
+    "about": "the profile's notebook is no durable store, and a cleanup deletes it",
+    "edits": [
+      {
+        "file": "noteorganizer/core/paths.py",
+        "find": "            for d in (get_appdata_dir(), get_user_notebook_dir())}\n",
+        "replace": "            for d in (get_appdata_dir(),)}\n"
+      }
+    ],
+    "must_fail": ["even listed as a leftover, the profile's notebook is never cleared"],
+    "suites": ["test_data_safety"],
+    "expect": "killed",
+    "note": "Killed on Windows, where the app runs: elsewhere the two folders are one."
+  },
+  {
+    "id": "NP04",
+    "about": "the notebook brought in from AppData is not said to be kept there",
+    "edits": [
+      {
+        "file": "noteorganizer/core/paths.py",
+        "find": "        message += \"\\n\\nThe notebook there is kept as it was.\"\n",
+        "replace": "        pass\n"
+      }
+    ],
+    "must_fail": ["...says the notebook in AppData is kept"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
     "id": "WC01",
     "about": "the words readout is as tall as its text, so the toolbar jumps when the editor empties",
     "edits": [

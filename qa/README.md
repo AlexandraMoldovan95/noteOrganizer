@@ -263,7 +263,8 @@ A new surface joins this list the moment it ships.
 - **Standing invariants:** plain text is the store · `core/` never
   imports tkinter · the worker thread never touches a widget · offsets
   counted in characters · any-script input · fast on weak machines ·
-  the built `.exe` and `%APPDATA%`
+  the built `.exe` and its notebook folder (the profile's
+  `Note Organizer`; `%APPDATA%` before 2026-10-27)
 
 ## House rules for new checks
 

@@ -52,8 +52,10 @@ Note Organizer runs as a single window with two tabs, **Notes** and **Calendar**
 locally on your own computer — there's no account to create and no internet connection required.
 Run from source, the data folder sits next to the script — or wherever a `notebook_location.txt`
 beside it says, one folder path on a line (`%LOCALAPPDATA%\MyNotes`, say); the installed app
-keeps it per-user under `%APPDATA%\NoteOrganizer` (worth knowing if you ever go looking for your
-notes folder).
+keeps it per-user in a `Note Organizer` folder in your user folder, beside Documents (worth
+knowing if you ever go looking for your notes folder). Updating or uninstalling the app leaves it
+where it is. An older version kept it under `%APPDATA%\NoteOrganizer`; the first start of the new
+one copies that notebook in and leaves the old folder as it was.
 
 The very first time the app starts, it opens on a **welcome note**: a short tour of what each
 part of the app is for, written as an ordinary note, with a section of its own on what the app

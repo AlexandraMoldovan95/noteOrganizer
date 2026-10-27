@@ -392,6 +392,104 @@ try:
 finally:
     shutil.rmtree(_mig_root, ignore_errors=True)
 
+# ---- The built app keeps its notebook in the profile, beside Documents ----
+# Installed from the Store it runs as an MSIX package, and what it creates
+# in AppData goes to the package's private copy, which uninstalling deletes
+# (2026-10-27). Played here with sys.frozen set and a stand-in profile, so
+# nothing reaches the real one.
+_pr_root = tempfile.mkdtemp(prefix='qa_profile_')
+_pr_env = {k: os.environ.get(k) for k in ('USERPROFILE', 'APPDATA', 'XDG_DATA_HOME')}
+_pr_frozen = getattr(sys, 'frozen', None)
+try:
+    _pr_user = os.path.join(_pr_root, 'user')
+    os.environ['USERPROFILE'] = _pr_user
+    os.environ['APPDATA'] = os.path.join(_pr_user, 'AppData', 'Roaming')
+    os.environ['XDG_DATA_HOME'] = os.environ['APPDATA']
+    sys.frozen = True
+    _pr_home = NO_paths.get_user_notebook_dir()
+    _pr_old = NO_paths.get_appdata_dir()
+    if os.name != 'nt':
+        check('elsewhere than Windows, the built app keeps the AppData equivalent',
+              _pr_home == _pr_old)
+    else:
+        check('the built app keeps its notebook in the profile, beside Documents',
+              os.path.normcase(NO_paths.resolve_data_dir(os.path.dirname(
+                  os.path.abspath(__file__)))[0])
+              == os.path.normcase(os.path.join(_pr_user, 'Note Organizer')))
+        # An older .exe's notebook in AppData is brought in: copied, never moved.
+        os.makedirs(os.path.join(_pr_old, 'attachments'))
+        _pr_notes = [{'id': 1, 'uid': 'pr-1', 'title': 'From the old exe', 'body': 'a'},
+                     {'id': 2, 'uid': 'pr-2', 'title': 'Second', 'body': 'b'}]
+        with open(os.path.join(_pr_old, 'notes_data.json'), 'w', encoding='utf-8') as f:
+            json.dump(_pr_notes, f)
+        with open(os.path.join(_pr_old, 'settings.json'), 'w', encoding='utf-8') as f:
+            json.dump({'app_version': '0.97.405', 'theme': 'dark'}, f)
+        with open(os.path.join(_pr_old, 'attachments', 'pr_file.bin'), 'w') as f:
+            f.write('x')
+        with open(os.path.join(_pr_old, 'notes_data.json'), 'rb') as f:
+            _pr_bytes = f.read()
+        os.makedirs(_pr_home, exist_ok=True)
+        _pr_msg = NO_paths.run_migrations(_pr_home) or ''
+        check(f"the first start brings the old exe's notebook in, its file too ({_pr_msg[:60]!r})",
+              NO_paths.count_notes_in(os.path.join(_pr_home, 'notes_data.json')) == 2
+              and os.path.exists(os.path.join(_pr_home, 'attachments', 'pr_file.bin')))
+        check('...says the notebook in AppData is kept',
+              'kept as it was' in _pr_msg)
+        with open(os.path.join(_pr_old, 'notes_data.json'), 'rb') as f:
+            _pr_after = f.read()
+        NO_paths.purge_stale_copies(_pr_home)
+        check('...and leaves it exactly as it was, a cleanup after it too',
+              _pr_after == _pr_bytes
+              and os.path.exists(os.path.join(_pr_old, 'notes_data.json'))
+              and os.path.exists(os.path.join(_pr_old, 'attachments', 'pr_file.bin')))
+        # An older exe run again writes to AppData; its notebook must never
+        # take the place of the notes written since in the profile.
+        with open(os.path.join(_pr_home, 'notes_data.json'), 'w', encoding='utf-8') as f:
+            json.dump(_pr_notes + [{'id': 3, 'uid': 'pr-3', 'title': 'Written since'}], f)
+        with open(os.path.join(_pr_home, 'settings.json'), 'w', encoding='utf-8') as f:
+            json.dump({'app_version': '0.97.405'}, f)
+        NO_paths.run_migrations(_pr_home)
+        check("a notebook the built app has is never replaced by AppData's",
+              NO_paths.count_notes_in(os.path.join(_pr_home, 'notes_data.json')) == 3
+              and not any(n.startswith('notes_data_replaced_')
+                          for n in os.listdir(_pr_home)))
+    # The second barrier: even listed as a leftover, the profile's notebook
+    # is never cleared. A run from source beside an empty notebook would
+    # otherwise find an empty one "covered", and delete it.
+    del sys.frozen
+    _pr_src = os.path.join(_pr_root, 'source')
+    os.makedirs(_pr_src)
+    # Without the file brought in above: a folder holding a file the
+    # source run lacks is spared for that reason alone, and proves nothing.
+    shutil.rmtree(_pr_home, ignore_errors=True)
+    os.makedirs(_pr_home)
+    for _pr_dir in (_pr_src, _pr_home):
+        with open(os.path.join(_pr_dir, 'notes_data.json'), 'w', encoding='utf-8') as f:
+            f.write('[]')
+        with open(os.path.join(_pr_dir, 'settings.json'), 'w', encoding='utf-8') as f:
+            json.dump({'app_version': '0.97.405'}, f)
+    _pr_legacy = NO_paths.get_legacy_dirs
+    NO_paths.get_legacy_dirs = lambda app_dir: [_pr_home]
+    try:
+        NO_paths.purge_stale_copies(_pr_src)
+    finally:
+        NO_paths.get_legacy_dirs = _pr_legacy
+    check("even listed as a leftover, the profile's notebook is never cleared",
+          os.path.exists(os.path.join(_pr_home, 'notes_data.json'))
+          and os.path.exists(os.path.join(_pr_home, 'settings.json')))
+finally:
+    for _pr_key, _pr_value in _pr_env.items():
+        if _pr_value is None:
+            os.environ.pop(_pr_key, None)
+        else:
+            os.environ[_pr_key] = _pr_value
+    if _pr_frozen is None:
+        if hasattr(sys, 'frozen'):
+            del sys.frozen
+    else:
+        sys.frozen = _pr_frozen
+    shutil.rmtree(_pr_root, ignore_errors=True)
+
 # The app's own APP_DIR must sit beside note_organizer.py, not inside the
 # noteorganizer/ package.
 check('APP_DIR is not inside the noteorganizer package',

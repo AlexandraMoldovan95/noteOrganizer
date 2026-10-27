@@ -380,18 +380,21 @@
       "Edit(./templates.json)",
       "Edit(./trash.json)",
       "Edit(~/AppData/Roaming/NoteOrganizer/**)",
+      "Edit(~/Note Organizer/**)",
       "Read(./attachments/**)",
       "Read(./notes_data*.json)",
       "Read(./settings.json)",
       "Read(./templates.json)",
       "Read(./trash.json)",
       "Read(~/AppData/Roaming/NoteOrganizer/**)",
+      "Read(~/Note Organizer/**)",
       "Write(./attachments/**)",
       "Write(./notes_data*.json)",
       "Write(./settings.json)",
       "Write(./templates.json)",
       "Write(./trash.json)",
-      "Write(~/AppData/Roaming/NoteOrganizer/**)"
+      "Write(~/AppData/Roaming/NoteOrganizer/**)",
+      "Write(~/Note Organizer/**)"
     ]
   }
 }

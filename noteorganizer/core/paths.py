@@ -18,11 +18,12 @@ TWO SITUATIONS, HANDLED DIFFERENTLY
 -----------------------------------
 * **Run as a .py script (development)** - data sits beside the script, so
   ``notes_data.json`` is right there in the project folder.
-* **Run as a .exe (distributed)** - data goes to the app's own folder
-  under ``%APPDATA%``, which is per-user, always writable, and never
-  cleaned up by Windows. A one-file exe unpacks into a temp folder Windows
-  later deletes, and places like Program Files may be read-only, so
-  writing beside the exe is unreliable.
+* **Run as a .exe (distributed)** - data goes to the app's own folder in
+  the person's profile, ``Note Organizer`` beside Documents, which is
+  per-user, writable, and left alone by Windows, uninstalling and the
+  Microsoft Store's package alike (see :func:`get_user_notebook_dir`).
+  Until 2026-10-27 it was ``%APPDATA%\\NoteOrganizer``, still read once
+  to bring an older notebook in. Writing beside the exe is unreliable.
 
 :func:`resolve_data_dir` picks between them and, importantly, *proves* the
 folder is writable by actually writing a probe file. Existence is not
@@ -40,9 +41,10 @@ dangerous function in this codebase. Two rules constrain it:
 1. It only removes files it recognises as its own
    (:data:`OWNED_FILENAMES`, :data:`OWNED_PREFIXES`) - never a file the
    user happened to put there.
-2. The app's folder under ``%APPDATA%`` is **permanently exempt**, however
-   redundant it looks. It is the durable store the distributed app reads
-   from. Treating it as just another disposable leftover is exactly what
+2. The durable stores -- the app's folder under ``%APPDATA%`` and its
+   folder in the profile -- are **permanently exempt**, however redundant
+   they look: a built app keeps a real notebook in each. Treating one as
+   just another disposable leftover is exactly what
    deleted a real notebook once; the exemption is not an optimisation to
    be tidied away later.
 
@@ -81,21 +83,46 @@ JSON_UNREADABLE = (json.JSONDecodeError, UnicodeDecodeError, RecursionError)
 #   Running as a .py script (development)  -> data sits beside the script, so
 #       notes_data.json is right there in the project folder while coding.
 #
-#   Running as a .exe (distributed)        -> data goes in %APPDATA%\NoteOrganizer,
-#       a per-user folder that is ALWAYS writable and NEVER cleaned up by
-#       Windows. This is what fixes the "notes vanish on another PC" bug: a
-#       --onefile exe unpacks into a temporary folder that Windows deletes on
-#       exit, and folders like Downloads or Program Files may be read-only, so
-#       writing next to the exe is unreliable. %APPDATA% is neither.
+#   Running as a .exe (distributed)        -> data goes in the profile's
+#       "Note Organizer" folder (get_user_notebook_dir), per-user and never
+#       cleaned up by Windows, an uninstall or the Store's package. Writing
+#       next to the exe is unreliable: a --onefile exe unpacks into a folder
+#       Windows deletes on exit, and Downloads or Program Files may be
+#       read-only. %APPDATA%\NoteOrganizer held it until 2026-10-27.
 
 def get_appdata_dir():
-    """Per-user application data folder for this app."""
+    """Per-user application data folder for this app: where the built app
+    kept its notebook until 2026-10-27, and still a place it reads from."""
     if os.name == "nt":
         base = os.environ.get("APPDATA") or os.path.expanduser("~")
     else:
         base = os.environ.get("XDG_DATA_HOME") or os.path.join(
             os.path.expanduser("~"), ".local", "share")
     return os.path.join(base, "NoteOrganizer")
+
+
+def get_user_notebook_dir():
+    """Where the built app keeps the notebook: a folder of its own in the
+    person's profile, beside Documents.
+
+    Not AppData: installed from the Microsoft Store, the app runs as an
+    MSIX package, and every file it creates in AppData goes to the
+    package's private copy, which uninstalling deletes -- and the atomic
+    save creates a new file every time. The rest of the profile is the
+    person's own and stays. Not Documents: Windows 11 sets it to back up
+    to OneDrive without asking, and the notes would leave the device
+    unasked. Elsewhere than Windows, the AppData equivalent, as before."""
+    if os.name == "nt":
+        base = os.environ.get("USERPROFILE") or os.path.expanduser("~")
+        return os.path.join(base, "Note Organizer")
+    return get_appdata_dir()
+
+
+def _durable_stores():
+    """The folders a built app has kept a real notebook in, compared as
+    paths: no cleanup ever removes anything from them, whatever runs it."""
+    return {os.path.normcase(os.path.abspath(d))
+            for d in (get_appdata_dir(), get_user_notebook_dir())}
 
 
 def bundled_file(*parts):
@@ -196,11 +223,20 @@ def resolve_data_dir(script_dir):
         to fall back from the preferred location, else ``None``.
     """
     if getattr(sys, "frozen", False):
-        # Distributed app: always per-user AppData.
+        # Distributed app: its own folder in the profile (see
+        # get_user_notebook_dir for why not AppData).
+        home = get_user_notebook_dir()
+        if _is_writable(home):
+            return home, None
         appdata = get_appdata_dir()
         if _is_writable(appdata):
-            return appdata, None
-        # Extremely rare (locked-down AppData). Fall back to the exe's folder,
+            return appdata, (
+                "Your profile folder couldn't be written to, so notes are "
+                f"being saved here instead:\n{appdata}\n\nIf the app came from "
+                "the Microsoft Store, uninstalling it can remove that folder: "
+                "make a backup (Settings → Backup) before you do."
+            )
+        # Extremely rare (a locked-down profile). Fall back to the exe's folder,
         # then to the temp dir, so the app still runs instead of dying.
         exe_dir = os.path.dirname(sys.executable)
         if _is_writable(exe_dir):
@@ -381,11 +417,16 @@ def run_migrations(app_dir):
             return {}
 
     # --- Case 1: reclaim data from %APPDATA% ---
+    # A run from source taking over from the installed app. The built app
+    # never replaces a notebook it has: it only fills an empty folder
+    # (case 2), or an old exe run again would put its notebook in place
+    # of the notes written since.
     appdata_dir = get_appdata_dir()
     appdata_notes = os.path.join(appdata_dir, "notes_data.json")
     already_done = _settings().get("reclaimed_from_appdata")
 
-    if (not already_done
+    if (not getattr(sys, "frozen", False)
+            and not already_done
             and os.path.abspath(appdata_dir) != os.path.abspath(app_dir)
             and os.path.exists(appdata_notes)
             and count_notes_in(appdata_notes) > 0):
@@ -482,10 +523,13 @@ def run_migrations(app_dir):
     for d in get_legacy_dirs(app_dir):
         _copy_attachments(d, attachments_path)
 
-    return (
+    message = (
         f"Your notes now live in the app folder:\n{app_dir}\n\n"
         f"Imported {best_count} note(s) from:\n{best_dir}"
     )
+    if os.path.normcase(os.path.abspath(best_dir)) in _durable_stores():
+        message += "\n\nThe notebook there is kept as it was."
+    return message
 
 
 # Files this app is responsible for. Nothing outside this list is ever
@@ -600,15 +644,16 @@ def purge_stale_copies(app_dir):
         byte for byte, and the attachments folder holds nothing else
       - the file being deleted is one this app created (a settings.json
         must also carry this app's own keys)
-      - the folder isn't the real per-user AppData folder (see below)
+      - the folder isn't a durable store (see below)
 
     The dist\\ folder itself is never removed (it holds the .exe); only the
     orphaned data files inside it are.
 
-    %APPDATA%\\NoteOrganizer is never touched by this function, under any
-    circumstances, even when it looks fully redundant against app_dir's own
-    copy. It's the durable, cross-run store the distributed .exe actually
-    reads from — treating it as just another disposable legacy folder once
+    The durable stores -- %APPDATA%\\NoteOrganizer and the profile's
+    "Note Organizer" folder (_durable_stores) -- are never touched by this
+    function, under any circumstances, even when one looks fully redundant
+    against app_dir's own copy. They are where a built app keeps a real
+    notebook -- treating the first as just another disposable legacy folder once
     caused it to be silently deleted the moment any throwaway script-mode
     directory (a dev checkout, a CI runner, a test script's own scratch
     copy) imported this module while real notes existed there. See
@@ -616,14 +661,14 @@ def purge_stale_copies(app_dir):
     local_path = os.path.join(app_dir, "notes_data.json")
     if not os.path.exists(local_path):
         return []
-    appdata_dir = os.path.abspath(get_appdata_dir())
+    durable = _durable_stores()
     # Only a leftover folder that still holds a notebook can need clearing
     # (the loop below skips every other one), and on nearly every launch
     # there is none. Reading the whole local notebook first bought
     # nothing: a second full parse of it at every startup, ~95 ms at
     # 5,000 notes (measured).
     stale_dirs = [d for d in get_legacy_dirs(app_dir)
-                  if os.path.abspath(d) != appdata_dir
+                  if os.path.normcase(os.path.abspath(d)) not in durable
                   and os.path.exists(os.path.join(d, "notes_data.json"))]
     if not stale_dirs:
         return []
@@ -638,9 +683,9 @@ def purge_stale_copies(app_dir):
     cleared = []
 
     for stale_dir in stale_dirs:
-        if os.path.abspath(stale_dir) == appdata_dir:
-            # The per-user AppData folder is the durable, cross-run store the
-            # distributed .exe actually reads from — never a disposable
+        if os.path.normcase(os.path.abspath(stale_dir)) in durable:
+            # A durable store -- the AppData folder an older .exe read from,
+            # the profile folder the built app reads from now -- never a disposable
             # leftover copy, no matter how "redundant" it looks against
             # whatever directory happens to be running this code right now.
             # Without this guard, simply importing this module from any

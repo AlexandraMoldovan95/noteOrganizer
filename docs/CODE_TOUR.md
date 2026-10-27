@@ -883,7 +883,7 @@ files* — and it's worth reading precisely for that reason.
 |---|---|---|
 | a `.py` script | beside the script | convenient while developing |
 | a `.py` script with a `notebook_location.txt` beside it | the folder that file names | the developer's own notebook, out of the working tree |
-| a `.exe` | your `%APPDATA%` folder | always writable, never auto-cleaned |
+| a `.exe`, or the Store's package | the `Note Organizer` folder in your profile | writable, never auto-cleaned, and kept when the Store's package is uninstalled — a package's AppData is not ([why](ARCHITECTURE.md#the-notebook-outside-appdata)) |
 
 `chosen_notebook_dir` reads that file: its first line that is not blank or
 a `#` comment, with environment variables expanded. The file is git-ignored
@@ -914,8 +914,9 @@ check:
    `settings.json` also has to carry keys only this app writes, because in
    the built app one of the folders it looks at is wherever the zip was
    unpacked.
-2. The `%APPDATA%` folder is **permanently exempt**, no matter how
-   redundant it looks.
+2. The durable stores — the `%APPDATA%` folder an older `.exe` used and
+   the profile folder the built app uses now — are **permanently exempt**,
+   no matter how redundant they look.
 3. It deletes **file by file, only what it proved it had** — never a whole
    folder in one go.
 

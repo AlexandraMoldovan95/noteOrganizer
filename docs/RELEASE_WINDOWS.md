@@ -57,12 +57,15 @@ Four things wait for the listing, when there is one:
 
 Two things to prove on the package itself, before the listing goes live:
 
-- **Uninstalling leaves the notes.** The privacy policy says so, and it holds only if the MSIX
-  package excludes `%APPDATA%\NoteOrganizer` from file-system write virtualization — the owner's
-  decision, 2026-10-21 (`unvirtualizedResources`, with flexible virtualization on Windows 11).
-  Without that, Windows keeps the notes in the package's own folder and deletes them with the app.
-  A real Store install is uninstalled once to watch the folder stay; if it does not, the policy's
-  sentence changes before anything ships.
+- **Uninstalling leaves the notes.** The privacy policy says so. The built app keeps its notebook
+  in the profile's `Note Organizer` folder, outside AppData, whose writes an MSIX package has
+  virtualized into its own folder and deleted with the app — the owner's decision, 2026-10-27,
+  replacing that of 2026-10-21 to exclude `%APPDATA%\NoteOrganizer` from virtualization, which
+  needed the restricted capability `unvirtualizedResources` and the Store's review of it
+  ([why](ARCHITECTURE.md#the-notebook-outside-appdata)). Proved in Windows Sandbox before the
+  listing: install, notes written, an update to a newer package, uninstall, reinstall, the notes
+  still there; then on a real Store install once more. If it does not hold, the policy's sentence
+  changes before anything ships.
 - **Markets.** `sites.google.com`, where the policy lives, is blocked in mainland China: untick
   China among the markets, or accept that the policy cannot be opened there.
 

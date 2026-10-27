@@ -106,8 +106,10 @@ must now call `initialise()` deliberately, which is what `test_data_safety.py` d
 
 ### Storage
 
-Everything is local JSON — next to the script when run from source, per-user under
-`%APPDATA%\NoteOrganizer` when running as the built `.exe` (`core/paths.py` decides). A source run
+Everything is local JSON — next to the script when run from source, per-user in the profile's
+`Note Organizer` folder (`C:\Users\<name>\Note Organizer`) when running as the built `.exe` or
+the Store's package (`core/paths.py` decides; see
+[The notebook outside AppData](#the-notebook-outside-appdata)). A source run
 can keep its notebook elsewhere: a git-ignored `notebook_location.txt` beside the script names the
 folder. It exists because every notebook this project lost was lost in the working tree; a file
 rather than an environment variable, because the tests run copies of the code that must keep
@@ -137,6 +139,25 @@ app registers at startup, which shows an error toast naming the file.
 Restoring from the Trash writes the notes first and the trash second, once each for any number of
 notes (`restore_many_from_trash` writes nothing itself): a failed notes write then leaves the note
 still in the trash file, where the old order could leave it in neither.
+
+### The notebook outside AppData
+
+Decided 2026-10-27, for the Microsoft Store. The Store installs the app as an MSIX package, and a
+package's writes to AppData are virtualized: every file it *creates* there goes to the package's
+private copy, which uninstalling deletes — and the atomic save above creates a new file on every
+write. So the built app keeps its notebook in the profile instead, `C:\Users\<name>\Note
+Organizer` (`get_user_notebook_dir`): writes there are the person's own, outside the package,
+and an update, an uninstall or the Store leaves them alone. Not Documents: Windows 11 sets it to
+back up to OneDrive without asking, and the notes would leave the device unasked. The other way
+— keeping `%APPDATA%` and declaring it unvirtualized — needs the restricted capability
+`unvirtualizedResources`, which the Store reviews; the profile needs nothing.
+
+Three rules go with it. The first start of a built app with an empty folder **copies** an older
+`.exe`'s notebook in from `%APPDATA%\NoteOrganizer` and says so — copied, never moved, the old
+folder left as it was. A built app **never replaces** a notebook it already has with AppData's
+(`run_migrations` takes over from `%APPDATA%` only for a run from source). And both folders are
+**durable stores** (`_durable_stores`): no cleanup removes anything from either, whatever runs
+it — the rule a lost notebook taught ([the story](ISSUES_LOG.md#the-cleanup-that-deleted-the-real-notebook)).
 
 ### Defensive normalization
 

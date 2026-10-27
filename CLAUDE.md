@@ -50,7 +50,10 @@ nothing — `core/diagnostics.py`.)
   when run from source — or in the folder a git-ignored
   `notebook_location.txt` beside it names, which keeps the owner's own
   source-run notebook out of the working tree (since 2026-10-08) —
-  `%APPDATA%\NoteOrganizer` when running as the built `.exe`. Every note passes through `normalize_note()` as a single choke
+  the profile's `Note Organizer` folder (`C:\Users\<name>\Note Organizer`,
+  beside Documents) when running as the built `.exe` or the Store's MSIX
+  package — `%APPDATA%\NoteOrganizer` until 2026-10-27, still read once
+  to bring an older notebook in (copied, never moved). Every note passes through `normalize_note()` as a single choke
   point that coerces malformed/missing fields to safe defaults.
 - **UI:** every dropdown, popup, and dialog the app draws is a hand-built
   `Toplevel`. The system's own dialogs appear in exactly two situations,
@@ -383,8 +386,9 @@ Three tiers:
   `qa/probe_bar_width.py`, any `test_*.py`, or `note_organizer.py` itself
   inside the project tree; `reset --hard`,
   `push --force`, `rebase`, `branch -D`, `restore`, `clean`; installing
-  anything; and reading or writing `%APPDATA%\NoteOrganizer` or the real
-  data files at the project root.
+  anything; and reading or writing `%APPDATA%\NoteOrganizer`, the
+  profile's `Note Organizer` folder, or the real data files at the
+  project root.
 
 The last tier is the point: the [QA testing safety](#qa-testing-safety-hard-rule--real-data-has-been-lost-to-this-three-times)
 rule stops depending on an agent remembering it. The chat protocol is
