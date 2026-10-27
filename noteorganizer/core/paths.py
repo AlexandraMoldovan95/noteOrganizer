@@ -125,6 +125,11 @@ def _durable_stores():
             for d in (get_appdata_dir(), get_user_notebook_dir())}
 
 
+def _is_durable(folder):
+    """Whether *folder* is one of _durable_stores()."""
+    return os.path.normcase(os.path.abspath(folder)) in _durable_stores()
+
+
 def bundled_file(*parts):
     """An absolute path to a file that ships WITH the app, not with the
     user's data.
@@ -522,16 +527,22 @@ def run_migrations(app_dir):
     if os.path.exists(notes_path):
         return None
 
-    best_dir, best_count = None, 0
+    best_dir, best_count, own_store = None, 0, None
     for d in get_legacy_dirs(app_dir):
         candidate = os.path.join(d, "notes_data.json")
         if os.path.exists(candidate):
             n = count_notes_in(candidate)
             if n > best_count:
                 best_dir, best_count = d, n
-
+            elif own_store is None and _is_durable(d):
+                own_store = d
+    # An empty or unreadable notebook in the old app's own store is still
+    # that notebook: its Trash and templates come, and an unreadable file is
+    # kept aside and announced by load_notes, as it is anywhere else.
+    best_dir = best_dir or own_store
     if not best_dir:
         return None
+    durable = _is_durable(best_dir)
 
     # The notes file goes LAST, whole: it is what tells the next start the
     # copy is done. Written first, a start killed mid-copy left notes whose
@@ -541,14 +552,17 @@ def run_migrations(app_dir):
     # folder its own folder was unpacked into, and a generic
     # settings.json there -- another program's -- used to be adopted
     # wholesale as this app's preferences.
-    if os.path.exists(legacy_settings) and _looks_like_our_settings(legacy_settings):
+    ours = os.path.exists(legacy_settings) and _looks_like_our_settings(legacy_settings)
+    if ours:
         _preserve_settings_if_unreadable(settings_path)
         try:
             shutil.copy2(legacy_settings, settings_path)
         except (IOError, OSError):
             pass
-        # On the same evidence: a Trash or templates file beside another
-        # program's notes is not ours to bring in.
+    # On the same evidence: a Trash or templates file beside another
+    # program's notes is not ours to bring in. The old app's own store needs
+    # no evidence -- its settings.json may be the file that cannot be read.
+    if ours or durable:
         _copy_companions(best_dir, app_dir)
 
     for d in get_legacy_dirs(app_dir):
@@ -559,9 +573,10 @@ def run_migrations(app_dir):
 
     message = (
         f"Your notes now live in this folder:\n{app_dir}\n\n"
-        f"Imported {best_count} note(s) from:\n{best_dir}"
+        + (f"Imported {best_count} note(s) from:\n{best_dir}" if best_count
+           else f"Brought in the notebook from:\n{best_dir}")
     )
-    if os.path.normcase(os.path.abspath(best_dir)) in _durable_stores():
+    if durable:
         message += "\n\nThe notebook there is kept as it was."
     return message
 
@@ -752,6 +767,10 @@ def purge_stale_copies(app_dir):
             if not (os.path.isfile(full) and _is_owned_file(filename)):
                 continue
             if filename == "settings.json" and not _looks_like_our_settings(full):
+                continue
+            # A backup is a notebook too: it goes only when every note in it
+            # is ours already. They went unread, beside a covered notes file.
+            if filename.startswith(OWNED_PREFIXES) and not is_redundant_copy(full, local_notes):
                 continue
             try:
                 os.remove(full)

@@ -497,6 +497,32 @@ try:
         check(f'an unwritable profile falls back to AppData, with a warning ({str(_pr_fall[1])[:50]!r})',
               os.path.normcase(_pr_fall[0]) == os.path.normcase(_pr_old)
               and _pr_fall[1] is not None and 'backup' in _pr_fall[1].lower())
+        # An old notebook with no notes left (all in the Trash) or one that
+        # cannot be read is still the old app's notebook: it used to be
+        # passed over, its Trash and templates with it, and a welcome note
+        # then ended every later attempt.
+        for _pe_how, _pe_notes in (('empty', '[]'), ('unreadable', '{ broken')):
+            _pe_user = os.path.join(_pr_root, 'user_' + _pe_how)
+            os.environ['USERPROFILE'] = _pe_user
+            os.environ['APPDATA'] = os.path.join(_pe_user, 'AppData', 'Roaming')
+            _pe_old, _pe_home = NO_paths.get_appdata_dir(), NO_paths.get_user_notebook_dir()
+            os.makedirs(_pe_old)
+            os.makedirs(_pe_home)
+            for _pe_name, _pe_text in (('notes_data.json', _pe_notes),
+                                       ('settings.json', '{ not json'),
+                                       ('trash.json', '[{"id": 5, "title": "Binned",'
+                                                      ' "deleted_at": "2026-10-20 09:00:00"}]'),
+                                       ('templates.json', '[{"name": "Kept"}]')):
+                with open(os.path.join(_pe_old, _pe_name), 'w', encoding='utf-8') as f:
+                    f.write(_pe_text)
+            _pe_msg = NO_paths.run_migrations(_pe_home) or ''
+            check(f'an {_pe_how} old notebook is brought in with its Trash and templates '
+                  f'({_pe_msg[:40]!r})',
+                  all(os.path.exists(os.path.join(_pe_home, n))
+                      for n in ('notes_data.json', 'trash.json', 'templates.json'))
+                  and 'Brought in' in _pe_msg)
+        os.environ['USERPROFILE'] = _pr_user
+        os.environ['APPDATA'] = os.path.join(_pr_user, 'AppData', 'Roaming')
     # The second barrier: even listed as a leftover, the profile's notebook
     # is never cleared. A run from source beside an empty notebook would
     # otherwise find an empty one "covered", and delete it.
@@ -2902,6 +2928,23 @@ try:
           and not os.path.exists(os.path.join(_pg_stale, "attachments")))
     check("...but another program's settings.json there is left alone",
           os.path.isfile(os.path.join(_pg_stale, "settings.json")))
+
+    # 4. A backup beside a covered notebook is read too: one holding a note
+    #    the app does not have stays. They went unread, with the notebook.
+    with open(os.path.join(_pg_stale, "notes_data.json"), "w", encoding="utf-8") as _f:
+        json.dump(_pg_notes, _f)
+    _pg_unique = os.path.join(_pg_stale, "notes_data_backup_20261001_090000.json")
+    _pg_same = os.path.join(_pg_stale, "notes_data_backup_20261002_090000.json")
+    with open(_pg_unique, "w", encoding="utf-8") as _f:
+        json.dump(_pg_notes + [{"id": 2, "title": "Only in a backup"}], _f)
+    with open(_pg_same, "w", encoding="utf-8") as _f:
+        json.dump(_pg_notes, _f)
+    _paths.purge_stale_copies(_pg_app)
+    check("a leftover backup holding a note the app lacks survives the purge",
+          os.path.isfile(_pg_unique))
+    check("...while a backup the app already holds whole is cleaned up",
+          not os.path.exists(_pg_same)
+          and not os.path.exists(os.path.join(_pg_stale, "notes_data.json")))
 finally:
     _paths.get_legacy_dirs = _pg_real_legacy
     shutil.rmtree(_pg_root, ignore_errors=True)

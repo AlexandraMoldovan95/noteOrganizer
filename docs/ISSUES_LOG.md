@@ -188,6 +188,7 @@ is in the table below as well.
 | [The preview that kept every frame](#the-preview-that-kept-every-frame) | A limit has to hold while the thing it limits is being built, not only once it is finished. | next |
 | [The table drawn whole](#the-table-drawn-whole) | Anything drawn whole needs a size past which it is not drawn; outside content chooses the size. | next |
 | [The Trash restored under a window it never had](#the-trash-restored-under-a-window-it-never-had) | A setting that decides what is deleted travels with the things it decides about. | next |
+| [An old folder judged by one file](#an-old-folder-judged-by-one-file) | Before acting on a folder, read every file the action touches. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -2125,6 +2126,31 @@ into a notebook without one and into one that chose 30; mutants TW18 and TW19. T
 follows the same rule.
 
 **Takeaway:** a setting that decides what is deleted travels with the things it decides about.
+
+### An old folder judged by one file
+
+*(2026-10-27 · found by the final audit's break-it round)*
+
+**Symptom:** two start-up routes acted on an older notebook's folder after reading only its
+`notes_data.json`. The first start passed over an old notebook whose notes file was empty (every
+note in the Trash) or unreadable — its Trash and templates with it — and a welcome note then
+ended every later attempt. The cleanup of a leftover folder deleted its `notes_data_backup_*`
+files unread, once the notes file beside them was covered, so a note that lived only in a backup
+was gone.
+
+**Root cause:** both asked "how many notes does `notes_data.json` hold?" and took the answer for
+the whole folder. Zero meant "nothing here" to the adoption, though zero is also "all in the
+Trash" and "cannot be read"; covered meant "all of it" to the cleanup, though a backup is a
+notebook of its own.
+
+**Fix:** the old app's own store (AppData, the profile folder) is adopted whatever its notes file
+holds; an unreadable one comes in to be kept aside and announced as anywhere else, and its Trash
+and templates come without waiting on a settings file that may be the one that cannot be read. A
+backup in a leftover folder goes only when every note in it is the app's already.
+`test_data_safety`; mutants MG03, MG04, PB01.
+
+**Takeaway:** a folder holds more than its main file. Before acting on a folder, read every file
+the action touches.
 
 
 ## Tk & platform gotchas

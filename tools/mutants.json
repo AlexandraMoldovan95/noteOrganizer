@@ -5701,5 +5701,38 @@
     "must_fail": ["across midnight the new day's reminder replaces the old one"],
     "suites": ["qa8"],
     "expect": "killed"
+  },
+  {
+    "id": "MG03",
+    "about": "an empty or unreadable old notebook is passed over at the first start",
+    "edits": [{"file": "noteorganizer/core/paths.py",
+               "find": "    best_dir = best_dir or own_store\n",
+               "replace": ""}],
+    "must_fail": ["an empty old notebook is brought in with its Trash and templates",
+                  "an unreadable old notebook is brought in with its Trash and templates"],
+    "suites": ["test_data_safety"],
+    "expect": "killed",
+    "note": "Killed on Windows, where the app runs; elsewhere the profile folder is the AppData equivalent and these checks do not run."
+  },
+  {
+    "id": "PB01",
+    "about": "a leftover folder's backups go unread with its covered notebook",
+    "edits": [{"file": "noteorganizer/core/paths.py",
+               "find": "            if filename.startswith(OWNED_PREFIXES) and not is_redundant_copy(full, local_notes):\n                continue\n",
+               "replace": ""}],
+    "must_fail": ["a leftover backup holding a note the app lacks survives the purge"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "MG04",
+    "about": "the old store's Trash and templates wait on a settings file that may be unreadable",
+    "edits": [{"file": "noteorganizer/core/paths.py",
+               "find": "    if ours or durable:\n        _copy_companions(best_dir, app_dir)\n",
+               "replace": "    if ours:\n        _copy_companions(best_dir, app_dir)\n"}],
+    "must_fail": ["an empty old notebook is brought in with its Trash and templates"],
+    "suites": ["test_data_safety"],
+    "expect": "killed",
+    "note": "Killed on Windows, where the app runs; elsewhere the profile folder is the AppData equivalent and these checks do not run."
   }
 ]
