@@ -458,6 +458,27 @@ if _held is not None:
 app.update()
 app.update_idletasks()
 """),
+    # The emoji picker from the toolbar's button, the keyboard one emoji
+    # along: the ring round a coloured chip is the thing to look at.
+    ("25-the-emoji-picker-walked-by-the-keyboard", """
+app._dismiss_mini_popup()
+app.notebook.select(app.TAB_NOTES)
+app.open_note_in_tab(app.notes[0])
+app.update()
+app.focus_force()
+app.update()
+app.emoji_btn.focus_set()
+app.update()
+# Pressed as Space presses it, with the keyboard on the button; then the
+# keyboard is put on the second emoji, as Right puts it (qa1 walks the keys).
+app.emoji_btn.invoke()
+app.update()
+_cells = app._walk_choices(app._mini_popup)
+if len(_cells) > 1:
+    _cells[1].focus_force()
+app.update()
+app.update_idletasks()
+"""),
 ]
 
 SEED = [

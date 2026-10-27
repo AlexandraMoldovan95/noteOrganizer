@@ -1907,7 +1907,8 @@ class CalendarViewMixin:
         else:
             anchor_xy = (self.winfo_rootx() + 100, self.winfo_rooty() + 100)
         self._show_color_palette(None, current, on_pick, allow_reset=True,
-                                 anchor_xy=anchor_xy, reset_label="No color")
+                                 anchor_xy=anchor_xy, reset_label="No color",
+                                 keyboard_from=getattr(event, "widget", None))
 
     def _clear_day_color(self, date_str):
         if date_str in self.day_colors:
@@ -2092,6 +2093,12 @@ class CalendarViewMixin:
                       None if (capped["now"] and em not in pending)
                       else w.configure(bg=h))
             cell.bind("<Leave>", lambda e, em=em: refresh_cell(em))
+            # From the keyboard: the chip it is on wears the pointer's
+            # darker shade, as the ring is already the sign of a pick.
+            self._pressable(cell, lambda em=em: toggle(em), walk=True)
+            cell.bind("<FocusIn>", lambda e, w=cell, h=hover_color:
+                      w.configure(bg=h))
+            cell.bind("<FocusOut>", lambda e, em=em: refresh_cell(em))
 
         # Under the grid, and given a blank line's worth of height from the
         # start so that reaching the cap does not shove the buttons down.
@@ -2132,18 +2139,23 @@ class CalendarViewMixin:
 
         btn_row = tk.Frame(outer, bg=self.colors["card"])
         btn_row.pack(fill="x", pady=(8, 0))
-        tk.Button(btn_row, text="Clear", command=clear_pending, relief="flat",
-                  cursor="hand2", bg=self.colors["sidebar"], fg=self.colors["text"],
-                  font=("Segoe UI", 8)).pack(side="left", fill="x", expand=True,
-                                             padx=(0, 4), ipady=4)
-        tk.Button(btn_row, text="✓ Save", command=save_and_close, relief="flat",
-                  cursor="hand2", bg=self.colors["accent"], fg=self._on_fill("accent"),
-                  font=("Segoe UI", 8, "bold")).pack(side="left", fill="x", expand=True,
-                                                     padx=(4, 0), ipady=4)
+        clear = tk.Button(btn_row, text="Clear", command=clear_pending, relief="flat",
+                          cursor="hand2", bg=self.colors["sidebar"], fg=self.colors["text"],
+                          font=("Segoe UI", 8))
+        clear.pack(side="left", fill="x", expand=True, padx=(0, 4), ipady=4)
+        save = tk.Button(btn_row, text="✓ Save", command=save_and_close, relief="flat",
+                         cursor="hand2", bg=self.colors["accent"], fg=self._on_fill("accent"),
+                         font=("Segoe UI", 8, "bold"))
+        save.pack(side="left", fill="x", expand=True, padx=(4, 0), ipady=4)
+        for button in (clear, save):
+            self._button_choice(button)
 
+        # The day's menu opened from the keyboard hands the keyboard on.
+        opener = getattr(event, "widget", None)
         if event is not None:
             anchor_xy = (event.x_root, event.y_root)
-            self._place_dropdown_popup(pop, None, anchor_xy=anchor_xy)
+            self._place_dropdown_popup(pop, None, anchor_xy=anchor_xy,
+                                       keyboard_from=opener)
         else:
             self._place_dropdown_popup(pop, None,
                                        anchor_xy=(self.winfo_rootx() + 100, self.winfo_rooty() + 100))

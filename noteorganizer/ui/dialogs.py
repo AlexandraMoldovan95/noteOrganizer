@@ -851,7 +851,7 @@ class DialogsMixin:
                 self._close_nested_popup()
 
     def _place_dropdown_popup(self, pop, anchor_widget=None, anchor_xy=None,
-                              enable_click_outside=True):
+                              enable_click_outside=True, keyboard_from=None):
         """Position a popup like a dropdown anchored to a button: directly below
         it if there's room, otherwise flipped above so it never runs off-screen.
         Horizontally aligned to the button's left edge (nudged in if needed).
@@ -976,16 +976,21 @@ class DialogsMixin:
                 "<Escape>", self._escape_backs_out, add="+")
         if enable_click_outside:
             self._bind_click_outside(pop)
-        if self._opened_from_keyboard(anchor_widget):
-            self._keyboard_into_popup(pop, anchor_widget)
+        # *keyboard_from* is the opener of a popup placed at a point, not on
+        # a widget: the calendar's day, its menu opened from the keyboard.
+        opener = anchor_widget if anchor_widget is not None else keyboard_from
+        if self._opened_from_keyboard(opener):
+            self._keyboard_into_popup(pop, opener)
 
-    def _place_mini_popup(self, pop, anchor_widget=None, anchor_xy=None):
+    def _place_mini_popup(self, pop, anchor_widget=None, anchor_xy=None,
+                          keyboard_from=None):
         """Position a mini popup (inline rename, color palette, etc.) just
         below the anchor, flipping above and clamping within the app window's
         own bounds when needed — same safe logic as _place_dropdown_popup, so
         these popups can't run off a different monitor or off the window edge
         on a multi-monitor setup either."""
-        self._place_dropdown_popup(pop, anchor_widget, anchor_xy=anchor_xy)
+        self._place_dropdown_popup(pop, anchor_widget, anchor_xy=anchor_xy,
+                                   keyboard_from=keyboard_from)
 
     def _maybe_dismiss_mini_popup(self, event):
         pop = getattr(self, "_mini_popup", None)
@@ -1259,6 +1264,10 @@ class DialogsMixin:
                 self.bind_class(self.KEY_PRESS_TAG, seq, self._key_menu)
             except tk.TclError:
                 pass
+        self.bind_class(self.KEY_PRESS_TAG, "<FocusIn>",
+                        lambda e: self._ring_shown(e.widget, True))
+        self.bind_class(self.KEY_PRESS_TAG, "<FocusOut>",
+                        lambda e: self._ring_shown(e.widget, False))
         for seq, step in (("<KeyPress-Up>", "up"), ("<KeyPress-Down>", "down"),
                           ("<KeyPress-Left>", "left"), ("<KeyPress-Right>", "right"),
                           ("<KeyPress-Home>", "first"), ("<KeyPress-End>", "last")):
@@ -1289,9 +1298,28 @@ class DialogsMixin:
     def _ring_round(self, widget, rest):
         """The keyboard's ring as *widget*'s one-pixel border, drawn in
         *rest* -- the colour around it -- while the keyboard is elsewhere."""
+        widget._ring_rest = rest
         widget.configure(highlightthickness=1, highlightbackground=rest,
                          highlightcolor=self._focus_ring())
         return widget
+
+    def _ring_shown(self, widget, on):
+        """Both border colours, as the keyboard comes and goes: Windows draws
+        no focus colour round a label, only its resting one."""
+        rest = getattr(widget, "_ring_rest", None)
+        if rest is None:
+            return
+        try:
+            widget.configure(highlightbackground=self._focus_ring() if on else rest)
+        except tk.TclError:
+            pass
+
+    def _button_choice(self, button, current=False):
+        """A Tk button that is one choice of a popup -- a swatch, a day, a
+        template: the arrows walk to it, Return presses it as Space does,
+        and its ring rests in its own colour, so it is drawn as before."""
+        self._ring_round(button, button.cget("bg"))
+        return self._pressable(button, button.invoke, walk=True, current=current)
 
     def _key_press(self, event):
         widget = event.widget

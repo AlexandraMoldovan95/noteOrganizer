@@ -1063,6 +1063,9 @@ keys that only mean something inside a list, in the find bar, or on the note lis
 | **↑** / **↓** / **Home** / **End** | a dropdown's open list | Walks the list. |
 | **Enter** / **Space** | a dropdown's open list | Chooses, and the keyboard goes back to the dropdown. |
 | **Esc** | a dropdown's open list | Closes it without choosing. |
+| **Arrow keys** / **Home** / **End** | a picker (text colour, highlight, emoji, a table's size, a date, a colour) | Moves between its swatches, emoji, cells or days. |
+| **Enter** / **Space** | a picker | Picks. An emoji goes in and the picker stays open, for the next one. |
+| **Esc** | a picker | Closes it; the keyboard goes back to the button that opened it. |
 | **Alt+↑** / **Alt+↓** | checklist item with the ring (after a press on its ▲ ▼, or Tab to its box) | Moves the item one place up or down, as its ▲ ▼ do — in a note or a template. |
 | **Page Up** / **Page Down** | Calendar tab | Previous / next month. |
 | **Ctrl+Page Up** / **Ctrl+Page Down** | Calendar tab | Previous / next year. |

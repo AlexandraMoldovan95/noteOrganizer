@@ -15429,6 +15429,150 @@ check('one pass: the UTF-16 count is still the one Tk keeps',
                      chr(0x1F468) + chr(0x200D) + chr(0x1F469) + ' ok')))
 set_body('')
 
+# ---- KEYBOARD: the pickers walked by the keyboard ----
+# Space opened the text colour, highlight and emoji pickers from the
+# toolbar, and then no key picked anything: the keyboard stayed on the
+# toolbar, and a popup is a window of its own, which Tab never enters.
+_kp_asked = []
+_kp_real_focus_set = tk.Misc.focus_set
+
+
+def _kp_record(self):
+    _kp_asked.append(self)
+    return _kp_real_focus_set(self)
+
+
+def _kp_settle(n=6):
+    for _ in range(n):
+        app.update()
+        time.sleep(0.02)
+
+
+def _kp_key(w, key):
+    """*key* on *w*, the keyboard forced there first: where the app put it is
+    asked of the focus_set record, never of the forcing."""
+    if w is not None and take_focus(w):
+        w.event_generate(key)
+        _kp_settle()
+        return True
+    return False
+
+
+def _kp_choices():
+    pop = getattr(app, '_mini_popup', None)
+    if pop is None or not pop.winfo_exists():
+        return []
+    return app._walk_choices(pop)
+
+
+app.new_note()
+app.notebook.select(app.TAB_NOTES)
+set_body('colour me')
+_kp_settle()
+tk.Misc.focus_set = _kp_record
+try:
+    # Text colour: Space, Right, Down, Return.
+    app.body_text.tag_add('sel', '1.0', '1.6')
+    del _kp_asked[:]
+    _kp_key(app.text_color_btn, '<space>')
+    _kp_sw = _kp_choices()
+    check(f'Space on the text colour button opens its swatches and the keyboard '
+          f'goes to the first ({len(_kp_sw)} choices)',
+          len(_kp_sw) >= 15 and _kp_sw[0] in _kp_asked)
+    del _kp_asked[:]
+    _kp_key(_kp_sw[0] if _kp_sw else None, '<Right>')
+    _kp_right = _kp_asked[-1:] == _kp_sw[1:2]
+    del _kp_asked[:]
+    _kp_key(_kp_sw[1] if len(_kp_sw) > 1 else None, '<Down>')
+    check(f'Right walks to the next swatch and Down to the one below it '
+          f'({_kp_right}, {_kp_asked[-1:]})',
+          len(_kp_sw) > 6 and _kp_right and _kp_asked[-1:] == [_kp_sw[6]])
+    del _kp_asked[:]
+    _kp_key(_kp_sw[6] if len(_kp_sw) > 6 else None, '<Return>')
+    _kp_tags = app.body_text.tag_names('1.2')
+    check(f'Return paints the selection that colour, and the keyboard goes back '
+          f'to the button ({_kp_tags})',
+          ('text_color_' + NO.PRESET_NOTE_COLORS[6].lstrip('#')) in _kp_tags
+          and app.text_color_btn in _kp_asked)
+    # Highlight: one column, Down then Return.
+    app.body_text.tag_add('sel', '1.0', '1.6')
+    _kp_key(app.highlight_btn, '<space>')
+    _kp_hl = _kp_choices()
+    _kp_key(_kp_hl[0] if _kp_hl else None, '<Down>')
+    _kp_key(_kp_hl[1] if len(_kp_hl) > 1 else None, '<Return>')
+    _kp_tags = app.body_text.tag_names('1.2')
+    check(f'the highlight picker too: Down and Return paint the second colour '
+          f'({_kp_tags})',
+          ('highlight_' + NO.HIGHLIGHT_COLOR_PALETTE[1].lstrip('#')) in _kp_tags)
+    # Emoji: Return inserts and the keyboard stays, for the next one.
+    app.body_text.tag_remove('sel', '1.0', 'end')
+    app.body_text.mark_set('insert', 'end-1c')
+    _kp_key(app.emoji_btn, '<space>')
+    _kp_em = _kp_choices()
+    del _kp_asked[:]
+    _kp_key(_kp_em[0] if _kp_em else None, '<Right>')
+    _kp_cell = _kp_em[1] if len(_kp_em) > 1 else None
+    _kp_text = str(_kp_cell.cget('text')) if _kp_cell is not None else '?'
+    # Windows draws no focus colour round a label, only its resting one,
+    # so the ring is both (a photograph found it missing).
+    _kp_ringed = (_kp_cell is not None and focus_settles_on(_kp_cell)
+                  and str(_kp_cell.cget('highlightbackground')).lower()
+                  == app._focus_ring().lower()
+                  and str(_kp_em[0].cget('highlightbackground')).lower()
+                  == app.colors['card'].lower())
+    check(f'the emoji the keyboard is on wears the ring in both border colours, '
+          f'and the one it left does not ({_kp_ringed})', _kp_ringed)
+    del _kp_asked[:]
+    _kp_key(_kp_cell, '<Return>')
+    check(f'the emoji picker: Right and Return insert the second emoji, and the '
+          f'keyboard stays in the picker ({_kp_asked})',
+          app.body_text.get('1.0', 'end-1c').endswith(_kp_text)
+          and app._mini_popup is not None and app._mini_popup.winfo_exists()
+          and app.body_text not in _kp_asked)
+    _kp_canvas = _kp_cell.master.master.master if _kp_cell is not None else None
+    _kp_key(_kp_cell, '<End>')
+    check(f'End walks to the last emoji, and its list scrolls to show it '
+          f'({_kp_canvas.yview() if _kp_canvas is not None else None})',
+          _kp_em and _kp_em[-1] in _kp_asked and _kp_canvas.yview()[0] > 0)
+    del _kp_asked[:]
+    _kp_key(_kp_em[-1] if _kp_em else None, '<Escape>')
+    check('Escape closes the emoji picker, the keyboard back on its button',
+          (app._mini_popup is None or not app._mini_popup.winfo_exists())
+          and app.emoji_btn in _kp_asked)
+    # Insert table: the shape follows the keyboard, Return makes it.
+    set_body('')
+    _kp_key(app.table_btn, '<space>')
+    _kp_cells = _kp_choices()
+    _kp_key(_kp_cells[0] if _kp_cells else None, '<Down>')
+    _kp_held = _kp_asked[-1] if _kp_asked else None
+    _kp_key(_kp_held, '<Right>')
+    _kp_caption = [str(w.cget('text')) for w in _walk_widgets(app._mini_popup, tk.Label)
+                   if 'table' in str(w.cget('text'))] if app._mini_popup else []
+    _kp_key(_kp_asked[-1] if _kp_asked else None, '<Return>')
+    check(f'the table picker: the shape follows the keyboard ({_kp_caption}) and '
+          f'Return inserts a table that size',
+          _kp_caption == ['2 x 3 table']
+          and '\n'.join(NO.core_tables.blank_table(2, 3))
+          in app.body_text.get('1.0', 'end-1c'))
+    # The date picker opens on the field's date, and the arrows move days.
+    app._commit_cell_editor() if getattr(app, '_cell_editor', None) else None
+    set_body('')
+    app._show_date_in_field('2026-06-10')
+    del _kp_asked[:]
+    _kp_key(app.pick_date_btn, '<space>')
+    _kp_days = [c for c in _kp_choices() if str(c.cget('text')) == '10']
+    _kp_key(_kp_days[0] if _kp_days else None, '<Right>')
+    _kp_key(_kp_asked[-1] if _kp_asked else None, '<Return>')
+    check(f'the date picker starts on the date in the field, Right and Return '
+          f'pick the next day ({app.date_entry.get()!r})',
+          _kp_days and _kp_days[0] in _kp_asked
+          and app.date_entry.get() == NO.show_date('2026-06-11'))
+finally:
+    tk.Misc.focus_set = _kp_real_focus_set
+    app._dismiss_mini_popup()
+app.new_note()
+_kp_settle()
+
 # ---- CLOSING SAVES SILENTLY (dead last: it destroys the app) ----
 # The quit-time "Unsaved notes" ask could only ever cover the last
 # half-second of typing; the app now trusts its own autosave and closes

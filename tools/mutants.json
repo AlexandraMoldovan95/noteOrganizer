@@ -989,7 +989,7 @@
     "id": "KD02",
     "about": "a list opened from the keyboard leaves the keyboard on its opener",
     "edits": [{"file": "noteorganizer/ui/dialogs.py",
-               "find": "        if self._opened_from_keyboard(anchor_widget):\n",
+               "find": "        if self._opened_from_keyboard(opener):\n",
                "replace": "        if False:\n"}],
     "must_fail": ["Space on the filter dropdown opens its list, and the keyboard goes"],
     "suites": ["qa9"],
@@ -1054,6 +1054,77 @@
                "replace": "                    if ahead <= -100000:\n"}],
     "must_fail": ["Up on the first row goes nowhere"],
     "suites": ["qa9"],
+    "expect": "killed"
+  },
+  {
+    "id": "KP01",
+    "about": "a picker's swatches take Return but no arrow key",
+    "edits": [{"file": "noteorganizer/ui/dialogs.py",
+               "find": "        return self._pressable(button, button.invoke, walk=True, current=current)\n",
+               "replace": "        return self._pressable(button, button.invoke, walk=False, current=current)\n"}],
+    "must_fail": ["Space on the text colour button opens its swatches",
+                  "Right walks to the next swatch and Down to the one below it"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "KP02",
+    "about": "an emoji inserted from the keyboard sends the keyboard into the note",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                if not has_focus and not from_keys:\n",
+               "replace": "                if not has_focus:\n"}],
+    "must_fail": ["the emoji picker: Right and Return insert the second emoji, and the"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "KP03",
+    "about": "the emoji picker's emoji are out of the keyboard's reach",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                self._pressable(cell, lambda em=em: insert_emoji(em, from_keys=True),\n                                walk=True)\n",
+               "replace": ""}],
+    "must_fail": ["the emoji picker: Right and Return insert the second emoji, and the"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "KP04",
+    "about": "the table picker's shape does not follow the keyboard",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                cell.bind(\"<FocusIn>\", lambda e, r=r, c=c: highlight(r, c))\n",
+               "replace": ""}],
+    "must_fail": ["the table picker: the shape follows the keyboard"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "KP05",
+    "about": "the date picker opens with the keyboard on its arrow, not on the date",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                    self._button_choice(btn, current=is_selected or (\n",
+               "replace": "                    self._button_choice(btn, current=False and (\n"}],
+    "must_fail": ["the date picker starts on the date in the field"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "KP06",
+    "about": "an arrow goes to the first choice a step away, not the nearest",
+    "edits": [{"file": "noteorganizer/ui/dialogs.py",
+               "find": "                    score = ahead + 3 * abs(aside)\n",
+               "replace": "                    score = ahead\n"}],
+    "must_fail": ["Right walks to the next swatch and Down to the one below it"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "KP07",
+    "about": "the keyboard's ring is the focus colour alone, which Windows never draws round a label",
+    "edits": [{"file": "noteorganizer/ui/dialogs.py",
+               "find": "        self.bind_class(self.KEY_PRESS_TAG, \"<FocusIn>\",\n                        lambda e: self._ring_shown(e.widget, True))\n",
+               "replace": ""}],
+    "must_fail": ["the emoji the keyboard is on wears the ring in both border colours"],
+    "suites": ["qa1"],
     "expect": "killed"
   },
   {

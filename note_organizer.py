@@ -6471,11 +6471,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 width=14, height=1, relief="flat", bd=0, cursor="hand2",
                 command=lambda h=hex_color: choose(h))
             swatch.pack(pady=(0 if i == 0 else 1, 0))
+            self._button_choice(swatch)
         clear = tk.Button(
             outer, text="Clear highlight", relief="flat", cursor="hand2",
             bg=self.colors["card"], fg=self.colors["text"],
             command=lambda: choose(None))
         clear.pack(pady=(0, 8))
+        self._button_choice(clear)
         return outer
 
     def _grid_highlight_popup(self, info, box, x_root, y_root):
@@ -8421,6 +8423,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 cell.bind("<Button-1>", lambda e, r=r, c=c: (
                     self._dismiss_mini_popup(), self._insert_table(r, c),
                     "break")[2])
+                # From the keyboard the shape follows the keyboard, as it
+                # follows the pointer: that block is where the keyboard is.
+                self._pressable(cell, lambda r=r, c=c: (
+                    self._dismiss_mini_popup(), self._insert_table(r, c)),
+                    walk=True)
+                cell.bind("<FocusIn>", lambda e, r=r, c=c: highlight(r, c))
                 cells[(r, c)] = cell
         grid.bind("<Leave>", leave)
 
@@ -9672,6 +9680,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     relief="flat", cursor="hand2", command=lambda c=hex_color: _choose(c)
                 )
                 swatch.grid(row=i // 5, column=i % 5, padx=4, pady=4)
+                self._button_choice(swatch)
 
             button_row = tk.Frame(body, bg=self.colors["card"])
             button_row.pack(fill="x", padx=15, pady=(8, 14))
@@ -9680,6 +9689,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 bg=self.colors["sidebar"], fg=self.colors["text"], cursor="hand2", font=("Segoe UI", 9)
             )
             clear_btn.pack(fill="x", ipady=5)
+            self._button_choice(clear_btn)
 
         self._place_dropdown_popup(popup, anchor_btn)
 
@@ -10087,18 +10097,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         sb.pack(side="right", fill="y")
         canvas.pack(side="left", fill="both", expand=True)
 
-        def insert_emoji(emoji):
+        def insert_emoji(emoji, from_keys=False):
             try:
                 # Skip re-focusing if this field already has focus — avoids
                 # redundant OS-level focus-change overhead on rapid clicks.
                 # focus_get raises KeyError, not TclError, while the focus
                 # sits in an override-redirect popup like this picker -- it
                 # is what made the second emoji die where the first landed.
+                # From the keyboard, the keyboard stays on the emoji, for
+                # the next one.
                 try:
                     has_focus = self.focus_get() is text_widget
                 except KeyError:
                     has_focus = False
-                if not has_focus:
+                if not has_focus and not from_keys:
                     text_widget.focus_set()
                 # A field showing its grey hint takes the emoji in its place.
                 getattr(text_widget, "clear_placeholder", lambda: None)()
@@ -10149,8 +10161,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 cell = tk.Label(grid, text=em, font=("Segoe UI Emoji", 14),
                                 bg=chip_bg, cursor="hand2", bd=0,
                                 width=2, height=1)
-                cell.grid(row=r, column=c, padx=2, pady=2, ipadx=1, ipady=1)
+                # Padding 1, not 2: the keyboard's ring, resting in the
+                # grid's own colour, is the other pixel.
+                self._ring_round(cell, self.colors["card"])
+                cell.grid(row=r, column=c, padx=1, pady=1, ipadx=1, ipady=1)
                 cell.bind("<Button-1>", lambda e, em=em: insert_emoji(em))
+                self._pressable(cell, lambda em=em: insert_emoji(em, from_keys=True),
+                                walk=True)
                 cell.bind("<Enter>", lambda e, w=cell, h=chip_hover: w.configure(bg=h))
                 cell.bind("<Leave>", lambda e, w=cell, b=chip_bg: w.configure(bg=b))
 
@@ -12828,7 +12845,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return pop
 
     def _show_color_palette(self, anchor_widget, current, on_pick, allow_reset=True,
-                            anchor_xy=None, reset_label="Default (theme color)"):
+                            anchor_xy=None, reset_label="Default (theme color)",
+                            keyboard_from=None):
         """Show a small inline color palette near `anchor_widget` (or at
         `anchor_xy` root coordinates, for callers with no persistent widget to
         anchor to — e.g. a calendar day reached via right-click). Clicking a
@@ -12862,9 +12880,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         per_row = 5
         for i, color in enumerate(PALETTE_COLORS):
             r, c = divmod(i, per_row)
-            cell = tk.Canvas(grid, width=self.px(26), height=self.px(26),
-                             highlightthickness=0, bg=self.colors["card"],
-                             cursor="hand2")
+            # Two pixels narrower: the keyboard's ring is the third, on the
+            # canvas's edge, which the swatch drawn inside never reaches.
+            cell = tk.Canvas(grid, width=self.px(26) - 2, height=self.px(26) - 2,
+                             bg=self.colors["card"], cursor="hand2")
+            self._ring_round(cell, self.colors["card"])
+            self._pressable(cell, lambda col=color: pick(col), walk=True,
+                            current=color == current)
             self._rounded_rect(cell, 2, 2, 24, 24, 7, fill=color, outline=color)
             if color == current:
                 # The tick is the only sign of the colour in use, and two
@@ -12877,12 +12899,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             cell.bind("<Button-1>", lambda e, col=color: (pick(col), "break")[1])
 
         if allow_reset:
-            tk.Button(frame, text=reset_label,
-                      command=lambda: pick(""), relief="flat", cursor="hand2",
-                      bg=self.colors["sidebar"], fg=self.colors["text"],
-                      font=("Segoe UI", 8)).pack(fill="x", pady=(6, 0), ipady=2)
+            reset = tk.Button(frame, text=reset_label,
+                              command=lambda: pick(""), relief="flat", cursor="hand2",
+                              bg=self.colors["sidebar"], fg=self.colors["text"],
+                              font=("Segoe UI", 8))
+            reset.pack(fill="x", pady=(6, 0), ipady=2)
+            self._button_choice(reset)
 
-        self._place_mini_popup(pop, anchor_widget, anchor_xy=anchor_xy)
+        self._place_mini_popup(pop, anchor_widget, anchor_xy=anchor_xy,
+                               keyboard_from=keyboard_from)
         return pop
 
     # ---------- Themed dialogs (replace OS messagebox) ----------
@@ -15986,6 +16011,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 relief="flat", cursor="hand2", command=lambda c=hex_color: _choose(c)
             )
             swatch.grid(row=i // 5, column=i % 5, padx=4, pady=4)
+            self._button_choice(swatch,
+                                current=hex_color == self.current_note_color)
 
         button_row = tk.Frame(body, bg=self.colors["card"])
         button_row.pack(fill="x", padx=15, pady=(8, 14))
@@ -15995,6 +16022,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             bg=self.colors["sidebar"], fg=self.colors["text"], cursor="hand2", font=("Segoe UI", 9)
         )
         reset_btn.pack(fill="x", ipady=5)
+        self._button_choice(reset_btn)
 
         self._place_dropdown_popup(popup, self.color_swatch_btn)
 
@@ -16193,6 +16221,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         cursor="hand2", command=lambda d=date_str: _pick(d)
                     )
                     btn.grid(row=r, column=c, padx=1, pady=1)
+                    # The keyboard starts on the marked day, else today.
+                    self._button_choice(btn, current=is_selected or (
+                        current_day is None and date_str == today_str))
 
         def _prev():
             state["month"] -= 1
@@ -16210,6 +16241,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         prev_btn.config(command=_prev)
         next_btn.config(command=_next)
+        for arrow in (prev_btn, next_btn):
+            self._button_choice(arrow)
+        today_str = format_date(datetime.now().date())
         _render()
         self._place_dropdown_popup(picker, anchor_widget)
 
@@ -19730,6 +19764,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                           relief="flat", cursor="hand2", bg=self.colors["sidebar"],
                           fg=self.colors["text"], font=("Segoe UI", 10))
             b.pack(fill="x", pady=2, ipady=3)
+            self._button_choice(b)
 
         anchor = getattr(self, "use_template_btn", None) or getattr(self, "editor", self)
         self._place_dropdown_popup(pop, anchor)

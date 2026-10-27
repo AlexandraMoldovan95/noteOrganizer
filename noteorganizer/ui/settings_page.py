@@ -3852,6 +3852,14 @@ class SettingsPageMixin:
                                 "dropdown."),
             ("Escape", "Close the list without choosing."),
         )),
+        ("Pickers (colours, emoji, a table's size, a date)", (
+            ("Arrow keys  /  Home  /  End", "Move between the swatches, emoji, "
+                                            "cells or days."),
+            ("Enter  /  Space", "Pick it. An emoji goes in and the picker "
+                                "stays open, for the next one."),
+            ("Escape", "Close the picker. The keyboard goes back to the "
+                       "button that opened it."),
+        )),
         ("Checklist (click an item's ▲ ▼, or Tab to its box)", (
             ("Alt+Up  /  Alt+Down", "Move the item one place up or down, as "
                                     "the ▲ ▼ at its left do; in a template's "
