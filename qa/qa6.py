@@ -3674,6 +3674,9 @@ class _MgApp:
     def on_app_close(self):
         pass
 
+    def on_session_end(self):
+        pass
+
 
 import tkinter.messagebox as _mg_box
 _mg_kept = (NO.NoteOrganizer, NO._draw_sharp_on_scaled_screens, NO.initialise,
