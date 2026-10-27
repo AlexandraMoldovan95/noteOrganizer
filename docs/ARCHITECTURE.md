@@ -153,8 +153,9 @@ back up to OneDrive without asking, and the notes would leave the device unasked
 `unvirtualizedResources`, which the Store reviews; the profile needs nothing.
 
 Three rules go with it. The first start of a built app with an empty folder **copies** an older
-`.exe`'s notebook in from `%APPDATA%\NoteOrganizer` and says so — copied, never moved, the old
-folder left as it was. A built app **never replaces** a notebook it already has with AppData's
+`.exe`'s notebook in from `%APPDATA%\NoteOrganizer` — its notes, settings, attached files, Trash
+and templates (`NOTEBOOK_COMPANIONS`, never over a file the notebook has) — and says so; copied,
+never moved, the old folder left as it was. A built app **never replaces** a notebook it already has with AppData's
 (`run_migrations` takes over from `%APPDATA%` only for a run from source). And both folders are
 **durable stores** (`_durable_stores`): no cleanup removes anything from either, whatever runs
 it — the rule a lost notebook taught ([the story](ISSUES_LOG.md#the-cleanup-that-deleted-the-real-notebook)).

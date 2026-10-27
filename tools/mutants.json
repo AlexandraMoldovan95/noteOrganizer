@@ -3191,6 +3191,37 @@
     "note": "Killed on Windows, where the app runs."
   },
   {
+    "id": "CP01",
+    "about": "a notebook brought in leaves its Trash and templates behind",
+    "edits": [
+      {
+        "file": "noteorganizer/core/paths.py",
+        "find": "    for name in NOTEBOOK_COMPANIONS:\n",
+        "replace": "    for name in ():\n"
+      }
+    ],
+    "must_fail": ["...and brings its Trash and templates too, not only the notes",
+                  "a run from source keeps its own Trash, and takes the templates it lacks"],
+    "suites": ["test_data_safety"],
+    "expect": "killed",
+    "note": "Killed on Windows, where the app runs."
+  },
+  {
+    "id": "CP02",
+    "about": "a Trash brought in overwrites the one the notebook has",
+    "edits": [
+      {
+        "file": "noteorganizer/core/paths.py",
+        "find": "        dst = os.path.join(dest_dir, name)\n        if os.path.isfile(src) and not os.path.exists(dst):\n",
+        "replace": "        dst = os.path.join(dest_dir, name)\n        if os.path.isfile(src):\n"
+      }
+    ],
+    "must_fail": ["a run from source keeps its own Trash, and takes the templates it lacks"],
+    "suites": ["test_data_safety"],
+    "expect": "killed",
+    "note": "Killed on Windows, where the app runs."
+  },
+  {
     "id": "NP04",
     "about": "the notebook brought in from AppData is not said to be kept there",
     "edits": [

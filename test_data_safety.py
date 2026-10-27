@@ -426,6 +426,11 @@ try:
             json.dump({'app_version': '0.97.405', 'theme': 'dark'}, f)
         with open(os.path.join(_pr_old, 'attachments', 'pr_file.bin'), 'w') as f:
             f.write('x')
+        with open(os.path.join(_pr_old, 'trash.json'), 'w', encoding='utf-8') as f:
+            json.dump([{'id': 9, 'uid': 'pr-t', 'title': 'In the old Trash',
+                        'deleted_at': '2026-10-20 09:00:00'}], f)
+        with open(os.path.join(_pr_old, 'templates.json'), 'w', encoding='utf-8') as f:
+            json.dump([{'name': 'Old template', 'title': '', 'body': 'x'}], f)
         with open(os.path.join(_pr_old, 'notes_data.json'), 'rb') as f:
             _pr_bytes = f.read()
         os.makedirs(_pr_home, exist_ok=True)
@@ -435,6 +440,11 @@ try:
               and os.path.exists(os.path.join(_pr_home, 'attachments', 'pr_file.bin')))
         check('...says the notebook in AppData is kept',
               'kept as it was' in _pr_msg)
+        check('...and brings its Trash and templates too, not only the notes',
+              all(os.path.exists(os.path.join(_pr_home, n))
+                  and open(os.path.join(_pr_home, n), 'rb').read()
+                  == open(os.path.join(_pr_old, n), 'rb').read()
+                  for n in ('trash.json', 'templates.json')))
         with open(os.path.join(_pr_old, 'notes_data.json'), 'rb') as f:
             _pr_after = f.read()
         NO_paths.purge_stale_copies(_pr_home)
@@ -470,6 +480,20 @@ try:
     # is never cleared. A run from source beside an empty notebook would
     # otherwise find an empty one "covered", and delete it.
     del sys.frozen
+    # A run from source taking over from AppData brings the Trash and the
+    # templates where it has none -- and never over a Trash of its own.
+    if os.name == 'nt':
+        _pr_take = os.path.join(_pr_root, 'take')
+        os.makedirs(_pr_take)
+        with open(os.path.join(_pr_take, 'trash.json'), 'w', encoding='utf-8') as f:
+            f.write('[]')
+        NO_paths.run_migrations(_pr_take)
+        with open(os.path.join(_pr_take, 'trash.json'), encoding='utf-8') as f:
+            _pr_own = f.read()
+        check('a run from source keeps its own Trash, and takes the templates it lacks',
+              _pr_own == '[]'
+              and os.path.exists(os.path.join(_pr_take, 'templates.json'))
+              and NO_paths.count_notes_in(os.path.join(_pr_take, 'notes_data.json')) == 2)
     _pr_src = os.path.join(_pr_root, 'source')
     os.makedirs(_pr_src)
     # Without the file brought in above: a folder holding a file the

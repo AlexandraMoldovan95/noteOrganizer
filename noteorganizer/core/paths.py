@@ -300,6 +300,25 @@ def count_notes_in(path):
         return 0
 
 
+#: What else travels with a notebook brought in, beside its notes, settings
+#: and attached files. The Trash and the templates were left behind, so a
+#: notebook came in with both empty (2026-10-27).
+NOTEBOOK_COMPANIONS = ("trash.json", "templates.json")
+
+
+def _copy_companions(src_dir, dest_dir):
+    """The Trash and the templates, copied only where the notebook has none:
+    never over a file of its own."""
+    for name in NOTEBOOK_COMPANIONS:
+        src = os.path.join(src_dir, name)
+        dst = os.path.join(dest_dir, name)
+        if os.path.isfile(src) and not os.path.exists(dst):
+            try:
+                shutil.copy2(src, dst)
+            except (IOError, OSError):
+                pass
+
+
 def _copy_attachments(src_dir, dest_dir):
     src_attach = os.path.join(src_dir, "attachments")
     if not os.path.isdir(src_attach):
@@ -454,6 +473,7 @@ def run_migrations(app_dir):
                 pass
 
         _copy_attachments(appdata_dir, attachments_path)
+        _copy_companions(appdata_dir, app_dir)
 
         settings = _settings()
         settings["reclaimed_from_appdata"] = True
@@ -518,6 +538,9 @@ def run_migrations(app_dir):
             shutil.copy2(legacy_settings, settings_path)
         except (IOError, OSError):
             pass
+        # On the same evidence: a Trash or templates file beside another
+        # program's notes is not ours to bring in.
+        _copy_companions(best_dir, app_dir)
 
     for d in get_legacy_dirs(app_dir):
         _copy_attachments(d, attachments_path)

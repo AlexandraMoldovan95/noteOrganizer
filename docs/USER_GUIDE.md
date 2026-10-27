@@ -55,7 +55,8 @@ beside it says, one folder path on a line (`%LOCALAPPDATA%\MyNotes`, say); the i
 keeps it per-user in a `Note Organizer` folder in your user folder, beside Documents (worth
 knowing if you ever go looking for your notes folder). Updating or uninstalling the app leaves it
 where it is. An older version kept it under `%APPDATA%\NoteOrganizer`; the first start of the new
-one copies that notebook in and leaves the old folder as it was.
+one copies that notebook in — notes, Trash, templates, settings and attached files — and leaves
+the old folder as it was.
 
 The very first time the app starts, it opens on a **welcome note**: a short tour of what each
 part of the app is for, written as an ordinary note, with a section of its own on what the app
