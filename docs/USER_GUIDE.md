@@ -261,10 +261,9 @@ included, and a copy from Google Docs bold only where the document is.
 - Copying works the same way outwards: select part of a note, copy it, and paste it into an email
   or a document, and it arrives still formatted, its font sizes and typefaces included. Copying
   between two notes keeps everything.
-- A formatted paste keeps up to **100,000 characters** and **2,000 styled pieces** (a bold word,
-  a coloured line). Past either, a message says what was left out. For the whole of a very long
-  text, press **Ctrl+Z** and paste it again with **Ctrl+Shift+V**, which has no limit — it comes
-  without its formatting.
+- A paste keeps up to **100,000 characters**, and a formatted one up to **2,000 styled pieces** (a
+  bold word, a coloured line). Past either, a message says what was left out. A note longer than
+  that is slow to edit, so paste the rest of a very long text into a note of its own.
 
 Pasting from a PDF is a special case, because a PDF has no paragraphs — only lines placed on a
 page. Pasting those as they come gives a note broken into narrow ragged lines a third of the way

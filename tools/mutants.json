@@ -5765,6 +5765,16 @@
     "expect": "killed"
   },
   {
+    "id": "PL01",
+    "about": "Ctrl+Shift+V pastes text of any length",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        cut = len(text) > MAX_PASTE_CHARS\n",
+               "replace": "        cut = False\n"}],
+    "must_fail": ["...and Ctrl+Shift+V keeps the same ceiling, and says so"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
     "id": "MG04",
     "about": "the old store's Trash and templates wait on a settings file that may be unreadable",
     "edits": [{"file": "noteorganizer/core/paths.py",

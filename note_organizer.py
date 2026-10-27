@@ -7688,9 +7688,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # A PDF's line breaks are where its column ended, not where the
         # writer did. Rejoined before the markers are stripped, because that
         # decision reads the line structure and refuses to touch a list.
+        # The formatted paste's ceiling, here too: one line of 600,000
+        # characters took ten seconds to lay out at every key (ISSUES_LOG:
+        # "The plain paste with no ceiling").
+        cut = len(text) > MAX_PASTE_CHARS
+        if cut:
+            text = text[:MAX_PASTE_CHARS]
         self._paste_from_table = self._note_raw_table_at_caret()
         self._replace_selection_with(
             strip_list_markers(reflow_wrapped(self._foreign_plain(text))))
+        if cut:
+            self._say_if_paste_was_cut({"text_cut": True}, in_body=True)
         kept = self._tidy_table_paste_left()
         self._body_follow_caret = True
         self.after_idle(self._resync_list_tags)
@@ -7855,9 +7863,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             msg = (f"Only the first {MAX_PASTE_CHARS:,} characters of what you "
                    "copied were pasted; the rest was left out.")
             if in_body:
-                msg += ("\n\nTo paste all of it, press Ctrl+Z, then "
-                        "Ctrl+Shift+V: that pastes everything, without its "
-                        "formatting.")
+                msg += ("\n\nA note longer than that is slow to edit: paste "
+                        "the rest into a note of its own.")
         elif in_body and cut.get("styles_cut"):
             msg = ("All of the text was pasted, but its formatting stops after "
                    f"the first {MAX_PASTE_SPANS:,} styled pieces.")

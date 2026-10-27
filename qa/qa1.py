@@ -2643,19 +2643,23 @@ try:
           _cut_inside == [] and len(_cut_told) == 1
           and _cut_told[0][0] == 'Pasted in part'
           and f'{NO.MAX_PASTE_CHARS:,}' in _cut_told[0][1]
-          and 'Ctrl+Shift+V' in _cut_told[0][1])
+          and 'a note of its own' in _cut_told[0][1])
     check(f'...and the note holds what it says was pasted ({len(body())} chars)',
           body() == 'before ' + 'x' * NO.MAX_PASTE_CHARS)
     _cut_told.clear()
     app._body_undo_redo('undo'); app.update()
     check(f'Ctrl+Z takes the cut paste back whole ({body()[:12]!r}...)',
           body() == 'before ')
+    # Ctrl+Shift+V has the same ceiling (the owner's choice, 2026-10-27):
+    # one line of 600,000 characters took ten seconds at every key.
     take_focus(app.body_text)
     app.body_text.event_generate('<Control-Shift-V>')
     app.update()
-    check(f'...and Ctrl+Shift+V then brings in all of it, as the notice says '
-          f'({len(body())} chars)',
-          body() == 'before ' + _cut_long and _cut_told == [])
+    check(f'...and Ctrl+Shift+V keeps the same ceiling, and says so '
+          f'({len(body())} chars, {[t for t, _m in _cut_told]})',
+          body() == 'before ' + 'x' * NO.MAX_PASTE_CHARS
+          and [t for t, _m in _cut_told] == ['Pasted in part'])
+    _cut_told.clear()
 
     set_body('')
     _stub_clipboard(html='<p>x</p>' + '<p><b>x</b></p>' * (NO.MAX_PASTE_SPANS + 5))

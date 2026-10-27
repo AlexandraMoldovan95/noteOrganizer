@@ -189,6 +189,7 @@ is in the table below as well.
 | [The table drawn whole](#the-table-drawn-whole) | Anything drawn whole needs a size past which it is not drawn; outside content chooses the size. | next |
 | [The Trash restored under a window it never had](#the-trash-restored-under-a-window-it-never-had) | A setting that decides what is deleted travels with the things it decides about. | next |
 | [An old folder judged by one file](#an-old-folder-judged-by-one-file) | Before acting on a folder, read every file the action touches. | next |
+| [The plain paste with no ceiling](#the-plain-paste-with-no-ceiling) | A limit with a way round is not a limit: protect every door to what it protects. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -2151,6 +2152,27 @@ backup in a leftover folder goes only when every note in it is the app's already
 
 **Takeaway:** a folder holds more than its main file. Before acting on a folder, read every file
 the action touches.
+
+### The plain paste with no ceiling
+
+*(2026-10-27 · found by the final audit's break-it round; the ceiling is the owner's choice)*
+
+**Symptom:** pasting a long text with Ctrl+Shift+V froze the app: 600 KB took ten seconds, a
+megabyte twenty-seven — and then every key typed after it took as long again.
+
+**Root cause:** the formatted paste stops at 100,000 characters, so one paste cannot make a
+note nobody can edit; its message then offered Ctrl+Shift+V, "which has no limit", for the rest.
+A probe showed what the limit protects against. Text copied from a PDF has its lines rejoined
+into paragraphs, and lines of one length — the probe's — became one line of 600,000 characters.
+Tk lays out a wrapped line whole wherever the view or the caret moves on it, so each step paid
+for the whole line.
+
+**Fix:** Ctrl+Shift+V keeps the same 100,000 characters and says so with the same message, which
+now suggests pasting the rest into a note of its own rather than a way round. The user guide
+says the same. qa1 pastes past the ceiling both ways; mutant PL01.
+
+**Takeaway:** a limit with a way round is not a limit. If something is worth protecting against,
+protect every door to it.
 
 
 ## Tk & platform gotchas
