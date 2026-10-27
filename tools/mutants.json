@@ -3023,8 +3023,8 @@
       },
       {
         "file": "noteorganizer/core/storage.py",
-        "find": "    elapsed = int((_now_epoch() - when) // 86400)\n",
-        "replace": "    elapsed = (datetime.now() - when).days\n"
+        "find": "    elapsed = max(0, int((_now_epoch() - when) // 86400))\n",
+        "replace": "    elapsed = max(0, (datetime.now() - when).days)\n"
       }
     ],
     "must_fail": ["...and the days left are counted in real days too"],
