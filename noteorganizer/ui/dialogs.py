@@ -604,8 +604,9 @@ class DialogsMixin:
         caret.pack(side="left", padx=(0, 6))
         # The border too, not just the fill: a long-lived widget tracks EVERY
         # colour option it sets, or a theme switch leaves that one frozen on
-        # the build-time palette.
-        self.track_theme(btn, bg="sidebar", highlightbackground="card")
+        # the build-time palette. Its focus colour is the keyboard's ring.
+        self.track_theme(btn, bg="sidebar", highlightbackground="card",
+                         highlightcolor="focus_ring")
         self.track_theme(lbl, bg="sidebar", fg="text")
         self.track_theme(caret, bg="sidebar", fg="subtext")
 
@@ -658,7 +659,9 @@ class DialogsMixin:
                 btn._dd_popup = pop
             pop.wm_overrideredirect(True)
             pop.configure(bg=self.colors["accent"])
-            frame = tk.Frame(pop, bg=self.colors["card"], padx=4, pady=4)
+            # A pixel less padding: each row's border (the keyboard's ring)
+            # takes it back, so the list is drawn as it always was.
+            frame = tk.Frame(pop, bg=self.colors["card"], padx=3, pady=4)
             frame.pack(padx=1, pady=1)
             current = var.get()
             # `options` may be a static list or a callable returning the
@@ -670,7 +673,10 @@ class DialogsMixin:
                 is_cur = (opt == current)
                 row_bg = self.colors["sidebar"] if is_cur else self.colors["card"]
                 row = tk.Frame(frame, bg=row_bg, cursor="hand2")
-                row.pack(fill="x", pady=1)
+                self._ring_round(row, self.colors["card"])
+                row.pack(fill="x")
+                self._pressable(row, lambda v=opt: pick(v), walk=True,
+                                current=is_cur)
                 widgets = [row]
                 color = dot_color_fn(opt) if dot_color_fn else None
                 if color:
@@ -722,7 +728,16 @@ class DialogsMixin:
         for w in (btn, lbl, caret):
             w.configure(cursor="hand2")
             w.bind("<Button-1>", lambda e: open_list())
+        self._opens_list_from_keyboard(btn, open_list)
         return btn
+
+    def _opens_list_from_keyboard(self, opener, open_list):
+        """A dropdown's opener, from the keyboard: Tab stops on it; Space,
+        Return, Down and Alt+Down open its list, which takes the keyboard
+        while it is open (_keyboard_into_popup)."""
+        self._pressable(opener, open_list)
+        for seq in ("<KeyPress-Down>", "<Alt-KeyPress-Down>"):
+            opener.bind(seq, lambda e: (open_list(), "break")[1])
 
     def _close_nested_popup(self):
         """Close the popup open INSIDE the open popup (a dropdown's list,
@@ -961,6 +976,8 @@ class DialogsMixin:
                 "<Escape>", self._escape_backs_out, add="+")
         if enable_click_outside:
             self._bind_click_outside(pop)
+        if self._opened_from_keyboard(anchor_widget):
+            self._keyboard_into_popup(pop, anchor_widget)
 
     def _place_mini_popup(self, pop, anchor_widget=None, anchor_xy=None):
         """Position a mini popup (inline rename, color palette, etc.) just
@@ -1224,6 +1241,279 @@ class DialogsMixin:
     def _focus_ring(self):
         """The colour of the ring round whatever holds the keyboard."""
         return palette_value(self.colors, "focus_ring")
+
+    # Tk's own buttons take Tab and Space. A control the app draws -- a
+    # canvas, a label, a frame of labels -- took neither. Two bind tags,
+    # bound once at start, give it both, and arrow keys in a popup's list.
+    KEY_PRESS_TAG = "NoteOrganizerKeyPress"
+    KEY_WALK_TAG = "NoteOrganizerKeyWalk"
+
+    def _bind_keyboard_tags(self):
+        """What the two tags do, for every widget that carries them."""
+        for seq in ("<KeyPress-space>", "<KeyPress-Return>", "<KeyPress-KP_Enter>"):
+            self.bind_class(self.KEY_PRESS_TAG, seq, self._key_press)
+        # The menu key is "App" on Windows and "Menu" on X11, and Tk raises
+        # on a keysym it does not know (as the note list found).
+        for seq in ("<Shift-KeyPress-F10>", "<KeyPress-App>", "<KeyPress-Menu>"):
+            try:
+                self.bind_class(self.KEY_PRESS_TAG, seq, self._key_menu)
+            except tk.TclError:
+                pass
+        for seq, step in (("<KeyPress-Up>", "up"), ("<KeyPress-Down>", "down"),
+                          ("<KeyPress-Left>", "left"), ("<KeyPress-Right>", "right"),
+                          ("<KeyPress-Home>", "first"), ("<KeyPress-End>", "last")):
+            self.bind_class(self.KEY_WALK_TAG, seq,
+                            lambda e, s=step: self._key_walk(e.widget, s))
+        # Counted so a popup closing can tell a click's keyboard from one
+        # Windows moved for it (_keyboard_back).
+        self._pointer_presses = 0
+        self.bind_all("<ButtonPress>", self._count_pointer_press, add="+")
+
+    def _count_pointer_press(self, _event=None):
+        self._pointer_presses = getattr(self, "_pointer_presses", 0) + 1
+
+    def _pressable(self, widget, command, walk=False, current=False, menu=None):
+        """Let Tab stop on *widget*, and Space or Return press it as a click
+        does. With *walk* the arrows move between it and the other choices
+        of its popup; *current* marks the one the keyboard starts on; *menu*
+        is what its right-click opens, for Shift+F10 and the menu key."""
+        widget._key_press = command
+        widget._key_current = current
+        widget._key_menu = menu
+        tags = widget.bindtags()
+        extra = (self.KEY_PRESS_TAG,) + ((self.KEY_WALK_TAG,) if walk else ())
+        widget.bindtags(tags[:1] + extra + tags[1:])
+        widget.configure(takefocus=1)
+        return widget
+
+    def _ring_round(self, widget, rest):
+        """The keyboard's ring as *widget*'s one-pixel border, drawn in
+        *rest* -- the colour around it -- while the keyboard is elsewhere."""
+        widget.configure(highlightthickness=1, highlightbackground=rest,
+                         highlightcolor=self._focus_ring())
+        return widget
+
+    def _key_press(self, event):
+        widget = event.widget
+        press = getattr(widget, "_key_press", None)
+        if press is None:
+            return None
+        place = self._place_of(widget)
+        press()
+        self.after_idle(lambda: self._keyboard_stays(widget, place))
+        return "break"
+
+    def _key_menu(self, event):
+        """Shift+F10 or the menu key: the widget's right-click menu, opened
+        at the widget as a click would open it at the pointer."""
+        widget = event.widget
+        menu = getattr(widget, "_key_menu", None)
+        if menu is None:
+            return None
+        try:
+            at = SimpleNamespace(
+                widget=widget, x=8, y=widget.winfo_height() // 2,
+                x_root=widget.winfo_rootx() + 8,
+                y_root=widget.winfo_rooty() + widget.winfo_height() // 2)
+        except tk.TclError:
+            return "break"
+        menu(at)
+        return "break"
+
+    @staticmethod
+    def _place_of(widget):
+        """Where *widget* stands: its path and its place among its siblings,
+        then its parent's, up to its window -- enough to find what stands
+        there once a list or a page has been drawn again."""
+        place = []
+        w = widget
+        try:
+            while w is not None and not isinstance(w, (tk.Tk, tk.Toplevel)):
+                kids = [k for k in w.master.winfo_children()
+                        if not isinstance(k, tk.Toplevel)]
+                place.append((str(w), kids.index(w)))
+                w = w.master
+        except (tk.TclError, ValueError, AttributeError):
+            pass
+        if w is not None:
+            place.append((str(w), 0))
+        return place
+
+    def _found_at(self, place):
+        """What stands at *place* now: the widget itself if it lives, else
+        the one at the same places below its nearest ancestor still alive,
+        or the first control after that point if none takes the keyboard."""
+        for depth, (path, _index) in enumerate(place):
+            try:
+                w = self.nametowidget(path)
+                if w.winfo_exists():
+                    break
+            except (KeyError, tk.TclError):
+                continue
+        else:
+            return None
+        if depth:
+            for _path, index in reversed(place[:depth]):
+                kids = [k for k in w.winfo_children()
+                        if not isinstance(k, tk.Toplevel)]
+                if not kids:
+                    break
+                w = kids[min(index, len(kids) - 1)]
+        try:
+            if str(self.tk.call("tk::FocusOK", w)) == "1":
+                return w
+            return w.tk_focusNext()
+        except (tk.TclError, KeyError):
+            return None
+
+    def _keyboard_nowhere(self, gone=""):
+        """Whether the keyboard is on nothing -- or on *gone*, a window
+        being taken down -- rather than somewhere a person put it."""
+        try:
+            now = str(self.tk.call("focus"))
+            if now not in ("", ".") and not (
+                    gone and (now == gone or now.startswith(gone + "."))):
+                return self.nametowidget(now).winfo_exists() == 0
+        except KeyError:
+            return True
+        except tk.TclError:
+            return False
+        return True
+
+    def _keyboard_stays(self, widget, place):
+        """After a press from the keyboard: a press that drew its list or
+        page again took the control with it, and the keyboard fell to the
+        window. It goes to what stands in that control's place now."""
+        try:
+            if widget.winfo_exists():
+                return
+        except tk.TclError:
+            pass
+        if not self._keyboard_nowhere():
+            return
+        target = self._found_at(place)
+        if target is not None:
+            target.focus_set()
+            self._bring_into_sight(target)
+
+    def _walk_choices(self, top, drawn=True):
+        """The choices the arrows walk in *top*, in reading order -- or, for
+        a popup not yet drawn (*drawn* False), all of them as they were made."""
+        found = []
+
+        def gather(w):
+            for child in w.winfo_children():
+                if isinstance(child, tk.Toplevel):
+                    continue
+                if (self.KEY_WALK_TAG in child.bindtags()
+                        and (not drawn or child.winfo_viewable())):
+                    found.append(child)
+                gather(child)
+        gather(top)
+        if not drawn:
+            return found
+        return sorted(found, key=lambda w: (w.winfo_rooty(), w.winfo_rootx()))
+
+    @staticmethod
+    def _centre_of(w):
+        return (w.winfo_rootx() + w.winfo_width() / 2,
+                w.winfo_rooty() + w.winfo_height() / 2)
+
+    def _key_walk(self, widget, step):
+        """Up, Down, Left and Right go to the nearest choice that way, Home
+        and End to the first and the last: one rule for a list, a grid of
+        swatches and the emoji picker's groups alike."""
+        try:
+            choices = self._walk_choices(widget.winfo_toplevel())
+            if not choices:
+                return "break"
+            if step in ("first", "last"):
+                target = choices[0] if step == "first" else choices[-1]
+            else:
+                hx, hy = self._centre_of(widget)
+                best = None
+                for c in choices:
+                    if c is widget:
+                        continue
+                    cx, cy = self._centre_of(c)
+                    ahead, aside = {"down": (cy - hy, cx - hx),
+                                    "up": (hy - cy, cx - hx),
+                                    "right": (cx - hx, cy - hy),
+                                    "left": (hx - cx, cy - hy)}[step]
+                    if ahead <= 1:
+                        continue
+                    score = ahead + 3 * abs(aside)
+                    if best is None or score < best[0]:
+                        best = (score, c)
+                target = best[1] if best else None
+        except tk.TclError:
+            return "break"
+        if target is not None:
+            target.focus_set()
+            self._bring_into_sight(target)
+        return "break"
+
+    def _opened_from_keyboard(self, opener):
+        """Whether the popup about to open on *opener* was asked for from
+        the keyboard. A box being typed in keeps the keyboard: a popup it
+        anchors (the emoji picker of a field) is the mouse's to use."""
+        return (opener is not None and self._holds_keyboard(opener)
+                and opener.winfo_class() not in self._TYPING_CLASSES)
+
+    def _keyboard_into_popup(self, pop, opener):
+        """A popup opened from the keyboard takes it, on its current choice,
+        else its first, else its first control -- unless it has already
+        placed it -- and hands it back to *opener* when it closes."""
+        try:
+            if str(self.tk.call("focus", "-lastfor", pop)) == str(pop):
+                choices = self._walk_choices(pop, drawn=False)
+                current = [c for c in choices if getattr(c, "_key_current", False)]
+                target = (current or choices or [pop.tk_focusNext()])[0]
+                if target is not None:
+                    target.focus_set()
+        except (tk.TclError, KeyError):
+            return
+        path, place = str(pop), self._place_of(opener)
+        clicks = getattr(self, "_pointer_presses", 0)
+        pop.bind("<Destroy>", lambda e: (self._keyboard_back(path, place, clicks)
+                                         if str(e.widget) == path else None),
+                 add="+")
+
+    def _keyboard_back(self, path, place, clicks):
+        """Back to the opener once its popup has gone, by any road -- or to
+        what stands in its place, when the choice drew its page again. Not
+        while a question is asking, and not where a click put it since."""
+        def back():
+            if self._a_dialog_is_asking():
+                try:
+                    self.after(100, back)
+                except tk.TclError:
+                    pass
+                return
+            target = self._found_at(place)
+            if target is None:
+                return
+            clicked = getattr(self, "_pointer_presses", 0) != clicks
+            # Without a click, a keyboard in another window was put there by
+            # Windows, activating whatever was under the closed popup.
+            if not self._keyboard_nowhere(gone=path) and (
+                    clicked or self._keyboard_in_window_of(target)):
+                return
+            try:
+                if target.winfo_viewable():
+                    target.focus_set()
+                    self._bring_into_sight(target)
+            except tk.TclError:
+                pass
+        self.after_idle(back)
+
+    def _keyboard_in_window_of(self, widget):
+        """Whether the keyboard is somewhere in *widget*'s own window."""
+        try:
+            now = self.nametowidget(str(self.tk.call("focus")))
+            return now.winfo_toplevel() is widget.winfo_toplevel()
+        except (KeyError, tk.TclError):
+            return False
 
     def _holds_keyboard(self, widget):
         """Whether the keyboard is on *widget* in its window, by Tk's own

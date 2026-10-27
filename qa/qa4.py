@@ -230,8 +230,11 @@ _probe_dd.pack(); app.update()
 # palette, so a widget frozen at build time still matches ONE theme by
 # coincidence — it cannot match both.
 def _borders_ok():
-    return (str(app.category_menu.cget('highlightbackground')) == app.colors['card'],
-            str(_probe_dd.cget('highlightbackground')) == app.colors['card'],
+    # The keyboard's ring too: it is the border's other colour (focus_ring).
+    return (str(app.category_menu.cget('highlightbackground')) == app.colors['card']
+            and str(app.category_menu.cget('highlightcolor')) == app._focus_ring(),
+            str(_probe_dd.cget('highlightbackground')) == app.colors['card']
+            and str(_probe_dd.cget('highlightcolor')) == app._focus_ring(),
             str(app.export_progress_frame.cget('highlightbackground')) == app.colors['accent']
             and str(app.export_progress_frame.cget('bg')) == app.colors['card'])
 _dark_ok = _borders_ok()

@@ -12913,7 +12913,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._mini_popup = pop
         pop.wm_overrideredirect(True)
         pop.configure(bg=self.colors["accent"])
-        frame = tk.Frame(pop, bg=self.colors["card"], padx=4, pady=4)
+        # padx 3, rows packed with no pady: each row's ring takes the pixel.
+        frame = tk.Frame(pop, bg=self.colors["card"], padx=3, pady=4)
         frame.pack(padx=1, pady=1)
 
         current = self.category_var.get()
@@ -12922,7 +12923,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             is_cur = (cat == current)
             row = tk.Frame(frame, bg=self.colors["sidebar"] if is_cur else self.colors["card"],
                            cursor="hand2")
-            row.pack(fill="x", pady=1)
+            self._ring_round(row, self.colors["card"])
+            row.pack(fill="x")
             dot = tk.Label(row, text="●", bg=row.cget("bg"), fg=color,
                           font=("Segoe UI", 11), cursor="hand2")
             dot.pack(side="left", padx=(10, 6), pady=4)
@@ -12939,6 +12941,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._schedule_autosave()
                 self._dismiss_mini_popup()
 
+            self._pressable(row, pick, walk=True, current=is_cur)
             for w in (row, dot, lbl):
                 # "break": the pick destroys this popup (see
                 # _show_inline_rename).
@@ -13742,6 +13745,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.bind_all("<<PrevWindow>>",
                       lambda e: self._tab_target_into_sight(e, backwards=True),
                       add="+")
+        self._bind_keyboard_tags()
 
         notes_tab = tk.Frame(self.notebook)
         self.track_theme(notes_tab, bg="bg")
@@ -14445,12 +14449,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                    fg=self.colors["subtext"], font=("Segoe UI", 9))
         self._cat_caret.pack(side="left", padx=(4, 10))
         self.track_theme(self.category_menu, bg="sidebar",
-                         highlightbackground="card")
+                         highlightbackground="card", highlightcolor="focus_ring")
         self.track_theme(self._cat_btn_lbl, bg="sidebar", fg="text")
         self.track_theme(self._cat_caret, bg="sidebar", fg="subtext")
         for w in (self.category_menu, self._cat_dot, self._cat_btn_lbl, self._cat_caret):
             w.configure(cursor="hand2")
             w.bind("<Button-1>", lambda e: self._open_category_dropdown())
+        self._opens_list_from_keyboard(self.category_menu,
+                                       self._open_category_dropdown)
         self._refresh_category_button()
         # Beside the category in day mode (_show_day_mode): the category a day
         # is given is that day's, and the series' card keeps its own.
@@ -17632,11 +17638,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._mini_popup = pop
         pop.wm_overrideredirect(True)
         pop.configure(bg=self.colors["accent"])
-        frame = tk.Frame(pop, bg=self.colors["card"], padx=4, pady=4)
+        # A pixel less padding all round, which each row's ring takes back.
+        frame = tk.Frame(pop, bg=self.colors["card"], padx=3, pady=4)
         frame.pack(padx=1, pady=1)
         tk.Label(frame, text=f"Move {len(self.selected_note_ids)} note(s) to:",
                  bg=self.colors["card"], fg=self.colors["subtext"],
-                 font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=6, pady=(4, 2))
+                 font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=7, pady=(4, 2))
 
         def apply_category(cat):
             # The popup goes first, ahead of anything modal: it is an
@@ -17711,15 +17718,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         for cat in CATEGORY_COLORS.keys():
             row = tk.Frame(frame, bg=self.colors["card"], cursor="hand2")
+            self._ring_round(row, self.colors["card"])
             row.pack(fill="x")
+            self._pressable(row, lambda c=cat: apply_category(c), walk=True)
             dot = tk.Canvas(row, width=self.px(10), height=self.px(10),
                             highlightthickness=0, bg=self.colors["card"])
             dot.create_oval(1, 1, 9, 9, fill=CATEGORY_COLORS[cat], outline=CATEGORY_COLORS[cat])
             self._scale_drawing(dot)
-            dot.pack(side="left", padx=(8, 6), pady=5)
+            dot.pack(side="left", padx=(8, 6), pady=4)
             lbl = tk.Label(row, text=cat, bg=self.colors["card"], fg=self.colors["text"],
                           font=("Segoe UI", 9), anchor="w")
-            lbl.pack(side="left", fill="x", expand=True, padx=(0, 10), pady=5)
+            lbl.pack(side="left", fill="x", expand=True, padx=(0, 10), pady=4)
             for w in (row, dot, lbl):
                 # "break": this destroys the popup the row is in (see
                 # _show_inline_rename).
@@ -17743,21 +17752,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._mini_popup = pop
         pop.wm_overrideredirect(True)
         pop.configure(bg=self.colors["accent"])
-        frame = tk.Frame(pop, bg=self.colors["card"], padx=4, pady=4)
+        frame = tk.Frame(pop, bg=self.colors["card"], padx=3, pady=4)
         frame.pack(padx=1, pady=1)
         tk.Label(frame,
                  text=f"Export {len(self.selected_note_ids)} note(s) as:",
                  bg=self.colors["card"], fg=self.colors["subtext"],
-                 font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=6,
+                 font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=7,
                                                     pady=(4, 2))
         for fmt, fmt_label in (("html", "Web pages (.html)"),
                                ("txt", "Plain text (.txt)")):
             row = tk.Frame(frame, bg=self.colors["card"], cursor="hand2")
+            self._ring_round(row, self.colors["card"])
             row.pack(fill="x")
+            self._pressable(row, lambda f=fmt: (self._dismiss_mini_popup(),
+                                                self._bulk_export_run(f)),
+                            walk=True)
             lbl = tk.Label(row, text=fmt_label, bg=self.colors["card"],
                            fg=self.colors["text"], font=("Segoe UI", 9),
                            anchor="w")
-            lbl.pack(side="left", fill="x", expand=True, padx=10, pady=5)
+            lbl.pack(side="left", fill="x", expand=True, padx=10, pady=4)
             for w in (row, lbl):
                 # "break": this destroys the popup the row is in (see
                 # _show_inline_rename).
@@ -17779,7 +17792,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         tk.Button(frame, text="Cancel", command=self._dismiss_mini_popup,
                   relief="flat", cursor="hand2", bd=0,
                   bg=self.colors["sidebar"], fg=self.colors["text"],
-                  font=("Segoe UI", 8)).pack(fill="x", padx=6, pady=(6, 4),
+                  font=("Segoe UI", 8)).pack(fill="x", padx=7, pady=(6, 4),
                                              ipady=2)
 
     def _bulk_export_run(self, fmt):

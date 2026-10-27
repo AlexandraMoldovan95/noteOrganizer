@@ -1059,6 +1059,10 @@ keys that only mean something inside a list, in the find bar, or on the note lis
 | **Alt+↑** / **Alt+↓** | note list | Moves the note with the ring one place up or down (Custom order). |
 | **Esc** | note list, while dragging | Puts the dragged card back where it was. |
 | **Shift+F10** or the menu key | note list | Opens that note's own right-click menu, at the note. |
+| **Space** / **Enter** / **↓** | a dropdown (Sort, Show, a note's category and repeat, the font, a setting) | Opens its list, on the choice it shows now. |
+| **↑** / **↓** / **Home** / **End** | a dropdown's open list | Walks the list. |
+| **Enter** / **Space** | a dropdown's open list | Chooses, and the keyboard goes back to the dropdown. |
+| **Esc** | a dropdown's open list | Closes it without choosing. |
 | **Alt+↑** / **Alt+↓** | checklist item with the ring (after a press on its ▲ ▼, or Tab to its box) | Moves the item one place up or down, as its ▲ ▼ do — in a note or a template. |
 | **Page Up** / **Page Down** | Calendar tab | Previous / next month. |
 | **Ctrl+Page Up** / **Ctrl+Page Down** | Calendar tab | Previous / next year. |

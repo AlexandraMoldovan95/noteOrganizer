@@ -190,7 +190,7 @@ a Windows check.
 ## Photographs: did a screen change shape while nobody was looking?
 
 `py qa/story_look.py` opens the app on a fixed little notebook,
-photographs twenty-three screens — the list, the editor, the calendar,
+photographs twenty-four screens — the list, the editor, the calendar,
 Settings sections, a light theme, and the popups, panels and states that
 releases changed — and compares each against the copy in `qa/screens/`. Those
 copies are committed, so a change of appearance shows up in a diff like

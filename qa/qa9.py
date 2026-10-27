@@ -3307,6 +3307,170 @@ finally:
      app._version_backup_path) = _fq_saved
     app.geometry('1100x850'); _pn_settle()
 
+# ---- KEYBOARD: a themed dropdown, from the keyboard alone ----
+# Built from a frame and two labels with only a mouse binding, all thirteen
+# dropdowns -- Text size among them -- were out of Tab's reach, and a list a
+# click had opened could not be walked: the keyboard stayed on the opener.
+_kd_asked = []
+_kd_real_focus_set = tk.Misc.focus_set
+
+
+def _kd_record(self):
+    _kd_asked.append(self)
+    return _kd_real_focus_set(self)
+
+
+def _kd_settle(n=6):
+    for _ in range(n):
+        app.update()
+        time.sleep(0.02)
+
+
+def _kd_take(w, cap_s=2.0):
+    """A PRECONDITION: the keyboard forced onto *w*, and Tk agreeing."""
+    w.focus_force()
+    t0 = time.time()
+    while time.time() - t0 < cap_s:
+        try:
+            if app.focus_get() is w:
+                return True
+        except (KeyError, tk.TclError):
+            pass
+        app.update()
+        time.sleep(0.02)
+    return False
+
+
+def _kd_rows(pop):
+    """A list popup's rows, top to bottom: the frames Space and Return press."""
+    found = []
+
+    def walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Frame) and getattr(c, '_key_press', None):
+                found.append(c)
+            walk(c)
+    try:
+        if pop is not None and pop.winfo_exists():
+            walk(pop)
+    except tk.TclError:
+        pass
+    return found
+
+
+def _kd_says(row):
+    return [str(c.cget('text')) for c in row.winfo_children()
+            if isinstance(c, tk.Label)][-1:]
+
+
+def _kd_open_pop():
+    pop = getattr(app, '_mini_popup', None)
+    return pop if pop is not None and pop.winfo_exists() else None
+
+
+def _kd_key(w, key):
+    """*key* pressed on *w*, the keyboard forced there first (a precondition:
+    where the app put it is asked of the focus_set record)."""
+    if w is not None and _kd_take(w):
+        w.event_generate(key)
+        _kd_settle()
+        return True
+    return False
+
+
+if getattr(app, '_settings_open', False):
+    app.hide_settings_page()
+app.notebook.select(app.TAB_NOTES)
+app.new_note()
+app.filter_var.set('All')
+app.refresh_note_list()
+_kd_settle()
+_kd_dd = app.filter_menu
+tk.Misc.focus_set = _kd_record
+try:
+    check('the filter dropdown is a Tab stop, with the keyboard\'s ring as its '
+          'focus colour',
+          str(_kd_dd.cget('takefocus')) == '1'
+          and str(_kd_dd.cget('highlightcolor')).lower() == app._focus_ring().lower())
+    del _kd_asked[:]
+    _kd_pressed = _kd_key(_kd_dd, '<space>')
+    _kd_list = _kd_rows(_kd_open_pop())
+    _kd_cur = [r for r in _kd_list if r._key_current]
+    check(f'Space on the filter dropdown opens its list, and the keyboard goes '
+          f'to the row it shows now, All ({[_kd_says(r) for r in _kd_cur]})',
+          _kd_pressed and len(_kd_list) >= 3 and len(_kd_cur) == 1
+          and _kd_says(_kd_cur[0]) == ['All'] and _kd_cur[0] in _kd_asked)
+    del _kd_asked[:]
+    _kd_key(_kd_list[0] if _kd_list else None, '<Down>')
+    check('Down walks to the next row', len(_kd_list) > 1 and _kd_list[1] in _kd_asked)
+    del _kd_asked[:]
+    _kd_key(_kd_list[1] if len(_kd_list) > 1 else None, '<End>')
+    check('End goes to the last row, Home to the first',
+          _kd_list and _kd_list[-1] in _kd_asked
+          and _kd_key(_kd_list[-1], '<Home>') and _kd_list[0] in _kd_asked)
+    del _kd_asked[:]
+    _kd_up = _kd_key(_kd_list[0] if _kd_list else None, '<Up>')
+    check('Up on the first row goes nowhere', _kd_up and not _kd_asked)
+    _kd_second = _kd_says(_kd_list[1])[0] if len(_kd_list) > 1 else None
+    del _kd_asked[:]
+    _kd_key(_kd_list[1] if len(_kd_list) > 1 else None, '<Return>')
+    check(f'Return chooses the row, closes the list, and the keyboard goes back '
+          f'to the dropdown ({app.filter_var.get()!r}, asked {_kd_asked[-2:]})',
+          _kd_second is not None and app.filter_var.get() == _kd_second
+          and _kd_open_pop() is None and _kd_dd in _kd_asked)
+    # Down opens it too; Escape closes it choosing nothing.
+    _kd_before = app.filter_var.get()
+    _kd_key(_kd_dd, '<Down>')
+    _kd_list = _kd_rows(_kd_open_pop())
+    del _kd_asked[:]
+    _kd_key(_kd_list[0] if _kd_list else None, '<Escape>')
+    check(f'Down opens it too, and Escape closes it choosing nothing, the '
+          f'keyboard back on the dropdown ({app.filter_var.get()!r}, asked '
+          f'{_kd_asked[-1:]})',
+          len(_kd_list) >= 3 and _kd_open_pop() is None
+          and app.filter_var.get() == _kd_before and _kd_dd in _kd_asked)
+    # The mouse's list leaves the keyboard where it was.
+    _kd_take(app.search_entry)
+    del _kd_asked[:]
+    _qa_click(_kd_dd)
+    _kd_settle()
+    _kd_pop = _kd_open_pop()
+    check(f'a click opens the list as before and sends the keyboard nowhere '
+          f'({_kd_asked})', _kd_pop is not None and not any(
+              str(w).startswith(str(_kd_pop)) for w in _kd_asked))
+    app._dismiss_mini_popup()
+    _kd_settle()
+    # Inside the template editor: Escape closes the list alone, and the
+    # keyboard is back on the opener there.
+    app._edit_template(None, redraw=lambda: None)
+    _kd_settle()
+    _kd_ed = app._mini_popup
+    _kd_cat = find_dropdown_by_label(_kd_ed, 'General') if _kd_ed else None
+    _kd_key(_kd_cat, '<space>')
+    _kd_nested = getattr(app, '_nested_dropdown', None)
+    _kd_nrows = _kd_rows(_kd_nested)
+    del _kd_asked[:]
+    _kd_key(_kd_nrows[0] if _kd_nrows else None, '<Escape>')
+    # Asked of the record, or of the focus itself: on Windows the editor is
+    # activated again as the list goes, and Tk hands its opener the keyboard.
+    _kd_held = None
+    try:
+        _kd_held = app.focus_get()
+    except KeyError:
+        pass
+    check(f'in the template editor, Escape on the category list closes the list '
+          f'alone, and the keyboard goes back to its opener ({_kd_asked[-1:]}, '
+          f'{_kd_held})',
+          _kd_nrows and not _kd_nested.winfo_exists() and _kd_ed.winfo_exists()
+          and (_kd_cat in _kd_asked or _kd_held is _kd_cat))
+    app._dismiss_mini_popup()
+    _kd_settle()
+finally:
+    tk.Misc.focus_set = _kd_real_focus_set
+app.filter_var.set('All')
+app.refresh_note_list()
+_kd_settle()
+
 check('none of the blocks above raised a background error (%s)' % _bg9[:2],
       not _bg9)
 app.notes = list(_na_notes)

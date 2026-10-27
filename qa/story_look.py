@@ -439,6 +439,25 @@ app._hide_toast()
 app.update()
 app.update_idletasks()
 """),
+    # The Show dropdown opened from the keyboard, the keyboard one row down:
+    # its ring is the thing to look at. The foreground first, as scene 15.
+    ("24-a-dropdown-walked-by-the-keyboard", """
+app._dismiss_mini_popup()
+app.hide_settings_page()
+app.notebook.select(app.TAB_NOTES)
+app.update()
+app.focus_force()
+app.update()
+app.filter_menu.focus_set()
+app.update()
+app.filter_menu.event_generate('<space>')
+app.update()
+_held = app.focus_get()
+if _held is not None:
+    _held.event_generate('<Down>')
+app.update()
+app.update_idletasks()
+"""),
 ]
 
 SEED = [

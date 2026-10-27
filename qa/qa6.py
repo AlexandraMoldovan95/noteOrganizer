@@ -4107,6 +4107,57 @@ NO.save_trash(app.trash)
 app.geometry('1100x850')
 _kv_settle()
 
+# Text size, the app's own setting for reading, from the keyboard alone: it
+# was a frame and two labels Tab never stopped on.
+app.show_settings_page()
+app.toggle_settings_panel('appearance')
+_kv_settle(20)
+
+
+def _ks_dropdown_showing(text):
+    found = []
+
+    def walk(w):
+        for c in w.winfo_children():
+            if (isinstance(c, tk.Frame) and getattr(c, '_key_press', None)
+                    and any(isinstance(k, tk.Label) and str(k.cget('text')) == text
+                            for k in c.winfo_children())):
+                found.append(c)
+            walk(c)
+    walk(app.settings_content)
+    return found[0] if found else None
+
+
+_ks_size = app.editor_font_size
+_ks_dd = _ks_dropdown_showing(str(_ks_size))
+_ks_chain, _ks_at = [], str(app._settings_nav_buttons['appearance'])
+for _ in range(40):
+    _ks_at = str(app.tk.call('tk_focusNext', _ks_at))
+    _ks_chain.append(_ks_at)
+check(f'Tab from Appearance in the menu reaches the Text size dropdown '
+      f'({len(_ks_chain)} stops looked at)',
+      _ks_dd is not None and str(_ks_dd) in _ks_chain)
+_ks_pop, _ks_rows = None, []
+if _ks_dd is not None and _take_focus(_ks_dd):
+    _ks_dd.event_generate('<space>')
+    _kv_settle()
+    _ks_pop = app._mini_popup
+    _ks_rows = [c for c in (_ks_pop.winfo_children()[0].winfo_children()
+                            if _ks_pop is not None and _ks_pop.winfo_exists() else [])
+                if getattr(c, '_key_press', None)]
+_ks_next = next((i + 1 for i, r in enumerate(_ks_rows)
+                 if r._key_current and i + 1 < len(_ks_rows)), None)
+if _ks_next is not None and _take_focus(_ks_rows[_ks_next]):
+    _ks_rows[_ks_next].event_generate('<Return>')
+    _kv_settle()
+check(f'Space opens it and Return on the next size chooses it '
+      f'({_ks_size} -> {app.editor_font_size})',
+      _ks_next is not None
+      and app.editor_font_size == NO.FONT_SIZES[NO.FONT_SIZES.index(_ks_size) + 1])
+app._set_editor_font(size=_ks_size)
+app.hide_settings_page()
+_kv_settle()
+
 
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")

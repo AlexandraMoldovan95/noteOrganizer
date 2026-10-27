@@ -975,6 +975,88 @@
     "expect": "killed"
   },
   {
+    "id": "KD01",
+    "about": "a themed dropdown is out of Tab's reach and no key opens it",
+    "edits": [{"file": "noteorganizer/ui/dialogs.py",
+               "find": "        self._opens_list_from_keyboard(btn, open_list)\n        return btn\n",
+               "replace": "        return btn\n"}],
+    "must_fail": ["the filter dropdown is a Tab stop",
+                  "Tab from Appearance in the menu reaches the Text size dropdown"],
+    "suites": ["qa9", "qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "KD02",
+    "about": "a list opened from the keyboard leaves the keyboard on its opener",
+    "edits": [{"file": "noteorganizer/ui/dialogs.py",
+               "find": "        if self._opened_from_keyboard(anchor_widget):\n",
+               "replace": "        if False:\n"}],
+    "must_fail": ["Space on the filter dropdown opens its list, and the keyboard goes"],
+    "suites": ["qa9"],
+    "expect": "killed"
+  },
+  {
+    "id": "KD03",
+    "about": "a dropdown's rows take no arrow keys",
+    "edits": [{"file": "noteorganizer/ui/dialogs.py",
+               "find": "                self._pressable(row, lambda v=opt: pick(v), walk=True,\n",
+               "replace": "                self._pressable(row, lambda v=opt: pick(v), walk=False,\n"}],
+    "must_fail": ["Down walks to the next row"],
+    "suites": ["qa9"],
+    "expect": "killed"
+  },
+  {
+    "id": "KD04",
+    "about": "Home and End go to the wrong ends of a list",
+    "edits": [{"file": "noteorganizer/ui/dialogs.py",
+               "find": "                target = choices[0] if step == \"first\" else choices[-1]\n",
+               "replace": "                target = choices[-1] if step == \"first\" else choices[0]\n"}],
+    "must_fail": ["End goes to the last row, Home to the first"],
+    "suites": ["qa9"],
+    "expect": "killed"
+  },
+  {
+    "id": "KD05",
+    "about": "a list closed from the keyboard leaves the keyboard on nothing",
+    "edits": [{"file": "noteorganizer/ui/dialogs.py",
+               "find": "            target = self._found_at(place)\n            if target is None:\n                return\n            clicked",
+               "replace": "            target = None\n            if target is None:\n                return\n            clicked"}],
+    "must_fail": ["Return chooses the row, closes the list, and the keyboard goes back",
+                  "Down opens it too, and Escape closes it choosing nothing"],
+    "suites": ["qa9"],
+    "expect": "killed"
+  },
+  {
+    "id": "KD06",
+    "about": "a list a click opened takes the keyboard too",
+    "edits": [{"file": "noteorganizer/ui/dialogs.py",
+               "find": "        return (opener is not None and self._holds_keyboard(opener)\n                and opener.winfo_class() not in self._TYPING_CLASSES)\n",
+               "replace": "        return opener is not None\n"}],
+    "must_fail": ["a click opens the list as before and sends the keyboard nowhere"],
+    "suites": ["qa9"],
+    "expect": "killed"
+  },
+  {
+    "id": "KD07",
+    "about": "a dropdown's ring keeps the colour of the theme it was made in",
+    "edits": [{"file": "noteorganizer/ui/dialogs.py",
+               "find": "        self.track_theme(btn, bg=\"sidebar\", highlightbackground=\"card\",\n                         highlightcolor=\"focus_ring\")\n",
+               "replace": "        self.track_theme(btn, bg=\"sidebar\", highlightbackground=\"card\")\n"}],
+    "must_fail": ["a themed dropdown border follows too"],
+    "suites": ["qa4"],
+    "expect": "killed"
+  },
+  {
+    "id": "KD08",
+    "about": "an arrow at the end of a list walks back the other way",
+    "edits": [{"file": "noteorganizer/ui/dialogs.py",
+               "find": "                    if ahead <= 1:\n",
+               "replace": "                    if ahead <= -100000:\n"}],
+    "must_fail": ["Up on the first row goes nowhere"],
+    "suites": ["qa9"],
+    "expect": "killed"
+  },
+  {
     "id": "A01",
     "about": "a highlight given in an open cell reaches the note only when the cell closes",
     "edits": [

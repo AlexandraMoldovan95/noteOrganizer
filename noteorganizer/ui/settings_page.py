@@ -3844,6 +3844,14 @@ class SettingsPageMixin:
                           "note. The menu key does the same where a "
                           "keyboard has one."),
         )),
+        ("Dropdowns (Sort, Show, Repeat, the font, the settings)", (
+            ("Space  /  Enter  /  Down", "Open the list, on the choice it "
+                                         "shows now."),
+            ("Up  /  Down  /  Home  /  End", "Walk the list."),
+            ("Enter  /  Space", "Choose. The keyboard goes back to the "
+                                "dropdown."),
+            ("Escape", "Close the list without choosing."),
+        )),
         ("Checklist (click an item's ▲ ▼, or Tab to its box)", (
             ("Alt+Up  /  Alt+Down", "Move the item one place up or down, as "
                                     "the ▲ ▼ at its left do; in a template's "
