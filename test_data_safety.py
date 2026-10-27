@@ -1255,6 +1255,37 @@ if _storage._attachment_path_within("../../out") is not None:
     _guard_ok = False
 check("the path guard never raises and never returns a path outside the folder",
       _guard_ok)
+# One file, one name. NTFS answers other strings for the same file -- an
+# 8.3 short name, a "::$DATA" stream suffix -- while every check upstream
+# compares names: a backup's Trash entry deleted a note's photo by its short
+# name, and "x.exe::$DATA" opened with no unsafe-file warning. A symlink is
+# the same alias on Linux.
+_two_names = os.path.join(_paths.ATTACHMENTS_DIR, "20261003091512345678_holiday.jpg")
+with open(_two_names, "w") as _f:
+    _f.write("photo")
+_aliases = []
+if os.name == "nt":
+    import ctypes
+    _aliases.append("20261003091512345678_holiday.jpg::$DATA")
+    _short_buf = ctypes.create_unicode_buffer(1024)
+    if ctypes.windll.kernel32.GetShortPathNameW(_two_names, _short_buf, 1024):
+        _short = os.path.basename(_short_buf.value)
+        if _short.lower() != os.path.basename(_two_names):
+            _aliases.append(_short)   # absent where the volume makes no short names
+else:
+    os.symlink(_two_names, os.path.join(_paths.ATTACHMENTS_DIR, "202610~1.JPG"))
+    _aliases.append("202610~1.JPG")
+check("a name that reaches a file under another name is refused (%s)" % _aliases,
+      bool(_aliases) and all(_storage._attachment_path_within(a) is None for a in _aliases))
+check("...while the file's own name still resolves, in any case Windows allows",
+      _storage._attachment_path_within("20261003091512345678_holiday.jpg") is not None
+      and (os.name != "nt" or _storage._attachment_path_within(
+          "20261003091512345678_HOLIDAY.JPG") is not None))
+_storage._delete_attachment_files([{"attachments": [{"stored_as": a} for a in _aliases]}])
+check("...and a delete by an alias leaves the file", os.path.exists(_two_names))
+for _left in (_two_names, os.path.join(_paths.ATTACHMENTS_DIR, "202610~1.JPG")):
+    if os.path.lexists(_left):
+        os.remove(_left)
 # And normalize_note flattens a smuggled path to a bare filename at the
 # data choke point, closing traversal for every channel (share + zip +
 # hand-edit), not only the sinks.

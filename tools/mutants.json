@@ -5488,5 +5488,16 @@
     "must_fail": ["a copy of the app without the file says so, and opens nothing"],
     "suites": ["qa6"],
     "expect": "killed"
+  },
+  {
+    "id": "TN01",
+    "about": "an attachment's alias (8.3 short name, ::$DATA, a symlink) resolves to the file it stands for",
+    "edits": [{"file": "noteorganizer/core/storage.py",
+               "find": "        if os.path.normcase(candidate) != os.path.normcase(named):\n            return None\n",
+               "replace": ""}],
+    "must_fail": ["a name that reaches a file under another name is refused",
+                  "...and a delete by an alias leaves the file"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
   }
 ]

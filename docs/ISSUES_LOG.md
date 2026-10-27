@@ -181,6 +181,7 @@ is in the table below as well.
 | [The Trash that counted on the wall clock](#the-trash-that-counted-on-the-wall-clock) | An age is the distance between two moments, not between two clock readings; a rule that deletes must count the moments. | 0.97.405 |
 | [The flicker that was a word count](#the-flicker-that-was-a-word-count) | A label whose text can come and go sizes its row by what it says; give it the height of its tallest state. | 0.97.405 |
 | [Photographs of the site's pages, blank below the first screen](#photographs-of-the-sites-pages-blank-below-the-first-screen) | A photograph proves only what was on the screen when it was taken: photograph a page as a reader meets it, and give what changes it checks of its own. | the website |
+| [A file with two names](#a-file-with-two-names) | When a check and the action after it each name a file, they must name it the same way: resolve once, compare what was resolved. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -1956,6 +1957,31 @@ became two hours.
 
 **Takeaway:** an age is the distance between two moments, not between two clock readings; the
 two part by an hour twice a year, and a rule that deletes must count the moments.
+
+### A file with two names
+
+*(2026-10-27 · found by the final audit's break-it round, on Windows)*
+
+**Symptom:** a backup whose Trash held one entry, its file named `202610~1.JPG`, deleted a
+note's own photo at the next start. A note whose file was `evil.exe::$DATA` opened the program
+without the "Potentially unsafe file" question.
+
+**Root cause:** NTFS answers more than one string for the same file. It gives every long name
+an 8.3 short name — for the app's timestamped names, predictable from the year and month — and
+reads a `::$DATA` suffix as the file's own data. Every check before a delete or an open compares
+names: the import's list of files it owns, the spare list a delete leaves alone, the extension
+that decides the warning. `_attachment_path_within` resolved the name with `realpath`, which
+follows the alias to the long file. So the file deleted or opened was not the name checked.
+
+**Fix:** the resolver refuses a name that reaches a file under another name: what `realpath`
+returns must be, letter for letter except case, the name joined to the folder. Every delete and
+every open goes through it, so the purge, Delete forever, Empty trash and the warning all see the
+same file. The warning also reads its extension from the resolved path. `test_data_safety` makes
+a real short name and a `::$DATA` suffix on Windows and a symlink on Linux, and holds that each
+is refused while the file's own name, in any case, still opens; mutant TN01 takes the check away.
+
+**Takeaway:** when a check and the action after it each name the file, they must name it the
+same way. Resolve once, and compare what was resolved.
 
 
 ## Tk & platform gotchas

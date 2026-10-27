@@ -170,7 +170,9 @@ class AttachmentsMixin:
             # normalize_note already stores clean names, and this repeats
             # the rstrip at the sink so the two can never disagree even
             # for a record that predates that rule.
-            ext = os.path.splitext(stored_as.rstrip(". "))[1].lower()
+            # And from the file the path resolved to, which is the one
+            # startfile opens: the resolver refuses aliases, this repeats it.
+            ext = os.path.splitext(os.path.basename(path).rstrip(". "))[1].lower()
 
             # Pillow decodes all of these — shown large, right in the app,
             # instead of handing off to whatever image viewer Windows has

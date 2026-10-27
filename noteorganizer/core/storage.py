@@ -220,11 +220,20 @@ def _attachment_path_within(stored_as):
         return None
     try:
         base = os.path.realpath(paths.ATTACHMENTS_DIR)
-        candidate = os.path.realpath(os.path.join(base, stored_as))
+        named = os.path.normpath(os.path.join(base, stored_as))
+        candidate = os.path.realpath(named)
         if candidate == base:
             return None  # the folder itself, not a file in it
         if os.path.commonpath([base, candidate]) != base:
             return None  # escaped the attachments folder
+        # The file reached must be the file named. NTFS answers other
+        # strings for the same file -- an 8.3 short name ("202610~1.JPG"),
+        # a "::$DATA" stream suffix -- and every check upstream compares
+        # names: a backup's Trash entry named a note's photo by its short
+        # name and the purge deleted it; "x.exe::$DATA" opened with no
+        # unsafe-file warning. ISSUES_LOG: "A file with two names".
+        if os.path.normcase(candidate) != os.path.normcase(named):
+            return None
     except (ValueError, OSError):
         # commonpath raises across drives and UNC roots, realpath on a NUL:
         # "cannot resolve safely" means refuse, never crash the delete loop,
