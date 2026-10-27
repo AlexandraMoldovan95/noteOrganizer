@@ -12209,8 +12209,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.bind_class("ChecklistArrows", "<Leave>",
                         lambda e: self._light_arrows(e.widget, False))
         # The ring that shows which item the keyboard is on, in a note's
-        # checklist and a template's.
-        for tag in ("ChecklistBox", "TemplateChecklistBox"):
+        # checklist and a template's -- and which Trash row, its box having
+        # no words to draw Windows' dotted ring round.
+        for tag in ("ChecklistBox", "TemplateChecklistBox", "TrashTickBox"):
             self.bind_class(tag, "<FocusIn>",
                             lambda e: self._ring_checklist_row(e.widget, True))
             self.bind_class(tag, "<FocusOut>",
@@ -12417,11 +12418,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _ring_checklist_row(self, box, on):
         """The ring round the checklist row whose tick box has the keyboard,
-        in a note or a template: without it Tab and Alt+Up/Down went to an
-        item nobody could see was chosen (her re-test, case 591)."""
+        in a note or a template, or round a Trash row: without it Tab and
+        Alt+Up/Down went to an item nobody could see was chosen (her re-test,
+        case 591)."""
         try:
             row = box.master
-            color = self.colors["accent"] if on else row.cget("bg")
+            color = self._focus_ring() if on else row.cget("bg")
             # Both: Tk draws the border in highlightcolor while the focus
             # is anywhere inside the row, and the box is inside it.
             row.configure(highlightbackground=color, highlightcolor=color)
@@ -13735,6 +13737,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.bind_all("<<PrevWindow>>",
                       lambda e: self._tab_ring_if_tabbed_to(e, backwards=True),
                       add="+")
+        # And what a Tab lands on is scrolled into sight (_bring_into_sight).
+        self.bind_all("<<NextWindow>>", self._tab_target_into_sight, add="+")
+        self.bind_all("<<PrevWindow>>",
+                      lambda e: self._tab_target_into_sight(e, backwards=True),
+                      add="+")
 
         notes_tab = tk.Frame(self.notebook)
         self.track_theme(notes_tab, bg="bg")
@@ -14335,7 +14342,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             font=("Segoe UI", 9, "bold"), command=self._show_off_schedule_days)
         self.track_theme(self.offschedule_btn, bg="bg", fg="accent_text",
                          activebackground="bg", activeforeground="accent_text",
-                         highlightbackground="bg", highlightcolor="accent")
+                         highlightbackground="bg", highlightcolor="focus_ring")
         # Both wrap to the width they have instead of being cut at both
         # ends: the series line runs long ("Every week on Mon, Tue, Wed,
         # until ...", then the days that keep their own edits), and centred
@@ -14363,7 +14370,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.track_theme(self.day_series_btn, bg="accent", fg="on_accent",
                          activebackground="accent_hover",
                          activeforeground="on_accent",
-                         highlightbackground="card", highlightcolor="accent")
+                         highlightbackground="card", highlightcolor="focus_ring")
         self.day_series_btn.pack(side="right", padx=(8, 10), pady=8,
                                  ipadx=6, ipady=2)
         self.day_strip_lbl = tk.Label(
@@ -14545,7 +14552,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._toggles_its_popup(self.day_move_btn, self._open_move_day_picker)
         self.track_theme(self.day_move_btn, bg="sidebar", fg="text",
                          activebackground="card", activeforeground="text",
-                         highlightbackground="bg", highlightcolor="accent")
+                         highlightbackground="bg", highlightcolor="focus_ring")
         # ...and, while the day has something to reset -- a move, or text of
         # its own -- the way back to the series, from the day itself: in the
         # calendar's right-click menu alone, it was not found (field request,
@@ -14556,7 +14563,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                        command=self._reset_this_day)
         self.track_theme(self.day_reset_btn, bg="sidebar", fg="text",
                          activebackground="card", activeforeground="text",
-                         highlightbackground="bg", highlightcolor="accent")
+                         highlightbackground="bg", highlightcolor="focus_ring")
 
         # Note color, on the same row, pushed a bit right of the date controls.
         color_label = tk.Label(meta_row, text="🎨 Color:", font=("Segoe UI", 9, "bold"))

@@ -82,6 +82,12 @@ PAIRS = [
     ("on_success", "success_pressed", "words on a confirming button, held down"),
     ("text", "find_all", "text of the other find matches"),
     ("text", "find_miss", "text in the find box when nothing is found"),
+    ("focus_ring", "bg", "the keyboard's ring on the window (a mark, owes "
+                         "3:1)", AA_NON_TEXT),
+    ("focus_ring", "card", "the keyboard's ring on a card or panel",
+     AA_NON_TEXT),
+    ("focus_ring", "sidebar", "the keyboard's ring in the sidebar or a list",
+     AA_NON_TEXT),
 ]
 
 # Surfaces the app mixes from a palette rather than reading off it, each

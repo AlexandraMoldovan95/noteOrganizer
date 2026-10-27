@@ -4007,6 +4007,106 @@ app.new_note(); app.update()
 app.notes = []
 app.save_notes(); app.refresh_note_list(); app.update()
 
+# ---- KEYBOARD: what Tab lands on is scrolled into sight ----
+# Tk's Tab moves the keyboard and never the view, and the editor, Settings
+# and the Trash list are frames drawn on canvases: at the app's opening size
+# Tab walked onto Save and Delete below the fold, and onto sixty Trash
+# controls nobody could see, with the view standing still.
+def _kv_settle(n=6):
+    for _ in range(n):
+        app.update()
+        time.sleep(0.02)
+
+
+def _kv_in_view(w, canvas):
+    top = w.winfo_rooty() - canvas.winfo_rooty()
+    return 0 <= top and top + w.winfo_height() <= canvas.winfo_height()
+
+
+if getattr(app, '_settings_open', False):
+    app.hide_settings_page()
+app.notebook.select(app.TAB_NOTES)
+app.geometry('900x600')
+app.new_note()
+_kv_settle(10)
+_kv_ec = app.editor_canvas
+_kv_save = find_widget(app.editor, tk.Button, '💾 Save')
+_kv_ec.yview_moveto(0)
+_kv_settle()
+_kv_from = _kv_save.tk_focusPrev() if _kv_save is not None else None
+check(f'fixture: at 900x600 the editor\'s Save lies below the fold, and so does '
+      f'the control before it ({_kv_ec.yview()})',
+      _kv_from is not None and not _kv_in_view(_kv_save, _kv_ec)
+      and not _kv_in_view(_kv_from, _kv_ec) and _take_focus(_kv_from))
+_kv_from.event_generate('<Tab>')
+_kv_settle()
+check(f'Tab onto Save, below the fold, scrolls the editor to show it '
+      f'({_kv_ec.yview()})', _kv_in_view(_kv_save, _kv_ec))
+_kv_view = _kv_ec.yview()
+if _take_focus(_kv_save):
+    _kv_save.event_generate('<Shift-Tab>')
+    _kv_settle()
+check(f'...and Shift+Tab back onto a control already in sight leaves the view '
+      f'where it was ({_kv_view} -> {_kv_ec.yview()})',
+      _kv_ec.yview() == _kv_view and _kv_in_view(_kv_from, _kv_ec))
+_kv_ec.yview_moveto(1.0)
+_kv_settle()
+_kv_after_title = app.title_entry.tk_focusNext()
+check('fixture: scrolled to the bottom, the title box is out of sight',
+      not _kv_in_view(app.title_entry, _kv_ec) and _take_focus(_kv_after_title))
+_kv_after_title.event_generate('<Shift-Tab>')
+_kv_settle()
+check(f'Shift+Tab onto the title, above the fold, scrolls back up to it '
+      f'({_kv_ec.yview()})', _kv_in_view(app.title_entry, _kv_ec))
+
+# Recently deleted: a list on a canvas, on a page on a canvas. Both move.
+app.trash = [{'id': 700 + i, 'uid': f'kv-{i}', 'title': f'Sight{i:02d}',
+              'body': 'x', 'category': 'General',
+              'deleted_at': f'2026-10-{1 + i % 25:02d} 10:00:00'} for i in range(30)]
+NO.save_trash(app.trash)
+app.geometry('1000x650')
+app.show_settings_page()
+app.toggle_settings_panel('trash')
+_kv_settle(20)
+_kv_list = app._active_panel_canvas
+_kv_page = app.settings_canvas
+_kv_rows = [w for w in _kv_list.winfo_children()[0].winfo_children()
+            if getattr(w, '_trash_buttons', None)]
+_kv_first = (next(c for c in _kv_rows[0].winfo_children()
+                  if isinstance(c, tk.Checkbutton)) if _kv_rows else None)
+def _kv_keyboard():
+    """Where the keyboard is, by Tk's record for the window."""
+    try:
+        return app.nametowidget(str(app.tk.call('focus', '-lastfor', app)))
+    except (KeyError, tk.TclError):
+        return None
+
+
+_kv_hidden, _kv_landed = [], 0
+if _kv_first is not None and _take_focus(_kv_first):
+    for _kv_i in range(70):
+        _kv_held = _kv_keyboard()
+        if _kv_held is None:
+            break
+        _kv_held.event_generate('<Tab>')
+        _kv_settle(2)
+        _kv_held = _kv_keyboard()
+        if _kv_held is not None and str(_kv_held).startswith(str(_kv_list)):
+            _kv_landed += 1
+            if not (_kv_in_view(_kv_held, _kv_list)
+                    and _kv_in_view(_kv_held, _kv_page)):
+                _kv_hidden.append(str(_kv_held.cget('text')) or 'tick')
+check(f'fixture: Tab walked deep into a Trash list longer than its box '
+      f'({_kv_landed} landings, the list at {_kv_list.yview()})',
+      _kv_landed >= 60 and _kv_list.yview()[0] > 0)
+check(f'every Trash control Tab lands on is in sight, in the list and on the '
+      f'page ({len(_kv_hidden)} out of sight: {_kv_hidden[:6]})', not _kv_hidden)
+app.hide_settings_page()
+app.trash = []
+NO.save_trash(app.trash)
+app.geometry('1100x850')
+_kv_settle()
+
 
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")

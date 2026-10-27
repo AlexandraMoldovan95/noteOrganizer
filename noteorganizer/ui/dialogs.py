@@ -33,7 +33,7 @@ import tkinter as tk
 from tkinter import ttk
 from types import SimpleNamespace
 
-from ..core.themes import letters_on
+from ..core.themes import letters_on, palette_value
 
 
 class DialogsMixin:
@@ -1218,3 +1218,104 @@ class DialogsMixin:
         for cb in callbacks:
             if callable(cb):
                 self.after(150, lambda cb=cb: _run_safely(cb))
+
+    # ---- Where the keyboard is, and keeping it in sight ----
+
+    def _focus_ring(self):
+        """The colour of the ring round whatever holds the keyboard."""
+        return palette_value(self.colors, "focus_ring")
+
+    def _holds_keyboard(self, widget):
+        """Whether the keyboard is on *widget* in its window, by Tk's own
+        record (focus -lastfor): it holds while another program has the
+        foreground, and a click on a button or a drawn control never sets it."""
+        try:
+            return str(self.tk.call("focus", "-lastfor", widget)) == str(widget)
+        except tk.TclError:
+            return False
+
+    def _tab_target_into_sight(self, event, backwards=False):
+        """Tab moves the keyboard and never the view, so what it lands on is
+        brought into sight. Runs after Tk's own traversal (bound with "+")."""
+        try:
+            here = event.widget
+            target = here.tk_focusPrev() if backwards else here.tk_focusNext()
+        except (tk.TclError, KeyError, AttributeError):
+            return
+        if target is not None:
+            self._bring_into_sight(target)
+
+    def _bring_into_sight(self, widget):
+        """Scroll each canvas holding *widget* on a page just far enough to
+        show it, innermost first: the editor, Settings and its menu, and the
+        Trash, Share and emoji lists are frames drawn on canvases."""
+        try:
+            child = widget
+            while child is not None and not isinstance(child, (tk.Tk, tk.Toplevel)):
+                parent = child.master
+                if (isinstance(parent, tk.Canvas) and isinstance(child, tk.Frame)
+                        and child.winfo_manager() == "canvas"):
+                    self._show_on_canvas(parent, child, widget)
+                child = parent
+        except (tk.TclError, AttributeError, ValueError, TypeError):
+            pass
+
+    @staticmethod
+    def _canvas_window_item(canvas, child):
+        for item in canvas.find_all():
+            if (canvas.type(item) == "window"
+                    and str(canvas.itemcget(item, "window")) == str(child)):
+                return item
+        return None
+
+    def _offset_within(self, widget, page, axis):
+        """How far *widget* lies from *page*'s top (axis "y") or left edge.
+        A canvas on the way is crossed by its scroll, which it updates at
+        once; the windows on it move only when it next draws."""
+        total, w = 0.0, widget
+        while w is not None and w is not page:
+            parent = w.master
+            item = (self._canvas_window_item(parent, w)
+                    if isinstance(parent, tk.Canvas)
+                    and w.winfo_manager() == "canvas" else None)
+            if item is not None:
+                shown = parent.canvasy(0) if axis == "y" else parent.canvasx(0)
+                total += parent.bbox(item)[1 if axis == "y" else 0] - shown
+            else:
+                total += w.winfo_y() if axis == "y" else w.winfo_x()
+            w = parent
+        return total
+
+    def _show_on_canvas(self, canvas, page, widget):
+        """Scroll *canvas*, which draws *page*, until *widget* is inside its
+        view with a small margin -- the least movement that shows it."""
+        item = self._canvas_window_item(canvas, page)
+        if item is None:
+            return
+        box = canvas.bbox(item)
+        region = str(canvas.cget("scrollregion")).split() or canvas.bbox("all")
+        if not box or not region or len(region) != 4:
+            return
+        region = [float(v) for v in region]
+        margin = self.px(6)
+        for axis, i in (("y", 1), ("x", 0)):
+            view = canvas.winfo_height() if axis == "y" else canvas.winfo_width()
+            span = region[i + 2] - region[i]
+            if view <= 1 or span <= view:
+                continue
+            near = box[i] + self._offset_within(widget, page, axis)
+            far = near + (widget.winfo_height() if axis == "y"
+                          else widget.winfo_width())
+            shown = canvas.canvasy(0) if axis == "y" else canvas.canvasx(0)
+            if near - margin < shown:
+                start = near - margin
+            elif far + margin > shown + view:
+                start = min(near - margin, far + margin - view)
+            else:
+                continue
+            fraction = max(0.0, min((start - region[i]) / span, 1.0))
+            (canvas.yview_moveto if axis == "y" else canvas.xview_moveto)(fraction)
+            # A move the person made, as the scrollbar's is: it beats a
+            # table rebuild's restore still in force (_editor_scrollbar_moved).
+            if canvas is getattr(self, "editor_canvas", None):
+                self._grid_view_restore = None

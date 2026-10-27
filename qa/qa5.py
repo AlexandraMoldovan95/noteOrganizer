@@ -3430,7 +3430,7 @@ app.set_theme('light'); app.update()
 _os_colors = (str(_os_btn.cget('bg')), str(_os_btn.cget('activebackground')),
               str(_os_btn.cget('highlightcolor')), str(_os_btn.cget('fg')))
 check(f'the way in takes every colour of a new theme ({_os_colors})',
-      _os_colors == (app.colors['bg'], app.colors['bg'], app.colors['accent'],
+      _os_colors == (app.colors['bg'], app.colors['bg'], app._focus_ring(),
                      app.colors['accent_text']))
 app.set_theme('dark'); app.update()
 
@@ -4017,7 +4017,7 @@ app._autosave_now(); app.update()
 app.set_theme('light'); app.update()
 _mv_c = app.colors
 _mv_want = tuple(str(_mv_c[k]).lower() for k in (
-    'sidebar', 'text', 'card', 'text', 'bg', 'accent'))
+    'sidebar', 'text', 'card', 'text', 'bg')) + (app._focus_ring().lower(),)
 _mv_opts = ('bg', 'fg', 'activebackground', 'activeforeground',
             'highlightbackground', 'highlightcolor')
 _mv_got = tuple(str(app.day_move_btn.cget(o)).lower() for o in _mv_opts)

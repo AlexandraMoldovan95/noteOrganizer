@@ -893,6 +893,88 @@
     "expect": "killed"
   },
   {
+    "id": "KF01",
+    "about": "Tab moves the keyboard and leaves the view where it was",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self.bind_all(\"<<NextWindow>>\", self._tab_target_into_sight, add=\"+\")\n",
+               "replace": ""}],
+    "must_fail": ["Tab onto Save, below the fold, scrolls the editor to show it",
+                  "every Trash control Tab lands on is in sight"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "KF02",
+    "about": "the view follows the keyboard down but never up",
+    "edits": [{"file": "noteorganizer/ui/dialogs.py",
+               "find": "            if near - margin < shown:\n",
+               "replace": "            if False:\n"}],
+    "must_fail": ["Shift+Tab onto the title, above the fold, scrolls back up to it"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "KF03",
+    "about": "a control already in sight is scrolled to the top anyway",
+    "edits": [{"file": "noteorganizer/ui/dialogs.py",
+               "find": "            else:\n                continue\n            fraction",
+               "replace": "            else:\n                start = near - margin\n            fraction"}],
+    "must_fail": ["...and Shift+Tab back onto a control already in sight leaves the view"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "KF04",
+    "about": "a Trash row's tick box takes the keyboard with no ring round its row",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "        tick.bindtags((\"TrashTickBox\",) + tick.bindtags())\n",
+               "replace": ""}],
+    "must_fail": ["the Trash row whose tick box holds the keyboard wears the ring"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "KF05",
+    "about": "Tab reads a Trash row's buttons right to left again",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "        row._trash_buttons = {\"restore\": restore_btn, \"delete\": delete_btn}\n",
+               "replace": "        delete_btn.lower(restore_btn)\n        row._trash_buttons = {\"restore\": restore_btn, \"delete\": delete_btn}\n"}],
+    "must_fail": ["Tab reads a Trash row left to right"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "KF06",
+    "about": "Select all comes after the Trash list in Tab's order, though drawn above it",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "        select_btn.lower(wrap)\n",
+               "replace": ""}],
+    "must_fail": ["Select all, drawn above the list, comes before it"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "KF07",
+    "about": "a Trash row's Restore pressed by key leaves the keyboard on nothing",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "            if keyed:\n                self._keyboard_to_trash_row(parent, place, \"restore\")\n",
+               "replace": "            if False:\n                self._keyboard_to_trash_row(parent, place, \"restore\")\n"}],
+    "must_fail": ["Space on a row's Restore puts that note back"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "KF08",
+    "about": "the checklist's and the Trash's ring wear the accent, under 3:1 on two light themes",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            color = self._focus_ring() if on else row.cget(\"bg\")\n",
+               "replace": "            color = self.colors[\"accent\"] if on else row.cget(\"bg\")\n"}],
+    "must_fail": ["the Trash row whose tick box holds the keyboard wears the ring",
+                  "template move: Alt+Down on a box moves its item"],
+    "suites": ["qa3", "qa9"],
+    "expect": "killed"
+  },
+  {
     "id": "A01",
     "about": "a highlight given in an open cell reaches the note only when the cell closes",
     "edits": [
@@ -3398,7 +3480,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                         activebackground=\"bg\", activeforeground=\"accent_text\",\n                         highlightbackground=\"bg\", highlightcolor=\"accent\")\n",
+        "find": "                         activebackground=\"bg\", activeforeground=\"accent_text\",\n                         highlightbackground=\"bg\", highlightcolor=\"focus_ring\")\n",
         "replace": "                         activeforeground=\"accent_text\",\n                         highlightbackground=\"bg\")\n"
       }
     ],
@@ -3583,8 +3665,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                         highlightbackground=\"card\", highlightcolor=\"accent\")\n        self.day_series_btn.pack(",
-        "replace": "                         highlightcolor=\"accent\")\n        self.day_series_btn.pack("
+        "find": "                         highlightbackground=\"card\", highlightcolor=\"focus_ring\")\n        self.day_series_btn.pack(",
+        "replace": "                         highlightcolor=\"focus_ring\")\n        self.day_series_btn.pack("
       }
     ],
     "must_fail": ["every colour of the day's strip and words follows a new theme"],
@@ -3792,8 +3874,8 @@
     "id": "MV15",
     "about": "\"Move this day…\" keeps the old theme's colour around its keyboard ring",
     "edits": [{"file": "note_organizer.py",
-               "find": "        self.track_theme(self.day_move_btn, bg=\"sidebar\", fg=\"text\",\n                         activebackground=\"card\", activeforeground=\"text\",\n                         highlightbackground=\"bg\", highlightcolor=\"accent\")\n",
-               "replace": "        self.track_theme(self.day_move_btn, bg=\"sidebar\", fg=\"text\",\n                         activebackground=\"card\", activeforeground=\"text\",\n                         highlightcolor=\"accent\")\n"}],
+               "find": "        self.track_theme(self.day_move_btn, bg=\"sidebar\", fg=\"text\",\n                         activebackground=\"card\", activeforeground=\"text\",\n                         highlightbackground=\"bg\", highlightcolor=\"focus_ring\")\n",
+               "replace": "        self.track_theme(self.day_move_btn, bg=\"sidebar\", fg=\"text\",\n                         activebackground=\"card\", activeforeground=\"text\",\n                         highlightcolor=\"focus_ring\")\n"}],
     "must_fail": ["every colour of \"Move this day…\" and \"Reset this day…\" follows a new theme"],
     "suites": ["qa5"],
     "expect": "killed"
@@ -3832,8 +3914,8 @@
     "id": "MV19",
     "about": "\"Reset this day…\" keeps the old theme's colour around its keyboard ring",
     "edits": [{"file": "note_organizer.py",
-               "find": "                                       command=self._reset_this_day)\n        self.track_theme(self.day_reset_btn, bg=\"sidebar\", fg=\"text\",\n                         activebackground=\"card\", activeforeground=\"text\",\n                         highlightbackground=\"bg\", highlightcolor=\"accent\")\n",
-               "replace": "                                       command=self._reset_this_day)\n        self.track_theme(self.day_reset_btn, bg=\"sidebar\", fg=\"text\",\n                         activebackground=\"card\", activeforeground=\"text\",\n                         highlightcolor=\"accent\")\n"}],
+               "find": "                                       command=self._reset_this_day)\n        self.track_theme(self.day_reset_btn, bg=\"sidebar\", fg=\"text\",\n                         activebackground=\"card\", activeforeground=\"text\",\n                         highlightbackground=\"bg\", highlightcolor=\"focus_ring\")\n",
+               "replace": "                                       command=self._reset_this_day)\n        self.track_theme(self.day_reset_btn, bg=\"sidebar\", fg=\"text\",\n                         activebackground=\"card\", activeforeground=\"text\",\n                         highlightcolor=\"focus_ring\")\n"}],
     "must_fail": ["every colour of \"Move this day…\" and \"Reset this day…\" follows a new theme"],
     "suites": ["qa5"],
     "expect": "killed"

@@ -15155,7 +15155,7 @@ def _mv_rings():
     return [i for i, r in enumerate(_mv_rows())
             if str(r.cget('highlightbackground')).lower()
             == str(r.cget('highlightcolor')).lower()
-            == app.colors['accent'].lower()]
+            == app._focus_ring().lower()]
 
 
 def _mv_agree(expected):

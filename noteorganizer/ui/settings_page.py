@@ -1355,7 +1355,11 @@ class SettingsPageMixin:
         pop.bind("<Escape>", lambda e: self._escape_backs_out())
 
     def _build_trash_row(self, parent, entry, redraw, on_tick=None):
-        row = tk.Frame(parent, bg=self.colors["card"])
+        # The border is the ring of the row whose box has the keyboard
+        # (TrashTickBox); the padding inside gives back its pixel.
+        row = tk.Frame(parent, bg=self.colors["card"], highlightthickness=1,
+                       highlightbackground=self.colors["card"],
+                       highlightcolor=self.colors["card"])
         row.pack(fill="x", pady=3)
 
         # A tick box, so recovering yesterday's forty deleted notes is not
@@ -1375,7 +1379,8 @@ class SettingsPageMixin:
             row, variable=var, command=(on_tick or (lambda: None)),
             bg=self.colors["card"], activebackground=self.colors["card"],
             selectcolor=self.colors["check_well"], bd=0, highlightthickness=0)
-        tick.pack(side="left", padx=(8, 0))
+        tick.pack(side="left", padx=(7, 0))
+        tick.bindtags(("TrashTickBox",) + tick.bindtags())
 
         # Built now, packed LAST -- see the buttons below. The packer
         # hands out the cavity in pack order, so whatever is packed first
@@ -1435,11 +1440,17 @@ class SettingsPageMixin:
             return any(e is entry for e in self.trash)
 
         def restore():
+            keyed = self._holds_keyboard(restore_btn)
+            place = self._trash_row_place(row)
             if still_in_trash():
                 self._restore_from_trash(entry)
             redraw()
+            if keyed:
+                self._keyboard_to_trash_row(parent, place, "restore")
 
         def delete_forever():
+            keyed = self._holds_keyboard(delete_btn)
+            place = self._trash_row_place(row)
             if not still_in_trash():
                 redraw()
                 return
@@ -1455,15 +1466,22 @@ class SettingsPageMixin:
                 self.trash = [e for e in self.trash if e is not entry]
                 save_trash(self.trash)
             redraw()
+            if keyed:
+                self._keyboard_to_trash_row(parent, place, "delete")
 
-        tk.Button(row, text="Delete", command=delete_forever, relief="flat",
-                  cursor="hand2", bg=self.colors["danger"], fg=self._on_fill("danger"),
-                  font=("Segoe UI", 8, "bold")).pack(side="right", padx=(2, 8), ipadx=4, ipady=1)
+        # Restore made first, Delete packed first: Delete stays at the edge
+        # and Tab still reads the row left to right.
         restore_btn = tk.Button(row, text="Restore", command=restore, relief="flat",
                                 cursor="hand2", bg=self.colors["accent"],
                                 fg=self._on_fill("accent"),
                                 font=("Segoe UI", 8, "bold"))
+        delete_btn = tk.Button(row, text="Delete", command=delete_forever,
+                               relief="flat", cursor="hand2",
+                               bg=self.colors["danger"], fg=self._on_fill("danger"),
+                               font=("Segoe UI", 8, "bold"))
+        delete_btn.pack(side="right", padx=(2, 7), ipadx=4, ipady=1)
         restore_btn.pack(side="right", padx=2, ipadx=4, ipady=1)
+        row._trash_buttons = {"restore": restore_btn, "delete": delete_btn}
         # A double-click's second press lands on the row that slid up into
         # this one's place when the first restore redrew the list -- and
         # restored that note too. The checklist bin's hazard, and its guard.
@@ -1475,7 +1493,33 @@ class SettingsPageMixin:
         # field once a series row grew a "repeats ..." line: the buttons
         # were squeezed to slivers. A row can afford a shortened title;
         # it cannot afford an unclickable Restore.
-        left.pack(side="left", fill="x", expand=True, padx=10, pady=8)
+        left.pack(side="left", fill="x", expand=True, padx=10, pady=7)
+
+    @staticmethod
+    def _trash_row_place(row):
+        """Where *row* stands among the Trash's rows."""
+        try:
+            rows = [w for w in row.master.winfo_children()
+                    if getattr(w, "_trash_buttons", None)]
+            return rows.index(row)
+        except (tk.TclError, ValueError):
+            return 0
+
+    def _keyboard_to_trash_row(self, rows_frame, place, which):
+        """After a row's Restore or Delete pressed from the keyboard, the
+        row drawn in its place takes the keyboard, on the same button --
+        or the last row, or what follows the list once it is empty."""
+        try:
+            rows = [w for w in rows_frame.winfo_children()
+                    if getattr(w, "_trash_buttons", None)]
+            target = (rows[min(place, len(rows) - 1)]._trash_buttons[which]
+                      if rows else rows_frame.tk_focusNext())
+        except (tk.TclError, KeyError, AttributeError):
+            return
+        if target is not None:
+            target.focus_set()
+            rows_frame.update_idletasks()     # the redrawn rows, laid out
+            self._bring_into_sight(target)
 
     def _retention_loss_warning(self, doomed, days, current):
         """What shortening the window to `days` is about to cost, in words.
@@ -1845,11 +1889,13 @@ class SettingsPageMixin:
         # With Select all, it keeps a few and deletes the rest.
         delete_btn = self._settings_big_button(
             parent, "Delete selected permanently", delete_selected, kind="danger")
-        # Above the rows, shown while the Trash holds anything.
+        # Above the rows, shown while the Trash holds anything -- and first
+        # in Tab's order too, which follows the stacking order, not the page.
         select_btn = tk.Button(
             parent, text="Select all", command=toggle_all, relief="flat",
             cursor="hand2", font=("Segoe UI", 8), bd=0,
             bg=self.colors["card"], fg=self.colors["text"])
+        select_btn.lower(wrap)
         empty_holder = self._settings_big_button(
             parent, "Empty trash", empty_trash, kind="danger")
         empty_holder.pack(fill="x", padx=12, pady=(4, 10), ipady=5)

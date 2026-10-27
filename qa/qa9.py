@@ -898,7 +898,7 @@ check(f'template move: Alt+Down on a box moves its item, and the keyboard is '
       and _tm_held is _tm_part(_tm_rows()[1], klass=tk.Checkbutton)
       and str(_tm_rows()[1].cget('highlightbackground')).lower()
       == str(_tm_rows()[1].cget('highlightcolor')).lower()
-      == app.colors['accent'].lower())
+      == app._focus_ring().lower())
 _fake_ask.answer = True
 del _asks[:]
 app.ask_yes_no_cancel = _fake_ask

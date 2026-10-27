@@ -710,6 +710,14 @@ filled button.
 | words on a confirming button, held down | 7.5 | 6.8 | 7.5 | 7.6 | 4.9 | 4.9 | 5.4 | 5.6 |
 | text of the other find matches | 6.5 | 6.7 | 5.8 | 6.9 | 9.1 | 8.2 | 9.4 | 9.3 |
 | text in the find box when nothing is found | 10.7 | 10.3 | 10.3 | 10.4 | 12.1 | 10.6 | 10.6 | 10.5 |
+| the keyboard's ring on the window (a mark, owes 3:1) | 14.7 | 15.3 | 15.1 | 15.2 | 14.2 | 12.4 | 12.7 | 12.5 |
+| the keyboard's ring on a card or panel | 11.8 | 11.3 | 10.8 | 12.2 | 15.5 | 13.5 | 13.6 | 13.5 |
+| the keyboard's ring in the sidebar or a list | 13.1 | 13.3 | 12.7 | 13.4 | 12.8 | 11.1 | 11.3 | 11.0 |
+
+The last three rows are the ring round whatever holds the keyboard: a drawn control reached by
+Tab, a row of a dropdown's list, the Trash's and a checklist's tick boxes. It is the theme's text
+colour (`focus_ring` in `core/themes.py`), not the accent the checklist's ring first wore: the
+accent is a fill, and on the light green and cream themes it is under 3:1 on the sidebar.
 
 A note's own colour, or its category's, is the person's choice and so is not in this table, but
 it is shown as words: the tags line on its card. Picked for its look, it often did not read —
@@ -721,7 +729,7 @@ mixed toward the theme's text, which is bluish, and the yellow came out khaki. O
 is mixed toward the theme's light text. test_data_safety holds every swatch the app offers to
 4.6:1 on every theme's card, and the warm ones to their hue and saturation.
 
-The last row is the find box's ground while its words are found nowhere: a tint of the warning
+The row above the ring's is the find box's ground while its words are found nowhere: a tint of the warning
 red over white on a light theme (a truer red there, its pink taken out) and over near-black on a
 dark one (`miss_surface` in `core/themes.py`). It used to be one fixed dark red on every theme,
 which put dark words on a dark ground on the light ones (1.2:1); mixed into each theme's own

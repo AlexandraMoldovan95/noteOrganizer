@@ -3298,6 +3298,129 @@ _tw_settings.pop('trash_retention_days', None)
 NO.save_settings(_tw_settings)
 app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
 
+# ---- KEYBOARD in Recently deleted: a row's ring, its order, and where the
+# keyboard goes after a row's Restore or Delete ----
+# The tick box has no words, so Windows drew no dotted ring round it; Delete
+# came before Restore in Tab's order and Select all after the list it sits
+# above; and Space on a row's Restore left the keyboard on the window.
+def _kt_settle(n=6):
+    for _ in range(n):
+        app.update()
+        time.sleep(0.02)
+
+
+def _kt_take(w, cap_s=2.0):
+    """A PRECONDITION: the keyboard forced onto *w*, and Tk agreeing."""
+    w.focus_force()
+    t0 = time.time()
+    while time.time() - t0 < cap_s:
+        try:
+            if app.focus_get() is w:
+                return True
+        except (KeyError, tk.TclError):
+            pass
+        app.update()
+        time.sleep(0.02)
+    return False
+
+
+def _kt_rows():
+    found = []
+
+    def walk(w):
+        for c in w.winfo_children():
+            if getattr(c, '_trash_buttons', None):
+                found.append(c)
+            else:
+                walk(c)
+    walk(app.settings_page)
+    return found
+
+
+def _kt_tick(row):
+    return next((c for c in row.winfo_children()
+                 if isinstance(c, tk.Checkbutton)), None)
+
+
+def _kt_ringed():
+    return [i for i, r in enumerate(_kt_rows())
+            if str(r.cget('highlightbackground')).lower()
+            == str(r.cget('highlightcolor')).lower()
+            == app._focus_ring().lower()]
+
+
+app.trash = [{'id': 600 + i, 'uid': f'kt-{i}', 'title': f'KeyTrash{i}', 'body': 'x',
+              'category': 'General', 'deleted_at': f'2026-10-{20 - i:02d} 10:00:00'}
+             for i in range(6)]
+NO.save_trash(app.trash)
+app.show_settings_page(); app.toggle_settings_panel('trash')
+_kt_settle(10)
+_kt_r = _kt_rows()
+check(f'fixture: six Trash rows drawn, each with its tick box ({len(_kt_r)})',
+      len(_kt_r) == 6 and all(_kt_tick(r) is not None for r in _kt_r))
+if len(_kt_r) == 6 and _kt_take(_kt_tick(_kt_r[1])):
+    _kt_settle(2)
+    _kt_one = _kt_ringed()
+    _kt_take(_kt_tick(_kt_rows()[3]))
+    _kt_settle(2)
+    check(f'the Trash row whose tick box holds the keyboard wears the ring, and '
+          f'only that row ({_kt_one}, then {_kt_ringed()})',
+          _kt_one == [1] and _kt_ringed() == [3])
+_kt_r = _kt_rows()
+if _kt_r:
+    _kt_b = _kt_r[0]._trash_buttons
+    check('Tab reads a Trash row left to right: its tick box, Restore, Delete',
+          _kt_tick(_kt_r[0]).tk_focusNext() is _kt_b['restore']
+          and _kt_b['restore'].tk_focusNext() is _kt_b['delete'])
+    _kt_sel = find_btn(app.settings_page, 'Select all')
+    check('Select all, drawn above the list, comes before it in Tab\'s order',
+          _kt_sel is not None and _kt_sel.tk_focusNext() is _kt_tick(_kt_r[0]))
+
+_kt_asked = []
+_kt_real_focus_set = tk.Misc.focus_set
+
+
+def _kt_record(self):
+    _kt_asked.append(self)
+    return _kt_real_focus_set(self)
+
+
+tk.Misc.focus_set = _kt_record
+try:
+    _kt_r = _kt_rows()
+    _kt_gone = _kt_r[2]._trash_buttons if len(_kt_r) > 2 else None
+    _kt_title = 'KeyTrash2'
+    if _kt_gone is not None and _kt_take(_kt_gone['restore']):
+        del _kt_asked[:]
+        _kt_gone['restore'].event_generate('<space>')
+        _kt_settle()
+    _kt_r = _kt_rows()
+    check(f'Space on a row\'s Restore puts that note back, and the row drawn in '
+          f'its place takes the keyboard on its own Restore ({_kt_asked})',
+          not any(e.get('title') == _kt_title for e in app.trash)
+          and len(_kt_r) == 5 and _kt_r[2]._trash_buttons['restore'] in _kt_asked)
+    if _kt_r and _kt_take(_kt_r[-1]._trash_buttons['delete']):
+        del _kt_asked[:]
+        _kt_r[-1]._trash_buttons['delete'].event_generate('<space>')
+        _kt_settle()
+    _kt_r = _kt_rows()
+    check(f'Space on the last row\'s Delete deletes it, and the new last row '
+          f'takes the keyboard on its Delete ({_kt_asked})',
+          len(_kt_r) == 4 and _kt_r[-1]._trash_buttons['delete'] in _kt_asked)
+    # A click is not the keyboard: the mouse's Restore moves nothing.
+    if _kt_r and _kt_take(_kt_tick(_kt_r[0])):
+        del _kt_asked[:]
+        _kt_r[1]._trash_buttons['restore'].invoke()
+        _kt_settle()
+    check(f'a Restore pressed by the mouse sends the keyboard nowhere '
+          f'({_kt_asked})', len(_kt_rows()) == 3 and not any(
+              getattr(w.master, '_trash_buttons', None) for w in _kt_asked))
+finally:
+    tk.Misc.focus_set = _kt_real_focus_set
+app.hide_settings_page()
+app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
+_kt_settle()
+
 
 print()
 print(f"=== QA3 FAILURES: {fails if fails else 'NONE'} ===")

@@ -428,9 +428,12 @@ def legible_on(colour, ground, ink, minimum=4.6):
 
 
 # Palette names worked out from another of its colours rather than written
-# down: the shade a filled Save takes while it is held, so a press shows.
+# down: the shade a filled Save takes while it is held, so a press shows;
+# the ring round whatever holds the keyboard, which must read on every
+# surface (the accent does not, on the light green and cream themes).
 DERIVED_KEYS = {
     "success_pressed": lambda palette: blend(palette["success"], "#000000", 0.12),
+    "focus_ring": lambda palette: palette["text"],
 }
 
 
