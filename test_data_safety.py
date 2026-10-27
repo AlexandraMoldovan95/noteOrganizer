@@ -1295,6 +1295,56 @@ check("...and a delete by an alias leaves the file", os.path.exists(_two_names))
 for _left in (_two_names, os.path.join(_paths.ATTACHMENTS_DIR, "202610~1.JPG")):
     if os.path.lexists(_left):
         os.remove(_left)
+# Trash entries come in as trash.json held them, and a hand-edited or
+# damaged one held attachments as 7, true, a string, or a file name that is
+# a list: the start-up purge read them and stopped the app at every start.
+_odd_trash = [{"id": 1, "deleted_at": "2001-01-01 00:00:00", "attachments": 7},
+              {"id": 2, "deleted_at": "2001-01-01 00:00:00", "attachments": True},
+              {"id": 3, "deleted_at": "2001-01-01 00:00:00", "attachments": "x.png"},
+              {"id": 4, "deleted_at": "2001-01-01 00:00:00",
+               "attachments": [{"stored_as": ["x"]}, 5, {"stored_as": "kept.png"}]}]
+try:
+    _odd_names = _storage.attachment_names_in(_odd_trash)
+    _storage._delete_attachment_files(_odd_trash, spare={"kept.png"})
+    _storage.purge_expired_trash([dict(e) for e in _odd_trash], [])
+    _odd_ok = _odd_names == {"kept.png"}
+except Exception as _odd_exc:   # the start-up crash this guards against
+    _odd_ok = False
+    print("   raised:", repr(_odd_exc))
+check("Trash entries whose attachments are not a list of files neither "
+      "stop the purge nor hide the files that are named", _odd_ok)
+# JSON's 1e999 reads as infinity, and int() of it raised OverflowError in the
+# recurrence's clamps: one such number in notes_data.json -- or in a leftover
+# notebook the start-up purge reads -- stopped the app at every start. So did
+# raw notes nested 990 lists deep, through the purge's content signature.
+from noteorganizer.core import model as _model_nf, recurrence as _rec_nf
+_nf_ok = True
+for _nf_v in (float("inf"), float("-inf")):
+    try:
+        _nf_rule = _rec_nf.normalize_recurrence(
+            {"freq": "daily", "interval": _nf_v, "count": _nf_v})
+        _nf_ok = _nf_ok and _nf_rule["interval"] == 1 and _nf_rule["count"] == 0
+        _model_nf.normalize_note({"id": 1, "title": "t", "date": "2026-10-01",
+                                  "recurrence": {"freq": "daily", "interval": _nf_v}})
+    except Exception as _nf_exc:
+        _nf_ok = False
+        print("   raised:", repr(_nf_exc))
+check("an infinite repeat interval or count reads as the default, not a crash", _nf_ok)
+_nf_deep = []
+_nf_cur = _nf_deep
+for _ in range(985):
+    _nf_cur.append([])
+    _nf_cur = _nf_cur[0]
+_nf_file = os.path.join(_paths.APP_DIR, "nf_stale_notes.json")
+with open(_nf_file, "w", encoding="utf-8") as _f:
+    json.dump([{"id": 1, "title": "t", "paragraphs": _nf_deep}], _f)
+try:
+    _nf_judged = _paths.is_redundant_copy(_nf_file, [{"id": 1, "title": "t"}])
+except Exception as _nf_exc:
+    _nf_judged = "raised %r" % _nf_exc
+os.remove(_nf_file)
+check("a leftover notebook too deep to sign is kept, never a crash (%s)" % _nf_judged,
+      _nf_judged is False)
 # And normalize_note flattens a smuggled path to a bare filename at the
 # data choke point, closing traversal for every channel (share + zip +
 # hand-edit), not only the sinks.

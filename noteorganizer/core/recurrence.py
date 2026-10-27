@@ -432,7 +432,9 @@ def normalize_recurrence(rec):
         # protects every route: load, share/zip import, hand-edit, UI).
         out["interval"] = max(1, min(int(rec.get("interval", 1)),
                                      MAX_RECURRENCE_INTERVAL))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
+        # OverflowError: JSON's 1e999 reads as infinity, and int() of it
+        # stopped the app at every start (ISSUES_LOG: "The number too big to start").
         out["interval"] = 1
 
     weekdays = rec.get("weekdays", [])
@@ -459,7 +461,7 @@ def normalize_recurrence(rec):
         # huge count is meaningless — same both-sides discipline as the
         # interval clamp, no asymmetry left in this validator.
         out["count"] = max(0, min(int(rec.get("count", 0)), MAX_OCCURRENCES))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         out["count"] = 0
 
     return out

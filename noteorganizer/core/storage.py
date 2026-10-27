@@ -264,13 +264,22 @@ def copy_attachment_file(stored_as):
         return None
 
 
+def attachments_of(note):
+    """The attachments of a note or Trash entry that name a file: dicts with
+    a non-empty string stored_as. Trash entries come in as the file held
+    them, and a 7, a true or a list there stopped the app at every start."""
+    atts = note.get("attachments") if isinstance(note, dict) else None
+    if not isinstance(atts, list):
+        return []
+    return [a for a in atts if isinstance(a, dict)
+            and isinstance(a.get("stored_as"), str) and a["stored_as"]]
+
+
 def attachment_names_in(notes_or_entries):
     """The stored file name of every attachment these notes (or trash
     entries) use."""
-    return {att.get("stored_as")
-            for note in notes_or_entries if isinstance(note, dict)
-            for att in (note.get("attachments") or [])
-            if isinstance(att, dict) and att.get("stored_as")}
+    return {att["stored_as"] for note in notes_or_entries
+            for att in attachments_of(note)}
 
 
 def _delete_attachment_files(notes_or_entries, spare=()):
@@ -280,13 +289,9 @@ def _delete_attachment_files(notes_or_entries, spare=()):
     must survive, those the notes in the app still use, in case a stale row
     acts. ISSUES_LOG: "The Trash that gave notes back one at a time"."""
     for note in notes_or_entries:
-        if not isinstance(note, dict):
-            continue
-        for att in note.get("attachments") or []:
-            if not isinstance(att, dict):
-                continue
-            stored_as = att.get("stored_as")
-            if not stored_as or stored_as in spare:
+        for att in attachments_of(note):
+            stored_as = att["stored_as"]
+            if stored_as in spare:
                 continue
             path = _attachment_path_within(stored_as)
             if path is None:

@@ -601,7 +601,10 @@ def is_redundant_copy(candidate_path, local_notes):
         return False
     if not data:
         return True
-    return _content_signatures(data).issubset(_content_signatures(local_notes))
+    try:
+        return _content_signatures(data).issubset(_content_signatures(local_notes))
+    except Exception:  # noqa: BLE001 -- raw notes nested 990 deep overflowed the
+        return False   # recursion and stopped every start: unjudged is kept
 
 
 def _attachments_are_covered(stale_dir, app_dir):

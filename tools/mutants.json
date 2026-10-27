@@ -5519,5 +5519,35 @@
     "must_fail": ["a delete the Trash cannot hold keeps the note, on screen and on disk"],
     "suites": ["qa3"],
     "expect": "killed"
+  },
+  {
+    "id": "AT01",
+    "about": "a Trash entry's attachments are read as a list whatever they are",
+    "edits": [{"file": "noteorganizer/core/storage.py",
+               "find": "    if not isinstance(atts, list):\n        return []\n    return [a for a in atts",
+               "replace": "    return [a for a in (atts or [])"}],
+    "must_fail": ["Trash entries whose attachments are not a list of files neither stop the purge"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "NF01",
+    "about": "an infinite repeat interval raises at every start",
+    "edits": [{"file": "noteorganizer/core/recurrence.py",
+               "find": "    except (TypeError, ValueError, OverflowError):\n        # OverflowError: JSON's 1e999",
+               "replace": "    except (TypeError, ValueError):\n        # OverflowError: JSON's 1e999"}],
+    "must_fail": ["an infinite repeat interval or count reads as the default, not a crash"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "NF02",
+    "about": "the stale-copy judgement lets a signature's RecursionError escape",
+    "edits": [{"file": "noteorganizer/core/paths.py",
+               "find": "    try:\n        return _content_signatures(data).issubset(_content_signatures(local_notes))\n    except Exception:  # noqa: BLE001 -- raw notes nested 990 deep overflowed the\n        return False   # recursion and stopped every start: unjudged is kept\n",
+               "replace": "    return _content_signatures(data).issubset(_content_signatures(local_notes))\n"}],
+    "must_fail": ["a leftover notebook too deep to sign is kept, never a crash"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
   }
 ]

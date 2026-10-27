@@ -72,6 +72,7 @@ from ..core.storage import (
     trash_entries_past_window,
     _delete_attachment_files,
     attachment_names_in,
+    attachments_of,
     copy_attachment_file,
     get_setting,
     save_setting,
@@ -1503,8 +1504,7 @@ class SettingsPageMixin:
     def _attached_files_words(entries):
         """", along with N attached files" for Trash entries about to go
         for good, or "" when they carry none: the files leave the disk too."""
-        files = sum(len(entry.get("attachments") or []) for entry in entries
-                    if isinstance(entry, dict))
+        files = sum(len(attachments_of(entry)) for entry in entries)
         if not files:
             return ""
         return f", along with {files} attached {'file' if files == 1 else 'files'}"

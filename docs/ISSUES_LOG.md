@@ -183,6 +183,7 @@ is in the table below as well.
 | [Photographs of the site's pages, blank below the first screen](#photographs-of-the-sites-pages-blank-below-the-first-screen) | A photograph proves only what was on the screen when it was taken: photograph a page as a reader meets it, and give what changes it checks of its own. | the website |
 | [A file with two names](#a-file-with-two-names) | When a check and the action after it each name a file, they must name it the same way: resolve once, compare what was resolved. | next |
 | [A delete that trusted the Trash](#a-delete-that-trusted-the-trash) | An order that is safe only if the first step worked needs the first step's answer. | next |
+| [The number too big to start](#the-number-too-big-to-start) | Code that runs before the window exists takes the safe answer for whatever it cannot read. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -2007,6 +2008,31 @@ sent to the Trash — stop there with everything as it was. `test_data_safety` a
 
 **Takeaway:** an order that is safe only if the first step worked needs the first step's answer.
 A write whose result nobody reads is a write nobody checked.
+
+### The number too big to start
+
+*(2026-10-27 · found by the final audit's break-it round)*
+
+**Symptom:** three files that stopped the app at every start, for as long as they were there: a
+`notes_data.json` whose repeat interval was `1e999`; a leftover notebook in the folder above the
+app's, nested 990 lists deep; a `trash.json` whose entry said `"attachments": 7`.
+
+**Root cause:** the start-up readers expected the errors JSON usually gives and not these. Python
+reads `1e999` as infinity, and `int()` of infinity raises `OverflowError`, which the repeat rule's
+clamps did not catch. The stale-copy purge signs raw notes by recursion, and 990 levels plus its
+own frames overflowed the stack. The Trash comes in as the file held it, and the purge's list of
+files to spare iterated whatever `attachments` was. None of the three was inside a guard.
+
+**Fix:** the clamps catch `OverflowError` and fall back to their defaults. The purge's judgement
+— the one place that signs raw notes — keeps a folder it cannot judge. `attachments_of` reads a
+note's or entry's files as dicts with a string name, and every reader of a Trash entry's files
+goes through it. A probe gave every field of a note, a Trash entry and the settings infinity,
+minus infinity, NaN and deep nesting; nothing on the start-up path raises now.
+`test_data_safety` holds each; mutants AT01, NF01, NF02.
+
+**Takeaway:** a value from a file is any value its format can carry, infinity and depth
+included. Code that runs before the window exists must take the safe answer — keep, skip,
+default — for whatever it cannot read.
 
 
 ## Tk & platform gotchas
