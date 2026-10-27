@@ -21790,6 +21790,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._settle_background_work_at_close()
         self.destroy()
 
+    def on_session_end(self):
+        """Windows is signing out, restarting or shutting down: save what the
+        close would save and settle the background work, asking nothing --
+        the session ends whatever is answered. It used to end the process
+        with an import's copied files and its temp folder left behind, and
+        the last typing unsaved."""
+        try:
+            self._flush_autosave(leaving=False)
+            self._sync_active_tab()
+            for i in range(len(self.open_tabs)):
+                if not self.editor_state_matches_saved(self.open_tabs[i]["state"]):
+                    self.switch_to_tab(i)
+                    self.save_current_note(auto=True)
+        except Exception:
+            self._log_swallowed("session end: final save")
+        self._wait_for_io_workers(cap_s=5.0)
+        self._settle_background_work_at_close()
+
     def set_status(self, text):
         # A line naming what a save left out is put right by
         # _say_nothing_is_left_out only while it is still the line on
@@ -22002,6 +22020,9 @@ def _main():
             _draw_sharp_on_scaled_screens()
         app = NoteOrganizer()
         app.protocol("WM_DELETE_WINDOW", app.on_app_close)
+        # Signing out, restarting, shutting down: Windows ends the process
+        # without WM_DELETE_WINDOW, and Tk says so with this one instead.
+        app.protocol("WM_SAVE_YOURSELF", app.on_session_end)
         app.mainloop()
     except Exception as exc:  # noqa: BLE001 — last-resort catch-all on purpose
         import traceback

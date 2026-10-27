@@ -3242,6 +3242,26 @@ finally:
     app._notes_unsaved = False
 app.notes = []; app.save_notes()
 
+# Signing out of Windows, restarting or shutting down ends the process
+# without the close: Tk's WM_SAVE_YOURSELF comes instead, and the last
+# typing was left unsaved. on_session_end saves it, asking nothing.
+app.new_note(); app.update()
+_se_note = NO.normalize_note({'id': 4242, 'title': 'Before sign-out', 'body': 'typed'})
+app.notes = [_se_note]; app.save_notes()
+app.open_note_in_tab(_se_note); app.update()
+_se_asked = []
+_se_real_ask = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: (_se_asked.append(a[0] if a else ''), True)[1]
+try:
+    app.body_text.insert('end', ' just before')
+    app.on_session_end(); app.update()
+    _se_disk = [n.get('body') for n in json.load(open(NO.DATA_FILE, encoding='utf-8'))]
+    check(f'a Windows sign-out saves the last typing, asking nothing ({_se_disk})',
+          _se_disk == ['typed just before'] and not _se_asked and app.winfo_exists())
+finally:
+    app.ask_yes_no = _se_real_ask
+app.notes = []; app.save_notes()
+
 # A backup's Trash brings its window when this notebook never chose one:
 # the default 30 days then emptied, at the next start, a Trash its owner
 # kept for a year. A window chosen here stays.

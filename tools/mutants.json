@@ -5681,5 +5681,15 @@
     "must_fail": ["a save is flushed to the disk before it replaces the file"],
     "suites": ["test_data_safety"],
     "expect": "killed"
+  },
+  {
+    "id": "SE01",
+    "about": "a Windows sign-out saves nothing",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            self._flush_autosave(leaving=False)\n            self._sync_active_tab()\n            for i in range(len(self.open_tabs)):\n                if not self.editor_state_matches_saved(self.open_tabs[i][\"state\"]):\n",
+               "replace": "            self._cancel_pending_autosave()\n            for i in []:\n                if not self.editor_state_matches_saved(self.open_tabs[i][\"state\"]):\n"}],
+    "must_fail": ["a Windows sign-out saves the last typing, asking nothing"],
+    "suites": ["qa3"],
+    "expect": "killed"
   }
 ]

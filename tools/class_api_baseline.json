@@ -823,6 +823,7 @@
   "on_app_close": "(self)",
   "on_end_mode_changed": "(self)",
   "on_recurrence_changed": "(self)",
+  "on_session_end": "(self)",
   "open_attachment": "(self, index)",
   "open_blank_tab": "(self)",
   "open_color_picker": "(self)",
