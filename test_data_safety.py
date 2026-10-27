@@ -453,6 +453,19 @@ try:
               NO_paths.count_notes_in(os.path.join(_pr_home, 'notes_data.json')) == 3
               and not any(n.startswith('notes_data_replaced_')
                           for n in os.listdir(_pr_home)))
+        # A profile that cannot be written: AppData, said out loud, with
+        # the one thing that can take it there -- the Store's uninstall.
+        _pr_writable = NO_paths._is_writable
+        NO_paths._is_writable = lambda folder: (
+            os.path.normcase(folder) != os.path.normcase(_pr_home)
+            and _pr_writable(folder))
+        try:
+            _pr_fall = NO_paths.resolve_data_dir(os.path.dirname(os.path.abspath(__file__)))
+        finally:
+            NO_paths._is_writable = _pr_writable
+        check(f'an unwritable profile falls back to AppData, with a warning ({str(_pr_fall[1])[:50]!r})',
+              os.path.normcase(_pr_fall[0]) == os.path.normcase(_pr_old)
+              and _pr_fall[1] is not None and 'backup' in _pr_fall[1].lower())
     # The second barrier: even listed as a leftover, the profile's notebook
     # is never cleared. A run from source beside an empty notebook would
     # otherwise find an empty one "covered", and delete it.

@@ -3176,6 +3176,21 @@
     "note": "Killed on Windows, where the app runs: elsewhere the two folders are one."
   },
   {
+    "id": "NP05",
+    "about": "an unwritable profile falls back to AppData in silence, its uninstall risk unsaid",
+    "edits": [
+      {
+        "file": "noteorganizer/core/paths.py",
+        "find": "        if _is_writable(appdata):\n            return appdata, (\n",
+        "replace": "        if _is_writable(appdata):\n            return appdata, None\n            return appdata, (\n"
+      }
+    ],
+    "must_fail": ["an unwritable profile falls back to AppData, with a warning"],
+    "suites": ["test_data_safety"],
+    "expect": "killed",
+    "note": "Killed on Windows, where the app runs."
+  },
+  {
     "id": "NP04",
     "about": "the notebook brought in from AppData is not said to be kept there",
     "edits": [
