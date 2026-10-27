@@ -226,12 +226,9 @@ def _attachment_path_within(stored_as):
             return None  # the folder itself, not a file in it
         if os.path.commonpath([base, candidate]) != base:
             return None  # escaped the attachments folder
-        # The file reached must be the file named. NTFS answers other
-        # strings for the same file -- an 8.3 short name ("202610~1.JPG"),
-        # a "::$DATA" stream suffix -- and every check upstream compares
-        # names: a backup's Trash entry named a note's photo by its short
-        # name and the purge deleted it; "x.exe::$DATA" opened with no
-        # unsafe-file warning. ISSUES_LOG: "A file with two names".
+        # The file reached must be the file named: NTFS aliases (a short
+        # name, "::$DATA") passed every name check upstream and reached
+        # another file. ISSUES_LOG: "A file with two names".
         if os.path.normcase(candidate) != os.path.normcase(named):
             return None
     except (ValueError, OSError):
