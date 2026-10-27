@@ -374,6 +374,28 @@ dismissed, but on Linux it returns at once with the menu still open (measured in
 so destroying it there would make it vanish. Only one right-click menu is ever open, so the
 previous one is done with when the next is asked for.
 
+### The keyboard: every control both hands can press
+
+Tk's own buttons take Tab and Space; what the app draws — a canvas, a label, a frame of labels —
+takes neither unless told. So a drawn control is made with `_pressable` (in `ui/dialogs.py`): a
+Tab stop, pressed by Space and Return as a click presses it, its right-click menu on Shift+F10.
+Two bind tags carry this, bound once for the whole app, so a rebuilt list adds no Tcl commands.
+
+A popup is a window of its own, and Tab never leaves the window it is in. So a popup opened from
+the keyboard takes it (`_keyboard_into_popup`, from `_place_dropdown_popup`, the one door every
+popup goes through) on its current choice; the arrows walk its choices by where they stand, one
+rule for a list, a grid of swatches and the emoji picker; and when it closes, by any road, the
+keyboard goes back to the opener — or to what stands in its place, when the choice drew the page
+again. A popup a click opens leaves the keyboard alone: the mouse's behaviour does not change.
+
+Tab moves the keyboard and never the view, and the editor, Settings and the long lists are frames
+drawn on canvases, so what Tab lands on is scrolled into sight (`_bring_into_sight`).
+
+The ring is the theme's text colour (`focus_ring`), measured by the contrast gate, and it is both
+border colours while the keyboard is on a control: Windows draws no focus colour round a label,
+only its resting one ([the story](ISSUES_LOG.md#the-app-the-keyboard-could-reach-only-half-of)).
+qa6 asks every page whether a click can press anything Tab cannot reach.
+
 ### Theme tracking — two different patterns, on purpose
 
 `track_theme(widget, **option_map)` registers a widget so a later theme switch re-applies the

@@ -1336,6 +1336,26 @@
     "expect": "killed"
   },
   {
+    "id": "KS01",
+    "about": "the shortcuts page leaves out the one way out of the note",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "            (\"Ctrl+Tab  /  Ctrl+Shift+Tab\", \"Leave the note or the comments \"\n                                            \"box, where Tab types a tab.\"),\n",
+               "replace": ""}],
+    "must_fail": ["the shortcuts page names, under Anywhere, the way out of the note"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "KS02",
+    "about": "Text size promises bigger text everywhere, and makes only the notes bigger",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "            \"Bigger text in every note, without reformatting a single one.\")\n",
+               "replace": "            \"Bigger text everywhere, without reformatting a single note.\")\n"}],
+    "must_fail": ["the Text size row promises bigger text in every note, not everywhere"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
     "id": "A01",
     "about": "a highlight given in an open cell reaches the note only when the cell closes",
     "edits": [

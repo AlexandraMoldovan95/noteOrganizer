@@ -63,7 +63,7 @@ suite has had, and what each one really was:
 | `qa3` | trash, sharing, import/export |
 | `qa4` | theming, stress tests, leak regression — and the note list drawn a screenful at a time, with a save redrawing one card |
 | `qa5` | corrupt data, edge cases |
-| `qa6` | grouping, settings, attachments, multi-feature combinations — and every control in sight, on every page, at an ordinary and the smallest window, and on a screen scaled to 150% and 200% (Sharp text); spelling, with a stand-in dictionary |
+| `qa6` | grouping, settings, attachments, multi-feature combinations — and every control in sight, on every page, at an ordinary and the smallest window, and on a screen scaled to 150% and 200% (Sharp text); every control a click acts on within Tab's reach, and what Tab lands on in sight; spelling, with a stand-in dictionary |
 | `qa7` | calendar delete, the month drawn on one canvas, the calendar History register, multi-select, image preview, autosave & memory fixes |
 | `qa8` | search debounce, background-timer robustness |
 | `qa9` | the nested-dropdown-inside-popup fix |
@@ -493,6 +493,13 @@ A new surface joins this list the moment it ships.
   card; the other order moves the focus off the card and loses the ring
   every time, turning the flake into a certainty. Found by opening the
   failing picture beside the reference — the ring was simply not there.
+
+  A ring can also be missing with the foreground held: **Windows draws no
+  focus colour round a label**, only its resting one. Tk said the keyboard
+  was on an emoji, `highlightcolor` was the ring's, and the photograph of
+  scene 25 showed nothing. So a check asks for the ring in both border
+  colours (qa1's emoji check), and it reads them after an `update()`: Tk
+  can report the focus before it has delivered the `<FocusIn>` that paints.
 - **A `Toplevel` parented to a widget JOINS that widget's tree, and on a
   headless display the pointer never moves.** A hover preview created as
   `tk.Toplevel(row)` appears in `row.winfo_children()`, so it lands inside

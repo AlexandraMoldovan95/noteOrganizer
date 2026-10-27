@@ -189,6 +189,7 @@ is in the table below as well.
 | [The table drawn whole](#the-table-drawn-whole) | Anything drawn whole needs a size past which it is not drawn; outside content chooses the size. | next |
 | [The Trash restored under a window it never had](#the-trash-restored-under-a-window-it-never-had) | A setting that decides what is deleted travels with the things it decides about. | next |
 | [An old folder judged by one file](#an-old-folder-judged-by-one-file) | Before acting on a folder, read every file the action touches. | next |
+| [The app the keyboard could reach only half of](#the-app-the-keyboard-could-reach-only-half-of) | A mouse binding is not a control; ask every page what a click can press that Tab cannot reach. And a focus ring is a claim about the screen: Windows draws none round a label. | next |
 | [The plain paste with no ceiling](#the-plain-paste-with-no-ceiling) | A limit with a way round is not a limit: protect every door to what it protects. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
@@ -2807,6 +2808,45 @@ still.
 
 **Takeaway:** a label whose text can come and go sizes its row by what it says at the moment;
 give it the height of its tallest state, or the layout moves with the words.
+
+### The app the keyboard could reach only half of
+
+**Symptom:** in the final audit before publishing, an agent walked Tk's own Tab chain on every
+page and listed what a mouse could press that Tab never reached. The list was long: all thirteen
+dropdowns (Text size, the app's one setting for reading, among them), the colour and emoji
+pickers, a category's rename, colour and delete, the eight theme tiles, the alignment buttons,
+the sidebar's arrow, every day of the calendar, and the delete toast's Undo, gone after eight
+seconds. Where Tab did go, it often went out of sight: at the window's opening size it landed on
+Save and Delete below the fold, and on sixty Trash controls, with the view standing still.
+
+**Root cause:** four things, one of them Tk's and three the app's. A control the app draws — a
+canvas, a label, a frame of labels — was given a mouse binding and nothing else: no `takefocus`,
+no key. A popup is a window of its own, and Tab never leaves the window it is in, so even a
+picker made of real buttons was out of reach once open. Tk's Tab moves the keyboard and never the
+view, and the pages here are frames drawn on canvases. And then, found only by a photograph of
+the emoji picker: **Windows draws no focus colour round a label.** Tk said the keyboard was on
+the second emoji, its `highlightcolor` was the ring's, and the picture showed nothing; it draws a
+label's resting colour, `highlightbackground`, and only that.
+
+**Fix:** once, in the helpers every popup and drawn control goes through. Two bind tags, bound
+once: Space and Return press a drawn control, and the arrows, Home and End walk a popup's choices
+by where they stand. A popup asked for from the keyboard takes it, on its current choice, and
+gives it back to its opener when it closes, by any road; a click's popup leaves the keyboard
+where it was. A press that draws its page again puts the keyboard back where the control stood.
+The calendar's month has its own ring and arrows, as the note list has. What Tab lands on is
+scrolled into sight. And the ring is both border colours while the keyboard is on a control, in
+the theme's text colour, which the contrast gate now measures (the accent the checklist's ring
+wore is under 3:1 on two light themes).
+
+**How it is held:** qa6 walks every page — the notes page, the calendar with a day open, History,
+each Settings section — and fails on any widget a click acts on that is neither a Tab stop nor
+inside one. It is the class's check rather than a list of the instances, so the next control
+drawn with a mouse binding alone turns it red. Each route has its own checks and mutants (KF, KD,
+KP, KB, KC in `tools/mutants.json`).
+
+**Takeaway:** a mouse binding is not a control; a control is what both hands can press. And a
+focus ring is a claim about the screen: Tk saying the keyboard is there, and a colour option
+saying what to draw, were both true while nothing was drawn — look at the picture.
 
 ## Editor & input interaction
 

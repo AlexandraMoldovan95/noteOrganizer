@@ -1041,6 +1041,9 @@ keys that only mean something inside a list, in the find bar, or on the note lis
 | **Ctrl+S** | anywhere | Saves the note you're editing. |
 | **Ctrl+F** | anywhere | Opens the find bar for searching within the current note. |
 | **Ctrl+Z** | right after a delete, outside a text box | Takes the delete back, as the banner's **Undo** does. The banner stays while the keyboard is on its Undo. |
+| **Tab** / **Shift+Tab** | anywhere | Moves to the next / previous control; the page scrolls to show it. Every control a click can press is on the way. |
+| **Ctrl+Tab** / **Ctrl+Shift+Tab** | in the note or the comments box | Leaves the box (where Tab types a tab) for the next / previous control. |
+| **Esc** | a popup or a dropdown's list | Closes it, and the keyboard goes back to what opened it. |
 | **Space** / **Enter** | anywhere | Presses what the keyboard is on — a drawn button too: a theme, an alignment, a category's rename, colour or delete, the sidebar's ‹. |
 | **Ctrl+B** / **Ctrl+I** / **Ctrl+U** / **Ctrl+D** | editor | Bold / Italic / Underline / Strikethrough. |
 | **Ctrl+V** | editor | Pastes — the bold, the colours and the lists come with it. |

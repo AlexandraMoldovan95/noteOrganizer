@@ -4327,6 +4327,46 @@ app.save_notes(); NO.save_trash(app.trash)
 app.refresh_note_list()
 _kv_settle()
 
+# ---- KEYBOARD: the way out of the note, and what Text size promises ----
+# In the note body Tab types a tab, so the one way out is Tk's Ctrl+Tab --
+# and the page saying "Everything the keyboard can do" never named it.
+_kw_groups = dict((g[0], [c for c, _d in g[1]]) for g in app.SHORTCUT_GROUPS)
+check(f'the shortcuts page names, under Anywhere, the way out of the note and '
+      f'Escape ({_kw_groups.get("Anywhere")})',
+      'Ctrl+Tab  /  Ctrl+Shift+Tab' in _kw_groups.get('Anywhere', [])
+      and 'Escape' in _kw_groups.get('Anywhere', []))
+app.notebook.select(app.TAB_NOTES)
+app.new_note()
+_kv_settle()
+_kw_next = app.body_text.tk_focusNext()
+if _take_focus(app.body_text):
+    app.body_text.event_generate('<Control-Tab>')
+    _kv_settle()
+_kw_held = None
+try:
+    _kw_held = app.nametowidget(str(app.tk.call('focus', '-lastfor', app)))
+except (KeyError, tk.TclError):
+    pass
+check(f'...and Ctrl+Tab does leave the note, for the control after it ({_kw_held})',
+      _kw_held is _kw_next and app.body_text.get('1.0', 'end-1c') == '')
+# Text size makes the notes bigger, not the rest of the app: its words say so.
+def _walk_all(w):
+    for c in w.winfo_children():
+        yield c
+        yield from _walk_all(c)
+
+
+app.show_settings_page()
+app.toggle_settings_panel('appearance')
+_kv_settle(6)
+_kw_hint = [str(w.cget('text')) for w in _walk_all(app.settings_content)
+            if isinstance(w, tk.Label) and str(w.cget('text')).startswith('Bigger text')]
+check(f'the Text size row promises bigger text in every note, not everywhere '
+      f'({_kw_hint})', _kw_hint == ['Bigger text in every note, without '
+                                    'reformatting a single one.'])
+app.hide_settings_page()
+_kv_settle()
+
 
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")

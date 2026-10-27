@@ -3719,7 +3719,7 @@ class SettingsPageMixin:
 
         row = self._card_row(
             card, "Text size",
-            "Bigger text everywhere, without reformatting a single note.")
+            "Bigger text in every note, without reformatting a single one.")
         self.editor_font_size_var = tk.StringVar(value=str(self.editor_font_size))
         self._build_themed_dropdown(
             row, self.editor_font_size_var, [str(s) for s in FONT_SIZES],
@@ -3845,6 +3845,12 @@ class SettingsPageMixin:
                        "its tables; Enter / Shift+Enter step the matches."),
         )),
         ("Anywhere", (
+            ("Tab  /  Shift+Tab", "The next / previous control. The page "
+                                  "scrolls to show it."),
+            ("Ctrl+Tab  /  Ctrl+Shift+Tab", "Leave the note or the comments "
+                                            "box, where Tab types a tab."),
+            ("Escape", "Close a popup or a dropdown's list. On a question: "
+                       "its safe answer (No, Cancel)."),
             ("Space  /  Enter", "Press what the keyboard is on — a drawn "
                                 "button too: a theme, an alignment, a "
                                 "category's rename or colour."),
