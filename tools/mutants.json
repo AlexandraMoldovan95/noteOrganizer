@@ -5785,6 +5785,16 @@
     "expect": "killed"
   },
   {
+    "id": "FT01",
+    "about": "a Trash row stamped in the future promises more days than the window",
+    "edits": [{"file": "noteorganizer/core/storage.py",
+               "find": "    elapsed = max(0, int((_now_epoch() - when) // 86400))\n",
+               "replace": "    elapsed = int((_now_epoch() - when) // 86400)\n"}],
+    "must_fail": ["a stamp in the future promises no more than the window"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
     "id": "MG04",
     "about": "the old store's Trash and templates wait on a settings file that may be unreadable",
     "edits": [{"file": "noteorganizer/core/paths.py",

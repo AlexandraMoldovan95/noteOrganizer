@@ -701,8 +701,9 @@ def days_left_in_trash(deleted_at):
     window = trash_retention_days()
     if window is None:
         return None
-    # Real days, by the purge's own clock, so the row and the purge agree.
-    elapsed = int((_now_epoch() - when) // 86400)
+    # Real days, by the purge's own clock, so the row and the purge agree;
+    # a stamp in the future (a clock put right since) is "just deleted".
+    elapsed = max(0, int((_now_epoch() - when) // 86400))
     return max(0, window - elapsed)
 
 

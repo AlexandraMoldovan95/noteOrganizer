@@ -827,6 +827,10 @@ try:
           _storage.days_left_in_trash('not a date') is None)
     check('days_left_in_trash returns None rather than raising on junk',
           _storage.days_left_in_trash(None) is None)
+    # Deleted while the clock ran ahead, read after it was put right: the
+    # row promised more days than the window has.
+    check('a stamp in the future promises no more than the window',
+          _storage.days_left_in_trash('2099-01-01 09:00:00') == NO.TRASH_RETENTION_DAYS)
 
     _notes = [n for n in _notes if n['id'] != 2]
     # A note created AFTER the delete has taken the id the trashed one used.
