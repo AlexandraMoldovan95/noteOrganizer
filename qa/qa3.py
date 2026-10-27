@@ -3242,6 +3242,31 @@ finally:
     app._notes_unsaved = False
 app.notes = []; app.save_notes()
 
+# A backup's Trash brings its window when this notebook never chose one:
+# the default 30 days then emptied, at the next start, a Trash its owner
+# kept for a year. A window chosen here stays.
+_tw_backup = {'notes_data.json': json.dumps([{'title': 'Kept', 'body': 'x'}]).encode(),
+              'trash.json': json.dumps([{'id': 7, 'uid': 'tw-7', 'title': 'Old',
+                                         'deleted_at': '2026-03-01 09:00:00'}]).encode(),
+              'settings.json': json.dumps({'trash_retention_days': 365,
+                                           'app_version': '0.97.405'}).encode()}
+_tw_settings = NO.load_settings()
+_tw_settings.pop('trash_retention_days', None)
+NO.save_settings(_tw_settings)
+app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
+_dz_import(_tw_backup)
+check(f'a restored Trash keeps the window it came with, where none was chosen '
+      f'({NO.trash_retention_days()} days)', NO.trash_retention_days() == 365)
+NO.choose_trash_window(30)
+app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
+_dz_import(_tw_backup)
+check(f'...and a window chosen here stays ({NO.trash_retention_days()} days)',
+      NO.trash_retention_days() == 30)
+_tw_settings = NO.load_settings()
+_tw_settings.pop('trash_retention_days', None)
+NO.save_settings(_tw_settings)
+app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
+
 
 print()
 print(f"=== QA3 FAILURES: {fails if fails else 'NONE'} ===")

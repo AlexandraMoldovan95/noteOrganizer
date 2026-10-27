@@ -187,6 +187,7 @@ is in the table below as well.
 | [The close that outran a failed save](#the-close-that-outran-a-failed-save) | A warning that something will be lost is a promise to stop before losing it. | next |
 | [The preview that kept every frame](#the-preview-that-kept-every-frame) | A limit has to hold while the thing it limits is being built, not only once it is finished. | next |
 | [The table drawn whole](#the-table-drawn-whole) | Anything drawn whole needs a size past which it is not drawn; outside content chooses the size. | next |
+| [The Trash restored under a window it never had](#the-trash-restored-under-a-window-it-never-had) | A setting that decides what is deleted travels with the things it decides about. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -2103,6 +2104,27 @@ the same kind of limit.
 
 **Takeaway:** anything drawn whole needs a size past which it is not drawn. Outside content
 chooses the size.
+
+### The Trash restored under a window it never had
+
+*(2026-10-27 · found by the final audit's break-it round, on the phone's app; the desktop had the
+same gap)*
+
+**Symptom:** a backup restored onto a new phone brought its Trash, kept for a year, and the next
+start deleted every entry older than 30 days for good, attached files included.
+
+**Root cause:** the import kept each Trash entry with the moment it was deleted, and took from the
+backup's settings its categories and calendar decorations — but not the Trash's window. A new
+notebook has none chosen, so the start-up purge went by the default 30 days: a window nobody
+chose for those entries, the class of "The Trash that forgot its window".
+
+**Fix:** when the notebook receiving the backup has never chosen a window, it takes the backup's,
+if it is a whole number of days from 1 to 365. A window chosen on this device stays; a window that
+could not be read stays unknown, so nothing is purged. qa3 imports a backup with a 365-day window
+into a notebook without one and into one that chose 30; mutants TW18 and TW19. The phone's app
+follows the same rule.
+
+**Takeaway:** a setting that decides what is deleted travels with the things it decides about.
 
 
 ## Tk & platform gotchas

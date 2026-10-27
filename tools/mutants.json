@@ -5651,5 +5651,25 @@
     "must_fail": ["a 100x31 table is kept as its text"],
     "suites": ["qa1"],
     "expect": "killed"
+  },
+  {
+    "id": "TW18",
+    "about": "a restored Trash is left under the default window its owner never had",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            choose_trash_window(window)\n",
+               "replace": "            pass\n"}],
+    "must_fail": ["a restored Trash keeps the window it came with, where none was chosen"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "TW19",
+    "about": "a backup's window replaces the one this notebook chose",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                and \"trash_retention_days\" not in load_settings()\n",
+               "replace": ""}],
+    "must_fail": ["...and a window chosen here stays"],
+    "suites": ["qa3"],
+    "expect": "killed"
   }
 ]

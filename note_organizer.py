@@ -11629,6 +11629,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                 decor = loaded.get(decor_key)
                                 if isinstance(decor, dict):
                                     state["imported_" + decor_key] = decor
+                            if "trash_retention_days" in loaded:
+                                state["imported_trash_window"] = loaded["trash_retention_days"]
                     except (*_core_paths.JSON_UNREADABLE, IOError, OSError, AttributeError):
                         pass
 
@@ -11840,6 +11842,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if restored_decor:
             save_setting("day_colors", dict(self.day_colors))
             save_setting("day_emoji", dict(self.day_emoji))
+
+        # The Trash's window comes with its entries when this notebook never
+        # chose one: the default 30 days then emptied, at the next start, a
+        # restored Trash kept for a year (ISSUES_LOG: "The Trash restored
+        # under a window it never had"). A window chosen here stays.
+        window = state.get("imported_trash_window")
+        if (isinstance(window, int) and not isinstance(window, bool)
+                and 1 <= window <= 365 and state.get("imported_trash")
+                and "trash_retention_days" not in load_settings()
+                and not get_setting(TRASH_WINDOW_UNKNOWN)):
+            choose_trash_window(window)
 
         # Files already spoken for — by a note we're keeping (re-importing
         # your own backup lands here) or by an earlier note in this same
