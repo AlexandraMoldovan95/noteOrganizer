@@ -497,6 +497,19 @@ try:
         check(f'an unwritable profile falls back to AppData, with a warning ({str(_pr_fall[1])[:50]!r})',
               os.path.normcase(_pr_fall[0]) == os.path.normcase(_pr_old)
               and _pr_fall[1] is not None and 'backup' in _pr_fall[1].lower())
+        # A FILE where the folder goes: said as that, with what cures it --
+        # the message used to blame a profile that could not be written.
+        _pf_user = os.path.join(_pr_root, 'user_file')
+        os.environ['USERPROFILE'] = _pf_user
+        os.environ['APPDATA'] = os.path.join(_pf_user, 'AppData', 'Roaming')
+        os.makedirs(_pf_user)
+        with open(NO_paths.get_user_notebook_dir(), 'w') as f:
+            f.write('not a folder')
+        _pf_fall = NO_paths.resolve_data_dir(os.path.dirname(os.path.abspath(__file__)))
+        check(f'a file in the notes folder\'s place is named as the cause ({str(_pf_fall[1])[:60]!r})',
+              'file named' in (_pf_fall[1] or '') and 'Rename' in (_pf_fall[1] or ''))
+        os.environ['USERPROFILE'] = _pr_user
+        os.environ['APPDATA'] = os.path.join(_pr_user, 'AppData', 'Roaming')
         # An old notebook with no notes left (all in the Trash) or one that
         # cannot be read is still the old app's notebook: it used to be
         # passed over, its Trash and templates with it, and a welcome note

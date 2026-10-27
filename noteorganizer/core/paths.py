@@ -235,11 +235,17 @@ def resolve_data_dir(script_dir):
             return home, None
         appdata = get_appdata_dir()
         if _is_writable(appdata):
+            # Said as it is: a file in the folder's place is not a profile
+            # that cannot be written, and renaming it is the whole cure.
+            why = (f"A file named \"{os.path.basename(home)}\" is where the notes "
+                   f"folder goes:\n{home}\nRename or move that file, then start "
+                   "the app again." if os.path.isfile(home)
+                   else "Your profile folder couldn't be written to.")
             return appdata, (
-                "Your profile folder couldn't be written to, so notes are "
-                f"being saved here instead:\n{appdata}\n\nIf the app came from "
-                "the Microsoft Store, uninstalling it can remove that folder: "
-                "make a backup (Settings → Backup) before you do."
+                f"{why}\n\nUntil then, notes are being saved here instead:\n"
+                f"{appdata}\n\nIf the app came from the Microsoft Store, "
+                "uninstalling it can remove that folder: make a backup "
+                "(Settings → Backup) before you do."
             )
         # Extremely rare (a locked-down profile). Fall back to the exe's folder,
         # then to the temp dir, so the app still runs instead of dying.

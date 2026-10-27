@@ -3181,8 +3181,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/paths.py",
-        "find": "        if _is_writable(appdata):\n            return appdata, (\n",
-        "replace": "        if _is_writable(appdata):\n            return appdata, None\n            return appdata, (\n"
+        "find": "        if _is_writable(appdata):\n            # Said as it is: a file in the folder's place is not a profile\n",
+        "replace": "        if _is_writable(appdata):\n            return appdata, None\n            # Said as it is: a file in the folder's place is not a profile\n"
       }
     ],
     "must_fail": ["an unwritable profile falls back to AppData, with a warning"],
@@ -5793,6 +5793,17 @@
     "must_fail": ["a stamp in the future promises no more than the window"],
     "suites": ["test_data_safety"],
     "expect": "killed"
+  },
+  {
+    "id": "NF03",
+    "about": "a file where the notes folder goes is blamed on an unwritable profile",
+    "edits": [{"file": "noteorganizer/core/paths.py",
+               "find": "                   \"the app again.\" if os.path.isfile(home)\n",
+               "replace": "                   \"the app again.\" if False\n"}],
+    "must_fail": ["a file in the notes folder's place is named as the cause"],
+    "suites": ["test_data_safety"],
+    "expect": "killed",
+    "note": "Killed on Windows, where the app runs; elsewhere the profile folder is the AppData equivalent and these checks do not run."
   },
   {
     "id": "MG04",
