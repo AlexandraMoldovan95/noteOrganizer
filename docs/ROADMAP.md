@@ -384,6 +384,18 @@ One row per recorded bump. `Added`/`Fixed` are the cumulative totals the number 
 counting notes record what counted, what didn't, and why. The features themselves are described in
 [CHANGELOG.md](../CHANGELOG.md).
 
+**Counting CHANGELOG's bullets gives more than the number.** Recounted on 2026-10-27, for the
+final audit: up to `0.97.405`, CHANGELOG lists 98 `Added` and 418 `Fixed` where the version says
+97 and 405. Both gaps are in the rows below, and neither grows after `0.80.198`:
+
+- **13 `Fixed`** — three in `0.55.81` and ten in `0.64.95` — are fixes introduced and repaired
+  inside the same unreleased branch. CHANGELOG lists them; the rule leaves them uncounted.
+- **1 `Added`** — `0.80.198` lists five `Added`, and its row says five, but the number moved by
+  four (76 → 80). A slip at the time, kept: a shipped version is never renumbered.
+
+A recount checks a release by its own section's step from the version before, not by the
+grand total.
+
 | Version | Date | Added | Fixed | Counting notes |
 |---|---|---|---|---|
 | `0.28.38` | 2026-08-17 | 28 | 38 | First recorded total: everything from `0.1.0` through the batch that included the Statistics read-only/live-update fix. |
