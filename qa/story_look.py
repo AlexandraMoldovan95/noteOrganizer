@@ -408,7 +408,7 @@ app.update()
 app.toggle_settings_panel('about')
 app.update()
 from noteorganizer.core import paths as _sl_paths
-_sl_shown = chr(92).join(['C:', 'Users', 'you', 'AppData', 'Roaming', 'NoteOrganizer'])
+_sl_shown = chr(92).join(['C:', 'Users', 'you', 'Note Organizer'])
 def _sl_no_names(widget):
     for child in widget.winfo_children():
         if isinstance(child, tk.Label) and str(child.cget('text')) == str(_sl_paths.APP_DIR):
