@@ -5569,5 +5569,27 @@
     "must_fail": ["...and once the disk takes it, the close saves without asking"],
     "suites": ["qa3"],
     "expect": "killed"
+  },
+  {
+    "id": "MG01",
+    "about": "the first start's copy writes the notes file before the files it needs",
+    "edits": [{"file": "noteorganizer/core/paths.py",
+               "find": "    # files never came, and nothing tried again.\n",
+               "replace": "    # files never came, and nothing tried again.\n    _copy_whole(os.path.join(best_dir, \"notes_data.json\"), notes_path)\n"}],
+    "must_fail": ["a first start killed while copying files leaves no notes file to mark it done"],
+    "suites": ["test_data_safety"],
+    "expect": "killed",
+    "note": "Killed on Windows, where the app runs; elsewhere the profile folder is the AppData equivalent and these checks do not run."
+  },
+  {
+    "id": "MG02",
+    "about": "an attachment is copied straight onto its name, so a kill leaves it truncated",
+    "edits": [{"file": "noteorganizer/core/paths.py",
+               "find": "        shutil.copy2(src, part)\n        os.replace(part, dst)\n",
+               "replace": "        shutil.copy2(src, dst)\n"}],
+    "must_fail": ["a first start killed while copying files leaves no notes file to mark it done"],
+    "suites": ["test_data_safety"],
+    "expect": "killed",
+    "note": "Killed on Windows, where the app runs; elsewhere the profile folder is the AppData equivalent and these checks do not run."
   }
 ]

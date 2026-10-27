@@ -434,10 +434,31 @@ try:
         with open(os.path.join(_pr_old, 'notes_data.json'), 'rb') as f:
             _pr_bytes = f.read()
         os.makedirs(_pr_home, exist_ok=True)
+        # The first start killed mid-copy (a reboot, Task Manager): the notes
+        # file is written last, so the next start copies again rather than
+        # keeping notes whose files never came.
+        _pr_copy2 = NO_paths.shutil.copy2
+
+        def _pr_killed(src, dst, *a, **k):
+            if src.endswith('pr_file.bin'):
+                open(dst, 'w').close()   # the copy cut short where it was going
+                raise SystemExit('killed mid-copy')
+            return _pr_copy2(src, dst, *a, **k)
+        NO_paths.shutil.copy2 = _pr_killed
+        try:
+            NO_paths.run_migrations(_pr_home)
+        except SystemExit:
+            pass
+        finally:
+            NO_paths.shutil.copy2 = _pr_copy2
+        check('a first start killed while copying files leaves no notes file to mark it done',
+              not os.path.exists(os.path.join(_pr_home, 'notes_data.json'))
+              and not os.path.exists(os.path.join(_pr_home, 'attachments', 'pr_file.bin')))
         _pr_msg = NO_paths.run_migrations(_pr_home) or ''
         check(f"the first start brings the old exe's notebook in, its file too ({_pr_msg[:60]!r})",
               NO_paths.count_notes_in(os.path.join(_pr_home, 'notes_data.json')) == 2
-              and os.path.exists(os.path.join(_pr_home, 'attachments', 'pr_file.bin')))
+              and os.path.exists(os.path.join(_pr_home, 'attachments', 'pr_file.bin'))
+              and open(os.path.join(_pr_home, 'attachments', 'pr_file.bin')).read() == 'x')
         check('...says the notebook in AppData is kept',
               'kept as it was' in _pr_msg)
         check('...and brings its Trash and templates too, not only the notes',

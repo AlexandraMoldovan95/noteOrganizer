@@ -306,6 +306,23 @@ def count_notes_in(path):
 NOTEBOOK_COMPANIONS = ("trash.json", "templates.json")
 
 
+def _copy_whole(src, dst):
+    """Copy *src* to *dst* whole or not at all: beside it first, then
+    replaced in one step. Copied in place, a start killed mid-copy left a
+    truncated file that every later "copy only if missing" kept for good."""
+    part = dst + ".part"
+    try:
+        shutil.copy2(src, part)
+        os.replace(part, dst)
+        return True
+    except (IOError, OSError):
+        try:
+            os.remove(part)
+        except OSError:
+            pass
+        return False
+
+
 def _copy_companions(src_dir, dest_dir):
     """The Trash and the templates, copied only where the notebook has none:
     never over a file of its own."""
@@ -313,10 +330,7 @@ def _copy_companions(src_dir, dest_dir):
         src = os.path.join(src_dir, name)
         dst = os.path.join(dest_dir, name)
         if os.path.isfile(src) and not os.path.exists(dst):
-            try:
-                shutil.copy2(src, dst)
-            except (IOError, OSError):
-                pass
+            _copy_whole(src, dst)
 
 
 def _copy_attachments(src_dir, dest_dir):
@@ -328,10 +342,7 @@ def _copy_attachments(src_dir, dest_dir):
         src = os.path.join(src_attach, filename)
         dst = os.path.join(dest_dir, filename)
         if os.path.isfile(src) and not os.path.exists(dst):
-            try:
-                shutil.copy2(src, dst)
-            except (IOError, OSError):
-                pass
+            _copy_whole(src, dst)
 
 
 def _timestamped_backup(path, label):
@@ -522,11 +533,9 @@ def run_migrations(app_dir):
     if not best_dir:
         return None
 
-    try:
-        shutil.copy2(os.path.join(best_dir, "notes_data.json"), notes_path)
-    except (IOError, OSError):
-        return None
-
+    # The notes file goes LAST, whole: it is what tells the next start the
+    # copy is done. Written first, a start killed mid-copy left notes whose
+    # files never came, and nothing tried again.
     legacy_settings = os.path.join(best_dir, "settings.json")
     # Only a settings file this app wrote. The built app looks in the
     # folder its own folder was unpacked into, and a generic
@@ -544,6 +553,9 @@ def run_migrations(app_dir):
 
     for d in get_legacy_dirs(app_dir):
         _copy_attachments(d, attachments_path)
+
+    if not _copy_whole(os.path.join(best_dir, "notes_data.json"), notes_path):
+        return None
 
     message = (
         f"Your notes now live in this folder:\n{app_dir}\n\n"
