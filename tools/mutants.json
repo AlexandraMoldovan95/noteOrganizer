@@ -5775,6 +5775,16 @@
     "expect": "killed"
   },
   {
+    "id": "SL01",
+    "about": "the Share panel's search trace outlives its box",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        search.bind(\"<Destroy>\", drop_trace, add=\"+\")\n",
+               "replace": ""}],
+    "must_fail": ["reopening the Share panel lets the last search box's trace go"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
     "id": "MG04",
     "about": "the old store's Trash and templates wait on a settings file that may be unreadable",
     "edits": [{"file": "noteorganizer/core/paths.py",

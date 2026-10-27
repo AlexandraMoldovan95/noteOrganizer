@@ -9842,6 +9842,14 @@ if _side_closers:
     check('while the area itself stays in the panel',
           app.share_code_area.winfo_ismapped())
 app.notes[0].pop('attachments', None)
+_sp_old_var = app.share_search_var
+app.toggle_share_panel(); app.update()
+# Each opening builds a new search box and variable; the last one's trace
+# held it, its closure and the panel's widgets alive after every close.
+app.toggle_share_panel(); app.update()
+check(f"reopening the Share panel lets the last search box's trace go "
+      f"({_sp_old_var.trace_info()})",
+      _sp_old_var is not app.share_search_var and _sp_old_var.trace_info() == [])
 app.toggle_share_panel(); app.update()
 
 # "Show N more" in the Share panel adds the next page under the boxes

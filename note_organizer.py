@@ -11045,7 +11045,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._cancel_share_search()
             self._share_search_job = self.after(180, refilter)
 
-        query_var.trace_add("write", on_query)
+        query_trace = query_var.trace_add("write", on_query)
+
+        def drop_trace(_event=None):
+            # Gone with the box: the trace held the variable, this closure and
+            # every widget it names alive after each closing of the panel.
+            try:
+                query_var.trace_remove("write", query_trace)
+            except tk.TclError:
+                pass
+        search.bind("<Destroy>", drop_trace, add="+")
         self._share_refilter = refilter
         render_checkboxes()
 
