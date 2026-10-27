@@ -82,7 +82,11 @@ function RunApp($label) {
 
 function Install($v) {
     try { Add-AppxPackage -Path "C:\work\NoteOrganizer_$v.msix" -ErrorAction Stop; Log "installed $v" }
-    catch { Log "INSTALL FAILED $v : $($_.Exception.Message)" }
+    catch { Log "INSTALL FAILED $v : $($_.Exception.Message)"; return }
+    # The licenses About opens, where the app looks for them (sys._MEIPASS).
+    $pkg = Get-AppxPackage -Name NoteOrganizer.Test
+    $notices = Join-Path $pkg.InstallLocation '_internal\THIRD_PARTY_NOTICES.txt'
+    Log "$v | the licenses ship inside the package: $(Test-Path $notices)"
 }
 
 Report 'before install'

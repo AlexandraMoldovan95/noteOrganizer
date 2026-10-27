@@ -46,8 +46,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Copied into the scratch folder. The package has to travel with the entry
 # point: note_organizer.py imports from it, so a copy on its own fails with
-# ModuleNotFoundError.
-PAYLOAD = ["note_organizer.py", "noteorganizer"]
+# ModuleNotFoundError. The licenses travel too: About opens them, and qa6
+# presses that button.
+PAYLOAD = ["note_organizer.py", "noteorganizer", "THIRD_PARTY_NOTICES.txt"]
 
 STANDALONE = ["test_recurrence.py", "test_calculator.py", "test_data_safety.py",
               "test_entry_module_identity.py", "test_richtext.py",
@@ -113,6 +114,10 @@ STATIC = [
     # mutates. One lost its lines to a later fix and guarded nothing for a day.
     ("mutants find their code",
      [sys.executable, os.path.join("tools", "check_mutant_targets.py")]),
+    # The ninth: the Pillow CI tests is the one the .exe ships, and the
+    # licenses the build bundles name it.
+    ("what ships is what is tested",
+     [sys.executable, os.path.join("tools", "check_shipped.py")]),
 ]
 
 

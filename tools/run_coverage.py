@@ -109,7 +109,9 @@ def main(argv):
         d = os.path.join(cov_dir, "run_" + name)
         os.makedirs(d)
         run_dirs.append(d)
-        shutil.copy2(os.path.join(ROOT, "note_organizer.py"), d)
+        # The licenses with the app: qa6 opens them from About.
+        for item in ("note_organizer.py", "THIRD_PARTY_NOTICES.txt"):
+            shutil.copy2(os.path.join(ROOT, item), d)
         shutil.copytree(os.path.join(ROOT, "noteorganizer"),
                         os.path.join(d, "noteorganizer"),
                         ignore=shutil.ignore_patterns("__pycache__"))

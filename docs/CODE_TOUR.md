@@ -115,7 +115,7 @@ docs/                     these documents
 qa/                       headless GUI tests, the stories and the test plan
 test_*.py                 eight unit suites; seven need no window
 tools/                    what CI runs, and the tools behind the docs' numbers
-├── check_*.py            nine static gates: eight in CI, the link check before a push
+├── check_*.py            ten static gates: nine in CI, the link check before a push
 ├── pre_push_check.py     the gates, locally, in seconds (links in, mutant targets left to CI)
 ├── run_tests.py          the whole suite, safely, from a scratch copy
 ├── run_coverage.py       the whole suite again, measuring what it executes
@@ -124,6 +124,8 @@ tools/                    what CI runs, and the tools behind the docs' numbers
 ├── call_graph.py         which methods call which: the measure behind the split
 ├── doc_screenshots.py    retakes the documentation's screenshots
 ├── make_icon.py          draws the app icon, rather than storing one
+├── make_third_party_notices.py  the licenses the build ships, from the installed copies
+├── msix/                 packs the build as MSIX, and proves it in Windows Sandbox
 └── linux-ci/             one Docker command reproduces the Ubuntu CI leg
 .github/workflows/        CI: tests on Windows and Linux; mutants and stories on demand
 ```
@@ -1212,6 +1214,9 @@ kept apart from the apps ([site/README](../site/README.md#kept-apart-from-the-ap
 `STORE_REVIEW_URL` is the Store's review page once there is
 one: until then it is `None`, and About shows no Feedback card. The app
 opens a page and nothing more; it makes no connection of its own.
+`NOTICES` names the licenses file the build ships beside the package,
+which About opens in the person's text editor
+([RELEASE_WINDOWS](RELEASE_WINDOWS.md#the-licenses-that-ship-with-it)).
 
 ### One writer for the crash log
 

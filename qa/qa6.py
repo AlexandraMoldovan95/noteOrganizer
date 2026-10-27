@@ -1164,9 +1164,10 @@ app.update()
 # at all. The browser is stood in for here: nothing is opened. The running
 # app's own details still head every crash_log.txt entry (core/diagnostics).
 import webbrowser as _fb_web
-from noteorganizer.core import diagnostics as _fb_diag
+from noteorganizer.core import diagnostics as _fb_diag, paths as _fb_paths
 _fb_opened, _fb_warned = [], []
-_fb_real = (_fb_web.open, _fb_diag.STORE_REVIEW_URL, app.notes, app.show_warning)
+_fb_real = (_fb_web.open, _fb_diag.STORE_REVIEW_URL, app.notes, app.show_warning,
+            _fb_diag.NOTICES, getattr(os, 'startfile', None))
 app.notes = [NO.normalize_note({'id': 1, 'title': 'SECRET-TITLE', 'body': 'SECRET-BODY',
                                 'attachments': [{'name': 'a.pdf', 'stored_as': '1_a.pdf'}]}),
              NO.normalize_note({'id': 2, 'title': 'two', 'body': 'x'})]
@@ -1210,6 +1211,28 @@ try:
     check('a browser that will not open leaves the link copied, and says so',
           bool(_fb_warned) and 'copied' in _fb_warned[-1]
           and app.clipboard_get() == _fb_diag.PRIVACY_URL)
+    # The licenses: a text file that ships with the app, opened in the
+    # person's editor -- stood in for here too.
+    os.startfile = lambda p, *a, **k: _fb_opened.append(p)
+    _fb_lic = find_btn_qa6(_fb_frame, 'Open')
+    if _fb_lic is not None:
+        _fb_lic.invoke()
+    _fb_lic_path = _fb_paths.bundled_file(_fb_diag.NOTICES)
+    check('About opens the licenses file that ships with the app',
+          _fb_lic is not None and _fb_opened[-1:] == [_fb_lic_path])
+    _fb_lic_text = open(_fb_lic_path, encoding='utf-8').read() if os.path.isfile(_fb_lic_path) else ''
+    check('...which holds the app\'s own license and those of Python, Pillow and '
+          'the PyInstaller bootloader',
+          all(part in _fb_lic_text for part in
+              ('Note Organizer -- MIT License', 'PYTHON SOFTWARE FOUNDATION LICENSE',
+               '\nPillow ', 'Bootloader Exception')))
+    _fb_diag.NOTICES = 'no-such-licenses.txt'
+    _fb_count = len(_fb_opened)
+    if _fb_lic is not None:
+        _fb_lic.invoke()
+    check('a copy of the app without the file says so, and opens nothing',
+          len(_fb_opened) == _fb_count and bool(_fb_warned)
+          and 'missing' in _fb_warned[-1])
     # Once the app has a Store page, feedback is a review there.
     _fb_diag.STORE_REVIEW_URL = 'ms-windows-store://review/?ProductId=TEST'
     _fb_web.open = lambda url, *a, **k: (_fb_opened.append(url), True)[1]
@@ -1224,7 +1247,12 @@ try:
 finally:
     # Put back what was there -- the script's own silent stand-in from its
     # first lines -- not the real dialog a del would have uncovered.
-    _fb_web.open, _fb_diag.STORE_REVIEW_URL, app.notes, app.show_warning = _fb_real
+    (_fb_web.open, _fb_diag.STORE_REVIEW_URL, app.notes, app.show_warning,
+     _fb_diag.NOTICES, _fb_startfile) = _fb_real
+    if _fb_startfile is not None:
+        os.startfile = _fb_startfile
+    elif hasattr(os, 'startfile'):
+        del os.startfile   # not Windows: there was none to put back
     _fb_frame.destroy()
     app.update()
 

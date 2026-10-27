@@ -1114,6 +1114,9 @@ on this computer, with **Open folder** and **Copy path** beside it. Under it, **
 opens the welcome note from the first start — or, if you deleted it, puts a fresh copy back in
 your notebook and opens that. Pressing it again opens the same note rather than adding another.
 
+**Open-source licenses → Open** shows, in your text editor, the licenses of the software Note
+Organizer is built with — Python, Tcl/Tk, Pillow and the libraries they bring — and its own.
+
 ### Feedback and the privacy policy
 
 Something not working, slow, or an idea? Once the app is in the Microsoft Store, **Settings →

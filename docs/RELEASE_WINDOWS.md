@@ -25,6 +25,34 @@ lands in `dist/NoteOrganizer/` — `NoteOrganizer.exe` beside the
 `_internal` folder it needs; ship the whole folder, never the `.exe`
 alone.
 
+### The licenses that ship with it
+
+The build carries other people's software: Python (with Tcl/Tk,
+OpenSSL, zlib and the rest of its Windows build), Pillow with its image
+libraries, PyInstaller's bootloader and Microsoft's C runtime. Their
+licenses travel inside the build as `THIRD_PARTY_NOTICES.txt`, which
+**Settings → About → Open-source licenses** opens.
+
+`py tools/make_third_party_notices.py` writes that file from the
+installed copies themselves, never by hand. Run it and commit the result
+whenever Python, Pillow or PyInstaller is updated on the machine that
+builds. You cannot forget: the spec compares the committed file with a
+fresh one and stops the build when they differ.
+
+### Updating Pillow
+
+The `.exe` ships the Pillow installed where it is built, and CI tests
+the one `requirements.txt` pins. They must be the same, so the spec
+stops a build when they are not, and `tools/check_shipped.py` holds the
+rest on every run. To move to a new version:
+
+1. Change the pin in `requirements.txt` and in
+   `tools/linux-ci/Dockerfile`.
+2. Install it: `py -m pip install Pillow==<version>`.
+3. Rebuild the Linux image: `docker build -t noteorg-linux-ci tools/linux-ci`.
+4. `py tools/make_third_party_notices.py`, then the full suite on both
+   (`py tools/run_tests.py` and the Linux image), then build.
+
 ## Microsoft Store (MSIX)
 
 The Microsoft Store expects the app packaged as MSIX. MSIX packages use a 4-part version number, `Major.Minor.Build.Revision` (e.g. `1.5.6.0`), with three hard requirements:
@@ -50,7 +78,8 @@ py tools/msix/make_sandbox_test.py      # dist/msix/NoteOrganizer-msix-test.wsb
 Double-clicking the `.wsb` opens a disposable Windows in which `sandbox_test.ps1` signs both
 packages with a certificate made there, puts an older `.exe`'s notebook in AppData, and installs,
 starts, updates, uninstalls and reinstalls the app; `dist/msix/out/result.txt` says after each
-step what the profile's notebook, the package's private copy and AppData hold, and a message says
+step what the profile's notebook, the package's private copy and AppData hold — and, after each
+install, whether the licenses About opens are inside the package — and a message says
 when it is done. Nothing touches this machine's certificates or notebooks. The identity is a test
 one (`NoteOrganizer.Test`) until Partner Center reserves the Store's, and a Major of `0` is for
 Sandbox only. Run on 2026-10-27: the old notebook came in, both notes stayed byte for byte

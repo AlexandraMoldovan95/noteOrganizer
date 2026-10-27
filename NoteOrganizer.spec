@@ -11,10 +11,36 @@ The icon comes from tools/make_icon.py, which draws it rather than
 storing it, and ships inside the bundle as well as being stamped on the
 .exe -- the stamp is what Explorer and the taskbar read, the shipped
 copy is what the window itself puts in its title bar.
+
+The licenses (THIRD_PARTY_NOTICES.txt) are checked, not generated: the
+build stops when they are not those of the Python, Pillow and PyInstaller
+doing it, or when that Pillow is not the one requirements.txt pins -- the
+one CI tests.
 """
 import glob
+import importlib.util
 import os
 import re
+from importlib import metadata
+
+
+def _check_what_ships():
+    """Stop the build when the licenses or the Pillow would not match."""
+    pin = re.search(r"^Pillow==(\S+)", open("requirements.txt", encoding="utf-8").read(), re.M)
+    if not pin or pin.group(1) != metadata.version("pillow"):
+        raise SystemExit("Pillow %s is installed, but requirements.txt pins %s -- CI tests "
+                         "the pinned one." % (metadata.version("pillow"), pin and pin.group(1)))
+    spec = importlib.util.spec_from_file_location(
+        "notices", os.path.join("tools", "make_third_party_notices.py"))
+    notices = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(notices)
+    with open(notices.OUT, encoding="utf-8") as fh:
+        if fh.read() != notices.render():
+            raise SystemExit("THIRD_PARTY_NOTICES.txt is out of date: run "
+                             "py tools/make_third_party_notices.py and commit it.")
+
+
+_check_what_ships()
 
 
 def _app_version():
@@ -75,8 +101,10 @@ a = Analysis(
     # theme whose icon did not ship would fall back to the purple one.
     # Globbed rather than listed, so adding a theme and re-running
     # tools/make_icon.py --all is the whole job.
+    # The licenses beside them, where Settings -> About opens them.
     datas=[(f, 'assets') for f in glob.glob(os.path.join('assets', 'icon*.ico'))
-           + glob.glob(os.path.join('assets', 'icon*.png'))],
+           + glob.glob(os.path.join('assets', 'icon*.png'))]
+          + [('THIRD_PARTY_NOTICES.txt', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

@@ -61,7 +61,9 @@ TIMEOUT = 1500
 
 def fresh_copy():
     dest = tempfile.mkdtemp(prefix="notesorg-mutant-")
-    shutil.copy2(os.path.join(ROOT, "note_organizer.py"), dest)
+    # The licenses are in run_tests.py's payload: qa6 opens them from About.
+    for name in ("note_organizer.py", "THIRD_PARTY_NOTICES.txt"):
+        shutil.copy2(os.path.join(ROOT, name), dest)
     shutil.copytree(os.path.join(ROOT, "noteorganizer"),
                     os.path.join(dest, "noteorganizer"),
                     ignore=shutil.ignore_patterns("__pycache__"))

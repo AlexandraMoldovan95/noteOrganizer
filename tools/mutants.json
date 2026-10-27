@@ -5468,5 +5468,25 @@
     "must_fail": ["a lone cell's line breaks are lines, and what follows keeps its line"],
     "suites": ["test_richtext"],
     "expect": "killed"
+  },
+  {
+    "id": "LN01",
+    "about": "About has no way to open the licenses",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "        self._text_button(control, \"Open\", self._open_licenses).pack()\n",
+               "replace": ""}],
+    "must_fail": ["About opens the licenses file that ships with the app"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "LN02",
+    "about": "a copy of the app without the licenses file hands the editor a path that is not there",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "        if not os.path.isfile(path):\n            self.show_warning(\"Licenses not found\",",
+               "replace": "        if False:\n            self.show_warning(\"Licenses not found\","}],
+    "must_fail": ["a copy of the app without the file says so, and opens nothing"],
+    "suites": ["qa6"],
+    "expect": "killed"
   }
 ]

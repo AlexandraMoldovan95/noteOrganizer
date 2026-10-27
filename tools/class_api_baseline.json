@@ -474,6 +474,7 @@
   "_open_find": "(self)",
   "_open_imported_note_in_editor": "(self, shared_note, trimmed=False)",
   "_open_in_browser": "(self, url)",
+  "_open_licenses": "(self)",
   "_open_move_day_picker": "(self)",
   "_open_note_from_calendar": "(self, base_note, date_str, whole_series=False)",
   "_open_note_from_grid": "(self, base_note, date_str)",

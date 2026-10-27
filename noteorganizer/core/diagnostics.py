@@ -1,5 +1,5 @@
-"""What the app may say about itself when something goes wrong, and the
-pages it opens in the browser.
+"""What the app may say about itself when something goes wrong, the pages
+it opens in the browser, and the licenses file it ships with.
 
 crash_log.txt says it, on this computer only: the version, the Windows it
 runs on, how it draws on this screen, and how big the notebook is. Never what
@@ -25,6 +25,10 @@ PRIVACY_URL = "https://sites.google.com/view/noteorganizer-privacy"
 # where people who install from a store, and never see LICENSE, read it.
 ABOUT_TERMS = ("Free software under the MIT license, provided as is. "
                "Keep a backup of your notes.")
+
+# The licenses of everything the built app carries, opened from About.
+# tools/make_third_party_notices.py writes it; NoteOrganizer.spec ships it.
+NOTICES = "THIRD_PARTY_NOTICES.txt"
 
 # The Microsoft Store's review page, once the app is published there. While
 # it is None, About has no Feedback card: reviews are the only way in.

@@ -3829,10 +3829,11 @@ class SettingsPageMixin:
 
     def _build_settings_about_panel(self, parent):
         """Version, where the data lives, the welcome note, the privacy
-        policy, and -- once the app is in the Store -- a way to review it."""
+        policy, the licenses, and -- once the app is in the Store -- a way
+        to review it."""
         self._settings_subtitle(
             parent, "Version info, where your notes live, the welcome note, "
-                    "and the privacy policy.")
+                    "the privacy policy and the licenses.")
         head = tk.Frame(parent, bg=self.colors["bg"])
         self.track_theme(head, bg="bg")
         head.pack(fill="x", pady=(0, 14))
@@ -3913,6 +3914,12 @@ class SettingsPageMixin:
         self._text_button(
             control, "Read",
             lambda: self._open_in_browser(diagnostics.PRIVACY_URL)).pack()
+        licenses = self._settings_card(parent)
+        control = self._card_row(
+            licenses, "Open-source licenses",
+            "Note Organizer is built with Python, Tcl/Tk and Pillow. Their "
+            "licenses, and its own, are in one text file.", first=True)
+        self._text_button(control, "Open", self._open_licenses).pack()
         if diagnostics.STORE_REVIEW_URL:
             talk = self._settings_card(parent)
             control = self._card_row(
@@ -3933,6 +3940,20 @@ class SettingsPageMixin:
                  ("sharp", "on" if sharp else "off"),
                  ("theme", THEME_LABELS.get(self.theme_name, self.theme_name))]
                 + diagnostics.notebook(self.notes))
+
+    def _open_licenses(self):
+        """Open the licenses file that ships with the app, in the person's
+        text editor."""
+        path = paths.bundled_file(diagnostics.NOTICES)
+        if not os.path.isfile(path):
+            self.show_warning("Licenses not found",
+                              "The licenses file is missing from this copy "
+                              "of the app.")
+            return
+        try:
+            os.startfile(path)   # Windows-only, matches this app's target
+        except OSError as exc:
+            self.show_warning("Could not open the licenses", str(exc))
 
     def _open_in_browser(self, url):
         """Open *url* in the person's browser. Where that fails, the link is

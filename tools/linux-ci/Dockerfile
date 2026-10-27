@@ -32,7 +32,8 @@ RUN apt-get update \
     # prove it at build time rather than discovering it at run time.
     && python -c "import tkinter; print('tkinter', tkinter.TkVersion)"
 
-RUN pip install --no-cache-dir Pillow
+# The version requirements.txt pins; tools/check_shipped.py keeps them equal.
+RUN pip install --no-cache-dir Pillow==13.0.0
 
 WORKDIR /repo
 ENTRYPOINT ["/bin/sh", "-c", "xvfb-run -a python tools/run_tests.py \"$@\"", "--"]
