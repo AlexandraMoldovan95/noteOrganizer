@@ -3288,7 +3288,8 @@ class SettingsPageMixin:
             doomed = [n for n in self.notes
                       if n["id"] in named and n.get("category") == name]
             gone = {n["id"] for n in doomed}
-            self._move_notes_to_trash(doomed)
+            if self._move_notes_to_trash(doomed) is None:
+                return   # trash.json refused them: the category and its notes stay
             self.notes = [n for n in self.notes if n["id"] not in gone]
             # A day of a series that stays, filed here on its own, is
             # re-filed under General by the call below -- never deleted.
@@ -3404,6 +3405,11 @@ class SettingsPageMixin:
             icon="question", default="no"
         ):
             return
+        # Into the Trash first: when trash.json cannot be written nothing
+        # changes, the merge's file copies included.
+        trash_ids = {id(n) for n in to_trash}
+        if self._move_notes_to_trash(to_trash) is None:
+            return
         # Only now, after Yes, are the files merged. The merge copies each
         # file, and it used to run before the question: "No" still gave
         # the kept note new files, and every retry made another copy.
@@ -3434,8 +3440,6 @@ class SettingsPageMixin:
             if merged_attach != list(kept.get("attachments", [])):
                 kept["attachments"] = merged_attach
                 grew.add(kept.get("id"))
-        trash_ids = {id(n) for n in to_trash}
-        self._move_notes_to_trash(to_trash)
         self.notes = [n for n in self.notes if id(n) not in trash_ids]
         self.save_notes()
         # The editor is told, as after every change made behind it: a copy

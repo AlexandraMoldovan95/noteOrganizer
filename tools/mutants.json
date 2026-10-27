@@ -5499,5 +5499,25 @@
                   "...and a delete by an alias leaves the file"],
     "suites": ["test_data_safety"],
     "expect": "killed"
+  },
+  {
+    "id": "TF01",
+    "about": "a Trash write that fails keeps the entries it appended in memory",
+    "edits": [{"file": "noteorganizer/core/storage.py",
+               "find": "    if not ok:\n        del trash[before:]\n",
+               "replace": ""}],
+    "must_fail": ["a Trash that cannot be written is reported, and keeps nothing"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "TF02",
+    "about": "a delete goes on when the Trash could not be written",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        ok, _exc = core_move_to_trash(self.trash, notes_to_trash)\n        if not ok:\n",
+               "replace": "        ok, _exc = core_move_to_trash(self.trash, notes_to_trash)\n        if False:\n"}],
+    "must_fail": ["a delete the Trash cannot hold keeps the note, on screen and on disk"],
+    "suites": ["qa3"],
+    "expect": "killed"
   }
 ]

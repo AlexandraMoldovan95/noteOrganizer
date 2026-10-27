@@ -663,15 +663,20 @@ def move_notes_to_trash(trash, notes_to_trash):
         notes_to_trash: the notes being removed from the active list.
 
     Returns:
-        The same trash list, for convenience at the call site.
+        ``(True, None)`` once trash.json holds them, or ``(False, exception)``
+        with *trash* as it was: the caller must then keep the notes, or they
+        are in neither file (ISSUES_LOG: "A delete that trusted the Trash").
     """
+    before = len(trash)
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     for note in notes_to_trash:
         entry = dict(note)
         entry["deleted_at"] = stamp
         trash.append(entry)
-    save_trash(trash)
-    return trash
+    ok, exc = save_trash(trash)
+    if not ok:
+        del trash[before:]
+    return ok, exc
 
 
 def days_left_in_trash(deleted_at):

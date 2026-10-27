@@ -15779,7 +15779,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                          ("Make it a note", "note")],
                 default="Make it a note")
             if choice in ("note", "trash"):
-                self._settle_off_schedule_day(note, day, choice)
+                if not self._settle_off_schedule_day(note, day, choice):
+                    break   # the Trash could not be written, and that was said
                 made += choice == "note"
                 trashed += choice == "trash"
         if made or trashed:
@@ -15822,16 +15823,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "created": stamp,
             "updated": stamp,
         })
+        # Into the Trash before the day leaves the series: if trash.json
+        # cannot be written, the day's own words stay where they were.
+        if how == "trash" and self._move_notes_to_trash([fresh]) is None:
+            return False
         note["overrides"].pop(day, None)
         # A day moved here whose own day the rule no longer gives: the move
         # goes with it, or it would draw the day again if the rule came back.
         origin = moved_from(note, day)
         if origin is not None:
             note["moved"].pop(origin, None)
-        if how == "trash":
-            self._move_notes_to_trash([fresh])
-        else:
+        if how != "trash":
             self.notes.append(fresh)
+        return True
 
 
 
@@ -17515,8 +17519,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         named = {n["id"] for n in to_trash}
         to_trash = [n for n in self.notes if n["id"] in named]
         count = len(to_trash)
-        marks = [(e.get("id"), e.get("deleted_at"))
-                 for e in self._move_notes_to_trash(to_trash)]
+        moved = self._move_notes_to_trash(to_trash)
+        if moved is None:
+            return   # trash.json refused them: they stay, and that was said
+        marks = [(e.get("id"), e.get("deleted_at")) for e in moved]
         self.notes = [n for n in self.notes if n["id"] not in named]
         self.save_notes()
         # If the note currently open in the editor was among the ones just
@@ -21523,9 +21529,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         name exactly what it deleted -- the timestamp is stamped down
         there, and reading it back off the end of the trash is the kind
         of guess that is right until two deletes land together.
+
+        Returns None when trash.json could not be written, having said so:
+        the caller then keeps the notes, or they would be in neither file.
         """
         before = len(self.trash)
-        core_move_to_trash(self.trash, notes_to_trash)
+        ok, _exc = core_move_to_trash(self.trash, notes_to_trash)
+        if not ok:
+            self.show_warning(
+                "Nothing was deleted",
+                "The Trash could not be saved, so the note stays where it is. "
+                "Is the disk full? Details are in crash_log.txt.")
+            return None
         return self.trash[before:]
 
     def delete_current_note(self):
@@ -21616,8 +21631,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             deleted_id = note["id"]
             # Move to trash (30-day recovery) rather than destroying it.
             doomed = [n for n in self.notes if n["id"] == deleted_id]
-            marks = [(e.get("id"), e.get("deleted_at"))
-                     for e in self._move_notes_to_trash(doomed)]
+            moved = self._move_notes_to_trash(doomed)
+            if moved is None:
+                return   # trash.json refused it: the note stays, and that was said
+            marks = [(e.get("id"), e.get("deleted_at")) for e in moved]
             self.notes = [n for n in self.notes if n["id"] != deleted_id]
             self.save_notes()
             # Close any open tab that pointed at the deleted note (force: its

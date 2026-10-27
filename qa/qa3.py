@@ -3179,6 +3179,36 @@ for _dz_how, _dz_bytes in _dz_damage.items():
                   for _t, m in _dz_said))
 app.notes = []; app.save_notes()
 
+# A delete when trash.json cannot be written (a full disk, a file another
+# program holds) deletes nothing and says so. The note used to leave the
+# notes file while the Trash kept it only in memory: in neither file once
+# the app closed, under a status line promising "recoverable".
+_tf_keep = NO.normalize_note({'id': 1, 'title': 'Keep me', 'body': 'x'})
+_tf_doomed = NO.normalize_note({'id': 2, 'title': 'Accountant: Maria', 'body': 'tax'})
+app.notes = [_tf_keep, _tf_doomed]; app.save_notes()
+app.trash = []; NO.save_trash(app.trash)
+_tf_warned = []
+_tf_real = (app.ask_yes_no, app.show_warning)
+app.ask_yes_no = lambda *a, **k: True
+app.show_warning = lambda *a, **k: _tf_warned.append(' '.join(map(str, a)))
+os.makedirs(NO.TRASH_FILE + '.tmp')
+try:
+    app.selected_note_id = None
+    app._delete_note(_tf_doomed, None)
+    app.update()
+    _tf_disk = [n.get('title') for n in json.load(open(NO.DATA_FILE, encoding='utf-8'))]
+    check('a delete the Trash cannot hold keeps the note, on screen and on disk '
+          f'({_tf_disk})',
+          any(n.get('id') == 2 for n in app.notes) and 'Accountant: Maria' in _tf_disk
+          and not any(e.get('id') == 2 for e in app.trash))
+    check('...and says nothing was deleted',
+          any('Nothing was deleted' in w for w in _tf_warned))
+finally:
+    os.rmdir(NO.TRASH_FILE + '.tmp')
+    app.ask_yes_no, app.show_warning = _tf_real
+app.notes = []; app.save_notes()
+app.trash = []; NO.save_trash(app.trash)
+
 
 print()
 print(f"=== QA3 FAILURES: {fails if fails else 'NONE'} ===")

@@ -182,6 +182,7 @@ is in the table below as well.
 | [The flicker that was a word count](#the-flicker-that-was-a-word-count) | A label whose text can come and go sizes its row by what it says; give it the height of its tallest state. | 0.97.405 |
 | [Photographs of the site's pages, blank below the first screen](#photographs-of-the-sites-pages-blank-below-the-first-screen) | A photograph proves only what was on the screen when it was taken: photograph a page as a reader meets it, and give what changes it checks of its own. | the website |
 | [A file with two names](#a-file-with-two-names) | When a check and the action after it each name a file, they must name it the same way: resolve once, compare what was resolved. | next |
+| [A delete that trusted the Trash](#a-delete-that-trusted-the-trash) | An order that is safe only if the first step worked needs the first step's answer. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -1982,6 +1983,30 @@ is refused while the file's own name, in any case, still opens; mutant TN01 take
 
 **Takeaway:** when a check and the action after it each name the file, they must name it the
 same way. Resolve once, and compare what was resolved.
+
+### A delete that trusted the Trash
+
+*(2026-10-27 · found by the final audit's break-it round, on a disk filled on purpose)*
+
+**Symptom:** on a disk with room for the notes file but not for the Trash, Delete took the note
+out of both. The status line said "recoverable for 30 days"; after a restart the note was in
+neither file.
+
+**Root cause:** every delete wrote the Trash first, the right order, and then removed the note and
+wrote the notes file — without asking whether the first write worked. `move_notes_to_trash`
+dropped `save_trash`'s answer. The smaller notes file then saved fine, and the Trash held the
+note only in memory, where nothing writes it at close. The restore direction had been fixed for
+the same class long before ("a duplicate at worst, never a note in neither file"); this direction
+had the order and not the check.
+
+**Fix:** `move_notes_to_trash` returns the write's result and, when it failed, takes back what it
+appended. The app's wrapper says "Nothing was deleted" and returns None, and all five delete
+routes — a note, the selection, a category with its notes, the Duplicates panel, a series day
+sent to the Trash — stop there with everything as it was. `test_data_safety` and qa3 make
+`trash.json` unwritable; mutants TF01 and TF02.
+
+**Takeaway:** an order that is safe only if the first step worked needs the first step's answer.
+A write whose result nobody reads is a write nobody checked.
 
 
 ## Tk & platform gotchas

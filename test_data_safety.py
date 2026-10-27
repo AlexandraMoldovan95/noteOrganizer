@@ -760,10 +760,19 @@ try:
 
     _notes = [{'id': 1, 'title': 'Keep'}, {'id': 2, 'title': 'Bin', 'category': 'Gone'}]
     _trash = []
-    _storage.move_notes_to_trash(_trash, [_notes[1]])
+    _moved = _storage.move_notes_to_trash(_trash, [_notes[1]])
+    check('move_notes_to_trash says it wrote the trash file', _moved == (True, None))
     check('move_notes_to_trash puts the note in the trash', len(_trash) == 1)
     check('move_notes_to_trash stamps a deletion time', bool(_trash[0].get('deleted_at')))
     check('move_notes_to_trash writes the trash file', os.path.exists(NO_paths.TRASH_FILE))
+    # A Trash that cannot be written keeps nothing, and says so: the caller
+    # then keeps the note, which used to end up in neither file.
+    os.makedirs(NO_paths.TRASH_FILE + '.tmp')
+    _held = list(_trash)
+    _refused = _storage.move_notes_to_trash(_trash, [{'id': 3, 'title': 'Doomed'}])
+    os.rmdir(NO_paths.TRASH_FILE + '.tmp')
+    check('a Trash that cannot be written is reported, and keeps nothing',
+          _refused[0] is False and _trash == _held)
 
     check('days_left_in_trash counts from the stamp',
           _storage.days_left_in_trash(_trash[0]['deleted_at']) == NO.TRASH_RETENTION_DAYS)
