@@ -37,6 +37,27 @@ This MSIX package version is separate from, and doesn't need to match, the app's
 
 Source: [Microsoft Learn — App package requirements for MSIX apps](https://learn.microsoft.com/en-us/windows/apps/publish/publish-your-app/msix/app-package-requirements)
 
+### Packing it, and proving it in Windows Sandbox
+
+Two tools in `tools/msix/`, both needing the Windows SDK (its signing tools, the x64 desktop
+tools and the App Certification Kit) and, for the proof, Windows Sandbox:
+
+```powershell
+py tools/msix/build_msix.py --update    # dist/msix: the package, and one a build higher
+py tools/msix/make_sandbox_test.py      # dist/msix/NoteOrganizer-msix-test.wsb
+```
+
+Double-clicking the `.wsb` opens a disposable Windows in which `sandbox_test.ps1` signs both
+packages with a certificate made there, puts an older `.exe`'s notebook in AppData, and installs,
+starts, updates, uninstalls and reinstalls the app; `dist/msix/out/result.txt` says after each
+step what the profile's notebook, the package's private copy and AppData hold, and a message says
+when it is done. Nothing touches this machine's certificates or notebooks. The identity is a test
+one (`NoteOrganizer.Test`) until Partner Center reserves the Store's, and a Major of `0` is for
+Sandbox only. Run on 2026-10-27: the old notebook came in, both notes stayed byte for byte
+through the update, the uninstall and the reinstall, the package's private copy held no file,
+and AppData was untouched. The sandbox runs without a virtual GPU: started from the Start menu,
+it lost its connection on this machine.
+
 Four things wait for the listing, when there is one:
 
 - **The privacy policy's address**, which Partner Center asks for: Microsoft requires a policy for
