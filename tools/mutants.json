@@ -5691,5 +5691,15 @@
     "must_fail": ["a Windows sign-out saves the last typing, asking nothing"],
     "suites": ["qa3"],
     "expect": "killed"
+  },
+  {
+    "id": "MD01",
+    "about": "a new day passes unnoticed by the reminder",
+    "edits": [{"file": "noteorganizer/ui/calendar_view.py",
+               "find": "        if today != getattr(self, \"_reminder_day\", today):\n",
+               "replace": "        if False:\n"}],
+    "must_fail": ["across midnight the new day's reminder replaces the old one"],
+    "suites": ["qa8"],
+    "expect": "killed"
   }
 ]

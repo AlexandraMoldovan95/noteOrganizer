@@ -995,6 +995,7 @@ class CalendarViewMixin:
         self._render_reminder_bar(len(due), today)
 
     def _render_reminder_bar(self, count, today):
+        self._reminder_bar_day = today
         for w in self.reminder_bar.winfo_children():
             w.destroy()
         self.reminder_bar.pack(fill="x", side="top", before=self.notebook)
@@ -1046,6 +1047,21 @@ class CalendarViewMixin:
     def dismiss_reminder(self):
         """Hide the reminder bar for the rest of the session."""
         self.reminder_bar.pack_forget()
+
+    def _watch_the_day(self):
+        """Once a minute: when the date has changed since the last look, a
+        bar for an earlier day goes and the new day's is asked for. Asked
+        only at start, an app left open overnight, or woken from sleep the
+        next day, never reminded about the new day's notes."""
+        if not self._still_alive():
+            return
+        today = datetime.now().strftime("%Y-%m-%d")
+        if today != getattr(self, "_reminder_day", today):
+            if getattr(self, "_reminder_bar_day", None) not in (None, today):
+                self.dismiss_reminder()
+            self.maybe_show_reminder()
+        self._reminder_day = today
+        self.after(60_000, self._watch_the_day)
 
     def show_day_summary_tooltip(self, date_str):
         """Compact, TITLES-ONLY list for hovering the day cell itself (not a

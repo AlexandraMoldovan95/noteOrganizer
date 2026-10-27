@@ -776,6 +776,7 @@
   "_wait_for_resize_to_settle": "(self)",
   "_watch_date_field": "(self, entry)",
   "_watch_resize_release": "(self)",
+  "_watch_the_day": "(self)",
   "_wheel_pixels": "(self, delta)",
   "_whole_note_rescue_copy": "(note)",
   "_widget_alive": "(widget)",

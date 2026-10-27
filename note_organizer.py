@@ -941,6 +941,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.open_note_in_tab(last_note)
         self.after(250, self.announce_startup_changes)
         self.after(400, self.maybe_show_reminder)
+        self._reminder_day = datetime.now().strftime("%Y-%m-%d")
+        self.after(60_000, self._watch_the_day)
         self._last_active_dirty = None
         self.after(600, self._poll_active_dirty)
 

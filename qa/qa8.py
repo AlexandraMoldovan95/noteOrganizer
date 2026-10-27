@@ -182,6 +182,30 @@ try:
 except tk.TclError as e:
     check(f'maybe_show_reminder does not crash after the window closes ({e})', False)
 
+# Left open across midnight, or woken from sleep the next day, the app asks
+# for the new day's reminder and drops a bar still showing an earlier day.
+# It asked only at start: "for today" stayed on yesterday's date.
+app8b = NO.NoteOrganizer(); app8b._poll_active_dirty = lambda: None
+app8b.geometry('1100x850'); app8b.update()
+_md_today = datetime.now().strftime('%Y-%m-%d')
+app8b.notes = [NO.normalize_note({'id': 1, 'title': 'Today', 'body': 'x', 'date': _md_today})]
+_md_settings = NO.load_settings()
+_md_settings.pop('reminder_last_shown', None)
+NO.save_settings(_md_settings)
+app8b._render_reminder_bar(3, '2026-01-01')
+app8b._reminder_day = '2026-01-01'
+app8b._watch_the_day(); app8b.update()
+_md_said = [str(w.cget('text')) for w in app8b.reminder_bar.winfo_children()
+            if isinstance(w, tk.Label)]
+check(f"across midnight the new day's reminder replaces the old one ({_md_said})",
+      app8b._reminder_bar_day == _md_today and any('1 note for today' in t for t in _md_said))
+app8b.destroy()
+try:
+    app8b._watch_the_day()
+    check('the day watch does not crash after the window closes', True)
+except tk.TclError as e:
+    check(f'the day watch does not crash after the window closes ({e})', False)
+
 app9 = NO.NoteOrganizer(); app9._poll_active_dirty = lambda: None
 app9.show_info = lambda *a, **k: True
 app9.geometry('1100x850'); app9.update()
