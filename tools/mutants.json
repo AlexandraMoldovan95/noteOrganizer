@@ -5591,5 +5591,45 @@
     "suites": ["test_data_safety"],
     "expect": "killed",
     "note": "Killed on Windows, where the app runs; elsewhere the profile folder is the AppData equivalent and these checks do not run."
+  },
+  {
+    "id": "GF01",
+    "about": "an animation keeps every decoded frame while its first loop plays",
+    "edits": [{"file": "noteorganizer/ui/attachments.py",
+               "find": "                        and source is not None and held > self.PREVIEW_MEMORY_BYTES:\n",
+               "replace": "                        and source is not None and held < 0:\n"}],
+    "must_fail": ["a long animation keeps only the frames that fit, at their own size"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "GF02",
+    "about": "a closed preview's frames stay alive",
+    "edits": [{"file": "noteorganizer/ui/dialogs.py",
+               "find": "        self._image_preview_ref = None\n",
+               "replace": ""}],
+    "must_fail": ["...and closing the preview lets its frames go"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "GF03",
+    "about": "an image of any size is decoded whole for the preview",
+    "edits": [{"file": "noteorganizer/ui/attachments.py",
+               "find": "                if w * h > self.PREVIEW_PIXEL_BUDGET:\n",
+               "replace": "                if False:\n"}],
+    "must_fail": ["an image past the pixel budget is offered elsewhere, not decoded"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "GF04",
+    "about": "an animation's frames are enlarged up to 8x like a still's",
+    "edits": [{"file": "noteorganizer/ui/attachments.py",
+               "find": "                    _scaled(pil_img.convert(\"RGBA\"), grow=not animated))]\n",
+               "replace": "                    _scaled(pil_img.convert(\"RGBA\")))]\n"}],
+    "must_fail": ["a long animation keeps only the frames that fit, at their own size"],
+    "suites": ["qa7"],
+    "expect": "killed"
   }
 ]

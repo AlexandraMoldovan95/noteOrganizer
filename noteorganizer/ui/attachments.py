@@ -229,12 +229,12 @@ class AttachmentsMixin:
         cache_key = self._preview_cache_key(path, target_w, target_h)
         cached = self._cached_preview(cache_key)
 
-        def _scaled(frame):
+        def _scaled(frame, grow=True):
             w, h = frame.size
             if w > target_w or h > target_h:
                 frame = frame.copy()
                 frame.thumbnail((target_w, target_h), Image.LANCZOS)
-            elif w > 0 and h > 0 and w < target_w * 0.6 and h < target_h * 0.6:
+            elif grow and w > 0 and h > 0 and w < target_w * 0.6 and h < target_h * 0.6:
                 # Small image, room to spare — enlarge so it's actually easy
                 # to see. Capped so a tiny icon doesn't get blown up absurdly
                 # large just because the window happens to be big.
@@ -264,11 +264,21 @@ class AttachmentsMixin:
                     # -- _scaled() then fits it exactly, as before. Every
                     # other format ignores the request.
                     pil_img.draft(pil_img.mode, (target_w, target_h))
+                w, h = pil_img.size
+                if w * h > self.PREVIEW_PIXEL_BUDGET:
+                    # A 439 KB PNG decoded to 12000x12000 peaked at 1.7 GB;
+                    # left to the program Windows opens it with.
+                    pil_img.close()
+                    self._too_big_to_preview(path)
+                    return
+                if not animated and (w > target_w or h > target_h):
+                    pil_img.thumbnail((target_w, target_h), Image.LANCZOS)
                 # Pillow composites disposal-method-aware frames onto the
                 # right canvas internally as you seek — converting to RGBA
                 # here is what actually captures that composited result,
                 # not just this frame's own raw (possibly partial) pixels.
-                frames = [ImageTk.PhotoImage(_scaled(pil_img.convert("RGBA")))]
+                frames = [ImageTk.PhotoImage(
+                    _scaled(pil_img.convert("RGBA"), grow=not animated))]
                 delays = [(pil_img.info.get("duration", 100) or 100)
                           if animated else 100]
             except Exception:
@@ -325,7 +335,14 @@ class AttachmentsMixin:
                 if not img_lbl.winfo_exists():
                     return
                 nxt = state["i"] + 1
+                held = sum(f.width() * f.height() * 4 for f in frames)
                 if nxt >= len(frames) and self._preview_source is source \
+                        and source is not None and held > self.PREVIEW_MEMORY_BYTES:
+                    # Kept frames past what the cache may hold: a 33 KB GIF
+                    # ran the app out of memory. It plays the part that fits.
+                    self._release_preview_source()
+                    nxt = 0
+                elif nxt >= len(frames) and self._preview_source is source \
                         and source is not None:
                     # First time round: this frame is not decoded yet. In
                     # order, one per tick, because Pillow composites each
@@ -333,7 +350,7 @@ class AttachmentsMixin:
                     try:
                         source.seek(nxt)
                         frames.append(ImageTk.PhotoImage(
-                            _scaled(source.convert("RGBA"))))
+                            _scaled(source.convert("RGBA"), grow=False)))
                         delays.append(source.info.get("duration", 100) or 100)
                     except EOFError:
                         # The last frame has been seen: from here on the
@@ -377,6 +394,19 @@ class AttachmentsMixin:
     # so this holds a good many; one long animation can fill it, and one
     # bigger than all of it is simply not kept.
     PREVIEW_MEMORY_BYTES = 64 * 1024 * 1024
+    # The largest image decoded for a preview, in pixels: a 50-megapixel
+    # photo still shows (a JPEG is decoded small anyway); past it, the
+    # program Windows opens images with shows it instead.
+    PREVIEW_PIXEL_BUDGET = 50_000_000
+
+    def _too_big_to_preview(self, path):
+        """Offer the image to the program Windows opens it with, rather
+        than decode it whole here."""
+        if self.ask_yes_no(
+                "Too large to preview",
+                "This image is too large to show here. Open it in the program "
+                "your computer uses for images?", icon="question", default="yes"):
+            self._open_externally(path)
 
     @staticmethod
     def _preview_cache_key(path, width, height):

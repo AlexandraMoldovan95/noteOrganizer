@@ -185,6 +185,7 @@ is in the table below as well.
 | [A delete that trusted the Trash](#a-delete-that-trusted-the-trash) | An order that is safe only if the first step worked needs the first step's answer. | next |
 | [The number too big to start](#the-number-too-big-to-start) | Code that runs before the window exists takes the safe answer for whatever it cannot read. | next |
 | [The close that outran a failed save](#the-close-that-outran-a-failed-save) | A warning that something will be lost is a promise to stop before losing it. | next |
+| [The preview that kept every frame](#the-preview-that-kept-every-frame) | A limit has to hold while the thing it limits is being built, not only once it is finished. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -2056,6 +2057,28 @@ where the write's temporary file goes; mutants CS01 and CS02.
 
 **Takeaway:** a warning that something will be lost is a promise to stop before losing it. If the
 next step is the loss, the warning has to be a question.
+
+### The preview that kept every frame
+
+*(2026-10-27 · found by the final audit's break-it round)*
+
+**Symptom:** a 33 KB GIF ran the app out of memory as its preview played; a 1.2 MB one grew it by
+1.8 GB. A 439 KB PNG of 12000×12000 peaked at 1.7 GB on its way to a preview the size of a
+window.
+
+**Root cause:** the preview decodes an animation one frame per tick and keeps each, so its next
+loop plays from memory. The 64 MB limit applied only to what is remembered after the first loop;
+during it, nothing was counted. Small animations were enlarged up to eight times first, and the
+list stayed referenced after the preview closed. A still image was converted to RGBA and copied
+at full size before it was shrunk — `draft()` shrinks only a JPEG.
+
+**Fix:** frames stop being kept once they pass the same 64 MB, and the animation plays the part
+it has. An animation is never enlarged. Closing the preview lets its frames go. A still is shrunk
+before it is converted, and an image past 50 megapixels (a JPEG is decoded small and passes) is
+offered to the program the computer opens images with instead. qa7 plays each; mutants GF01–GF04.
+
+**Takeaway:** a limit has to hold while the thing it limits is being built, not only once it is
+finished.
 
 
 ## Tk & platform gotchas

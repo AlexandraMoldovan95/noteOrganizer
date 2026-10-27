@@ -1162,8 +1162,10 @@ class DialogsMixin:
             except (tk.TclError, ValueError):
                 pass
             self._gif_anim_job = None
-        # An image preview may still be reading its animation's frames.
+        # An image preview may still be reading its animation's frames, and
+        # its frames were kept alive after it closed (only the cache keeps any).
         self._release_preview_source()
+        self._image_preview_ref = None
         pop = getattr(self, "_mini_popup", None)
         if pop is not None:
             try:

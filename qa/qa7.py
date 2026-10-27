@@ -1163,6 +1163,46 @@ except OSError:
 check(f'closing an animation mid-decode lets its file go (was reading: '
       f'{_pv_held}, then movable: {_pv_moved})', _pv_held and _pv_moved)
 
+# An animation's memory is bounded. Every decoded frame was kept while the
+# first loop played, enlarged up to 8x, and kept after the preview closed:
+# a 33 KB GIF ran the app out of memory. Frames stop being kept past
+# PREVIEW_MEMORY_BYTES (here room for three), and closing lets them go.
+_pv_tiny = os.path.join(_pv_dir, 'tiny_anim.gif')
+_pv_small = [_pv_Image.new('RGB', (10, 10), (_i * 20, 0, 0)) for _i in range(12)]
+_pv_small[0].save(_pv_tiny, save_all=True, append_images=_pv_small[1:],
+                  duration=20, loop=0)
+app.PREVIEW_MEMORY_BYTES = 10 * 10 * 4 * 3
+try:
+    app._show_image_preview(_pv_tiny, 'tiny_anim.gif')
+    _pv_end = time.time() + 10
+    while app._preview_source is not None and time.time() < _pv_end:
+        app.update(); time.sleep(0.01)
+    _pv_kept = list(app._image_preview_ref)
+    check(f'a long animation keeps only the frames that fit, at their own size '
+          f'({len(_pv_kept)} of 12 kept, {_pv_kept[0].width()} px wide)',
+          len(_pv_kept) == 4 and _pv_kept[0].width() == 10
+          and app._preview_source is None)
+    app._dismiss_mini_popup(); app.update()
+    check('...and closing the preview lets its frames go',
+          app._image_preview_ref is None)
+finally:
+    del app.PREVIEW_MEMORY_BYTES
+
+# An image too large to decode here is offered to the program Windows opens
+# images with: a 439 KB PNG of 12000x12000 peaked at 1.7 GB in the preview.
+_pv_asked = []
+_pv_real_ask = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: (_pv_asked.append(a[0] if a else ''), False)[1]
+app.PREVIEW_PIXEL_BUDGET = 1000
+try:
+    app._show_image_preview(os.path.join(_pv_dir, 'big.png'), 'big.png'); app.update()
+    check(f'an image past the pixel budget is offered elsewhere, not decoded '
+          f'({_pv_asked})',
+          _pv_asked == ['Too large to preview'] and app._mini_popup is None)
+finally:
+    app.ask_yes_no = _pv_real_ask
+    del app.PREVIEW_PIXEL_BUDGET
+
 # A JPEG photo is decoded at the size it is shown, and still fills it.
 _pv_jpg = os.path.join(_pv_dir, 'photo_pv.jpg')
 _pv_Image.new('RGB', (3000, 2000), (40, 90, 160)).save(_pv_jpg, quality=85)
@@ -1257,9 +1297,14 @@ finally:
     app.ask_yes_no = _real_ask_lnk
     if _real_startfile2 is not None:
         NO.os.startfile = _real_startfile2
-check('a trailing-dot .lnk still meets the warning, and No still blocks',
-      len(_asked2) == 1 and _asked2[0][1].get('default') == 'no'
-      and _opened2 == [])
+# On Windows the dirty name reaches evil.lnk under another name, so the
+# resolver refuses it outright ("A file with two names"); elsewhere the file
+# has that literal name, and the gate asks.
+check('a trailing-dot .lnk never opens unasked: the warning with No, or '
+      f'refused as another name ({_asked2})',
+      _opened2 == []
+      and ((len(_asked2) == 1 and _asked2[0][1].get('default') == 'no')
+           or (os.name == 'nt' and _asked2 == [])))
 
 # non-previewable file still gets the "opens externally" hint
 app.current_attachments = [{'filename': 'doc.pdf', 'stored_as': 'doc.pdf'}]
