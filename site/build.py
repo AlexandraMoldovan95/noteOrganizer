@@ -14,7 +14,7 @@ What it does, in order:
    resized to WebP.
 3. Checks what it built: every internal link and anchor resolves, no
    {{token}} is left unfilled, and nothing private (a home folder, a
-   private account or folder name: FORBIDDEN) reached a page.
+   private account or folder name: FORBIDDEN, PRIVATE_WORDS) reached a page.
 4. Only then puts it in public/'s place. Any failure stops the build with
    a non-zero exit and leaves the last good site in public/ untouched.
 
@@ -24,6 +24,7 @@ edit public/ by hand, because the next build replaces it.
 
 import argparse
 import ast
+import hashlib
 import html
 import json
 import os
@@ -68,8 +69,32 @@ PAGES = {
 
 # Text that must never reach a published page. A build that finds one
 # stops; the page is not published with it.
-FORBIDDEN = [r"adas9", r"mekotrading", r"noteOrganizerSavedFiles",
-             r"[A-Za-z]:\\Users\\", r"stepIT"]
+FORBIDDEN = [r"[A-Za-z]:\\Users\\"]
+# ...and private words -- an account, a home folder's name, a folder of
+# notes -- kept as the SHA-256 of each, lowercased, by its length: listed
+# as words, the guard published what it guarded. Any run of letters and
+# digits in a page that holds one stops the build too.
+PRIVATE_WORDS = {
+    5: {"0d7d48a65e977aff4d6360550c5bd34225aa217a68b495a898708a3dd561e2a2"},
+    6: {"ef034696c770ea75c312c7be5d421e4cb9872dfab54fd21ed388525d6e9d9389"},
+    11: {"a8885707c07fe4e003bb49e0f1519239d48ca8454fd82e70d4d07ca1e997aa0e"},
+    23: {"808a8aa57b09e9f4d849741fe212622e62e20c99f22cd7f3c1e534275cf2f769"},
+}
+
+
+def private_text(text):
+    """What private text *text* holds: each FORBIDDEN pattern it matches,
+    and how many PRIVATE_WORDS -- never the words themselves."""
+    found = ["text matching %r" % p for p in FORBIDDEN if re.search(p, text, re.IGNORECASE)]
+    words = 0
+    for token in re.findall(r"[a-z0-9]+", text.lower()):
+        for length, digests in PRIVATE_WORDS.items():
+            for at in range(len(token) - length + 1):
+                piece = token[at:at + length].encode("utf-8")
+                words += hashlib.sha256(piece).hexdigest() in digests
+    if words:
+        found.append("%d private word(s)" % words)
+    return found
 
 # Pages are linked by file, never by folder ("demo/index.html", not
 # "demo/"): a server opens a folder's index.html by itself, but a page
@@ -820,9 +845,8 @@ def check_output():
         rel = os.path.relpath(path, OUT)
         if "{{" in text:
             problems.append("%s: an unfilled {{token}}" % rel)
-        for pattern in FORBIDDEN:
-            if re.search(pattern, text, re.IGNORECASE):
-                problems.append("%s: private text matching %r" % (rel, pattern))
+        for what in private_text(text):
+            problems.append("%s: private %s" % (rel, what))
         if re.search(r"<form\b", text, re.IGNORECASE):
             problems.append("%s: a form, which cannot send: _headers says form-action "
                             "'none', and feedback goes through the stores" % rel)
@@ -862,10 +886,8 @@ def check_output():
     for root, _, files in os.walk(OUT):
         for name in files:
             if name.endswith((".js", ".css", ".txt")):
-                text = read(os.path.join(root, name))
-                for pattern in FORBIDDEN:
-                    if re.search(pattern, text, re.IGNORECASE):
-                        problems.append("%s: private text matching %r" % (name, pattern))
+                for what in private_text(read(os.path.join(root, name))):
+                    problems.append("%s: private %s" % (name, what))
     return problems, len(pages)
 
 
