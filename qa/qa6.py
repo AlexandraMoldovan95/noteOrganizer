@@ -4374,7 +4374,11 @@ def _kb_unreachable(top):
                 route = getattr(c, '_key_route', None)
                 anc, ok = c, route is not None and str(route) in chain
                 while anc is not None and not ok:
-                    ok = str(anc) in chain
+                    # The tab strip is a Tab stop, and no key of its own
+                    # reaches into a page: an attachment's name passed as
+                    # "inside" it while the keyboard could not open it.
+                    ok = str(anc) in chain and (
+                        anc is c or anc.winfo_class() != 'TNotebook')
                     anc = anc.master
                 if not ok:
                     text = str(c.cget('text'))[:20] if 'text' in c.keys() else ''
@@ -4389,7 +4393,16 @@ NO.CATEGORY_COLORS.setdefault('Work', '#7c5cff')
 app.templates = [{'name': 'KbTemplate', 'title': 'x', 'body': 'y', 'category': 'General'}]
 app.notes = [{'id': 801, 'title': 'KbNote', 'body': 'x', 'category': 'Work',
               'date': '2026-10-02', 'created': '2026-01-01 00:00',
-              'updated': '2026-01-01 00:00', 'checklist': [], 'attachments': []}]
+              'updated': '2026-01-01 00:00', 'checklist': [],
+              'attachments': [{'filename': 'kb.pdf',
+                               'stored_as': '20261002120000000000_kb.pdf'},
+                              {'filename': 'kb.png',
+                               'stored_as': '20261002120000000000_kb.png'}]}]
+with open(os.path.join(NO.ATTACHMENTS_DIR, '20261002120000000000_kb.pdf'), 'wb') as f:
+    f.write(b'%PDF-1.4')
+import PIL.Image as _kb_Image
+_kb_Image.new('RGB', (40, 30), (200, 40, 40)).save(
+    os.path.join(NO.ATTACHMENTS_DIR, '20261002120000000000_kb.png'))
 app.trash = [{'id': 802, 'uid': 'kb-t', 'title': 'KbGone', 'body': 'x', 'category': 'General',
               'deleted_at': '2026-10-20 10:00:00'}]
 app.save_notes(); NO.save_trash(app.trash)
@@ -4398,6 +4411,58 @@ app.notebook.select(app.TAB_NOTES)
 app.open_note_in_tab(app.notes[0])
 _kv_settle(10)
 _kb_where = {'the notes page': _kb_unreachable(app)}
+# An attachment opens from the keyboard as a click opens it: its name was a
+# label bound to the mouse alone, and only the remove ✕ beside it was a Tab
+# stop. A picture's preview takes the keyboard on its Close, Escape shuts
+# it, and the keyboard goes back to the row.
+_ka_names = [w for w in app.attachments_frame.winfo_children()
+             for w in w.winfo_children() for w in w.winfo_children()
+             if isinstance(w, tk.Label) and getattr(w, '_key_press', None)]
+_ka_opened = []
+_ka_real_start = getattr(NO.os, 'startfile', None)
+NO.os.startfile = lambda p, *a, **k: _ka_opened.append(os.path.basename(p))
+_ka_preview = _ka_on_close = _ka_shut = _ka_back = False
+
+
+def _ka_holder():
+    try:
+        return app.nametowidget(str(app.tk.call('focus', '-lastfor', app)))
+    except (KeyError, tk.TclError):
+        return None
+
+
+try:
+    if len(_ka_names) == 2 and _take_focus(_ka_names[0]):
+        _ka_names[0].event_generate('<space>')
+        _kv_settle()
+    if len(_ka_names) == 2 and _take_focus(_ka_names[1]):
+        _ka_names[1].event_generate('<Return>')
+        _kv_settle()
+        _ka_pop = app._mini_popup
+        _ka_preview = _ka_pop is not None and bool(_ka_pop.winfo_exists())
+        _ka_held = _ka_holder()
+        _ka_on_close = (_ka_preview and isinstance(_ka_held, tk.Button)
+                        and str(_ka_held).startswith(str(_ka_pop) + '.')
+                        and 'Close' in str(_ka_held.cget('text')))
+        (_ka_held or app).event_generate('<Escape>')
+        _kv_settle()
+        _ka_shut = app._mini_popup is None
+        _ka_back = _ka_holder() is _ka_names[1]
+except tk.TclError as _ka_exc:
+    print(f'  (attachment keys raised {_ka_exc!r})')
+finally:
+    app._dismiss_mini_popup()
+    if _ka_real_start is None:
+        del NO.os.startfile
+    else:
+        NO.os.startfile = _ka_real_start
+check(f"Space on an attachment's name opens the file, as a click does "
+      f"({len(_ka_names)} names are Tab stops; opened {_ka_opened})",
+      len(_ka_names) == 2 and _ka_opened == ['20261002120000000000_kb.pdf'])
+check(f"...Return on a picture's shows it with the keyboard on Close ({_ka_preview}, "
+      f"{_ka_on_close}), Escape shuts it ({_ka_shut}), and the keyboard goes back "
+      f"to the row ({_ka_back})",
+      _ka_preview and _ka_on_close and _ka_shut and _ka_back)
 app.notebook.select(app.TAB_CALENDAR)
 app.cal_year, app.cal_month = 2026, 10
 app.render_calendar()

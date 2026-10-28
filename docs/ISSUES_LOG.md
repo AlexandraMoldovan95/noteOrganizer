@@ -3138,6 +3138,13 @@ and End scroll every Settings section. The click counter never counted a left cl
 runs only a tag's most specific binding. The reminder bar's ring kept an old theme's colours, and
 a banner hid the Undo the keyboard was on without moving it. Mutants KR01–KR12.
 
+**Round 3** *(2026-10-28)*: an attachment could not be opened from the keyboard at all. Its name
+was a label bound to the mouse, and qa6's walk passed it because the tab strip, an ancestor, is a
+Tab stop, though no key of the strip's reaches into a page. The name is a drawn control now, and a
+picture's preview opened from it takes the keyboard on Close, shuts on Escape, and gives the
+keyboard back to the row. The walk no longer counts the tab strip as "inside", and its notes page
+carries attachments. Mutants RT05, RT06.
+
 **Takeaway:** a mouse binding is not a control; a control is what both hands can press. And a
 focus ring is a claim about the screen: Tk saying the keyboard is there, and a colour option
 saying what to draw, were both true while nothing was drawn — look at the picture.

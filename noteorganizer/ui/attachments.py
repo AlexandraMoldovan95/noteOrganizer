@@ -296,10 +296,10 @@ class AttachmentsMixin:
         header.pack(fill="x", padx=12, pady=(10, 4))
         tk.Label(header, text=filename, font=("Segoe UI", 10, "bold"),
                  bg=self.colors["bg"], fg=self.colors["text"]).pack(side="left")
-        tk.Button(header, text="✕ Close", command=self._dismiss_mini_popup,
-                  relief="flat", cursor="hand2", bg=self.colors["card"],
-                  fg=self.colors["text"], font=("Segoe UI", 9)
-                  ).pack(side="right", ipadx=6, ipady=2)
+        close_btn = tk.Button(header, text="✕ Close", command=self._dismiss_mini_popup,
+                              relief="flat", cursor="hand2", bg=self.colors["card"],
+                              fg=self.colors["text"], font=("Segoe UI", 9))
+        close_btn.pack(side="right", ipadx=6, ipady=2)
         tk.Button(header, text="Open externally",
                   command=lambda: (self._dismiss_mini_popup(), self._open_externally(path)),
                   relief="flat", cursor="hand2", bg=self.colors["accent"],
@@ -389,6 +389,21 @@ class AttachmentsMixin:
 
         overlay.place(relx=0.5, rely=0.5, anchor="center")
         overlay.lift()
+        # Escape closes it, as it closes every popup.
+        if getattr(self, "_mini_popup_escape_bind", None) is None:
+            self._mini_popup_escape_bind = self.bind(
+                "<Escape>", self._escape_backs_out, add="+")
+        # Opened from the keyboard (Space or Return on the row), it takes the
+        # keyboard on Close, and gives it back to the row when it goes.
+        opener = getattr(self, "_key_pressing", None)
+        if opener is not None:
+            self.update_idletasks()        # placed now, so it can take it
+            close_btn.focus_set()
+            path, place = str(overlay), self._place_of(opener)
+            clicks = getattr(self, "_pointer_presses", 0)
+            overlay.bind("<Destroy>", lambda e: (
+                self._keyboard_back(path, place, clicks)
+                if str(e.widget) == path else None), add="+")
         # Click-outside-to-dismiss, matching every other in-app overlay —
         # bound on a short delay so the click that OPENED this preview isn't
         # also immediately seen as a click "outside" it. Bound for THIS
@@ -566,8 +581,13 @@ class AttachmentsMixin:
             name_lbl = tk.Label(top_row, text=f"{icon} {display_name}", font=("Segoe UI", 9),
                                  anchor="w", cursor="hand2",
                                  bg=self.colors["card"], fg=self.colors["text"])
-            name_lbl.pack(side="left", fill="x", expand=True, padx=8, pady=4)
+            name_lbl.pack(side="left", fill="x", expand=True, padx=7, pady=3)
             name_lbl.bind("<Button-1>", lambda e, idx=i: self.open_attachment(idx))
+            # A Tab stop that Space and Return open, as a click does: the ✕
+            # beside it was all the keyboard could reach. Its ring rests in
+            # its own fill, a pixel taken from the padding round it.
+            self._ring_round(name_lbl)
+            self._pressable(name_lbl, lambda idx=i: self.open_attachment(idx))
 
             remove_btn = tk.Button(
                 top_row, text="✕", command=lambda idx=i: self.remove_attachment(idx),

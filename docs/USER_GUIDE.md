@@ -407,10 +407,10 @@ bullet and numbering buttons deliberately do nothing to a table.
 ### Attachments
 
 Attach one or more files to a note from the editor. Attached files show as a small list with their
-name and a way to remove them; click a file to open it. Removing an attachment deletes it from
-that note only — it doesn't touch anything else.
+name and a way to remove them; click a file to open it, or Tab to its name and press Space or
+Enter. Removing an attachment deletes it from that note only — it doesn't touch anything else.
 
-Pictures open large, right in the app. PDFs, text files, Word, Excel and PowerPoint documents
+Pictures open large, right in the app; **Close** or Escape puts them away. PDFs, text files, Word, Excel and PowerPoint documents
 (`.docx`, `.xlsx`, `.pptx`), and sound and video files open straight away in the app your computer
 uses for them. Any other kind of file asks first, because a file from someone else's backup can do
 more than show what is in it; a kind that can run programs — a program, a script, a shortcut, a

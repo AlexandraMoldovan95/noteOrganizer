@@ -7833,5 +7833,42 @@
       "qa7"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "RT05",
+    "about": "an attachment's name is bound to the mouse alone again",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "            self._pressable(name_lbl, lambda idx=i: self.open_attachment(idx))\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "every control a click acts on, on every page, is a Tab stop or inside one",
+      "Space on an attachment's name opens the file, as a click does"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RT06",
+    "about": "a picture's preview opened from the keyboard leaves the keyboard under it",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "            close_btn.focus_set()\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "...Return on a picture's shows it with the keyboard on Close"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
   }
 ]
