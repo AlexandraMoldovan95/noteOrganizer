@@ -439,9 +439,11 @@ from Tk, so the main window holds the keyboard until it is, and nothing is typed
 Every other part is covered by one watcher rather than a list (`_watch_parts_put_away`): an
 `<Unmap>` of a widget its geometry manager has forgotten (pack, grid or place forget — not one
 scrolled out of a canvas, nor a tab left) with the keyboard inside is looked at again two idle
-rounds later, so a row laid out again in one go is left alone, and the keyboard goes to the
-control just clicked, or to the next one on. A page's own move, made at once, comes first. A tab
-left takes the keyboard off anything out of sight, not only a box.
+rounds later. A part laid out again by then is left alone even while it is still unmapped: the
+test is that it and every parent have a manager again, because mapping lags layout (pack maps a
+re-dealt toolbar's buttons only once their row's new size settles). Otherwise the keyboard goes
+to the control just clicked, or to the next one on. A page's own move, made at once, comes
+first. A tab left takes the keyboard off anything out of sight, not only a box.
 
 A press that draws its list again takes the control with it, and Tk leaves the keyboard on the
 window — or on the popup's own window, which counts as nowhere too. It goes to what stands in the
