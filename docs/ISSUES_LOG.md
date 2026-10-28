@@ -197,6 +197,7 @@ is in the table below as well.
 | [Round three: one rescue copy, and files another program holds](#round-three-one-rescue-copy-and-files-another-program-holds) | A store with one slot keeps only the last thing put in it; and a file that could not be opened is not a file that could not be read. | next |
 | [Round four: days kept but not used, loss counted in words, and a run that saves nothing](#round-four-days-kept-but-not-used-loss-counted-in-words-and-a-run-that-saves-nothing) | A value kept "only for later" is still read now by everything that read it before; a measure of harm needs a lower bound as well as an upper one. | next |
 | [Round four: what a click put away, and what a screen can draw](#round-four-what-a-click-put-away-and-what-a-screen-can-draw) | A limit on what is typed is no limit on what is drawn; and a part hidden with the keyboard inside is one rule, not a list. | next |
+| [Round five: a retry paid at every read, and shares in the wrong unit](#round-five-a-retry-paid-at-every-read-and-shares-in-the-wrong-unit) | A condition added to one branch, or a unit to one side of a fraction, changes a question asked in more than one place; a check's deadline is a claim about the machine. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -2607,6 +2608,57 @@ it. Only the pages fixed one by one in round three, Settings and the sidebar, mo
 **Takeaway:** a limit on what is typed is no limit on what is drawn: every drawer of outside content
 needs a size it never passes. And when a fix moves the keyboard off one hidden part, ask what else
 can be hidden with the keyboard inside. The answer is one rule, not a list.
+
+### Round five: a retry paid at every read, and shares in the wrong unit
+
+*(2026-10-28 · found by the final audit's fifth break-it round, which attacked round four's fixes
+by name)*
+
+**Symptom:**
+- **A held settings file froze the app.** With `settings.json` held by another program for the
+  whole run, the start took 19 seconds, Recently deleted 27, a click on a note 4, and every pause
+  in typing 1. Round four's retries for that file were waited through at every read.
+- **Half a table deleted, no copy.** Five rows of a shopping list's eight, deleted at once, made
+  no rescue copy, while the same words written as prose did.
+- **The newest words in no file.** A turn-off whose own save cleared text still took an older
+  copy's text when a save made while the turn-off waited had one.
+- **An item typed, then cleared.** In the blank editor a delete leaves, an item typed in the
+  checklist's Add box was cleared by Ctrl+N.
+- **"Export complete" without the templates.** With `templates.json` held at the start, one
+  template saved in the session became the backup's whole `templates.json`.
+- **Smaller:** the refused writes of a held file raised a banner at every note opened, over a
+  delete's Undo; the start announced a held file's categories as gone missing; and a run that
+  saves nothing showed "Auto-saved" under its own message after the first save.
+
+**Root cause:** each round-four fix answered its question in one place and left a sibling asking
+the old one. The retries meant for the run's first read had no record that it was made. Loss was
+counted in words, but its shares were still taken of a length with the padding in it: two units
+in one fraction. The turn-off's new rule was put in one of its two branches. The blank editor's
+test asked the editor's state, which leaves out the Add box. And the export trusted that what
+the app holds is never less than its files, which a held start had made untrue.
+
+**Fix:**
+- Only the run's first read of `settings.json` waits for it (`_settings_tried`); every later read
+  tries once. The other data files are read once a run and keep their retries.
+- A save's loss and its shares are in one unit: the old text measured as the loss is, each word
+  with one space (`_measured`).
+- A turn-off that takes text keeps the newest text first, whichever copy is there.
+- The blank editor's question counts the checklist's Add box.
+- A templates or Trash file the start could not read is read at the export and joined with the
+  session's, or named as left out (`read_list_now`).
+- A held file's refused write is reported once a run; a held settings file's categories are not
+  announced; the held run's status line is right from its first save.
+- And in the suite: the waits for an export or import to finish had 5–10 s deadlines, and on a busy
+  machine an import outlived one and changed notes under the next checks. They end when the work
+  does, with a ceiling of 120 s.
+- `test_data_safety`, qa3, qa5; mutants DR57–DR64, with DR32, DR47, DR49 and RD01 re-aimed. DR60
+  survived the first test, whose table lost enough to pass under the old measure too; the test now
+  first proves the old measure would miss it.
+
+**Takeaway:** a fix that adds a condition to one branch, or a new unit to one side of a fraction,
+has changed a question that was asked in more than one place. Ask it everywhere, in the same units.
+And a check's deadline is a claim about the machine, not the code: wait for the work, and fail only
+on a ceiling no working run comes near.
 
 
 ## Tk & platform gotchas
