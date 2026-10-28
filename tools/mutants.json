@@ -8785,5 +8785,92 @@
       "qa7"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "RU16",
+    "about": "a template's name is packed before its row's pencil and bin",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "        # After the bin and the pencil, as an attachment's name is after its\n        # ✕: packed first, a 50-letter name took the row and both.\n        name_lbl.pack(side=\"left\", fill=\"x\", expand=True, padx=6, pady=8)\n",
+        "replace": ""
+      },
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "        shown = one_line(name, 200)\n",
+        "replace": "        name_lbl.pack(side=\"left\", fill=\"x\", expand=True, padx=6, pady=8)\n        shown = one_line(name, 200)\n"
+      }
+    ],
+    "must_fail": [
+      "a long name leaves its row's buttons in the row"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RU17",
+    "about": "a category's name is packed before its row's rename and delete",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "            self._icon_button(row, \"lock\").pack(side=\"right\", padx=5)\n        name_lbl.pack(side=\"left\", fill=\"x\", expand=True, padx=(2, 6))\n",
+        "replace": "            self._icon_button(row, \"lock\").pack(side=\"right\", padx=5)\n"
+      },
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                   self._cal_font((\"Segoe UI\", 10, \"bold\"))[0])\n\n        def recolor():\n",
+        "replace": "                   self._cal_font((\"Segoe UI\", 10, \"bold\"))[0])\n        name_lbl.pack(side=\"left\", fill=\"x\", expand=True, padx=(2, 6))\n\n        def recolor():\n"
+      }
+    ],
+    "must_fail": [
+      "a long name leaves its row's buttons in the row"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RU18",
+    "about": "a statistics pill's category name is packed before its count",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                figure.pack(side=\"right\", padx=(6, 12))\n                cat_lbl.pack(side=\"left\", fill=\"x\", expand=True)\n",
+        "replace": "                cat_lbl.pack(side=\"left\", fill=\"x\", expand=True)\n                figure.pack(side=\"right\", padx=(6, 12))\n"
+      }
+    ],
+    "must_fail": [
+      "a long name leaves its row's buttons in the row"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RU19",
+    "about": "a picture's preview draws its name whole, before its two buttons",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "        name_lbl.pack(side=\"left\", fill=\"x\", expand=True)   # after the buttons\n",
+        "replace": ""
+      },
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "                            text=self._fit_name(filename, name_font, max(\n                                self.px(120), target_w - self.px(220))))\n",
+        "replace": "                            text=filename)\n        name_lbl.pack(side=\"left\")\n"
+      }
+    ],
+    "must_fail": [
+      "a picture's preview with a long name stays inside the window, its Close in its header"
+    ],
+    "suites": [
+      "qa7"
+    ],
+    "expect": "killed"
   }
 ]

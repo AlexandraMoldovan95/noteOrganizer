@@ -5088,6 +5088,61 @@ check(f"the status line quotes a name of many lines on one line "
       '\n' not in str(app.status_lbl.cget('text')))
 app.set_status('')
 
+# ---- A ROW'S BUTTONS KEEP THEIR ROOM ----
+# Round 4: Tk's packer serves widgets in the order they were packed, and a
+# name packed before its row's buttons took the room they needed: in
+# Settings > Templates a 50-letter name pushed the pencil out, 80 the bin
+# too, and the same in Categories (80 letters allowed) and the statistics.
+def _rb_inside(w, row):
+    return (w is not None and w.winfo_ismapped() and w.winfo_width() > 5
+            and w.winfo_x() + w.winfo_width() <= row.winfo_width())
+
+
+_rb_cat = 'Quarterly planning for the north office and everyone in it, too'[:80]
+_rb_kept_tpl = list(app.templates)
+app.templates = [{'name': 'Onboarding checklist for new staff in the north office, '
+                          'with every form they need on day one', 'body': 'x'}]
+NO.CATEGORY_COLORS[_rb_cat] = '#5b8def'
+app.notes = [NO.normalize_note({'id': 961, 'title': 'RbNote', 'body': 'b',
+                                'category': _rb_cat})]
+app.save_notes()
+_rb_seen, _rb_where = {}, None
+try:
+    app.show_settings_page()
+    # The names drawn as they fit: their first letters always show.
+    for _rb_section, _rb_word in (('templates', 'Onbo'), ('categories', 'Quar')):
+        app.toggle_settings_panel(_rb_section)
+        _kv_settle(10)
+        _rb_panel = getattr(app, 'settings_%s_panel' % _rb_section)
+        for _rb_icon in _tl_widgets(_rb_panel, tk.Widget):
+            _rb_kind = getattr(_rb_icon, '_icon_kind', None)
+            _rb_row = _rb_icon.master
+            _rb_name = ' '.join(str(c.cget('text')) for c in _rb_row.winfo_children()
+                                if isinstance(c, tk.Label))
+            if _rb_kind in ('pencil', 'trash') and _rb_word in _rb_name:
+                _rb_seen[_rb_section, _rb_kind] = _rb_inside(_rb_icon, _rb_row)
+    app.toggle_settings_panel('statistics')
+    _kv_settle(10)
+    _rb_pill = next((l.master for l in _tl_widgets(app.settings_statistics_panel, tk.Label)
+                     if str(l.cget('text')).startswith('Quar')), None)
+    _rb_count = next((l for l in (_rb_pill.winfo_children() if _rb_pill else ())
+                      if isinstance(l, tk.Label) and str(l.cget('text')).isdigit()), None)
+    _rb_seen['statistics', 'count'] = _rb_inside(_rb_count, _rb_pill)
+    _rb_where = ((_rb_count.winfo_ismapped(), _rb_count.winfo_x(), _rb_count.winfo_width(),
+                  _rb_pill.winfo_width()) if _rb_count is not None else
+                 [str(l.cget('text'))[:14] for l in _tl_widgets(
+                     app.settings_statistics_panel, tk.Label)][:60])
+finally:
+    app.hide_settings_page()
+    app.templates = _rb_kept_tpl
+    NO.CATEGORY_COLORS.pop(_rb_cat, None)
+    app.notes = []
+    app.save_notes()
+    _kv_settle(4)
+check(f"a long name leaves its row's buttons in the row: the template's pencil "
+      f"and bin, the category's, and the statistics' count ({_rb_seen}; {_rb_where})",
+      len(_rb_seen) == 5 and all(_rb_seen.values()))
+
 # ---- KEYBOARD: a tick box is looked at the moment it is pressed ----
 # Round 3 of the final audit: the look after Space waited 100 ms for every
 # Tk button, though a tick box runs its command at once. A template's tick

@@ -1520,6 +1520,26 @@ check(f'a label of many lines, or long with no type, is drawn on one line that '
       '\n' not in _ll_shown['lines'][0] and _ll_shown['lines'][0].endswith('.rdp')
       and _ll_shown['lines'][1] <= _ll_line and _ll_shown['lines'][2]
       and _ll_shown['no type'][0].endswith('…') and _ll_shown['no type'][2])
+# The picture's preview is as wide as what it holds, and drew the name whole
+# before its two buttons: 300 letters made it wider than the window, Close
+# past its edge; 60,000 passed X's limit and ended the app.
+from PIL import Image as _ll_Image
+_ll_Image.new('RGB', (60, 40), (40, 90, 200)).save(
+    os.path.join(NO.ATTACHMENTS_DIR, '20261001120000000003_wide.png'))
+app.current_attachments = [{'filename': 'Holiday at the lake ' * 15 + '.png',
+                            'stored_as': '20261001120000000003_wide.png'}]
+app.refresh_attachments_list(); app.update()
+app.open_attachment(0); app.update(); app.update()
+_ll_pop = app._mini_popup
+_ll_close = find_widget(_ll_pop, tk.Button, '✕ Close') if _ll_pop is not None else None
+_ll_head = _ll_close.master if _ll_close is not None else None
+check(f"a picture's preview with a long name stays inside the window, its "
+      f"Close in its header ({_ll_pop.winfo_width() if _ll_pop else None} of "
+      f"{app.winfo_width()} px)",
+      _ll_close is not None and _ll_pop.winfo_width() <= app.winfo_width()
+      and _ll_close.winfo_ismapped()
+      and _ll_close.winfo_x() + _ll_close.winfo_width() <= _ll_head.winfo_width())
+app._dismiss_mini_popup(); app.update()
 
 # ---- A colon never reaches a stored name ----
 # The resolver refuses a stored name holding one: on Windows it names a

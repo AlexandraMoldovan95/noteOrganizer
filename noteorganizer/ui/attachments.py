@@ -346,8 +346,14 @@ class AttachmentsMixin:
 
         header = tk.Frame(overlay, bg=self.colors["bg"])
         header.pack(fill="x", padx=12, pady=(10, 4))
-        tk.Label(header, text=filename, font=("Segoe UI", 10, "bold"),
-                 bg=self.colors["bg"], fg=self.colors["text"]).pack(side="left")
+        # The overlay is as wide as what it holds: a long name drawn whole
+        # made it wider than the window, Close past its edge. Cut to a room
+        # no wider than the picture may be, beside the two buttons.
+        name_font = self._cal_font(("Segoe UI", 10, "bold"))[0]
+        name_lbl = tk.Label(header, font=name_font, anchor="w",
+                            bg=self.colors["bg"], fg=self.colors["text"],
+                            text=self._fit_name(filename, name_font, max(
+                                self.px(120), target_w - self.px(220))))
         close_btn = tk.Button(header, text="✕ Close", command=self._dismiss_mini_popup,
                               relief="flat", cursor="hand2", bg=self.colors["card"],
                               fg=self.colors["text"], font=("Segoe UI", 9))
@@ -358,6 +364,7 @@ class AttachmentsMixin:
             relief="flat", cursor="hand2", bg=self.colors["accent"],
             fg=self._on_fill("accent"), font=("Segoe UI", 9))
         open_btn.pack(side="right", padx=(0, 6), ipadx=6, ipady=2)
+        name_lbl.pack(side="left", fill="x", expand=True)   # after the buttons
 
         img_lbl = tk.Label(overlay, image=frames[0], bg=self.colors["bg"])
         img_lbl.pack(padx=16, pady=(4, 16))

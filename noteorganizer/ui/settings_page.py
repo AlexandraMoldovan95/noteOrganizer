@@ -609,12 +609,16 @@ class SettingsPageMixin:
                 dot = tk.Frame(pill, bg=color, width=7, height=7)
                 dot.pack(side="left", padx=(8, 6), pady=8)
                 dot.pack_propagate(False)
-                tk.Label(pill, text=cat, font=("Segoe UI", 9, "bold"),
-                         bg=self._surface(), fg=self.colors["subtext"], anchor="w"
-                         ).pack(side="left", fill="x", expand=True)
+                cat_lbl = tk.Label(pill, bg=self._surface(),
+                                   fg=self.colors["subtext"], anchor="w")
+                _fit_title(self, cat_lbl, "", cat, "",
+                           self._cal_font(("Segoe UI", 9, "bold"))[0])
                 figure = tk.Label(pill, text=str(n), font=("Consolas", 9),
                                   bg=self._surface(), fg=self.colors["text"], anchor="e")
+                # The count before the name: packed after it, a long name
+                # took the pill and the count had no room.
                 figure.pack(side="right", padx=(6, 12))
+                cat_lbl.pack(side="left", fill="x", expand=True)
                 view["cat_counts"].append(figure)
 
         view["since"] = tk.Label(
@@ -775,7 +779,6 @@ class SettingsPageMixin:
                             fg=self.colors["text"], anchor="w")
         _fit_title(self, name_lbl, "", name, "",
                    self._cal_font(("Segoe UI", 10, "bold"))[0])
-        name_lbl.pack(side="left", fill="x", expand=True, padx=6, pady=8)
         shown = one_line(name, 200)
 
         def delete():
@@ -827,6 +830,9 @@ class SettingsPageMixin:
 
         edit_btn.bind("<Button-1>", edit)
         edit_btn.pack(side="right", padx=1)
+        # After the bin and the pencil, as an attachment's name is after its
+        # ✕: packed first, a 50-letter name took the row and both.
+        name_lbl.pack(side="left", fill="x", expand=True, padx=6, pady=8)
 
     def _draw_template_table_preview(self, canvas, body_text):
         """A read-only rendering of the body's tables, for the template
@@ -3351,11 +3357,12 @@ class SettingsPageMixin:
         swatch.pack_propagate(False)
 
         count = self.count_notes_in_category(name)
-        name_lbl = tk.Label(
-            row, text=f"{name}   ({count})", bg=self.colors["card"],
-            fg=self.colors["text"], font=("Segoe UI", 10, "bold"), anchor="w"
-        )
-        name_lbl.pack(side="left", fill="x", expand=True, padx=(2, 6))
+        name_lbl = tk.Label(row, bg=self.colors["card"],
+                            fg=self.colors["text"], anchor="w")
+        # The name gives way before its count, and is packed after the icons
+        # (below): an 80-letter name took the row and its rename and delete.
+        _fit_title(self, name_lbl, "", name, f"   ({count})",
+                   self._cal_font(("Segoe UI", 10, "bold"))[0])
 
         def recolor():
             def apply_color(chosen):
@@ -3415,6 +3422,7 @@ class SettingsPageMixin:
                               ).pack(side="right", padx=1)
         else:
             self._icon_button(row, "lock").pack(side="right", padx=5)
+        name_lbl.pack(side="left", fill="x", expand=True, padx=(2, 6))
 
     def _delete_category(self, name, redraw):
         """Delete a category, asking what to do with any notes it holds."""
