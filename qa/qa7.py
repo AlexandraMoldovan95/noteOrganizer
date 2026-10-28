@@ -1218,6 +1218,52 @@ check(f'a large JPEG fits the preview, and fills it ({_pv_pw}x{_pv_ph} in '
       _pv_pw <= _pv_tw and _pv_ph <= _pv_th
       and max(_pv_pw / _pv_tw, _pv_ph / _pv_th) > 0.95)
 
+# ---- Every frame is judged before it is decoded ----
+# The pixel budget asked only the first frame: a TIFF named .png, 16x16 and
+# then 13,000x13,000, showed at once and took 46 s and 2 GB for its second
+# page. A JPEG holding two pictures (MPO) is the same shape through a decoder
+# the preview does use. ISSUES_LOG: "The preview that kept every frame".
+_mf_path = os.path.join(_pv_dir, 'two_pictures.jpg')
+_pv_Image.new('RGB', (16, 16), (200, 30, 30)).save(
+    _mf_path, format='MPO', save_all=True,
+    append_images=[_pv_Image.new('RGB', (300, 200), (30, 30, 200))])
+app.PREVIEW_PIXEL_BUDGET = 1000
+try:
+    app._show_image_preview(_mf_path, 'two_pictures.jpg'); app.update()
+    _mf_shown = app._mini_popup is not None
+    for _ in range(50):
+        app.update()
+        time.sleep(0.02)
+        if app._preview_source is None:
+            break
+    _mf_frames = len(app._image_preview_ref or [])
+    _mf_released = app._preview_source is None
+finally:
+    del app.PREVIEW_PIXEL_BUDGET
+    app._dismiss_mini_popup(); app.update()
+check(f'a later frame past the pixel budget is never decoded: the first shows '
+      f'and the animation stops there ({_mf_frames} frame(s) kept)',
+      _mf_shown and _mf_frames == 1 and _mf_released)
+
+# Pillow knows a file by its contents, so a ".png" could be any of the forty
+# kinds it reads -- a TIFF, an icon set, an EPS it hands to Ghostscript. Only
+# the decoders of the pictures the preview shows may read one.
+_mf_ico = os.path.join(_pv_dir, 'icon_named.png')
+_pv_Image.new('RGBA', (64, 64), (0, 120, 0, 255)).save(
+    _mf_ico, format='ICO', sizes=[(16, 16), (64, 64)])
+_mf_told = []
+_mf_real_warn = app.show_warning
+app.show_warning = lambda t, m, **k: _mf_told.append(t)
+try:
+    app._show_image_preview(_mf_ico, 'icon_named.png'); app.update()
+    _mf_ico_shown = app._mini_popup is not None
+finally:
+    app.show_warning = _mf_real_warn
+    app._dismiss_mini_popup(); app.update()
+check(f'a picture of another kind under a .png name is not decoded, and '
+      f'says it cannot be previewed ({_mf_told})',
+      _mf_told == ["Can't preview this file"] and not _mf_ico_shown)
+
 # ---- A shortcut file is dangerous too (product review T0-8) ----
 # The warn-before-opening list covered the 1990s executables and missed
 # every vehicle actually used to deliver code today. A .lnk carries an

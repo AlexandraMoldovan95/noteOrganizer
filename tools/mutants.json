@@ -6952,5 +6952,25 @@
     "must_fail": ["a note that fails to write is named in the message"],
     "suites": ["qa1"],
     "expect": "killed"
+  },
+  {
+    "id": "AX16",
+    "about": "an animation's later frame is decoded whatever its size",
+    "edits": [{"file": "noteorganizer/ui/attachments.py",
+               "find": "                        past_budget = (source.size[0] * source.size[1]\n",
+               "replace": "                        past_budget = False and (source.size[0] * source.size[1]\n"}],
+    "must_fail": ["a later frame past the pixel budget is never decoded"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "AX17",
+    "about": "the preview lets Pillow read a file with any of its decoders",
+    "edits": [{"file": "noteorganizer/ui/attachments.py",
+               "find": "                pil_img = Image.open(path, formats=self.PREVIEW_DECODERS)\n",
+               "replace": "                pil_img = Image.open(path)\n"}],
+    "must_fail": ["a picture of another kind under a .png name is not decoded"],
+    "suites": ["qa7"],
+    "expect": "killed"
   }
 ]

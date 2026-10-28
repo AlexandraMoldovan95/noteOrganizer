@@ -2086,8 +2086,18 @@ it has. An animation is never enlarged. Closing the preview lets its frames go. 
 before it is converted, and an image past 50 megapixels (a JPEG is decoded small and passes) is
 offered to the program the computer opens images with instead. qa7 plays each; mutants GF01–GF04.
 
+**A frame later** *(2026-10-28 · found by the final audit's second round)*: the 50-megapixel
+budget asked the first frame only. A 923 KB TIFF named `.png`, its first page 16×16 and its second
+13,000×13,000, showed at once; then the animation reached page two and took 46 seconds and 2 GB.
+Seeking to a frame reads its size without decoding it, so every frame is now judged before it is
+decoded, and the animation stops at the first one past the budget. The preview also lets Pillow
+use only the decoders of the pictures it shows: Pillow knows a file by its contents, so a `.png`
+could be a TIFF, an icon set, or an EPS that Pillow hands to Ghostscript. Nothing else in the app
+decodes an outside image. qa7 plays a JPEG holding a small and a large picture, and previews an
+icon set named `.png`; mutants AX16, AX17.
+
 **Takeaway:** a limit has to hold while the thing it limits is being built, not only once it is
-finished.
+finished — and for every part of it, not the first.
 
 ### The table drawn whole
 

@@ -228,7 +228,11 @@ class AttachmentsMixin:
             frames, delays = list(cached[0]), list(cached[1])
         else:
             try:
-                pil_img = Image.open(path)
+                # Pillow knows a file by what is in it, not by its name: a
+                # ".png" could be a TIFF, an icon set, or an EPS that Pillow
+                # hands to Ghostscript. Only the decoders of the pictures
+                # the preview is for may read it.
+                pil_img = Image.open(path, formats=self.PREVIEW_DECODERS)
             except Exception:
                 self.show_warning("Can't preview this file",
                                  "This file couldn't be read as an image.")
@@ -327,9 +331,15 @@ class AttachmentsMixin:
                     # frame onto the one before as it seeks.
                     try:
                         source.seek(nxt)
-                        frames.append(ImageTk.PhotoImage(
-                            _scaled(source.convert("RGBA"), grow=False)))
-                        delays.append(source.info.get("duration", 100) or 100)
+                        # Judged before it is decoded, as the first frame is:
+                        # seeking reads a frame's size, not its pixels, and a
+                        # later frame can be any size the file likes.
+                        past_budget = (source.size[0] * source.size[1]
+                                       > self.PREVIEW_PIXEL_BUDGET)
+                        if not past_budget:
+                            frames.append(ImageTk.PhotoImage(
+                                _scaled(source.convert("RGBA"), grow=False)))
+                            delays.append(source.info.get("duration", 100) or 100)
                     except EOFError:
                         # The last frame has been seen: from here on the
                         # animation plays from memory, and so does the next
@@ -343,6 +353,13 @@ class AttachmentsMixin:
                         # stopping the app.
                         self._release_preview_source()
                         nxt = 0
+                    else:
+                        if past_budget:
+                            # A frame past the budget ends it the same way:
+                            # a TIFF's 169-megapixel second page took 46 s and
+                            # 2 GB. ISSUES_LOG: "The preview that kept every frame".
+                            self._release_preview_source()
+                            nxt = 0
                 elif nxt >= len(frames):
                     nxt = 0
                 state["i"] = nxt
@@ -374,8 +391,13 @@ class AttachmentsMixin:
     PREVIEW_MEMORY_BYTES = 64 * 1024 * 1024
     # The largest image decoded for a preview, in pixels: a 50-megapixel
     # photo still shows (a JPEG is decoded small anyway); past it, the
-    # program Windows opens images with shows it instead.
+    # program Windows opens images with shows it instead. Asked of every
+    # frame of an animation, before that frame is decoded.
     PREVIEW_PIXEL_BUDGET = 50_000_000
+    # The only decoders the preview lets Pillow use: those of the pictures
+    # it shows (PREVIEWED_IN_APP). A JPEG holding several pictures (MPO)
+    # comes through the JPEG decoder, and its frames are judged one by one.
+    PREVIEW_DECODERS = ("PNG", "JPEG", "GIF", "BMP", "WEBP")
 
     def _too_big_to_preview(self, path):
         """Offer the image to the program Windows opens it with, rather
