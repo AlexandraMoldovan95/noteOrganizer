@@ -18557,7 +18557,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         turn-off with it; one kept keeps it waiting."""
         self._cancel_pending_autosave()
         if self.selected_note_id is None and not self.open_tabs:
-            return True
+            # The blank editor a delete leaves, or a start with no note open,
+            # still takes typing, and the autosave just cancelled was all that
+            # would have kept it: a click away within half a second lost it.
+            try:
+                if not self._editor_state_has_content(self.capture_editor_state()):
+                    return True
+            except Exception:
+                self._log_swallowed("flush: blank editor")
+                return True
         # selected_note_id can end up stale — pointing at a note that no
         # longer exists — in the brief window between a delete removing the
         # note from self.notes and the editor being repointed somewhere

@@ -8333,5 +8333,23 @@
       "qa5"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "DR47",
+    "about": "the blank editor a delete leaves is flushed as nothing, its typing lost on any way out within the autosave's wait",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                if not self._editor_state_has_content(self.capture_editor_state()):\n                    return True\n",
+        "replace": "                if True:\n                    return True\n"
+      }
+    ],
+    "must_fail": [
+      "typing in the blank editor a delete leaves is saved by any way out"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
   }
 ]

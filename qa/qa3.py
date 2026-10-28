@@ -3566,6 +3566,42 @@ finally:
     app.ask_yes_no = _se_real_ask
 app.notes = []; app.save_notes()
 
+# The blank editor a delete leaves -- no note, no tab -- still takes typing,
+# and a way out within the autosave's half second (Ctrl+N, another note, the
+# close, a sign-out) cancelled that autosave and saved nothing (round 4).
+_be_real = (app.ask_yes_no, app._themed_dialog)
+app.ask_yes_no = lambda *a, **k: True
+app._themed_dialog = lambda *a, **k: True
+
+
+def _be_bodies():
+    return sorted(n.get('body') for n in json.load(open(NO.DATA_FILE, encoding='utf-8')))
+
+
+try:
+    _be_saved = []
+    for _be_way, _be_words in (('Ctrl+N', 'buy milk'), ('sign-out', 'call the bank')):
+        app.new_note(); app.update()
+        _be_doomed = NO.normalize_note({'id': 4250, 'title': 'Gone', 'body': 'old'})
+        app.notes = [_be_doomed]; app.save_notes()
+        app.open_note_in_tab(_be_doomed); app.update()
+        app.delete_current_note(); app.update()
+        _be_state = (app.selected_note_id, len(app.open_tabs))
+        app.body_text.insert('1.0', _be_words)
+        if _be_way == 'Ctrl+N':
+            app.open_blank_tab(); app.update()
+        else:
+            app.on_session_end(); app.update()
+        _be_saved.append((_be_way, _be_state, _be_bodies()))
+finally:
+    app.ask_yes_no, app._themed_dialog = _be_real
+check(f'typing in the blank editor a delete leaves is saved by any way out '
+      f'within the autosave\'s wait ({_be_saved})',
+      [s[2] for s in _be_saved] == [['buy milk'], ['call the bank']]
+      and all(s[1] == (None, 0) for s in _be_saved))
+app.new_note(); app.update()
+app.notes = []; app.save_notes()
+
 # ...and saves all the close saves (one list, _save_on_the_way_out). Its own
 # copy had drifted: a date typed short was left unsettled, so unsaved, and a
 # write that had failed was never tried again (2026-10-28, the final audit).
