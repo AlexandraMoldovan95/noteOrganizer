@@ -3935,6 +3935,38 @@ app._hide_toast()
 app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
 app.refresh_note_list()
 _kt_settle()
+# Round 3: with the list put away by the sidebar's arrow, the list was still
+# the landing -- a hidden window, for which Tk only notes a request -- so the
+# keyboard stayed on the hidden Undo. Asked where it IS, not where it was sent.
+app.toggle_sidebar()
+_kt_settle()
+_kz_land = {}
+for _kz_how in ('a plain banner', 'Ctrl+Z', 'the banner going', 'Space'):
+    app._show_toast('Note moved to Trash', action=lambda: None)
+    _kt_settle(2)
+    _kz_on = _kt_take(app.toast_action_lbl)
+    if _kz_how == 'a plain banner':
+        app._show_toast('Exported to notes.txt')
+    elif _kz_how == 'Ctrl+Z':
+        app.toast_action_lbl.event_generate('<Control-z>')
+    elif _kz_how == 'Space':
+        app.toast_action_lbl.event_generate('<space>')
+    else:
+        app._hide_toast()
+    _kt_settle(4)
+    try:
+        _kz_held = app.nametowidget(str(app.tk.call('focus', '-lastfor', app)))
+        _kz_land[_kz_how] = (_kz_on, _kz_held is app.sidebar_toggle
+                             and bool(_kz_held.winfo_viewable()))
+    except (KeyError, tk.TclError):
+        _kz_land[_kz_how] = (_kz_on, False)
+    app._hide_toast()
+if app._sidebar_hidden:
+    app.toggle_sidebar()
+_kt_settle()
+check(f'with the note list put away, the keyboard leaves a hidden Undo for the '
+      f'list\'s arrow, by every road ({_kz_land})',
+      len(_kz_land) == 4 and all(v == (True, True) for v in _kz_land.values()))
 
 
 print()

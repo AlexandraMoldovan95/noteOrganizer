@@ -3146,7 +3146,10 @@ keyboard back to the row. The walk no longer counts the tab strip as "inside", a
 carries attachments. Mutants RT05, RT06. The wrapped Space handed the keyboard on only when the
 button was destroyed, and a button its own press hid — Share and Import's Close, the day's ✕, the
 Trash's bulk delete, Settings, Back to Notes — kept it out of sight; hidden now counts as gone,
-as it already did for the app's drawn controls. Mutant RT07.
+as it already did for the app's drawn controls. Mutant RT07. And round two's own fix for the hidden
+Undo sent the keyboard to the note list even while the list was put away by its arrow: Tk only
+notes a request for a hidden window, and the keyboard stayed on the Undo. qa3 had counted the
+request, not asked where the keyboard was; it lands on the arrow now. Mutant RT08.
 
 **Takeaway:** a mouse binding is not a control; a control is what both hands can press. And a
 focus ring is a claim about the screen: Tk saying the keyboard is there, and a colour option

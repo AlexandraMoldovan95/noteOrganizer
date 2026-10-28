@@ -7896,5 +7896,23 @@
       "qa6"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "RT08",
+    "about": "with the note list put away, a hidden Undo hands the keyboard to the hidden list",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        return self.sidebar_toggle if getattr(self, \"_sidebar_hidden\", False) else self.canvas\n",
+        "replace": "        return self.canvas\n"
+      }
+    ],
+    "must_fail": [
+      "with the note list put away, the keyboard leaves a hidden Undo for the list's arrow, by every road"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
   }
 ]

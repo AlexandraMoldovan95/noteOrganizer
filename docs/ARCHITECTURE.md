@@ -438,7 +438,8 @@ panel — Share or Import's Close, the day's ✕, the Trash's bulk delete — co
 hands the keyboard on the same way; one whose whole window was put away is left alone. A control
 hidden rather than destroyed moves the keyboard itself before it goes: the toast's Undo, taken,
 timed out or replaced by a banner with nothing to offer, hands it to where the Undo's own key
-sends it (`_keyboard_off_toast`).
+sends it (`_keyboard_off_toast`): the note list, or its arrow while the list is put away — never a
+window out of sight, for which Tk only notes a request and moves nothing.
 
 The ring is the theme's text colour (`focus_ring`), measured by the contrast gate, and it is both
 border colours while the keyboard is on a control: Windows draws no focus colour round a label,

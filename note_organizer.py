@@ -22365,8 +22365,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _toast_landing(self):
         """Where the keyboard goes when the banner's Undo goes from under it:
-        the note list, or the tabs -- or, on Settings, the entry of the
-        section showing."""
+        the note list -- its arrow, while the list is put away -- or the tabs;
+        or, on Settings, the entry of the section showing. Tk only notes a
+        request for a hidden window, and the keyboard stayed on the Undo."""
         if getattr(self, "_settings_open", False):
             return (getattr(self, "_settings_nav_buttons", None) or {}).get(
                 getattr(self, "_settings_selected_section", None))
@@ -22374,7 +22375,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             on_notes = self.notebook.index("current") == self.TAB_NOTES
         except tk.TclError:
             return None
-        return self.canvas if on_notes else self.notebook
+        if not on_notes:
+            return self.notebook
+        return self.sidebar_toggle if getattr(self, "_sidebar_hidden", False) else self.canvas
 
     def _keyboard_off_toast(self):
         """The Undo hidden while the keyboard is on it -- the banner gone, or
