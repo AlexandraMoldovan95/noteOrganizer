@@ -2325,6 +2325,16 @@ class SettingsPageMixin:
         if not self._dismiss_mini_popup_asking():
             return
         self._catch_up_deferred_refresh()
+        # Read before anything below moves it: the find bar put away parks
+        # the keyboard on the window, and a table cell's editor closes as
+        # the keyboard leaves it. Both came back to the note's body, not to
+        # the note list or to nothing.
+        held = self._keyboard_inside(self.notebook)
+        if held is not None and any(
+                str(held).startswith(str(part) + ".")
+                for part in (self.body_text, getattr(self, "_find_bar", None))
+                if part is not None):
+            held = self.body_text
         # The find bar belongs to the note being left (her re-test, 600).
         self._hide_find()
         self.notebook.pack_forget()
@@ -2352,8 +2362,8 @@ class SettingsPageMixin:
         # A click on Settings takes no keyboard, which stayed in the hidden
         # note: Tab typed tabs into it, Backspace deleted a letter, and both
         # were saved. It comes onto the page, and goes back on the way out.
-        self._keyboard_before_settings = self._keyboard_inside(self.notebook)
-        if self._keyboard_before_settings is not None:
+        self._keyboard_before_settings = held
+        if held is not None:
             self._keyboard_to(self._toast_landing())
 
     def hide_settings_page(self):

@@ -14181,6 +14181,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                       lambda e: self._tab_target_into_sight(e, backwards=True),
                       add="+")
         self._bind_keyboard_tags()
+        self._watch_parts_put_away()
 
         notes_tab = tk.Frame(self.notebook)
         self.track_theme(notes_tab, bg="bg")
@@ -14230,9 +14231,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # when the previously-focused widget is hidden by the tab switch.
             # Explicitly park focus on the notebook itself so no field silently
             # starts capturing keystrokes the user didn't click into.
+            # And off anything the tab left out of sight: the note list, a
+            # Canvas, kept it, and Alt+Up reordered notes nobody could see.
             try:
                 focused = self.focus_get()
-                if isinstance(focused, (tk.Entry, tk.Text)):
+                held = self._keyboard_inside(self.notebook)
+                if isinstance(focused, (tk.Entry, tk.Text)) or (
+                        held is not None and held is not self.notebook
+                        and not held.winfo_viewable()):
                     self.notebook.focus_set()
             except (tk.TclError, KeyError):
                 pass

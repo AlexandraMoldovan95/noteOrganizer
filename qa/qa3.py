@@ -1162,7 +1162,7 @@ _tp_told = []
 _tp_real_info = app.show_info
 _tp_real_rename = app._show_inline_rename
 app.show_info = lambda title, message, **k: _tp_told.append((title, message))
-app._show_inline_rename = lambda _anchor, _default, on_name: on_name('One too many')
+app._show_inline_rename = lambda _anchor, _default, on_name, **_limit: on_name('One too many')
 try:
     app.title_entry.delete(0, 'end')
     app.title_entry.insert(0, 'Has a title')

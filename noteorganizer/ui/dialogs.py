@@ -29,6 +29,7 @@ See :mod:`noteorganizer.ui` for what a mixin is and the two rules that
 keep them working.
 """
 
+import time
 import tkinter as tk
 from tkinter import ttk
 from types import SimpleNamespace
@@ -1339,8 +1340,11 @@ class DialogsMixin:
             except tk.TclError:
                 pass
 
-    def _count_pointer_press(self, _event=None):
+    def _count_pointer_press(self, event=None):
         self._pointer_presses = getattr(self, "_pointer_presses", 0) + 1
+        # What was pressed, and when: where the keyboard goes when the
+        # click puts away the part holding it (_keyboard_off_part).
+        self._last_press = (getattr(event, "widget", None), time.monotonic())
 
     def _tk_press_starts(self, path):
         """Space on one of Tk's own buttons, before its command runs: where
@@ -1773,6 +1777,58 @@ class DialogsMixin:
             target.focus_set()
         except tk.TclError:
             pass
+
+    def _watch_parts_put_away(self):
+        """Bound once at start. A part of the window put away while the
+        keyboard is in it -- the checklist folded, the calculator, a panel
+        closed, a Settings section left -- kept it: a click takes no
+        keyboard, and keys went on into what nobody could see, and were
+        saved. One watcher for every such part, made now or later."""
+        self.bind_all("<Unmap>", self._part_put_away, add="+")
+
+    def _part_put_away(self, event):
+        """An unmapped widget its manager has forgotten (pack, grid or place
+        forget), with the keyboard inside it, is looked at again once the
+        moment has passed: a row laid out again is forgotten and packed back
+        in one go. Scrolled out of a canvas, or a tab left, it stays managed."""
+        part = event.widget
+        if isinstance(part, (str, tk.Tk, tk.Toplevel)):
+            return
+        try:
+            if part.winfo_manager():
+                return
+            held = str(self.tk.call("focus", "-lastfor", part))
+            if not (held == str(part) or held.startswith(str(part) + ".")):
+                return
+            held = self.nametowidget(held)
+        except (KeyError, tk.TclError):
+            return
+        self.after_idle(lambda: self.after_idle(
+            lambda: self._keyboard_off_part(held)))
+
+    def _keyboard_off_part(self, held):
+        """The keyboard off *held*, put away with its part: to the control
+        just clicked, when it is in sight and takes it (the checklist's own
+        bar, a Settings entry), else to the next control on, as a press
+        that hid its own button hands it on (_keyboard_stays)."""
+        try:
+            if not held.winfo_exists():
+                return
+            top = held.winfo_toplevel()
+            now = str(self.tk.call("focus"))
+            if (str(self.tk.call("focus", "-lastfor", top)) != str(held)
+                    or (now and self.nametowidget(now).winfo_toplevel() is not top)
+                    or held.winfo_viewable() or not top.winfo_viewable()):
+                return      # moved since, back in sight, or the window away
+            target, at = getattr(self, "_last_press", (None, 0.0))
+            if not (target is not None and time.monotonic() - at < 1.0
+                    and not isinstance(target, str) and target.winfo_exists()
+                    and target.winfo_toplevel() is top
+                    and str(self.tk.call("tk::FocusOK", target)) == "1"):
+                target = held.tk_focusNext()
+        except (KeyError, tk.TclError):
+            return
+        self._keyboard_to(target if target is not None else top)
 
     def _tab_target_into_sight(self, event, backwards=False):
         """Tab moves the keyboard and never the view, so what it lands on is

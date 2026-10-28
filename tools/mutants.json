@@ -7896,6 +7896,11 @@
         "file": "noteorganizer/ui/dialogs.py",
         "find": "                if ((widget.winfo_exists() and (\n                        widget.winfo_viewable()\n                        or not widget.winfo_toplevel().winfo_viewable()))\n",
         "replace": "                if (widget.winfo_exists()\n"
+      },
+      {
+        "file": "note_organizer.py",
+        "find": "        self._watch_parts_put_away()\n",
+        "replace": ""
       }
     ],
     "must_fail": [
@@ -7930,7 +7935,12 @@
     "edits": [
       {
         "file": "noteorganizer/ui/settings_page.py",
-        "find": "        if self._keyboard_before_settings is not None:\n            self._keyboard_to(self._toast_landing())\n",
+        "find": "        if held is not None:\n            self._keyboard_to(self._toast_landing())\n",
+        "replace": ""
+      },
+      {
+        "file": "note_organizer.py",
+        "find": "        self._watch_parts_put_away()\n",
         "replace": ""
       }
     ],
@@ -7985,6 +7995,11 @@
       {
         "file": "note_organizer.py",
         "find": "            if self._keyboard_inside(self.sidebar) is not None:\n                self._keyboard_to(self.sidebar_toggle)\n",
+        "replace": ""
+      },
+      {
+        "file": "note_organizer.py",
+        "find": "        self._watch_parts_put_away()\n",
         "replace": ""
       }
     ],
@@ -8870,6 +8885,61 @@
     ],
     "suites": [
       "qa7"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RU20",
+    "about": "a part put away by a click keeps the keyboard, out of sight",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._watch_parts_put_away()\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a click that puts away the part holding the keyboard hands it to something in sight",
+      "...so keys typed after it change nothing saved"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RU21",
+    "about": "Settings opened from the find box gives the keyboard back to nothing",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                for part in (self.body_text, getattr(self, \"_find_bar\", None))\n",
+        "replace": "                for part in ()\n"
+      }
+    ],
+    "must_fail": [
+      "Settings opened from the find box gives the keyboard back to the note"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RU22",
+    "about": "a tab left moves the keyboard off a box only, so the note list keeps it hidden",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                        held is not None and held is not self.notebook\n                        and not held.winfo_viewable()):\n",
+        "replace": "                        False):\n"
+      }
+    ],
+    "must_fail": [
+      "a tab left with the keyboard on the note list takes it off the list"
+    ],
+    "suites": [
+      "qa6"
     ],
     "expect": "killed"
   }

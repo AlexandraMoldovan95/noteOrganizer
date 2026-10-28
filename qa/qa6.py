@@ -4836,6 +4836,7 @@ check(f'...and a click on Back to Notes gives the keyboard back to the note '
 # one, Page Down still reads the page on.
 _take_focus(app.body_text)
 app._keyboard_to = lambda target: None    # as if nothing had moved it
+app._keyboard_off_part = lambda held: None    # the put-away watcher neither
 try:
     app.show_settings_page()
 finally:
@@ -4848,6 +4849,7 @@ _ks_left = _ks_holder() is app.body_text
 app.event_generate('<Next>')
 _kv_settle(2)
 _ks_paged = app.settings_canvas.yview()[0]
+del app._keyboard_off_part
 app.hide_settings_page()
 _kv_settle(4)
 check(f'...and with the keyboard left in the hidden note, Page Down still '
@@ -5142,6 +5144,108 @@ finally:
 check(f"a long name leaves its row's buttons in the row: the template's pencil "
       f"and bin, the category's, and the statistics' count ({_rb_seen}; {_rb_where})",
       len(_rb_seen) == 5 and all(_rb_seen.values()))
+
+# ---- KEYBOARD: a part put away by a click hands the keyboard on ----
+# Round 4: a click takes no keyboard, so folding the checklist with the caret
+# in its Add box left it there: x and Return added an item nobody saw, and it
+# was saved. The same for the calculator, a Settings section left, the import
+# panel closed. One watcher hands the keyboard on from any part put away.
+def _pa_holder():
+    try:
+        return app.nametowidget(str(app.tk.call('focus', '-lastfor', app)))
+    except (KeyError, tk.TclError):
+        return None
+
+
+def _pa_click(button):
+    """A click on a Tk button: the press the app counts, then its command."""
+    _qa_fire(button, '<ButtonPress-1>')
+    button.invoke()
+    _kv_settle(6)
+
+
+_pa_seen = {}
+app.notes = [NO.normalize_note({'id': 971, 'title': 'PaNote', 'body': 'milk',
+                                'checklist': [{'text': 'eggs', 'done': False}]})]
+app.save_notes()
+app.refresh_note_list()
+app.notebook.select(app.TAB_NOTES)
+app.open_note_in_tab(app.notes[0])
+_kv_settle(6)
+if not app._checklist_open:
+    app.toggle_checklist_section()
+_kv_settle(4)
+_pa_took = _take_focus(app.checklist_add_entry)
+_pa_click(app.checklist_btn)                       # the bar folds the list
+_pa_h = _pa_holder()
+_pa_seen['checklist'] = (_pa_took, _pa_h is not None and bool(_pa_h.winfo_viewable()))
+for _pa_key in ('<KeyPress-x>', '<KeyPress-Return>'):
+    app.event_generate(_pa_key)                    # Tk sends it where the keyboard is
+    _kv_settle(2)
+app._flush_autosave()
+_pa_items = [i['text'] for i in (app.find_note(971) or {}).get('checklist', [])]
+if not app._calculator_open:
+    app.toggle_calculator_section()
+_kv_settle(4)
+_pa_took = _take_focus(app.calculator_display)
+_pa_click(app.calculator_btn)                      # the calculator folds
+_pa_h = _pa_holder()
+_pa_seen['calculator'] = (_pa_took, _pa_h is not None and bool(_pa_h.winfo_viewable()))
+app.toggle_import_panel()
+_kv_settle(4)
+_pa_took = _take_focus(app.import_box)
+app.toggle_import_panel()                          # its button, pressed again
+_kv_settle(6)
+_pa_h = _pa_holder()
+_pa_seen['import'] = (_pa_took, _pa_h is not None and bool(_pa_h.winfo_viewable()))
+app.show_settings_page()
+app.toggle_settings_panel('categories')
+_kv_settle(10)
+_pa_new = next((e for e in _tl_widgets(app.settings_categories_panel, tk.Entry)), None)
+_pa_took = _pa_new is not None and _take_focus(_pa_new)
+if _pa_new is not None:
+    _pa_new.insert(0, 'Zed')
+_pa_click(app._settings_nav_buttons['about'])      # another section
+_pa_h = _pa_holder()
+_pa_seen['settings'] = (_pa_took, _pa_h is not None and bool(_pa_h.winfo_viewable()))
+app.event_generate('<KeyPress-Return>')
+_kv_settle(4)
+_pa_zed = 'Zed' in NO.CATEGORY_COLORS
+NO.CATEGORY_COLORS.pop('Zed', None)
+app.hide_settings_page()
+_kv_settle(4)
+check(f"a click that puts away the part holding the keyboard hands it to "
+      f"something in sight: the checklist, the calculator, the import panel, a "
+      f"Settings section ({_pa_seen})",
+      len(_pa_seen) == 4 and all(a and b for a, b in _pa_seen.values()))
+check(f"...so keys typed after it change nothing saved (checklist {_pa_items}, "
+      f"a category added: {_pa_zed})", _pa_items == ['eggs'] and not _pa_zed)
+# Settings from the find box comes back to the note: the find bar put away
+# first parked the keyboard on the window, and nothing was given back.
+app._open_find()
+_kv_settle(4)
+_pa_in_find = _take_focus(app._find_entry)
+find_btn_qa6(app.sidebar, '⚙ Settings').invoke()
+_kv_settle(6)
+find_btn_qa6(app.settings_page, 'Back to Notes').invoke()
+_kv_settle(6)
+check(f"Settings opened from the find box gives the keyboard back to the note "
+      f"({_pa_in_find}, {_pa_holder()})", _pa_in_find and _pa_holder() is app.body_text)
+# A tab left with the keyboard on the note list, a Canvas: only a box was
+# moved off, and Alt+Up reordered notes behind the Calendar.
+_pa_on_list = _take_focus(app.canvas)
+app.notebook.select(app.TAB_CALENDAR)
+_kv_settle(8)
+_pa_h = _pa_holder()
+check(f"a tab left with the keyboard on the note list takes it off the list "
+      f"({_pa_on_list}, {_pa_h})",
+      _pa_on_list and _pa_h is not None and bool(_pa_h.winfo_viewable()))
+app.notebook.select(app.TAB_NOTES)
+_kv_settle(4)
+app.notes = []
+app.save_notes()
+app.refresh_note_list()
+_kv_settle()
 
 # ---- KEYBOARD: a tick box is looked at the moment it is pressed ----
 # Round 3 of the final audit: the look after Space waited 100 ms for every
