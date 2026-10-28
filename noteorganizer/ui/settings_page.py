@@ -262,6 +262,26 @@ class SettingsPageMixin:
                 pass
         return "break"
 
+    def _settings_page_key(self, event, how):
+        """Page Up and Down, the arrows, Home and End scroll the Settings page
+        -- *how* is a (count, "pages"/"units") step or a place to move to --
+        from anywhere on it but a box being typed in, or a popup over it."""
+        if not getattr(self, "_settings_open", False) or self._a_dialog_is_asking():
+            return None
+        widget = getattr(event, "widget", None)
+        try:
+            if (isinstance(widget, str) or widget.winfo_toplevel() is not self
+                    or widget.winfo_class() in self._TYPING_CLASSES):
+                return None
+            canvas = self.settings_canvas
+            if isinstance(how, float):
+                canvas.yview_moveto(how)
+            else:
+                canvas.yview_scroll(*how)
+        except (tk.TclError, AttributeError):
+            return None
+        return "break"
+
     def _wrap_to_own_width(self, label, inset=4):
         """Wrap where the label ends, not where somebody guessed it ends.
 
@@ -2555,6 +2575,14 @@ class SettingsPageMixin:
             return "break"
         canvas.bind("<MouseWheel>", _page_wheel)
         page.bind("<MouseWheel>", _page_wheel)
+        # And from the keyboard: a section with nothing to Tab to -- the
+        # Keyboard shortcuts, four fifths below the fold -- could not be read
+        # without a mouse. After the calendar's own bind_all, which replaces.
+        for seq, how in (("<Prior>", (-1, "pages")), ("<Next>", (1, "pages")),
+                         ("<Up>", (-1, "units")), ("<Down>", (1, "units")),
+                         ("<Home>", 0.0), ("<End>", 1.0)):
+            self.bind_all(seq, lambda e, h=how: self._settings_page_key(e, h),
+                          add="+")
 
         # Clicking a non-interactive part of the page takes focus off whatever
         # field has it, so a cursor is not left blinking in an already-saved
@@ -3946,6 +3974,11 @@ class SettingsPageMixin:
                                     "row of History: open it, or its "
                                     "right-click menu."),
         )),
+        ("Settings (while this page is showing)", (
+            ("Page Up  /  Page Down", "Scroll the section a page at a time — "
+                                      "Up / Down a little, Home / End to its "
+                                      "top or bottom. Not in a text box."),
+        )),
     )
 
     def _build_settings_shortcuts_panel(self, parent):
@@ -3957,8 +3990,8 @@ class SettingsPageMixin:
         """
         self._settings_subtitle(
             parent,
-            "Everything the keyboard can do. The formatting four are also "
-            "on the note body's right-click menu.")
+            "Everything the keyboard can do — Page Down reads on. The "
+            "formatting four are also on the note body's right-click menu.")
         for title, rows in self.SHORTCUT_GROUPS:
             tk.Label(parent, text=title, font=("Segoe UI", 9, "bold"),
                      anchor="w", bg=self.colors["bg"],

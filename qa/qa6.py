@@ -4543,6 +4543,59 @@ check(f'the Text size row promises bigger text in every note, not everywhere '
 app.hide_settings_page()
 _kv_settle()
 
+# ---- KEYBOARD: the Settings page scrolled from the keyboard ----
+# Round 2 of the final audit: Keyboard shortcuts is labels alone, nothing to
+# Tab to, and four fifths of it lay below the fold with no key to reach it --
+# the page telling keyboard users how to use the keyboard.
+app.geometry('1100x750')
+app.show_settings_page()
+app.toggle_settings_panel('shortcuts')
+_kv_settle(10)
+_kp_page = app.settings_canvas
+_kp_nav = app._settings_nav_buttons.get('shortcuts')
+
+
+def _kp_key(widget, key):
+    """*key* on *widget*, the keyboard forced there first; the page's top."""
+    if widget is not None and _take_focus(widget):
+        widget.event_generate(key)
+        _kv_settle(2)
+    return _kp_page.yview()
+
+
+_kp_page.yview_moveto(0)
+_kv_settle(2)
+check(f'fixture: most of Keyboard shortcuts lies below the fold ({_kp_page.yview()})',
+      _kp_page.yview()[1] < 0.6)
+_kp_down = _kp_key(_kp_nav, '<Next>')[0]
+_kp_end = _kp_key(_kp_nav, '<End>')[1]
+_kp_home = _kp_key(_kp_nav, '<Home>')[0]
+_kp_arrow = _kp_key(_kp_nav, '<Down>')[0]
+check(f'with the keyboard on its menu entry, Page Down, End, Home and Down '
+      f'scroll the page ({_kp_down:.2f}, {_kp_end:.2f}, {_kp_home:.2f}, '
+      f'{_kp_arrow:.2f})',
+      _kp_down > 0.1 and _kp_end > 0.999 and _kp_home == 0.0
+      and 0.0 < _kp_arrow < _kp_down)
+_kp_groups = ' '.join(c for t, rows in app.SHORTCUT_GROUPS
+                      if t.startswith('Settings') for c, _d in rows)
+check(f'...and the page names them, in a Settings group ({_kp_groups!r})',
+      'Page Up' in _kp_groups and 'Page Down' in _kp_groups)
+# In a box being typed in, End is the box's own. No section that runs past
+# the window holds one, so a box is put on this one for the question.
+_kp_box = tk.Entry(app.settings_shortcuts_panel)
+_kp_box.insert(0, 'typed')
+_kp_box.pack(before=app.settings_shortcuts_panel.winfo_children()[0])
+_kp_page.yview_moveto(0)
+_kv_settle(4)
+_kp_still = _kp_key(_kp_box, '<End>')[0]
+check(f'...but in a text box on the page, End stays the box\'s own (the page '
+      f'at {_kp_still}, the caret at {_kp_box.index("insert")})',
+      _kp_still == 0.0 and _kp_box.index('insert') == 5)
+_kp_box.destroy()
+app.hide_settings_page()
+app.geometry('1100x850')
+_kv_settle()
+
 
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")

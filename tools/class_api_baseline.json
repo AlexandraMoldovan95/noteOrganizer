@@ -685,6 +685,7 @@
   "_set_window_icon": "(self)",
   "_settings_big_button": "(self, parent_frame, text, command, kind='normal')",
   "_settings_card": "(self, parent, pad=(22, 20))",
+  "_settings_page_key": "(self, event, how)",
   "_settings_section_heading": "(self, parent, title)",
   "_settings_section_note": "(self, parent, subtitle)",
   "_settings_subtitle": "(self, parent, text)",

@@ -1090,6 +1090,7 @@ keys that only mean something inside a list, in the find bar, or on the note lis
 | **Enter** / **Space** | the month | Opens the day with the ring, as a click does. |
 | **Shift+F10** or the menu key | the month | Opens that day's right-click menu: add a note, colour or mark the day. |
 | **Enter** / **Shift+F10** | a note in an open day's list, or a row of History | Opens it, or its right-click menu. |
+| **Page Up** / **Page Down**, **↑** / **↓**, **Home** / **End** | the Settings page, outside a text box | Scrolls the section showing: a page, a little, or to its top or bottom. Keyboard shortcuts, which has nothing to Tab to, is read this way. |
 | **Enter** | a question | Presses the highlighted button. |
 | **Esc** | a question | Gives the safe answer (No, Cancel). |
 | **Tab** / **Shift+Tab** | a question | Moves between the question's own buttons, and comes back round. |

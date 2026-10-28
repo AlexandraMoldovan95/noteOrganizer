@@ -1435,6 +1435,26 @@
     "expect": "killed"
   },
   {
+    "id": "KR08",
+    "about": "no key scrolls the Settings page, so a section with nothing to Tab to is read only by the wheel",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "            self.bind_all(seq, lambda e, h=how: self._settings_page_key(e, h),\n                          add=\"+\")\n",
+               "replace": "            pass\n"}],
+    "must_fail": ["with the keyboard on its menu entry, Page Down, End, Home and Down"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "KR09",
+    "about": "End in a text box on the Settings page scrolls the page as well",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "                    or widget.winfo_class() in self._TYPING_CLASSES):\n",
+               "replace": "                    ):\n"}],
+    "must_fail": ["...but in a text box on the page, End stays the box's own"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
     "id": "A01",
     "about": "a highlight given in an open cell reaches the note only when the cell closes",
     "edits": [

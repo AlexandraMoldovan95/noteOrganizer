@@ -420,7 +420,10 @@ in its place, when the choice drew the page again. A popup a click opens leaves 
 alone: the mouse's behaviour does not change.
 
 Tab moves the keyboard and never the view, and the editor, Settings and the long lists are frames
-drawn on canvases, so what Tab lands on is scrolled into sight (`_bring_into_sight`).
+drawn on canvases, so what Tab lands on is scrolled into sight (`_bring_into_sight`). A section
+with nothing to Tab to — Keyboard shortcuts is labels alone — is read with Page Up and Down, the
+arrows, Home and End, which scroll the Settings page from anywhere on it but a box being typed in
+(`_settings_page_key`).
 
 A press that draws its list again takes the control with it, and Tk leaves the keyboard on the
 window — or on the popup's own window, which counts as nowhere too. It goes to what stands in the
