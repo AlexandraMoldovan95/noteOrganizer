@@ -2131,7 +2131,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                             if isinstance(src, bytes):
                                 zf.writestr(arcname, src)
                             else:
-                                zf.write(src, arcname=arcname)
+                                # One file another program holds failed the
+                                # whole backup: one that will not open is left
+                                # out and named. A failure writing the zip still ends it.
+                                try:
+                                    with open(src, "rb"):
+                                        pass
+                                except OSError:
+                                    state.setdefault("left_out", []).append(
+                                        os.path.basename(arcname))
+                                else:
+                                    zf.write(src, arcname=arcname)
                             state["current"] = i
                     # On the disk before it replaces the backup of that
                     # name, the only copy off this computer.
@@ -2183,6 +2193,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.export_progress_frame.place_forget()
             self._export_state = None
             self._take_back_cut_short("export")
+            left = state.get("left_out") or []
+            left_said = ("\n\nLeft out, because another program may be holding "
+                         f"{'them' if len(left) > 1 else 'it'}: "
+                         + ", ".join(left[:5])
+                         + (f" and {len(left) - 5} more" if len(left) > 5 else "")
+                         + ". Close that program and export again to include "
+                         f"{'them' if len(left) > 1 else 'it'}.") if left else ""
             if state["error"]:
                 self.show_error("Export failed",
                                f"Couldn't create the backup file:\n{state['error']}")
@@ -2195,15 +2212,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     "Note Organizer started, and not your notes file, which "
                     "could not be opened then. Close Note Organizer and open it "
                     "again; '⬇ Import' brings this backup's notes in beside "
-                    "yours.")
+                    "yours." + left_said)
             else:
                 self._remember_finished_export()
                 self.show_info(
-                    "Export complete",
+                    "Export complete" if not left else "Export complete, but not all of it",
                     f"Your notes, settings, and attachments were saved to:\n"
                     f"{state['save_path']}\n\n"
                     "Copy or email this single file to another device, then use "
-                    "'⬇ Import' there to bring everything in."
+                    "'⬇ Import' there to bring everything in." + left_said
                 )
             return
         self._export_poll_job = self.after(100, self._poll_export_progress)

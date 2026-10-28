@@ -8496,5 +8496,23 @@
       "qa3"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "DR56",
+    "about": "an attached file another program holds fails the whole backup instead of being left out and named",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                                try:\n                                    with open(src, \"rb\"):\n                                        pass\n                                except OSError:\n",
+        "replace": "                                try:\n                                    pass\n                                except OSError:\n"
+      }
+    ],
+    "must_fail": [
+      "a backup leaves out an attached file another program holds, and names it"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
   }
 ]

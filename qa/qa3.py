@@ -3610,6 +3610,50 @@ check(f'...and a Windows sign-out shows no dialog ({_hr_session})', _hr_session 
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
 
+# One attached file another program holds with no sharing failed the whole
+# backup (round 4): it is left out of it, and named.
+_la_file = os.path.join(NO.ATTACHMENTS_DIR, '20261028120000000000_scan.png')
+os.makedirs(NO.ATTACHMENTS_DIR, exist_ok=True)
+with open(_la_file, 'wb') as _f:
+    _f.write(b'held')
+_la_zip = os.path.join(tempfile.gettempdir(), 'qa3_export_held_attachment.zip')
+_la_said = []
+_la_real = (app.show_info, fd.asksaveasfilename)
+_la_open = open
+
+
+def _la_held(path, *a, **k):
+    # Opened by the entry file's own code only: another program's hold.
+    if os.path.basename(str(path)) == os.path.basename(_la_file):
+        raise PermissionError(13, 'held by another program')
+    return _la_open(path, *a, **k)
+
+
+app.show_info = lambda *a, **k: _la_said.append(' '.join(map(str, a)))
+NO.open = _la_held
+fd.asksaveasfilename = lambda **k: _la_zip
+try:
+    app.notes = [NO.normalize_note({'id': 1, 'title': 'Kept', 'body': 'words'})]
+    app.save_notes()
+    app.export_data()
+    t0 = time.time()
+    while app._export_state is not None and time.time() - t0 < 10:
+        app.update()
+    with zipfile.ZipFile(_la_zip) as _zf:
+        _la_names = _zf.namelist()
+finally:
+    app.show_info, fd.asksaveasfilename = _la_real
+    del NO.open
+    os.remove(_la_file)
+    if os.path.exists(_la_zip):
+        os.remove(_la_zip)
+check(f'a backup leaves out an attached file another program holds, and names it '
+      f'({_la_said[:1]}, {_la_names})',
+      len(_la_said) == 1 and 'not all of it' in _la_said[0] and 'scan.png' in _la_said[0]
+      and 'notes_data.json' in _la_names
+      and not any('scan.png' in n for n in _la_names))
+app.notes = []; app.save_notes()
+
 # Signing out of Windows, restarting or shutting down ends the process
 # without the close: Tk's WM_SAVE_YOURSELF comes instead, and the last
 # typing was left unsaved. on_session_end saves it, asking nothing.
