@@ -1379,6 +1379,62 @@
     "expect": "killed"
   },
   {
+    "id": "KR03",
+    "about": "Space on one of Tk's own buttons that its press destroys leaves the keyboard on the window",
+    "edits": [{"file": "noteorganizer/ui/dialogs.py",
+               "find": "                if script.strip():\n",
+               "replace": "                if False:\n"}],
+    "must_fail": ["Space on the Trash's \"Show 5 more\" puts the keyboard on the first",
+                  "Space on Duplicates' \"Show 2 more groups\" puts the keyboard on the",
+                  "Space on a template checklist's tick box, which draws the list again,",
+                  "Space on the Share list's \"Show 54 more\" puts the keyboard on the",
+                  "Space on History's \"Show more\" puts the keyboard on the first row it"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "KR04",
+    "about": "a popup holding the keyboard itself counts as somewhere, so a box redrawn in it leaves the keyboard on nothing",
+    "edits": [{"file": "noteorganizer/ui/dialogs.py",
+               "find": "                if isinstance(held, tk.Toplevel):\n                    return True\n",
+               "replace": ""}],
+    "must_fail": ["Space on a template checklist's tick box, which draws the list again,"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "KR05",
+    "about": "the keyboard's new place is looked for before the rows just drawn are mapped",
+    "edits": [{"file": "noteorganizer/ui/dialogs.py",
+               "find": "        self.update_idletasks()\n        target = self._found_at(place)\n",
+               "replace": "        target = self._found_at(place)\n"}],
+    "must_fail": ["Space on the Trash's \"Show 5 more\" puts the keyboard on the first",
+                  "Space on History's \"Show more\" puts the keyboard on the first row it"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "KR06",
+    "about": "the click counter is one bare <ButtonPress>, which the app's <ButtonPress-1> on \"all\" outranks",
+    "edits": [{"file": "noteorganizer/ui/dialogs.py",
+               "find": "        for button in (1, 2, 3):\n            self.bind_all(f\"<ButtonPress-{button}>\", self._count_pointer_press,\n                          add=\"+\")\n",
+               "replace": "        self.bind_all(\"<ButtonPress>\", self._count_pointer_press, add=\"+\")\n"}],
+    "must_fail": ["a left click is counted as a click",
+                  "...and a click straight after Space on \"Show more\" keeps the keyboard"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "KR07",
+    "about": "a button its press destroyed takes the keyboard back from where a click put it",
+    "edits": [{"file": "noteorganizer/ui/dialogs.py",
+               "find": "                if (widget.winfo_exists()\n                        or getattr(self, \"_pointer_presses\", 0) != clicks):\n",
+               "replace": "                if widget.winfo_exists():\n"}],
+    "must_fail": ["...and a click straight after Space on \"Show more\" keeps the keyboard"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
     "id": "A01",
     "about": "a highlight given in an open cell reaches the note only when the cell closes",
     "edits": [

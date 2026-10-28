@@ -1276,12 +1276,77 @@ class DialogsMixin:
             self.bind_class(self.KEY_WALK_TAG, seq,
                             lambda e, s=step: self._key_walk(e.widget, s))
         # Counted so a popup closing can tell a click's keyboard from one
-        # Windows moved for it (_keyboard_back).
+        # Windows moved for it (_keyboard_back). Per button: Tk runs only a
+        # tag's most specific binding, and "all" holds <ButtonPress-1> too,
+        # so a bare <ButtonPress> here never heard a left click.
         self._pointer_presses = 0
-        self.bind_all("<ButtonPress>", self._count_pointer_press, add="+")
+        for button in (1, 2, 3):
+            self.bind_all(f"<ButtonPress-{button}>", self._count_pointer_press,
+                          add="+")
+        # Tk's own buttons take Space through their class binding, which
+        # runs the command and never _key_press: a "Show 25 more" that goes
+        # as it draws the next page left the keyboard on the window. Tk runs
+        # a Button's command 100 ms after the key, so the look afterwards is
+        # a timer made just after Tk's own, which Tcl runs after it.
+        self._tk_presses = {}
+        starts = self.register(self._tk_press_starts)
+        ends = self.register(self._tk_press_ends)
+        for cls in ("Button", "Checkbutton", "Radiobutton"):
+            try:
+                script = str(self.tk.call("bind", cls, "<Key-space>"))
+                if script.strip():
+                    self.tk.call("bind", cls, "<Key-space>",
+                                 f"{starts} %W\n{script}\n"
+                                 f"after 100 [list {ends} %W]")
+            except tk.TclError:
+                pass
 
     def _count_pointer_press(self, _event=None):
         self._pointer_presses = getattr(self, "_pointer_presses", 0) + 1
+
+    def _tk_press_starts(self, path):
+        """Space on one of Tk's own buttons, before its command runs: where
+        it stands, and the clicks so far, for _tk_press_ends."""
+        try:
+            widget = self.nametowidget(path)
+            self._tk_presses[path] = (widget, self._place_of(widget),
+                                      getattr(self, "_pointer_presses", 0))
+        except (KeyError, AttributeError, tk.TclError):
+            pass
+
+    def _tk_press_ends(self, path):
+        """...and after: a button the press destroyed hands the keyboard to
+        what stands in its place, as a drawn control's press does -- inside a
+        part of its window that lived on, not a question or a popup that
+        went, and not after a click put the keyboard somewhere."""
+        pressed = getattr(self, "_tk_presses", {}).pop(path, None)
+        if pressed is None:
+            return
+        widget, place, clicks = pressed
+
+        def settle():
+            try:
+                if self._a_dialog_is_asking():
+                    self.after(100, settle)    # its answer may draw the list
+                    return
+                if (widget.winfo_exists()
+                        or getattr(self, "_pointer_presses", 0) != clicks):
+                    return
+            except tk.TclError:
+                return
+            living = next((p for p, _i in place if self._still_there(p)), None)
+            if living is not None and living != place[-1][0]:
+                self._keyboard_stays(widget, place)
+        try:
+            self.after_idle(settle)
+        except tk.TclError:
+            pass
+
+    def _still_there(self, path):
+        try:
+            return bool(self.nametowidget(path).winfo_exists())
+        except (KeyError, tk.TclError):
+            return False
 
     def _pressable(self, widget, command, walk=False, current=False, menu=None):
         """Let Tab stop on *widget*, and Space or Return press it as a click
@@ -1423,12 +1488,16 @@ class DialogsMixin:
 
     def _keyboard_nowhere(self, gone=""):
         """Whether the keyboard is on nothing -- or on *gone*, a window
-        being taken down -- rather than somewhere a person put it."""
+        being taken down -- rather than somewhere a person put it. A popup
+        holding it itself is nothing too, as the main window is: Tk puts it
+        there when the control that held it is destroyed."""
         try:
             now = str(self.tk.call("focus"))
             if now not in ("", ".") and not (
                     gone and (now == gone or now.startswith(gone + "."))):
                 held = self.nametowidget(now)
+                if isinstance(held, tk.Toplevel):
+                    return True
                 return not (held.winfo_exists() and held.winfo_viewable())
         except KeyError:
             return True
@@ -1448,6 +1517,9 @@ class DialogsMixin:
             pass
         if not self._keyboard_nowhere():
             return
+        # What was just drawn, mapped: a new row's controls are mapped an
+        # idle round after the row, and Tab's own test skips them until then.
+        self.update_idletasks()
         target = self._found_at(place)
         if target is not None:
             target.focus_set()

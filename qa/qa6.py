@@ -4132,6 +4132,157 @@ NO.save_trash(app.trash)
 app.geometry('1100x850')
 _kv_settle()
 
+# ---- KEYBOARD: a Tk button its own press destroys hands the keyboard on ----
+# Round 2 of the final audit: every "Show N more" goes as it draws the next
+# page, and the keyboard fell to the window -- about a hundred Tabs back to
+# the rows just drawn. Tk's own buttons take Space through their class
+# binding, which never reached _keyboard_stays; nor did a template
+# checklist's tick box, whose press draws its list again.
+_kr_asked = []
+_kr_real_focus_set = tk.Misc.focus_set
+
+
+def _kr_record(self):
+    _kr_asked.append(self)
+    return _kr_real_focus_set(self)
+
+
+def _kr_all(w):
+    for c in w.winfo_children():
+        yield c
+        yield from _kr_all(c)
+
+
+def _kr_press(widget, top, is_new, click_after=None):
+    """Space on *widget*, the keyboard forced there first; then the first
+    control under *top* the press drew that *is_new* accepts, and the
+    focus_set calls the press made. With *click_after*, a left press on it
+    straight after the key, as a click elsewhere would come."""
+    if widget is None or not _take_focus(widget):
+        return None, []
+    before = {str(w) for w in _kr_all(top)}
+    del _kr_asked[:]
+    widget.event_generate('<space>')
+    if click_after is not None:
+        click_after.event_generate('<ButtonPress-1>', x=2, y=2)
+        click_after.event_generate('<ButtonRelease-1>', x=2, y=2)
+    _kv_settle(20)      # Tk runs a Button's command 100 ms after the key
+    new = next((w for w in _kr_all(top)
+                if str(w) not in before and is_new(w)), None)
+    return new, list(_kr_asked)
+
+
+def _kr_more(top):
+    return next((w for w in _kr_all(top) if isinstance(w, tk.Button)
+                 and str(w.cget('text')).startswith('Show ')
+                 and w.winfo_viewable()), None)
+
+
+_kr_box = lambda w: isinstance(w, tk.Checkbutton)  # noqa: E731
+app.notes = ([NO.normalize_note({'id': 7300 + i, 'title': f'Twin {i // 2:02d}',
+                                 'body': f'same {i // 2}'}) for i in range(44)]
+             + [NO.normalize_note({'id': 7400 + i, 'title': f'Dated {i:03d}',
+                                   'body': 'd', 'date': f'2026-{1 + i // 28:02d}-'
+                                                        f'{1 + i % 28:02d}'})
+                for i in range(110)])
+app.save_notes()
+app.refresh_note_list()
+app.trash = [{'id': 7600 + i, 'uid': f'kr-{i}', 'title': f'MoreGone{i:02d}',
+              'body': 'x', 'category': 'General',
+              'deleted_at': f'2026-10-{1 + i % 25:02d} 11:{i:02d}:00'}
+             for i in range(30)]
+NO.save_trash(app.trash)
+app.templates = [{'name': 'KR template', 'title': '', 'body': '', 'comments': '',
+                  'category': 'General',
+                  'checklist': [{'text': 'one', 'done': False},
+                                {'text': 'two', 'done': False}]}]
+app.geometry('1000x650')
+tk.Misc.focus_set = _kr_record
+try:
+    app.show_settings_page()
+    app.toggle_settings_panel('trash')
+    _kv_settle(20)
+    _kr_list, _kr_page = app._active_panel_canvas, app.settings_canvas
+    _kr_new, _kr_did = _kr_press(_kr_more(app.settings_page), app.settings_page, _kr_box)
+    check(f'Space on the Trash\'s "Show 5 more" puts the keyboard on the first '
+          f'row it drew, in sight ({_kr_new}, asked {_kr_did[-1:]})',
+          _kr_new is not None and _kr_did[-1:] == [_kr_new]
+          and _kv_in_view(_kr_new, _kr_list) and _kv_in_view(_kr_new, _kr_page))
+    # The counter a closing popup reads: a left click is a click too.
+    _kr_heading = find_widget(app.settings_page, tk.Label, 'Recently deleted')
+    _kr_was = app._pointer_presses
+    if _kr_heading is not None:
+        _kr_heading.event_generate('<ButtonPress-1>', x=2, y=2)
+        _kr_heading.event_generate('<ButtonRelease-1>', x=2, y=2)
+        _kv_settle(2)
+    check(f'a left click is counted as a click ({_kr_was} -> {app._pointer_presses})',
+          _kr_heading is not None and app._pointer_presses == _kr_was + 1)
+    app.toggle_settings_panel('duplicates')
+    _kv_settle(20)
+    _kr_list = app._active_panel_canvas
+    # A click straight after the key put the keyboard where it wanted.
+    _kr_heading = find_widget(app.settings_page, tk.Label, 'Duplicates')
+    _kr_new, _kr_did = _kr_press(_kr_more(app.settings_page), app.settings_page,
+                                 _kr_box, click_after=_kr_heading)
+    check(f'...and a click straight after Space on "Show more" keeps the keyboard '
+          f'out of the list ({_kr_did})', _kr_new is not None and not any(
+              str(w).startswith(str(_kr_list)) for w in _kr_did))
+    app.toggle_settings_panel('duplicates')
+    _kv_settle(20)
+    _kr_list = app._active_panel_canvas
+    _kr_new, _kr_did = _kr_press(_kr_more(app.settings_page), app.settings_page, _kr_box)
+    check(f'Space on Duplicates\' "Show 2 more groups" puts the keyboard on the '
+          f'first copy it drew, in sight ({_kr_new}, asked {_kr_did[-1:]})',
+          _kr_new is not None and _kr_did[-1:] == [_kr_new]
+          and _kv_in_view(_kr_new, _kr_list))
+    app.toggle_settings_panel('templates')
+    _kv_settle(20)
+    app._edit_template(app.templates[0], redraw=lambda: None)
+    _kv_settle(10)
+    _kr_ed = app._mini_popup
+    _kr_tick = next((w for w in _kr_all(_kr_ed) if isinstance(w, tk.Checkbutton)), None)
+    _kr_new, _kr_did = _kr_press(_kr_tick, _kr_ed, _kr_box)
+    # The first item's box is the first box drawn again.
+    check(f'Space on a template checklist\'s tick box, which draws the list again, '
+          f'leaves the keyboard on that item\'s new box ({_kr_new}, asked {_kr_did[-1:]})',
+          _kr_tick is not None and _kr_new is not None and _kr_did[-1:] == [_kr_new])
+    app._dismiss_mini_popup()
+    _kv_settle()
+    app.hide_settings_page()
+    app.toggle_share_panel()
+    _kv_settle(20)
+    _kr_share = app._share_checklist_canvas
+    _kr_new, _kr_did = _kr_press(_kr_more(_kr_share), _kr_share, _kr_box)
+    check(f'Space on the Share list\'s "Show 54 more" puts the keyboard on the '
+          f'first box it drew, in sight ({_kr_new}, asked {_kr_did[-1:]})',
+          _kr_new is not None and _kr_did[-1:] == [_kr_new]
+          and _kv_in_view(_kr_new, _kr_share))
+    app.toggle_share_panel()
+    app.notebook.select(app.TAB_CALENDAR)
+    _kv_settle(10)
+    app._show_calendar_history()
+    _kv_settle(20)
+    _kr_rows = app._history_rows
+    _kr_new, _kr_did = _kr_press(_kr_more(_kr_rows), _kr_rows,
+                                 lambda w: getattr(w, '_key_press', None) is not None)
+    check(f'Space on History\'s "Show more" puts the keyboard on the first row it '
+          f'drew, in sight ({_kr_new}, asked {_kr_did[-1:]})',
+          _kr_new is not None and _kr_did[-1:] == [_kr_new]
+          and _kv_in_view(_kr_new, app.cal_scroll_canvas))
+    app._hide_calendar_history()
+finally:
+    tk.Misc.focus_set = _kr_real_focus_set
+if getattr(app, '_settings_open', False):
+    app.hide_settings_page()
+app.notebook.select(app.TAB_NOTES)
+app.notes = []
+app.save_notes()
+app.refresh_note_list()
+app.trash, app.templates = [], []
+NO.save_trash(app.trash)
+app.geometry('1100x850')
+_kv_settle()
+
 # Text size, the app's own setting for reading, from the keyboard alone: it
 # was a frame and two labels Tab never stopped on.
 app.show_settings_page()

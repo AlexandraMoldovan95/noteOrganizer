@@ -422,6 +422,16 @@ alone: the mouse's behaviour does not change.
 Tab moves the keyboard and never the view, and the editor, Settings and the long lists are frames
 drawn on canvases, so what Tab lands on is scrolled into sight (`_bring_into_sight`).
 
+A press that draws its list again takes the control with it, and Tk leaves the keyboard on the
+window — or on the popup's own window, which counts as nowhere too. It goes to what stands in the
+control's place now (`_keyboard_stays`). A drawn control's press reaches that through the bind
+tag; Tk's own buttons take Space through their class binding, which the app wraps once at start
+(`_tk_press_starts` / `_tk_press_ends`). The look afterwards waits for the command, which Tk runs
+100 ms after the key, and for a question the press asked; it leaves the keyboard alone after a
+click, or when a question or popup went with the button. That click is counted per mouse button:
+Tk runs only a tag's most specific binding, and a bare `<ButtonPress>` on "all" never heard a
+left click, which the app's `<ButtonPress-1>` there outranks.
+
 The ring is the theme's text colour (`focus_ring`), measured by the contrast gate, and it is both
 border colours while the keyboard is on a control: Windows draws no focus colour round a label,
 only its resting one ([the story](ISSUES_LOG.md#the-app-the-keyboard-could-reach-only-half-of)).
