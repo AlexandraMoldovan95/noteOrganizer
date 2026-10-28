@@ -9212,5 +9212,41 @@
       "qa3"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "DR62",
+    "about": "a held file's refused write is reported at every write, its banner over a delete's Undo at every note opened",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "        if path not in _held_reported:\n            _held_reported.add(path)\n            _report_write_failure(path, exc)\n",
+        "replace": "        _report_write_failure(path, exc)\n"
+      }
+    ],
+    "must_fail": [
+      "a held file's refused write is reported once a run, and refused every time"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR63",
+    "about": "a settings file held at the start has the notes' categories announced as gone missing from it",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "    report[\"categories_adopted\"] = [] if held else adopted\n",
+        "replace": "    report[\"categories_adopted\"] = adopted\n"
+      }
+    ],
+    "must_fail": [
+      "...its categories not said to have gone missing, the notes keeping theirs"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
   }
 ]

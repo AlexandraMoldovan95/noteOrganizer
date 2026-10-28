@@ -3965,7 +3965,8 @@ try:
         with _hs_real_open(_paths.SETTINGS_FILE, "w", encoding="utf-8") as f:
             json.dump(_hs_real, f)
         with _hs_real_open(_paths.DATA_FILE, "w", encoding="utf-8") as f:
-            json.dump([{"id": 1, "title": "a"}, {"id": 2, "title": ""}], f)
+            json.dump([{"id": 1, "title": "a", "category": "Held-start client"},
+                       {"id": 2, "title": ""}], f)
         if _hs_case == "later":
             _storage.load_settings()                       # read whole once
         _storage.open = _hs_refusing(1 if _hs_case == "moment" else -1)
@@ -3996,6 +3997,11 @@ try:
                   and not _hs_saved and not _hs_aside and _hs_disk() == _hs_real
                   and _hs_report.get("cleanup_report") is None
                   and len(_hs_notes) == 2)
+            check("...its categories not said to have gone missing, the notes "
+                  "keeping theirs (%s, %s)" % (_hs_report.get("categories_adopted"),
+                                               _hs_notes[0].get("category")),
+                  _hs_report.get("categories_adopted") == []
+                  and _hs_notes[0].get("category") == "Held-start client")
             check("...and only the run's first read waits for it: five later reads "
                   "try once each (%d waits)" % _hs_waits,
                   _hs_waits == 0
@@ -4009,9 +4015,30 @@ try:
         _paths.WRITES_HELD.clear()
 finally:
     _storage.time.sleep = _hs_sleep
+    NO.CATEGORY_COLORS.pop("Held-start client", None)
     _paths.configure(_hs_prev)
     for _d in _hs_dirs:
         shutil.rmtree(_d, ignore_errors=True)
+
+# A held file's refused write is reported once a run: a setting is written at
+# every note opened, and its banner took the place of a delete's Undo (round 5).
+_hr_dir = tempfile.mkdtemp(prefix="nd_heldrep_")
+_hr_prev = _paths.APP_DIR
+_hr_calls = []
+_hr_cb = _storage.on_write_failure
+try:
+    _paths.configure(_hr_dir)
+    _paths.hold_writes(_paths.SETTINGS_FILE)
+    _storage.on_write_failure = lambda path, exc: _hr_calls.append(os.path.basename(path))
+    _hr_results = [_storage.save_settings({"theme": "dark_slate"})[0] for _ in range(3)]
+finally:
+    _storage.on_write_failure = _hr_cb
+    _paths.WRITES_HELD.clear()
+    _paths.configure(_hr_prev)
+    shutil.rmtree(_hr_dir, ignore_errors=True)
+check("a held file's refused write is reported once a run, and refused every "
+      "time (%s, %s)" % (_hr_calls, _hr_results),
+      _hr_calls == ["settings.json"] and _hr_results == [False] * 3)
 
 # ---- Every file renamed into place is on the disk first ----
 # A power cut just after a rename can leave the new name pointing at bytes

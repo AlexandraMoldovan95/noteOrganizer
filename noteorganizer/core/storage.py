@@ -613,8 +613,12 @@ def load_notes(version_change=None):
     # The notes' own categories join the map BEFORE normalising, which files
     # an unknown category under General; saved at once, before the cleanup
     # below reads the settings, so its own write carries them too.
-    report["categories_adopted"] = adopt_categories_of(raw)
-    if report["categories_adopted"]:
+    adopted = adopt_categories_of(raw)
+    # A settings file the start could not read was never read for its
+    # categories: they did not go missing from it, and it is not written.
+    held = paths.writes_held(paths.SETTINGS_FILE)
+    report["categories_adopted"] = [] if held else adopted
+    if adopted and not held:
         persist_categories()
 
     # Every note gets the full set of fields, so no later code has to
@@ -722,6 +726,8 @@ def mend_surrogates(value):
 # this is its one way to say "that write FAILED". Every failed write is also
 # appended to crash_log.txt, so a route nobody checks still leaves a trace.
 on_write_failure = None
+#: The held files whose refused write was reported this run (_write_json_atomic).
+_held_reported = set()
 
 
 def _report_write_failure(path, exc):
@@ -758,7 +764,11 @@ def _write_json_atomic(path, value):
             13, "Not saved: Note Organizer could not open this file, or bring "
             "it in, when it started, so nothing is written to it until Note "
             "Organizer is opened again", path)
-        _report_write_failure(path, exc)
+        # Reported once a run: a setting is written at every note opened,
+        # and its banner each time took the place of a delete's Undo.
+        if path not in _held_reported:
+            _held_reported.add(path)
+            _report_write_failure(path, exc)
         return False, exc
     tmp_path = path + ".tmp"
     try:
