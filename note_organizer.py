@@ -10582,11 +10582,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """
         have = {a.get("stored_as") for a in mine.get("attachments") or []
                 if isinstance(a, dict)}
-        claimed = {a.get("stored_as")
-                   for n in (self.notes + self.trash)
-                   if isinstance(n, dict) and n is not mine
-                   for a in (n.get("attachments") or [])
-                   if isinstance(a, dict)}
+        # Trash entries are as the file held them: read through
+        # attachments_of, as every reader of their files is.
+        claimed = attachment_names_in(n for n in self.notes + self.trash
+                                      if n is not mine)
         for att in self._files_to_adopt(mine, theirs):
             name = att.get("stored_as")
             if name in have:
@@ -11919,10 +11918,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # The Trash's window comes with its entries when this notebook never
         # chose one: the default 30 days then emptied, at the next start, a
         # restored Trash kept for a year (ISSUES_LOG: "The Trash restored
-        # under a window it never had"). A window chosen here stays.
+        # under a window it never had"). A window chosen here stays, and so
+        # does the default against a shorter one: this notebook's own Trash
+        # was promised it, and a backup from a 7-day notebook emptied it.
         window = state.get("imported_trash_window")
         if (isinstance(window, int) and not isinstance(window, bool)
-                and 1 <= window <= 365 and state.get("imported_trash")
+                and TRASH_RETENTION_DAYS < window <= 365
+                and state.get("imported_trash")
                 and "trash_retention_days" not in load_settings()
                 and not get_setting(TRASH_WINDOW_UNKNOWN)):
             choose_trash_window(window)
@@ -11937,12 +11939,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # The trash's files count as claimed too: re-importing your own
         # backup used to append a twin trash entry sharing the original's
         # physical file, and delete-forever on either destroyed the
-        # other's attachment.
-        claimed = {a.get("stored_as")
-                   for n in (self.notes + self.trash)
-                   if isinstance(n, dict)
-                   for a in (n.get("attachments") or [])
-                   if isinstance(a, dict)}
+        # other's attachment. Read through attachments_of: a Trash entry's
+        # field as the file held it (a 7) stopped the merge here.
+        claimed = attachment_names_in(self.notes + self.trash)
         next_id = max([n["id"] for n in self.notes], default=0) + 1
         # With the copies asked for of notes already here, past the
         # look-alike question: they were just asked about, by name.
@@ -21631,10 +21630,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # before it was changed -- hovering one row took the count
             # from 25 to 26, with exactly one Toplevel inside the tree.
             win = tk.Toplevel(widget.winfo_toplevel())
+            # Held at once, so hide() takes it away whatever happens below.
+            tip["win"] = win
             win.wm_overrideredirect(True)  # no title bar / borders
             win.configure(bg=self.colors["accent"])
             frame = tk.Frame(win, bg=self.colors["card"], padx=10, pady=8)
             frame.pack(padx=1, pady=1)
+            # A Trash entry is as the file held it; its fields are read
+            # from a shaped copy, as a note's are.
+            shown = normalize_note(dict(note))
 
             def line(label, value):
                 if not value:
@@ -21647,13 +21651,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                          fg=self.colors["text"], wraplength=self.px(260), justify="left"
                          ).pack(side="left")
 
-            title = (note.get("title") or "").strip() or "(untitled)"
+            title = shown["title"].strip() or "(untitled)"
             line("Title", title[:60])
             # The words without the tables, and a line saying the tables
             # are there -- the calendar's rule; raw, a table read as bars.
-            raw = note.get("body")
-            body, tables_here = core_tables.preview_text(
-                raw if isinstance(raw, str) else "")
+            body, tables_here = core_tables.preview_text(shown["body"])
             body = body.strip()
             if body:
                 preview = body[:120] + ("…" if len(body) > 120 else "")
@@ -21661,22 +21663,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if tables_here:
                 line("Holds", "▦ 1 table" if tables_here == 1
                      else "▦ %d tables" % tables_here)
-            comments = (note.get("comments") or "").strip()
+            comments = shown["comments"].strip()
             if comments:
                 line("Comments", comments[:80] + ("…" if len(comments) > 80 else ""))
-            line("Date", show_date(note.get("date")))
-            if note.get("color"):
-                line("Color", note["color"])
-            atts = note.get("attachments", [])
+            line("Date", show_date(shown["date"]))
+            if shown["color"]:
+                line("Color", shown["color"])
+            atts = shown["attachments"]
             if atts:
-                line("Attachments", ", ".join(a.get("filename", "?") for a in atts))
-            created = note.get("created", "")
-            if created:
+                line("Attachments", ", ".join(str(a.get("filename") or "?") for a in atts))
+            # As held, not shaped: a load backfills a missing stamp with now.
+            created = note.get("created")
+            if isinstance(created, str) and created:
                 line("Created", show_stamp(created))
 
             # Position just below-right of the cursor.
             win.wm_geometry(f"+{event.x_root + 14}+{event.y_root + 12}")
-            tip["win"] = win
 
         def hide(event=None):
             if tip["win"] is not None:

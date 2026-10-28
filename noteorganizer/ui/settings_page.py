@@ -59,7 +59,7 @@ from ..core.recurrence import describe_recurrence, is_recurring, show_date
 # Shortens with an ellipsis rather than by slicing: a title cut at N
 # characters with nothing to show for it is the same defect as a
 # sentence clipped by a layout, only cheaper to make.
-from ..core.model import _truncate
+from ..core.model import _truncate, normalize_note
 from ..core.storage import (
     TRASH_RETENTION_DAYS,
     trash_retention_days,
@@ -1391,13 +1391,16 @@ class SettingsPageMixin:
         # and Delete buttons needed, and those are the only things in the
         # row a person has to be able to hit.
         left = tk.Frame(row, bg=self.colors["card"])
-        title = (entry.get("title") or "").strip() or "(untitled)"
+        # The entry is as the file held it; what the row shows is read from
+        # a shaped copy, or a title of 7 kept the whole panel from opening.
+        shown = normalize_note(dict(entry))
+        title = shown["title"].strip() or "(untitled)"
         # A repeating series is one row here, exactly like a one-off note,
         # and the Delete button beside it destroys every occurrence it
         # has. Every other list in the app marks a series -- the note
         # cards, the calendar day panel -- and this one, the only list
         # where deleting cannot be undone, did not.
-        repeats = is_recurring(entry)
+        repeats = is_recurring(shown)
         tk.Label(left, text=("🔁 " if repeats else "") + _truncate(title, 42),
                  bg=self.colors["card"], fg=self.colors["text"],
                  font=("Segoe UI", 10, "bold"), anchor="w").pack(fill="x")
@@ -1413,7 +1416,7 @@ class SettingsPageMixin:
         if remaining is not None:
             sub += f" · {remaining} day(s) left"
         if repeats:
-            sub += f" · repeats {describe_recurrence(entry).lower()}"
+            sub += f" · repeats {describe_recurrence(shown).lower()}"
         sub_lbl = tk.Label(left, text=sub, bg=self.colors["card"],
                            fg=self.colors["subtext"], font=("Segoe UI", 8),
                            anchor="w", justify="left")

@@ -422,8 +422,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            body, tables_here = core_tables.preview_text(\n                raw if isinstance(raw, str) else \"\")",
-        "replace": "            body, tables_here = (raw if isinstance(raw, str) else \"\"), 0"
+        "find": "            body, tables_here = core_tables.preview_text(shown[\"body\"])",
+        "replace": "            body, tables_here = shown[\"body\"], 0"
       }
     ],
     "must_fail": ["a table in a hover preview is named, not drawn as bars"],
@@ -6446,6 +6446,78 @@
     "must_fail": [
       "the next start says Windows cut it short",
       "the next start says an export was cut short by Windows"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR10",
+    "about": "a backup from a notebook with a shorter Trash window shortens the window here",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                and TRASH_RETENTION_DAYS < window <= 365\n",
+        "replace": "                and 1 <= window <= 365\n"
+      }
+    ],
+    "must_fail": [
+      "a backup from a notebook that keeps its Trash for less does not shorten"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR12",
+    "about": "a backup's merge reads the Trash entries' files raw, and a files field of 7 stops it",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        claimed = attachment_names_in(self.notes + self.trash)\n",
+        "replace": "        claimed = {a.get(\"stored_as\") for n in (self.notes + self.trash) if isinstance(n, dict) for a in (n.get(\"attachments\") or []) if isinstance(a, dict)}\n"
+      }
+    ],
+    "must_fail": [
+      "a backup merges beside Trash entries whose files field is not a list"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR13",
+    "about": "a Trash row reads its entry's title raw, and a title of 5 keeps Recently deleted from opening",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "        title = shown[\"title\"].strip() or \"(untitled)\"\n",
+        "replace": "        title = (entry.get(\"title\") or \"\").strip() or \"(untitled)\"\n"
+      }
+    ],
+    "must_fail": [
+      "Recently deleted opens with every damaged entry drawn"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR14",
+    "about": "a Trash row's hover reads the entry raw, breaks, and leaves its window behind",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            shown = normalize_note(dict(note))\n",
+        "replace": "            shown = note\n"
+      }
+    ],
+    "must_fail": [
+      "...and hovering each row shows and takes away its preview"
     ],
     "suites": [
       "qa3"

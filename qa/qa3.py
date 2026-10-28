@@ -3451,6 +3451,67 @@ check(f'...and a window chosen here stays ({NO.trash_retention_days()} days)',
 _tw_settings = NO.load_settings()
 _tw_settings.pop('trash_retention_days', None)
 NO.save_settings(_tw_settings)
+# ...and never a shorter one: this notebook's own Trash was deleted under
+# the default's promise, and a backup from a 7-day notebook emptied it at
+# the next start, files and all (2026-10-28, the final audit).
+app.notes = []; app.save_notes()
+app.trash = [dict(NO.normalize_note({'id': 3, 'title': 'Mine, 10 days ago'}),
+                  deleted_at=time.strftime('%Y-%m-%d %H:%M:%S',
+                                           time.localtime(time.time() - 10 * 86400)))]
+NO.save_trash(app.trash)
+_dz_import(dict(_tw_backup, **{'settings.json': json.dumps(
+    {'trash_retention_days': 7, 'app_version': '0.97.405'}).encode()}))
+check(f'a backup from a notebook that keeps its Trash for less does not shorten '
+      f'the window here ({NO.trash_retention_days()} days, '
+      f'saved: {"trash_retention_days" in NO.load_settings()})',
+      NO.trash_retention_days() == NO.TRASH_RETENTION_DAYS
+      and 'trash_retention_days' not in NO.load_settings())
+app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
+
+# A Trash entry is kept as the file held it, and four readers still read its
+# fields raw: a title of 7 kept Recently deleted from opening, comments or
+# files of the wrong type broke a row's hover and left its window behind, and
+# a files field of 7 stopped a backup's merge after its files were copied
+# (2026-10-28, the final audit).
+app.trash = [
+    {'id': 11, 'deleted_at': '2026-10-20 10:00:00', 'title': 5},
+    {'id': 12, 'deleted_at': '2026-10-20 10:00:00', 'title': ['a'], 'comments': 9},
+    {'id': 13, 'deleted_at': '2026-10-20 10:00:00', 'title': 'Seven', 'attachments': 7},
+    {'id': 14, 'deleted_at': '2026-10-20 10:00:00', 'title': 'List',
+     'attachments': [1, 2]}]
+NO.save_trash(app.trash)
+_dz_import({'notes_data.json': json.dumps([{'title': 'From backup', 'body': 'x'}]).encode()})
+check('a backup merges beside Trash entries whose files field is not a list',
+      any(n.get('title') == 'From backup' for n in app.notes))
+_rt_errors = []
+_rt_real_report = app.report_callback_exception
+app.report_callback_exception = lambda *a: _rt_errors.append(str(a[1]))
+try:
+    # Caught, so a broken panel is this check's FAIL, not the suite's end.
+    try:
+        app.show_settings_page()
+        app.toggle_settings_panel('trash')
+        app.update()
+    except Exception as _rt_exc:
+        _rt_errors.append(repr(_rt_exc))
+    _rt_rows = _trash_rows()
+    check(f'Recently deleted opens with every damaged entry drawn '
+          f'({len(_rt_rows)} rows; errors {_rt_errors})',
+          len(_rt_rows) == 4 and not _rt_errors)
+    _rt_top = set(app.winfo_children())
+    for _rt_row in _rt_rows:
+        for _rt_w in _rt_row.winfo_children():
+            if isinstance(_rt_w, tk.Frame):
+                _rt_w.event_generate('<Enter>', x=2, y=2); app.update()
+                _rt_w.event_generate('<Leave>'); app.update()
+    _rt_left = [w for w in app.winfo_children()
+                if isinstance(w, tk.Toplevel) and w not in _rt_top and w.winfo_exists()]
+    check(f'...and hovering each row shows and takes away its preview '
+          f'(errors {_rt_errors}; left behind {len(_rt_left)})',
+          not _rt_errors and not _rt_left)
+finally:
+    app.report_callback_exception = _rt_real_report
+    app.hide_settings_page(); app.update()
 app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
 
 # ---- KEYBOARD in Recently deleted: a row's ring, its order, and where the
