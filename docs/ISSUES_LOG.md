@@ -2627,8 +2627,9 @@ by name)*
 - **"Export complete" without the templates.** With `templates.json` held at the start, one
   template saved in the session became the backup's whole `templates.json`.
 - **Smaller:** the refused writes of a held file raised a banner at every note opened, over a
-  delete's Undo; the start announced a held file's categories as gone missing; and a run that
-  saves nothing showed "Auto-saved" under its own message after the first save.
+  delete's Undo; the start announced a held file's categories as gone missing; a run that saves
+  nothing showed "Auto-saved" under its own message after the first save; and a lock file held a
+  moment at the start let a second window open the same notebook once it was let go.
 
 **Root cause:** each round-four fix answered its question in one place and left a sibling asking
 the old one. The retries meant for the run's first read had no record that it was made. Loss was
@@ -2647,11 +2648,12 @@ the app holds is never less than its files, which a held start had made untrue.
 - A templates or Trash file the start could not read is read at the export and joined with the
   session's, or named as left out (`read_list_now`).
 - A held file's refused write is reported once a run; a held settings file's categories are not
-  announced; the held run's status line is right from its first save.
+  announced; the held run's status line is right from its first save; a sharing violation on the
+  lock file is tried again before the lock fails open.
 - And in the suite: the waits for an export or import to finish had 5–10 s deadlines, and on a busy
   machine an import outlived one and changed notes under the next checks. They end when the work
   does, with a ceiling of 120 s.
-- `test_data_safety`, qa3, qa5; mutants DR57–DR64, with DR32, DR47, DR49 and RD01 re-aimed. DR60
+- `test_data_safety`, qa3, qa5; mutants DR57–DR65, with DR32, DR47, DR49 and RD01 re-aimed. DR60
   survived the first test, whose table lost enough to pass under the old measure too; the test now
   first proves the old measure would miss it.
 
