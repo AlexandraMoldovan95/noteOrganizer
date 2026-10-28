@@ -1694,18 +1694,27 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if cut:
             save_setting("backup_cut_short", None)
             name = os.path.basename(str(cut.get("file") or "")) or "the backup"
+            when = ("Windows signed out or shut down"
+                    if cut.get("when") == "session" else "Note Organizer closed")
             if cut.get("kind") == "import":
                 lines.append(
-                    f"The import of {name} was cut short when Note Organizer "
-                    "closed, so nothing from it was kept: no notes and no "
-                    "files. To bring it in, import it again (Settings → "
-                    "Backup → Import).")
+                    f"The import of {name} was cut short when {when}, so "
+                    "nothing from it was kept: no notes and no files. To bring "
+                    "it in, import it again (Settings → Backup → Import).")
             else:
+                # A process ended mid-export leaves its unfinished file
+                # beside the target (export_data writes there first).
+                leftover = str(cut.get("file") or "") + ".tmp"
+                if cut.get("file") and os.path.isfile(leftover):
+                    try:
+                        os.remove(leftover)
+                    except OSError:
+                        pass
                 lines.append(
-                    f"The export to {name} was cut short when Note Organizer "
-                    "closed, so no new backup was made. A file already there "
-                    "under that name is as it was. To make one, export again "
-                    "(Settings → Backup → Export).")
+                    f"The export to {name} was cut short when {when}, so no "
+                    "new backup was made. A file already there under that name "
+                    "is as it was. To make one, export again (Settings → "
+                    "Backup → Export).")
 
         if VERSION_CHANGE:
             direction, old, new = VERSION_CHANGE
@@ -2063,6 +2072,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if state["done"]:
             self.export_progress_frame.place_forget()
             self._export_state = None
+            self._take_back_cut_short("export")
             if state["error"]:
                 self.show_error("Export failed",
                                f"Couldn't create the backup file:\n{state['error']}")
@@ -2077,6 +2087,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 )
             return
         self._export_poll_job = self.after(100, self._poll_export_progress)
+
+    @staticmethod
+    def _take_back_cut_short(kind):
+        """Forget the line left for the next start about a backup of *kind*
+        cut short: the end of a Windows session leaves it while the work
+        goes on, in case the session does end, and work that then finishes
+        makes it untrue."""
+        cut = get_setting("backup_cut_short", None, expect=dict)
+        if cut and cut.get("kind") == kind:
+            save_setting("backup_cut_short", None)
 
     def _remember_finished_export(self):
         """Record the moment a backup export succeeded -- the Backup panel
@@ -2109,6 +2129,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         state = self._export_state
         if state is not None and state.get("done") and not state.get("error"):
             self._remember_finished_export()
+            self._take_back_cut_short("export")
             self._export_state = None
         elif state is not None:
             # Stopped past the wait, or still running: no new backup. A
@@ -11753,7 +11774,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if state["error"]:
             # A worker that failed partway may have copied files already.
             self._drop_unclaimed_import_files(state)
-            self.show_error("Import failed", state["error"])
+            if state.get("stop"):
+                # Stopped by the end of a Windows session that went on after
+                # all (_settle_backups_at_session_end): not a failure.
+                self.set_status(self._IMPORT_STOPPED_AT_SESSION_END)
+            else:
+                self.show_error("Import failed", state["error"])
             if temp_dir:
                 shutil.rmtree(temp_dir, ignore_errors=True)
             return
@@ -18338,8 +18364,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # A date or repeat the save could not store exists only on the
         # screen now, and a caller that is leaving is about to replace the
         # screen. Asked, not decided: going back to fix it is the safe
-        # answer, so it is what Escape and Enter give.
-        if not leaving:
+        # answer, so it is what Escape and Enter give. Not at the end of a
+        # Windows session, which ends whatever is answered.
+        if not leaving or getattr(self, "_ending_session", False):
             return True
         try:
             left_out = self._date_and_repeat_to_store()[2]
@@ -21875,25 +21902,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         if not self._dismiss_mini_popup_asking(holding_work_only=True):
             return
-        if self._flush_autosave() is False:
+        if self._save_on_the_way_out() is False:
             return
-        self._sync_active_tab()
-        for i in range(len(self.open_tabs)):
-            try:
-                if not self.editor_state_matches_saved(
-                        self.open_tabs[i]["state"]):
-                    self.switch_to_tab(i)
-                    self.save_current_note(auto=True)
-            except Exception:
-                # Closing must not get stuck behind a broken tab; the
-                # autosaves along the way have the rest.
-                self._log_swallowed("close: per-tab final save")
-                continue
-        # The last write failed: try once more (the disk may have room now),
-        # and if it fails again, closing would lose what only the screen has.
-        if getattr(self, "_notes_unsaved", False):
-            ok, _exc = core_save_notes(self.notes)
-            self._notes_unsaved = not ok
         if getattr(self, "_notes_unsaved", False) and not self.ask_yes_no(
                 "Close without saving?",
                 "Your latest changes could not be saved, so they are only on "
@@ -21907,23 +21917,99 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._settle_background_work_at_close()
         self.destroy()
 
-    def on_session_end(self):
-        """Windows is signing out, restarting or shutting down: save what the
-        close would save and settle the background work, asking nothing --
-        the session ends whatever is answered. It used to end the process
-        with an import's copied files and its temp folder left behind, and
-        the last typing unsaved."""
-        try:
-            self._flush_autosave(leaving=False)
-            self._sync_active_tab()
-            for i in range(len(self.open_tabs)):
-                if not self.editor_state_matches_saved(self.open_tabs[i]["state"]):
+    def _save_on_the_way_out(self):
+        """Everything the process going away must not lose: a date typed
+        short settled, the editor and every open tab saved, and a notes
+        write that failed tried once more (the disk may have room now).
+        The close and the end of a Windows session both run this one list;
+        the session's own copy of it drifted, and signing out lost a date
+        typed short and an edit a failed save had left only on screen.
+
+        Returns False when the person chose to go back to a date or repeat
+        the save could not store -- never at a session's end, which asks
+        nothing (_ending_session)."""
+        if self._flush_autosave() is False:
+            return False
+        self._sync_active_tab()
+        for i in range(len(self.open_tabs)):
+            try:
+                if not self.editor_state_matches_saved(
+                        self.open_tabs[i]["state"]):
                     self.switch_to_tab(i)
                     self.save_current_note(auto=True)
+            except Exception:
+                # Closing must not get stuck behind a broken tab; the
+                # autosaves along the way have the rest.
+                self._log_swallowed("close: per-tab final save")
+                continue
+        if getattr(self, "_notes_unsaved", False):
+            ok, _exc = core_save_notes(self.notes)
+            self._notes_unsaved = not ok
+        return True
+
+    def on_session_end(self):
+        """Windows is signing out, restarting or shutting down: save what the
+        close would save, asking nothing -- the session ends whatever is
+        answered.
+
+        It is only a question, though. Tk calls this from
+        WM_QUERYENDSESSION, and the person can still cancel on Windows'
+        "apps are preventing shutdown" screen, so nothing is torn down that
+        the app needs if the session goes on. It used to stop the backup
+        work outright: a cancelled sign-out left an import silently gone and
+        an export cut short behind a progress bar that never moved again
+        (2026-10-28, the final audit). See _settle_backups_at_session_end."""
+        self._ending_session = True
+        try:
+            self._save_on_the_way_out()
         except Exception:
             self._log_swallowed("session end: final save")
-        self._wait_for_io_workers(cap_s=5.0)
-        self._settle_background_work_at_close()
+        finally:
+            self._ending_session = False
+        self._settle_backups_at_session_end()
+
+    def _settle_backups_at_session_end(self):
+        """What the end of a Windows session does to a backup's worker,
+        right whether the session ends or is cancelled.
+
+        An export goes on writing: it may finish, and its file only takes
+        the target's place when whole. An import is stopped and dropped,
+        since one killed half-copied leaves files no note points at and the
+        unpacked backup in the temp folder -- and the screen says so at
+        once. Either leaves a line for the next start in case the session
+        does end (announce_startup_changes); an export that finishes takes
+        its line back."""
+        export = self._export_state
+        if export is not None and not export.get("done"):
+            save_setting("backup_cut_short", {
+                "kind": "export", "file": export.get("save_path") or "",
+                "when": "session"})
+        state = self._import_state
+        if state is None:
+            return
+        state["stop"] = True
+        save_setting("backup_cut_short", {
+            "kind": "import", "file": state.get("zip") or "", "when": "session"})
+        # Stopped between two chunks of a megabyte (StoppableFile): moments.
+        deadline = time.time() + 2.0
+        for t in [t for t in getattr(self, "_io_workers", []) if t.is_alive()]:
+            t.join(timeout=max(0.0, deadline - time.time()))
+        if not state.get("done"):
+            # Its poll reports the stop when it comes.
+            return
+        self._import_state = None
+        if state.get("temp_dir"):
+            shutil.rmtree(state["temp_dir"], ignore_errors=True)
+        self._drop_unclaimed_import_files(state)
+        try:
+            self.export_progress_frame.place_forget()
+            self.set_status(self._IMPORT_STOPPED_AT_SESSION_END)
+        except tk.TclError:
+            pass
+
+    _IMPORT_STOPPED_AT_SESSION_END = (
+        "The import was stopped as Windows began to sign out or shut down, so "
+        "nothing from the backup was kept. Import it again to bring it in.")
 
     def set_status(self, text):
         # A line naming what a save left out is put right by

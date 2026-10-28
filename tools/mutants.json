@@ -6149,8 +6149,8 @@
     "id": "SE01",
     "about": "a Windows sign-out saves nothing",
     "edits": [{"file": "note_organizer.py",
-               "find": "            self._flush_autosave(leaving=False)\n            self._sync_active_tab()\n            for i in range(len(self.open_tabs)):\n                if not self.editor_state_matches_saved(self.open_tabs[i][\"state\"]):\n",
-               "replace": "            self._cancel_pending_autosave()\n            for i in []:\n                if not self.editor_state_matches_saved(self.open_tabs[i][\"state\"]):\n"}],
+               "find": "        self._ending_session = True\n        try:\n            self._save_on_the_way_out()\n",
+               "replace": "        self._ending_session = True\n        try:\n            self._cancel_pending_autosave()\n"}],
     "must_fail": ["a Windows sign-out saves the last typing, asking nothing"],
     "suites": ["qa3"],
     "expect": "killed"
@@ -6334,6 +6334,121 @@
     ],
     "suites": [
       "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR04",
+    "about": "the end of a Windows session saves by its own drifted list: no date settled, no failed write tried again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._ending_session = True\n        try:\n            self._save_on_the_way_out()\n",
+        "replace": "        self._ending_session = True\n        try:\n            self._flush_autosave(leaving=False)\n"
+      }
+    ],
+    "must_fail": [
+      "a Windows sign-out settles a date typed short and saves it",
+      "...and writes once more what a failed save left only on screen"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR05",
+    "about": "the end of a Windows session asks about a date the save cannot store",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if not leaving or getattr(self, \"_ending_session\", False):\n",
+        "replace": "        if not leaving:\n"
+      }
+    ],
+    "must_fail": [
+      "...asking nothing, even about a date it cannot store"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR06",
+    "about": "the end of a Windows session stops an export that could still finish",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if export is not None and not export.get(\"done\"):\n",
+        "replace": "        if export is not None:\n            export[\"stop\"] = True\n        if export is not None and not export.get(\"done\"):\n"
+      }
+    ],
+    "must_fail": [
+      "...and a session that goes on sees it finish"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR07",
+    "about": "an import stopped at the end of a Windows session leaves its progress bar on screen",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        try:\n            self.export_progress_frame.place_forget()\n            self.set_status(self._IMPORT_STOPPED_AT_SESSION_END)\n",
+        "replace": "        try:\n            self.set_status(self._IMPORT_STOPPED_AT_SESSION_END)\n"
+      }
+    ],
+    "must_fail": [
+      "the end of a Windows session stops an import and says so at once"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR08",
+    "about": "an export that finishes after a cancelled session end keeps its word for the next start",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self._export_state = None\n            self._take_back_cut_short(\"export\")\n            if state[\"error\"]:\n",
+        "replace": "            self._export_state = None\n            if state[\"error\"]:\n"
+      }
+    ],
+    "must_fail": [
+      "...and a session that goes on sees it finish"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR09",
+    "about": "the next start blames the close, and leaves an export's unfinished file, after Windows ended the session",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                if cut.get(\"file\") and os.path.isfile(leftover):\n",
+        "replace": "                if False:\n"
+      },
+      {
+        "file": "note_organizer.py",
+        "find": "                    if cut.get(\"when\") == \"session\" else \"Note Organizer closed\")\n",
+        "replace": "                    if False else \"Note Organizer closed\")\n"
+      }
+    ],
+    "must_fail": [
+      "the next start says Windows cut it short",
+      "the next start says an export was cut short by Windows"
+    ],
+    "suites": [
+      "qa3"
     ],
     "expect": "killed"
   }

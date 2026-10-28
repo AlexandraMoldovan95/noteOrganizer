@@ -2691,6 +2691,108 @@ finally:
         _t.join(25)
     app._import_state = None
     app._export_state = None
+for _p in (_he_zip, _he_zip + '.tmp'):
+    if os.path.exists(_p):
+        os.remove(_p)
+app.notes = []; app.save_notes()
+
+# The end of a Windows session is a question the person can still cancel
+# (Tk answers WM_QUERYENDSESSION with it), so it tears down nothing the app
+# needs if the session goes on. It stopped the export and dropped the import
+# outright, behind a progress bar that never moved again (2026-10-28, the
+# final audit). A file is held until the test lets it go (_sx['go']).
+_sx = {'on': None, 'seen': False, 'go': False}
+
+
+class _HeldTillGo(_hs.StoppableFile):
+    def _check(self):
+        if (_sx['on'] and not _sx['seen']
+                and str(getattr(self._raw, 'name', '')).endswith(_sx['on'])):
+            _sx['seen'] = True
+            t0 = time.time()
+            while not _sx['go'] and not self._stop() and time.time() - t0 < 20:
+                time.sleep(0.01)
+        super()._check()
+
+
+def _sx_wait(cond, cap=10):
+    t0 = time.time()
+    while not cond() and time.time() - t0 < cap:
+        app.update()
+        time.sleep(0.02)
+
+
+NO.StoppableFile = _hs.StoppableFile = _HeldTillGo
+_sx_info = []
+app.show_info = lambda *a, **k: _sx_info.append(a[0] if a else '')
+try:
+    NO.save_setting('backup_cut_short', None)
+    fd.asksaveasfilename = lambda **k: _he_zip
+    _sx.update(on='qa3_held_export.zip.tmp', seen=False, go=False)
+    app.export_data()
+    _sx_wait(lambda: _sx['seen'])
+    t0 = time.time()
+    app.on_session_end()
+    _sx_took = time.time() - t0
+    check(f'the end of a Windows session leaves an export writing, and does not '
+          f'wait for it ({_sx_took:.1f} s)',
+          _sx['seen'] and app._export_state is not None and _sx_took < 2)
+    check('...leaving word for the next start in case the session does end',
+          NO.get_setting('backup_cut_short')
+          == {'kind': 'export', 'file': _he_zip, 'when': 'session'})
+    _sx['go'] = True
+    _sx_wait(lambda: app._export_state is None)
+    check(f'...and a session that goes on sees it finish: said, and the word for '
+          f'the next start taken back ({_sx_info})',
+          'Export complete' in _sx_info and os.path.exists(_he_zip)
+          and NO.get_setting('backup_cut_short') is None
+          and app.export_progress_frame.winfo_manager() == '')
+    # An import is stopped and dropped -- killed half-copied it leaves files
+    # no note points at -- and the screen says so at once.
+    with zipfile.ZipFile(_hb_zip, 'w') as _zf:
+        _zf.writestr('notes_data.json', json.dumps([{
+            'title': 'Film', 'body': 'x',
+            'attachments': [{'name': 'film.bin', 'stored_as': _hb_name}]}]))
+        _zf.writestr('attachments/' + _hb_name, b'film' * 1000)
+    fd.askopenfilename = lambda **k: _hb_zip
+    _sx.update(on=_hb_name, seen=False, go=False)
+    app.import_data()
+    _sx_wait(lambda: _sx['seen'])
+    _sx_temp = (app._import_state or {}).get('temp_dir')
+    app.on_session_end(); app.update()
+    check(f'the end of a Windows session stops an import and says so at once '
+          f'({app.status_lbl.cget("text")[:60]!r})',
+          _sx['seen'] and app._import_state is None
+          and app.export_progress_frame.winfo_manager() == ''
+          and 'stopped as Windows' in str(app.status_lbl.cget('text')))
+    check('...leaving nothing of it behind',
+          not (_sx_temp and os.path.exists(_sx_temp))
+          and not os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _hb_name))
+          and not any(n.get('title') == 'Film' for n in app.notes))
+    check('...and word for the next start',
+          NO.get_setting('backup_cut_short')
+          == {'kind': 'import', 'file': _hb_zip, 'when': 'session'})
+    _words = _next_start_says()
+    check(f'the next start says Windows cut it short ({_words[:120]!r})',
+          'qa3_held_import.zip' in _words and 'when Windows signed out' in _words)
+    # An export the process died in leaves its unfinished file beside the
+    # target; the next start that says so takes it away.
+    with open(_he_zip + '.tmp', 'wb') as _fh:
+        _fh.write(b'half')
+    NO.save_setting('backup_cut_short',
+                    {'kind': 'export', 'file': _he_zip, 'when': 'session'})
+    _words = _next_start_says()
+    check('the next start says an export was cut short by Windows, and takes '
+          'its unfinished file away',
+          'when Windows signed out' in _words and not os.path.exists(_he_zip + '.tmp'))
+finally:
+    _sx['go'] = True
+    NO.StoppableFile, _hs.StoppableFile = _kept_stoppable
+    app.show_info = _kept_info
+    for _t in getattr(app, '_io_workers', []):
+        _t.join(25)
+    app._import_state = None
+    app._export_state = None
 for _p in (_hb_zip, _he_zip, _he_zip + '.tmp'):
     if os.path.exists(_p):
         os.remove(_p)
@@ -3271,6 +3373,59 @@ try:
           _se_disk == ['typed just before'] and not _se_asked and app.winfo_exists())
 finally:
     app.ask_yes_no = _se_real_ask
+app.notes = []; app.save_notes()
+
+# ...and saves all the close saves (one list, _save_on_the_way_out). Its own
+# copy had drifted: a date typed short was left unsettled, so unsaved, and a
+# write that had failed was never tried again (2026-10-28, the final audit).
+app.new_note(); app.update()
+_se2 = NO.normalize_note({'id': 4243, 'title': 'Dentist', 'body': 'call'})
+app.notes = [_se2]; app.save_notes()
+app.open_note_in_tab(_se2); app.update()
+_se2_asked = []
+_se2_real = (app.ask_yes_no, app._themed_dialog, app.show_error)
+app.ask_yes_no = lambda *a, **k: (_se2_asked.append(a[0] if a else ''), True)[1]
+app._themed_dialog = lambda *a, **k: (_se2_asked.append(a[0] if a else ''), True)[1]
+app.show_error = lambda *a, **k: None
+
+
+def _se2_disk():
+    return [(n.get('date'), n.get('body')) for n in
+            json.load(open(NO.DATA_FILE, encoding='utf-8')) if n.get('id') == 4243]
+
+
+try:
+    app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '17.10')
+    app.body_text.insert('end', ' them')
+    app.on_session_end(); app.update()
+    _se2_want = NO.format_date(NO.read_date('17.10', settled=True))
+    check(f'a Windows sign-out settles a date typed short and saves it, as the '
+          f'close does ({_se2_disk()})',
+          _se2_disk() == [(_se2_want, 'call them')] and not _se2_asked)
+    os.makedirs(NO.DATA_FILE + '.tmp')
+    try:
+        app.body_text.insert('end', ' today')
+        app._flush_autosave(leaving=False); app.update()
+        _se2_failed = app._notes_unsaved
+    finally:
+        os.rmdir(NO.DATA_FILE + '.tmp')
+    app.on_session_end(); app.update()
+    check(f'...and writes once more what a failed save left only on screen '
+          f'({_se2_disk()})',
+          _se2_failed and not app._notes_unsaved
+          and _se2_disk() == [(_se2_want, 'call them today')])
+    app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '45.13.2026')
+    app.body_text.insert('end', '!')
+    _se2_asked.clear()
+    app.on_session_end(); app.update()
+    check(f'...asking nothing, even about a date it cannot store ({_se2_asked})',
+          not _se2_asked and app.winfo_exists())
+finally:
+    # The unreadable date is cleared while the questions are still answered.
+    app.date_entry.delete(0, 'end')
+    app.new_note(); app.update()
+    app.ask_yes_no, app._themed_dialog, app.show_error = _se2_real
+    app._notes_unsaved = False
 app.notes = []; app.save_notes()
 
 # A backup's Trash brings its window when this notebook never chose one:
