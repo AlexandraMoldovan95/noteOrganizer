@@ -9414,5 +9414,46 @@
       "qa6"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "RV08",
+    "about": "a table's export finds the row's pipes again for every empty cell",
+    "edits": [
+      {
+        "file": "noteorganizer/core/richtext.py",
+        "find": "            pipes = tables.pipe_positions(line)\n            cells = []\n",
+        "replace": "            cells = []\n"
+      },
+      {
+        "file": "noteorganizer/core/richtext.py",
+        "find": "                    if c + 1 < len(pipes):\n",
+        "replace": "                    pipes = tables.pipe_positions(line)\n                    if c + 1 < len(pipes):\n"
+      }
+    ],
+    "must_fail": [
+      "a table's export finds a row's pipes a few times, not once per empty cell"
+    ],
+    "suites": [
+      "test_richtext"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RV09",
+    "about": "a table's export walks every merge for every row",
+    "edits": [
+      {
+        "file": "noteorganizer/core/richtext.py",
+        "find": "            merge_at[n] = (spans_of_row.get(r, {}),\n                           covered_of_row.get(r, set()))\n",
+        "replace": "            merge_at[n] = (\n                {c: m_spans[(ar, c)] for (ar, c) in m_spans if ar == r},\n                {c for (rr, c) in m_covered if rr == r})\n"
+      }
+    ],
+    "must_fail": [
+      "...and sorts its merges into rows once, not once per row"
+    ],
+    "suites": [
+      "test_richtext"
+    ],
+    "expect": "killed"
   }
 ]

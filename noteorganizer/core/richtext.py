@@ -832,10 +832,16 @@ def note_to_html(text, formatting=None, paragraphs=None,
                       if n - block_first != sep_at]
         matrix = [tables.split_row(lines[n]) for n in data_lines]
         m_spans, m_covered = tables.merge_map(matrix)
+        # Sorted into rows once: asked of every merge for every row, a
+        # 400-row table of merges cost rows x merges.
+        spans_of_row, covered_of_row = {}, {}
+        for (ar, c), span in m_spans.items():
+            spans_of_row.setdefault(ar, {})[c] = span
+        for (rr, c) in m_covered:
+            covered_of_row.setdefault(rr, set()).add(c)
         for r, n in enumerate(data_lines):
-            merge_at[n] = (
-                {c: m_spans[(ar, c)] for (ar, c) in m_spans if ar == r},
-                {c for (rr, c) in m_covered if rr == r})
+            merge_at[n] = (spans_of_row.get(r, {}),
+                           covered_of_row.get(r, set()))
             hidden_at[n] = hidden_cols
 
     out, offset, open_lists, in_table = [], 0, [], False
@@ -929,6 +935,9 @@ def note_to_html(text, formatting=None, paragraphs=None,
             row_spans, row_covered = merge_at.get(number, ({}, set()))
             row_hidden = hidden_at.get(number, set())
             row_aligns = tables.cell_alignments(line)
+            # Once per row: asked again for every empty cell, a row of
+            # 3,000 empty cells walked its whole line 3,000 times.
+            pipes = tables.pipe_positions(line)
             cells = []
             for c, (start, end) in enumerate(row):
                 if c in row_covered or c in row_hidden:
@@ -959,7 +968,6 @@ def note_to_html(text, formatting=None, paragraphs=None,
                 cell_a, cell_b = offset + start, offset + end
                 if cell_b == cell_a:
                     # An empty cell's highlight rides its padding.
-                    pipes = tables.pipe_positions(line)
                     if c + 1 < len(pipes):
                         cell_a = offset + pipes[c] + 1
                         cell_b = offset + pipes[c + 1]

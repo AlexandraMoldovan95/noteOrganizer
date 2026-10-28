@@ -1158,6 +1158,58 @@ check(f"stray end tags before a copy's marker are not looked for along every "
                              "<!--EndFragment--></tr></table>")
       == "<table><tr><td>a</td></tr></table>")
 
+# A table exported or copied: every empty cell walked its row's line for its
+# pipes, and every row walked every merge -- one row of 3,000 empty cells took
+# four seconds. Counted as walks, never time.
+from noteorganizer.core import richtext as _rtx, tables as _tbx
+_pipe_walks, _merge_walks = [0], [0]
+_real_pipes, _real_merges = _tbx.pipe_positions, _tbx.merge_map
+
+
+class _CountingDict(dict):
+    def __iter__(self):
+        _merge_walks[0] += 1
+        return dict.__iter__(self)
+
+    def items(self):
+        _merge_walks[0] += 1
+        return dict.items(self)
+
+
+class _CountingSet(set):
+    def __iter__(self):
+        _merge_walks[0] += 1
+        return set.__iter__(self)
+
+
+def _counted_pipes(line):
+    _pipe_walks[0] += 1
+    return _real_pipes(line)
+
+
+def _counted_merges(matrix):
+    spans, covered = _real_merges(matrix)
+    return _CountingDict(spans), _CountingSet(covered)
+
+
+_tbx.pipe_positions, _tbx.merge_map = _counted_pipes, _counted_merges
+try:
+    _wide_html = _rtx.note_to_html(
+        "\n".join(_tbx.format_table([[""] * 300] * 2)))
+    _wide_walks = _pipe_walks[0]
+    _long_html = _rtx.note_to_html(
+        "\n".join(_tbx.format_table([["a", "<"]] * 200)), inline_tables=True)
+    _long_walks = _merge_walks[0]
+finally:
+    _tbx.pipe_positions, _tbx.merge_map = _real_pipes, _real_merges
+check(f"a table's export finds a row's pipes a few times, not once per empty "
+      f"cell ({_wide_walks} walks for 2 rows of 300)",
+      _wide_walks <= 2 * 2
+      and _wide_html.count("<td") + _wide_html.count("<th") == 600)
+check(f"...and sorts its merges into rows once, not once per row "
+      f"({_long_walks} walks for 200 rows)",
+      _long_walks <= 4 and _long_html.count('colspan="2"') == 200)
+
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
 
