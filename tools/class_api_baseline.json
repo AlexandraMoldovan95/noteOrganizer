@@ -498,7 +498,7 @@
   "_open_category_dropdown": "(self)",
   "_open_cell_editor": "(self, info, r, c, select=True)",
   "_open_color_swatch_popup": "(self, kind)",
-  "_open_externally": "(self, path)",
+  "_open_externally": "(self, path, shown=None)",
   "_open_find": "(self)",
   "_open_imported_note_in_editor": "(self, shared_note, trimmed=False)",
   "_open_in_browser": "(self, url)",

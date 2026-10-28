@@ -192,7 +192,7 @@ is in the table below as well.
 | [The app the keyboard could reach only half of](#the-app-the-keyboard-could-reach-only-half-of) | A mouse binding is not a control; ask every page what a click can press that Tab cannot reach. And a focus ring is a claim about the screen: Windows draws none round a label. | next |
 | [The plain paste with no ceiling](#the-plain-paste-with-no-ceiling) | A limit with a way round is not a limit: protect every door to what it protects. | next |
 | [Round two: each fix's next door](#round-two-each-fixs-next-door) | A fix is for the behaviour, not the route it was reported on; ask every other road that reaches it. | next |
-| [The photo that was a remote connection](#the-photo-that-was-a-remote-connection) | What a person sees about a file is read from the file that will open, never from a label beside it. | next |
+| [The photo that was a remote connection](#the-photo-that-was-a-remote-connection) | What a person sees about a file is read from the file that will open; where the safe kinds are few, list those, not the dangerous ones. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -2237,27 +2237,44 @@ done, name the behaviour and ask every other road that reaches it.
 *(2026-10-28 · found by the final audit's second round, with a crafted backup)*
 
 **Symptom:** a backup's note listed "🖼 Holiday photo.jpg", with the picture icon and without the
-"Opens in your default app" hint. Clicked, it handed Windows an `.rdp` file: a remote-desktop
-connection, not a photo. The same note could show "Wallpaper.png" over a `.theme`, and a label
+"Opens in your default app" hint. Clicked, it handed Windows an `.rdp` file — a remote-desktop
+connection, not a photo — and asked nothing. So did a `.pyw` (which the Python launcher runs), a
+`.theme`, an Excel add-in, a Word document with macros and a Windows update package. A label
 holding a right-to-left override showed its letters in another order.
 
-**Root cause:** an attachment record has two names. `stored_as` is the file on disk, and the open,
-its warning and the alias guard had all learned to judge that one ("A file with two names").
-`filename` is a label. The row took its text, its icon and the choice of hint from it, and the
-warning quoted it. The app never writes a pair that disagrees — it stores "stamp_" plus the
-original name — so nothing checked that the two agree, and a backup can write any label over any
-file.
+**Root cause:** the app trusted two things it had no reason to. The first was the label. An
+attachment record has two names: `stored_as` is the file on disk, and the open, its warning and
+the alias guard had all learned to judge that one ("A file with two names"). `filename` is a
+label, and the row took its text, its icon and the choice of hint from it, and the warning quoted
+it. The app never writes a pair that disagrees — it stores "stamp_" plus the original name — so
+nothing checked that the two agree, and a backup can write any label over any file.
+
+The second was its own list. The question before opening was asked only for the kinds on a list of
+dangerous ones, and a list of dangerous kinds is never complete: Windows has hundreds of file
+associations, every installed program adds more, and it had already been extended once, for the
+shortcuts and disk images it missed. Everything else went straight to `os.startfile`.
 
 **Fix:** `normalize_note` makes the label end in the type of the file that opens ("Holiday
 photo.rdp") and takes out the characters that reorder or hide text: the controls, and the bidi
 marks, overrides and isolates. The row, the remove question, the warning and the note list's hover
 card read the name through the same `attachment_display_name`, so a record that never passed
 `normalize_note` shows the same. The icon and the hint come from the stored file, as the click
-does. A record the app made itself shows exactly as before. `test_data_safety`; qa7 puts a raw
-crafted record in the editor; mutants AX01–AX05.
+does. A record the app made itself shows exactly as before.
 
-**Takeaway:** a label is a claim about a file. What a person sees about it — the name, the icon,
-the hint under it — is read from the file that will open, the way the safety check already was.
+And the list is turned round. `how_to_open` names the short list of kinds whose usual app only
+shows what is in them — pictures, PDF, plain text and CSV, Word, Excel and PowerPoint files that
+cannot hold macros, sound and video — and those open at once, so a person's own documents meet no
+new question. Every other kind asks. The kinds known to run code keep the old warning; the rest
+get a calm one that says only that the app does not know the kind, and opens on "Open". Missing a
+kind from the dangerous list now costs the wording, never the question. Every handoff to Windows,
+the preview's "Open externally" included, goes through the one gate in `_open_externally`.
+
+`test_data_safety`; qa7 puts a raw crafted record in the editor and clicks each kind; mutants
+AX01–AX09.
+
+**Takeaway:** a label is a claim about a file; what a person sees is read from the file that will
+open. And where the safe kinds are few and the dangerous ones are anything else, list the safe
+ones: a list of what is dangerous is wrong the day it is written, and wrong quietly.
 
 
 ## Tk & platform gotchas

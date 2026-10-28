@@ -6834,8 +6834,8 @@
     "id": "AX04",
     "about": "the attachment row's icon and hint are judged from the label",
     "edits": [{"file": "noteorganizer/ui/attachments.py",
-               "find": "                att.get(\"stored_as\") or display_name) in PREVIEWED_IN_APP\n",
-               "replace": "                att.get(\"filename\") or display_name) in PREVIEWED_IN_APP\n"}],
+               "find": "                att.get(\"stored_as\") or display_name) == \"preview\"\n",
+               "replace": "                att.get(\"filename\") or display_name) == \"preview\"\n"}],
     "must_fail": ["a photo label over another kind of file shows that kind"],
     "suites": ["qa7"],
     "expect": "killed"
@@ -6847,6 +6847,46 @@
                "find": "            original_name = attachment_display_name(attachment.get(\"filename\"), stored_as)\n",
                "replace": "            original_name = attachment.get(\"filename\", stored_as)\n"}],
     "must_fail": ["the warning names the file by the type that opens, not the label"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "AX06",
+    "about": "a kind of file the app does not know opens without asking",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "    return \"ask\"\n",
+               "replace": "    return \"open\"\n"}],
+    "must_fail": ["only kinds whose usual app just shows them open unasked"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "AX07",
+    "about": "Python files lose the stronger warning",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "    \".gadget\", \".py\", \".pyw\", \".pyz\", \".pyzw\", \".pyc\", \".pyo\",\n",
+               "replace": "    \".gadget\",\n"}],
+    "must_fail": ["only kinds whose usual app just shows them open unasked"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "AX08",
+    "about": "opening an attachment of an unknown kind skips the question",
+    "edits": [{"file": "noteorganizer/ui/attachments.py",
+               "find": "        elif kind == \"ask\":\n",
+               "replace": "        elif False:\n"}],
+    "must_fail": ["any other kind asks first, and Cancel opens nothing"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "AX09",
+    "about": "a person's own .docx asks before it opens",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "    \".docx\", \".xlsx\", \".pptx\",\n",
+               "replace": "    \".xlsx\", \".pptx\",\n"}],
+    "must_fail": ["a person's own documents, PDFs, text and video open with no question"],
     "suites": ["qa7"],
     "expect": "killed"
   }

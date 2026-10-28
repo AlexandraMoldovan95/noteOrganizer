@@ -1581,6 +1581,43 @@ check("...while a name the app stored itself is shown as it was, every time",
           and _dn(_dn(n, "20261028120000000000_" + n), "20261028120000000000_" + n) == n
           for n in _own)
       and _nn_att(_label)["attachments"] == _label["attachments"])
+# What a click does is judged from the stored file, and only kinds whose
+# usual app just shows them open unasked. A list of dangerous kinds is never
+# complete: .pyw, .rdp, .theme, .xll and the macro documents went straight
+# to Windows. Anything not on the short list asks.
+from noteorganizer.core import model as _kinds
+_how = {name: _kinds.how_to_open("20261001_" + name) for name in [
+    "photo.jpg", "scan.PNG", "anim.gif",
+    "minutes.docx", "sheet.xlsx", "slides.pptx", "scan.pdf", "notes.txt",
+    "list.csv", "clip.mp4", "song.mp3", "film.mov",
+    "run.exe", "link.lnk", "evil.lnk. ", "n.pyw", "budget.py", "trip.rdp",
+    "wall.theme", "report.xll", "minutes.docm", "sum.xlsm", "upd.msu",
+    "app.msixbundle", "c.iqy", "w.wsc", "m.psm1", "nb.one",
+    "old.doc", "old.xls", "page.html", "drawing.svg", "data.json",
+    "archive.zip", "text.odt", "noext", "odd.xyz",
+    "x.r" + chr(0x202e) + "dp"]}
+_wrong = {n: k for n, k in _how.items() if k != (
+    "preview" if n in ("photo.jpg", "scan.PNG", "anim.gif")
+    else "open" if n.rsplit(".", 1)[-1] in ("docx", "xlsx", "pptx", "pdf", "txt",
+                                            "csv", "mp4", "mp3", "mov")
+    else "ask" if n in ("old.doc", "old.xls", "page.html", "drawing.svg",
+                        "data.json", "archive.zip", "text.odt", "noext",
+                        "odd.xyz", "x.r" + chr(0x202e) + "dp")
+    else "warn")}
+check("only kinds whose usual app just shows them open unasked; the rest ask, "
+      "those that run code with the warning (%r)" % _wrong, not _wrong)
+check("...a bare '.rdp' is an .rdp, as Windows reads it",
+      _kinds.how_to_open(".rdp") == "warn")
+_old_list = {".exe", ".bat", ".cmd", ".com", ".scr", ".pif", ".msi", ".msp",
+             ".ps1", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".wsh", ".hta",
+             ".cpl", ".jar", ".reg", ".ps2", ".msc", ".gadget", ".lnk", ".url",
+             ".scf", ".iso", ".img", ".vhd", ".vhdx", ".chm", ".inf", ".sct",
+             ".appref-ms", ".settingcontent-ms", ".msix", ".appx",
+             ".appinstaller", ".library-ms", ".search-ms", ".application",
+             ".diagcab", ".ws", ".vb", ".mht", ".mhtml"}
+check("...every kind that had the warning still has it, and none of them opens unasked",
+      _old_list <= _kinds.DANGEROUS_EXTENSIONS
+      and not (_kinds.DANGEROUS_EXTENSIONS & _kinds.OPENS_WITHOUT_ASKING))
 # Defensive: under a mutant that breaks the guard the outsider is gone,
 # and a bare remove would crash the run before its footer. The checks
 # already recorded their verdicts; this only lets the suite finish.

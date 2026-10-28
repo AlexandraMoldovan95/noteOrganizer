@@ -403,6 +403,13 @@ Attach one or more files to a note from the editor. Attached files show as a sma
 name and a way to remove them; click a file to open it. Removing an attachment deletes it from
 that note only — it doesn't touch anything else.
 
+Pictures open large, right in the app. PDFs, text files, Word, Excel and PowerPoint documents
+(`.docx`, `.xlsx`, `.pptx`), and sound and video files open straight away in the app your computer
+uses for them. Any other kind of file asks first, because a file from someone else's backup can do
+more than show what is in it; a kind that can run programs — a program, a script, a shortcut, a
+document with macros — says so in stronger words. The name shown always ends in the file's real
+type.
+
 ![Attachments](screenshots/attachments.png)
 
 ### Checklists

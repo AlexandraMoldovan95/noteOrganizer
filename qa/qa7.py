@@ -1288,6 +1288,64 @@ check(f'a photo label over another kind of file shows that kind: its name, '
       and not any('🖼' in t or '\u202e' in t for t in _row_texts)
       and any('Opens in your default app' in t for t in _row_texts))
 
+# ---- Only kinds that just show their contents open unasked ----
+# The warn-before-opening list was a list of dangerous kinds, and such a
+# list is never complete: .pyw, .rdp, .theme, .xll, macro documents, .msu
+# and more went straight to Windows. Now a short list opens at once, a
+# kind that runs code asks with the warning, and every other kind asks
+# calmly -- while a person's own .docx, .pdf or .mp4 still meets no question.
+_k_opened, _k_asked = [], []
+_k_real_ask, _k_real_dlg = app.ask_yes_no, app._themed_dialog
+_k_real_start = getattr(NO.os, 'startfile', None)
+_k_answer = [False]
+NO.os.startfile = lambda p, *a, **k: _k_opened.append(os.path.basename(p))
+app.ask_yes_no = lambda t, m, **k: (_k_asked.append(('warn', t, m, k)), _k_answer[0])[1]
+app._themed_dialog = lambda t, m, **k: (_k_asked.append(('ask', t, m, k)), _k_answer[0])[1]
+
+
+def _k_click(name):
+    stored = '20261001120000000000_' + name
+    with open(os.path.join(NO.ATTACHMENTS_DIR, stored), 'wb') as f:
+        f.write(b'content')
+    app.current_attachments = [{'filename': name, 'stored_as': stored}]
+    _k_opened.clear(); _k_asked.clear()
+    app.open_attachment(0); app.update()
+    return [a[0] for a in _k_asked], list(_k_opened)
+
+
+try:
+    _k_plain = {n: _k_click(n) for n in ('minutes.docx', 'sheet.xlsx', 'slides.pptx',
+                                         'scan.pdf', 'notes.txt', 'clip.mp4')}
+    check(f'a person\'s own documents, PDFs, text and video open with no question '
+          f'({_k_plain})',
+          all(v == ([], ['20261001120000000000_' + n]) for n, v in _k_plain.items()))
+    _k_code = {n: _k_click(n) for n in ('run.pyw', 'trip.rdp', 'wall.theme', 'report.xll',
+                                        'minutes.docm', 'upd.msu', 'app.msixbundle', 'c.iqy')}
+    check(f'kinds that run code or reach out ask with the warning, and No opens '
+          f'nothing ({_k_code})',
+          all(v == (['warn'], []) for v in _k_code.values()))
+    _k_unknown = {n: _k_click(n) for n in ('archive.zip', 'page.html', 'old.doc', 'odd.xyz')}
+    check(f'any other kind asks first, and Cancel opens nothing ({_k_unknown})',
+          all(v == (['ask'], []) for v in _k_unknown.values()))
+    _k_click('archive.zip')
+    _k_q = _k_asked[0] if _k_asked else ('', '', '', {})
+    check(f'the question for an unknown kind is calm and plain: it names the file, '
+          f'offers Cancel and Open with Cancel first, and claims nothing about '
+          f'running programs ({_k_q[1]!r}: {_k_q[2][:60]!r})',
+          _k_q[1] == 'Open this file?'
+          and '“archive.zip”' in _k_q[2]
+          and "doesn't know this kind of file" in _k_q[2]
+          and 'run programs' not in _k_q[2]
+          and _k_q[3].get('buttons') == [('Cancel', False), ('Open', True)]
+          and _k_q[3].get('default') == 'Cancel')
+    _k_answer[0] = True
+    check('...and Open is what opens it',
+          _k_click('archive.zip') == (['ask'], ['20261001120000000000_archive.zip']))
+finally:
+    app.ask_yes_no, app._themed_dialog = _k_real_ask, _k_real_dlg
+    if _k_real_start is not None:
+        NO.os.startfile = _k_real_start
+
 # ---- A trailing dot cannot smuggle it past the gate ----
 # Windows strips trailing dots/spaces when it OPENS a path, so
 # "evil.lnk. " names evil.lnk on disk while splitext sees no extension

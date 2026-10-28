@@ -206,6 +206,26 @@ changed — and `_offset_indices` laying them back the same way, in one walk:
 each span end used to be a walk from the top of the note, and Enter in a
 numbered list, which lays every span again, took 3.4 s at 8,000 styled words.
 
+### An attachment opens by what it is, not by what it says
+
+An attachment record is two names: `stored_as`, the file in `attachments/`, and `filename`, the
+label the row shows. Only the first is evidence — a backup can write any label over any file — so
+everything a person sees or is asked about an attachment comes from it. `normalize_note()` makes
+the label end in the stored file's type and takes out the characters that reorder or hide text
+(`attachment_display_name`); the row's icon and hint, and the click, ask `how_to_open` of the
+stored file.
+
+`how_to_open` is an allow list on purpose. The kinds whose usual app only shows what is in them —
+pictures, PDF, plain text and CSV, Word, Excel and PowerPoint files that cannot hold macros, sound
+and video — open at once, so a person's own files meet no question. Every other kind asks before
+Windows gets it. A list of dangerous kinds was the design before, and it was never complete:
+Windows has hundreds of associations, and every installed program adds more.
+`DANGEROUS_EXTENSIONS` survives only to choose the stronger of the two questions, so a kind
+missing from it is asked about more calmly, never not asked. A format that *can* carry macros
+(`.doc`, `.xls`, `.ppt`, OpenDocument) or that a browser runs (`.html`, `.svg`) stays off the
+short list, however ordinary
+([the story](ISSUES_LOG.md#the-photo-that-was-a-remote-connection)).
+
 ### Recurrence model
 
 A recurring note is stored once — the "base" note carries a `recurrence` rule (frequency,

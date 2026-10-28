@@ -64,7 +64,7 @@ suite has had, and what each one really was:
 | `qa4` | theming, stress tests, leak regression — and the note list drawn a screenful at a time, with a save redrawing one card |
 | `qa5` | corrupt data, edge cases |
 | `qa6` | grouping, settings, attachments, multi-feature combinations — and every control in sight, on every page, at an ordinary and the smallest window, and on a screen scaled to 150% and 200% (Sharp text); every control a click acts on within Tab's reach, and what Tab lands on in sight; spelling, with a stand-in dictionary |
-| `qa7` | calendar delete, the month drawn on one canvas, the calendar History register, multi-select, image preview, autosave & memory fixes |
+| `qa7` | calendar delete, the month drawn on one canvas, the calendar History register, multi-select, image preview, opening an attachment (what opens unasked, what asks and how, the name shown), autosave & memory fixes |
 | `qa8` | search debounce, background-timer robustness |
 | `qa9` | the nested-dropdown-inside-popup fix |
 

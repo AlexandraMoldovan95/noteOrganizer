@@ -429,6 +429,62 @@ def file_type_of(name):
 # never of the label: the row's icon, its hint and the click all agree.
 PREVIEWED_IN_APP = frozenset({".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"})
 
+# Kinds whose usual app only shows what is in them: handed to Windows at once.
+# Every other kind asks first, since a list of the dangerous ones is never
+# complete. ISSUES_LOG: "The photo that was a remote connection".
+OPENS_WITHOUT_ASKING = PREVIEWED_IN_APP | frozenset({
+    ".jfif", ".tif", ".tiff", ".heic", ".heif", ".avif", ".ico",
+    # Formats that cannot carry macros or scripts: not .doc, .xls, .ppt or
+    # OpenDocument, which can, nor web pages, .svg or .xml, which a browser runs.
+    ".pdf", ".txt", ".md", ".markdown", ".csv", ".log", ".rtf",
+    ".docx", ".xlsx", ".pptx",
+    # Sound and video; not .wma, .wmv or .asf, whose container can carry
+    # script commands and web addresses, nor playlists, which are addresses.
+    ".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus",
+    ".mp4", ".m4v", ".mov", ".avi", ".mkv", ".webm",
+})
+
+# Kinds Windows runs, or that run code or reach out when opened: these ask with
+# the stronger warning. Missing one costs only the wording -- it still asks.
+DANGEROUS_EXTENSIONS = frozenset({
+    # Programs and scripts Windows runs outright.
+    ".exe", ".bat", ".cmd", ".com", ".scr", ".pif", ".msi", ".msp", ".mst",
+    ".ps1", ".ps2", ".psm1", ".psd1", ".ps1xml", ".ps2xml", ".psc1", ".psc2",
+    ".msh", ".msh1", ".msh2", ".mshxml", ".msh1xml", ".msh2xml",
+    ".vbs", ".vbe", ".vb", ".bas", ".js", ".jse", ".wsf", ".wsh", ".ws",
+    ".wsc", ".sct", ".hta", ".cpl", ".jar", ".jnlp", ".reg", ".msc",
+    ".gadget", ".py", ".pyw", ".pyz", ".pyzw", ".pyc", ".pyo",
+    # Shortcuts, installers, disk images and settings files that hand Windows
+    # a command, a package, a remote connection or a theme to apply.
+    ".lnk", ".url", ".website", ".scf", ".iso", ".img", ".vhd", ".vhdx",
+    ".chm", ".hlp", ".inf", ".ins", ".isp", ".appref-ms", ".application",
+    ".settingcontent-ms", ".library-ms", ".search-ms", ".appcontent-ms",
+    ".msix", ".msixbundle", ".appx", ".appxbundle", ".appinstaller", ".msu",
+    ".cab", ".diagcab", ".diagpkg", ".diagcfg", ".xbap", ".rdp", ".theme",
+    ".themepack", ".deskthemepack", ".cer", ".crt", ".der", ".mht", ".mhtml",
+    ".shs", ".shb", ".mcf", ".xnk", ".glk", ".wiz", ".wsb",
+    # Documents and add-ins that carry macros or fetch data when opened.
+    ".docm", ".dotm", ".xlsm", ".xltm", ".xlsb", ".xlam", ".xla", ".xll",
+    ".pptm", ".potm", ".ppsm", ".ppam", ".sldm", ".iqy", ".slk",
+    ".one", ".onepkg", ".pub", ".mdb", ".accdb", ".accde", ".mde", ".mda",
+    ".ade", ".adp",
+})
+
+
+def how_to_open(name):
+    """How the attachment stored as *name* opens -- judged from the stored
+    file, never from its label: "preview" (the app shows it), "open" (handed
+    to Windows at once), "warn" (asks, saying it can run programs) or "ask"
+    (asks, saying the app does not know the kind)."""
+    kind = file_type_of(name)
+    if kind in PREVIEWED_IN_APP:
+        return "preview"
+    if kind in OPENS_WITHOUT_ASKING:
+        return "open"
+    if kind in DANGEROUS_EXTENSIONS:
+        return "warn"
+    return "ask"
+
 
 def attachment_display_name(filename, stored_as):
     """The name a person is shown for an attachment: *filename*, a label a

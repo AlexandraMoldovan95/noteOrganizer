@@ -389,6 +389,7 @@ from noteorganizer.core.model import (
     sanitize_color,
     MAX_CHECKLIST_ITEMS,
     MAX_ATTACHMENTS,
+    DANGEROUS_EXTENSIONS,
     attachment_display_name,
 )
 
@@ -16009,24 +16010,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
 
 
-    # File extensions Windows will execute (or run scripts from) rather than
-    # just open in a viewer. Opening one runs code, so we warn first.
-    DANGEROUS_EXTENSIONS = {
-        # The classics: files Windows executes outright.
-        ".exe", ".bat", ".cmd", ".com", ".scr", ".pif", ".msi", ".msp",
-        ".ps1", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".wsh", ".hta",
-        ".cpl", ".jar", ".reg", ".ps2", ".msc", ".gadget",
-        # And the ones actually used to deliver code today, which this
-        # list missed: a .lnk carries an arbitrary command line behind an
-        # innocent name and icon, .iso/.img mount on double-click, and
-        # the rest each hand a path or a command straight to Windows.
-        # An attachment arriving inside an imported backup reaches
-        # os.startfile through exactly this gate.
-        ".lnk", ".url", ".scf", ".iso", ".img", ".vhd", ".vhdx",
-        ".chm", ".inf", ".sct", ".appref-ms", ".settingcontent-ms",
-        ".msix", ".appx", ".appinstaller", ".library-ms", ".search-ms",
-        ".application", ".diagcab", ".ws", ".vb", ".mht", ".mhtml",
-    }
+    # The kinds of file that open with the stronger warning. The list lives in
+    # core/model.py beside the short list of kinds that open unasked: it only
+    # chooses the warning's words now, since every kind not on that short list
+    # asks before it opens (how_to_open; ISSUES_LOG: "The photo that was a
+    # remote connection"). A .lnk carries a command line behind an innocent
+    # name, a disk image mounts on a double click, an .rdp connects out.
+    DANGEROUS_EXTENSIONS = DANGEROUS_EXTENSIONS
 
 
 

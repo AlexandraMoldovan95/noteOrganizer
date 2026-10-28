@@ -37,8 +37,8 @@ from datetime import datetime
 from PIL import Image, ImageTk
 
 from ..core import paths
-from ..core.model import (MAX_ATTACHMENTS, PREVIEWED_IN_APP,
-                          attachment_display_name, file_type_of)
+from ..core.model import (MAX_ATTACHMENTS, attachment_display_name,
+                          how_to_open)
 from ..core.storage import (_attachment_path_within, _delete_attachment_files,
                             attachment_names_in)
 
@@ -165,45 +165,20 @@ class AttachmentsMixin:
             # The name the question quotes ends in the type of the file
             # that opens, whatever label the record carries.
             original_name = attachment_display_name(attachment.get("filename"), stored_as)
-            # The safety decision keys off the REAL on-disk file's
-            # extension (stored_as preserves the original extension — see
-            # add_attachment), NOT the display filename a crafted note
-            # controls separately, so a ".exe" masquerading as "doc.pdf"
-            # can't skip the warning. file_type_of drops the trailing
-            # dots/spaces Windows strips when it OPENS a path ("invoice.lnk. "
-            # executes invoice.lnk), repeated here at the sink for a record
-            # that predates normalize_note's rule.
-            # And from the file the path resolved to, which is the one
-            # startfile opens: the resolver refuses aliases, this repeats it.
-            ext = file_type_of(os.path.basename(path))
-
-            # Pillow decodes all of these — shown large, right in the app,
+            # Every decision keys off the REAL on-disk file -- the path the
+            # resolver reached, which is the one startfile opens -- never the
+            # display filename a crafted note controls separately, so a ".exe"
+            # masquerading as "doc.pdf" can't skip the question. how_to_open
+            # reads the type as Windows does, trailing dots and spaces off
+            # ("invoice.lnk. " executes invoice.lnk).
+            # Pillow decodes the pictures — shown large, right in the app,
             # instead of handing off to whatever image viewer Windows has
-            # associated with the file type. Anything else still opens
-            # externally below.
-            if ext in PREVIEWED_IN_APP:
+            # associated with the file type. Anything else opens externally,
+            # through the one gate that asks.
+            if how_to_open(os.path.basename(path)) == "preview":
                 self._show_image_preview(path, original_name)
                 return
-
-            # Warn before opening anything Windows would execute as a program
-            # or script — opening it runs code, not just views a file.
-            if ext in self.DANGEROUS_EXTENSIONS:
-                proceed = self.ask_yes_no(
-                    "⚠ Potentially unsafe file",
-                    f"“{original_name}” is a type of file that can run programs "
-                    "or commands on your computer.\n\n"
-                    "Only open it if you completely trust where it came from. "
-                    "Opening an unsafe file can harm your computer.\n\n"
-                    "Open it anyway?",
-                    icon="warning", default="no"
-                )
-                if not proceed:
-                    return
-
-            try:
-                os.startfile(path)  # Windows-only, matches this app's target platform
-            except (AttributeError, OSError):
-                self.show_info("Can't open automatically", f"File is located at:\n{path}")
+            self._open_externally(path, original_name)
 
     def _show_image_preview(self, path, filename):
         """A large, in-app image preview — most of the window, not a tiny
@@ -465,12 +440,40 @@ class AttachmentsMixin:
             except Exception:
                 pass
 
-    def _open_externally(self, path):
-        """Hand a file off to whatever program Windows has associated with
-        it — the plain, no-preview fallback used for file types this app
-        can't show inline itself."""
+    def _open_externally(self, path, shown=None):
+        """Hand a file to whatever program Windows has for its kind -- the
+        one way an attachment leaves the app, so the one place that asks.
+
+        A kind whose usual app only shows it opens at once. A kind that
+        runs code asks with the warning; any other kind asks calmly, since
+        a list of dangerous kinds is never complete (how_to_open). *shown*
+        is the name the question quotes, from attachment_display_name."""
+        shown = shown or os.path.basename(path)
+        kind = how_to_open(os.path.basename(path))
+        if kind == "warn":
+            if not self.ask_yes_no(
+                    "⚠ Potentially unsafe file",
+                    f"“{shown}” is a type of file that can run programs "
+                    "or commands on your computer.\n\n"
+                    "Only open it if you completely trust where it came from. "
+                    "Opening an unsafe file can harm your computer.\n\n"
+                    "Open it anyway?",
+                    icon="warning", default="no"):
+                return
+        elif kind == "ask":
+            # Cancel first: Escape answers it, and Enter lands on it.
+            if not self._themed_dialog(
+                    "Open this file?",
+                    "Note Organizer doesn't know this kind of file, so it "
+                    f"can't tell you whether “{shown}” is safe to open.\n\n"
+                    "Windows will open it with whatever app it has for files "
+                    "like this. Only open it if you trust where it came from.",
+                    kind="question",
+                    buttons=[("Cancel", False), ("Open", True)],
+                    default="Cancel"):
+                return
         try:
-            os.startfile(path)
+            os.startfile(path)  # Windows-only, matches this app's target platform
         except (AttributeError, OSError):
             self.show_info("Can't open automatically", f"File is located at:\n{path}")
 
@@ -502,8 +505,8 @@ class AttachmentsMixin:
             # The name, the icon and the hint all from the file that opens,
             # as the click is: a label is whatever a backup wrote.
             display_name = attachment_display_name(att.get("filename"), att.get("stored_as"))
-            can_preview_inline = file_type_of(
-                att.get("stored_as") or display_name) in PREVIEWED_IN_APP
+            can_preview_inline = how_to_open(
+                att.get("stored_as") or display_name) == "preview"
             icon = "🖼" if can_preview_inline else "📄"
 
             row = tk.Frame(self.attachments_frame, bg=self.colors["card"])
