@@ -9266,5 +9266,23 @@
       "qa3"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "DR65",
+    "about": "a lock file another program holds a moment fails open at once, and a second window can open the notebook once it is let go",
+    "edits": [
+      {
+        "file": "noteorganizer/core/single_instance.py",
+        "find": "            if getattr(exc, \"winerror\", None) != 32 or attempt == 2:\n",
+        "replace": "            if True:\n"
+      }
+    ],
+    "must_fail": [
+      "a lock file held a moment by another program is taken on a later try"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
   }
 ]

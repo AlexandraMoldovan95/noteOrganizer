@@ -43,6 +43,7 @@ it stops the ordinary accident, not a determined user.
 
 import errno
 import os
+import time
 
 from . import paths
 
@@ -66,10 +67,17 @@ def acquire(path=None):
     if _held is not None:
         return True
     target = path or _lock_path()
-    try:
-        handle = open(target, "a+")
-    except (IOError, OSError):
-        return True  # see "the deliberate failure mode" above
+    for attempt in range(3):
+        try:
+            handle = open(target, "a+")
+            break
+        except (IOError, OSError) as exc:
+            # A sharing violation is another program holding the file a
+            # moment, and failing open let a second window in after it:
+            # tried again, as the data files are. Past that, the failure mode.
+            if getattr(exc, "winerror", None) != 32 or attempt == 2:
+                return True  # see "the deliberate failure mode" above
+            time.sleep(0.5)
     try:
         handle.seek(0)
         if os.name == "nt":

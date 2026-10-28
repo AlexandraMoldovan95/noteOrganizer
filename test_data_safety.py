@@ -2535,6 +2535,37 @@ try:
           _acquire_with_lock_error(_errno.EACCES) is False
           and _acquire_with_lock_error(_errno.EAGAIN) is False)
 
+    # A lock file another program holds a moment (a sharing violation) is
+    # tried again: failing open at once let a second window in once it was
+    # let go (round 5). Raised twice, then the file opens: the lock is taken.
+    class _Sharing(PermissionError):
+        winerror = 32
+
+    _sh_left = {"n": 2}
+    _sh_real_open, _sh_real_sleep = open, _si_mod.time.sleep
+
+    def _sh_open(path, *a, **k):
+        if path.endswith("sharing_probe.lock") and _sh_left["n"] > 0:
+            _sh_left["n"] -= 1
+            raise _Sharing(13, "held by another program")
+        return _sh_real_open(path, *a, **k)
+
+    _si_mod.open = _sh_open
+    _si_mod.time.sleep = lambda s: None
+    try:
+        _sh_got = _si_mod.acquire(os.path.join(_lock_dir, "sharing_probe.lock"))
+        _sh_held = _si_mod.held()
+    finally:
+        del _si_mod.open
+        _si_mod.time.sleep = _sh_real_sleep
+        try:
+            _si_mod.release()
+        except Exception:
+            pass
+    check("a lock file held a moment by another program is taken on a later try "
+          "(got %s, held %s)" % (_sh_got, _sh_held),
+          _sh_got is True and _sh_held is True and _sh_left["n"] == 0)
+
     # A lock that cannot be created must never stop the app from starting:
     # refusing to open because a LOCK failed is worse than what it guards.
     check("an uncreatable lock file reports success rather than blocking",
