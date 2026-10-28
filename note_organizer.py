@@ -457,6 +457,8 @@ from noteorganizer.core.sharing import (
     encode_share_code,
     decode_share_code,
     _safe_extract_zip,
+    put_zone_mark,
+    zone_mark_of,
 )
 
 
@@ -11732,6 +11734,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # folder — the slowest part for a backup with a lot of them.
                 imported_attachments_dir = os.path.join(temp_dir, "attachments")
                 state["phase"] = "copying"
+                # A backup downloaded from the internet is marked so by
+                # Windows; each file taken out of it carries the same mark,
+                # or SmartScreen and Office's Protected View never see it.
+                zone_mark = zone_mark_of(zip_path)
                 if os.path.isdir(imported_attachments_dir):
                     files = os.listdir(imported_attachments_dir)
                     state["total"] = max(len(files), 1)
@@ -11748,6 +11754,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                 copy_file_until_stopped(
                                     os.path.join(imported_attachments_dir, filename),
                                     part, stop)
+                                # Marked before it is in place, so it is never
+                                # there unmarked; the rename keeps the mark.
+                                put_zone_mark(part, zone_mark)
                                 os.replace(part, dest)
                                 state["copied"].append(filename)
                             except (IOError, OSError):

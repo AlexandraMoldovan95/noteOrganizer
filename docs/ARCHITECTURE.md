@@ -226,6 +226,13 @@ missing from it is asked about more calmly, never not asked. A format that *can*
 short list, however ordinary
 ([the story](ISSUES_LOG.md#the-photo-that-was-a-remote-connection)).
 
+Windows' own defences are kept as well. A browser marks what it downloads — the `Zone.Identifier`
+stream, the "Mark of the Web" — and SmartScreen and Office's Protected View go by that mark. A zip
+keeps it on the zip alone, so the import writes the backup's mark onto each attachment it copies
+out (`zone_mark_of`, `put_zone_mark` in `core/sharing.py`), as Explorer's own unzip does. A file
+attached by hand keeps its own, because `shutil.copy2` copies the stream on Windows. A disk that
+keeps no streams goes without, and the import carries on.
+
 ### Recurrence model
 
 A recurring note is stored once — the "base" note carries a `recurrence` rule (frequency,

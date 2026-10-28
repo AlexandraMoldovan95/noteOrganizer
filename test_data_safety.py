@@ -1618,6 +1618,95 @@ _old_list = {".exe", ".bat", ".cmd", ".com", ".scr", ".pif", ".msi", ".msp",
 check("...every kind that had the warning still has it, and none of them opens unasked",
       _old_list <= _kinds.DANGEROUS_EXTENSIONS
       and not (_kinds.DANGEROUS_EXTENSIONS & _kinds.OPENS_WITHOUT_ASKING))
+# Windows' Mark of the Web travels with what the app brings in. A backup
+# downloaded from the internet is marked, and the import took files out of
+# it unmarked, so SmartScreen and Office's Protected View never saw them. A
+# file attached by hand keeps its own (shutil.copy2 copies the stream on
+# Windows), and so does a duplicate's copy. Windows only: nowhere else keeps
+# the stream.
+if os.name == "nt":
+    import types as _types_m
+    import zipfile as _zip_m
+    import tkinter.filedialog as _tkfd_m
+    _m_dir = tempfile.mkdtemp(prefix="notesorg-motw-")
+    _m_mark = (b"[ZoneTransfer]\r\nZoneId=3\r\n"
+               b"HostUrl=https://example.invalid/NotesBackup.zip\r\n")
+
+    def _m_read(path):
+        try:
+            with open(path + ":Zone.Identifier", "rb") as _fh:
+                return _fh.read()
+        except OSError:
+            return None
+
+    class _Quiet:
+        """A progress widget that is not there: every call does nothing."""
+        def __getattr__(self, _name):
+            return lambda *a, **k: None
+
+    _m_zip = os.path.join(_m_dir, "NotesBackup.zip")
+    with _zip_m.ZipFile(_m_zip, "w") as _z:
+        _z.writestr("notes_data.json", "[]")
+        _z.writestr("attachments/20261001120000000001_m_minutes.docm", b"PK macro")
+    with open(_m_zip + ":Zone.Identifier", "wb") as _f:
+        _f.write(_m_mark)
+    os.makedirs(NO.ATTACHMENTS_DIR, exist_ok=True)
+    _m_app = _types_m.SimpleNamespace(
+        _export_state=None, _import_state=None, set_status=lambda *a: None,
+        ask_yes_no=lambda *a, **k: True, export_progress_bar=_Quiet(),
+        export_progress_lbl=_Quiet(), export_progress_frame=_Quiet(),
+        _start_io_worker=lambda work: work(), _poll_import_progress=lambda: None)
+    _m_real_open = NO.filedialog.askopenfilename
+    NO.filedialog.askopenfilename = lambda **k: _m_zip
+    try:
+        NO.NoteOrganizer.import_data(_m_app)
+    finally:
+        NO.filedialog.askopenfilename = _m_real_open
+    _m_state = _m_app._import_state or {}
+    _m_dest = os.path.join(NO.ATTACHMENTS_DIR, "20261001120000000001_m_minutes.docm")
+    check("an attachment restored from a downloaded backup keeps the backup's "
+          "mark of the web (%r, %r)" % (_m_state.get("error"), _m_read(_m_dest)),
+          _m_state.get("error") is None and _m_read(_m_dest) == _m_mark)
+
+    _m_src = os.path.join(_m_dir, "Downloads", "minutes.docx")
+    os.makedirs(os.path.dirname(_m_src))
+    with open(_m_src, "wb") as _f:
+        _f.write(b"PK docx")
+    with open(_m_src + ":Zone.Identifier", "wb") as _f:
+        _f.write(_m_mark)
+    os.makedirs(_paths.ATTACHMENTS_DIR, exist_ok=True)
+    _m_editor = _types_m.SimpleNamespace(
+        current_attachments=[], selected_note_id=None,
+        show_warning=lambda *a, **k: None, show_error=lambda *a, **k: None,
+        ask_yes_no=lambda *a, **k: True, refresh_attachments_list=lambda: None,
+        _schedule_autosave=lambda: None)
+    _m_real_many = _tkfd_m.askopenfilenames
+    _tkfd_m.askopenfilenames = lambda **k: (_m_src,)
+    try:
+        NO.NoteOrganizer.add_attachment(_m_editor)
+    finally:
+        _tkfd_m.askopenfilenames = _m_real_many
+    _m_added = [os.path.join(_paths.ATTACHMENTS_DIR, a["stored_as"])
+                for a in _m_editor.current_attachments]
+    check("a file attached by hand keeps its own mark of the web",
+          len(_m_added) == 1 and _m_read(_m_added[0]) == _m_mark)
+    _m_dup = (_storage.copy_attachment_file(os.path.basename(_m_added[0]))
+              if _m_added else None)
+    _m_dup_path = os.path.join(_paths.ATTACHMENTS_DIR, _m_dup) if _m_dup else None
+    check("...and so does the copy a duplicated note gets",
+          bool(_m_dup) and _m_read(_m_dup_path) == _m_mark)
+    try:
+        _m_nowhere = NO.put_zone_mark(os.path.join(_m_dir, "no folder", "x.docx"), _m_mark)
+    except Exception as _exc:
+        _m_nowhere = "raised %r" % _exc
+    check("...while a place that cannot hold the mark goes without it and never fails (%r)"
+          % (_m_nowhere,), _m_nowhere is False)
+    for _left in [_m_dest, _m_dup_path] + _m_added:
+        if _left and os.path.exists(_left):
+            os.remove(_left)
+    if _m_state.get("temp_dir"):
+        shutil.rmtree(_m_state["temp_dir"], ignore_errors=True)
+    shutil.rmtree(_m_dir, ignore_errors=True)
 # Defensive: under a mutant that breaks the guard the outsider is gone,
 # and a bare remove would crash the run before its footer. The checks
 # already recorded their verdicts; this only lets the suite finish.

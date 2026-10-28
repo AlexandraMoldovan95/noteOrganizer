@@ -382,3 +382,44 @@ def copy_file_until_stopped(src, dst, stop):
         except OSError:
             pass
         raise
+
+
+# Windows' "Mark of the Web": the stream a browser or mail program leaves on a
+# downloaded file, saying where it came from. SmartScreen, Office's Protected
+# View and its block on macros from the internet all read it. A zip keeps it on
+# the zip only, so whatever the import takes out of a backup would arrive
+# unmarked -- unless the import writes the backup's mark onto each file, as
+# Explorer's own unzip does. ISSUES_LOG: "The photo that was a remote connection".
+ZONE_STREAM = ":Zone.Identifier"
+MAX_ZONE_MARK = 64 * 1024
+# What stands in for a mark too long to be a real one: the Internet zone.
+INTERNET_ZONE_MARK = b"[ZoneTransfer]\r\nZoneId=3\r\n"
+
+
+def zone_mark_of(path):
+    """The Mark of the Web *path* carries, as the bytes of its stream, or None:
+    there is none, this is not Windows, or the disk keeps no streams."""
+    if os.name != "nt":
+        return None
+    try:
+        with open(path + ZONE_STREAM, "rb") as fh:
+            mark = fh.read(MAX_ZONE_MARK + 1)
+    except (OSError, ValueError):
+        return None
+    if len(mark) > MAX_ZONE_MARK:
+        return INTERNET_ZONE_MARK
+    return mark or None
+
+
+def put_zone_mark(path, mark):
+    """Give the file at *path* the Mark of the Web *mark* (from zone_mark_of).
+    Never raises, and answers whether the mark was written: on FAT, exFAT or
+    a share without streams the file simply goes unmarked, and stays."""
+    if not mark or os.name != "nt":
+        return False
+    try:
+        with open(path + ZONE_STREAM, "wb") as fh:
+            fh.write(mark)
+        return True
+    except (OSError, ValueError):
+        return False

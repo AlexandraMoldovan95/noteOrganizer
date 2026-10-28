@@ -2240,7 +2240,9 @@ done, name the behaviour and ask every other road that reaches it.
 "Opens in your default app" hint. Clicked, it handed Windows an `.rdp` file — a remote-desktop
 connection, not a photo — and asked nothing. So did a `.pyw` (which the Python launcher runs), a
 `.theme`, an Excel add-in, a Word document with macros and a Windows update package. A label
-holding a right-to-left override showed its letters in another order.
+holding a right-to-left override showed its letters in another order. And a backup downloaded
+from the internet gave up Windows' mark of where it came from: none of the files the import took
+out of it carried one.
 
 **Root cause:** the app trusted two things it had no reason to. The first was the label. An
 attachment record has two names: `stored_as` is the file on disk, and the open, its warning and
@@ -2253,6 +2255,12 @@ The second was its own list. The question before opening was asked only for the 
 dangerous ones, and a list of dangerous kinds is never complete: Windows has hundreds of file
 associations, every installed program adds more, and it had already been extended once, for the
 shortcuts and disk images it missed. Everything else went straight to `os.startfile`.
+
+The mark was lost rather than trusted. A browser leaves a `Zone.Identifier` stream on what it
+downloads — the "Mark of the Web" — and SmartScreen, Office's Protected View and its block on
+macros from the internet all go by it. A zip keeps it on the zip alone: `zipfile` writes plain
+files, and the import copied only their contents, so its files lost the last defences Windows
+would have added after the app's own.
 
 **Fix:** `normalize_note` makes the label end in the type of the file that opens ("Holiday
 photo.rdp") and takes out the characters that reorder or hide text: the controls, and the bidi
@@ -2269,12 +2277,19 @@ get a calm one that says only that the app does not know the kind, and opens on 
 kind from the dangerous list now costs the wording, never the question. Every handoff to Windows,
 the preview's "Open externally" included, goes through the one gate in `_open_externally`.
 
-`test_data_safety`; qa7 puts a raw crafted record in the editor and clicks each kind; mutants
-AX01–AX09.
+The import now writes the backup's mark onto each attachment it copies out, before the file takes
+its place, as Explorer's own unzip does (`zone_mark_of`, `put_zone_mark`); a disk that keeps no
+streams goes without, and the import carries on. A file attached by hand already kept its own —
+`shutil.copy2` copies the stream on Windows — and so does a duplicated note's copy; both are now
+checked, so a change of copy can no longer drop it unseen.
+
+`test_data_safety` (the marks on Windows); qa7 puts a raw crafted record in the editor and clicks
+each kind; mutants AX01–AX12.
 
 **Takeaway:** a label is a claim about a file; what a person sees is read from the file that will
 open. And where the safe kinds are few and the dangerous ones are anything else, list the safe
-ones: a list of what is dangerous is wrong the day it is written, and wrong quietly.
+ones: a list of what is dangerous is wrong the day it is written, and wrong quietly. A copy that
+drops where a file came from switches off defences the app never sees, so it carries that too.
 
 
 ## Tk & platform gotchas

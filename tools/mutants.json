@@ -6889,5 +6889,38 @@
     "must_fail": ["a person's own documents, PDFs, text and video open with no question"],
     "suites": ["qa7"],
     "expect": "killed"
+  },
+  {
+    "id": "AX10",
+    "about": "attachments restored from a downloaded backup lose its mark of the web",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                                put_zone_mark(part, zone_mark)\n",
+               "replace": "                                pass\n"}],
+    "must_fail": ["an attachment restored from a downloaded backup keeps the backup's mark of the web"],
+    "suites": ["test_data_safety"],
+    "expect": "killed",
+    "note": "Killed on Windows, where the app runs; elsewhere no file keeps the stream and these checks do not run."
+  },
+  {
+    "id": "AX11",
+    "about": "a file attached by hand loses its mark of the web",
+    "edits": [{"file": "noteorganizer/ui/attachments.py",
+               "find": "                shutil.copy2(src_path, dest_path)\n",
+               "replace": "                shutil.copyfile(src_path, dest_path)\n"}],
+    "must_fail": ["a file attached by hand keeps its own mark of the web"],
+    "suites": ["test_data_safety"],
+    "expect": "killed",
+    "note": "Killed on Windows, where the app runs; elsewhere no file keeps the stream and these checks do not run."
+  },
+  {
+    "id": "AX12",
+    "about": "a duplicated note's copy of an attachment loses its mark of the web",
+    "edits": [{"file": "noteorganizer/core/storage.py",
+               "find": "        shutil.copy2(src, dest)\n",
+               "replace": "        shutil.copyfile(src, dest)\n"}],
+    "must_fail": ["...and so does the copy a duplicated note gets"],
+    "suites": ["test_data_safety"],
+    "expect": "killed",
+    "note": "Killed on Windows, where the app runs; elsewhere no file keeps the stream and these checks do not run."
   }
 ]
