@@ -39,9 +39,12 @@ from .recurrence import (
 # kill the app with a pasted share code (see normalize_note).
 MAX_CHECKLIST_ITEMS = 1000
 
-# And the longest item: each is drawn as one wrapped label, as tall as its text,
-# and a pasted page or a share code made one tens of thousands of pixels tall.
+# And the longest item a box adds: each is drawn as one wrapped label, as tall
+# as its text, and a pasted page made one tens of thousands of pixels tall. One
+# already longer is kept whole, and drawn cut (checklist_shown).
 MAX_CHECKLIST_ITEM_CHARS = 2_000
+# The lines of one item its row draws: a line break is a line however short.
+CHECKLIST_SHOWN_LINES = 100
 
 # The same ceiling for attachments, which render a row of widgets each and
 # arrive by the same untrusted routes. 200 paint in about 0.6 s on a fast
@@ -149,6 +152,21 @@ def _truncate(text, limit=60):
     if len(flat) <= limit:
         return flat
     return flat[:limit].rstrip() + "…"
+
+
+def checklist_shown(text):
+    """A checklist item as its row draws it: as it is, unless longer than
+    MAX_CHECKLIST_ITEM_CHARS or CHECKLIST_SHOWN_LINES, then cut there with an
+    ellipsis. Display only: an item saved before the limit, or brought by a
+    share code, keeps every word in the note."""
+    if not isinstance(text, str):
+        return ""
+    lines = text.split("\n")
+    if (len(text) <= MAX_CHECKLIST_ITEM_CHARS
+            and len(lines) <= CHECKLIST_SHOWN_LINES):
+        return text
+    shown = "\n".join(lines[:CHECKLIST_SHOWN_LINES])[:MAX_CHECKLIST_ITEM_CHARS]
+    return shown.rstrip() + "…"
 
 
 def _note_str(note, key, default=""):
@@ -700,8 +718,9 @@ def normalize_note(note):
             text = item.get("text", "")
             if not isinstance(text, str):
                 text = ""
-            checklist.append({"text": text[:MAX_CHECKLIST_ITEM_CHARS],
-                              "done": bool(item.get("done"))})
+            # Any length kept: an item saved before the box had a limit is
+            # the person's words. Its row draws it cut (checklist_shown).
+            checklist.append({"text": text, "done": bool(item.get("done"))})
         if len(checklist) >= MAX_CHECKLIST_ITEMS:
             break
     clean["checklist"] = checklist

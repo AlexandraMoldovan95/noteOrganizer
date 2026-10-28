@@ -2430,11 +2430,14 @@ qa6 counts the measures asked of Tk for a 6,000-character cell, never the time; 
 And one more door with no limit at all: the checklist's "Add item" box. A pasted page became one
 item, drawn as one wrapped label as tall as its text — on Linux the app died drawing 30,000
 characters, past X's 32,767-pixel window — and a 490-character share code carried a 60,000-character
-item in. Every route to an item now keeps 2,000 characters: the note's and the template editor's
-boxes refuse a key or a paste past it and say so, as the title's box does, and `normalize_note`
-and `normalize_template` cut what a share code, a backup or an old file brings. The template
-editor's name and title boxes keep the note title's 200. test_data_safety, qa1 and qa6; mutants
-RT14–RT17.
+item in. The note's and the template editor's boxes now refuse a key or a paste past 2,000
+characters and say so, as the title's box does. An item already longer — saved before the limit,
+or brought by a share code or a backup — is not cut: a first version cut it at every load, which
+would have taken a person's own words away without a trace. It is kept whole, and its row draws at
+most 2,000 characters and 100 lines, then "…" (`checklist_shown`); the line count matters because
+1,999 line breaks fit the limit and still stand a row past X's height. The template editor's name
+and title boxes keep the note title's 200. test_data_safety, qa1 and qa6; mutants RT14–RT17 and
+RT21–RT23.
 
 **Takeaway:** a limit on what comes in says nothing about what is then done with it. Ask what the
 work costs at the limit — a capped number squared is not capped — and count every door to it, not

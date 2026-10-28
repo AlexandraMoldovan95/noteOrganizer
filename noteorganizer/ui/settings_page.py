@@ -59,7 +59,8 @@ from ..core.recurrence import describe_recurrence, is_recurring, show_date
 # Shortens with an ellipsis rather than by slicing: a title cut at N
 # characters with nothing to show for it is the same defect as a
 # sentence clipped by a layout, only cheaper to make.
-from ..core.model import MAX_CHECKLIST_ITEM_CHARS, _truncate, normalize_note
+from ..core.model import (MAX_CHECKLIST_ITEM_CHARS, _truncate, checklist_shown,
+                          normalize_note)
 from ..core.storage import (
     TRASH_RETENTION_DAYS,
     trash_retention_days,
@@ -1226,7 +1227,8 @@ class SettingsPageMixin:
                 self._icon_button(row, "trash", do_del, danger=True,
                                   bg_key="sidebar", removes_row=True
                                   ).pack(side="right")
-                lbl = tk.Label(row, text=item.get("text", ""), bg=self.colors["sidebar"],
+                lbl = tk.Label(row, text=checklist_shown(item.get("text", "")),
+                               bg=self.colors["sidebar"],
                                fg=self.colors["subtext"] if item.get("done") else self.colors["text"],
                                font=("Segoe UI", 9), anchor="w", wraplength=self.px(320),
                                justify="left")

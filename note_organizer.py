@@ -391,6 +391,7 @@ from noteorganizer.core.model import (
     sanitize_color,
     MAX_CHECKLIST_ITEMS,
     MAX_CHECKLIST_ITEM_CHARS,
+    checklist_shown,
     MAX_ATTACHMENTS,
     DANGEROUS_EXTENSIONS,
     HIDDEN_IN_NAMES,
@@ -12636,7 +12637,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         bin_btn.pack(side="right")
         bin_btn.bindtags(("ChecklistRowButton",) + bin_btn.bindtags())
 
-        lbl = tk.Label(row, text=item.get("text", ""), bg=self.colors["card"],
+        # Drawn cut past the limit: a share code's 60,000 characters made a
+        # label past the 32,767 pixels X can draw, and the app died.
+        lbl = tk.Label(row, text=checklist_shown(item.get("text", "")),
+                       bg=self.colors["card"],
                        fg=self.colors["text"], font=("Segoe UI", 10), anchor="w",
                        justify="left", wraplength=self.CHECKLIST_WRAP)
         lbl.pack(side="left", fill="x", expand=True, padx=(2, 4))

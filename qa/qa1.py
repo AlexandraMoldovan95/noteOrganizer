@@ -15807,6 +15807,43 @@ app.checklist_add_var.set('')
 app._cancel_pending_autosave()
 app.new_note(); app.update()
 
+# ...and an item already longer -- saved before the box had a limit, or
+# brought by a share code -- keeps every word, and only its row is drawn cut:
+# a load that cut it would have lost what a person wrote.
+from noteorganizer.core import model as _cl_model
+_cl_long = 'w ' * 30000
+_cl_lines = 'x\n' * 999          # under the limit, on a thousand lines
+app.notes.append(NO.normalize_note(
+    {'id': 99731, 'title': 'Long item', 'body': 'b',
+     'checklist': [{'text': _cl_long, 'done': False},
+                   {'text': _cl_lines, 'done': False}]}))
+app.save_notes()
+app.open_note_in_tab(app.find_note(99731)); app.update()
+if not app._checklist_open:
+    app.toggle_checklist_section()
+app.update()
+_cl_drawn = [max((w.cget('text') for w in rec[1].winfo_children()
+                  if isinstance(w, tk.Label)), key=len)
+             for rec in app._checklist_drawn['rows']]
+_cl_tall = [rec[1].winfo_reqheight() for rec in app._checklist_drawn['rows']]
+app._get_checklist()[0]['done'] = True        # a change, so the note saves
+app._autosave_now(); app.update()
+_cl_kept = [it['text'] for it in app.find_note(99731)['checklist']]
+_cl_disk = [it['text'] for n in json.load(open('notes_data.json', encoding='utf-8'))
+            if n.get('id') == 99731 for it in n['checklist']]
+check(f'a checklist item longer than the limit is kept whole through a save, '
+      f'and its row is drawn cut ({[len(t) for t in _cl_drawn]}, '
+      f'{[t.count(chr(10)) for t in _cl_drawn]} line breaks, rows {_cl_tall} px, '
+      f'kept {[len(t) for t in _cl_kept]}, on disk {[len(t) for t in _cl_disk]})',
+      _cl_kept == [_cl_long, _cl_lines] and _cl_disk == [_cl_long, _cl_lines]
+      and all(t.endswith('…') for t in _cl_drawn)
+      and len(_cl_drawn[0]) <= NO.MAX_CHECKLIST_ITEM_CHARS + 1
+      and _cl_drawn[1].count('\n') < _cl_model.CHECKLIST_SHOWN_LINES
+      and max(_cl_tall) < 32767)
+app.new_note(); app.update()
+app.notes = [n for n in app.notes if n.get('id') != 99731]
+app.save_notes()
+
 # ---- CLOSING SAVES SILENTLY (dead last: it destroys the app) ----
 # The quit-time "Unsaved notes" ask could only ever cover the last
 # half-second of typing; the app now trusts its own autosave and closes

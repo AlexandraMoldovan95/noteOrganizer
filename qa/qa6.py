@@ -4908,6 +4908,33 @@ check(f'the template editor\'s name, title and checklist boxes refuse what '
       and all(v == (0, k[0]) for k, v in _tl_kept.items())
       and any('A checklist item can be up to 2,000 characters' in t for t in _tl_told))
 
+# ...and a template's item already longer keeps every word, its row drawn cut,
+# as a note's row is (qa1): a backup's 60,000 characters stood one label past
+# what X can draw.
+_tl_label = None
+try:
+    app._edit_template({'name': 'Long item', 'checklist': [
+        {'text': 'w ' * 30000, 'done': False}]}, lambda: None)
+    app.update()
+    _tl_texts = []
+
+    def _tl_labels(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Label):
+                _tl_texts.append(c.cget('text'))
+            _tl_labels(c)
+
+    if app._mini_popup is not None:
+        _tl_labels(app._mini_popup)
+    _tl_label = max(_tl_texts, key=len, default='')
+finally:
+    app._dismiss_mini_popup()
+    app.update()
+check(f'the template editor draws a checklist item past the limit cut '
+      f'({len(_tl_label or "")} characters drawn)',
+      _tl_label is not None and _tl_label.endswith('…')
+      and len(_tl_label) <= NO.MAX_CHECKLIST_ITEM_CHARS + 1)
+
 # ---- KEYBOARD: a tick box is looked at the moment it is pressed ----
 # Round 3 of the final audit: the look after Space waited 100 ms for every
 # Tk button, though a tick box runs its command at once. A template's tick

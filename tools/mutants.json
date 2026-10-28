@@ -8015,16 +8015,36 @@
   },
   {
     "id": "RT14",
-    "about": "a note's checklist item of any length comes in whole",
+    "about": "a load cuts a note's checklist item past the limit, losing the person's words",
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "            checklist.append({\"text\": text[:MAX_CHECKLIST_ITEM_CHARS],\n",
-        "replace": "            checklist.append({\"text\": text,\n"
+        "find": "            checklist.append({\"text\": text, \"done\": bool(item.get(\"done\"))})\n",
+        "replace": "            checklist.append({\"text\": text[:MAX_CHECKLIST_ITEM_CHARS], \"done\": bool(item.get(\"done\"))})\n"
       }
     ],
     "must_fail": [
-      "normalize_note, normalize_template and a share code keep a checklist item to MAX_CHECKLIST_ITEM_CHARS"
+      "normalize_note, normalize_template and a share code keep a long checklist item whole",
+      "a checklist item longer than the limit is kept whole through a save"
+    ],
+    "suites": [
+      "test_data_safety",
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RT15",
+    "about": "a load cuts a template's checklist item past the limit",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "            {\"text\": it.get(\"text\", \"\") if isinstance(it.get(\"text\"), str) else \"\",\n",
+        "replace": "            {\"text\": (it.get(\"text\", \"\") if isinstance(it.get(\"text\"), str) else \"\")[:2000],\n"
+      }
+    ],
+    "must_fail": [
+      "normalize_note, normalize_template and a share code keep a long checklist item whole"
     ],
     "suites": [
       "test_data_safety"
@@ -8032,20 +8052,58 @@
     "expect": "killed"
   },
   {
-    "id": "RT15",
-    "about": "a template's checklist item of any length comes in whole",
+    "id": "RT21",
+    "about": "a note's checklist row draws an item of any length whole",
     "edits": [
       {
-        "file": "noteorganizer/core/storage.py",
-        "find": "                      else \"\")[:MAX_CHECKLIST_ITEM_CHARS],\n",
-        "replace": "                      else \"\"),\n"
+        "file": "note_organizer.py",
+        "find": "        lbl = tk.Label(row, text=checklist_shown(item.get(\"text\", \"\")),\n",
+        "replace": "        lbl = tk.Label(row, text=item.get(\"text\", \"\"),\n"
       }
     ],
     "must_fail": [
-      "normalize_note, normalize_template and a share code keep a checklist item to MAX_CHECKLIST_ITEM_CHARS"
+      "a checklist item longer than the limit is kept whole through a save, and its row is drawn cut"
     ],
     "suites": [
-      "test_data_safety"
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RT22",
+    "about": "the template editor's checklist row draws an item of any length whole",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                lbl = tk.Label(row, text=checklist_shown(item.get(\"text\", \"\")),\n",
+        "replace": "                lbl = tk.Label(row, text=item.get(\"text\", \"\"),\n"
+      }
+    ],
+    "must_fail": [
+      "the template editor draws a checklist item past the limit cut"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RT23",
+    "about": "a row draws an item of a few characters on thousands of lines whole",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "            and len(lines) <= CHECKLIST_SHOWN_LINES):\n",
+        "replace": "            and True):\n"
+      }
+    ],
+    "must_fail": [
+      "...and a row draws it cut, by characters and by lines",
+      "a checklist item longer than the limit is kept whole through a save, and its row is drawn cut"
+    ],
+    "suites": [
+      "test_data_safety",
+      "qa1"
     ],
     "expect": "killed"
   },

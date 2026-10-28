@@ -127,7 +127,7 @@ def normalize_template(tpl):
         tpl = {}
     # Lazy, like this module's other model imports: model -> categories ->
     # storage at import time, so a top-level import here closes the loop.
-    from .model import MAX_CHECKLIST_ITEMS, MAX_CHECKLIST_ITEM_CHARS
+    from .model import MAX_CHECKLIST_ITEMS
 
     def _s(key, default=""):
         v = tpl.get(key, default)
@@ -150,8 +150,8 @@ def normalize_template(tpl):
         # template: 20,000 items in templates.json froze the app the moment
         # the template was applied.
         "checklist": [
-            {"text": (it.get("text", "") if isinstance(it.get("text"), str)
-                      else "")[:MAX_CHECKLIST_ITEM_CHARS],
+            # An item's length kept whole, as a note's (checklist_shown).
+            {"text": it.get("text", "") if isinstance(it.get("text"), str) else "",
              "done": bool(it.get("done"))}
             # isinstance first: the cap's slice raises on a dict-shaped
             # value, and templates.json is hand-editable -- what used to
