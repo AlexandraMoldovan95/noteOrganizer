@@ -6689,5 +6689,23 @@
     ],
     "expect": "killed",
     "note": "Killed on Windows, whose file names ignore case; elsewhere other capitals name another file."
+  },
+  {
+    "id": "DR23",
+    "about": "the template editor saves a template's styles at their old offsets, under other words",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                \"formatting\": self._extract_formatting(body_txt),\n",
+        "replace": "                \"formatting\": data.get(\"formatting\", []),\n"
+      }
+    ],
+    "must_fail": [
+      "an edit in the template editor keeps the bold on the words it was on"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
   }
 ]

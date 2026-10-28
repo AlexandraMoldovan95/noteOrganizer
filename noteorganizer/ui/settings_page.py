@@ -968,6 +968,11 @@ class SettingsPageMixin:
         name_var = field("Template name", data["name"])
         title_var = field("Note title (optional)", data["title"])
         body_txt = field("Note body", data["body"], height=4)
+        # Its styles and list lines ride on the text as tags, as in the
+        # editor, so an edit carries them along. Kept as offsets beside the
+        # text, they landed on other words after any edit before them.
+        self._apply_formatting(body_txt, data.get("formatting", []))
+        self._apply_paragraphs(body_txt, data.get("paragraphs", []))
         # Tables in the body show AS tables, right here -- the same
         # visual language as the editor, in preview form. Hidden until
         # the body actually holds one.
@@ -1247,11 +1252,11 @@ class SettingsPageMixin:
                 "comments": comments_txt.get("1.0", "end").rstrip("\n"),
                 "category": cat_var.get(),
                 "checklist": [dict(it) for it in tpl_checklist],
-                # The dialog cannot edit these, but it must not lose
-                # them either: a template saved from the editor carries
-                # its formatting, and saving it here used to wipe it.
-                "formatting": data.get("formatting", []),
-                "paragraphs": data.get("paragraphs", []),
+                # Read back from the tags the body carries (above): a
+                # template saved from the editor keeps its formatting, on
+                # the words it was on.
+                "formatting": self._extract_formatting(body_txt),
+                "paragraphs": self._extract_paragraphs(body_txt),
             })
 
         def save():
