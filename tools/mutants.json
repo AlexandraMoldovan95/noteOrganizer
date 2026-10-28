@@ -9320,5 +9320,59 @@
       "qa6"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "RV03",
+    "about": "Tab at a table's last cell looks for the new row by text line, separator included",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            bottom = fresh[\"data_rows\"] - 1\n",
+        "replace": "            bottom = fresh[\"nrows\"] - 1\n"
+      }
+    ],
+    "must_fail": [
+      "Tab at the last cell of a table with a separator row opens the editor in the new row"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RV04",
+    "about": "a commit that takes a table past what is drawn leaves the keyboard on nothing",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if not self._keyboard_nowhere():\n            return\n        b = self.body_text\n        span = self._table_block_at(first) if first is not None else None\n",
+        "replace": "        return\n        b = self.body_text\n        span = self._table_block_at(first) if first is not None else None\n"
+      }
+    ],
+    "must_fail": [
+      "Enter, and Tab at the last cell, that take a table past what is drawn put the keyboard in its text"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RV05",
+    "about": "a table kept as text gets the keyboard wherever the note's caret was left",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if rows:\n            def row_line(n):\n",
+        "replace": "        if False:\n            def row_line(n):\n"
+      }
+    ],
+    "must_fail": [
+      "Enter, and Tab at the last cell, that take a table past what is drawn put the keyboard in its text"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
   }
 ]

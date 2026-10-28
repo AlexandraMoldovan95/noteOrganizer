@@ -5381,6 +5381,72 @@ app.save_notes()
 app.refresh_note_list()
 _kv_settle()
 
+# ---- KEYBOARD: Tab and Enter in a table keep it in the table ----
+# Round 5: Tab at the last cell of a table with a separator row (a column
+# resized or hidden, a markdown table pasted) added a row and opened no editor:
+# the rows were counted with the separator. The keyboard fell to nothing.
+def _tt_open(nid, body):
+    app.notes = [NO.normalize_note({'id': nid, 'title': f'TtNote{nid}', 'body': body})]
+    app.save_notes()
+    app.refresh_note_list()
+    app.open_note_in_tab(app.notes[0])
+    _kv_settle(8)
+    return app._grid_at_line(1)
+
+
+def _tt_press(grid, r, c, key):
+    app._open_cell_editor(grid, r, c, select=False)
+    _kv_settle(4)
+    _take_focus(app._cell_editor['entry'])
+    app._cell_editor['entry'].event_generate(key)
+    _kv_settle(4)
+
+
+_tt_sep = None
+_tt_grid = _tt_open(991, '| Name | Qty |\n|---|---|\n| Milk | 2 |\n| Eggs | 12 |\nafter')
+try:
+    if _tt_grid is not None:
+        _tt_rows = (_tt_grid['nrows'], _tt_grid['data_rows'])
+        _tt_press(_tt_grid, 2, 1, '<Tab>')
+        _tt_ed = app._cell_editor
+        _tt_sep = (_tt_rows, _tt_ed is not None and (_tt_ed['r'], _tt_ed['c']),
+                   _tt_ed is not None and _pa_holder() is _tt_ed['entry'])
+finally:
+    app._close_cell_editor()
+    app.update()
+check(f"Tab at the last cell of a table with a separator row opens the editor in "
+      f"the new row ((text rows, data rows), cell, holds the keyboard: {_tt_sep})",
+      _tt_sep == ((4, 3), (3, 0), True))
+# And Enter, or Tab at the last cell, taking a table past what is drawn kept
+# it as text with the keyboard on nothing: the keys typed next were lost.
+# The limit is set to the table's own height, so one line more passes it.
+_tt_flip = {}
+for _tt_id, _tt_key, _tt_line in ((992, '<Return>', 3), (993, '<Tab>', 4)):
+    _tt_grid = _tt_open(_tt_id, '| Name | Qty |\n| Milk | 2 |\n| Eggs | 12 |\nafter')
+    try:
+        if _tt_grid is not None and _tt_grid['nrows'] == 3:  # drawn, no separator
+            app.MAX_DRAWN_TABLE_PX = app._grid_row_height() * 3
+            _tt_press(_tt_grid, 2, 1, _tt_key)
+            _tt_gone = app._grid_at_line(1) is None
+            _tt_held = _pa_holder() is app.body_text
+            app.event_generate('<KeyPress-x>')         # where the keyboard is
+            _kv_settle(2)
+            _tt_flip[_tt_key] = (_tt_gone, _tt_held, NO.core_tables.split_row(
+                app.body_text.get(f'{_tt_line}.0', f'{_tt_line}.end')))
+    finally:
+        app.__dict__.pop('MAX_DRAWN_TABLE_PX', None)
+        app._close_cell_editor()
+        app.update()
+check(f"Enter, and Tab at the last cell, that take a table past what is drawn put "
+      f"the keyboard in its text, in the cell ((kept as text, keyboard in the "
+      f"note, the row typed into): {_tt_flip})",
+      _tt_flip == {'<Return>': (True, True, ['Eggs', '12<br>x']),
+                   '<Tab>': (True, True, ['x', ''])})
+app.notes = []
+app.save_notes()
+app.refresh_note_list()
+_kv_settle()
+
 # ---- A POPUP THAT GROWS STAYS INSIDE THE WINDOW ----
 # Round 4: the template editor grew with its checklist and never scrolled,
 # placed once for the height it opened at: 25 items, or one long one, put

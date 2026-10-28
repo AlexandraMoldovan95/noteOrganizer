@@ -414,6 +414,7 @@
   "_keyboard_off_toast": "(self)",
   "_keyboard_stays": "(self, widget, place)",
   "_keyboard_to": "(self, target)",
+  "_keyboard_to_kept_table": "(self, first, r, c)",
   "_keyboard_to_trash_row": "(self, rows_frame, place, which)",
   "_kind_from": "(icon, kind, fallback)",
   "_known_note_differs": "(self, mine, theirs, source)",

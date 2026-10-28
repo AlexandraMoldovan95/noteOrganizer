@@ -4031,6 +4031,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         fresh = (self._grid_at_line(anchor_line)
                  if anchor_line is not None else None)
         if fresh is None:
+            self._keyboard_to_kept_table(anchor_line, r, c + delta)
             return "break"
         order = sorted(fresh["cells"])
         try:
@@ -4081,6 +4082,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     reopened["entry"].mark_set("insert", caret)
                 except tk.TclError:
                     pass
+        elif fresh is None:
+            self._keyboard_to_kept_table(anchor_line, r, c)
         return "break"
 
     def _editor_fit_window(self):
@@ -4916,11 +4919,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._render_table_grids()
         fresh = self._grid_at_line(first)
         if fresh is not None:
-            bottom = fresh["nrows"] - 1
+            # Cells are keyed by data row: nrows counts the separator too,
+            # and with one no cell was found and the keyboard fell to nothing.
+            bottom = fresh["data_rows"] - 1
             for c in range(fresh["ncols"]):
                 if (bottom, c) in fresh["cells"]:
                     self._open_cell_editor(fresh, bottom, c)
                     break
+        else:
+            self._keyboard_to_kept_table(first, info["data_rows"], 0)
         self._schedule_autosave()
         return "break"
 
@@ -6737,7 +6744,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         info = (self._grid_at_line(anchor_line)
                 if anchor_line is not None else None)
         if info is None:
-            self._keyboard_to(self.body_text)
+            self._keyboard_to_kept_table(anchor_line, r, c)
             return
         r = max(0, min(r, info["data_rows"] - 1))
         c = max(0, min(c, info["ncols"] - 1))
@@ -6749,6 +6756,32 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._open_cell_editor(info, r, c, select=False)
         else:
             self._keyboard_to(self.body_text)
+
+    def _keyboard_to_kept_table(self, first, r, c):
+        """The keyboard into the text of the table starting on line *first*,
+        at the end of data row *r*'s cell *c* -- past a row's last cell, the
+        next row's first, as Tab walks. A commit that takes a table past what
+        is drawn leaves it as text: its editor went, and the keys typed next
+        went nowhere, or to wherever the note's own caret had been left."""
+        if not self._keyboard_nowhere():
+            return
+        b = self.body_text
+        span = self._table_block_at(first) if first is not None else None
+        block = ([b.get(f"{n}.0", f"{n}.end")
+                  for n in range(span[0], span[1] + 1)] if span else [])
+        sep_at = core_tables.separator_index(block) if block else None
+        rows = [i for i in range(len(block)) if i != sep_at]
+        if rows:
+            def row_line(n):
+                return rows[min(max(n, 0), len(rows) - 1)]
+            if c >= len(core_tables.cell_bounds(block[row_line(r)])):
+                r, c = r + 1, 0
+            i = row_line(r)
+            bounds = core_tables.cell_bounds(block[i])
+            end = bounds[min(max(c, 0), len(bounds) - 1)][1] if bounds else 0
+            b.mark_set("insert", f"{span[0] + i}.{self._tk_col(block[i], end)}")
+            b.see("insert")
+        self._keyboard_to(b)
 
     def _editor_context_menu(self, info, event):
         editor = getattr(self, "_cell_editor", None)
