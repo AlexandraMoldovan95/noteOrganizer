@@ -33,7 +33,41 @@ import tkinter as tk
 from tkinter import ttk
 from types import SimpleNamespace
 
+from ..core.model import _truncate
 from ..core.themes import letters_on, palette_value
+
+
+def one_line(text, limit):
+    """*text* drawn as one line of at most *limit* characters, with "…"
+    where it was cut -- and exactly as it is when it already is one. For a
+    name a file keeps whole: drawn whole, 3,000 lines or 60,000 letters
+    asked Tk for a label past the 32,767 pixels X can draw."""
+    text = str(text)
+    if len(text) > limit or "\n" in text or "\r" in text:
+        return _truncate(text, limit)
+    return text
+
+
+# The most of a message a dialog lays out: its label is as tall as its text,
+# and a name quoted whole -- a backup's title of 300,000 letters, or 3,000
+# lines -- passed the 32,767 pixels X can draw, even at 225%.
+MESSAGE_SHOWN_CHARS = 12_000
+MESSAGE_SHOWN_LINES = 300
+
+
+def message_shown(message):
+    """*message* as a dialog draws it: whole when it fits the limits above,
+    else its start and its end -- where the question is -- with "…" for
+    what lies between."""
+    message = str(message)
+    lines = message.split("\n")
+    if (len(message) <= MESSAGE_SHOWN_CHARS
+            and len(lines) <= MESSAGE_SHOWN_LINES):
+        return message
+    half_c, half_l = MESSAGE_SHOWN_CHARS // 2, MESSAGE_SHOWN_LINES // 2
+    head = "\n".join(lines[:half_l])[:half_c]
+    tail = "\n".join(lines[-half_l:])[-half_c:]
+    return head + "\n…\n" + tail
 
 
 class DialogsMixin:
@@ -163,7 +197,8 @@ class DialogsMixin:
         msg_box.pack(side="top", fill="both", expand=True, padx=20, pady=(0, 16))
         msg_view = tk.Canvas(msg_box, bg=self.colors["card"],
                              highlightthickness=0, bd=0)
-        msg_lbl = tk.Label(msg_view, text=message, bg=self.colors["card"],
+        msg_lbl = tk.Label(msg_view, text=message_shown(message),
+                           bg=self.colors["card"],
                            fg=self.colors["subtext"], font=("Segoe UI", 10),
                            wraplength=self.px(380), justify="left", anchor="w")
         msg_view.create_window(0, 0, window=msg_lbl, anchor="nw")

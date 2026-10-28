@@ -4973,6 +4973,121 @@ check(f'the template editor draws a checklist item past the limit cut '
       _tl_label is not None and _tl_label.endswith('…')
       and len(_tl_label) <= NO.MAX_CHECKLIST_ITEM_CHARS + 1)
 
+# ---- A NAME KEPT WHOLE IS DRAWN ON ONE LINE, CUT ----
+# Round 4 of the final audit: Save as template's name box took a pasted page,
+# and the picker and Settings > Templates drew a name whole -- 300 letters made
+# the picker wider than the screen, 5,000 passed X's limit and ended the app
+# at every visit. Names stay whole in the file; boxes keep the limit, and
+# rows and buttons draw one line, cut. Long enough to show it, short enough
+# that drawing them whole under a mutant does not end the process.
+_nm_long = 'Weekly meeting minutes ' * 13              # 299 characters
+_nm_lines = 'line\n' * 40
+
+
+def _tl_widgets(w, cls):
+    for c in w.winfo_children():
+        if isinstance(c, cls):
+            yield c
+        yield from _tl_widgets(c, cls)
+
+
+app.notes = [NO.normalize_note({'id': 951, 'title': 'NmNote', 'body': 'b'})]
+app.save_notes()
+app.refresh_note_list()
+app.open_note_in_tab(app.notes[0])
+_kv_settle(6)
+_nm_box = None
+try:
+    app.save_current_as_template()
+    app.update()
+    _nm_box = next(_tl_entries(app._mini_popup), None)
+    if _nm_box is not None:
+        _nm_box.delete(0, 'end')
+        _nm_box.insert(0, 'p' * 5000)                  # a paste past the limit
+        _nm_box_len = len(_nm_box.get())
+finally:
+    app._dismiss_mini_popup()
+    app.update()
+check(f"Save as template's name box refuses a paste past the note title's "
+      f"{app.TITLE_MAX_LEN} ({_nm_box_len if _nm_box else None} kept)",
+      _nm_box is not None and _nm_box_len == 0)
+_nm_kept = list(app.templates)
+app.templates = [{'name': _nm_long, 'body': 'x'}, {'name': _nm_lines, 'body': 'y'}]
+_nm_picker = _nm_buttons = None
+try:
+    app.show_template_picker()
+    app.update()
+    _nm_pop = app._mini_popup
+    _nm_picker = _nm_pop.winfo_reqwidth()
+    _nm_buttons = [str(b.cget('text')) for b in _tl_widgets(_nm_pop, tk.Button)
+                   if '🧩' in str(b.cget('text'))]
+finally:
+    app._dismiss_mini_popup()
+    app.update()
+check(f"the template picker draws a long name cut, on one line, and stays "
+      f"narrower than the window ({_nm_picker} px; "
+      f"{[len(t) for t in _nm_buttons or []]} characters)",
+      _nm_picker is not None and _nm_picker < app.winfo_width()
+      and len(_nm_buttons) == 2
+      and all('\n' not in t and t.endswith('…') for t in _nm_buttons))
+app.show_settings_page()
+app.toggle_settings_panel('templates')
+_kv_settle(10)
+_nm_rows = [c for c in _tl_widgets(app.settings_page, tk.Label)
+            if str(c.cget('text')).startswith(('Weekly', 'line'))]
+_nm_line_h = app._cal_font(('Segoe UI', 10, 'bold'))[1]
+check(f"...and so does Settings > Templates "
+      f"({[(len(str(r.cget('text'))), r.winfo_reqheight()) for r in _nm_rows]}), "
+      f"each name still whole in the file",
+      len(_nm_rows) == 2
+      and all('\n' not in str(r.cget('text'))
+              and r.winfo_reqheight() < 3 * _nm_line_h for r in _nm_rows)
+      and [t['name'] for t in app.templates] == [_nm_long, _nm_lines])
+app.hide_settings_page()
+app.templates = _nm_kept
+_kv_settle(4)
+# A question is as tall as its message, and quoted a title kept whole: one of
+# 300,000 letters or 3,000 lines passed X's limit. It shows the start and the
+# end, the question kept. The probe's own message passes the limits without
+# passing X's, so a mutant drawing it whole fails here instead of ending.
+from noteorganizer.ui.dialogs import (message_shown as _nm_message_shown,
+                                      MESSAGE_SHOWN_CHARS as _nm_chars)
+_nm_msg = 'Delete “' + 'word ' * 4000 + '”?\n' + 'more\n' * 400 + 'Really delete it?'
+_nm_seen = {}
+
+
+def _nm_read_and_answer():
+    _nm_stack = getattr(app, '_asking_dialogs', None) or []
+    if _nm_stack:
+        _nm_labels = list(_tl_widgets(_nm_stack[-1]['border'], tk.Label))
+        _nm_seen['text'] = max((str(l.cget('text')) for l in _nm_labels), key=len)
+        _nm_stack[-1]['buttons'][0].invoke()
+
+
+app.after(300, _nm_read_and_answer)
+# The class's own question, and its own wait: earlier checks left stubs of
+# both on the app.
+_nm_wait = app.__dict__.pop('wait_variable', None)
+try:
+    NO.NoteOrganizer._themed_dialog(app, 'A long one', _nm_msg,
+                                    buttons=[('No', False), ('Yes', True)])
+finally:
+    if _nm_wait is not None:
+        app.wait_variable = _nm_wait
+_kv_settle(4)
+_nm_text = _nm_seen.get('text', '')
+check(f"a question's message past the limits shows its start and its end, the "
+      f"question kept ({len(_nm_text)} of {len(_nm_msg)} characters, "
+      f"{_nm_text.count(chr(10)) + 1} lines)",
+      len(_nm_text) <= _nm_chars + 3 and _nm_text.count('\n') <= 301
+      and _nm_text.startswith('Delete “word') and _nm_text.endswith('Really delete it?')
+      and len(_nm_message_shown('w' * 300000)) <= _nm_chars + 3)
+app.set_status('Saved “' + 'line\n' * 300 + '”')
+check(f"the status line quotes a name of many lines on one line "
+      f"({app.status_lbl.cget('text')[:30]!r}...)",
+      '\n' not in str(app.status_lbl.cget('text')))
+app.set_status('')
+
 # ---- KEYBOARD: a tick box is looked at the moment it is pressed ----
 # Round 3 of the final audit: the look after Space waited 100 ms for every
 # Tk button, though a tick box runs its command at once. A template's tick

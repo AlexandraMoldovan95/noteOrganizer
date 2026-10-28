@@ -67,6 +67,7 @@ from ..core.storage import (
 )
 from ..core.themes import contrasting_fg
 from ..core import tables as core_tables
+from .dialogs import one_line
 
 
 # The open day's panel is drawn from the notes at the moment it opens, and
@@ -150,6 +151,9 @@ def _fit_title(app, label, head, title, tail, font):
     is what the label's edge used to cut first. The width is the label's
     own (it is stretched by its row), read each time it changes. A line
     that fits costs one measure, when the row is made."""
+    # One line, and no more of it than can ever show: a name kept whole in
+    # its file -- 3,000 lines, or 60,000 letters -- passed X's limit.
+    title = one_line(title, app.NAME_SHOWN_CHARS)
     whole = head + title + tail
     label.configure(text=whole, font=font)
     inset = 2 * sum(int(str(label.cget(o))) for o in

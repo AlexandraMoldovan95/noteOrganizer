@@ -42,6 +42,27 @@ from ..core.model import (MAX_ATTACHMENTS, attachment_display_name,
 from ..core.storage import (_attachment_path_within, _delete_attachment_files,
                             attachment_names_in)
 from .calendar_view import _fit_title
+from .dialogs import one_line
+
+
+def _name_and_type(display_name):
+    """*display_name* as (the name, its type) -- "Holiday photo", ".rdp" --
+    or (display_name, "") when it shows no type. Cut by length from the end,
+    never by an index found in a lower-cased copy: "İ" lower-cases to two
+    characters, and each one moved the cut a letter into the type."""
+    kind = file_type_of(display_name)
+    cut = len(display_name.rstrip(". ")) - len(kind)
+    if kind and cut > 0 and display_name[cut:cut + len(kind)].lower() == kind:
+        return display_name[:cut], display_name[cut:]
+    return display_name, ""
+
+
+def _quoted(display_name):
+    """An attachment's name as a question quotes it: one line, and a long
+    name cut before its type, which always shows -- a backup's label of
+    60,000 letters made the question taller than X can draw."""
+    stem, kind = _name_and_type(display_name)
+    return one_line(stem, 100) + kind
 
 
 class AttachmentsMixin:
@@ -120,7 +141,7 @@ class AttachmentsMixin:
         # glyph, No pre-selected, Escape backs out.
         if not self.ask_yes_no(
                 "Remove attachment",
-                f"Remove “{attachment_display_name(target.get('filename'), target.get('stored_as')) or 'this file'}” from the "
+                f"Remove “{_quoted(attachment_display_name(target.get('filename'), target.get('stored_as'))) or 'this file'}” from the "
                 "note?\n\nThe stored copy is deleted with it — this can't "
                 "be undone.",
                 icon="warning", default="no"):
@@ -572,7 +593,7 @@ class AttachmentsMixin:
         runs code asks with the warning; any other kind asks calmly, since
         a list of dangerous kinds is never complete (how_to_open). *shown*
         is the name the question quotes, from attachment_display_name."""
-        shown = shown or os.path.basename(path)
+        shown = _quoted(shown or os.path.basename(path))
         kind = how_to_open(os.path.basename(path))
         if kind == "warn":
             if not self.ask_yes_no(
@@ -639,21 +660,20 @@ class AttachmentsMixin:
             top_row = tk.Frame(row, bg=self.colors["card"])
             top_row.pack(fill="x")
 
-            name_lbl = tk.Label(top_row, text=f"{icon} {display_name}", font=("Segoe UI", 9),
+            name_lbl = tk.Label(top_row, font=("Segoe UI", 9),
                                  anchor="w", cursor="hand2",
                                  bg=self.colors["card"], fg=self.colors["text"])
-            # The type always shows: a long name gives way before it, not at
-            # the row's edge, where blank-looking characters hid ".rdp".
-            kind = file_type_of(display_name)
-            cut = display_name.lower().rfind(kind) if kind else -1
-            if cut > 0:
-                _fit_title(self, name_lbl, f"{icon} ", display_name[:cut],
-                           display_name[cut:], self._measuring_font(("Segoe UI", 9)))
-            name_lbl.bind("<Button-1>", lambda e, idx=i: self.open_attachment(idx))
             # A Tab stop that Space and Return open, as a click does: the ✕
             # beside it was all the keyboard could reach. Its ring rests in
             # its own fill, a pixel taken from the padding round it.
             self._ring_round(name_lbl)
+            # The type always shows: a long name gives way before it, not at
+            # the row's edge, where blank-looking characters hid ".rdp". Ringed
+            # first: the fit reads the border it leaves room for.
+            stem, kind = _name_and_type(display_name)
+            _fit_title(self, name_lbl, f"{icon} ", stem, kind,
+                       self._measuring_font(("Segoe UI", 9)))
+            name_lbl.bind("<Button-1>", lambda e, idx=i: self.open_attachment(idx))
             self._pressable(name_lbl, lambda idx=i: self.open_attachment(idx))
 
             remove_btn = tk.Button(

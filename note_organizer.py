@@ -343,7 +343,7 @@ def get_first_launch_date():
 from noteorganizer.ui.calculator_panel import CalculatorPanelMixin
 from noteorganizer.ui.attachments import AttachmentsMixin
 from noteorganizer.ui.calendar_view import CalendarViewMixin
-from noteorganizer.ui.dialogs import DialogsMixin
+from noteorganizer.ui.dialogs import DialogsMixin, one_line
 from noteorganizer.ui.settings_page import SettingsPageMixin
 from noteorganizer.ui.note_list import NoteListMixin
 from noteorganizer.ui.spelling import SpellingMixin
@@ -2960,6 +2960,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             else:
                 hi = mid - 1
         return value[:lo] + ellipsis
+
+    # How much of a name is laid out at all before it is fitted: a name kept
+    # whole in its file, as a backup can bring one, asked Tk for a label
+    # past the 32,767 pixels X can draw.
+    NAME_SHOWN_CHARS = 400
+
+    def _fit_name(self, name, font, max_px):
+        """*name* drawn on one line at most *max_px* wide, shortened with an
+        ellipsis -- one holding line breaks, or past NAME_SHOWN_CHARS, first
+        made one line as _fit_title makes it. Display only: the name itself
+        keeps every character."""
+        return self._ellipsize(one_line(name or "", self.NAME_SHOWN_CHARS),
+                               font, max_px)
 
     @staticmethod
     def _char_is_emoji(ch):
@@ -13165,10 +13178,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._bind_wheel_tree_if_unbound(child, handler)
 
 
-    def _show_inline_rename(self, anchor_widget, current, on_save):
+    def _show_inline_rename(self, anchor_widget, current, on_save, limit=None):
         """Small inline rename box near `anchor_widget`: an entry pre-filled with
         `current`, a Save and an ✕. on_save(new_text) returns True to close or
-        False to keep it open. No grab_set() — that can freeze the app."""
+        False to keep it open. No grab_set() — that can freeze the app.
+        *limit* is (characters, "What it names") for _limit_entry."""
         self._dismiss_mini_popup()
         pop = tk.Toplevel(self)
         self._mini_popup = pop
@@ -13185,6 +13199,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         entry.pack(side="left", ipady=3, padx=(0, 6))
         entry.select_range(0, "end")
         self._add_paste_menu(entry)
+        if limit is not None:
+            self._limit_entry(entry, *limit)
 
         def save():
             if on_save(var.get()):
@@ -16284,7 +16300,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 text = text[:160].rstrip() + "…"
             choice = self._themed_dialog(
                 f"Day {index} of {len(days)} off the schedule",
-                f"{show_day(when) if when else day} — “{title}”"
+                f"{show_day(when) if when else day} — “{one_line(title, 200)}”"
                 + (f"\n{text}" if text else "")
                 + f"\n\nThis day keeps its own edits, but the repeat "
                 f"({describe_recurrence(note)}) no longer lands on it, so the "
@@ -20220,8 +20236,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                   cursor="hand2", bg=self.colors["card"], fg=self.colors["subtext"],
                   font=("Segoe UI", 9, "bold"), bd=0).pack(side="right")
 
+        # A name drawn whole sized the popup: 300 letters made it wider than
+        # any screen, 5,000 passed X's limit. Kept whole, drawn cut.
+        name_font = self._cal_font(("Segoe UI", 10))[0]
         for tpl in self.templates:
-            name = tpl.get("name", "Untitled template")
+            name = self._fit_name(tpl.get("name", "Untitled template"),
+                                  name_font, self.px(360))
             b = tk.Button(frame, text=f"🧩  {name}", anchor="w",
                           command=lambda t=tpl: self._apply_template(t),
                           relief="flat", cursor="hand2", bg=self.colors["sidebar"],
@@ -20396,7 +20416,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # entirely different content someone still needs.
                 if not self.ask_yes_no(
                         "Template name taken",
-                        f"You already have a template named “{name}”.\n\n"
+                        f"You already have a template named “{one_line(name, 200)}”.\n\n"
                         "Replace the old template with this one?\n"
                         "Choose No to give this one another name.",
                         icon="warning", default="no"):
@@ -20415,7 +20435,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.templates = [t for t in self.templates if t.get("name") != name]
             self.templates.append(tpl)
             save_templates(self.templates)
-            self.set_status(f"Saved template “{name}”")
+            self.set_status(f"Saved template “{one_line(name, 200)}”")
             refresh = getattr(self, "_refresh_templates_panel", None)
             if callable(refresh):
                 try:
@@ -20425,7 +20445,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return True
 
         anchor = getattr(self, "editor", self)
-        self._show_inline_rename(anchor, default_name, do_save)
+        # The editor's name box keeps the note title's 200; this one took a
+        # pasted page, and the picker drawn from it passed X's limit.
+        self._show_inline_rename(anchor, default_name, do_save,
+                                 limit=(self.TITLE_MAX_LEN, "A template name"))
 
     def duplicate_current_note(self):
         """Duplicate the note currently open in the editor. Duplicates the SAVED
@@ -22127,9 +22150,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 line("Color", shown["color"])
             atts = shown["attachments"]
             if atts:
-                line("Attachments", ", ".join(
+                # Cut as the lines above are: a backup's names kept whole
+                # stood this card taller than X can draw.
+                line("Attachments", one_line(", ".join(
                     attachment_display_name(a.get("filename"), a.get("stored_as")) or "?"
-                    for a in atts if isinstance(a, dict)))
+                    for a in atts if isinstance(a, dict)), 160))
             # As held, not shaped: a load backfills a missing stamp with now.
             created = note.get("created")
             if isinstance(created, str) and created:
@@ -22489,7 +22514,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # screen: any other words over it end that. Kept past them, the
         # put-right wrote an earlier save's words over a later save's own.
         self._status_names_left_out = None
-        self.status_lbl.config(text=text)
+        # One line: it quotes names kept whole, and a title of 3,000 lines
+        # stood the status bar taller than X can draw.
+        self.status_lbl.config(text=one_line(text, 1000))
 
     def _on_data_write_failure(self, path, exc):
         """core/storage's on_write_failure callback: a data-file write

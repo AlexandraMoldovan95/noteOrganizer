@@ -93,6 +93,8 @@ from ..core.themes import (
     inset_surface,
     hairline,
 )
+from .calendar_view import _fit_title
+from .dialogs import one_line
 
 
 def _host():
@@ -767,9 +769,14 @@ class SettingsPageMixin:
         row = tk.Frame(parent, bg=self.colors["sidebar"])
         row.pack(fill="x", pady=4, padx=2)
         self._icon_button(row, "templates", bg_key="sidebar").pack(side="left", padx=(6, 0))
-        tk.Label(row, text=name, bg=self.colors["sidebar"],
-                 fg=self.colors["text"], font=("Segoe UI", 10, "bold"), anchor="w"
-                 ).pack(side="left", fill="x", expand=True, padx=6, pady=8)
+        # Kept whole, drawn cut to its room: 5,000 letters drawn whole asked
+        # X for a label past its 32,767 pixels, at every visit.
+        name_lbl = tk.Label(row, bg=self.colors["sidebar"],
+                            fg=self.colors["text"], anchor="w")
+        _fit_title(self, name_lbl, "", name, "",
+                   self._cal_font(("Segoe UI", 10, "bold"))[0])
+        name_lbl.pack(side="left", fill="x", expand=True, padx=6, pady=8)
+        shown = one_line(name, 200)
 
         def delete():
             # The window's click-outside used to answer this press too,
@@ -788,14 +795,14 @@ class SettingsPageMixin:
             # this bin to delete: asked anyway, Yes deleted nothing and the
             # template saved under that name stayed.
             if not any(t is tpl for t in self.templates):
-                self.set_status(f"“{name}” was replaced by the template "
+                self.set_status(f"“{shown}” was replaced by the template "
                                 "you saved")
                 return "break"
             # Honest about the stakes: notes go to the Trash and can come
             # back for the whole retention window -- templates do not.
             if self.ask_yes_no(
                     "Delete template",
-                    f"Delete the template “{name}” for good?\n\n"
+                    f"Delete the template “{shown}” for good?\n\n"
                     "Templates don't go to the Trash — this can't be undone.",
                     icon="warning", default="no"):
                 if own:
@@ -1311,7 +1318,7 @@ class SettingsPageMixin:
             if others:
                 if not self.ask_yes_no(
                         "Template name taken",
-                        f"You already have a template named “{taken_name}”.\n\n"
+                        f"You already have a template named “{one_line(taken_name, 200)}”.\n\n"
                         "Replace the old template with this one?\n"
                         "Choose No to give this one another name.",
                         icon="warning", default="no"):
@@ -1520,7 +1527,7 @@ class SettingsPageMixin:
                 return
             if self.ask_yes_no(
                 "Delete permanently",
-                f"Permanently delete “{title}”? This can't be undone."
+                f"Permanently delete “{one_line(title, 200)}”? This can't be undone."
                 + self._series_warning([entry]),
                 icon="warning", default="no"
             ) and still_in_trash():

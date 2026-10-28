@@ -8173,8 +8173,8 @@
     "edits": [
       {
         "file": "noteorganizer/ui/attachments.py",
-        "find": "            if cut > 0:\n                _fit_title(",
-        "replace": "            if False:\n                _fit_title("
+        "find": "            stem, kind = _name_and_type(display_name)\n",
+        "replace": "            stem, kind = display_name, \"\"\n"
       }
     ],
     "must_fail": [
@@ -8657,6 +8657,132 @@
     ],
     "suites": [
       "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RU09",
+    "about": "Save as template's name box takes a pasted page",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._show_inline_rename(anchor, default_name, do_save,\n                                 limit=(self.TITLE_MAX_LEN, \"A template name\"))\n",
+        "replace": "        self._show_inline_rename(anchor, default_name, do_save)\n"
+      }
+    ],
+    "must_fail": [
+      "Save as template's name box refuses a paste past the note title's"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RU10",
+    "about": "the template picker draws each name whole, and sizes itself by it",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            name = self._fit_name(tpl.get(\"name\", \"Untitled template\"),\n                                  name_font, self.px(360))\n",
+        "replace": "            name = tpl.get(\"name\", \"Untitled template\")\n"
+      }
+    ],
+    "must_fail": [
+      "the template picker draws a long name cut, on one line, and stays narrower than the window"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RU11",
+    "about": "a row's one-line drawer lays a name out whole, line breaks and all",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/calendar_view.py",
+        "find": "    title = one_line(title, app.NAME_SHOWN_CHARS)\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "...and so does Settings > Templates"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RU12",
+    "about": "a question draws its message whole, however long",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "        msg_lbl = tk.Label(msg_view, text=message_shown(message),\n",
+        "replace": "        msg_lbl = tk.Label(msg_view, text=message,\n"
+      }
+    ],
+    "must_fail": [
+      "a question's message past the limits shows its start and its end, the question kept"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RU13",
+    "about": "the status line draws a quoted name of many lines on many lines",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self.status_lbl.config(text=one_line(text, 1000))\n",
+        "replace": "        self.status_lbl.config(text=text)\n"
+      }
+    ],
+    "must_fail": [
+      "the status line quotes a name of many lines on one line"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RU14",
+    "about": "an attachment's type is found in a lower-cased copy, so a dotted I moves the cut",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "    cut = len(display_name.rstrip(\". \")) - len(kind)\n    if kind and cut > 0 and display_name[cut:cut + len(kind)].lower() == kind:\n",
+        "replace": "    cut = display_name.lower().rfind(kind) if kind else -1\n    if kind and cut > 0:\n"
+      }
+    ],
+    "must_fail": [
+      "...and with capital dotted Is before it too"
+    ],
+    "suites": [
+      "qa7"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RU15",
+    "about": "an attachment's label with no type is drawn whole",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "            _fit_title(self, name_lbl, f\"{icon} \", stem, kind,\n",
+        "replace": "            name_lbl.configure(text=f\"{icon} {display_name}\")\n            if kind: _fit_title(self, name_lbl, f\"{icon} \", stem, kind,\n"
+      }
+    ],
+    "must_fail": [
+      "a label of many lines, or long with no type, is drawn on one line that fits its row"
+    ],
+    "suites": [
+      "qa7"
     ],
     "expect": "killed"
   }

@@ -1490,6 +1490,36 @@ check(f'a long-named attachment keeps its ✕ in the row '
       f'of {_ll_row.winfo_width()} px)',
       _ll_x is not None and _ll_x.winfo_ismapped() and _ll_x.winfo_width() > 10
       and _ll_x.winfo_x() + _ll_x.winfo_width() <= _ll_row.winfo_width())
+# Round 4: a capital dotted I lower-cases to two characters, and the cut was
+# found in a lower-cased copy, so four of them moved it past the type. And a
+# label with no type, or one of three hundred lines, was drawn whole: at
+# 60,000 letters it ended the app at every start, the note being last open.
+_ll_shown = {}
+for _ll_key, _ll_label, _ll_file in (
+        ('dotted', 'İİİİ Holiday' + '⠀' * 120 + '.jpg',
+         '20261001120000000001_trip.rdp'),
+        ('lines', 'minutes\n' * 300 + '.rdp', '20261001120000000001_trip.rdp'),
+        ('no type', 'W' * 900, '20261001120000000002_plain')):
+    if not os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _ll_file)):
+        open(os.path.join(NO.ATTACHMENTS_DIR, _ll_file), 'wb').close()
+    app.current_attachments = [{'filename': _ll_label, 'stored_as': _ll_file}]
+    app.refresh_attachments_list(); app.update(); app.update()
+    _ll_l = next((w for w in app.attachments_frame.winfo_children()[0]
+                  .winfo_children()[0].winfo_children()
+                  if isinstance(w, tk.Label)), None)
+    _ll_shown[_ll_key] = (str(_ll_l.cget('text')) if _ll_l else '',
+                          _ll_l.winfo_reqheight() if _ll_l else 0,
+                          _ll_l.winfo_reqwidth() <= _ll_l.winfo_width() + 3
+                          if _ll_l else False)
+_ll_line = _ll_shown['no type'][1]
+check(f'...and with capital dotted Is before it too '
+      f'({_ll_shown["dotted"][0][-8:]!r})',
+      _ll_shown['dotted'][0].endswith('….rdp'))
+check(f'a label of many lines, or long with no type, is drawn on one line that '
+      f'fits its row ({[(t[:12], t[-6:], h, fits) for t, h, fits in _ll_shown.values()]})',
+      '\n' not in _ll_shown['lines'][0] and _ll_shown['lines'][0].endswith('.rdp')
+      and _ll_shown['lines'][1] <= _ll_line and _ll_shown['lines'][2]
+      and _ll_shown['no type'][0].endswith('…') and _ll_shown['no type'][2])
 
 # ---- A colon never reaches a stored name ----
 # The resolver refuses a stored name holding one: on Windows it names a
