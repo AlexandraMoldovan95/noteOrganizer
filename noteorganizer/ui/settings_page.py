@@ -1294,6 +1294,9 @@ class SettingsPageMixin:
             # saving a NEW template under a taken name, or renaming one
             # onto a neighbour, both ask first.
             taken_name = new_tpl.get("name")
+            if self._templates_full(taken_name,
+                                    replacing=None if is_new else tpl):
+                return
             others = [t for t in self.templates
                       if t is not tpl and t.get("name") == taken_name]
             if others:

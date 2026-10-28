@@ -1862,6 +1862,20 @@ check("an all-junk templates file is preserved before falling back",
       _tpJ == [] and any(p.startswith("templates_corrupt_")
                          for p in os.listdir(_paths.APP_DIR)))
 
+# A file of 20,000 templates (a backup's, or a hand-edited one) took
+# fourteen seconds to import and five for the picker to open: a load keeps
+# the first MAX_TEMPLATES, which no one reaches by hand -- the doors refuse
+# the next one (2026-10-28).
+with open(_paths.TEMPLATES_FILE, "w", encoding="utf-8") as _f:
+    json.dump([{"name": "t%05d" % _i, "body": "b"}
+               for _i in range(_storage.MAX_TEMPLATES + 500)], _f)
+_tpMany = _storage.load_templates()
+check(f"a templates file past the ceiling loads its first "
+      f"{_storage.MAX_TEMPLATES:,} ({len(_tpMany):,})",
+      len(_tpMany) == _storage.MAX_TEMPLATES
+      and _tpMany[-1]["name"] == "t%05d" % (_storage.MAX_TEMPLATES - 1))
+os.remove(_paths.TEMPLATES_FILE)
+
 # ---- Damage the parser does not call JSON is damage all the same ----
 # Two more ways a file can be unreadable, and neither raised the
 # JSONDecodeError the loaders caught: bytes that are not UTF-8 (a file

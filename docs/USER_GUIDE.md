@@ -634,7 +634,8 @@ Settings → Templates. Starting a new note with **Use template** fills in the t
 category, and checklist from the template — the template itself is never affected by what you do
 with the note afterward. Templates don't go to the Trash (Settings → Recently deleted) —
 deleting one can't be undone, and the confirmation warns you and pre-selects **No**, like every
-irreversible confirmation in the app.
+irreversible confirmation in the app. The app keeps up to 1,000 templates; a backup brings in
+templates only while there is room.
 
 ![Templates panel](screenshots/templates-panel.png)
 

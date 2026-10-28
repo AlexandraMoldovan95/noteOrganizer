@@ -257,6 +257,7 @@ from noteorganizer.core.storage import (
     save_settings,
     mend_surrogates,
     json_text,
+    MAX_TEMPLATES,
     normalize_template,
     load_templates,
     save_templates,
@@ -12114,14 +12115,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Templates and trash from the backup merge ADDITIVELY — nothing
         # local is replaced or removed (Z05-F07: both used to be left out
         # of the backup entirely, lost on every device move).
+        # Names looked up in a set, and no more than MAX_TEMPLATES in all:
+        # 20,000 in a 49 KB backup, each checked against every one before
+        # it, took fourteen seconds, and the picker five to open.
         added_templates = 0
+        template_names = {t.get("name") for t in self.templates}
         for tpl in (state.get("imported_templates") or []):
+            if len(self.templates) >= MAX_TEMPLATES:
+                break
             if not isinstance(tpl, dict):
                 continue
             tpl = normalize_template(tpl)
-            if tpl.get("name") and not any(
-                    t.get("name") == tpl.get("name") for t in self.templates):
+            if tpl.get("name") and tpl["name"] not in template_names:
                 self.templates.append(tpl)
+                template_names.add(tpl["name"])
                 added_templates += 1
         if added_templates:
             save_templates(self.templates)
@@ -20145,6 +20152,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._say_if_paste_was_cut({"text_cut": True})
         return "break"
 
+    def _templates_full(self, name, replacing=None):
+        """Whether a new template called *name* would pass MAX_TEMPLATES --
+        and if so, that is said. One that replaces another of that name, or
+        *replacing* itself, adds none. The doors refuse what a start would
+        not keep (load_templates)."""
+        if len(self.templates) < MAX_TEMPLATES or any(
+                t is replacing or t.get("name") == name for t in self.templates):
+            return False
+        self.show_info(
+            "Too many templates",
+            f"You already have {MAX_TEMPLATES:,} templates, which is the most "
+            "the app keeps. Delete one first.")
+        return True
+
     def save_current_as_template(self):
         """Save the current editor content as a reusable template. Asks for a
         template name inline, then stores title/body/comments/category."""
@@ -20175,6 +20196,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             name = name.strip()
             if not name:
                 return False  # keep the box open
+            if self._templates_full(name):
+                return True
             if any(t.get("name") == name for t in self.templates):
                 # Never overwrite silently: the same name may hold
                 # entirely different content someone still needs.

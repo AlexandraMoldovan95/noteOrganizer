@@ -1137,6 +1137,49 @@ NO.save_setting('day_colors', dict(app.day_colors))
 NO.save_setting('day_emoji', dict(app.day_emoji))
 NO.save_setting('collapsed_groups', [])
 
+# A CRAFTED backup with more templates than anyone keeps: 20,000 in 49 KB
+# took fourteen seconds to import -- each name checked against every one
+# before it -- and the picker five to open (2026-10-28). The import stops at
+# MAX_TEMPLATES, and the doors refuse the next one, so a start never drops one.
+_tp_before = list(app.templates)
+_tpz = os.path.join(tempfile.gettempdir(), 'qa3_many_templates.zip')
+with zipfile.ZipFile(_tpz, 'w') as zf:
+    zf.writestr('notes_data.json', '[]')
+    zf.writestr('templates.json', json.dumps(
+        [{'name': 'Imported %05d' % i, 'body': 'b'}
+         for i in range(NO.MAX_TEMPLATES + 500)]))
+fd.askopenfilename = lambda **k: _tpz
+app.import_data()
+t0 = time.time()
+while app._import_state is not None and time.time() - t0 < 60:
+    app.update()
+check(f'a backup with more templates than the app keeps fills it to '
+      f'{NO.MAX_TEMPLATES:,} and no further ({len(app.templates):,})',
+      len(app.templates) == NO.MAX_TEMPLATES
+      and all(t in app.templates for t in _tp_before)
+      and len(NO.load_templates()) == NO.MAX_TEMPLATES)
+_tp_told = []
+_tp_real_info = app.show_info
+_tp_real_rename = app._show_inline_rename
+app.show_info = lambda title, message, **k: _tp_told.append((title, message))
+app._show_inline_rename = lambda _anchor, _default, on_name: on_name('One too many')
+try:
+    app.title_entry.delete(0, 'end')
+    app.title_entry.insert(0, 'Has a title')
+    app.save_current_as_template()
+    app.update()
+finally:
+    app.show_info = _tp_real_info
+    app._show_inline_rename = _tp_real_rename
+check(f'...and saving one more by hand is refused, and that is said '
+      f'({[t for t, _m in _tp_told]})',
+      len(app.templates) == NO.MAX_TEMPLATES
+      and not any(t.get('name') == 'One too many' for t in app.templates)
+      and [t for t, _m in _tp_told] == ['Too many templates'])
+app.templates = _tp_before
+NO.save_templates(app.templates)
+os.remove(_tpz)
+
 # ---- SHARE-CODE decode: every refusal branch (coverage-lift C16) ----
 # Each malformed-input class must raise ValueError with a HUMAN message
 # (the UI shows it verbatim) — never a raw exception, never success.

@@ -7415,5 +7415,59 @@
       "qa3"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "IX18",
+    "about": "a templates file loads however many templates it holds",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "                        if len(kept) >= MAX_TEMPLATES:\n                            break\n",
+        "replace": "                        if False:\n                            break\n"
+      }
+    ],
+    "must_fail": [
+      "a templates file past the ceiling loads its first"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "IX19",
+    "about": "a backup's templates are all taken, however many",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if len(self.templates) >= MAX_TEMPLATES:\n                break\n",
+        "replace": "            if False:\n                break\n"
+      }
+    ],
+    "must_fail": [
+      "a backup with more templates than the app keeps fills it to"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "IX20",
+    "about": "a template saved by hand past the ceiling is taken",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if len(self.templates) < MAX_TEMPLATES or any(\n",
+        "replace": "        if True or any(\n"
+      }
+    ],
+    "must_fail": [
+      "...and saving one more by hand is refused, and that is said"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
   }
 ]

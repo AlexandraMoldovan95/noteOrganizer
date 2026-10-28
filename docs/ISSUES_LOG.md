@@ -2315,7 +2315,9 @@ drops where a file came from switches off defences the app never sees, so it car
 - a table on the clipboard — 161 KB of HTML, or 74 KB copied from a spreadsheet — became a note
   of 210 million characters, 1.2 GB of memory, and every save took half a minute;
 - a backup whose settings carried a million day colours (2.4 MB packed) made every note take
-  seconds to open and the app twenty to start, for good.
+  seconds to open and the app twenty to start, for good;
+- 20,000 templates in a 49 KB backup took fourteen seconds to import, and the template picker
+  five to open.
 
 **Root cause:** every one had a limit, and every limit was checked where the data came in and
 nowhere after it.
@@ -2341,6 +2343,8 @@ nowhere after it.
   was a day at all, was not. The import took them whole, and every settings write — one for each
   note opened — rewrote all 62 MB of them. The day markers were capped at three a day, at any
   length each, and the list of collapsed groups could stop the app starting with one wrong value.
+- *The templates.* No limit at all — and the import checked each incoming name against every
+  template before it, the square of 20,000.
 
 **Fix:**
 
@@ -2367,6 +2371,11 @@ nowhere after it.
   not keep leaves the file. The probe's import now keeps none of its million, and a note opens in
   a hundredth of a second. qa3 imports the backup and loads the file; mutants IX14–IX17, and I02
   and I03 aim at the shared door.
+- *The templates.* At most 1,000, far past anyone's use: a load keeps the first thousand, the
+  import stops there and looks names up in a set, and saving a 1,001st by hand is refused with a
+  word. The probe's import takes a tenth of a second and the picker a third.
+  test_data_safety loads the file, qa3 imports the backup and saves one too many; mutants
+  IX18–IX20.
 
 **Takeaway:** a limit on what comes in says nothing about what is then done with it. Ask what the
 work costs at the limit — a capped number squared is not capped — and count every door to it, not

@@ -99,6 +99,11 @@ def save_settings(settings):
 
 
 
+# Far past anyone's use: 20,000 templates in a 49 KB backup took fourteen
+# seconds to import and five for the picker to open.
+MAX_TEMPLATES = 1_000
+
+
 def normalize_template(tpl):
     """Coerce a template dict into a known shape so bad/old data can't crash the
     manager or the 'use template' flow. A template holds a name plus the note
@@ -149,7 +154,12 @@ def load_templates():
             with open(paths.TEMPLATES_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
             if isinstance(data, list):
-                kept = [normalize_template(t) for t in data if isinstance(t, dict)]
+                kept = []
+                for t in data:
+                    if isinstance(t, dict):
+                        kept.append(normalize_template(t))
+                        if len(kept) >= MAX_TEMPLATES:
+                            break
                 if data and not kept:
                     # List-shaped but all junk: same as unreadable —
                     # keep the bytes before a save replaces them.
