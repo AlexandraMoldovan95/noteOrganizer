@@ -191,6 +191,7 @@ is in the table below as well.
 | [An old folder judged by one file](#an-old-folder-judged-by-one-file) | Before acting on a folder, read every file the action touches. | next |
 | [The app the keyboard could reach only half of](#the-app-the-keyboard-could-reach-only-half-of) | A mouse binding is not a control; ask every page what a click can press that Tab cannot reach. And a focus ring is a claim about the screen: Windows draws none round a label. | next |
 | [The plain paste with no ceiling](#the-plain-paste-with-no-ceiling) | A limit with a way round is not a limit: protect every door to what it protects. | next |
+| [Round two: each fix's next door](#round-two-each-fixs-next-door) | A fix is for the behaviour, not the route it was reported on; ask every other road that reaches it. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -1983,11 +1984,13 @@ that decides the warning. `_attachment_path_within` resolved the name with `real
 follows the alias to the long file. So the file deleted or opened was not the name checked.
 
 **Fix:** the resolver refuses a name that reaches a file under another name: what `realpath`
-returns must be, letter for letter except case, the name joined to the folder. Every delete and
-every open goes through it, so the purge, Delete forever, Empty trash and the warning all see the
-same file. The warning also reads its extension from the resolved path. `test_data_safety` makes
-a real short name and a `::$DATA` suffix on Windows and a symlink on Linux, and holds that each
-is refused while the file's own name, in any case, still opens; mutant TN01 takes the check away.
+returns must be, letter for letter, the name joined to the folder. Every delete and every open
+goes through it, so the purge, Delete forever, Empty trash and the warning all see the same file.
+The warning also reads its extension from the resolved path. `test_data_safety` makes a real
+short name and a `::$DATA` suffix on Windows and a symlink on Linux, and holds that each is
+refused while the file's own name still opens; mutant TN01 takes the check away. "Except case"
+was first allowed on purpose, and round two found the capitals were an alias too
+([Round two](#round-two-each-fixs-next-door)).
 
 **Takeaway:** when a check and the action after it each name the file, they must name it the
 same way. Resolve once, and compare what was resolved.
@@ -2125,7 +2128,9 @@ chose for those entries, the class of "The Trash that forgot its window".
 if it is a whole number of days from 1 to 365. A window chosen on this device stays; a window that
 could not be read stays unknown, so nothing is purged. qa3 imports a backup with a 365-day window
 into a notebook without one and into one that chose 30; mutants TW18 and TW19. The phone's app
-follows the same rule.
+follows the same rule. Round two found the window taken when it was shorter too, which emptied
+this notebook's own Trash; it is now taken only when longer than the default
+([Round two](#round-two-each-fixs-next-door)).
 
 **Takeaway:** a setting that decides what is deleted travels with the things it decides about.
 
@@ -2174,6 +2179,57 @@ says the same. qa1 pastes past the ceiling both ways; mutant PL01.
 
 **Takeaway:** a limit with a way round is not a limit. If something is worth protecting against,
 protect every door to it.
+
+### Round two: each fix's next door
+
+*(2026-10-28 · found by the final audit's second break-it round, which attacked every fix of the
+first by name)*
+
+**Symptom:** eight of round one's fixes held for the case reported and not for the case beside
+it, and the rounds found four new data routes as well:
+
+- **A repeat ended another way.** A share code whose copy no longer repeated, answered Update,
+  kept the series' own days in the note, out of sight, with a rescue copy that had no room for
+  them. The next small edit's save dropped them with no copy anywhere, after a dialog promising
+  Restore previous would undo the update. A Restore previous of a version that did not repeat
+  did the same.
+- **Export after a failed save.** The failed save's message sends the person to Settings →
+  Backup → Export, and the backup was packed from the file on disk. It said "Export complete"
+  without the very changes it was made to rescue.
+- **The Trash window, shortened.** The import adopted a backup's Trash window whenever this
+  notebook had never chosen one, shorter windows too. A backup from a seven-day notebook emptied
+  this notebook's own Trash at the next start.
+- **Signing out.** The end of a Windows session saved by its own copy of the close's list. The
+  copy had drifted: a date typed short stayed unsettled, so unsaved, and a write that had failed
+  was never tried again. And the end of a session is only a question the person can still cancel.
+  The app stopped its backup work outright, behind a progress bar that never moved again.
+- **The rest.** A Trash entry's title of 7 kept Recently deleted from opening. A first start that
+  could not copy one file said "Imported" all the same. An old notebook whose settings could not
+  be read lost its Trash to the default window. A name in other capitals reached a kept note's
+  file. Three writers renamed files into place before their bytes were on the disk. The template
+  editor moved a template's bold onto other words, and the day's reminder broke on the Settings
+  page.
+
+**Root cause:** each first fix named the route it was reported on — the update from a share code
+"turns off a repeat in the editor", the purge "compares names" — and its sibling took another
+route to the same behaviour.
+
+**Fix:**
+- Whatever ends a repeat keeps the series' days in the rescue copy (`days_to_rescue`), and the
+  save that clears a one-off note's days keeps days no copy holds.
+- The export packs what the app holds.
+- A backup's window is taken only when it is longer.
+- The close and the end of a session run one list of saves (`_save_on_the_way_out`). The session
+  asks nothing, lets an export finish and says on screen that an import was stopped.
+- Trash rows read a shaped copy. Files that cannot be copied are tried again, then named. An
+  unreadable old settings file travels as it is. An attachment resolves only to a file of exactly
+  its name. Every rename into place waits for the disk, which `test_data_safety` now reads in the
+  source. The template editor keeps styles as tags. The reminder bar goes above whichever page
+  shows.
+- Mutants DR01–DR24.
+
+**Takeaway:** a fix is for the behaviour, not the route it was reported on. Before calling it
+done, name the behaviour and ask every other road that reaches it.
 
 
 ## Tk & platform gotchas

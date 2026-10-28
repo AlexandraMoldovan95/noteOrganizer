@@ -8,8 +8,8 @@ no tracking. The Windows app connects to nothing, and the Android app does not e
 permission to use the internet.
 
 Something leaves your device only when you send it - a note you share, or a backup you save
-somewhere else - or, on Android, when your phone's own backup to your Google account is on. The
-apps collect nothing, and send nothing to me.
+somewhere else - or, on Android, when your phone's own backup to your Google account is on, which
+you can turn off in the app. The apps collect nothing, and send nothing to me.
 
 ## Contents
 
@@ -53,10 +53,11 @@ Only when you do it, or when your phone's own backup is on:
 - **Opening an attached file in another app (Android).** That app is allowed to read that one
   file, and nothing else of the app's.
 - **Android's own backup.** If backup is turned on in your phone's settings, Android copies the
-  app's data, notes included, to your Google account, and puts it back when the app is installed
-  again - or copies it straight to a new phone when you move to one. Google keeps that copy under
-  its own privacy policy, and you can turn it off in the phone's settings. The app says so on its
-  Settings → Backup page.
+  app's data, notes included, to your Google account - about once a day, while the phone charges on
+  Wi-Fi - and puts it back when the app is installed again, or copies it straight to a new phone
+  when you move to one. Google keeps that copy under its own privacy policy. The app takes part
+  unless you turn this off at its Settings → Backup; from then on, Android copies nothing of the
+  app. As that page also says, nothing more is copied once the app's data passes 25 MB.
 - **A page you open from the app.** Settings → About opens this policy, and, once the app is in
   a store, its page there for a review. Your browser or the store's app opens it as it would any
   other page; the app sends nothing with it.
