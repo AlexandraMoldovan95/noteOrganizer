@@ -1315,10 +1315,11 @@ class DialogsMixin:
             pass
 
     def _tk_press_ends(self, path):
-        """...and after: a button the press destroyed hands the keyboard to
-        what stands in its place, as a drawn control's press does -- inside a
-        part of its window that lived on, not a question or a popup that
-        went, and not after a click put the keyboard somewhere."""
+        """...and after: a button the press destroyed, or hid with its panel
+        (a Close, the Trash's bulk delete), hands the keyboard to what stands
+        in its place, as a drawn control's press does -- inside a part of its
+        window that lived on, not a question or a popup that went, and not
+        after a click put the keyboard somewhere."""
         pressed = getattr(self, "_tk_presses", {}).pop(path, None)
         if pressed is None:
             return
@@ -1329,7 +1330,11 @@ class DialogsMixin:
                 if self._a_dialog_is_asking():
                     self.after(100, settle)    # its answer may draw the list
                     return
-                if (widget.winfo_exists()
+                # Still in sight, or its whole window put away (a popup
+                # hidden while another program is in front): left alone.
+                if ((widget.winfo_exists() and (
+                        widget.winfo_viewable()
+                        or not widget.winfo_toplevel().winfo_viewable()))
                         or getattr(self, "_pointer_presses", 0) != clicks):
                     return
             except tk.TclError:

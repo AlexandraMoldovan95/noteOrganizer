@@ -1427,11 +1427,19 @@
   {
     "id": "KR07",
     "about": "a button its press destroyed takes the keyboard back from where a click put it",
-    "edits": [{"file": "noteorganizer/ui/dialogs.py",
-               "find": "                if (widget.winfo_exists()\n                        or getattr(self, \"_pointer_presses\", 0) != clicks):\n",
-               "replace": "                if widget.winfo_exists():\n"}],
-    "must_fail": ["...and a click straight after Space on \"Show more\" keeps the keyboard"],
-    "suites": ["qa6"],
+    "edits": [
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "                        or not widget.winfo_toplevel().winfo_viewable()))\n                        or getattr(self, \"_pointer_presses\", 0) != clicks):\n",
+        "replace": "                        or not widget.winfo_toplevel().winfo_viewable()))):\n"
+      }
+    ],
+    "must_fail": [
+      "...and a click straight after Space on \"Show more\" keeps the keyboard"
+    ],
+    "suites": [
+      "qa6"
+    ],
     "expect": "killed"
   },
   {
@@ -7865,6 +7873,24 @@
     ],
     "must_fail": [
       "...Return on a picture's shows it with the keyboard on Close"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RT07",
+    "about": "a Tk button whose own press hid it keeps the keyboard, out of sight",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "                if ((widget.winfo_exists() and (\n                        widget.winfo_viewable()\n                        or not widget.winfo_toplevel().winfo_viewable()))\n",
+        "replace": "                if (widget.winfo_exists()\n"
+      }
+    ],
+    "must_fail": [
+      "a Tk button whose own press hides it hands the keyboard to a control in sight"
     ],
     "suites": [
       "qa6"

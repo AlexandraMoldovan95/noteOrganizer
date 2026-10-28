@@ -433,10 +433,12 @@ tag; Tk's own buttons take Space through their class binding, which the app wrap
 100 ms after the key, and for a question the press asked; it leaves the keyboard alone after a
 click, or when a question or popup went with the button. That click is counted per mouse button:
 Tk runs only a tag's most specific binding, and a bare `<ButtonPress>` on "all" never heard a
-left click, which the app's `<ButtonPress-1>` there outranks. A control hidden rather than
-destroyed moves the keyboard itself before it goes: the toast's Undo, taken, timed out or
-replaced by a banner with nothing to offer, hands it to where the Undo's own key sends it
-(`_keyboard_off_toast`).
+left click, which the app's `<ButtonPress-1>` there outranks. A button its own press hid with its
+panel — Share or Import's Close, the day's ✕, the Trash's bulk delete — counts as gone too, and
+hands the keyboard on the same way; one whose whole window was put away is left alone. A control
+hidden rather than destroyed moves the keyboard itself before it goes: the toast's Undo, taken,
+timed out or replaced by a banner with nothing to offer, hands it to where the Undo's own key
+sends it (`_keyboard_off_toast`).
 
 The ring is the theme's text colour (`focus_ring`), measured by the contrast gate, and it is both
 border colours while the keyboard is on a control: Windows draws no focus colour round a label,

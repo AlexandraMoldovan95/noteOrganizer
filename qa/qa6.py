@@ -4662,6 +4662,90 @@ app.geometry('1100x850')
 _kv_settle()
 
 
+# ---- KEYBOARD: a Tk button whose own press hides it ----
+# Round 3 of the final audit: Tk's buttons hand the keyboard on after a press
+# that destroys them, and one that only HID itself kept it -- on a control no
+# longer on screen, no ring anywhere, Tab starting again from the window's
+# top. Share and Import's Close, the Trash's bulk delete, Settings and
+# Back to Notes.
+def _kh_space(button):
+    """Space on *button*, the keyboard forced there first: where it is after."""
+    if button is None:
+        return 'no button'
+    app._bring_into_sight(button)
+    _kv_settle(4)
+    if not _take_focus(button):
+        return (f'not taken (viewable {button.winfo_viewable()}, keyboard on '
+                f'{app.tk.call("focus", "-lastfor", app)})')
+    button.event_generate('<space>')
+    _kv_settle(15)
+    try:
+        held = app.nametowidget(str(app.tk.call('focus', '-lastfor', app)))
+        if held is button or not held.winfo_viewable():
+            return f'hidden {held.winfo_class()}'
+    except (KeyError, tk.TclError):
+        return 'nowhere'
+    return 'in sight'
+
+
+_kh_real_ask = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: True
+_kh = {}
+try:
+    app.geometry('1100x850')
+    app.notebook.select(app.TAB_NOTES)
+    app.notes = [NO.normalize_note({'id': 901, 'title': 'KhOne', 'body': 'x',
+                                    'date': '2026-10-02'}),
+                 NO.normalize_note({'id': 902, 'title': 'KhTwo', 'body': 'y'})]
+    app.trash = [{'id': 903 + _i, 'uid': f'kh-{_i}', 'title': f'KhGone{_i}',
+                  'body': 'x', 'category': 'General',
+                  'deleted_at': '2026-10-20 10:00:00'} for _i in range(3)]
+    app.save_notes(); NO.save_trash(app.trash)
+    app.refresh_note_list()
+    _kv_settle(6)
+    app.toggle_share_panel()
+    _kv_settle(6)
+    _kh['Share Close'] = _kh_space(find_btn_qa6(app.share_panel, 'Close'))
+    app.toggle_import_panel()
+    _kv_settle(6)
+    _kh['Import Close'] = _kh_space(find_btn_qa6(app.import_panel, 'Close'))
+    # The day's ✕ goes the same road. It was walked in a fresh app; here, this
+    # far into the script, its button would not take the keyboard to begin
+    # with (not viewable), for a reason the round did not find.
+    _kh['⚙ Settings'] = _kh_space(find_btn_qa6(app.sidebar, '⚙ Settings'))
+    app.toggle_settings_panel('trash')
+    _kv_settle(10)
+
+    def _kh_rows(w):
+        for c in w.winfo_children():
+            if getattr(c, '_trash_buttons', None):
+                yield c
+            else:
+                yield from _kh_rows(c)
+
+    for _kh_row in list(_kh_rows(app.settings_trash_panel))[:2]:
+        next(c for c in _kh_row.winfo_children()
+             if isinstance(c, tk.Checkbutton)).invoke()
+    _kv_settle(6)
+    _kh['the Trash\'s bulk delete'] = _kh_space(
+        find_btn_qa6(app.settings_trash_panel, 'Delete 2 selected permanently'))
+    _kh['Back to Notes'] = _kh_space(find_btn_qa6(app.settings_page, 'Back to Notes'))
+finally:
+    app.ask_yes_no = _kh_real_ask
+    if getattr(app, '_settings_open', False):
+        app.hide_settings_page()
+    if app._is_placed(app.share_panel) or app._is_placed(app.import_panel):
+        app.share_panel.pack_forget(); app.import_panel.pack_forget()
+check(f'a Tk button whose own press hides it hands the keyboard to a control '
+      f'in sight ({_kh})',
+      len(_kh) == 5 and all(v == 'in sight' for v in _kh.values()))
+check('...and the Trash\'s bulk delete did delete the two ticked',
+      len(app.trash) == 1)
+app.notes = []; app.trash = []
+app.save_notes(); NO.save_trash(app.trash)
+app.refresh_note_list()
+_kv_settle()
+
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")
 

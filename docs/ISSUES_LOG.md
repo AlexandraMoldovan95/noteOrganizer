@@ -3143,7 +3143,10 @@ was a label bound to the mouse, and qa6's walk passed it because the tab strip, 
 Tab stop, though no key of the strip's reaches into a page. The name is a drawn control now, and a
 picture's preview opened from it takes the keyboard on Close, shuts on Escape, and gives the
 keyboard back to the row. The walk no longer counts the tab strip as "inside", and its notes page
-carries attachments. Mutants RT05, RT06.
+carries attachments. Mutants RT05, RT06. The wrapped Space handed the keyboard on only when the
+button was destroyed, and a button its own press hid — Share and Import's Close, the day's ✕, the
+Trash's bulk delete, Settings, Back to Notes — kept it out of sight; hidden now counts as gone,
+as it already did for the app's drawn controls. Mutant RT07.
 
 **Takeaway:** a mouse binding is not a control; a control is what both hands can press. And a
 focus ring is a claim about the screen: Tk saying the keyboard is there, and a colour option
