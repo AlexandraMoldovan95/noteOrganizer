@@ -3149,7 +3149,12 @@ Trash's bulk delete, Settings, Back to Notes — kept it out of sight; hidden no
 as it already did for the app's drawn controls. Mutant RT07. And round two's own fix for the hidden
 Undo sent the keyboard to the note list even while the list was put away by its arrow: Tk only
 notes a request for a hidden window, and the keyboard stayed on the Undo. qa3 had counted the
-request, not asked where the keyboard was; it lands on the arrow now. Mutant RT08.
+request, not asked where the keyboard was; it lands on the arrow now. Mutant RT08. Worst of the
+round: a click on ⚙ Settings from the editor takes no keyboard, so it stayed in the note, out of
+sight. The new Page Down did nothing there, and Tab, Space, Backspace and Ctrl+V edited the note,
+which was saved. Settings now takes the keyboard from the page it hides onto the section's entry
+and gives it back on the way out, a box out of sight is no longer "a box being typed in", and the
+note list put away by a click on its arrow hands the keyboard to the arrow. Mutants RT09–RT12.
 
 **Takeaway:** a mouse binding is not a control; a control is what both hands can press. And a
 focus ring is a claim about the screen: Tk saying the keyboard is there, and a colour option

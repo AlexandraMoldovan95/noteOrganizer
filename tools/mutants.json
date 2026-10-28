@@ -1455,11 +1455,19 @@
   {
     "id": "KR09",
     "about": "End in a text box on the Settings page scrolls the page as well",
-    "edits": [{"file": "noteorganizer/ui/settings_page.py",
-               "find": "                    or widget.winfo_class() in self._TYPING_CLASSES):\n",
-               "replace": "                    ):\n"}],
-    "must_fail": ["...but in a text box on the page, End stays the box's own"],
-    "suites": ["qa6"],
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                    or (widget.winfo_class() in self._TYPING_CLASSES\n                        and widget.winfo_viewable())):\n",
+        "replace": "                    ):\n"
+      }
+    ],
+    "must_fail": [
+      "...but in a text box on the page, End stays the box's own"
+    ],
+    "suites": [
+      "qa6"
+    ],
     "expect": "killed"
   },
   {
@@ -7912,6 +7920,78 @@
     ],
     "suites": [
       "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RT09",
+    "about": "Settings opened by a click leaves the keyboard in the hidden note",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "        if self._keyboard_before_settings is not None:\n            self._keyboard_to(self._toast_landing())\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a click on Settings from the note brings the keyboard onto the page"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RT10",
+    "about": "leaving Settings leaves the keyboard on the hidden page",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "            self._keyboard_to(before)\n",
+        "replace": "            pass\n"
+      }
+    ],
+    "must_fail": [
+      "...and a click on Back to Notes gives the keyboard back to the note"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RT11",
+    "about": "a hidden box counts as one being typed in, so the Settings page keys give way to it",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                    or (widget.winfo_class() in self._TYPING_CLASSES\n                        and widget.winfo_viewable())):\n",
+        "replace": "                    or widget.winfo_class() in self._TYPING_CLASSES):\n"
+      }
+    ],
+    "must_fail": [
+      "...and with the keyboard left in the hidden note, Page Down still scrolls the page"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RT12",
+    "about": "the note list put away by a click keeps the keyboard",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if self._keyboard_inside(self.sidebar) is not None:\n                self._keyboard_to(self.sidebar_toggle)\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a click on the sidebar's arrow with the keyboard on the note list brings it to the arrow"
+    ],
+    "suites": [
+      "qa6"
     ],
     "expect": "killed"
   }

@@ -14100,6 +14100,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.sidebar.pack_forget()
             self.sidebar_toggle_lbl.config(text="›")
             self._sidebar_hidden = True
+            # The keyboard on the list hidden by a click on the arrow: its keys
+            # (Alt+arrows move a note) still acted on a list out of sight.
+            if self._keyboard_inside(self.sidebar) is not None:
+                self._keyboard_to(self.sidebar_toggle)
 
     def build_notes_tab(self, parent):
         # --- Sidebar (note list) ---

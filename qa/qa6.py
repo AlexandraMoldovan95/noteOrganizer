@@ -4746,6 +4746,90 @@ app.save_notes(); NO.save_trash(app.trash)
 app.refresh_note_list()
 _kv_settle()
 
+# ---- KEYBOARD: Settings opened by a click, from the note ----
+# Round 3 of the final audit: a click on ⚙ Settings takes no keyboard, which
+# stayed in the note body, out of sight. Page Down moved its caret instead of
+# the page, and Tab, letters and Backspace edited the note, which was saved.
+def _ks_holder():
+    try:
+        return app.nametowidget(str(app.tk.call('focus', '-lastfor', app)))
+    except (KeyError, tk.TclError):
+        return None
+
+
+app.geometry('1100x750')
+app.notebook.select(app.TAB_NOTES)
+app.notes = [NO.normalize_note({'id': 911, 'title': 'KsNote',
+                                'body': 'milk\neggs\nbread'})]
+app.save_notes()
+app.refresh_note_list()
+app.open_note_in_tab(app.notes[0])
+_kv_settle(6)
+_ks_in_body = _take_focus(app.body_text)
+app.body_text.mark_set('insert', 'end-1c')
+find_btn_qa6(app.sidebar, '⚙ Settings').invoke()      # a click: no keyboard
+_kv_settle(6)
+_ks_on_page = str(getattr(_ks_holder(), '_w', '')).startswith(str(app.settings_page) + '.')
+app.toggle_settings_panel('shortcuts')
+_kv_settle(10)
+app.settings_canvas.yview_moveto(0)
+_kv_settle(2)
+_ks_top = app.settings_canvas.yview()[0]
+# Generated on the window, so Tk sends each key where the keyboard is.
+for _ks_key in ('<Next>', '<Tab>', '<KeyPress-x>', '<KeyPress-BackSpace>'):
+    app.event_generate(_ks_key)
+    _kv_settle(2)
+_ks_scrolled = app.settings_canvas.yview()[0]
+_ks_body = app.body_text.get('1.0', 'end-1c')
+find_btn_qa6(app.settings_page, 'Back to Notes').invoke()
+_kv_settle(6)
+_ks_back = _ks_holder() is app.body_text
+app._flush_autosave()
+_ks_saved = (app.find_note(911) or {}).get('body')
+check(f'a click on Settings from the note brings the keyboard onto the page '
+      f'({_ks_in_body}, {_ks_on_page}): Page Down scrolls it ({_ks_top:.2f} -> '
+      f'{_ks_scrolled:.2f}) and no key reaches the hidden note ({_ks_body!r}, '
+      f'saved {_ks_saved!r})',
+      _ks_in_body and _ks_on_page and _ks_scrolled > _ks_top
+      and _ks_body == 'milk\neggs\nbread' and _ks_saved == 'milk\neggs\nbread')
+check(f'...and a click on Back to Notes gives the keyboard back to the note '
+      f'({_ks_holder()})', _ks_back)
+# A box out of sight is no box being typed in: whatever left the keyboard in
+# one, Page Down still reads the page on.
+_take_focus(app.body_text)
+app._keyboard_to = lambda target: None    # as if nothing had moved it
+try:
+    app.show_settings_page()
+finally:
+    del app._keyboard_to
+app.toggle_settings_panel('shortcuts')
+_kv_settle(10)
+app.settings_canvas.yview_moveto(0)
+_kv_settle(2)
+_ks_left = _ks_holder() is app.body_text
+app.event_generate('<Next>')
+_kv_settle(2)
+_ks_paged = app.settings_canvas.yview()[0]
+app.hide_settings_page()
+_kv_settle(4)
+check(f'...and with the keyboard left in the hidden note, Page Down still '
+      f'scrolls the page ({_ks_left}, {_ks_paged:.2f})',
+      _ks_left and _ks_paged > 0)
+# The same for the note list, put away by a click on its arrow.
+_ks_list = _take_focus(app.canvas)
+_qa_click(app.sidebar_toggle)
+_kv_settle(6)
+_ks_arrow = _ks_holder() is app.sidebar_toggle and bool(app.sidebar_toggle.winfo_viewable())
+if app._sidebar_hidden:
+    app.toggle_sidebar()
+_kv_settle(4)
+check(f'a click on the sidebar\'s arrow with the keyboard on the note list '
+      f'brings it to the arrow ({_ks_list}, {_ks_holder()})', _ks_list and _ks_arrow)
+app.notes = []
+app.save_notes()
+app.refresh_note_list()
+_kv_settle()
+
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")
 

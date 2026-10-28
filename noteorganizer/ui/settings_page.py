@@ -270,8 +270,10 @@ class SettingsPageMixin:
             return None
         widget = getattr(event, "widget", None)
         try:
+            # A box out of sight is no box being typed in.
             if (isinstance(widget, str) or widget.winfo_toplevel() is not self
-                    or widget.winfo_class() in self._TYPING_CLASSES):
+                    or (widget.winfo_class() in self._TYPING_CLASSES
+                        and widget.winfo_viewable())):
                 return None
             canvas = self.settings_canvas
             if isinstance(how, float):
@@ -2327,6 +2329,12 @@ class SettingsPageMixin:
         if showing:
             self.toggle_settings_panel(showing)
         self._render_statistics()
+        # A click on Settings takes no keyboard, which stayed in the hidden
+        # note: Tab typed tabs into it, Backspace deleted a letter, and both
+        # were saved. It comes onto the page, and goes back on the way out.
+        self._keyboard_before_settings = self._keyboard_inside(self.notebook)
+        if self._keyboard_before_settings is not None:
+            self._keyboard_to(self._toast_landing())
 
     def hide_settings_page(self):
         """Return from Settings to the Notes/Calendar notebook. Returns False
@@ -2354,6 +2362,15 @@ class SettingsPageMixin:
         # "not showing", deferring again and leaving exactly the
         # staleness this was added to prevent.
         self._catch_up_deferred_refresh()
+        before = getattr(self, "_keyboard_before_settings", None)
+        self._keyboard_before_settings = None
+        if self._keyboard_inside(self.settings_page) is not None:
+            try:
+                if before is None or not before.winfo_exists():
+                    before = self._toast_landing()
+            except tk.TclError:
+                before = self._toast_landing()
+            self._keyboard_to(before)
         return True
 
     # ---------- Settings tab ----------

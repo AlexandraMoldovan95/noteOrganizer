@@ -1710,6 +1710,32 @@ class DialogsMixin:
         except tk.TclError:
             return False
 
+    def _keyboard_inside(self, container):
+        """The widget holding the keyboard, by Tk's own record, when it is
+        *container* or inside it; else None."""
+        try:
+            held = str(self.tk.call("focus", "-lastfor", self))
+            if held == str(container) or held.startswith(str(container) + "."):
+                return self.nametowidget(held)
+        except (KeyError, tk.TclError):
+            pass
+        return None
+
+    def _keyboard_to(self, target):
+        """Put the keyboard on *target*, laid out first. Tk holds a request
+        for a window not mapped yet -- a note inside a canvas, a moment after
+        its page came back -- until it is, the keys meanwhile going where
+        they went: so the window takes them first, and types nothing."""
+        if target is None:
+            return
+        try:
+            self.update_idletasks()
+            if not target.winfo_viewable():
+                self.focus_set()
+            target.focus_set()
+        except tk.TclError:
+            pass
+
     def _tab_target_into_sight(self, event, backwards=False):
         """Tab moves the keyboard and never the view, so what it lands on is
         brought into sight. Runs after Tk's own traversal (bound with "+")."""

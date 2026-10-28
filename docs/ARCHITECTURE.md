@@ -423,7 +423,11 @@ Tab moves the keyboard and never the view, and the editor, Settings and the long
 drawn on canvases, so what Tab lands on is scrolled into sight (`_bring_into_sight`). A section
 with nothing to Tab to — Keyboard shortcuts is labels alone — is read with Page Up and Down, the
 arrows, Home and End, which scroll the Settings page from anywhere on it but a box being typed in
-(`_settings_page_key`).
+(`_settings_page_key`) — and a box out of sight is none. A click on a button takes no keyboard, so
+a page that hides what holds it moves it itself (`_keyboard_inside`, `_keyboard_to`): Settings
+takes it from the note onto the section's entry and gives it back on the way out, and the note
+list put away by its arrow hands it to the arrow. A window not yet mapped only gets a request
+from Tk, so the main window holds the keyboard until it is, and nothing is typed meanwhile.
 
 A press that draws its list again takes the control with it, and Tk leaves the keyboard on the
 window — or on the popup's own window, which counts as nowhere too. It goes to what stands in the
