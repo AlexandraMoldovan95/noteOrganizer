@@ -6922,5 +6922,35 @@
     "suites": ["test_data_safety"],
     "expect": "killed",
     "note": "Killed on Windows, where the app runs; elsewhere no file keeps the stream and these checks do not run."
+  },
+  {
+    "id": "AX13",
+    "about": "an exported note's file name keeps the control characters Windows refuses",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "_FORBIDDEN_IN_FILE_NAMES = re.compile(r'[<>:\"/\\\\|?*\\x00-\\x1f]')\n",
+               "replace": "_FORBIDDEN_IN_FILE_NAMES = re.compile(r'[<>:\"/\\\\|?*\\n\\r\\t]')\n"}],
+    "must_fail": ["a file named from a title holds nothing Windows refuses or hides"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "AX14",
+    "about": "the bulk export names its files from titles as before, control characters kept",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            safe = export_file_stem(title)\n",
+               "replace": "            safe = re.sub(r'[<>:\"/\\\\|?*\\n\\r\\t]', \"_\", title).strip(\" ._\")[:60] or \"note\"\n"}],
+    "must_fail": ["a title with a control character exports, the character made safe"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "AX15",
+    "about": "a bulk export that could not write a note does not say which",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                f\"• {HIDDEN_IN_NAMES.sub('', t)[:60]}\" for t in failed[:5])\n",
+               "replace": "                \"\" for t in failed[:5])\n"}],
+    "must_fail": ["a note that fails to write is named in the message"],
+    "suites": ["qa1"],
+    "expect": "killed"
   }
 ]

@@ -6746,6 +6746,48 @@ check('bulk export announces the count',
       any('Exported 2 note(s)' in t for t in _toastsX))
 check('bulk export leaves selection mode',
       not app.selection_mode and not app.selected_note_ids)
+
+# A title holding a control character (one a share code can carry) could
+# not be exported at all on Windows, and the message counted the failure
+# without naming the note. The file name drops what Windows refuses; a note
+# that still fails to write is named.
+_ctl_note = NO.normalize_note({'id': 8803, 'title': 'bell\x07title', 'body': 'b',
+                               'category': 'General'})
+_bad_note = NO.normalize_note({'id': 8804, 'title': 'Unwritable title', 'body': 'u',
+                               'category': 'General'})
+app.notes = [_ctl_note, _bad_note]
+app.selected_note_ids = {8803, 8804}
+_ctl_dir = os.path.join(_exp_dir, 'bulk_ctl')
+os.makedirs(_ctl_dir, exist_ok=True)
+_fdX.askdirectory = lambda **kw: _ctl_dir
+_ctl_errs = []
+_ctl_real_err = app.show_error
+app.show_error = lambda t, m, **k: _ctl_errs.append((t, m))
+_ctl_real_open = getattr(NO, 'open', None)
+
+
+def _ctl_open(path, *a, **k):
+    if 'Unwritable' in str(path):
+        raise OSError(28, 'No space left on device')
+    return _ioX.open(path, *a, **k)
+
+
+NO.open = _ctl_open
+try:
+    app._bulk_export_run('txt')
+finally:
+    app.show_error = _ctl_real_err
+    if _ctl_real_open is None:
+        del NO.open
+    else:
+        NO.open = _ctl_real_open
+check(f'a title with a control character exports, the character made safe '
+      f'({sorted(os.listdir(_ctl_dir))})',
+      sorted(os.listdir(_ctl_dir)) == ['bell_title.txt'])
+check(f'a note that fails to write is named in the message ({_ctl_errs})',
+      len(_ctl_errs) == 1 and '1 failed to write' in _ctl_errs[0][1]
+      and '• Unwritable title' in _ctl_errs[0][1])
+app.notes = [_exp_note, _exp_note2]
 app._toggle_selection_mode()
 app.update()
 app.update_idletasks()

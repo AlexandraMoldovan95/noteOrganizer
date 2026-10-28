@@ -1618,6 +1618,17 @@ _old_list = {".exe", ".bat", ".cmd", ".com", ".scr", ".pif", ".msi", ".msp",
 check("...every kind that had the warning still has it, and none of them opens unasked",
       _old_list <= _kinds.DANGEROUS_EXTENSIONS
       and not (_kinds.DANGEROUS_EXTENSIONS & _kinds.OPENS_WITHOUT_ASKING))
+# An exported note's file is named from its title, and Windows refuses a
+# name holding any control character: a title with a bell in it (from a
+# share code, say) failed to export with "1 failed to write" and no name.
+_stems = {t: _kinds.export_file_stem(t) for t in [
+    "bell\x07title", "tab\there", "Export <trial>", "a" + chr(0x202e) + "b",
+    "c1\x85\x9fend", "del\x7fete", "...", "\x01\x02", "  .x.  ", "y" * 80]}
+check("a file named from a title holds nothing Windows refuses or hides (%r)" % _stems,
+      _stems == {"bell\x07title": "bell_title", "tab\there": "tab_here",
+                 "Export <trial>": "Export _trial", "a" + chr(0x202e) + "b": "ab",
+                 "c1\x85\x9fend": "c1end", "del\x7fete": "delete", "...": "note",
+                 "\x01\x02": "note", "  .x.  ": "x", "y" * 80: "y" * 60})
 # Windows' Mark of the Web travels with what the app brings in. A backup
 # downloaded from the internet is marked, and the import took files out of
 # it unmarked, so SmartScreen and Office's Protected View never saw them. A

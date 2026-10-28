@@ -486,6 +486,20 @@ def how_to_open(name):
     return "ask"
 
 
+# What Windows refuses in a file name: its reserved punctuation and every
+# control character. A title holding a control character could not be exported.
+_FORBIDDEN_IN_FILE_NAMES = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+
+
+def export_file_stem(title):
+    """A file name made from a note's title, before its extension: what Windows
+    refuses becomes "_", what hides or reorders text goes, the ends lose their
+    dots and spaces, and 60 characters are kept -- "note" when none are left.
+    The single-note export and the bulk one both name their files by it."""
+    stem = HIDDEN_IN_NAMES.sub("", _FORBIDDEN_IN_FILE_NAMES.sub("_", title))
+    return stem.strip(" ._")[:60] or "note"
+
+
 def attachment_display_name(filename, stored_as):
     """The name a person is shown for an attachment: *filename*, a label a
     backup can write over any file, cleaned of HIDDEN_IN_NAMES and made to

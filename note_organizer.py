@@ -390,7 +390,9 @@ from noteorganizer.core.model import (
     MAX_CHECKLIST_ITEMS,
     MAX_ATTACHMENTS,
     DANGEROUS_EXTENSIONS,
+    HIDDEN_IN_NAMES,
     attachment_display_name,
+    export_file_stem,
 )
 
 
@@ -11276,11 +11278,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                  "txt": ("Text file", ".txt")}
         label, ext = kinds[fmt]
         # A title is prose; a filename is not. Strip what Windows forbids.
-        safe = re.sub(r'[<>:"/\\|?*\n\r\t]', "_", title).strip(" ._")[:60]
         path = filedialog.asksaveasfilename(
             title=f"Export “{title}” as a {label.lower()}",
             defaultextension=ext,
-            initialfile=(safe or "note") + ext,
+            initialfile=export_file_stem(title) + ext,
             filetypes=[(label, "*" + ext), ("All files", "*.*")])
         if not path:
             return
@@ -17904,13 +17905,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             title=f"Export {len(self.selected_note_ids)} note(s) into…")
         if not folder:
             return
-        written, failed, used = 0, 0, set()
+        written, failed, used = 0, [], set()
         for note in self.notes:
             if note["id"] not in self.selected_note_ids:
                 continue
             title = (note.get("title") or "").strip() or "Untitled note"
-            safe = (re.sub(r'[<>:"/\\|?*\n\r\t]', "_", title)
-                    .strip(" ._")[:60] or "note")
+            safe = export_file_stem(title)
             name, n = safe, 1
             while (name.lower() in used
                    or os.path.exists(os.path.join(folder, name + ext))):
@@ -17923,11 +17923,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     f.write(self._note_export_content(note, fmt, title))
                 written += 1
             except (IOError, OSError):
-                failed += 1
+                failed.append(title)
         if failed:
+            # Which notes, not only how many: the person has to find them.
+            named = "\n".join(
+                f"• {HIDDEN_IN_NAMES.sub('', t)[:60]}" for t in failed[:5])
+            more = f"\n…and {len(failed) - 5} more" if len(failed) > 5 else ""
             self.show_error(
                 "Export incomplete",
-                f"{written} note(s) exported, {failed} failed to write.")
+                f"{written} note(s) exported, {len(failed)} failed to write:"
+                f"\n\n{named}{more}")
         else:
             self._show_toast(f"Exported {written} note(s)")
         self._exit_selection_mode_after_bulk_action()
