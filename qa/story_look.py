@@ -496,6 +496,32 @@ app.cal_canvas.focus_set()
 app.update()
 app.update_idletasks()
 """),
+    # The question an attachment of a kind the app does not know asks before
+    # it opens (the final audit's allow list). Photographed while it waits
+    # for its answer, in place of the wait; nothing is opened.
+    ("27-an-unknown-kind-of-file-asks-first", """
+app._dismiss_mini_popup()
+app.hide_settings_page()
+app.notebook.select(app.TAB_NOTES)
+app.open_note_in_tab(app.notes[0])
+app.update()
+def _shoot_while_asking(_var):
+    app.update()
+    app.update_idletasks()
+    time.sleep(0.4)
+    app.lift()
+    app.attributes("-topmost", True)
+    app.update()
+    time.sleep(0.2)
+    _grab_window("27-an-unknown-kind-of-file-asks-first")
+app.wait_variable = _shoot_while_asking
+try:
+    app._open_externally('C:/attachments/20261028090000000000_Holiday plans.zip',
+                         'Holiday plans.zip')
+finally:
+    del app.wait_variable
+_scene_took_its_own = True
+"""),
 ]
 
 SEED = [
@@ -575,9 +601,24 @@ def _days_ago(days):
 from PIL import ImageGrab as _Grab
 SCALE = _Grab.grab().size[0] / float(app.winfo_screenwidth())
 
+def _grab_window(name):
+    x = int(round(app.winfo_rootx() * SCALE))
+    y = int(round(app.winfo_rooty() * SCALE))
+    w = int(round(app.winfo_width() * SCALE))
+    h = int(round(app.winfo_height() * SCALE))
+    subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                    "-File", "grab.ps1", "-Out", os.path.join("shots", name + ".png"),
+                    "-X", str(x), "-Y", str(y), "-W", str(w), "-H", str(h)],
+                   capture_output=True)
+
 scenes = json.load(io.open("scenes.json", encoding="utf-8"))
 for name, script in scenes:
+    # A scene whose subject is a question photographs it itself, while the
+    # question waits: once answered, it is gone (scene 27).
+    _scene_took_its_own = False
     exec(script)
+    if _scene_took_its_own:
+        continue
     _no_reminder()          # belt and braces; see the note above
     app.update()
     app.update_idletasks()
@@ -600,14 +641,7 @@ for name, script in scenes:
     app.update()
     app.update_idletasks()
     time.sleep(0.2)
-    x = int(round(app.winfo_rootx() * SCALE))
-    y = int(round(app.winfo_rooty() * SCALE))
-    w = int(round(app.winfo_width() * SCALE))
-    h = int(round(app.winfo_height() * SCALE))
-    subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
-                    "-File", "grab.ps1", "-Out", os.path.join("shots", name + ".png"),
-                    "-X", str(x), "-Y", str(y), "-W", str(w), "-H", str(h)],
-                   capture_output=True)
+    _grab_window(name)
 app.destroy()
 '''
 
