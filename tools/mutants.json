@@ -6569,8 +6569,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            self._export_state = None\n            self._take_back_cut_short(\"export\")\n            if state[\"error\"]:\n",
-        "replace": "            self._export_state = None\n            if state[\"error\"]:\n"
+        "find": "            self._export_state = None\n            self._take_back_cut_short(\"export\")\n            left = state.get(\"left_out\") or []\n",
+        "replace": "            self._export_state = None\n            left = state.get(\"left_out\") or []\n"
       }
     ],
     "must_fail": [
