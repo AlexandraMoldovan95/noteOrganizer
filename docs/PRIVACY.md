@@ -1,6 +1,6 @@
 # Privacy policy
 
-*Note Organizer for Windows and for Android, made by Alexandra Moldovan. Last updated: 27 October
+*Note Organizer for Windows and for Android, made by Alexandra Moldovan. Last updated: 28 October
 2026.*
 
 Your notes stay on your device. Note Organizer has no accounts, no advertising, no analytics and
@@ -56,8 +56,10 @@ Only when you do it, or when your phone's own backup is on:
   app's data, notes included, to your Google account - about once a day, while the phone charges on
   Wi-Fi - and puts it back when the app is installed again, or copies it straight to a new phone
   when you move to one. Google keeps that copy under its own privacy policy. The app takes part
-  unless you turn this off at its Settings → Backup; from then on, Android copies nothing of the
-  app. As that page also says, nothing more is copied once the app's data passes 25 MB.
+  unless you turn this off at its Settings → Backup; from then on, Android's next backup replaces
+  that copy with one small file that only says the backup is off - so the choice stays off when
+  the app is restored - and holds none of your notes. As that page also says, nothing more is
+  copied once the app's data passes 25 MB.
 - **A page you open from the app.** Settings → About opens this policy, and, once the app is in
   a store, its page there for a review. Your browser or the store's app opens it as it would any
   other page; the app sends nothing with it.
