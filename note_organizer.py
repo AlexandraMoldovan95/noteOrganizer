@@ -263,6 +263,7 @@ from noteorganizer.core.storage import (
     normalize_template,
     load_templates,
     save_templates,
+    read_list_now,
     load_trash,
     save_trash,
     _delete_attachment_files,
@@ -2113,9 +2114,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # to another device lost them. Held as nothing while the file is
         # there, they travel as the file is: one this start could not read
         # keeps its bytes in the backup instead of an empty list.
-        for held, path, arcname in ((self.templates, TEMPLATES_FILE, "templates.json"),
-                                    (self.trash, TRASH_FILE, "trash.json")):
-            if held:
+        left_out = []
+        for held, path, arcname, ident in (
+                (self.templates, TEMPLATES_FILE, "templates.json", lambda e: e.get("name")),
+                (self.trash, TRASH_FILE, "trash.json", lambda e: e.get("uid") or e.get("id"))):
+            if _core_paths.writes_held(path) and os.path.exists(path):
+                # Unread at the start, the app holds only this session's: one
+                # template saved made "Export complete" of a backup without
+                # the file's (round 5). The file read now, or named left out.
+                kept = read_list_now(path)
+                if kept is None:
+                    left_out.append(arcname)
+                    kept = []
+                seen = {ident(e) for e in kept}
+                kept += [e for e in held if ident(e) not in seen]
+                if kept:
+                    entries.append((json_text(kept).encode("utf-8"), arcname))
+            elif held:
                 entries.append((json_text(held).encode("utf-8"), arcname))
             elif os.path.exists(path):
                 entries.append((path, arcname))
@@ -2126,7 +2141,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     entries.append((full_path, os.path.join("attachments", filename)))
 
         self._export_state = {"current": 0, "total": len(entries), "done": False,
-                              "error": None, "save_path": save_path,
+                              "error": None, "save_path": save_path, "left_out": left_out,
                               "session_only": len(self.notes) if session_only else None}
         self.export_progress_bar.configure(maximum=max(len(entries), 1), value=0)
         self.export_progress_lbl.config(text=f"Exporting… 0 / {len(entries)} files")

@@ -9194,5 +9194,23 @@
       "test_data_safety"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "DR61",
+    "about": "a templates or Trash file the start could not read is left out of the backup in silence once the session adds one entry",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if _core_paths.writes_held(path) and os.path.exists(path):\n",
+        "replace": "            if False:\n"
+      }
+    ],
+    "must_fail": [
+      "a templates file unread at the start goes into the backup with the session's, or is named left out"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
   }
 ]

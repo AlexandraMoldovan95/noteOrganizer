@@ -220,6 +220,18 @@ def load_templates():
     return []
 
 
+def read_list_now(path):
+    """The entries a data file holds, read once now, or None when it will not
+    open or holds no list: for a backup of a file the start could not read,
+    whose entries the app therefore does not hold."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json_from_text(f.read())
+    except (*paths.JSON_UNREADABLE, ValueError, OSError):
+        return None
+    return [e for e in data if isinstance(e, dict)] if isinstance(data, list) else None
+
+
 def save_templates(templates):
     """Write the templates list atomically — a failed write leaves the
     previous file intact (see _write_json_atomic), lands in crash_log.txt

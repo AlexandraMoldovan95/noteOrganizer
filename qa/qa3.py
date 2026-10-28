@@ -3654,6 +3654,44 @@ check(f'a backup leaves out an attached file another program holds, and names it
       and not any('scan.png' in n for n in _la_names))
 app.notes = []; app.save_notes()
 
+# A templates file the start could not read leaves the app holding only the
+# session's: one template saved made "Export complete" of a backup without
+# the file's own (round 5). Read at the export, or named as left out.
+_ht_zip = os.path.join(tempfile.gettempdir(), 'qa3_export_held_templates.zip')
+_ht_said, _ht_got = [], []
+_ht_real = (app.show_info, fd.asksaveasfilename, app.templates)
+app.show_info = lambda *a, **k: _ht_said.append(' '.join(map(str, a)))
+fd.asksaveasfilename = lambda **k: _ht_zip
+try:
+    app.notes = [NO.normalize_note({'id': 1, 'title': 'Kept', 'body': 'words'})]
+    app.save_notes()
+    for _ht_file in ('[{"name": "Weekly", "body": "a"}, {"name": "Trip", "body": "b"}]',
+                     '{broken'):
+        with open(NO.TEMPLATES_FILE, 'w', encoding='utf-8') as _f:
+            _f.write(_ht_file)
+        NO._core_paths.hold_writes(NO.TEMPLATES_FILE)
+        app.templates = [{'name': 'Made today', 'body': 'c'}]
+        app.export_data()
+        t0 = time.time()
+        while app._export_state is not None and time.time() - t0 < 120:
+            app.update()
+        with zipfile.ZipFile(_ht_zip) as _zf:
+            _ht_got.append([t.get('name') for t in
+                            json.loads(_zf.read('templates.json').decode('utf-8'))])
+        NO._core_paths.WRITES_HELD.clear()
+finally:
+    NO._core_paths.WRITES_HELD.clear()
+    app.show_info, fd.asksaveasfilename, app.templates = _ht_real
+    os.remove(NO.TEMPLATES_FILE)
+    if os.path.exists(_ht_zip):
+        os.remove(_ht_zip)
+check(f'a templates file unread at the start goes into the backup with the '
+      f'session\'s, or is named left out ({_ht_got}; {[s[:40] for s in _ht_said]})',
+      _ht_got == [['Weekly', 'Trip', 'Made today'], ['Made today']]
+      and len(_ht_said) == 2 and _ht_said[0].startswith('Export complete ')
+      and 'not all of it' in _ht_said[1] and 'templates.json' in _ht_said[1])
+app.notes = []; app.save_notes()
+
 # Signing out of Windows, restarting or shutting down ends the process
 # without the close: Tk's WM_SAVE_YOURSELF comes instead, and the last
 # typing was left unsaved. on_session_end saves it, asking nothing.
