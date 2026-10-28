@@ -2380,8 +2380,14 @@ nowhere after it.
   parsed to the end after the ceiling had been passed (7 s), the styles moved once per shift of
   every padded cell, and the structure at a copy's start marker looked for each stray end tag
   along every open table. The page is now read no further than the ceiling, the shifts are summed
-  once, and the open tags are counted; the slowest probe takes half a second. test_richtext
+  once, and the open tags are counted; the slowest probe takes about a second. test_richtext
   counts what is fed to the parser and what is compared; mutants IX21–IX22.
+- *Half an emoji.* A probe setting the find box to a lone UTF-16 surrogate led further: JSON can
+  spell one as an escape, Tk will not draw it, and a notes file holding one in a title stopped
+  the app starting, at every launch — the mend existed, but only on the way to disk ([The mend
+  that only ran on the way to disk](#the-mend-that-only-ran-on-the-way-to-disk)). Every data
+  file, the backup's files and a share code are now read through one reader that mends what an
+  escape spells. test_data_safety reads each with one in it; mutant IX23.
 
 **Takeaway:** a limit on what comes in says nothing about what is then done with it. Ask what the
 work costs at the limit — a capped number squared is not capped — and count every door to it, not

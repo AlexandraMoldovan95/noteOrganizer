@@ -257,6 +257,7 @@ from noteorganizer.core.storage import (
     save_settings,
     mend_surrogates,
     json_text,
+    json_from_text,
     MAX_TEMPLATES,
     normalize_template,
     load_templates,
@@ -11797,7 +11798,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
                 try:
                     with open(imported_notes_path, "r", encoding="utf-8") as f:
-                        imported_notes = json.load(f)
+                        imported_notes = json_from_text(f.read())
                 except (*_core_paths.JSON_UNREADABLE, IOError) as e:
                     state["error"] = f"Couldn't read the notes in that backup:\n{e}"
                     state["done"] = True
@@ -11818,7 +11819,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     if os.path.exists(extra_path):
                         try:
                             with open(extra_path, "r", encoding="utf-8") as f:
-                                loaded = json.load(f)
+                                loaded = json_from_text(f.read())
                             if isinstance(loaded, list):
                                 state[key] = loaded
                         except (*_core_paths.JSON_UNREADABLE, IOError, OSError):
@@ -11834,7 +11835,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 if os.path.exists(settings_path):
                     try:
                         with open(settings_path, "r", encoding="utf-8") as f:
-                            loaded = json.load(f)
+                            loaded = json_from_text(f.read())
                         cats = loaded.get("categories") if isinstance(loaded, dict) else None
                         if isinstance(cats, dict):
                             state["imported_categories"] = cats

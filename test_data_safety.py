@@ -1876,6 +1876,62 @@ check(f"a templates file past the ceiling loads its first "
       and _tpMany[-1]["name"] == "t%05d" % (_storage.MAX_TEMPLATES - 1))
 os.remove(_paths.TEMPLATES_FILE)
 
+# Half an emoji, spelled as a JSON escape: a lone surrogate, which Tk will
+# not draw -- one in a note's title stopped the app starting, at every
+# launch (2026-10-28). Every data file, and a share code, reads it mended.
+_LONE = '"t' + chr(92) + 'ud83d x"'
+
+
+def _encodes(value):
+    try:
+        json.dumps(value, ensure_ascii=False).encode("utf-8")
+        return True
+    except UnicodeEncodeError:
+        return False
+
+
+_lnKept = {}
+for _p in (_paths.DATA_FILE, _paths.TEMPLATES_FILE, _paths.SETTINGS_FILE,
+           _paths.TRASH_FILE):
+    if os.path.exists(_p):
+        with open(_p, "rb") as _f:
+            _lnKept[_p] = _f.read()
+with open(_paths.DATA_FILE, "w", encoding="utf-8") as _f:
+    _f.write('[{"id": 1, "title": %s, "body": %s}]' % (_LONE, _LONE))
+_lnNotes, _lnReport = _storage.load_notes(None)
+with open(_paths.TEMPLATES_FILE, "w", encoding="utf-8") as _f:
+    _f.write('[{"name": %s, "body": "b"}]' % _LONE)
+with open(_paths.SETTINGS_FILE, "w", encoding="utf-8") as _f:
+    _f.write('{"username": %s}' % _LONE)
+with open(_paths.TRASH_FILE, "w", encoding="utf-8") as _f:
+    _f.write('[{"id": 2, "title": %s, "deleted_at": "2026-10-28 00:00:00"}]' % _LONE)
+_lnAll = [_lnNotes, _storage.load_templates(), _storage.load_settings(),
+          _storage.load_trash()]
+check("a lone surrogate spelled in a data file is mended as each file is "
+      "read: notes, templates, settings, Trash",
+      all(_encodes(v) for v in _lnAll) and len(_lnNotes) == 1
+      and _lnNotes[0]["title"] == "t� x"
+      and _lnAll[1][0]["name"] == "t� x")
+import base64 as _b64
+import zlib as _zlib
+from noteorganizer.core import sharing as _sharingL
+_lnCode = "NOTE1:" + _b64.urlsafe_b64encode(_zlib.compress(
+    ('{"v": 1, "notes": [{"title": %s, "body": "b"}]}' % _LONE).encode("utf-8"))).decode()
+try:
+    _lnShared = _sharingL.decode_share_code(_lnCode)
+except ValueError as _e:
+    _lnShared = _e
+check(f"...and in a share code ({type(_lnShared).__name__})",
+      _encodes(_lnShared) if not isinstance(_lnShared, Exception) else False)
+# Each file put back as it was before these checks, or taken away again.
+for _p in (_paths.DATA_FILE, _paths.TEMPLATES_FILE, _paths.SETTINGS_FILE,
+           _paths.TRASH_FILE):
+    if _p in _lnKept:
+        with open(_p, "wb") as _f:
+            _f.write(_lnKept[_p])
+    elif os.path.exists(_p):
+        os.remove(_p)
+
 # ---- Damage the parser does not call JSON is damage all the same ----
 # Two more ways a file can be unreadable, and neither raised the
 # JSONDecodeError the loaders caught: bytes that are not UTF-8 (a file

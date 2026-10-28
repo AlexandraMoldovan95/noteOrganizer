@@ -11,6 +11,7 @@ writer goes through one atomic helper. docs/CODE_TOUR.md walks through it.
 
 import json
 import os
+import re
 import shutil
 import time
 from datetime import datetime
@@ -67,13 +68,27 @@ def choose_trash_window(days):
     return save_settings(settings)
 
 
+# A JSON escape can spell half an emoji, a lone surrogate, which Tk will not
+# draw: one in a note's title stopped the app starting, at every launch.
+_ESCAPED_SURROGATE = re.compile(r"\\u[dD][89a-fA-F]")
+
+
+def json_from_text(text):
+    """*text* read as JSON, every lone surrogate an escape spells mended
+    (mend_surrogates). Every data file and every import reads through here.
+    Looked for in the text first: mending rebuilds every value, and a file
+    the app wrote never needs it."""
+    data = json.loads(text)
+    return mend_surrogates(data) if _ESCAPED_SURROGATE.search(text) else data
+
+
 # ---- Settings file (read/modify/write, so keys never clobber each other) ----
 
 def load_settings():
     if os.path.exists(paths.SETTINGS_FILE):
         try:
             with open(paths.SETTINGS_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
+                data = json_from_text(f.read())
             if isinstance(data, dict):
                 return data
         except (*paths.JSON_UNREADABLE, IOError, OSError):
@@ -152,7 +167,7 @@ def load_templates():
     if os.path.exists(paths.TEMPLATES_FILE):
         try:
             with open(paths.TEMPLATES_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
+                data = json_from_text(f.read())
             if isinstance(data, list):
                 kept = []
                 for t in data:
@@ -191,7 +206,7 @@ def load_trash():
     if os.path.exists(paths.TRASH_FILE):
         try:
             with open(paths.TRASH_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
+                data = json_from_text(f.read())
             if isinstance(data, list):
                 kept = [e for e in data if isinstance(e, dict)]
                 if len(kept) != len(data):
@@ -512,7 +527,7 @@ def load_notes(version_change=None):
             report["version_backup_failed"] = report["version_backup_path"] is None
         try:
             with open(paths.DATA_FILE, "r", encoding="utf-8") as f:
-                raw = json.load(f)
+                raw = json_from_text(f.read())
         except (*paths.JSON_UNREADABLE, IOError, OSError):
             raw = None
         if not isinstance(raw, list):

@@ -7505,5 +7505,24 @@
       "test_richtext"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "IX23",
+    "about": "a lone surrogate a data file or share code spells is read as it is",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "    return mend_surrogates(data) if _ESCAPED_SURROGATE.search(text) else data\n",
+        "replace": "    return data\n"
+      }
+    ],
+    "must_fail": [
+      "a lone surrogate spelled in a data file is mended as each file is read",
+      "...and in a share code"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
   }
 ]

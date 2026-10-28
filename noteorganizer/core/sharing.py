@@ -59,7 +59,7 @@ import shutil
 import zlib
 
 from .paths import JSON_UNREADABLE
-from .storage import mend_surrogates
+from .storage import json_from_text, mend_surrogates
 
 # ---- Share codes (move notes between devices as copy-paste text) ----
 #
@@ -186,7 +186,8 @@ def decode_share_code(code):
             "Backup → Export)."
         )
     try:
-        payload = json.loads(raw.decode("utf-8"))
+        # Half an emoji spelled as an escape, mended (json_from_text).
+        payload = json_from_text(raw.decode("utf-8"))
     except (*JSON_UNREADABLE, ValueError):
         raise ValueError(
             "This share code is damaged or incomplete. Ask the sender to copy "
