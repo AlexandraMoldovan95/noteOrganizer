@@ -5956,7 +5956,7 @@
     "id": "TN01",
     "about": "an attachment's alias (8.3 short name, ::$DATA, a symlink) resolves to the file it stands for",
     "edits": [{"file": "noteorganizer/core/storage.py",
-               "find": "        if os.path.normcase(candidate) != os.path.normcase(named):\n            return None\n",
+               "find": "        if (os.path.normcase(candidate) != os.path.normcase(named)\n                or os.path.basename(candidate) != stored_as):\n            return None\n",
                "replace": ""}],
     "must_fail": ["a name that reaches a file under another name is refused",
                   "...and a delete by an alias leaves the file"],
@@ -6652,5 +6652,42 @@
       "test_data_safety"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "DR18",
+    "about": "an attachment name with a path in it is not refused by name",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "    if (os.path.basename(stored_as.replace(\"\\\\\", \"/\")) != stored_as\n            or stored_as in (\".\", \"..\")):\n",
+        "replace": "    if False:\n"
+      }
+    ],
+    "must_fail": [],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "survives",
+    "note": "Equivalent: without the tidying it once did, the resolved-path comparison below refuses 'zz/../x' and './x' too. Kept as the plain statement of the rule."
+  },
+  {
+    "id": "DR19",
+    "about": "an attachment named in other capitals reaches the file of that name",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "                or os.path.basename(candidate) != stored_as):\n",
+        "replace": "                or False):\n"
+      }
+    ],
+    "must_fail": [
+      "a name that reaches a file under another name is refused",
+      "...and a delete by an alias leaves the file"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed",
+    "note": "Killed on Windows, whose file names ignore case; elsewhere other capitals name another file."
   }
 ]

@@ -1408,15 +1408,23 @@ if os.name == "nt":
         _short = os.path.basename(_short_buf.value)
         if _short.lower() != os.path.basename(_two_names):
             _aliases.append(_short)   # absent where the volume makes no short names
+    # Another case, which Windows opens as the same file: every spare and
+    # claimed set compares names exactly, so a backup's Trash entry naming a
+    # kept note's photo in capitals was spared by none and deleted it
+    # (2026-10-28, the final audit).
+    _aliases.append("20261003091512345678_HOLIDAY.JPG")
+    _aliases.append("zz\\..\\20261003091512345678_holiday.jpg")
 else:
     os.symlink(_two_names, os.path.join(_paths.ATTACHMENTS_DIR, "202610~1.JPG"))
     _aliases.append("202610~1.JPG")
+# A path that comes back to the same name, which the guard's own tidying
+# used to collapse before it compared.
+_aliases += ["zz/../20261003091512345678_holiday.jpg",
+             "./20261003091512345678_holiday.jpg"]
 check("a name that reaches a file under another name is refused (%s)" % _aliases,
       bool(_aliases) and all(_storage._attachment_path_within(a) is None for a in _aliases))
-check("...while the file's own name still resolves, in any case Windows allows",
-      _storage._attachment_path_within("20261003091512345678_holiday.jpg") is not None
-      and (os.name != "nt" or _storage._attachment_path_within(
-          "20261003091512345678_HOLIDAY.JPG") is not None))
+check("...while the file's own name still resolves",
+      _storage._attachment_path_within("20261003091512345678_holiday.jpg") is not None)
 _storage._delete_attachment_files([{"attachments": [{"stored_as": a} for a in _aliases]}])
 check("...and a delete by an alias leaves the file", os.path.exists(_two_names))
 for _left in (_two_names, os.path.join(_paths.ATTACHMENTS_DIR, "202610~1.JPG")):

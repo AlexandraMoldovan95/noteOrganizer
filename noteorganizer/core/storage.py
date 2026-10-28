@@ -218,18 +218,24 @@ def _attachment_path_within(stored_as):
         # later remove or startfile raises ValueError, which the sinks'
         # "except OSError" would not catch.
         return None
+    if (os.path.basename(stored_as.replace("\\", "/")) != stored_as
+            or stored_as in (".", "..")):
+        # One bare file name, as the app stores it: "zz/../x" and "./x" came
+        # back to a file once tidied, past every exact comparison of names.
+        return None
     try:
         base = os.path.realpath(paths.ATTACHMENTS_DIR)
-        named = os.path.normpath(os.path.join(base, stored_as))
+        named = os.path.join(base, stored_as)
         candidate = os.path.realpath(named)
         if candidate == base:
             return None  # the folder itself, not a file in it
         if os.path.commonpath([base, candidate]) != base:
             return None  # escaped the attachments folder
-        # The file reached must be the file named: NTFS aliases (a short
-        # name, "::$DATA") passed every name check upstream and reached
-        # another file. ISSUES_LOG: "A file with two names".
-        if os.path.normcase(candidate) != os.path.normcase(named):
+        # The file reached must be the file named, case and all: NTFS
+        # aliases (a short name, "::$DATA", capitals) reached another note's
+        # file. ISSUES_LOG: "A file with two names".
+        if (os.path.normcase(candidate) != os.path.normcase(named)
+                or os.path.basename(candidate) != stored_as):
             return None
     except (ValueError, OSError):
         # commonpath raises across drives and UNC roots, realpath on a NUL:
