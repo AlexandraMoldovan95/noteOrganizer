@@ -1763,6 +1763,33 @@ check(f"a turn-off whose own save clears the text keeps that text, the newest, w
       f"{(_rd_prev.get('recurrence') or {}).get('freq')})",
       'NEW WORK' in (_rd_prev.get('body') or '')
       and (_rd_prev.get('recurrence') or {}).get('freq') == 'weekly')
+# ...and so when a save made while the turn-off waited has a copy of its own:
+# that copy's older text went in, and the words the last save took were in no
+# file (round 5). Turn-off picked, a big delete autosaved, words added, cleared.
+_ro_fixture()
+app.notes[0]['body'] = 'FIRST PART ' + 'early words ' * 25
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.rec_freq_var.set(NO.FREQ_LABELS[''])
+app.on_recurrence_changed(); app.update()
+app._themed_dialog = lambda *a, **k: True
+try:
+    app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'kept line')
+    app._autosave_now(); app.update()
+    _rh_held = getattr(app, '_held_text_rescue', None) is not None
+    app.body_text.insert('end-1c', ' SECOND PART ' + 'later words ' * 25)
+    app._autosave_now(); app.update()
+    app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'done')
+    app.save_current_note(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+_rd_prev = app.find_note(1).get('_prev') or {}
+check(f"...and so when a save made while the turn-off waited holds a copy of its "
+      f"own (held: {_rh_held}; {(_rd_prev.get('body') or '')[:24]!r}, "
+      f"{(_rd_prev.get('recurrence') or {}).get('freq')})",
+      _rh_held and 'SECOND PART' in (_rd_prev.get('body') or '')
+      and (_rd_prev.get('recurrence') or {}).get('freq') == 'weekly'
+      and not app.find_note(1)['recurrence'].get('freq'))
 
 # ---- "THIS OCCURRENCE ONLY" KEEPS WHAT A DAY CANNOT HOLD ----
 # The day's text goes to the day; a file attached and a tick made in the

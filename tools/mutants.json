@@ -7620,7 +7620,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        elif (not takes_text and isinstance(existing, dict)\n              and set(existing) <= set(self._RESCUE_TEXT_KEYS)\n",
+        "find": "        elif (isinstance(existing, dict)\n              and set(existing) <= set(self._RESCUE_TEXT_KEYS)\n",
         "replace": "        elif (False and isinstance(existing, dict)\n              and set(existing) <= set(self._RESCUE_TEXT_KEYS)\n"
       }
     ],
@@ -9156,6 +9156,24 @@
     ],
     "suites": [
       "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR59",
+    "about": "a turn-off that also takes text still takes a held save's older copy's text, so the newest words are in no file",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if takes_text:\n            pass                # the newest text, whatever an older copy holds\n",
+        "replace": "        if takes_text and not (held is not None and existing is held):\n            pass                # the newest text, whatever an older copy holds\n"
+      }
+    ],
+    "must_fail": [
+      "...and so when a save made while the turn-off waited holds a copy of its own"
+    ],
+    "suites": [
+      "qa5"
     ],
     "expect": "killed"
   }

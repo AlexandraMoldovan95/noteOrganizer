@@ -21343,10 +21343,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         held = getattr(self, "_held_text_rescue", None)
         self._held_text_rescue = None
         existing = note.get("_prev")
-        if held is not None and existing is held:
+        if takes_text:
+            pass                # the newest text, whatever an older copy holds
+        elif held is not None and existing is held:
             for key in self._RESCUE_TEXT_KEYS:
                 prev[key] = copy.deepcopy(held.get(key))
-        elif (not takes_text and isinstance(existing, dict)
+        elif (isinstance(existing, dict)
               and set(existing) <= set(self._RESCUE_TEXT_KEYS)
               and not rescue_copy_spent(note)):
             for key in self._RESCUE_TEXT_KEYS:
