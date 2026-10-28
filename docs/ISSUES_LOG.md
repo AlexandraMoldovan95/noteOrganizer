@@ -198,6 +198,7 @@ is in the table below as well.
 | [Round four: days kept but not used, loss counted in words, and a run that saves nothing](#round-four-days-kept-but-not-used-loss-counted-in-words-and-a-run-that-saves-nothing) | A value kept "only for later" is still read now by everything that read it before; a measure of harm needs a lower bound as well as an upper one. | next |
 | [Round four: what a click put away, and what a screen can draw](#round-four-what-a-click-put-away-and-what-a-screen-can-draw) | A limit on what is typed is no limit on what is drawn; and a part hidden with the keyboard inside is one rule, not a list. | next |
 | [Round five: a retry paid at every read, and shares in the wrong unit](#round-five-a-retry-paid-at-every-read-and-shares-in-the-wrong-unit) | A condition added to one branch, or a unit to one side of a fraction, changes a question asked in more than one place; a check's deadline is a claim about the machine. | next |
+| [Round five: the shortcuts under a picture, and a toolbar laid out again](#round-five-the-shortcuts-under-a-picture-and-a-toolbar-laid-out-again) | A rule about where the keyboard may go is asked of every road that moves it, the app's own shortcuts too; and a part is put away when its manager forgets it, not while it waits to be drawn. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -2661,6 +2662,55 @@ the app holds is never less than its files, which a held start had made untrue.
 has changed a question that was asked in more than one place. Ask it everywhere, in the same units.
 And a check's deadline is a claim about the machine, not the code: wait for the work, and fail only
 on a ceiling no working run comes near.
+
+### Round five: the shortcuts under a picture, and a toolbar laid out again
+
+*(2026-10-28 · found by the final audit's fifth break-it round, which attacked round four's fixes
+by name; this is its interface half)*
+
+**Symptom:**
+- **Keys under a picture, by a shortcut.** Round four's preview holds the keyboard for Tab and
+  clicks. Ctrl+N and Ctrl+F got past it: each gave the keyboard to a box under the picture, and
+  the picture stayed. Ctrl+F then Escape left it in the note's text under the picture, and what was
+  typed there was saved. Ctrl+N's title was typed blind. A table cell's palette outlived Ctrl+N
+  the same way, floating over the new note.
+- **A toolbar laid out again.** Round four's watcher hands the keyboard on from a part put away.
+  It read a formatting button laid out again as put away. Every width change that moves the
+  toolbar's buttons between rows (a snap, maximise, restore) sent the keyboard from B into the
+  note, and the next Space replaced the selected words. That was a regression of round four.
+- **Rows counted with the separator.** Tab at the last cell of a table with a separator row (a
+  column resized or hidden, a markdown table pasted) added the row and opened no editor. The
+  keyboard fell to nothing.
+- **A table kept as text in mid-edit.** Enter, Tab at the last cell, or Insert row below could take
+  a table past the height drawn as a grid. The table was then left as text, with the keyboard on
+  nothing, or (from the menu) at the note's end.
+- **Smaller.** A paste past a limited box's limit was refused whole, while the title's box shortens
+  it. Exporting or copying a table walked each row's line once for every empty cell. One row of
+  3,000 empty cells took 4.5 s, a 30 × 100 table 120 ms. And a picture's frame of 0.6 ms ticked
+  every millisecond, half a core while its preview was open.
+
+**Root cause:** the preview's rule covered the keys typed at it, not the app's own shortcuts. Those
+closed only a popup holding typed work, and moved the keyboard into the editor under the picture.
+The watcher judged a part put away by its being unmapped two idle rounds later, but mapping lags
+layout. When a row's size changes, pack asks the parent first, so a button packed straight back
+still reads as unmapped. Tab used `nrows`, the table's text lines with the separator, as a data
+row. And the routes that reopen a cell after a commit had no answer for a grid that had gone.
+
+**Fix:**
+- A shortcut that gives the editor the keyboard closes a popup with nothing to lose, as a click
+  outside does (`_leave_settings_for_the_editor`). The template editor still asks.
+- The watcher leaves the keyboard where it is when the part and every parent are managed again.
+- Tab counts data rows. A commit that leaves a table as text puts the keyboard in its text, at the
+  end of the cell being edited (`_keyboard_to_kept_table`).
+- A limited box's paste deletes the selection and pastes what fits, as the title's does, the
+  owner's choice. A key past the limit is still refused.
+- The export finds a row's pipes once, and sorts the merges into rows once. A frame of 10 ms or
+  less plays at 100 ms, as browsers play it.
+- qa1, qa6, qa7, `test_richtext`; mutants RV01–RV10, with RT16, RT17, RU09 and RU32 re-aimed.
+
+**Takeaway:** a rule about where the keyboard may go must hold on every road that moves it,
+including the app's own shortcuts. And a part is put away when its manager forgets it, not while it
+waits to be drawn: ask the layout, not the screen.
 
 
 ## Tk & platform gotchas
