@@ -5100,7 +5100,9 @@ def _rb_inside(w, row):
             and w.winfo_x() + w.winfo_width() <= row.winfo_width())
 
 
-_rb_cat = 'Quarterly planning for the north office and everyone in it, too'[:80]
+# As long as a category may be, in wide letters: an ordinary 64 left the row
+# room enough on Windows' narrower font, and the check passed with the fix out.
+_rb_cat = ('Quarterly ' + 'W' * 80)[:80]
 _rb_kept_tpl = list(app.templates)
 app.templates = [{'name': 'Onboarding checklist for new staff in the north office, '
                           'with every form they need on day one', 'body': 'x'}]
@@ -5108,7 +5110,9 @@ NO.CATEGORY_COLORS[_rb_cat] = '#5b8def'
 app.notes = [NO.normalize_note({'id': 961, 'title': 'RbNote', 'body': 'b',
                                 'category': _rb_cat})]
 app.save_notes()
-_rb_seen, _rb_where = {}, None
+_rb_seen, _rb_where, _rb_room = {}, None, None
+# The name drawn whole must want more than its row, or the check proves nothing.
+_rb_need = app._cal_font(('Segoe UI', 10, 'bold'))[0].measure(_rb_cat)
 try:
     app.show_settings_page()
     # The names drawn as they fit: their first letters always show.
@@ -5123,6 +5127,8 @@ try:
                                 if isinstance(c, tk.Label))
             if _rb_kind in ('pencil', 'trash') and _rb_word in _rb_name:
                 _rb_seen[_rb_section, _rb_kind] = _rb_inside(_rb_icon, _rb_row)
+                if _rb_section == 'categories':
+                    _rb_room = _rb_row.winfo_width()
     app.toggle_settings_panel('statistics')
     _kv_settle(10)
     _rb_pill = next((l.master for l in _tl_widgets(app.settings_statistics_panel, tk.Label)
@@ -5142,8 +5148,10 @@ finally:
     app.save_notes()
     _kv_settle(4)
 check(f"a long name leaves its row's buttons in the row: the template's pencil "
-      f"and bin, the category's, and the statistics' count ({_rb_seen}; {_rb_where})",
-      len(_rb_seen) == 5 and all(_rb_seen.values()))
+      f"and bin, the category's, and the statistics' count ({_rb_seen}; {_rb_where}; "
+      f"the category's name {_rb_need}px for a {_rb_room}px row)",
+      len(_rb_seen) == 5 and all(_rb_seen.values())
+      and _rb_room is not None and _rb_need > _rb_room)
 
 # ---- KEYBOARD: a part put away by a click hands the keyboard on ----
 # Round 4: a click takes no keyboard, so folding the checklist with the caret
