@@ -22108,13 +22108,31 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """The toast's Undo pressed from the keyboard: the banner goes, and
         the keyboard with it, so it lands on the list -- or the tabs."""
         self._run_toast_action()
+        target = self._toast_landing()
+        if target is not None:
+            target.focus_set()
+
+    def _toast_landing(self):
+        """Where the keyboard goes when the banner's Undo goes from under it:
+        the note list, or the tabs -- or, on Settings, the entry of the
+        section showing."""
         if getattr(self, "_settings_open", False):
-            return
+            return (getattr(self, "_settings_nav_buttons", None) or {}).get(
+                getattr(self, "_settings_selected_section", None))
         try:
             on_notes = self.notebook.index("current") == self.TAB_NOTES
         except tk.TclError:
-            return
-        (self.canvas if on_notes else self.notebook).focus_set()
+            return None
+        return self.canvas if on_notes else self.notebook
+
+    def _keyboard_off_toast(self):
+        """The Undo hidden while the keyboard is on it -- the banner gone, or
+        a banner with nothing to offer in its place: the keyboard lands where
+        the Undo's own key sends it, never on a word no longer on screen."""
+        if self._holds_keyboard(self.toast_action_lbl):
+            target = self._toast_landing()
+            if target is not None:
+                target.focus_set()
 
     def _toast_undo_key(self, event):
         """Ctrl+Z, while the toast offers an Undo and the keyboard is not in
@@ -22134,6 +22152,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return "break"
 
     def _hide_toast(self):
+        self._keyboard_off_toast()
         try:
             self.toast_frame.place_forget()
         except tk.TclError:
@@ -22203,6 +22222,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._fill(self.toast_action_lbl, color)
                 self.toast_action_lbl.pack(side="left", padx=(0, 14))
             else:
+                self._keyboard_off_toast()
                 self.toast_action_lbl.pack_forget()
             self.toast_frame.place(relx=0.5, rely=0.0, anchor="n", y=4)
             self.toast_frame.lift()

@@ -3716,6 +3716,36 @@ check(f'while the keyboard is on Undo the toast waits for it ({_kz_waited}), '
       f'and Space takes the offer',
       _kz_waited and 'KeyUndoMe' in _titles() and 'KeyUndoMe' not in _trash_titles())
 app._hide_toast()
+# Round 2 of the final audit: a plain banner in its place hid the Undo the
+# keyboard was on, and nothing moved the keyboard -- left on a word no
+# longer on screen, where Tab started again from the window's top.
+app.notebook.select(app.TAB_NOTES)
+app.refresh_note_list()
+_kt_settle()
+tk.Misc.focus_set = _kt_record
+try:
+    app._show_toast('Note moved to Trash', action=lambda: None)
+    _kt_settle(2)
+    _kz_on = _kt_take(app.toast_action_lbl)
+    del _kt_asked[:]
+    app._show_toast('Exported to notes.txt')
+    _kt_settle(2)
+    check(f'a plain banner over the Undo the keyboard is on hides the Undo and '
+          f'takes the keyboard to the note list ({_kz_on}, asked {_kt_asked})',
+          _kz_on and not app.toast_action_lbl.winfo_ismapped()
+          and _kt_asked[-1:] == [app.canvas])
+    app._show_toast('Note moved to Trash', action=lambda: None)
+    _kt_settle(2)
+    _kz_on = _kt_take(app.toast_action_lbl)
+    del _kt_asked[:]
+    app._hide_toast()
+    _kt_settle(2)
+    check(f'...and the banner going from under the keyboard does the same '
+          f'({_kz_on}, asked {_kt_asked})',
+          _kz_on and _kt_asked[-1:] == [app.canvas])
+finally:
+    tk.Misc.focus_set = _kt_real_focus_set
+app._hide_toast()
 app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
 app.refresh_note_list()
 _kt_settle()

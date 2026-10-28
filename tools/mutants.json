@@ -1466,6 +1466,26 @@
     "expect": "killed"
   },
   {
+    "id": "KR11",
+    "about": "a plain banner hides the Undo the keyboard is on and leaves the keyboard there",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            else:\n                self._keyboard_off_toast()\n                self.toast_action_lbl.pack_forget()\n",
+               "replace": "            else:\n                self.toast_action_lbl.pack_forget()\n"}],
+    "must_fail": ["a plain banner over the Undo the keyboard is on hides the Undo and"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "KR12",
+    "about": "the banner goes from under the keyboard on its Undo and leaves the keyboard on it",
+    "edits": [{"file": "note_organizer.py",
+               "find": "    def _hide_toast(self):\n        self._keyboard_off_toast()\n",
+               "replace": "    def _hide_toast(self):\n"}],
+    "must_fail": ["...and the banner going from under the keyboard does the same"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
     "id": "A01",
     "about": "a highlight given in an open cell reaches the note only when the cell closes",
     "edits": [
