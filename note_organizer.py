@@ -23,6 +23,7 @@ import re
 import math
 import functools
 from datetime import datetime, date as date_cls, timedelta
+from types import SimpleNamespace
 
 try:
     from PIL import Image, ImageTk
@@ -3734,6 +3735,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pass
         entry.bind("<Return>", lambda _e: self._editor_newline())
         entry.bind("<Shift-Return>", lambda _e: self._editor_newline())
+        # The cell's menu from the keyboard, as a drawn control's opens: every
+        # row, column and merge command lived in a right-click alone. "App"
+        # is Windows' menu key, "Menu" X11's; Tk raises on the one it lacks.
+        for seq in ("<Shift-F10>", "<App>", "<Menu>"):
+            try:
+                entry.bind(seq, lambda _e, i=info: self._grid_menu_from_keys(i))
+            except tk.TclError:
+                pass
         # Escape LEAVES the cell and keeps what was typed, exactly as Tab
         # and a click elsewhere do -- what the User Guide promises. It
         # used to close the editor without a commit, and the keystrokes
@@ -6324,17 +6333,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 width=3, height=1, relief="flat", cursor="hand2",
                 command=lambda h=hex_color: choose(h))
             swatch.grid(row=i // 5, column=i % 5, padx=4, pady=4)
+            self._button_choice(swatch)
         plain = tk.Button(
             outer, text="Theme color", relief="flat", cursor="hand2",
             bg=self.colors["card"], fg=self.colors["text"],
             command=lambda: choose(None))
         plain.pack(pady=(4, 8))
-        popup.update_idletasks()
-        popup.geometry(f"+{x_root}+{y_root}")
-        popup.bind("<FocusOut>",
-                   lambda _e: (None if getattr(self, "_hiding_popups", False)
-                               else self._dismiss_mini_popup()))
-        popup.focus_set()
+        self._button_choice(plain)
+        self._place_grid_palette(popup, x_root, y_root)
+
+    def _place_grid_palette(self, popup, x_root, y_root):
+        """A table's colour palette placed as every popup is: a click outside
+        or Escape closes it, the arrows walk it. A <FocusOut> on the window
+        closed it at the first Tab, its own buttons' too, leaving the
+        keyboard nowhere. Opened from the cell's menu by key, it takes it."""
+        self._place_mini_popup(popup, anchor_xy=(x_root, y_root))
+        if getattr(self, "_grid_menu_keys", False):
+            choices = self._walk_choices(popup, drawn=False)
+            if choices:
+                choices[0].focus_set()
 
     def _grid_merge_with(self, info, r, c, toward):
         """The right-click "Merge with cell to the left" (*toward* "left")
@@ -6642,6 +6659,62 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._grid_paste_cells(fresh, r, c)
         return "break"
 
+    def _grid_menu_from_keys(self, info):
+        """Shift+F10 or the menu key in a cell: its menu at the cell, as a
+        right-click opens it at the pointer; and once the menu, or a palette
+        it opened, has gone, the keyboard back in the table."""
+        editor = getattr(self, "_cell_editor", None)
+        if editor is None:
+            return "break"
+        r, c, canvas = editor["r"], editor["c"], info["canvas"]
+        cell = info["cells"].get((r, c))
+        try:
+            x = canvas.winfo_rootx() + int(cell["x"] - canvas.canvasx(0)) + 8
+            y = canvas.winfo_rooty() + int(cell["y"] - canvas.canvasy(0)
+                                           + cell["h"] // 2)
+        except (tk.TclError, TypeError, KeyError):
+            return "break"
+        anchor_line = self._grid_first_line(info)
+        self._editor_context_menu(info, SimpleNamespace(
+            widget=editor["entry"], x=8, y=cell["h"] // 2, x_root=x, y_root=y,
+            keys=True))
+        self.after(100, lambda: self._grid_keyboard_back(anchor_line, r, c))
+        return "break"
+
+    def _grid_keyboard_back(self, anchor_line, r, c, tries=0):
+        """Into the cell the menu was opened from -- or the nearest one left,
+        after a row or column went -- once nothing asks or floats over the
+        table any more, and only if the keyboard is on nothing."""
+        menu = getattr(self, "_context_menu", None)
+        try:
+            posted = menu is not None and bool(menu.winfo_ismapped())
+        except tk.TclError:
+            posted = False
+        if (posted or self._a_dialog_is_asking()
+                or getattr(self, "_mini_popup", None) is not None):
+            if tries < 3000:            # five minutes of a menu left open
+                self.after(100, lambda: self._grid_keyboard_back(
+                    anchor_line, r, c, tries + 1))
+            return
+        self._grid_menu_keys = False
+        if not self._keyboard_nowhere():
+            return
+        info = (self._grid_at_line(anchor_line)
+                if anchor_line is not None else None)
+        if info is None:
+            self._keyboard_to(self.body_text)
+            return
+        r = max(0, min(r, info["data_rows"] - 1))
+        c = max(0, min(c, info["ncols"] - 1))
+        while (r, c) not in info["cells"] and c > 0:
+            c -= 1                       # covered by a merge: its anchor
+        while (r, c) not in info["cells"] and r > 0:
+            r -= 1
+        if (r, c) in info["cells"]:
+            self._open_cell_editor(info, r, c, select=False)
+        else:
+            self._keyboard_to(self.body_text)
+
     def _editor_context_menu(self, info, event):
         editor = getattr(self, "_cell_editor", None)
         if editor is None:
@@ -6754,12 +6827,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._grid_apply_style(info, box, "highlight", color)
 
         self._highlight_swatch_column(popup, choose)
-        popup.update_idletasks()
-        popup.geometry(f"+{x_root}+{y_root}")
-        popup.bind("<FocusOut>",
-                   lambda _e: (None if getattr(self, "_hiding_popups", False)
-                               else self._dismiss_mini_popup()))
-        popup.focus_set()
+        self._place_grid_palette(popup, x_root, y_root)
 
     def _grid_align_context(self):
         """The alignment of the cell the user is in -- the open editor's,
@@ -6982,6 +7050,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return "break"
 
     def _grid_menu(self, info, event, at=None):
+        # Opened from the keyboard, its palettes take the keyboard too.
+        self._grid_menu_keys = bool(getattr(event, "keys", False))
         canvas = info["canvas"]
         hit = at if at is not None else self._grid_cell_at_xy(
             info, canvas.canvasx(event.x), canvas.canvasy(event.y))

@@ -192,6 +192,9 @@ RULES = [
                 "asked by a key press and by the grid's own resize, both of "
                 "which arrive after the page is drawn; a caller that runs "
                 "before Tk goes idle asks _calendar_is_showing instead",
+            "_grid_keyboard_back":
+                "asks whether a right-click menu is still posted: a menu has "
+                "no place in any layout, only on the screen or not",
         },
         window=1,
     ),

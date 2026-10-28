@@ -8942,5 +8942,59 @@
       "qa6"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "RU23",
+    "about": "no key opens a table cell's menu",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                entry.bind(seq, lambda _e, i=info: self._grid_menu_from_keys(i))\n",
+        "replace": "                pass\n"
+      }
+    ],
+    "must_fail": [
+      "Shift+F10 in a table cell opens the cell's menu, rows, columns and merges in it"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RU24",
+    "about": "a table's colour palette closes at the first Tab",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._place_mini_popup(popup, anchor_xy=(x_root, y_root))\n",
+        "replace": "        self._place_mini_popup(popup, anchor_xy=(x_root, y_root))\n        popup.bind(\"<FocusOut>\", lambda _e: self._dismiss_mini_popup())\n"
+      }
+    ],
+    "must_fail": [
+      "...a palette it opens takes the keyboard and keeps it through Tab"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RU25",
+    "about": "after a table cell's menu from the keyboard, the keyboard is left on nothing",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self.after(100, lambda: self._grid_keyboard_back(anchor_line, r, c))\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "...and the keyboard comes back into the cell once they are gone"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
   }
 ]

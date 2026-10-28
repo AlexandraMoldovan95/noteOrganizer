@@ -5247,6 +5247,80 @@ app.save_notes()
 app.refresh_note_list()
 _kv_settle()
 
+# ---- KEYBOARD: a table cell's menu ----
+# Round 4: every row, column and merge command of a table lived in a
+# right-click alone, and its two palettes closed at the first Tab with the
+# keyboard on nothing. Shift+F10 in a cell opens the cell's menu there, a
+# palette it opens takes the keyboard and keeps it, and the keyboard comes
+# back into the cell once they are gone.
+def _tm_labels(menu):
+    out = []
+    for i in range((menu.index('end') or -1) + 1):
+        if menu.type(i) in ('command', 'cascade'):
+            out.append(str(menu.entrycget(i, 'label')))
+        if menu.type(i) == 'cascade':
+            out += _tm_labels(menu.nametowidget(menu.entrycget(i, 'menu')))
+    return out
+
+
+app.notes = [NO.normalize_note({'id': 981, 'title': 'TmNote',
+                                'body': '| Item | Qty |\n| --- | --- |\n| cinnamon | 1 |'})]
+app.save_notes()
+app.refresh_note_list()
+app.open_note_in_tab(app.notes[0])
+_kv_settle(8)
+_tm_grid = app._grid_at_line(1)
+_tm_posted, _tm_in_palette, _tm_back, _tm_found = [], [], False, []
+_tm_real_popup = tk.Menu.tk_popup
+tk.Menu.tk_popup = lambda _m, *a, **k: _tm_posted.append(_m)
+try:
+    if _tm_grid is not None:
+        app._open_cell_editor(_tm_grid, 1, 0)
+        _kv_settle(4)
+        _take_focus(app._cell_editor['entry'])
+        app.event_generate('<Shift-F10>')           # to the cell, where the keyboard is
+        _tm_menu = _tm_posted[-1] if _tm_posted else None
+        _tm_found = _tm_labels(_tm_menu) if _tm_menu is not None else []
+        if _tm_menu is not None:
+            _tm_menu.invoke(next(i for i in range(_tm_menu.index('end') + 1)
+                                 if _tm_menu.type(i) == 'command' and str(
+                                     _tm_menu.entrycget(i, 'label')).startswith('Highlight')))
+        _kv_settle(4)
+        _tm_pop = app._mini_popup
+        for _tm_key in ('<Tab>', '<Tab>', '<Tab>'):
+            try:                                    # gone, it holds nothing
+                app.nametowidget(str(app.tk.call('focus', '-lastfor', _tm_pop))
+                                 ).event_generate(_tm_key)
+                _kv_settle(2)
+                _tm_in_palette.append(
+                    app._mini_popup is _tm_pop and str(app.tk.call(
+                        'focus', '-lastfor', _tm_pop)).startswith(str(_tm_pop) + '.'))
+            except (tk.TclError, KeyError, AttributeError):
+                _tm_in_palette.append(False)
+        if app._mini_popup is not None:
+            app.event_generate('<Escape>')
+        _kv_settle(20)
+        _tm_editor = getattr(app, '_cell_editor', None)
+        _tm_back = (_tm_editor is not None and _pa_holder() is _tm_editor['entry']
+                    and (_tm_editor['r'], _tm_editor['c']) == (1, 0))
+finally:
+    tk.Menu.tk_popup = _tm_real_popup
+    app._dismiss_mini_popup()
+    app._close_cell_editor()
+    app.update()
+check(f"Shift+F10 in a table cell opens the cell's menu, rows, columns and "
+      f"merges in it ({len(_tm_found)} entries)",
+      {'Delete row', 'Insert column right', 'Delete column',
+       'Merge with cell above'} <= set(_tm_found))
+check(f"...a palette it opens takes the keyboard and keeps it through Tab "
+      f"({_tm_in_palette})", len(_tm_in_palette) == 3 and all(_tm_in_palette))
+check(f"...and the keyboard comes back into the cell once they are gone "
+      f"({_pa_holder()})", _tm_back)
+app.notes = []
+app.save_notes()
+app.refresh_note_list()
+_kv_settle()
+
 # ---- KEYBOARD: a tick box is looked at the moment it is pressed ----
 # Round 3 of the final audit: the look after Space waited 100 ms for every
 # Tk button, though a tick box runs its command at once. A template's tick
