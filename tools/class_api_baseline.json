@@ -347,6 +347,7 @@
   "_grid_run_font": "(self, key, header)",
   "_grid_select_range": "(self, info, a, b)",
   "_grid_selection_matrix": "(self, sel)",
+  "_grid_separator_line": "(sep_cols, rows)",
   "_grid_set_alignment": "(self, info, box, align)",
   "_grid_set_col_width": "(self, info, c, width)",
   "_grid_set_marker": "(self, info, r, c, marker)",

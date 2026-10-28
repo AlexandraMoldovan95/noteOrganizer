@@ -1547,8 +1547,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        for row_aligns in aligns:\n            row_aligns.extend(\n                [core_tables.ALIGN_LEFT] * (width - len(row_aligns)))",
-        "replace": "        pass"
+        "find": "            for row_aligns in aligns:\n                row_aligns.extend(\n                    [core_tables.ALIGN_LEFT] * (width - len(row_aligns)))",
+        "replace": "            pass"
       }
     ],
     "must_fail": ["a copied cell pasted into a new column keeps its alignment"],
@@ -7266,6 +7266,80 @@
     ],
     "suites": [
       "qa9"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "IX10",
+    "about": "a table is lined up whatever its padding comes to",
+    "edits": [
+      {
+        "file": "noteorganizer/core/tables.py",
+        "find": "    return len(rows) * sum(widths) - kept <= MAX_TABLE_PADDING\n",
+        "replace": "    return True\n"
+      }
+    ],
+    "must_fail": [
+      "a table whose lining up would pad past 100,000 spaces is left ragged",
+      "a pasted spreadsheet with one wide cell goes in at its own size, not padded to it"
+    ],
+    "suites": [
+      "test_tables",
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "IX11",
+    "about": "a formatted paste is weighed before its padding, not after",
+    "edits": [
+      {
+        "file": "noteorganizer/core/richtext.py",
+        "find": "        if tables.aligned_length(text) > MAX_PASTE_CHARS:\n",
+        "replace": "        if False:\n"
+      }
+    ],
+    "must_fail": [
+      "a paste that padding carries past the ceiling is cut before the padding, and says so"
+    ],
+    "suites": [
+      "test_tables"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "IX12",
+    "about": "a pasted spreadsheet goes in whole, however far its padding carries it",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if laid_out(source_rows) > MAX_PASTE_CHARS:\n",
+        "replace": "        if False:\n"
+      }
+    ],
+    "must_fail": [
+      "one that its padding would carry past the ceiling is cut at the ceiling, padding included, and says so"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "IX13",
+    "about": "cells pasted into a table may grow it without limit",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if growth(matrix) > MAX_PASTE_CHARS:\n",
+        "replace": "        if False:\n"
+      }
+    ],
+    "must_fail": [
+      "cells pasted into a table grow it by no more than the ceiling"
+    ],
+    "suites": [
+      "qa1"
     ],
     "expect": "killed"
   }

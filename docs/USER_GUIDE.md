@@ -366,6 +366,11 @@ A table works the way a spreadsheet has taught your hands to expect:
 - **A table keeps its edge.** Delete or Backspace beside a table stops at it rather than gluing
   the next line onto a row; an *empty* line just above or below a table still deletes as
   usual. Cells pasted wider than the table add the columns they need.
+- **A table's text lines its columns up** with spaces, so it reads as a table anywhere it is
+  copied as plain text. One so long that lining it up would add more than 100,000 spaces — a
+  very long cell in a very long table — keeps each cell only as wide as its own words; the table
+  you see looks the same. A pasted table counts those spaces towards the paste's 100,000
+  characters.
 - **Selecting towards a table stops at it first.** Shift+Down on the line above a table (or
   Shift+Up from the line below, or Shift+Right at the end of the line above) selects up to the
   table's edge and stops there, so what you type next replaces just your line. Press the same

@@ -247,12 +247,98 @@ def format_row(cells, widths, aligns=None):
     return CELL + CELL.join(padded) + CELL
 
 
+# Lining a table up pads every cell to its column's widest, so the padding is
+# the widest cell times the rows: one 60,000-character cell over 3,500 rows
+# made 210 million characters of a 162 KB paste (ISSUES_LOG: "Limits that held
+# at the door but not after it"). Past this many spaces a table is left
+# ragged instead: each cell keeps only the spaces its alignment needs, which
+# is all the padding says, and the drawn grid, which sizes its columns from
+# the cells, looks the same. The paste ceiling's number (MAX_PASTE_CHARS): a
+# tidy adds no more than a whole paste may bring, and a table typed by hand
+# never comes near it.
+MAX_TABLE_PADDING = 100_000
+
+
+def _padding_fits(rows, widths):
+    """Whether padding *rows* to *widths* adds at most MAX_TABLE_PADDING
+    spaces -- counted as format_row pads, every row given every column, so
+    the count is never short of what either padder adds. Worked out from
+    sums: a row's missing cells are not walked one by one."""
+    kept = 0
+    for row in rows:
+        for i in range(min(len(row), len(widths))):
+            kept += min(len(row[i]), widths[i])
+    return len(rows) * sum(widths) - kept <= MAX_TABLE_PADDING
+
+
+def row_widths(rows, widths, aligns=None):
+    """The widths each row is padded to: *widths*, the columns', for every
+    row while that padding fits MAX_TABLE_PADDING -- else each row its own,
+    every cell as wide as its text and the spaces its alignment needs."""
+    if _padding_fits(rows, widths):
+        return [widths] * len(rows)
+    out = []
+    for r, row in enumerate(rows):
+        mine = aligns[r] if aligns and r < len(aligns) else []
+        out.append([len(cell) + _padding_need(mine[i] if i < len(mine)
+                                              else ALIGN_LEFT)
+                    for i, cell in enumerate(row)])
+    return out
+
+
 def format_table(rows, aligns=None):
-    """A table's lines, every column as wide as its widest cell."""
-    widths = layout_widths(rows, aligns)
-    return [format_row(row, widths,
+    """A table's lines, every column as wide as its widest cell -- or, past
+    MAX_TABLE_PADDING, every cell as wide as its own (row_widths)."""
+    per_row = row_widths(rows, layout_widths(rows, aligns), aligns)
+    return [format_row(row, per_row[r],
                        aligns[r] if aligns and r < len(aligns) else None)
             for r, row in enumerate(rows)]
+
+
+def tidy_plan(lines):
+    """What the editor's tidy pads one block's *lines* to -- every line a
+    row, a separator's dashes measured like any cell -- as ``(each row's
+    widths, each row's alignments)``, for pad_ops."""
+    aligns = [cell_alignments(line) for line in lines]
+    rows = [split_row(line) for line in lines]
+    return row_widths(rows, layout_widths(rows, aligns), aligns), aligns
+
+
+def tidied_length(lines):
+    """How long the block *lines* is once the editor's tidy has padded it
+    (tidy_plan), worked out without making the edits."""
+    per_row, aligns = tidy_plan(lines)
+    return len("\n".join(lines)) + sum(
+        delta for i, line in enumerate(lines)
+        for _at, delta in pad_ops(line, per_row[i], aligns[i]))
+
+
+def table_length(rows, aligns=None):
+    """``len("\\n".join(format_table(rows, aligns)))``, worked out without
+    building it: a paste decides how much of a table fits before it makes
+    any of it."""
+    per_row = row_widths(rows, layout_widths(rows, aligns), aligns)
+    total = max(0, len(rows) - 1)
+    for r, row in enumerate(rows):
+        total += 1 + sum(max(width, len(row[i]) if i < len(row) else 0) + 3
+                         for i, width in enumerate(per_row[r]))
+    return total
+
+
+def longest_fitting(count, size_of, limit):
+    """The largest *k* in 0..*count* whose ``size_of(k)`` is at most *limit*,
+    found by halving: a paste is cut at its ceiling before any of it is
+    built. 0 when not even one fits; ``size_of(0)`` is taken to fit."""
+    if size_of(count) <= limit:
+        return count
+    low, high = 0, count - 1
+    while low < high:
+        mid = (low + high + 1) // 2
+        if size_of(mid) <= limit:
+            low = mid
+        else:
+            high = mid - 1
+    return low
 
 
 def pad_ops(line, widths, aligns=None):
@@ -459,7 +545,47 @@ def align(text):
     """
     lines = (text or "").split("\n")
     shifts = []
-    for first, last in find_blocks(text):
+    # Offsets are counted from the start of the body: the lines before each
+    # block, as earlier blocks left them, are summed once and kept running.
+    # Summed afresh for every block, 6,000 small pasted tables walked the
+    # text 6,000 times.
+    counted = prefix = 0
+    for first, block, per_row, aligns in _alignment_plans(lines):
+        prefix += sum(len(line) + 1 for line in lines[counted:first])
+        counted = first
+        pos = prefix
+        for offset, old in enumerate(block):
+            # Each edit is recorded where it actually happens, not at the end
+            # of the line. Padding goes in *between* cells, so a word in a
+            # later cell of the same row moves too -- recording it at the
+            # line end left the bold in the second cell sitting on a space,
+            # which only showed once columns had a minimum width and there
+            # was padding to speak of. The ops come right to left, each at
+            # its place in the line as it was, so the line is put together
+            # once from its pieces -- rebuilt at every op, a row of thousands
+            # of cells was copied thousands of times.
+            pieces, end = [], len(old)
+            for at, delta in pad_ops(old, per_row[offset],
+                                     aligns[offset] if offset < len(aligns)
+                                     else None):
+                if delta > 0:
+                    pieces += [old[at:end], " " * delta]
+                else:
+                    pieces.append(old[at - delta:end])
+                end = at
+                shifts.append((pos + at, delta))
+            pieces.append(old[:end])
+            pos += len(old) + 1
+            lines[first + offset] = "".join(reversed(pieces))
+    return "\n".join(lines), shifts
+
+
+def _alignment_plans(lines):
+    """Each table block in *lines*, with what align() pads it to:
+    ``(first line, its lines, each row's widths, each row's alignments)``.
+    One reading of a block, shared by align() and aligned_length(), so the
+    size a paste weighs is the size align() makes."""
+    for first, last in find_blocks("\n".join(lines)):
         block = lines[first:last + 1]
         sep_at = separator_index(block)
         rows = [split_row(line) for line in block]
@@ -479,30 +605,20 @@ def align(text):
                     widths[i] = max(widths[i], column["width"])
         else:
             widths = layout_widths(rows, aligns)
-        # Offsets are counted from the start of the body, so the length of
-        # every line before this block has to be walked first. Done per
-        # block rather than kept running, because a block's own lines change
-        # length as they are replaced.
-        pos = sum(len(line) + 1 for line in lines[:first])
-        for offset, old in enumerate(list(lines[first:last + 1])):
-            new = old
-            # Each edit is recorded where it actually happens, not at the end
-            # of the line. Padding goes in *between* cells, so a word in a
-            # later cell of the same row moves too -- recording it at the
-            # line end left the bold in the second cell sitting on a space,
-            # which only showed once columns had a minimum width and there
-            # was padding to speak of.
-            for at, delta in pad_ops(old, widths,
-                                     aligns[offset] if offset < len(aligns)
-                                     else None):
-                if delta > 0:
-                    new = new[:at] + " " * delta + new[at:]
-                else:
-                    new = new[:at] + new[at - delta:]
-                shifts.append((pos + at, delta))
-            pos += len(old) + 1
-            lines[first + offset] = new
-    return "\n".join(lines), shifts
+        yield first, block, row_widths(rows, widths, aligns), aligns
+
+
+def aligned_length(text):
+    """``len(align(text)[0])``, worked out without building it: what the
+    padding adds, summed off the same edits align() would make."""
+    lines = (text or "").split("\n")
+    total = len(text or "")
+    for _first, block, per_row, aligns in _alignment_plans(lines):
+        for offset, line in enumerate(block):
+            total += sum(delta for _at, delta in pad_ops(
+                line, per_row[offset],
+                aligns[offset] if offset < len(aligns) else None))
+    return total
 
 
 def forget_widths(text):

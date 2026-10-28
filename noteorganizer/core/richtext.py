@@ -605,6 +605,21 @@ def html_to_note(fragment, report=None):
         # (_paste_formatted), whatever this returns.
         text, forgotten = tables.forget_widths(text)
         spans = shift_spans(spans, forgotten)
+        # The ceiling holds on what goes into the note, its padding counted:
+        # lined up, a 16 KB clipboard became a 2-million-character note. Past
+        # it the text is cut at a line before align() pads anything, and the
+        # paste says so (ISSUES_LOG: "Limits that held at the door but not
+        # after it").
+        if tables.aligned_length(text) > MAX_PASTE_CHARS:
+            lines = text.split("\n")
+            keep = tables.longest_fitting(
+                len(lines), lambda k: tables.aligned_length(
+                    "\n".join(lines[:k])), MAX_PASTE_CHARS)
+            text = "\n".join(lines[:keep])
+            spans = [dict(s, end=min(s["end"], len(text))) for s in spans
+                     if s["start"] < len(text)]
+            if report is not None:
+                report["text_cut"] = True
         # A cell that held a block tag has picked up the space put in its
         # place, and one that held several has picked up several. align()
         # rebuilds each row from its cells' stripped text, which settles all

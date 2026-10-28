@@ -2724,6 +2724,51 @@ try:
     app._commit_cell_editor()
     app.update()
     _cut_told.clear()
+    # A table counts its padding: lined up, a spreadsheet's rows under one
+    # wide cell were each padded to it, and 16 KB on the clipboard became two
+    # million characters in the note (2026-10-28).
+    _tsv_wide = 'x' * 5000 + '\ty\n' + 'a\tb\n' * 400
+    _stub_clipboard(html=None, text=_tsv_wide)
+    set_body('before ')
+    app.body_text.mark_set('insert', 'end-1c')
+    _cut_told.clear()
+    app._on_body_paste()
+    app.update()
+    check(f'a pasted spreadsheet with one wide cell goes in at its own size, '
+          f'not padded to it ({len(body()):,} chars)',
+          len(body()) < len(_tsv_wide) * 2 and _cut_told == []
+          and core_tables.split_row(body().split(chr(10))[1])[0] == 'x' * 5000)
+    _tsv_padded = 'x' * 240 + '\ty\n' + 'a\tb\n' * 400
+    _stub_clipboard(html=None, text=_tsv_padded)
+    set_body('before ')
+    app.body_text.mark_set('insert', 'end-1c')
+    app._on_body_paste()
+    app.update()
+    _tsv_rows = [l for l in body().split(chr(10)) if core_tables.is_table_row(l)]
+    check(f'one that its padding would carry past the ceiling is cut at the '
+          f'ceiling, padding included, and says so ({len(body()):,} chars, '
+          f'{len(_tsv_rows)} rows, {[t for t, _m in _cut_told]})',
+          len(body()) <= NO.MAX_PASTE_CHARS + len('before ') + 2
+          and 2 < len(_tsv_rows) < 402
+          and [t for t, _m in _cut_told] == ['Pasted in part'])
+    # Cells pasted into a table: a row of 30,000 cells added a column to every
+    # row of the table for each of them.
+    set_body(chr(10).join(['| Name | Qty |', '| --- | --- |', '| apple | 3 |',
+                           '| pear | 5 |']))
+    app._render_table_grids()
+    app.update()
+    _gp_before = len(body())
+    app.clipboard_clear()
+    app.clipboard_append('c\t' * 30000)
+    _stub_clipboard(html=None, text=None)
+    _cut_told.clear()
+    app._grid_paste_cells(app._grid_at_line(1), 1, 0)
+    app.update()
+    check(f'cells pasted into a table grow it by no more than the ceiling '
+          f'({len(body()) - _gp_before:,} chars more), and that is said',
+          0 < len(body()) - _gp_before <= NO.MAX_PASTE_CHARS
+          and [t for t, _m in _cut_told] == ['Pasted in part'])
+    _cut_told.clear()
 
     set_body('')
     _stub_clipboard(html='<p>x</p>' + '<p><b>x</b></p>' * (NO.MAX_PASTE_SPANS + 5))

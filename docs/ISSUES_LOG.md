@@ -2311,7 +2311,9 @@ drops where a file came from switches off defences the app never sees, so it car
 - a repeating note with 5,000 moved days took a minute and a half to open, and the same again at
   every launch, for as long as it was the note last open;
 - Ctrl+V of 600,000 characters of plain text pasted all of them, and every key after took more
-  than a second.
+  than a second;
+- a table on the clipboard — 161 KB of HTML, or 74 KB copied from a spreadsheet — became a note
+  of 210 million characters, 1.2 GB of memory, and every save took half a minute.
 
 **Root cause:** every one had a limit, and every limit was checked where the data came in and
 nowhere after it.
@@ -2328,6 +2330,11 @@ nowhere after it.
   ceiling](#the-plain-paste-with-no-ceiling)). Plain Ctrl+V never met either: with no HTML on the
   clipboard it was Tk's own paste, and so was the right-click menu's Paste, the comments box, a
   table's cell, a template's fields and the middle mouse button.
+- *The tables.* A table's text is lined up: every cell padded to its column's widest. The paste
+  ceiling counted what came in, then the padding was added — one 60,000-character cell over 3,500
+  rows is 210 million spaces. A sum was capped; the padding is a product. The same padding ran
+  when the caret left a table, when a cell was written and when cells were pasted in, and a row
+  of 30,000 pasted cells also added 30,000 columns to every row.
 
 **Fix:**
 
@@ -2341,6 +2348,13 @@ nowhere after it.
   Tk would have pasted the text itself, the app pastes what it keeps, and says so in the
   formatted paste's own words. qa1 and qa9 paste past the ceiling by every door; mutants
   IX05–IX09, and PL01 now aims at the shared ceiling.
+- *The tables.* Every way a table is lined up asks first what the padding would come to, and past
+  100,000 spaces leaves the table ragged: each cell keeps the spaces its alignment needs, which is
+  all the padding says, and the drawn grid looks the same. A paste weighs itself with its padding
+  before any of it is built, and stops at the row — or the cell — where it would pass the
+  ceiling; the 161 KB table now goes in as its 95,000 characters. test_tables checks the lengths
+  worked out ahead against what is then built, on 400 random tables; qa1 pastes the spreadsheet
+  and the 30,000 cells; mutants IX10–IX13.
 
 **Takeaway:** a limit on what comes in says nothing about what is then done with it. Ask what the
 work costs at the limit — a capped number squared is not capped — and count every door to it, not

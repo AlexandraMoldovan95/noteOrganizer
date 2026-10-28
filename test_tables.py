@@ -443,6 +443,71 @@ check("...while a row written without padding is still the row the editor "
       "draws", _pv9 == "words" and _pn9 == 1)
 
 
+# ---- Lining a table up never multiplies it ----
+# Padding every cell to its column's widest made the padding the widest
+# cell times the rows: one 60,000-character cell over 3,500 rows turned a
+# 162 KB paste into 210 million characters (ISSUES_LOG: "Limits that held
+# at the door but not after it"). Measured in characters, never in time.
+import random as _rnd
+from noteorganizer.core.richtext import MAX_PASTE_CHARS as _CEIL
+
+_wide_rows = [["x" * 60000, "y"]] + [["a", "b"]] * 3500
+_wide_len = tables.table_length(_wide_rows)
+check(f"a table whose lining up would pad past {tables.MAX_TABLE_PADDING:,} "
+      f"spaces is left ragged ({_wide_len:,} chars)",
+      _wide_len < 60000 + 3500 * 12)
+check("...and table_length says so without building it, as format_table builds it",
+      _wide_len == len("\n".join(tables.format_table(_wide_rows))))
+_wide_text = "\n".join("| " + " | ".join(r) + " |" for r in _wide_rows)
+_wide_aligned = tables.align(_wide_text)[0]
+check(f"...align() likewise ({len(_wide_aligned):,} chars)",
+      len(_wide_aligned) <= len(_wide_text) + 3500 * 4
+      and tables.aligned_length(_wide_text) == len(_wide_aligned))
+check("...while an ordinary table is lined up exactly as before",
+      tables.format_table([["Name", "Qty"], ["Milk", "2"]])
+      == ["| Name     | Qty      |", "| Milk     | 2        |"])
+
+_rg = _rnd.Random(20261028)
+_len_agree = True
+for _i in range(400):
+    _n, _c = _rg.randint(1, 6), _rg.randint(2, 4)
+    _lines = []
+    for _r in range(_n):
+        _k = _c if _rg.random() < 0.8 else _rg.randint(2, _c + 1)
+        if _r == 1 and _rg.random() < 0.5:
+            _lines.append("|" + "|".join(_rg.choice(["---", ":-:", "--:", "~", "-" * 12])
+                                         for _ in range(_k)) + "|")
+        else:
+            _lines.append("|" + "|".join(
+                " " * _rg.randint(0, 3) + "ab c"[:_rg.randint(0, 4)].strip()
+                + " " * _rg.randint(0, 3) for _ in range(_k)) + "|")
+    _t = _rg.choice(["", "words\n"]) + "\n".join(_lines)
+    _rows = [tables.split_row(l) for l in _lines]
+    _len_agree = (_len_agree
+                  and tables.aligned_length(_t) == len(tables.align(_t)[0])
+                  and tables.table_length(_rows)
+                  == len("\n".join(tables.format_table(_rows))))
+check("the lengths worked out ahead agree with what align() and "
+      "format_table() then build, on 400 random tables", _len_agree)
+
+# The paste: the ceiling holds on what goes into the note, padding included.
+_doc = ("<table><tr><td>" + "x" * 60000 + "</td><td>y</td></tr>"
+        + "<tr><td>a</td><td>b</td></tr>" * 3500 + "</table>")
+_cutW = {}
+_txtW = html_to_note(_doc, report=_cutW)[0]
+check(f"a pasted table with one 60,000-character cell over 3,500 rows stays "
+      f"within the paste ceiling ({len(_txtW):,} chars)",
+      len(_txtW) <= _CEIL)
+_doc = ("<table><tr><td>" + "x" * 240 + "</td><td>y</td></tr>"
+        + "<tr><td>a</td><td>b</td></tr>" * 400 + "</table>"
+        + "<p>" + "z" * 60000 + "</p>")
+_cutP = {}
+_txtP = html_to_note(_doc, report=_cutP)[0]
+check(f"a paste that padding carries past the ceiling is cut before the "
+      f"padding, and says so ({len(_txtP):,} chars, {_cutP})",
+      len(_txtP) <= _CEIL and _cutP.get("text_cut") is True
+      and _txtP.startswith("| " + "x" * 240))
+
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
 

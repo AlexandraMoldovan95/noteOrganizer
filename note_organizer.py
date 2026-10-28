@@ -2452,9 +2452,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._mark_unit_window_free()
         lines = [self.body_text.get(f"{n}.0", f"{n}.end")
                  for n in range(first, last + 1)]
-        aligns = [core_tables.cell_alignments(line) for line in lines]
-        widths = core_tables.layout_widths(
-            [core_tables.split_row(line) for line in lines], aligns)
+        # Lined up while the padding stays under its ceiling, ragged past it
+        # (core_tables.row_widths): a long cell in a long table padded every
+        # row to it.
+        per_row, aligns = core_tables.tidy_plan(lines)
         changed = False
         try:
             was_gravity = self.body_text.mark_gravity("insert")
@@ -2468,7 +2469,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # the offsets computed from get(), which skips windows.
             base = self._col_base(row)
             for at, delta in core_tables.pad_ops(
-                    line, widths,
+                    line, per_row[offset],
                     aligns[offset] if offset < len(aligns) else None):
                 changed = True
                 if base:
@@ -5295,13 +5296,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         b.delete(f"{first}.0", f"{first + old_nrows - 1}.end")
         lines = core_tables.format_table(rows, aligns)
         if sep_cols is not None and lines:
-            while len(sep_cols) < len(core_tables.column_widths(rows)):
-                sep_cols.append({"width": None, "align": None,
-                                 "hidden": False})
-            sep_line = core_tables.CELL + core_tables.CELL.join(
-                " " + cell + " "
-                for cell in core_tables.make_separator(sep_cols)
-            ) + core_tables.CELL
+            sep_line = self._grid_separator_line(sep_cols, rows)
             lines = [lines[0], sep_line] + lines[1:]
         b.insert(f"{first}.0", "\n".join(lines))
         self._grid_lay_cell_styles(first, lines, carried, source)
@@ -5618,6 +5613,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._grid_write_separator(first, nrows, rows, sep_cols, sep_at)
         self._grid_after_op(first)
 
+    @staticmethod
+    def _grid_separator_line(sep_cols, rows):
+        """The separator line a rewrite writes for *rows*: *sep_cols*, given
+        the columns the rows have grown (in place), as text. One writer for
+        the rewrite, the separator-only write and a paste weighing itself.
+        The columns counted once: counted again for every column added, a
+        row of 30,000 pasted cells walked the table 30,000 times."""
+        columns = len(core_tables.column_widths(rows))
+        while len(sep_cols) < columns:
+            sep_cols.append({"width": None, "align": None,
+                             "hidden": False})
+        return core_tables.CELL + core_tables.CELL.join(
+            " " + cell + " "
+            for cell in core_tables.make_separator(sep_cols)
+        ) + core_tables.CELL
+
     def _grid_write_separator(self, first, nrows, rows, sep_cols, sep_at):
         """Write the block's separator line surgically: replace it in
         place when it exists, insert one under the header when it does
@@ -5625,13 +5636,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         shifts them along, a same-line replace never reaches them (the
         separator itself holds only mechanics, never user styling)."""
         b = self.body_text
-        while len(sep_cols) < len(core_tables.column_widths(rows)):
-            sep_cols.append({"width": None, "align": None,
-                             "hidden": False})
-        sep_line = core_tables.CELL + core_tables.CELL.join(
-            " " + cell + " "
-            for cell in core_tables.make_separator(sep_cols)
-        ) + core_tables.CELL
+        sep_line = self._grid_separator_line(sep_cols, rows)
         table_align = self._grid_table_align_of(first)
         if sep_at is not None:
             line_no = first + sep_at
@@ -6322,38 +6327,81 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not context:
             return
         first, nrows, ncols = context
-        rows, aligns, sep_cols, sep_at = self._grid_block_parts(first, nrows)
-        # Columns grow the way rows always have: four columns copied from a
-        # spreadsheet into a two-column table used to lose the last two
-        # without a word. Tables carry no column cap (a pasted TSV table,
-        # an inserted or appended column never had one), so nothing here
-        # is clipped; the separator gains its columns in the rewrite.
-        width = max([ncols] + [c + len(line) for line in matrix])
-        for row in rows:
-            row.extend([""] * (width - len(row)))
-        # The alignments grow with them, or a copied cell landing in a new
-        # column has nowhere to keep its own.
-        for row_aligns in aligns:
-            row_aligns.extend(
-                [core_tables.ALIGN_LEFT] * (width - len(row_aligns)))
-        while r + len(matrix) > len(rows):
-            rows.append([""] * width)
-            aligns.append([core_tables.ALIGN_LEFT] * width)
+        old_rows, old_aligns, sep_cols, sep_at = self._grid_block_parts(first, nrows)
         clip_styles = getattr(self, "_grid_cell_clip_styles", None) if own else None
         clip_aligns = (getattr(self, "_grid_cell_clip_aligns", None) or []) if own else []
-        extra = {}
-        for dr, source_row in enumerate(matrix):
-            for dc, value in enumerate(source_row):
-                if c + dc < len(rows[r + dr]):
-                    rows[r + dr][c + dc] = value.replace(
-                        core_tables.CELL, "/").strip()
-                    if c + dc < len(aligns[r + dr]):
-                        aligns[r + dr][c + dc] = (
-                            clip_aligns[dr][dc] if dr < len(clip_aligns)
-                            and dc < len(clip_aligns[dr])
-                            else core_tables.ALIGN_LEFT)
-                    if clip_styles and (dr, dc) in clip_styles:
-                        extra[(r + dr, c + dc)] = clip_styles[(dr, dc)]
+
+        def build(block):
+            """The table's rows and alignments with *block* laid in, and the
+            styles its cells bring."""
+            rows = [list(row) for row in old_rows]
+            aligns = [list(row) for row in old_aligns]
+            # Columns grow the way rows always have: four columns copied
+            # from a spreadsheet into a two-column table used to lose the
+            # last two without a word. The separator gains its columns in
+            # the rewrite.
+            width = max([ncols] + [c + len(line) for line in block])
+            for row in rows:
+                row.extend([""] * (width - len(row)))
+            # The alignments grow with them, or a copied cell landing in a
+            # new column has nowhere to keep its own.
+            for row_aligns in aligns:
+                row_aligns.extend(
+                    [core_tables.ALIGN_LEFT] * (width - len(row_aligns)))
+            while r + len(block) > len(rows):
+                rows.append([""] * width)
+                aligns.append([core_tables.ALIGN_LEFT] * width)
+            extra = {}
+            for dr, source_row in enumerate(block):
+                for dc, value in enumerate(source_row):
+                    if c + dc < len(rows[r + dr]):
+                        rows[r + dr][c + dc] = value.replace(
+                            core_tables.CELL, "/").strip()
+                        if c + dc < len(aligns[r + dr]):
+                            aligns[r + dr][c + dc] = (
+                                clip_aligns[dr][dc] if dr < len(clip_aligns)
+                                and dc < len(clip_aligns[dr])
+                                else core_tables.ALIGN_LEFT)
+                        if clip_styles and (dr, dc) in clip_styles:
+                            extra[(r + dr, c + dc)] = clip_styles[(dr, dc)]
+            return rows, aligns, extra
+
+        # The paste may grow the table by no more than the ceiling every
+        # paste keeps: a row of 30,000 cells gave every row of the table
+        # 30,000 more. What fits is found before anything is written --
+        # whole rows first, then cells of the first row, then characters
+        # of its first cell -- and the cut is said.
+        before = len(self.body_text.get(f"{first}.0",
+                                        f"{first + nrows - 1}.end"))
+
+        def growth(block):
+            # As written by the rewrite and then tidied (_grid_after_op).
+            rows, aligns, _extra = build(block)
+            lines = core_tables.format_table(rows, aligns)
+            if sep_cols is not None and lines:
+                lines.insert(1, self._grid_separator_line(
+                    [dict(col) for col in sep_cols], rows))
+            return core_tables.tidied_length(lines) - before
+
+        if growth(matrix) > MAX_PASTE_CHARS:
+            cut = True
+            kept = core_tables.longest_fitting(
+                len(matrix), lambda k: growth(matrix[:k]), MAX_PASTE_CHARS)
+            if kept:
+                matrix = matrix[:kept]
+            else:
+                row0 = matrix[0]
+                kept = core_tables.longest_fitting(
+                    len(row0), lambda k: growth([row0[:k]]), MAX_PASTE_CHARS)
+                if kept:
+                    matrix = [row0[:kept]]
+                else:
+                    cell0 = row0[0]
+                    kept = core_tables.longest_fitting(
+                        len(cell0), lambda k: growth([[cell0[:k]]]),
+                        MAX_PASTE_CHARS)
+                    matrix = [[cell0[:kept]]]
+        rows, aligns, extra = build(matrix)
         # The block may have grown; rewrite against its original height and
         # let format_table emit the extra rows, the separator restored
         # after the header. Our own copy brings its cells' styles along.
@@ -6494,12 +6542,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                                  core_tables.MERGE_UP)
                         and c < len(aligns[off])):
                     aligns[off][c] = align
-        widths = core_tables.layout_widths(rows, aligns)
+        per_row = core_tables.row_widths(
+            rows, core_tables.layout_widths(rows, aligns), aligns)
         for offset, line in enumerate(lines):
             row = first + offset
             base = self._col_base(row)
             for at, delta in core_tables.pad_ops(
-                    line, widths,
+                    line, per_row[offset],
                     aligns[offset] if offset < len(aligns) else None):
                 t_at = base + self._tk_col(line, at)
                 if delta > 0:
@@ -7660,6 +7709,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         aligns = [row[:ncols] for row in aligns]
         rows = [rows[0], separator] + rows[1:]
         aligns = [aligns[0], [core_tables.ALIGN_LEFT] * ncols] + aligns[1:]
+        # The ceiling holds on the table as it goes in, padding included:
+        # rows under one wide cell were each padded to it, and 16 KB on the
+        # clipboard became two million characters. Rows past it are left
+        # out before any is laid out; not even the header fitting, the text
+        # goes in as text.
+        def laid_out(kept):
+            return core_tables.table_length(rows[:kept + 1], aligns[:kept + 1])
+        source_rows = len(rows) - 1
+        if laid_out(source_rows) > MAX_PASTE_CHARS:
+            kept = core_tables.longest_fitting(source_rows, laid_out,
+                                               MAX_PASTE_CHARS)
+            if kept == 0:
+                return False
+            rows, aligns, cut = rows[:kept + 1], aligns[:kept + 1], True
         lines = core_tables.format_table(rows, aligns)
         clip_place = getattr(self, "_grid_cell_clip_place", None) if own and not plain else None
         # The grids come down before anything is written, selection or not:
