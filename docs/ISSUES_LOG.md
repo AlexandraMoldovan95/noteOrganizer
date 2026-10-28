@@ -195,6 +195,7 @@ is in the table below as well.
 | [The photo that was a remote connection](#the-photo-that-was-a-remote-connection) | What a person sees about a file is read from the file that will open; where the safe kinds are few, list those, not the dangerous ones. | next |
 | [Limits that held at the door but not after it](#limits-that-held-at-the-door-but-not-after-it) | A cap on what comes in is not a cap on what is done with it: bound the work at the limit, and everything a load keeps. | next |
 | [Round three: one rescue copy, and files another program holds](#round-three-one-rescue-copy-and-files-another-program-holds) | A store with one slot keeps only the last thing put in it; and a file that could not be opened is not a file that could not be read. | next |
+| [Round four: days kept but not used, loss counted in words, and a run that saves nothing](#round-four-days-kept-but-not-used-loss-counted-in-words-and-a-run-that-saves-nothing) | A value kept "only for later" is still read now by everything that read it before; a measure of harm needs a lower bound as well as an upper one. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -2475,7 +2476,8 @@ failure.
 
 **Fix:**
 - Whatever ends a repeat copies the days into the rescue copy and keeps them in the note.
-- Loss is measured in cells, not padding (`_without_padding`).
+- Loss is measured in cells, not padding (`_without_padding`; replaced in round four by a count of
+  the words gone, which covers padding too).
 - A turn-off's copy keeps the text of a copy the note does not hold again, whatever came first.
 - An update's question says when it replaces such a copy.
 - The start reads its data files three times, half a second apart. A file it can neither read
@@ -2490,6 +2492,62 @@ failure.
 **Takeaway:** a store with one slot keeps only the last thing put in it. Before moving anything
 into it, ask what else will write there next. And a file that could not be opened is not a file
 that could not be read: one is a moment, the other is damage.
+
+### Round four: days kept but not used, loss counted in words, and a run that saves nothing
+
+*(2026-10-28 · found by the final audit's fourth break-it round, which attacked round three's fixes
+by name)*
+
+**Symptom:**
+- **A kept day took over the note.** Round three keeps a series' days in the note when its repeat
+  ends. Opened from its date on the calendar, the one-off showed its first day's old title and
+  text, and the save wrote them over the note. A series whose first day had been deleted vanished
+  from the calendar, and from its reminder, once turned off.
+- **The copy replaced again.** Adding a column, removing an empty one, or putting a step into a
+  numbered list replaced the rescue copy of a paragraph deleted a moment before. A turn-off whose
+  own save also cleared the text kept an older copy's text instead of the words it took.
+- **Typing lost.** Words typed in the blank editor a delete leaves were gone if the person pressed
+  Ctrl+N, clicked another note, closed the app or signed out within half a second. This was older
+  than round three.
+- **Settings held, then overwritten.** `settings.json` held for a moment by another program read
+  as damaged: the one-time cleanup ran again, and the next setting saved wrote a two-key file over
+  the person's categories, theme and Trash window.
+- **A run that saves nothing, with every way out closed.** It raised the old save dialog at every
+  pause, with advice that cannot work there. The export refused, or said "Export complete" over
+  nothing. An import said "Import complete" with its notes in no file. A sign-out raised a dialog.
+  A held Trash or templates file showed empty, unexplained.
+- **One held attachment** made every backup fail.
+
+**Root cause:** each fix had a reader it did not ask. The days were kept for a turn-back-on, but
+everything that reads them still applied them. Loss was measured as the span between the first
+and last change, and the padding fix of round three covered only one way that span grows. The
+hold was known to the core and the start notice, and to none of the screens that act on it. And
+the flush took "no note, no tab" to mean "nothing typed".
+
+**Fix:**
+- What a day shows is asked of a series only (`effective_note`). What a day holds, for the save
+  that decides whether days are kept, is a separate question (`day_as_kept`). Gated too, that one
+  judged every day empty and dropped them, which qa5's older checks caught at once.
+- The loss is the smaller of the span and the words gone, each with its space (`words_lost`).
+  Neither count comes out under what is really lost. A column added costs nothing; one letter
+  changed in a paragraph written without spaces costs one. A turn-off that also clears text keeps
+  the newest text.
+- The flush saves a blank editor that holds something, as its autosave would have.
+- Settings are read with the notes' retries. A refusal is not damage, and later refusals fall back
+  on the last good read. The cleanup waits while the settings are unknown, and a first start that
+  cannot bring an older notebook in holds `settings.json` too.
+- One question, `_notes_file_unread`, answers whether a run's notes file is unread. A held run
+  says so once, then on the status line. The export packs the notes written since the start and
+  says it holds only them. The import waits for a reopening. There is no dialog at a sign-out, no
+  purge, no welcome note, and a held Trash or templates file is named at the start.
+- An attachment that will not open is left out of a backup, and named.
+- `test_recurrence`, `test_note_identity`, `test_data_safety`, qa3, qa5; mutants DR41–DR56, with
+  DR31, DR32, Y01, TW01, TW13, SF06, DR08, DR37 and DR38 re-aimed.
+
+**Takeaway:** a value kept "only for later" is still read now by everything that read it before.
+Find every reader before deciding a field is inert. And a measure of harm needs a lower bound as
+well as an upper one; two crude counts that each never undershoot are, at their minimum, a fair
+one.
 
 
 ## Tk & platform gotchas
