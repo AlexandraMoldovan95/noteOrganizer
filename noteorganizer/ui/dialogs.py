@@ -1123,7 +1123,7 @@ class DialogsMixin:
         person chose to keep editing, or the save they asked for could not
         happen. With `holding_work_only`, a popup with nothing to lose is
         left alone rather than closed -- for callers that are not about
-        popups at all (a shortcut, a Settings section, the window closing).
+        popups at all (a Settings section, the window closing).
 
         A widget's own <Button-1> runs before the window's click-outside,
         so a widget opening something in the popup's place closed it

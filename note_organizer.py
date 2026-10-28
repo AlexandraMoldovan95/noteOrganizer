@@ -18999,8 +18999,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         directly -- the template gone without the question a click outside
         it asks. It gets the same three answers everywhere: Cancel (or
         Escape) keeps editing, No discards, Yes saves.
+
+        A popup with nothing to lose closes, as a click outside closes it:
+        left open, a picture's preview stood over the box the shortcut gave
+        the keyboard to, and the keys typed at it went into a hidden note.
         """
-        if not self._dismiss_mini_popup_asking(holding_work_only=True):
+        if not self._dismiss_mini_popup_asking():
             return False
         if getattr(self, "_settings_open", False):
             return self.hide_settings_page() is not False

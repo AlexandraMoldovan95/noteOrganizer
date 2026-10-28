@@ -4501,6 +4501,32 @@ check(f"a picture's preview opened by a click takes the keyboard, so keys "
 check(f"...and Tab and Shift+Tab walk its two buttons only ({_kp_inside}, "
       f"still open {_kp_open})", len(_kp_inside) == 6 and all(_kp_inside)
       and _kp_open)
+# Round 5: Ctrl+F and Ctrl+N gave the keyboard to a box under the preview,
+# left open over it, and the keys went into a note nobody could see. The
+# shortcut closes it, as a click outside does. Ctrl+N last: it clears the note.
+_ks_seen = {}
+try:
+    for _ks_key, _ks_box in (('<Control-f>', lambda: getattr(app, '_find_entry', None)),
+                             ('<Control-n>', lambda: app.title_entry)):
+        _take_focus(app.body_text)
+        _qa_click(_ka_names[1])
+        _kv_settle()
+        _ks_pop, _ks_held = app._mini_popup, _ka_holder()
+        _ks_ready = (_ks_pop is not None and _ks_held is not None
+                     and str(_ks_held).startswith(str(_ks_pop) + '.'))
+        app.event_generate(_ks_key)
+        _kv_settle()
+        _ks_seen[_ks_key] = (_ks_ready, app._mini_popup is None,
+                             _ka_holder() is _ks_box())
+        app._close_find()
+        _kv_settle()
+finally:
+    app._dismiss_mini_popup()
+app.open_note_in_tab(app.find_note(801))
+_kv_settle(6)
+check(f"Ctrl+F and Ctrl+N close a picture's preview before they give the keyboard "
+      f"to the box under it ((preview had it, closed, in the box): {_ks_seen})",
+      len(_ks_seen) == 2 and all(v == (True, True, True) for v in _ks_seen.values()))
 app.notebook.select(app.TAB_CALENDAR)
 app.cal_year, app.cal_month = 2026, 10
 app.render_calendar()

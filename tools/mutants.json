@@ -9284,5 +9284,23 @@
       "test_data_safety"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "RV01",
+    "about": "Ctrl+N and Ctrl+F leave a picture's preview open over the box they give the keyboard to",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if not self._dismiss_mini_popup_asking():\n            return False\n        if getattr(self, \"_settings_open\", False):\n",
+        "replace": "        if not self._dismiss_mini_popup_asking(holding_work_only=True):\n            return False\n        if getattr(self, \"_settings_open\", False):\n"
+      }
+    ],
+    "must_fail": [
+      "Ctrl+F and Ctrl+N close a picture's preview before they give the keyboard"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
   }
 ]
