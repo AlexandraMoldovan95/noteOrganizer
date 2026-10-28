@@ -5879,8 +5879,8 @@
     "id": "FW06",
     "about": "a table in the middle of pasted text is left to Tk, widths and all",
     "edits": [{"file": "note_organizer.py",
-               "find": "Anything _foreign_plain leaves as it came stays Tk's to paste.\"\"\"\n",
-               "replace": "Anything _foreign_plain leaves as it came stays Tk's to paste.\"\"\"\n        return False\n"}],
+               "find": "        it, so the app pastes what it keeps.\"\"\"\n",
+               "replace": "        it, so the app pastes what it keeps.\"\"\"\n        return False\n"}],
     "must_fail": ["a table in the middle of pasted text takes the app's route too",
                   "...the same widths forgotten"],
     "suites": ["qa1"],
@@ -5911,7 +5911,7 @@
     "id": "FW09",
     "about": "a template's body takes a pasted markdown table with its widths",
     "edits": [{"file": "note_organizer.py",
-               "find": "        text = self._foreign_plain(raw)\n        if text == raw.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\"):\n            return None\n",
+               "find": "        text = self._foreign_plain(raw)\n        if not cut and text == raw.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\"):\n            return None\n",
                "replace": "        return None\n"}],
     "must_fail": ["a template's body takes a pasted markdown table the same way"],
     "suites": ["qa1"],
@@ -6361,8 +6361,8 @@
     "id": "PL01",
     "about": "Ctrl+Shift+V pastes text of any length",
     "edits": [{"file": "note_organizer.py",
-               "find": "        cut = len(text) > MAX_PASTE_CHARS\n",
-               "replace": "        cut = False\n"}],
+               "find": "        if len(text) > MAX_PASTE_CHARS:\n            return text[:MAX_PASTE_CHARS], True\n",
+               "replace": "        if False:\n            return text[:MAX_PASTE_CHARS], True\n"}],
     "must_fail": ["...and Ctrl+Shift+V keeps the same ceiling, and says so"],
     "suites": ["qa1"],
     "expect": "killed"
@@ -7175,6 +7175,97 @@
     ],
     "suites": [
       "test_recurrence"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "IX05",
+    "about": "Ctrl+V of plain text past the ceiling is left to Tk, which pastes all of it",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if not cut and text == raw.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\"):\n            return False\n",
+        "replace": "        if text == raw.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\"):\n            return False\n"
+      }
+    ],
+    "must_fail": [
+      "Ctrl+V of plain text keeps the paste ceiling and says so",
+      "the right-click menu's Paste keeps the paste ceiling and says so"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "IX06",
+    "about": "the comments box leaves a paste past the ceiling to Tk",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if not table and not cut:\n",
+        "replace": "        if not table:\n"
+      }
+    ],
+    "must_fail": [
+      "the comments box keeps the paste ceiling and says so"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "IX07",
+    "about": "a middle-click paste pastes the whole selection",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        text, cut = self._cap_paste(text)\n        if not cut:\n            return None\n",
+        "replace": "        text, cut = self._cap_paste(text)\n        if True:\n            return None\n"
+      }
+    ],
+    "must_fail": [
+      "a middle-click paste keeps the paste ceiling and says so"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "IX08",
+    "about": "a plain paste into a table's cell is left to Tk, all of it",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            kept, cut = self._cap_paste(raw or \"\")\n            if not cut:\n                return None\n",
+        "replace": "            kept, cut = self._cap_paste(raw or \"\")\n            if True:\n                return None\n"
+      }
+    ],
+    "must_fail": [
+      "a table cell keeps the paste ceiling and says so"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "IX09",
+    "about": "a template's field leaves plain text past the ceiling to Tk",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if not cut and text == raw.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\"):\n            return None\n",
+        "replace": "        if text == raw.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\"):\n            return None\n"
+      }
+    ],
+    "must_fail": [
+      "plain text past the character cap is cut at it here too, and that is said"
+    ],
+    "suites": [
+      "qa9"
     ],
     "expect": "killed"
   }

@@ -2660,6 +2660,70 @@ try:
           body() == 'before ' + 'x' * NO.MAX_PASTE_CHARS
           and [t for t, _m in _cut_told] == ['Pasted in part'])
     _cut_told.clear()
+    # Every other door keeps it too (2026-10-28): with no HTML on the
+    # clipboard Ctrl+V was Tk's own paste, all of it -- 600,000 characters
+    # on one line, then more than a second at every key.
+    _cut_message = None
+
+    def _cut_door(label, paste, read, advice=True):
+        global _cut_message
+        _cut_told.clear()
+        paste()
+        app.update()
+        _kept = read()
+        check(f'{label} keeps the paste ceiling and says so '
+              f'({len(_kept)} chars, {[t for t, _m in _cut_told]})',
+              len(_kept) == NO.MAX_PASTE_CHARS + len('before ')
+              and [t for t, _m in _cut_told] == ['Pasted in part']
+              and ('a note of its own' in _cut_told[0][1]) == advice)
+        if _cut_told and advice:
+            _cut_message = _cut_told[0][1]
+
+    _stub_clipboard(html=None, text=_cut_long)
+    app.clipboard_clear()
+    app.clipboard_append(_cut_long)
+    for _label, _how in (('Ctrl+V of plain text', '<Control-v>'),
+                         ("the right-click menu's Paste", '<<Paste>>')):
+        set_body('before ')
+        app.body_text.mark_set('insert', 'end-1c')
+        take_focus(app.body_text)
+        _cut_door(_label, lambda how=_how: app.body_text.event_generate(how),
+                  body)
+    check('...in the very words the formatted paste uses',
+          _cut_message is not None and _cut_message.startswith(
+              f'Only the first {NO.MAX_PASTE_CHARS:,} characters of what you '
+              'copied were pasted'))
+    app.comments_text.delete('1.0', 'end')
+    app.comments_text.insert('1.0', 'before ')
+    _cut_door('the comments box', lambda: app.comments_text.event_generate(
+        '<<Paste>>'), lambda: app.comments_text.get('1.0', 'end-1c'),
+        advice=False)
+    app.comments_text.delete('1.0', 'end')
+    # The middle button pastes the selection -- in the app, on Windows --
+    # past every Paste binding.
+    _sel_src = NO.tk.Text(app.body_text.winfo_toplevel())
+    _sel_src.insert('1.0', _cut_long)
+    _sel_src.tag_add('sel', '1.0', 'end-1c')
+    set_body('before ')
+    app.tk.eval('set ::tk::Priv(mouseMoved) 0')
+    _cut_door('a middle-click paste', lambda: app.body_text.event_generate(
+        '<<PasteSelection>>', x=2, y=2), body)
+    _sel_src.destroy()
+    # And a table's cell, whose plain paste was Tk's own as well.
+    set_body(chr(10).join(['| Name | Qty |', '| --- | --- |', '| apple | 3 |']))
+    app._render_table_grids()
+    app.update()
+    app._open_cell_editor(app._grid_at_line(1), 1, 0)
+    _cell_e = app._cell_editor['entry']
+    _cell_e.delete('1.0', 'end')
+    _cell_e.insert('1.0', 'before ')
+    _cut_door('a table cell', lambda: app._editor_paste(app._grid_at_line(1)),
+              lambda: _cell_e.get('1.0', 'end-1c'))
+    _cell_e.delete('1.0', 'end')
+    _cell_e.insert('1.0', 'apple')
+    app._commit_cell_editor()
+    app.update()
+    _cut_told.clear()
 
     set_body('')
     _stub_clipboard(html='<p>x</p>' + '<p><b>x</b></p>' * (NO.MAX_PASTE_SPANS + 5))

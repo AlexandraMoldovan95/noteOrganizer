@@ -2306,27 +2306,45 @@ drops where a file came from switches off defences the app never sees, so it car
 
 *(2026-10-28 · found by the final audit's second round, with files and clipboards made to hurt)*
 
-**Symptom:** a backup holding one repeating note with 5,000 moved days took a minute and a half
-to open that note — and the same again at every launch, for as long as it was the note last open.
+**Symptom:** several, each from something a person could be handed — a backup, a clipboard:
 
-**Root cause:** the limit was there. A load keeps at most 5,000 moved days, the number a rule may
-generate, because each is worked out on every calendar draw. But it was checked where the data
-came in, and nowhere after it. The editor's banner ("5,000 days moved") counted them by asking
-the calendar about each moved day in turn, and each question read every moved day of the series:
-5,000 questions of 5,000 readings, twenty-five million in all. The History asked the same way, the
-count of days whose own edits fell off the schedule likewise, and the load itself looked each move
-up along the whole list of deleted days. A cap of 5,000 was a cap on the input, and a promise of
-twenty-five million on the work.
+- a repeating note with 5,000 moved days took a minute and a half to open, and the same again at
+  every launch, for as long as it was the note last open;
+- Ctrl+V of 600,000 characters of plain text pasted all of them, and every key after took more
+  than a second.
 
-**Fix:** each of those questions is now asked of all the days at once. The rule is asked once for
-every day in question — a repeat that stops after N times is walked once from its first day, not
-once per moved day — and the moved days are read once, not once per day. The answers are the
-same, which the unit suite checks against the old day-by-day questions on 300 random series. The
-note opens in under half a second, restart included. test_recurrence counts how often the moved
-days are read whole, never the time, so a slow machine cannot fail it; mutants IX01–IX04.
+**Root cause:** every one had a limit, and every limit was checked where the data came in and
+nowhere after it.
+
+- *The moved days.* A load keeps at most 5,000, the number a rule may generate, because each is
+  worked out on every calendar draw. The editor's banner ("5,000 days moved") counted them by
+  asking the calendar about each moved day in turn, and each question read every moved day of the
+  series: 5,000 questions of 5,000 readings, twenty-five million in all. The History asked the
+  same way, the count of days whose own edits fell off the schedule likewise, and the load itself
+  looked each move up along the whole list of deleted days. A cap of 5,000 on the input was a
+  promise of twenty-five million on the work.
+- *The paste.* The 100,000-character ceiling lived in the formatted paste, and Ctrl+Shift+V had
+  been given it the day before ([The plain paste with no
+  ceiling](#the-plain-paste-with-no-ceiling)). Plain Ctrl+V never met either: with no HTML on the
+  clipboard it was Tk's own paste, and so was the right-click menu's Paste, the comments box, a
+  table's cell, a template's fields and the middle mouse button.
+
+**Fix:**
+
+- *The moved days.* Each question is asked of all the days at once. The rule is asked once for
+  every day in question — a repeat that stops after N times is walked once from its first day, not
+  once per moved day — and the moved days are read once. The answers are the same, which the unit
+  suite checks against the old day-by-day questions on 300 random series. The note opens in under
+  half a second, restart included. test_recurrence counts how often the moved days are read
+  whole, never the time, so a slow machine cannot fail it; mutants IX01–IX04.
+- *The paste.* Every route reads the clipboard through one reader that keeps the ceiling. Where
+  Tk would have pasted the text itself, the app pastes what it keeps, and says so in the
+  formatted paste's own words. qa1 and qa9 paste past the ceiling by every door; mutants
+  IX05–IX09, and PL01 now aims at the shared ceiling.
 
 **Takeaway:** a limit on what comes in says nothing about what is then done with it. Ask what the
-work costs at the limit: a capped number squared is not capped.
+work costs at the limit — a capped number squared is not capped — and count every door to it, not
+the one the limit was written for.
 
 
 ## Tk & platform gotchas

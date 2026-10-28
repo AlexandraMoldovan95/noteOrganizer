@@ -3638,6 +3638,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                    lambda e, i=info: self._editor_paste(i))
         entry.bind("<Control-V>",
                    lambda e, i=info: self._editor_paste(i))
+        entry.bind("<<PasteSelection>>",
+                   lambda e: self._paste_selection_capped(e, in_body=True))
         # Ctrl+A selects the whole cell -- Tk's Text default for it is
         # an emacs-style line-start jump nobody here is looking for.
         def _select_all_cell(_e, t=entry):
@@ -6265,6 +6267,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             raw = self.clipboard_get()
         except tk.TclError:
             raw = None
+        # Within the ceiling every paste keeps (_cap_paste).
+        raw, cut = self._cap_paste(raw) if raw is not None else (None, False)
         # The system clipboard is the ground truth. The remembered matrix is
         # only trusted while it still MATCHES the clipboard -- someone who
         # copied something newer meant the newer thing, and the remembered
@@ -6356,6 +6360,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._grid_replace_block(first, nrows, rows, aligns, sep_cols,
                                  extra=extra)
         self._grid_after_op(first)
+        if cut:
+            self._say_if_paste_was_cut({"text_cut": True}, in_body=True)
 
     def _grid_copy_cell(self, info, r, c):
         cell = info["cells"].get((r, c))
@@ -6410,7 +6416,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         Only when the clipboard actually holds a block -- several cells, or
         the remembered matrix -- so pasting a plain word into a cell still
-        behaves like typing it.
+        behaves like typing it: Tk's own paste, within the ceiling every
+        paste keeps (_cap_paste).
         """
         editor = getattr(self, "_cell_editor", None)
         if editor is None:
@@ -6424,7 +6431,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                  or (remembered is not None and raw is not None
                      and raw == "\n".join("\t".join(r) for r in remembered)))
         if not block:
-            return None
+            kept, cut = self._cap_paste(raw or "")
+            if not cut:
+                return None
+            entry = editor["entry"]
+            try:
+                entry.delete("sel.first", "sel.last")
+            except tk.TclError:
+                pass
+            entry.insert("insert", kept)
+            self._say_if_paste_was_cut({"text_cut": True}, in_body=True)
+            return "break"
         r, c = editor["r"], editor["c"]
         anchor_line = self._grid_first_line(info)
         self._commit_cell_editor()
@@ -7238,22 +7255,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         than let that broken-looking soup in, a paste that carries table
         rows has them stripped and the prose kept, with a quiet note that
         it happened. A paste with no table rows falls through to Tk's own
-        paste untouched (return None)."""
-        raw = clipboard.read_text()
-        if raw is None:
-            try:
-                raw = self.comments_text.clipboard_get()
-            except tk.TclError:
-                return None
+        paste untouched (return None) -- unless the ceiling every paste
+        keeps cut it (_clipboard_text): then what is kept is pasted here."""
+        raw, cut = self._clipboard_text(self.comments_text)
         if not raw:
             return None
         lines = raw.replace("\r\n", "\n").replace("\r", "\n").split("\n")
-        if not any(core_tables.is_table_row(ln) for ln in lines):
+        table = any(core_tables.is_table_row(ln) for ln in lines)
+        if not table and not cut:
             return None                      # no table -- let Tk paste it
-        kept = [ln for ln in lines if not core_tables.is_table_row(ln)]
-        # Collapse the blank runs a removed table leaves behind, so the
-        # prose does not arrive with a gap where the grid was.
-        cleaned = re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip("\n")
+        if table:
+            kept = [ln for ln in lines if not core_tables.is_table_row(ln)]
+            # Collapse the blank runs a removed table leaves behind, so the
+            # prose does not arrive with a gap where the grid was.
+            cleaned = re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip("\n")
+        else:
+            cleaned = "\n".join(lines)
         try:
             self.comments_text.delete("sel.first", "sel.last")
         except tk.TclError:
@@ -7261,7 +7278,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if cleaned:
             self.comments_text.insert("insert", cleaned)
         self._schedule_autosave()
-        self._show_toast("Comments keep text only — the table wasn't added")
+        if table:
+            self._show_toast("Comments keep text only — the table wasn't added")
+        if cut:
+            self._say_if_paste_was_cut({"text_cut": True})
         return "break"
 
     def _on_body_paste(self, event=None):
@@ -7368,12 +7388,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         get the newlines that keep them rows -- and a blank line from a
         table they would touch (_rows_gap).
         """
-        raw = clipboard.read_text()
+        raw, cut = self._clipboard_text(self.body_text)
         if raw is None:
-            try:
-                raw = self.body_text.clipboard_get()
-            except tk.TclError:
-                return False
+            return False
         if not raw or "\n" not in raw.strip():
             single = raw or ""
             if not core_tables.is_table_row(single.strip("\n")):
@@ -7404,6 +7421,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._resync_list_tags()
         self._render_table_grids(keep_typed=kept)
         self._schedule_autosave()
+        if cut:
+            self._say_if_paste_was_cut({"text_cut": True}, in_body=True)
         return True
 
     def _foreign_plain(self, raw):
@@ -7425,17 +7444,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         pasted by the app instead of by Tk, so the separator goes in at
         markdown's minimum (_foreign_plain) inside the paste's own unit --
         a table in the middle of the text, which no route above takes.
-        Anything _foreign_plain leaves as it came stays Tk's to paste."""
-        raw = clipboard.read_text()
-        if raw is None:
-            try:
-                raw = self.body_text.clipboard_get()
-            except tk.TclError:
-                return False
+        Anything _foreign_plain leaves as it came stays Tk's to paste --
+        unless the ceiling cut it (_clipboard_text): Tk would paste all of
+        it, so the app pastes what it keeps."""
+        raw, cut = self._clipboard_text(self.body_text)
         if not raw:
             return False
         text = self._foreign_plain(raw)
-        if text == raw.replace("\r\n", "\n").replace("\r", "\n"):
+        if not cut and text == raw.replace("\r\n", "\n").replace("\r", "\n"):
             return False
         # The grids down before anything is written (see
         # _paste_tsv_as_table): the drawing at the end would split the unit.
@@ -7446,6 +7462,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._resync_list_tags()
         self._render_table_grids(keep_typed=kept)
         self._schedule_autosave()
+        if cut:
+            self._say_if_paste_was_cut({"text_cut": True}, in_body=True)
         return True
 
     # Where a table being typed began when a paste started (see
@@ -7530,13 +7548,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Tk's plain paste, made by the app when the caret stands in a
         table being typed, so the table the paste takes the caret out of is
         tidied in the same undo unit (_tidy_table_paste_left)."""
-        text = clipboard.read_text()
+        text, cut = self._clipboard_text(self.body_text)
         if text is None:
-            try:
-                text = self.body_text.clipboard_get()
-            except tk.TclError:
-                self._paste_from_table = None
-                return False
+            self._paste_from_table = None
+            return False
         b = self.body_text
         # The grids down before anything is written (see
         # _paste_tsv_as_table): the drawing at the end would split the unit.
@@ -7551,6 +7566,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._resync_list_tags()
         self._render_table_grids(keep_typed=kept)
         self._schedule_autosave()
+        if cut:
+            self._say_if_paste_was_cut({"text_cut": True}, in_body=True)
         return True
 
     @_undo_atom
@@ -7567,14 +7584,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         plain text, so both now land as a grid. Single cells (no tab)
         keep pasting as ordinary text. *plain* (Ctrl+Shift+V): the table
         comes back without the copied cells' styles or its place on the page.
+        A *raw* given was read by the caller (_paste_plain), ceiling and all.
         """
+        cut = False
         if raw is None:
-            raw = clipboard.read_text()
+            raw, cut = self._clipboard_text(self.body_text)
             if raw is None:
-                try:
-                    raw = self.body_text.clipboard_get()
-                except tk.TclError:
-                    return False
+                return False
         if not raw or "\t" not in raw:
             return False
         raw = raw.replace("\r\n", "\n").replace("\r", "\n")
@@ -7695,6 +7711,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # edit outside this unit. A row it left the caret on stays the
         # caret's line (_tidy_table_paste_left).
         self._last_caret_line = kept
+        if cut:
+            self._say_if_paste_was_cut({"text_cut": True}, in_body=True)
         return True
 
     @_undo_atom
@@ -7720,12 +7738,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         took the paste back in two steps and returned the selection with
         none of the formatting it had.
         """
-        text = clipboard.read_text()
+        # The formatted paste's ceiling, here too: one line of 600,000
+        # characters took ten seconds to lay out at every key (ISSUES_LOG:
+        # "The plain paste with no ceiling").
+        text, cut = self._clipboard_text(self.body_text)
         if text is None:
-            try:
-                text = self.body_text.clipboard_get()
-            except tk.TclError:
-                return "break"
+            return "break"
         # This app's own copy of table cells is a table: its plain text is
         # tabs, for a spreadsheet, and pasted as that the boxes read "[x]"
         # where Ctrl+V rebuilt the table (2026-10-24, test case 693).
@@ -7741,12 +7759,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # A PDF's line breaks are where its column ended, not where the
         # writer did. Rejoined before the markers are stripped, because that
         # decision reads the line structure and refuses to touch a list.
-        # The formatted paste's ceiling, here too: one line of 600,000
-        # characters took ten seconds to lay out at every key (ISSUES_LOG:
-        # "The plain paste with no ceiling").
-        cut = len(text) > MAX_PASTE_CHARS
-        if cut:
-            text = text[:MAX_PASTE_CHARS]
         self._paste_from_table = self._note_raw_table_at_caret()
         self._replace_selection_with(
             strip_list_markers(reflow_wrapped(self._foreign_plain(text))))
@@ -7760,6 +7772,69 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Not the person leaving a table, either (see _on_body_paste); a row
         # it left the caret on stays the caret's line.
         self._last_caret_line = kept
+        return "break"
+
+    @staticmethod
+    def _cap_paste(text):
+        """*text* as a paste may put it in -- its first MAX_PASTE_CHARS
+        characters, the formatted paste's ceiling -- and whether it was cut.
+        The one ceiling every paste route keeps (_clipboard_text, and the
+        routes that read the clipboard or the selection some other way)."""
+        if len(text) > MAX_PASTE_CHARS:
+            return text[:MAX_PASTE_CHARS], True
+        return text, False
+
+    def _clipboard_text(self, widget):
+        """The clipboard's text as a paste puts it in, and whether it was
+        cut (_cap_paste).
+
+        Ctrl+V of plain text, the menu's Paste, the comments box and a
+        template's fields each pasted all of it: one line of 600,000
+        characters, then more than a second at every key (ISSUES_LOG:
+        "Limits that held at the door but not after it").
+
+        Returns:
+            ``(text, cut)``, or ``(None, False)`` when the clipboard holds
+            no text.
+        """
+        text = clipboard.read_text()
+        if text is None:
+            try:
+                text = widget.clipboard_get()
+            except tk.TclError:
+                return None, False
+        return self._cap_paste(text)
+
+    def _paste_selection_capped(self, event, in_body=False):
+        """A middle-click paste -- the selection, where the pointer is, as
+        Tk's own binding makes it -- within the ceiling every paste keeps.
+        Under it Tk pastes as ever (None); past it the first
+        MAX_PASTE_CHARS characters go in instead, and that is said."""
+        widget = event.widget
+        try:
+            text = widget.selection_get(selection="PRIMARY")
+        except tk.TclError:
+            return None
+        text, cut = self._cap_paste(text)
+        if not cut:
+            return None
+        try:
+            # Tk's own pastes nothing after a drag with the middle button,
+            # which scrolled the view instead.
+            if self.tk.eval("expr {[info exists ::tk::Priv(mouseMoved)]"
+                            " && $::tk::Priv(mouseMoved)}") == "1":
+                return "break"
+            widget.mark_set("insert", f"@{event.x},{event.y}")
+            widget.edit_separator()
+            widget.insert("insert", text)
+            widget.edit_separator()
+            widget.focus_set()
+        except tk.TclError:
+            return "break"
+        if widget in (getattr(self, "body_text", None),
+                      getattr(self, "comments_text", None)):
+            self._schedule_autosave()
+        self._say_if_paste_was_cut({"text_cut": True}, in_body=in_body)
         return "break"
 
     def _replace_selection_with(self, text):
@@ -7911,7 +7986,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         everything else waiting (an autosave) would run in its middle.
         *in_body*: the paste came into the note's body, which keeps the
         formatting -- so formatting cut short is news there, and nowhere
-        else -- and where Ctrl+Shift+V pastes all of the text, plain."""
+        else."""
         if cut.get("text_cut"):
             msg = (f"Only the first {MAX_PASTE_CHARS:,} characters of what you "
                    "copied were pasted; the rest was left out.")
@@ -8967,7 +9042,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._delete_selection_reaching_list()
             if self._on_body_paste() != "break":
                 try:
-                    b.insert("insert", b.clipboard_get())
+                    text, cut = self._cap_paste(b.clipboard_get())
+                    b.insert("insert", text)
+                    if cut:
+                        self._say_if_paste_was_cut({"text_cut": True},
+                                                   in_body=True)
                 except tk.TclError:
                     pass
             self._resync_list_tags()
@@ -15017,6 +15096,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # styling; Ctrl+V keeps it, the way every other editor does.
         self.body_text.bind("<Control-Shift-V>", self._paste_plain)
         self.body_text.bind("<Control-Shift-v>", self._paste_plain)
+        # The middle button pastes the selection, past every route above.
+        self.body_text.bind(
+            "<<PasteSelection>>",
+            lambda e: self._paste_selection_capped(e, in_body=True), add="+")
         self.body_text.bind("<Tab>", lambda e: self._on_body_tab(e, +1))
         self.body_text.bind("<Shift-Tab>", lambda e: self._on_body_tab(e, -1))
         # X11 reports Shift+Tab as its own keysym rather than a modified Tab.
@@ -15208,6 +15291,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # table used to land as raw pipe soup. Strip table rows out of a
         # paste here and say so, rather than leaving broken-looking pipes.
         self.comments_text.bind("<<Paste>>", self._on_comments_paste, add="+")
+        self.comments_text.bind("<<PasteSelection>>",
+                                self._paste_selection_capped, add="+")
         self.comments_text.bind("<KeyRelease>", self._schedule_autosave)
         # Expand/Collapse toggle for the comments box (compact 4 rows <-> 12).
         # Remembered, like the body's identical toggle above. The helper's own
@@ -19960,23 +20045,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 return "break"
         # Text holding a table of its own: its separator spelled at
         # markdown's minimum, as the note's body takes it (_foreign_plain).
-        try:
-            raw = clipboard.read_text()
-        except Exception:
-            raw = None
+        # Past the ceiling every paste keeps, pasted here too: Tk's own
+        # would put all of it in.
+        raw, cut = self._clipboard_text(text_widget)
         if raw is None:
-            try:
-                raw = text_widget.clipboard_get()
-            except tk.TclError:
-                return None
+            return None
         text = self._foreign_plain(raw)
-        if text == raw.replace("\r\n", "\n").replace("\r", "\n"):
+        if not cut and text == raw.replace("\r\n", "\n").replace("\r", "\n"):
             return None
         try:
             text_widget.delete("sel.first", "sel.last")
         except tk.TclError:
             pass
         text_widget.insert("insert", text)
+        if cut:
+            self._say_if_paste_was_cut({"text_cut": True})
         return "break"
 
     def save_current_as_template(self):

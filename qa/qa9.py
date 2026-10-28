@@ -260,6 +260,24 @@ try:
     app.update()
     check(f'...but not about formatting, which this box never keeps ({_told9})',
           _took9 == 'break' and _told9 == [])
+    # Plain text keeps the same ceiling here (2026-10-28): it was Tk's own
+    # paste, all of it.
+    _told9.clear()
+    _real_rt9 = NO.clipboard.read_text
+    NO.clipboard.read_html = lambda: None
+    NO.clipboard.read_text = lambda: 'w' * (NO.MAX_PASTE_CHARS + 50)
+    try:
+        _body9.delete('1.0', 'end')
+        _took9 = app._paste_table_aware(_body9)
+        app.update()
+    finally:
+        NO.clipboard.read_text = _real_rt9
+    check(f'plain text past the character cap is cut at it here too, and '
+          f'that is said ({len(_body9.get("1.0", "end-1c"))} chars, '
+          f'{[t for t, _m in _told9]})',
+          _took9 == 'break'
+          and len(_body9.get('1.0', 'end-1c')) == NO.MAX_PASTE_CHARS
+          and [t for t, _m in _told9] == ['Pasted in part'])
 finally:
     app.show_info = _real_info9
 _body9.delete('1.0', 'end')

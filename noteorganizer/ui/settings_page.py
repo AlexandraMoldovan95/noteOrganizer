@@ -983,6 +983,8 @@ class SettingsPageMixin:
                 # clipboard.
                 t.bind("<<Paste>>",
                        lambda e, w=t: self._paste_table_aware(w))
+                # The middle button's paste keeps the same ceiling.
+                t.bind("<<PasteSelection>>", self._paste_selection_capped)
                 return t
 
         name_var = field("Template name", data["name"])
