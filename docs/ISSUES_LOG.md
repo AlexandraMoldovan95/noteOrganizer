@@ -1995,6 +1995,14 @@ refused while the file's own name still opens; mutant TN01 takes the check away.
 was first allowed on purpose, and round two found the capitals were an alias too
 ([Round two](#round-two-each-fixs-next-door)).
 
+**Round three** *(2026-10-28)*: a name can reach a part of the file as well as the file. On NTFS
+`x.docx:Zone.Identifier` is the stream holding the file's Mark of the Web, and `realpath` hands it
+back unchanged, so it passed the letter-for-letter test. A backup's Trash entry naming it was
+purged at the next start, and the mark the import had just written went with it. The resolver now
+refuses any name holding a colon, which no Windows file name has, on every system; a file attached
+on Linux, where one can, is stored without it. `test_data_safety` writes the stream and purges by
+five spellings of it; qa7 attaches a file named with a colon; mutants RT01, RT02.
+
 **Takeaway:** when a check and the action after it each name the file, they must name it the
 same way. Resolve once, and compare what was resolved.
 

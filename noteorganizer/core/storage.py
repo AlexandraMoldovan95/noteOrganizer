@@ -246,6 +246,11 @@ def _attachment_path_within(stored_as):
         # One bare file name, as the app stores it: "zz/../x" and "./x" came
         # back to a file once tidied, past every exact comparison of names.
         return None
+    if ":" in stored_as:
+        # No Windows file name holds a colon: "x.docx:Zone.Identifier" is a
+        # stream of x.docx, its Mark of the Web, which realpath hands back as
+        # it is. Refused on every system. ISSUES_LOG: "A file with two names".
+        return None
     try:
         base = os.path.realpath(paths.ATTACHMENTS_DIR)
         named = os.path.join(base, stored_as)

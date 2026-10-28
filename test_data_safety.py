@@ -1497,7 +1497,35 @@ check("...while the file's own name still resolves",
       _storage._attachment_path_within("20261003091512345678_holiday.jpg") is not None)
 _storage._delete_attachment_files([{"attachments": [{"stored_as": a} for a in _aliases]}])
 check("...and a delete by an alias leaves the file", os.path.exists(_two_names))
-for _left in (_two_names, os.path.join(_paths.ATTACHMENTS_DIR, "202610~1.JPG")):
+# A named stream of the file is a name for something else again: realpath
+# hands "x.jpg:Zone.Identifier" back unchanged, so it passed the exact-name
+# test, and a backup's Trash entry naming it deleted the Mark of the Web
+# the import had just written (2026-10-28, the final audit's third round).
+# Refused on every system, so the check runs on each: on Linux the
+# "stream" is a file of its own, which the rule keeps all the same.
+_zone = b"[ZoneTransfer]\r\nZoneId=3\r\n"
+with open(_two_names + ":Zone.Identifier", "wb") as _f:
+    _f.write(_zone)
+_streams = ["20261003091512345678_holiday.jpg:Zone.Identifier",
+            "20261003091512345678_holiday.jpg:Zone.Identifier:$DATA",
+            "20261003091512345678_holiday.jpg:s.pdf",
+            "20261003091512345678_holiday.jpg:",
+            "20261003091512345678_holiday.jpg:$DATA"]
+check("a name that reaches a stream of a file is refused (%s)"
+      % [s for s in _streams if _storage._attachment_path_within(s) is not None],
+      all(_storage._attachment_path_within(s) is None for s in _streams))
+# What the start-up purge, Empty Trash and Delete forever all call.
+_storage._delete_attachment_files([{"attachments": [{"stored_as": s}]}
+                                   for s in _streams])
+try:
+    with open(_two_names + ":Zone.Identifier", "rb") as _f:
+        _zone_after = _f.read()
+except OSError:
+    _zone_after = None
+check("...and a Trash entry naming the file's mark leaves the mark",
+      _zone_after == _zone and os.path.exists(_two_names))
+for _left in (_two_names, os.path.join(_paths.ATTACHMENTS_DIR, "202610~1.JPG"),
+              _two_names + ":Zone.Identifier"):
     if os.path.lexists(_left):
         os.remove(_left)
 # Trash entries come in as trash.json held them, and a hand-edited or

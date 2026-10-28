@@ -1334,6 +1334,45 @@ check(f'a photo label over another kind of file shows that kind: its name, '
       and not any('🖼' in t or '\u202e' in t for t in _row_texts)
       and any('Opens in your default app' in t for t in _row_texts))
 
+# ---- A colon never reaches a stored name ----
+# The resolver refuses a stored name holding one: on Windows it names a
+# stream of another file ("x.docx:Zone.Identifier"), and a backup's Trash
+# entry deleted a file's Mark of the Web by it. Only Linux lets a file be
+# called so; attached there, it is stored without the colon and still opens.
+if os.name != 'nt':
+    _co_src = os.path.join(tempfile.mkdtemp(prefix='qa7-colon-'), 'minutes 10:30.txt')
+    with open(_co_src, 'w', encoding='utf-8') as f:
+        f.write('minutes')
+    app.current_attachments = []
+    _co_real_pick = fd.askopenfilenames
+    fd.askopenfilenames = lambda **k: (_co_src,)
+    try:
+        app.add_attachment(); app.update()
+    finally:
+        fd.askopenfilenames = _co_real_pick
+    _co_rec = [dict(a) for a in app.current_attachments]
+    _co_opened, _co_warned = [], []
+    _co_real_start = getattr(NO.os, 'startfile', None)
+    _co_real_warn = app.show_warning
+    NO.os.startfile = lambda p, *a, **k: _co_opened.append(os.path.basename(p))
+    app.show_warning = lambda t, m, **k: _co_warned.append(t)
+    try:
+        app.open_attachment(0); app.update()
+    finally:
+        app.show_warning = _co_real_warn
+        if _co_real_start is None:
+            del NO.os.startfile
+        else:
+            NO.os.startfile = _co_real_start
+    app._cancel_pending_autosave()
+    app.current_attachments = []
+    app.refresh_attachments_list(); app.update()
+    check(f'a file whose name holds a colon is stored without one, and opens '
+          f'({_co_rec}, opened {_co_opened}, warned {_co_warned})',
+          len(_co_rec) == 1 and ':' not in _co_rec[0]['stored_as']
+          and _co_rec[0]['filename'] == 'minutes 10:30.txt'
+          and _co_opened == [_co_rec[0]['stored_as']] and not _co_warned)
+
 # ---- Only kinds that just show their contents open unasked ----
 # The warn-before-opening list was a list of dangerous kinds, and such a
 # list is never complete: .pyw, .rdp, .theme, .xll, macro documents, .msu

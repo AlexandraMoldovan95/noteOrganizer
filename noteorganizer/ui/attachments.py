@@ -88,7 +88,10 @@ class AttachmentsMixin:
         added_any = False
         for src_path in filepaths:
             original_name = os.path.basename(src_path)
-            unique_name = f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{original_name}"
+            # No colon in a stored name, which the resolver refuses as a
+            # stream (_attachment_path_within): only Linux allows one here.
+            unique_name = (f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}_"
+                           f"{original_name.replace(':', '_')}")
             # Shown as every other route shows it, so the save's
             # normalize_note finds nothing to change.
             shown = attachment_display_name(original_name, unique_name)

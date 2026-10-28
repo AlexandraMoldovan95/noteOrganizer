@@ -7744,5 +7744,42 @@
       "qa3"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "RT01",
+    "about": "a stored name that reaches a stream of a file resolves",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "    if \":\" in stored_as:\n",
+        "replace": "    if False:\n"
+      }
+    ],
+    "must_fail": [
+      "a name that reaches a stream of a file is refused",
+      "...and a Trash entry naming the file's mark leaves the mark"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RT02",
+    "about": "an attachment keeps the colon of its file's name in the stored name",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "f\"{original_name.replace(':', '_')}\")",
+        "replace": "f\"{original_name}\")"
+      }
+    ],
+    "must_fail": [
+      "a file whose name holds a colon is stored without one, and opens"
+    ],
+    "suites": [
+      "qa7"
+    ],
+    "expect": "killed"
   }
 ]
