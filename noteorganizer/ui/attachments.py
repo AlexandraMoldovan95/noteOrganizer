@@ -227,12 +227,14 @@ class AttachmentsMixin:
     def _frame_delay(info):
         """A frame's time on screen in whole milliseconds, as Tk's after()
         takes it: Pillow gives an animated PNG's as a float (40.0), and
-        after() refuses anything but an integer. None, zero or junk is 100."""
+        after() refuses anything but an integer. None, junk or 10 ms and
+        less is 100, as browsers play them: a frame of 0.6 ms ticked every
+        millisecond, half a core while the preview was open."""
         try:
             delay = int(round(float(info.get("duration") or 0)))
         except (TypeError, ValueError, OverflowError):
             delay = 0
-        return delay if delay > 0 else 100
+        return delay if delay > 10 else 100
 
     def _build_image_preview(self, path, filename):
         """A large, in-app image preview — most of the window, not a tiny

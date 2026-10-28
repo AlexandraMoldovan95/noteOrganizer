@@ -1252,6 +1252,14 @@ check(f'an animated PNG shows and plays every frame, and lets its file go '
       _ap_raised is None and _ap_placed
       and len(app._image_preview_ref or []) == 6 and app._preview_source is None)
 app._dismiss_mini_popup(); app.update()
+# Round 5: a frame of 0.6 ms ticked every millisecond, half a core while the
+# preview was open. 10 ms and less plays at 100, as browsers play it.
+_fd_got = {d: app._frame_delay({'duration': d})
+           for d in (0.6, 1.5, 10, 10.4, 11, 20, 40.0, None, 'junk')}
+check(f'a frame of 10 ms or less plays at 100 ms, a longer one as it says '
+      f'({_fd_got})',
+      _fd_got == {0.6: 100, 1.5: 100, 10: 100, 10.4: 100, 11: 11, 20: 20,
+                  40.0: 40, None: 100, 'junk': 100})
 
 # And whatever else fails halfway takes the half-built preview down with it,
 # so its file is let go and no hidden popup is left behind.

@@ -9455,5 +9455,23 @@
       "test_richtext"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "RV10",
+    "about": "a preview's frame of a millisecond or two ticks as fast as it says",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "        return delay if delay > 10 else 100\n",
+        "replace": "        return delay if delay > 0 else 100\n"
+      }
+    ],
+    "must_fail": [
+      "a frame of 10 ms or less plays at 100 ms, a longer one as it says"
+    ],
+    "suites": [
+      "qa7"
+    ],
+    "expect": "killed"
   }
 ]
