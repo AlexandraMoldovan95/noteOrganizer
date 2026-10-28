@@ -2917,6 +2917,66 @@ for _tb_rows, _tb_cols, _tb_drawn in ((401, 2, False), (100, 31, False), (40, 5,
           and body().split('\n')[1] == _tb_lines[0])
 set_body('')
 
+# ...and so does one whose cells hold line breaks, past the drawn height: a
+# row is as tall as its cell with the most lines, and 250 rows of four-line
+# addresses, inside both limits above, passed the canvas and killed the app.
+# The two big ones are judged, not drawn: drawn, they would end the process.
+from noteorganizer.core import tables as _th_tables
+_th_br = _th_tables.LINE_BREAK
+
+
+def _th_table(rows, lines_per_cell, cols=2):
+    cell = _th_br.join(['line'] * lines_per_cell)
+    return (['| ' + ' | '.join('h%d' % c for c in range(cols)) + ' |',
+             '|' + '---|' * cols]
+            + ['| ' + ' | '.join([cell] * cols) + ' |' for _r in range(rows)])
+
+
+_th_one = ['| a | b |', '|---|---|', '| ' + _th_br.join(['x'] * 1001) + ' | y |']
+_th_tall = _th_table(250, 4)
+check(f'a table whose cells hold line breaks past the drawn height is kept as '
+      f'its text (one cell of 1,001 lines, 250 rows of four-line cells; '
+      f'{app.MAX_DRAWN_TABLE_PX} px, under the 32,767 X draws)',
+      app._table_too_big_to_draw(_th_one, 0, len(_th_one) - 1)
+      and app._table_too_big_to_draw(_th_tall, 0, len(_th_tall) - 1)
+      and app.MAX_DRAWN_TABLE_PX < 32_767)
+# The render asks it: under a budget made small, a 40-row table of three-line
+# cells stays text, and under the real one it is drawn, as tall as counted.
+_th_mid = _th_table(40, 3)
+app.MAX_DRAWN_TABLE_PX = 3000
+try:
+    set_body('Big\n' + '\n'.join(_th_mid) + '\nafter')
+    app._render_table_grids(); app.update()
+    _th_small = app._grid_at_line(2) is None
+finally:
+    del app.MAX_DRAWN_TABLE_PX
+app._render_table_grids(); app.update()
+_th_grid = app._grid_at_line(2)
+_th_h = _th_grid['canvas'].winfo_reqheight() if _th_grid else None
+check(f'...the drawing asks it: past the height it stays text ({_th_small}), '
+      f'within it the grid is drawn ({_th_h} px)',
+      _th_small and _th_grid is not None and 0 < _th_h <= 3 * 41 * 60)
+# A cell's editor spreads over its neighbours as its text grows, and grew past
+# the same limit: a pasted line of 6,000 letters, or 2,000 line breaks, asked
+# for a window X cannot make. Read before anything is drawn, then put back.
+_th_ed_w = _th_ed_h = None
+if _th_grid is not None:
+    app._open_cell_editor(_th_grid, 1, 0)
+    _th_ed = app._cell_editor
+    _th_ed['entry'].delete('1.0', 'end')
+    _th_ed['entry'].insert('1.0', 'w' * 6000 + '\n' * 2000)
+    app._grow_cell_editor(_th_ed['win'], _th_grid['canvas'])
+    _th_ed_w = int(float(_th_grid['canvas'].itemcget(_th_ed['win'], 'width')))
+    _th_ed_h = int(float(_th_grid['canvas'].itemcget(_th_ed['win'], 'height')))
+    _th_grid['canvas'].itemconfigure(_th_ed['win'], width=50, height=30)
+    app._close_cell_editor()
+app.update()
+check(f"...and a cell's editor grows no further than that either "
+      f"({_th_ed_w} x {_th_ed_h} px)",
+      _th_ed_w is not None and _th_ed_w <= app.MAX_DRAWN_TABLE_PX
+      and _th_ed_h <= app.MAX_DRAWN_TABLE_PX)
+set_body('')
+
 # What Excel writes: its markers inside the table -- for one row, around the
 # cells -- so the fragment alone was cells with no row, and a row copied
 # from Excel pasted as loose text, "The" and "app open on the phone." on

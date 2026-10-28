@@ -8604,5 +8604,60 @@
       "qa6"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "RU06",
+    "about": "a table's drawn height is not judged: line breaks in its cells pass the canvas limit",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        row_h = self._grid_row_height()\n        return sum(row_h",
+        "replace": "        return False\n        return sum(self._grid_row_height()"
+      }
+    ],
+    "must_fail": [
+      "a table whose cells hold line breaks past the drawn height is kept as its text",
+      "...the drawing asks it"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RU07",
+    "about": "a cell's editor widens without limit as a pasted line grows",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            needed = min(needed, self.MAX_DRAWN_TABLE_PX)\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "...and a cell's editor grows no further than that either"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RU08",
+    "about": "a cell's editor grows without limit with its line breaks",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            need = min(max(cell[\"h\"] - 2, lines * info[\"row_h\"]),\n                       self.MAX_DRAWN_TABLE_PX)\n",
+        "replace": "            need = max(cell[\"h\"] - 2, lines * info[\"row_h\"])\n"
+      }
+    ],
+    "must_fail": [
+      "...and a cell's editor grows no further than that either"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
   }
 ]

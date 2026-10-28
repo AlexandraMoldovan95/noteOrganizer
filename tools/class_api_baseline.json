@@ -347,6 +347,7 @@
   "_grid_replace_block": "(self, first, old_nrows, rows, aligns=None, sep_cols=None, source=None, extra=None)",
   "_grid_restyle": "(self, info)",
   "_grid_row_boundary_at": "(self, info, y)",
+  "_grid_row_height": "(self)",
   "_grid_run_font": "(self, key, header)",
   "_grid_select_range": "(self, info, a, b)",
   "_grid_selection_matrix": "(self, sel)",

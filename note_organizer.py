@@ -4038,7 +4038,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         try:
             lines = int(editor["entry"].index("end-1c").split(".")[0])
-            need = max(cell["h"] - 2, lines * info["row_h"])
+            # Capped as a drawn table is: past it the box scrolls inside.
+            need = min(max(cell["h"] - 2, lines * info["row_h"]),
+                       self.MAX_DRAWN_TABLE_PX)
             if need > int(float(info["canvas"].itemcget(
                     editor["win"], "height"))):
                 info["canvas"].itemconfigure(editor["win"], height=need)
@@ -4156,6 +4158,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     # drawn whole"). 400 rows stay under it at 225%.
     MAX_DRAWN_TABLE_ROWS = 400
     MAX_DRAWN_TABLE_CELLS = 3000
+    # And past this height, at the scale and text size it would be drawn at:
+    # a row is as tall as its cell with the most lines, and 250 rows of
+    # four-line addresses passed the canvas limit inside both caps above.
+    MAX_DRAWN_TABLE_PX = 30_000
 
     def _table_too_big_to_draw(self, lines, first0, last0):
         """Whether the table on lines *first0*..*last0* (0-based) is past
@@ -4163,10 +4169,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         rows = last0 - first0 + 1
         if rows > self.MAX_DRAWN_TABLE_ROWS:
             return True
-        widest = max((len(core_tables.split_row(lines[i]))
-                      for i in range(first0, min(last0 + 1, len(lines)))), default=0)
-        return (rows > self.MAX_DRAWN_TABLE_ROWS
-                or rows * widest > self.MAX_DRAWN_TABLE_CELLS)
+        cells = [core_tables.split_row(lines[i])
+                 for i in range(first0, min(last0 + 1, len(lines)))]
+        widest = max((len(row) for row in cells), default=0)
+        if rows * widest > self.MAX_DRAWN_TABLE_CELLS:
+            return True
+        # Every line of every row counted, the separator's too: a few
+        # pixels over-counted, never under.
+        row_h = self._grid_row_height()
+        return sum(row_h * max((len(core_tables.cell_display_lines(v))
+                                for v in row), default=1)
+                   for row in cells) > self.MAX_DRAWN_TABLE_PX
+
+    def _grid_row_height(self):
+        """The height of one line of a drawn table's row, padding included:
+        what the grid is built with, and what its size is judged by."""
+        header_font, cell_font = self._grid_fonts()
+        return max(header_font.metrics("linespace"),
+                   cell_font.metrics("linespace")) + 2 * 7
 
     def _build_table_grid(self, first, last):
         b = self.body_text
@@ -4186,9 +4206,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         aligns_matrix = [core_tables.cell_alignments(block[i])
                          for i in row_off]
         header_font, cell_font = self._grid_fonts()
-        pad_x, pad_y = 10, 7
-        row_h = max(header_font.metrics("linespace"),
-                    cell_font.metrics("linespace")) + 2 * pad_y
+        pad_x = 10
+        row_h = self._grid_row_height()
         char_px = cell_font.measure("0")
         floor = char_px * core_tables.MIN_COLUMN
         col_w = [floor] * len(widths)
@@ -6561,6 +6580,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                  if any(self._char_is_emoji(ch) for ch in seg)
                  else font.measure(seg)
                  for seg in content.split("\n")), default=0)
+            # No wider than a drawn table may be tall: one pasted line of
+            # 5,000 letters asked X for a window past its 32,767 pixels.
+            needed = min(needed, self.MAX_DRAWN_TABLE_PX)
             if needed > int(float(canvas.itemcget(win, "width"))):
                 canvas.itemconfigure(win, width=needed)
             self._editor_fit_window()
