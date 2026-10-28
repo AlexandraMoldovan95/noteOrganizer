@@ -15840,16 +15840,20 @@ set_body('')
 # every ceiling. A pasted page became one item, drawn as one wrapped label as
 # tall as its text -- on Linux the app died drawing it -- and a 490-character
 # share code carried one in. The box keeps MAX_CHECKLIST_ITEM_CHARS, and so
-# does every load (test_data_safety).
+# does every load (test_data_safety). A paste past it is shortened to fit, as
+# the title's is (the owner's choice, round 5); a key past it is refused.
 app.new_note(); app.update()
 _cl_box = app.checklist_add_entry
 _cl_told = []
 _cl_real_status = app.set_status
+_cl_real_read = NO.clipboard.read_text
 app.set_status = lambda text, *a, **k: _cl_told.append(text)
 try:
     app.checklist_add_var.set('')
-    _cl_box.insert(0, 'y' * (NO.MAX_CHECKLIST_ITEM_CHARS + 1))   # a paste past it
-    _cl_whole = app.checklist_add_var.get()
+    NO.clipboard.read_text = lambda: 'y' * (NO.MAX_CHECKLIST_ITEM_CHARS + 1)
+    _cl_box.event_generate('<<Paste>>')                          # a paste past it
+    _cl_pasted = app.checklist_add_var.get()
+    app.checklist_add_var.set('')
     _cl_box.insert(0, 'z' * NO.MAX_CHECKLIST_ITEM_CHARS)
     _cl_box.insert('end', 'z')                                   # a key past it
     _cl_at = len(app.checklist_add_var.get())
@@ -15857,13 +15861,18 @@ try:
     app.update()
 finally:
     app.set_status = _cl_real_status
+    NO.clipboard.read_text = _cl_real_read
 _cl_items = [len(it.get('text', '')) for it in app._get_checklist()]
-check(f'the checklist\'s Add box refuses what passes an item\'s limit, says so, '
-      f'and adds what fits ({len(_cl_whole)}, {_cl_at}, {_cl_items}; '
-      f'{_cl_told[:1]})',
-      _cl_whole == '' and _cl_at == NO.MAX_CHECKLIST_ITEM_CHARS
+_cl_limit = f'{NO.MAX_CHECKLIST_ITEM_CHARS:,}'
+check(f'the checklist\'s Add box shortens a paste past an item\'s limit, refuses '
+      f'a key past it, says so, and adds what fits ({len(_cl_pasted)}, {_cl_at}, '
+      f'{_cl_items}; {_cl_told[:2]})',
+      _cl_pasted == 'y' * NO.MAX_CHECKLIST_ITEM_CHARS
+      and _cl_at == NO.MAX_CHECKLIST_ITEM_CHARS
       and _cl_items == [NO.MAX_CHECKLIST_ITEM_CHARS]
-      and any(f'{NO.MAX_CHECKLIST_ITEM_CHARS:,} characters' in t for t in _cl_told))
+      and f'Pasted text shortened: a checklist item can be up to {_cl_limit} '
+          'characters' in _cl_told
+      and f'A checklist item can be up to {_cl_limit} characters' in _cl_told)
 app.checklist_add_var.set('')
 app._cancel_pending_autosave()
 app.new_note(); app.update()

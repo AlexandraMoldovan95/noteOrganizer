@@ -8134,7 +8134,7 @@
       }
     ],
     "must_fail": [
-      "the checklist's Add box refuses what passes an item's limit"
+      "the checklist's Add box shortens a paste past an item's limit"
     ],
     "suites": [
       "qa1"
@@ -8157,7 +8157,7 @@
       }
     ],
     "must_fail": [
-      "the template editor's name, title and checklist boxes refuse what passes their limits"
+      "the template editor's name, title and checklist boxes shorten a paste"
     ],
     "suites": [
       "qa6"
@@ -8686,7 +8686,7 @@
       }
     ],
     "must_fail": [
-      "Save as template's name box refuses a paste past the note title's"
+      "Save as template's name box shortens a paste to the note title's"
     ],
     "suites": [
       "qa6"
@@ -9116,7 +9116,7 @@
       }
     ],
     "must_fail": [
-      "a paste past a box's limit over its selection keeps what was typed"
+      "a paste past a box's limit over its selection replaces it, shortened"
     ],
     "suites": [
       "qa6"
@@ -9369,6 +9369,46 @@
     ],
     "must_fail": [
       "Enter, and Tab at the last cell, that take a table past what is drawn put the keyboard in its text"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RV06",
+    "about": "a paste past a limited box's limit is refused whole again, not shortened to fit",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                room = limit - len(entry.get())\n                if room > 0:\n",
+        "replace": "                room = 0\n                if room > 0:\n"
+      }
+    ],
+    "must_fail": [
+      "the checklist's Add box shortens a paste past an item's limit",
+      "the template editor's name, title and checklist boxes shorten a paste",
+      "Save as template's name box shortens a paste to the note title's",
+      "a paste past a box's limit over its selection replaces it, shortened"
+    ],
+    "suites": [
+      "qa1",
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RV07",
+    "about": "a shortened paste leaves the selection it was pasted over in place",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                if chosen:\n                    entry.delete(\"sel.first\", \"sel.last\")\n                room = limit - len(entry.get())\n",
+        "replace": "                room = limit - len(entry.get())\n"
+      }
+    ],
+    "must_fail": [
+      "a paste past a box's limit over its selection replaces it, shortened"
     ],
     "suites": [
       "qa6"

@@ -4947,7 +4947,7 @@ def _tl_entries(w):
 
 
 _tl_told = []
-_tl_real_status = app.set_status
+_tl_real_status, _tl_real_read = app.set_status, NO.clipboard.read_text
 app.set_status = lambda text, *a, **k: _tl_told.append(text)
 _tl_kept = {}
 try:
@@ -4958,21 +4958,29 @@ try:
     for _tl_box, _tl_limit in zip(_tl_boxes[:3], (app.TITLE_MAX_LEN, app.TITLE_MAX_LEN,
                                                    NO.MAX_CHECKLIST_ITEM_CHARS)):
         _tl_box.delete(0, 'end')
-        _tl_box.insert(0, 'q' * (_tl_limit + 1))      # a paste past the limit
-        _tl_whole = _tl_box.get()
+        NO.clipboard.read_text = lambda n=_tl_limit + 1: 'q' * n
+        _tl_box.event_generate('<<Paste>>')           # a paste past the limit
+        _tl_whole = _tl_box.get()                     # shortened to fit
+        _tl_box.delete(0, 'end')
         _tl_box.insert(0, 'q' * _tl_limit)            # one at the limit
         _tl_box.insert('end', 'q')                    # and a key past it
         _tl_kept[_tl_limit, len(_tl_kept)] = (len(_tl_whole), len(_tl_box.get()))
     app.update()
 finally:
-    app.set_status = _tl_real_status
+    app.set_status, NO.clipboard.read_text = _tl_real_status, _tl_real_read
     app._dismiss_mini_popup()
     app.update()
-check(f'the template editor\'s name, title and checklist boxes refuse what '
-      f'passes their limits, and say so ({_tl_kept}; {_tl_told[:1]})',
+check(f'the template editor\'s name, title and checklist boxes shorten a paste '
+      f'past their limits, refuse a key past them, and say so ({_tl_kept}; '
+      f'{_tl_told[:4]})',
       len(_tl_kept) == 3
-      and all(v == (0, k[0]) for k, v in _tl_kept.items())
-      and any('A checklist item can be up to 2,000 characters' in t for t in _tl_told))
+      and all(v == (k[0], k[0]) for k, v in _tl_kept.items())
+      and {f'Pasted text shortened: {what} can be up to {n:,} characters'
+           for what, n in (('a template name', app.TITLE_MAX_LEN),
+                           ('a note title', app.TITLE_MAX_LEN),
+                           ('a checklist item', NO.MAX_CHECKLIST_ITEM_CHARS))
+           } <= set(_tl_told)
+      and 'A checklist item can be up to 2,000 characters' in _tl_told)
 
 # ...and a template's item already longer keeps every word, its row drawn cut,
 # as a note's row is (qa1): a backup's 60,000 characters stood one label past
@@ -5025,20 +5033,27 @@ app.refresh_note_list()
 app.open_note_in_tab(app.notes[0])
 _kv_settle(6)
 _nm_box = None
+_nm_told = []
+_nm_real_status, _nm_real_read = app.set_status, NO.clipboard.read_text
 try:
     app.save_current_as_template()
     app.update()
     _nm_box = next(_tl_entries(app._mini_popup), None)
     if _nm_box is not None:
         _nm_box.delete(0, 'end')
-        _nm_box.insert(0, 'p' * 5000)                  # a paste past the limit
+        NO.clipboard.read_text = lambda: 'p' * 5000
+        app.set_status = lambda text, *a, **k: _nm_told.append(text)
+        _nm_box.event_generate('<<Paste>>')           # a page pasted: shortened
         _nm_box_len = len(_nm_box.get())
 finally:
+    app.set_status, NO.clipboard.read_text = _nm_real_status, _nm_real_read
     app._dismiss_mini_popup()
     app.update()
-check(f"Save as template's name box refuses a paste past the note title's "
-      f"{app.TITLE_MAX_LEN} ({_nm_box_len if _nm_box else None} kept)",
-      _nm_box is not None and _nm_box_len == 0)
+check(f"Save as template's name box shortens a paste to the note title's "
+      f"{app.TITLE_MAX_LEN} ({_nm_box_len if _nm_box else None} kept; {_nm_told[:1]})",
+      _nm_box is not None and _nm_box_len == app.TITLE_MAX_LEN
+      and _nm_told[:1] == ['Pasted text shortened: a template name can be up '
+                           f'to {app.TITLE_MAX_LEN} characters'])
 _nm_kept = list(app.templates)
 app.templates = [{'name': _nm_long, 'body': 'x'}, {'name': _nm_lines, 'body': 'y'}]
 _nm_picker = _nm_buttons = None
@@ -5586,10 +5601,12 @@ check(f"the template preview is drawn again only when its tables change "
       len(_pv_ids) == 3 and len(_pv_ids[0]) > 200 and _pv_ids[0] == _pv_ids[1]
       and _pv_ids[1] != _pv_ids[2])
 
-# ---- A PASTE OVER A SELECTION IN A LIMITED BOX IS WEIGHED WHOLE ----
+# ---- A PASTE OVER A SELECTION IN A LIMITED BOX REPLACES IT, SHORTENED ----
 # Round 4: off X11, Tk's own paste deletes the selection and inserts as two
 # edits; the delete passed the limit's check, the insert did not, and what
-# was typed was gone. Windows' paste is run here on every system.
+# was typed was gone. Windows' paste is run here on every system. Since
+# round 5 a paste past the limit is shortened to the room the selection
+# leaves, as the title's is.
 _wp_real_bind = str(app.tk.call('bind', 'Entry', '<<Paste>>'))
 _wp_real_read = NO.clipboard.read_text
 _wp_kept = None
@@ -5602,7 +5619,7 @@ try:
     _kv_settle(6)
     _wp_box = list(_tl_entries(app._mini_popup))[-1]       # the checklist's Add box
     _wp_box.insert(0, 'y' * 1900)
-    _wp_box.selection_range(0, 'end')
+    _wp_box.selection_range(1800, 'end')                   # the last 100 chosen
     app.clipboard_clear()
     app.clipboard_append('z' * 2500)
     NO.clipboard.read_text = lambda: 'z' * 2500
@@ -5615,9 +5632,10 @@ finally:
     app.clipboard_clear()
     app._dismiss_mini_popup()
     app.update()
-check(f"a paste past a box's limit over its selection keeps what was typed "
-      f"({len(_wp_kept) if _wp_kept is not None else None} characters kept)",
-      _wp_kept == 'y' * 1900)
+check(f"a paste past a box's limit over its selection replaces it, shortened to "
+      f"the room left ({_wp_kept.count('y') if _wp_kept is not None else None} "
+      f"typed and {_wp_kept.count('z') if _wp_kept is not None else None} pasted)",
+      _wp_kept == 'y' * 1800 + 'z' * 200)
 
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")

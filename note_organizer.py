@@ -1269,9 +1269,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _limit_entry(self, entry, limit, what):
         """Keep *entry* to *limit* characters, as the title's box is kept: a
-        key or a paste past it is refused, and the status bar says why. A
-        value already longer -- a template from a backup -- still shortens.
-        Registered on the entry, so the command goes with it."""
+        key past it is refused, a paste past it shortened to fit, and the
+        status bar says so. A value already longer -- a template from a
+        backup -- still shortens. Registered on the entry, so the command
+        goes with it."""
         def within(proposed, current):
             if len(proposed) <= limit or len(proposed) < len(current):
                 return True
@@ -1284,9 +1285,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         validatecommand=(entry.register(within), "%P", "%s"))
 
         def paste(_event=None):
-            # Tk's own paste, off X11, deletes the selection and inserts as two
-            # edits: the delete passed, the insert was refused, and the words
-            # typed were gone. Weighed whole first, and refused whole.
+            # Shortened to fit, as the title's paste is: refused whole, it
+            # looked as if it had failed. In one go -- Tk's own, off X11,
+            # deletes the selection and inserts as two edits.
             raw, _cut = self._clipboard_text(entry)
             if raw is None:
                 return None
@@ -1297,8 +1298,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 chosen = 0
             if len(entry.get()) - chosen + len(raw) <= limit:
                 return None
-            self.after_idle(lambda: self.set_status(
-                f"{what} can be up to {limit:,} characters"))
+            try:
+                if chosen:
+                    entry.delete("sel.first", "sel.last")
+                room = limit - len(entry.get())
+                if room > 0:
+                    entry.insert("insert", raw[:room])
+                    self.tk.call("tk::EntrySeeInsert", entry)
+            except tk.TclError:
+                return "break"
+            self.set_status(
+                f"Pasted text shortened: {what[:1].lower()}{what[1:]} can be up "
+                f"to {limit:,} characters" if room > 0
+                else f"{what} can be up to {limit:,} characters")
             return "break"
         entry.bind("<<Paste>>", paste, add="+")
 

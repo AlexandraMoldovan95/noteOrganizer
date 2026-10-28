@@ -432,7 +432,7 @@ too). The new order is saved with the note, and a template's checklist moves the
 The box sits beside the calculator at the same size; when a list gets long, **⤢ Expand** in its
 header grows it to give more room (and it always scrolls, expanded or not). The expanded size is a
 per-view choice — switching notes returns it to the compact size. An item can be up to 2,000
-characters; a longer paste is refused, and the status bar says so.
+characters; a longer paste is shortened to fit, as a note's title is, and the status bar says so.
 
 ![Checklist](screenshots/checklist.png)
 
