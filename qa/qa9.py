@@ -3471,6 +3471,70 @@ app.filter_var.set('All')
 app.refresh_note_list()
 _kd_settle()
 
+# ---- KEYBOARD: a popup opened from the keyboard lands where one types ----
+# Round 2 of the final audit: the template editor and the month jump put the
+# keyboard on the ✕ of their header, the first control built. A space typed
+# into a new template's name closed the editor, and the year typed into the
+# jump went nowhere (its own request for the year box is held by Tk until the
+# popup is drawn, where the landing cannot see it).
+
+
+def _kp_inside(pop):
+    return [w for w in _kd_asked
+            if pop is not None and str(w).startswith(str(pop) + '.')]
+
+
+tk.Misc.focus_set = _kd_record
+try:
+    app.notebook.select(app.TAB_CALENDAR)
+    _kd_settle()
+    del _kd_asked[:]
+    _kp_pressed = _kd_key(app.cal_month_lbl, '<space>')
+    _kp_pop = _kd_open_pop()
+    _kp_mine = _kp_inside(_kp_pop)
+    check(f'Space on the calendar\'s month opens the jump with the keyboard in '
+          f'its year box, the year selected to type over, never on its ✕ '
+          f'({[w.winfo_class() for w in _kp_mine]})',
+          _kp_pressed and _kp_pop is not None and _kp_mine
+          and _kp_mine[-1].winfo_class() == 'Entry'
+          and _kp_mine[-1].selection_present()
+          and not any(w.winfo_class() == 'Button' for w in _kp_mine))
+    app._dismiss_mini_popup()
+    _kd_settle()
+    app.notebook.select(app.TAB_NOTES)
+    app.show_settings_page()
+    app.toggle_settings_panel('templates')
+    _kd_settle()
+    _kp_new = find_widget(app.settings_page, tk.Button, '+ New template')
+    del _kd_asked[:]
+    _kd_key(_kp_new, '<space>')
+    _kp_ed = _kd_open_pop()
+    _kp_mine = _kp_inside(_kp_ed)
+    _kp_name = find_widget(_kp_ed, tk.Entry) if _kp_ed is not None else None
+    check(f'Space on "+ New template" opens the editor with the keyboard in its '
+          f'Template name box, "Untitled template" selected, never on its ✕ '
+          f'({[w.winfo_class() for w in _kp_mine]})',
+          _kp_ed is not None and _kp_name is not None and _kp_mine
+          and _kp_mine[-1] is _kp_name and _kp_name.selection_present()
+          and not any(w.winfo_class() == 'Button' for w in _kp_mine))
+    # Typed where the app put the keyboard: the space is a letter of the name.
+    _kp_typed = None
+    if _kp_mine and _kd_take(_kp_mine[-1]):
+        for _kp_k in ('W', 'e', 'e', 'k', 'space', 'p', 'l', 'a', 'n'):
+            _kp_mine[-1].event_generate(f'<KeyPress-{_kp_k}>')
+        _kd_settle()
+        _kp_typed = _kp_name.get() if _kp_ed.winfo_exists() else None
+    check(f'...and "Week plan" typed there is the template\'s name, the editor '
+          f'still open ({_kp_typed!r})', _kp_typed == 'Week plan')
+    app._dismiss_mini_popup()
+    _kd_settle()
+finally:
+    tk.Misc.focus_set = _kd_real_focus_set
+if getattr(app, '_settings_open', False):
+    app.hide_settings_page()
+app.notebook.select(app.TAB_NOTES)
+_kd_settle()
+
 check('none of the blocks above raised a background error (%s)' % _bg9[:2],
       not _bg9)
 app.notes = list(_na_notes)

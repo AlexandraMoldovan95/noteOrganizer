@@ -1519,15 +1519,26 @@ class DialogsMixin:
 
     def _keyboard_into_popup(self, pop, opener):
         """A popup opened from the keyboard takes it, on its current choice,
-        else its first, else its first control -- unless it has already
-        placed it -- and hands it back to *opener* when it closes."""
+        else its first, else its first box to type in, else its first
+        control -- unless it has already placed it -- and hands it back to
+        *opener* when it closes.
+
+        The box comes before the first control because that is the ✕ of a
+        popup's header, built first: the template editor opened on it, and
+        the first space typed into the name closed the editor. And a popup
+        that asks for its own box before it is placed (the month jump's
+        year) cannot be heard here: Tk holds that request until the window
+        is drawn, and `focus -lastfor` still names the popup."""
         try:
             if str(self.tk.call("focus", "-lastfor", pop)) == str(pop):
                 choices = self._walk_choices(pop, drawn=False)
                 current = [c for c in choices if getattr(c, "_key_current", False)]
-                target = (current or choices or [pop.tk_focusNext()])[0]
+                box = self._first_box_in(pop)
+                target = (current or choices or [box or pop.tk_focusNext()])[0]
                 if target is not None:
                     target.focus_set()
+                    if target is box:
+                        self._arrive_as_tab_does(box)
         except (tk.TclError, KeyError):
             return
         path, place = str(pop), self._place_of(opener)
@@ -1535,6 +1546,47 @@ class DialogsMixin:
         pop.bind("<Destroy>", lambda e: (self._keyboard_back(path, place, clicks)
                                          if str(e.widget) == path else None),
                  add="+")
+
+    def _first_box_in(self, pop):
+        """The first box to type in, in the order Tab takes through *pop*
+        (the order its widgets stack in), or None. Asked of the tree, not of
+        Tk's traversal, which skips everything until the popup is drawn."""
+        def placed(w):
+            while w is not pop:
+                if not w.winfo_manager():
+                    return False
+                w = w.master
+            return True
+
+        def walk(w):
+            for c in w.winfo_children():
+                if isinstance(c, tk.Toplevel):
+                    continue
+                if (c.winfo_class() in self._TYPING_CLASSES
+                        and str(c.cget("takefocus")) != "0"
+                        and str(c.cget("state")) != "disabled" and placed(c)):
+                    return c
+                found = walk(c)
+                if found is not None:
+                    return found
+            return None
+        try:
+            return walk(pop)
+        except (tk.TclError, AttributeError):
+            return None
+
+    @staticmethod
+    def _arrive_as_tab_does(box):
+        """In a one-line box, what it holds selected and the caret after it,
+        as Tk's own Tab arrives there: the first key typed replaces a new
+        template's "Untitled template", or the month jump's year. A box of
+        many lines is left as it is, as Tab leaves it."""
+        try:
+            if not isinstance(box, tk.Text):
+                box.selection_range(0, "end")
+                box.icursor("end")
+        except (tk.TclError, AttributeError):
+            pass
 
     def _keyboard_back(self, path, place, clicks):
         """Back to the opener once its popup has gone, by any road -- or to

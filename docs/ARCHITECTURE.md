@@ -410,10 +410,14 @@ Two bind tags carry this, bound once for the whole app, so a rebuilt list adds n
 
 A popup is a window of its own, and Tab never leaves the window it is in. So a popup opened from
 the keyboard takes it (`_keyboard_into_popup`, from `_place_dropdown_popup`, the one door every
-popup goes through) on its current choice; the arrows walk its choices by where they stand, one
-rule for a list, a grid of swatches and the emoji picker; and when it closes, by any road, the
-keyboard goes back to the opener — or to what stands in its place, when the choice drew the page
-again. A popup a click opens leaves the keyboard alone: the mouse's behaviour does not change.
+popup goes through) on its current choice — or, with no choices, in its first box to type in, its
+text selected as Tab arrives in a box: never on the ✕ its header builds first, where a space typed
+into a name closed the editor. A popup cannot pick its own landing by asking for a box before it
+is placed: Tk holds that request until the window is drawn, out of `focus -lastfor`'s sight. The
+arrows walk its choices by where they stand, one rule for a list, a grid of swatches and the emoji
+picker; and when it closes, by any road, the keyboard goes back to the opener — or to what stands
+in its place, when the choice drew the page again. A popup a click opens leaves the keyboard
+alone: the mouse's behaviour does not change.
 
 Tab moves the keyboard and never the view, and the editor, Settings and the long lists are frames
 drawn on canvases, so what Tab lands on is scrolled into sight (`_bring_into_sight`).

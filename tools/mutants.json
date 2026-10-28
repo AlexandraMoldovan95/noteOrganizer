@@ -1356,6 +1356,29 @@
     "expect": "killed"
   },
   {
+    "id": "KR01",
+    "about": "a popup with no choices opened from the keyboard lands on its header's ✕",
+    "edits": [{"file": "noteorganizer/ui/dialogs.py",
+               "find": "                target = (current or choices or [box or pop.tk_focusNext()])[0]\n",
+               "replace": "                target = (current or choices or [pop.tk_focusNext()])[0]\n"}],
+    "must_fail": ["Space on the calendar's month opens the jump with the keyboard in",
+                  "Space on \"+ New template\" opens the editor with the keyboard in its",
+                  "...and \"Week plan\" typed there is the template's name"],
+    "suites": ["qa9"],
+    "expect": "killed"
+  },
+  {
+    "id": "KR02",
+    "about": "a box the keyboard lands in keeps the caret in front of what it holds",
+    "edits": [{"file": "noteorganizer/ui/dialogs.py",
+               "find": "                box.selection_range(0, \"end\")\n",
+               "replace": "                pass\n"}],
+    "must_fail": ["Space on \"+ New template\" opens the editor with the keyboard in its",
+                  "...and \"Week plan\" typed there is the template's name"],
+    "suites": ["qa9"],
+    "expect": "killed"
+  },
+  {
     "id": "A01",
     "about": "a highlight given in an open cell reaches the note only when the cell closes",
     "edits": [
