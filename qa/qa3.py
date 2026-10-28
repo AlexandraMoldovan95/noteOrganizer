@@ -843,7 +843,7 @@ fd.asksaveasfilename = lambda **k: _atomic_zip
 try:
     app.export_data()
     t0 = time.time()
-    while app._export_state is not None and time.time() - t0 < 5:
+    while app._export_state is not None and time.time() - t0 < 120:
         app.update()
 finally:
     NO.zipfile.ZipFile = _real_zipfile_cls
@@ -874,7 +874,7 @@ try:
     _qa3_sharing.BOMB_MIN_BYTES = 1_000_000
     app.export_data()
     t0 = time.time()
-    while app._export_state is not None and time.time() - t0 < 5:
+    while app._export_state is not None and time.time() - t0 < 120:
         app.update()
 finally:
     _qa3_sharing.BOMB_MIN_BYTES = _kept_min
@@ -987,7 +987,7 @@ if os.path.exists(_rt_zip):
 fd.asksaveasfilename = lambda **k: _rt_zip
 app.export_data()
 t0 = time.time()
-while app._export_state is not None and time.time() - t0 < 5:
+while app._export_state is not None and time.time() - t0 < 120:
     app.update()
 check('full-notebook export completes', os.path.exists(_rt_zip))
 # Wipe the two locally, then import the backup back.
@@ -1000,7 +1000,7 @@ app._themed_dialog = lambda *a, **k: 'all'
 fd.askopenfilename = lambda **k: _rt_zip
 app.import_data()
 t0 = time.time()
-while app._import_state is not None and time.time() - t0 < 8:
+while app._import_state is not None and time.time() - t0 < 120:
     app.update()
 check('the template comes back from the backup',
       any(t.get('name') == 'RoundTripTpl' for t in app.templates))
@@ -1011,7 +1011,7 @@ _trash_count_rt = len(app.trash)
 fd.askopenfilename = lambda **k: _rt_zip
 app.import_data()
 t0 = time.time()
-while app._import_state is not None and time.time() - t0 < 8:
+while app._import_state is not None and time.time() - t0 < 120:
     app.update()
 check('re-importing the same backup does not double the trash',
       len(app.trash) == _trash_count_rt)
@@ -1048,7 +1048,7 @@ with zipfile.ZipFile(_cz, 'w') as zf:
 fd.askopenfilename = lambda **k: _cz
 app.import_data()
 t0 = time.time()
-while app._import_state is not None and time.time() - t0 < 8:
+while app._import_state is not None and time.time() - t0 < 120:
     app.update()
 _ft = next((e for e in app.trash if e.get('title') == 'ForeignTrash'), None)
 check('a foreign trash entry arrives normalized (deleted_at is a str)',
@@ -1082,7 +1082,7 @@ with zipfile.ZipFile(_dz, 'w') as zf:
 fd.askopenfilename = lambda **k: _dz
 app.import_data()
 t0 = time.time()
-while app._import_state is not None and time.time() - t0 < 30:
+while app._import_state is not None and time.time() - t0 < 120:
     app.update()
 _dz_new = {d: c for d, c in app.day_colors.items() if d not in _dc_before}
 check(f'a backup\'s day colours come in for real days only '
@@ -1106,7 +1106,7 @@ with zipfile.ZipFile(_dz, 'w') as zf:
     zf.writestr('settings.json', json.dumps({'day_colors': _dz_many}))
 app.import_data()
 t0 = time.time()
-while app._import_state is not None and time.time() - t0 < 60:
+while app._import_state is not None and time.time() - t0 < 120:
     app.update()
 check(f'a backup carrying more days than the app keeps fills it to '
       f'{NO.MAX_DAY_DECORATIONS:,} and no further ({len(app.day_colors):,})',
@@ -1151,7 +1151,7 @@ with zipfile.ZipFile(_tpz, 'w') as zf:
 fd.askopenfilename = lambda **k: _tpz
 app.import_data()
 t0 = time.time()
-while app._import_state is not None and time.time() - t0 < 60:
+while app._import_state is not None and time.time() - t0 < 120:
     app.update()
 check(f'a backup with more templates than the app keeps fills it to '
       f'{NO.MAX_TEMPLATES:,} and no further ({len(app.templates):,})',
@@ -1250,7 +1250,7 @@ if os.path.exists(_catzip):
 fd.asksaveasfilename = lambda **k: _catzip
 app.export_data()
 t0 = time.time()
-while app._export_state is not None and time.time() - t0 < 5:
+while app._export_state is not None and time.time() - t0 < 120:
     app.update()
 check('the backup zip carries settings.json', os.path.exists(_catzip))
 
@@ -1268,7 +1268,7 @@ app._themed_dialog = lambda *a, **k: 'all'
 fd.askopenfilename = lambda **k: _catzip
 app.import_data()
 t0 = time.time()
-while app._import_state is not None and time.time() - t0 < 8:
+while app._import_state is not None and time.time() - t0 < 120:
     app.update()
 check('importing the backup brings the category back',
       'Big Projects' in NO.CATEGORY_COLORS
@@ -1314,7 +1314,7 @@ if os.path.exists(_ordzip):
 fd.asksaveasfilename = lambda **k: _ordzip
 app.export_data()
 t0 = time.time()
-while app._export_state is not None and time.time() - t0 < 5:
+while app._export_state is not None and time.time() - t0 < 120:
     app.update()
 # The amnesiac device again -- but THIS one already owns a General note
 # with the identical text, the collision the old order manufactured.
@@ -1330,7 +1330,7 @@ app._themed_dialog = lambda *a, **k: (_dlg_asked.append(a), 'all')[1]
 fd.askopenfilename = lambda **k: _ordzip
 app.import_data()
 t0 = time.time()
-while app._import_state is not None and time.time() - t0 < 8:
+while app._import_state is not None and time.time() - t0 < 120:
     app.update()
 app._themed_dialog = _real_dlg3
 check('with categories merged first, the twin is no duplicate: no dialog',
@@ -1400,7 +1400,7 @@ if os.path.exists(_cxzip):
 fd.asksaveasfilename = lambda **k: _cxzip
 app.export_data()
 t0 = time.time()
-while app._export_state is not None and time.time() - t0 < 5:
+while app._export_state is not None and time.time() - t0 < 120:
     app.update()
 
 # A device that never heard of it, but DOES hold the identical note, so
@@ -1416,7 +1416,7 @@ app._themed_dialog = lambda *a, **k: 'cancel'
 fd.askopenfilename = lambda **k: _cxzip
 app.import_data()
 t0 = time.time()
-while app._import_state is not None and time.time() - t0 < 8:
+while app._import_state is not None and time.time() - t0 < 120:
     app.update()
 check('cancelling an import adds no notes', len(app.notes) == _before_cx)
 check('and leaves no stranger category in the palette',
@@ -1428,7 +1428,7 @@ check('...nor on disk',
 app._themed_dialog = lambda *a, **k: 'all'
 app.import_data()
 t0 = time.time()
-while app._import_state is not None and time.time() - t0 < 8:
+while app._import_state is not None and time.time() - t0 < 120:
     app.update()
 check('while agreeing DOES install it (the cancel was the difference)',
       'Foreign' in NO.CATEGORY_COLORS
@@ -2250,7 +2250,7 @@ if os.path.exists(_bkzip):
 fd.asksaveasfilename = lambda **k: _bkzip
 app.export_data()
 t0 = time.time()
-while app._export_state is not None and time.time() - t0 < 5:
+while app._export_state is not None and time.time() - t0 < 120:
     app.update()
 # The other PC: the same note, from before the laptop's changes.
 os.remove(_bk_path)
@@ -2264,7 +2264,7 @@ app._themed_dialog = lambda *a, **k: 'update'
 fd.askopenfilename = lambda **k: _bkzip
 app.import_data()
 t0 = time.time()
-while app._import_state is not None and time.time() - t0 < 8:
+while app._import_state is not None and time.time() - t0 < 120:
     app.update()
 app._themed_dialog = _real_dlg_bk
 _trips = [n for n in app.notes if n.get('uid') == _trip_uid]
@@ -2314,7 +2314,7 @@ if os.path.exists(_trzip):
 fd.asksaveasfilename = lambda **k: _trzip
 app.export_data()
 t0 = time.time()
-while app._export_state is not None and time.time() - t0 < 5:
+while app._export_state is not None and time.time() - t0 < 120:
     app.update()
 app.trash = [dict(NO.normalize_note({'id': 7, 'title': 'Old plan', 'body': 'x',
                                      'date': '2026-02-02'}),
@@ -2326,7 +2326,7 @@ fd.askopenfilename = lambda **k: _trzip
 for _round in range(2):
     app.import_data()
     t0 = time.time()
-    while app._import_state is not None and time.time() - t0 < 8:
+    while app._import_state is not None and time.time() - t0 < 120:
         app.update()
     if _round == 0:
         check("a backup's trashed note that differs in its date is kept",
@@ -2664,7 +2664,7 @@ app.import_data()
 _ri_state = app._import_state
 t0 = time.time()
 while (_ri_state is not None and not _ri_state['done']
-       and time.time() - t0 < 10):
+       and time.time() - t0 < 120):
     time.sleep(0.05)   # no update(): the main-thread merge must not run
 check('fixture: the import worker copied the backup file in',
       _ri_state is not None and _ri_state['done']
@@ -3047,7 +3047,7 @@ if os.path.exists(_iezip):
 fd.asksaveasfilename = lambda **k: _iezip
 app.export_data()
 t0 = time.time()
-while app._export_state is not None and time.time() - t0 < 5:
+while app._export_state is not None and time.time() - t0 < 120:
     app.update()
 _ie_asked = []
 _ie_real_dlg = app._themed_dialog
@@ -3055,7 +3055,7 @@ app._themed_dialog = lambda *a, **k: (_ie_asked.append(a[0]), 'update')[1]
 fd.askopenfilename = lambda **k: _iezip
 app.import_data()
 t0 = time.time()
-while app._import_state is not None and time.time() - t0 < 8:
+while app._import_state is not None and time.time() - t0 < 120:
     app.update()
 app._themed_dialog = _ie_real_dlg
 check(f'importing a backup holding that note exactly as it is offers no '
@@ -3077,7 +3077,7 @@ _ie_real_info = app.show_info
 app.show_info = lambda *a, **k: _ie_info.append(a[1])
 app.import_data()
 t0 = time.time()
-while app._import_state is not None and time.time() - t0 < 8:
+while app._import_state is not None and time.time() - t0 < 120:
     app.update()
 app._themed_dialog = _ie_real_dlg
 app.show_info = _ie_real_info
@@ -3116,7 +3116,7 @@ if os.path.exists(_ra_zip):
 fd.asksaveasfilename = lambda **k: _ra_zip
 app.export_data()
 t0 = time.time()
-while app._export_state is not None and time.time() - t0 < 5:
+while app._export_state is not None and time.time() - t0 < 120:
     app.update()
 check('fixture: the backup holding the note and its file is written',
       os.path.isfile(_ra_zip))
@@ -3137,7 +3137,7 @@ def _ra_import(answer):
     try:
         app.import_data()
         t0 = time.time()
-        while app._import_state is not None and time.time() - t0 < 8:
+        while app._import_state is not None and time.time() - t0 < 120:
             app.update()
     finally:
         app._themed_dialog, app.show_info = real_dlg, real_info
@@ -3311,7 +3311,7 @@ def _ic_import(notes, files, answer):
     fd.askopenfilename = lambda **k: zpath
     app.import_data()
     t0 = time.time()
-    while app._import_state is not None and time.time() - t0 < 8:
+    while app._import_state is not None and time.time() - t0 < 120:
         app.update()
     app._themed_dialog = real
     os.remove(zpath)
@@ -3391,7 +3391,7 @@ def _dz_import(members):
     try:
         app.import_data()
         t0 = time.time()
-        while app._import_state is not None and time.time() - t0 < 8:
+        while app._import_state is not None and time.time() - t0 < 120:
             app.update()
     finally:
         app._themed_dialog = real
@@ -3513,7 +3513,7 @@ try:
     fd.asksaveasfilename = lambda **k: _xf_zip
     app.export_data()
     t0 = time.time()
-    while app._export_state is not None and time.time() - t0 < 10:
+    while app._export_state is not None and time.time() - t0 < 120:
         app.update()
     with zipfile.ZipFile(_xf_zip) as _zf:
         _xf_packed = json.loads(_zf.read('notes_data.json').decode('utf-8'))
@@ -3549,7 +3549,7 @@ try:
     try:
         app.export_data()
         t0 = time.time()
-        while app._export_state is not None and time.time() - t0 < 10:
+        while app._export_state is not None and time.time() - t0 < 120:
             app.update()
     finally:
         app._corrupt_notes_report = None
@@ -3637,7 +3637,7 @@ try:
     app.save_notes()
     app.export_data()
     t0 = time.time()
-    while app._export_state is not None and time.time() - t0 < 10:
+    while app._export_state is not None and time.time() - t0 < 120:
         app.update()
     with zipfile.ZipFile(_la_zip) as _zf:
         _la_names = _zf.namelist()

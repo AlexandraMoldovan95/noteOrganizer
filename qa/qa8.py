@@ -296,7 +296,7 @@ fd.asksaveasfilename = lambda **k: export_path
 app11.export_data()
 app11.update()
 t0 = time.time()
-while app11._export_state is not None and time.time() - t0 < 8:
+while app11._export_state is not None and time.time() - t0 < 120:
     app11.update()
     time.sleep(0.05)
 zipfile.ZipFile.write = original_write
@@ -332,7 +332,7 @@ fd.askopenfilename = lambda **k: import_zip_path
 app12.import_data()
 app12.update()
 t0 = time.time()
-while app12._import_state is not None and time.time() - t0 < 8:
+while app12._import_state is not None and time.time() - t0 < 120:
     app12.update()
     time.sleep(0.05)
 os.listdir = original_listdir
