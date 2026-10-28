@@ -8514,5 +8514,59 @@
       "qa3"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "RU01",
+    "about": "an animated PNG's frame time goes to after() as Pillow gives it, a float",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "            delay = int(round(float(info.get(\"duration\") or 0)))\n",
+        "replace": "            delay = info.get(\"duration\") or 0\n"
+      }
+    ],
+    "must_fail": [
+      "an animated PNG shows and plays every frame, and lets its file go"
+    ],
+    "suites": [
+      "qa7"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RU02",
+    "about": "a preview that fails halfway is left half built, its file held",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "        except Exception:\n            self._dismiss_mini_popup()\n            raise\n",
+        "replace": "        except Exception:\n            raise\n"
+      }
+    ],
+    "must_fail": [
+      "a preview that fails halfway lets its file go and leaves no popup"
+    ],
+    "suites": [
+      "qa7"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RU03",
+    "about": "removing a file its preview still reads leaves the file held open",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "                str(getattr(source, \"filename\", \"\")))) == os.path.normcase(held):\n            self._release_preview_source()\n",
+        "replace": "                str(getattr(source, \"filename\", \"\")))) == os.path.normcase(held):\n            pass\n"
+      }
+    ],
+    "must_fail": [
+      "removing a file its preview is still reading lets the file go first"
+    ],
+    "suites": [
+      "qa7"
+    ],
+    "expect": "killed"
   }
 ]

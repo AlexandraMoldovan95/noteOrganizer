@@ -1229,6 +1229,84 @@ check(f'...a budget that still lets a 4K animation play two dozen frames '
       app.ANIMATION_PIXEL_BUDGET // (3840 * 2160) >= 24
       and app.ANIMATION_PIXEL_BUDGET <= 10 * app.PREVIEW_PIXEL_BUDGET)
 
+# An animated PNG plays as a GIF does. Pillow gives its frame times as floats
+# (40.0) and Tk's after() takes only integers: every animated PNG raised
+# halfway through the build, its file held open and its overlay never shown.
+_ap_png = os.path.join(_pv_dir, 'sticker_ap.png')
+_ab_frames[0].save(_ap_png, format='PNG', save_all=True,
+                   append_images=_ab_frames[1:6], duration=40, loop=0)
+getattr(app, '_preview_cache', {}).clear()
+_ap_raised = None
+try:
+    app._show_image_preview(_ap_png, 'sticker_ap.png')
+    _pv_end = time.time() + 10
+    while app._preview_source is not None and time.time() < _pv_end:
+        app.update(); time.sleep(0.01)
+except tk.TclError as _ap_exc:
+    _ap_raised = str(_ap_exc)
+_ap_pop = app._mini_popup
+_ap_placed = _ap_pop is not None and _ap_pop.winfo_manager() == 'place'
+check(f'an animated PNG shows and plays every frame, and lets its file go '
+      f'(raised {_ap_raised!r}, placed {_ap_placed}, '
+      f'{len(app._image_preview_ref or [])} of 6 frames)',
+      _ap_raised is None and _ap_placed
+      and len(app._image_preview_ref or []) == 6 and app._preview_source is None)
+app._dismiss_mini_popup(); app.update()
+
+# And whatever else fails halfway takes the half-built preview down with it,
+# so its file is let go and no hidden popup is left behind.
+getattr(app, '_preview_cache', {}).clear()
+_ap_real_after = app.after
+_ap_seen = {}
+
+
+def _ap_after(ms, *a, **k):
+    if ms == 20 and not _ap_seen:          # the first frame's tick
+        _ap_seen['source'] = app._preview_source
+        raise tk.TclError('a failure halfway through the build')
+    return _ap_real_after(ms, *a, **k)
+
+
+app.after = _ap_after
+try:
+    try:
+        app._show_image_preview(_ab_gif, 'wide_anim.gif')
+        _ap_failed = False
+    except tk.TclError:
+        _ap_failed = True
+finally:
+    del app.after
+_ap_was = _ap_seen.get('source')
+check(f'a preview that fails halfway lets its file go and leaves no popup '
+      f'(failed {_ap_failed}, file was held {_ap_was is not None}, '
+      f'now {app._preview_source}, popup {app._mini_popup})',
+      _ap_failed and _ap_was is not None and app._preview_source is None
+      and app._mini_popup is None
+      and (getattr(_ap_was, 'fp', None) is None
+           or getattr(_ap_was.fp, 'closed', False)))
+app.update()
+
+# A remove lets go of the file a preview is still reading: on Windows an open
+# file is not deleted, so the record went and the file stayed for good.
+from noteorganizer.core.storage import _attachment_path_within as _ap_within
+import shutil as _ap_shutil
+_ap_name = '20261003120000000000_held.gif'
+_ap_shutil.copy(_ab_gif, os.path.join(NO.ATTACHMENTS_DIR, _ap_name))
+getattr(app, '_preview_cache', {}).clear()
+_ap_kept = list(app.current_attachments)
+app.current_attachments = [{'filename': 'held.gif', 'stored_as': _ap_name}]
+app._show_image_preview(_ap_within(_ap_name), 'held.gif')
+_ap_reading = app._preview_source is not None
+app.remove_attachment(0)
+check(f'removing a file its preview is still reading lets the file go first '
+      f'(was reading {_ap_reading}, now {app._preview_source})',
+      _ap_reading and app._preview_source is None
+      and not os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _ap_name)))
+app._dismiss_mini_popup()
+app._cancel_pending_autosave()
+app.current_attachments = _ap_kept
+app.refresh_attachments_list(); app.update()
+
 # An image too large to decode here is offered to the program Windows opens
 # images with: a 439 KB PNG of 12000x12000 peaked at 1.7 GB in the preview.
 _pv_asked = []

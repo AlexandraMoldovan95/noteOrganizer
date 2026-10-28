@@ -138,6 +138,13 @@ class AttachmentsMixin:
         if index is None:
             return
         removed = self.current_attachments.pop(index)
+        # A preview still reading it holds it open, and Windows deletes no
+        # open file: the record went and the file stayed for good.
+        source = getattr(self, "_preview_source", None)
+        held = _attachment_path_within(stored) if stored else None
+        if source is not None and held and os.path.normcase(os.path.abspath(
+                str(getattr(source, "filename", "")))) == os.path.normcase(held):
+            self._release_preview_source()
         # Not a file another note or a Trash entry still shows -- a
         # duplicate or an import that could not copy it kept its name --
         # nor one this note lists twice. This note's own saved copy is left
@@ -185,6 +192,28 @@ class AttachmentsMixin:
             self._open_externally(path, original_name)
 
     def _show_image_preview(self, path, filename):
+        """The preview, or nothing: one that fails half built -- its file
+        kept open, its overlay never placed, as every animated PNG's did --
+        is taken down before the error is reported, so no file stays held
+        and no hidden popup is left for Escape to look for."""
+        try:
+            self._build_image_preview(path, filename)
+        except Exception:
+            self._dismiss_mini_popup()
+            raise
+
+    @staticmethod
+    def _frame_delay(info):
+        """A frame's time on screen in whole milliseconds, as Tk's after()
+        takes it: Pillow gives an animated PNG's as a float (40.0), and
+        after() refuses anything but an integer. None, zero or junk is 100."""
+        try:
+            delay = int(round(float(info.get("duration") or 0)))
+        except (TypeError, ValueError, OverflowError):
+            delay = 0
+        return delay if delay > 0 else 100
+
+    def _build_image_preview(self, path, filename):
         """A large, in-app image preview — most of the window, not a tiny
         thumbnail and not handed off to an external program. Uses Pillow
         (not plain Tk) for two reasons: plain Tk only decodes PNG/GIF, and
@@ -267,8 +296,7 @@ class AttachmentsMixin:
                 # not just this frame's own raw (possibly partial) pixels.
                 frames = [ImageTk.PhotoImage(
                     _scaled(pil_img.convert("RGBA"), grow=not animated))]
-                delays = [(pil_img.info.get("duration", 100) or 100)
-                          if animated else 100]
+                delays = [self._frame_delay(pil_img.info) if animated else 100]
             except Exception:
                 # A file that opens and then fails to decode -- truncated,
                 # say -- is the same news to the user as one that never
@@ -357,7 +385,7 @@ class AttachmentsMixin:
                             shown = ImageTk.PhotoImage(
                                 _scaled(source.convert("RGBA"), grow=False))
                             frames.append(shown)
-                            delays.append(source.info.get("duration", 100) or 100)
+                            delays.append(self._frame_delay(source.info))
                             state["decoded"] += canvas_px
                             state["held"] += shown.width() * shown.height() * 4
                     except EOFError:
