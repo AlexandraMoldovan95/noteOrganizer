@@ -7562,8 +7562,13 @@
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "    if \"overrides\" not in fields and \"recurrence\" in fields:\n        prev.update(days_to_rescue(note, fresh[\"recurrence\"]))\n    note[\"_prev\"] = prev\n    for field in fields:\n        note[field] = copy.deepcopy(fresh[field])\n",
-        "replace": "    taken = {}\n    if \"overrides\" not in fields and \"recurrence\" in fields:\n        taken = days_to_rescue(note, fresh[\"recurrence\"])\n        prev.update(taken)\n    note[\"_prev\"] = prev\n    for field in fields:\n        note[field] = copy.deepcopy(fresh[field])\n    for key in taken:\n        note[key] = copy.deepcopy(NOTE_DEFAULTS[key])\n"
+        "find": "    if \"overrides\" not in fields and \"recurrence\" in fields:\n        prev.update(days_to_rescue(note, fresh[\"recurrence\"]))\n",
+        "replace": "    taken = {}\n    if \"overrides\" not in fields and \"recurrence\" in fields:\n        taken = days_to_rescue(note, fresh[\"recurrence\"])\n        prev.update(taken)\n"
+      },
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    if restarted:\n        note[\"exceptions\"] = []\n",
+        "replace": "    if restarted:\n        note[\"exceptions\"] = []\n    for key in taken:\n        note[key] = copy.deepcopy(NOTE_DEFAULTS[key])\n"
       }
     ],
     "must_fail": [
@@ -9489,6 +9494,42 @@
     ],
     "suites": [
       "test_tables"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR67",
+    "about": "a series turned back on from another date in the editor keeps the old series' deleted days, which hide its own first day",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                if not kept_days_fit(note, date_value, recurrence):\n                    note[\"exceptions\"] = []\n",
+        "replace": "                if False:\n                    note[\"exceptions\"] = []\n"
+      }
+    ],
+    "must_fail": [
+      "a series turned back on keeps its old days on the same date, and from another its old deleted day no longer hides its first"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR68",
+    "about": "a share code restarting a series from another date keeps the old series' deleted days on the new one",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    if restarted:\n        note[\"exceptions\"] = []\n",
+        "replace": "    if False:\n        note[\"exceptions\"] = []\n"
+      }
+    ],
+    "must_fail": [
+      "...a share code restarting it from another date drops only the deleted days, kept in its copy"
+    ],
+    "suites": [
+      "test_recurrence"
     ],
     "expect": "killed"
   }

@@ -1790,6 +1790,34 @@ check(f"...and so when a save made while the turn-off waited holds a copy of its
       _rh_held and 'SECOND PART' in (_rd_prev.get('body') or '')
       and (_rd_prev.get('recurrence') or {}).get('freq') == 'weekly'
       and not app.find_note(1)['recurrence'].get('freq'))
+# Turned back on from another date, an old deleted day hid the new series' own
+# first day (round 5). Her answer: kept days come back only onto the same date
+# and rule; a deleted day holds nothing, and the rescue copy keeps them all.
+_rr_seen = []
+for _rr_date in ('2026-09-07', '2026-09-14'):
+    _ro_fixture()
+    app.notes[0]['exceptions'] = ['2026-09-14']
+    app.notes[0]['overrides'] = {'2026-09-21': {'body': 'DAY 21: decisions'}}
+    app.save_notes()
+    app.open_note_in_tab(app.find_note(1)); app.update()
+    app._themed_dialog = lambda *a, **k: True
+    try:
+        app.rec_freq_var.set(NO.FREQ_LABELS[''])
+        app.on_recurrence_changed(); app.update()
+        app.save_current_note(); app.update()
+        app.date_entry.delete(0, 'end'); app.date_entry.insert(0, _rr_date)
+        app.rec_freq_var.set(NO.FREQ_LABELS['weekly'])
+        app.on_recurrence_changed(); app.update()
+        app.save_current_note(); app.update()
+    finally:
+        app._themed_dialog = _ro_real_dlg
+    _rr_note = app.find_note(1)
+    _rr_seen.append((_rr_note.get('exceptions'), sorted(_rr_note.get('overrides') or {}),
+                     'Standup' in [n.get('title') for n in app.notes_on_date(_rr_date)]))
+check(f"a series turned back on keeps its old days on the same date, and from "
+      f"another its old deleted day no longer hides its first ({_rr_seen})",
+      _rr_seen[0][0] == ['2026-09-14'] and _rr_seen[1][0] == []
+      and all(s[1] == ['2026-09-21'] for s in _rr_seen) and _rr_seen[1][2])
 
 # ---- "THIS OCCURRENCE ONLY" KEEPS WHAT A DAY CANNOT HOLD ----
 # The day's text goes to the day; a file attached and a tick made in the

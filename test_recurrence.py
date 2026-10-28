@@ -767,6 +767,36 @@ check('...while a series still shows its day\'s own words',
 check('...and what a kept day holds is still read, for the saves that keep it',
       NO.day_as_kept(_kd, '2026-09-07').get('body') == 'FIRST DAY')
 
+# ---- ...and come back only onto the series they belong to ----
+# Turned back on from another date, an old deleted day hid the new series' own
+# first day (round 5). Her answer: they come back only with the same date and
+# rule; a deleted day holds nothing, and the rescue copy keeps them all.
+import copy
+_rs_days = {'exceptions': ['2026-09-14'],
+            'overrides': {'2026-09-21': {'body': 'DAY 21 OWN'}}}
+_rs = NO.normalize_note(dict({'id': 2, 'uid': 'kept-days-restart', 'title': 'Gym',
+                              'body': 'x', 'date': '2026-09-07',
+                              'recurrence': {'freq': ''}}, **_rs_days))
+_rs['_prev'] = dict({'title': 'Gym', 'body': 'x', 'date': '2026-09-07',
+                     'recurrence': NO.normalize_recurrence({'freq': 'weekly'})}, **_rs_days)
+check('kept days fit the series they were kept from, and only it',
+      NO.kept_days_fit(_rs, '2026-09-07', {'freq': 'weekly'})
+      and not NO.kept_days_fit(_rs, '2026-09-14', {'freq': 'weekly'})
+      and not NO.kept_days_fit(_rs, '2026-09-07', {'freq': 'daily'})
+      and NO.kept_days_fit(dict(_rs, _prev=None), '2026-09-14', {'freq': 'weekly'}))
+_rs_code = NO.apply_shared_update(copy.deepcopy(_rs), {
+    'uid': 'kept-days-restart', 'title': 'Gym', 'body': 'x', 'date': '2026-09-14',
+    'recurrence': {'freq': 'weekly'}})
+check(f'...a share code restarting it from another date drops only the deleted days, '
+      f'kept in its copy ({_rs_code.get("exceptions")}, '
+      f'{(_rs_code.get("_prev") or {}).get("exceptions")}, '
+      f'{sorted(_rs_code.get("overrides") or {})})',
+      _rs_code.get('exceptions') == []
+      and (_rs_code.get('_prev') or {}).get('exceptions') == ['2026-09-14']
+      and '2026-09-21' in (_rs_code.get('overrides') or {})
+      and '2026-09-14' in [str(x) for x in NO.expand_occurrences(
+          _rs_code, date(2026, 9, 1), date(2026, 9, 30))])
+
 
 print()
 print(f"FAILURES: {fails if fails else 'none'}")

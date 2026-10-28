@@ -241,6 +241,24 @@ def days_to_rescue(before, recurrence):
     return {key: copy.deepcopy(before[key]) for key in DAY_FIELDS if before.get(key)}
 
 
+def kept_days_fit(note, date_value, recurrence):
+    """Whether the days a turned-off *note* kept belong to it turned back on
+    with *date_value* and *recurrence*: only when both are as the series had
+    them, which its rescue copy holds. True when it kept none, or nothing
+    says what the series was: kept, they lose nothing. An old deleted day
+    hid a series restarted on it (round five of the final audit)."""
+    if is_recurring(note) or not is_recurring({"recurrence": recurrence}):
+        return True
+    kept = {key: note.get(key) for key in DAY_FIELDS if note.get(key)}
+    prev = note.get("_prev")
+    if not kept or not (isinstance(prev, dict) and is_recurring(prev)
+                        and all(prev.get(key) == value for key, value in kept.items())):
+        return True
+    return (prev.get("date") == date_value
+            and normalize_recurrence(prev.get("recurrence"))
+            == normalize_recurrence(recurrence))
+
+
 def apply_shared_update(note, incoming, fields=UPDATABLE_FROM_SHARED):
     """Overwrite *note*'s *fields* from *incoming* (normalised first),
     keeping every replaced field in ``_prev``, the rescue copy "↩ Restore
@@ -264,11 +282,19 @@ def apply_shared_update(note, incoming, fields=UPDATABLE_FROM_SHARED):
     # A share code's repeat turned off: this device's days are copied beside
     # the repeat they hang on, and stay in the note -- moved, the next copy
     # erased them. A backup brings its own (UPDATABLE_FROM_BACKUP).
+    restarted = ("overrides" not in fields and "recurrence" in fields
+                 and not kept_days_fit(note, fresh.get("date"), fresh["recurrence"]))
     if "overrides" not in fields and "recurrence" in fields:
         prev.update(days_to_rescue(note, fresh["recurrence"]))
+    # Turned back on another way: the old series' deleted days, which hold
+    # nothing, go with this copy instead of hiding the new series' own.
+    if restarted and note.get("exceptions"):
+        prev["exceptions"] = copy.deepcopy(note["exceptions"])
     note["_prev"] = prev
     for field in fields:
         note[field] = copy.deepcopy(fresh[field])
+    if restarted:
+        note["exceptions"] = []
     note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     return note
 

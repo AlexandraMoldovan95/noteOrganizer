@@ -376,6 +376,7 @@ from noteorganizer.core.model import (
     normalize_note,
     rescue_copy_spent,
     rescue_copy_due,
+    kept_days_fit,
     copy_replaced_by_restore,
     find_by_uid,
     split_by_identity,
@@ -21738,6 +21739,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 days_lost = repeat_off_kept = self._repeat_off_loses_days(
                     note, recurrence)
                 days_kept = self._days_kept_off_repeat(note)
+                # Turned back on with another date or rule: the old series'
+                # deleted days, which hold nothing, no longer hide the new one's.
+                if not kept_days_fit(note, date_value, recurrence):
+                    note["exceptions"] = []
                 if days_lost:
                     # One save that also clears the text: an older copy's text
                     # in place of it left the newest words in no file (round 4).
