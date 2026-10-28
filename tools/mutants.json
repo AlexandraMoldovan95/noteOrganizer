@@ -6725,5 +6725,79 @@
       "qa8"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "DR25",
+    "about": "the update's safety copy, cut off by a full disk, is left under the backup's name",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "        try:\n            os.remove(part)\n        except OSError:\n            pass\n        return None\n",
+        "replace": "        return None\n"
+      }
+    ],
+    "must_fail": [
+      "a backup the disk cannot hold leaves no cut-off file under its name"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR26",
+    "about": "an update's safety copy that could not be made is not reported",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "            report[\"version_backup_failed\"] = report[\"version_backup_path\"] is None\n",
+        "replace": "            report[\"version_backup_failed\"] = False\n"
+      }
+    ],
+    "must_fail": [
+      "...the load after an update says the safety copy could not be made",
+      "an update whose safety copy cannot be saved says there is none"
+    ],
+    "suites": [
+      "test_data_safety",
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR27",
+    "about": "the one-time cleanup removes notes with no copy of them made",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "        cleanup_due = False\n",
+        "replace": "        pass\n"
+      }
+    ],
+    "must_fail": [
+      "...and the one-time cleanup waits for a launch that can keep a copy"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR28",
+    "about": "the update notice says nothing of a safety copy that could not be saved",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                elif getattr(self, \"_version_backup_failed\", False):\n",
+        "replace": "                elif False:\n"
+      }
+    ],
+    "must_fail": [
+      "an update whose safety copy cannot be saved says there is none"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
   }
 ]

@@ -1730,6 +1730,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         "from just before this update was saved to:\n"
                         f"{self._version_backup_path}"
                     )
+                elif getattr(self, "_version_backup_failed", False):
+                    msg += (
+                        "\n\nThe extra backup of your notes from just before "
+                        "this update could not be saved, so there is none — "
+                        "the disk may be full. Settings → Backup → Export "
+                        "makes one.")
                 lines.append(msg)
             else:
                 lines.append(
@@ -1825,6 +1831,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._fresh_notebook = bool(report.get("fresh_notebook"))
         if report["version_backup_path"]:
             self._version_backup_path = report["version_backup_path"]
+        self._version_backup_failed = bool(report.get("version_backup_failed"))
         if report["cleanup_report"]:
             self._cleanup_report = report["cleanup_report"]
         self._categories_adopted = report.get("categories_adopted") or []

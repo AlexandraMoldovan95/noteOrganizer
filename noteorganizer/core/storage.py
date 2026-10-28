@@ -426,10 +426,20 @@ def backup_notes_file():
         return None
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_path = os.path.join(os.path.dirname(paths.DATA_FILE), f"notes_data_backup_{stamp}.json")
+    # Whole or not at all: on a full disk copy2 left a cut-off copy, unreadable,
+    # under the name the update's notice was about to give as the safety net.
+    part = backup_path + ".part"
     try:
-        shutil.copy2(paths.DATA_FILE, backup_path)
+        shutil.copy2(paths.DATA_FILE, part)
+        with open(part, "ab") as f:
+            os.fsync(f.fileno())
+        os.replace(part, backup_path)
         return backup_path
     except (IOError, OSError):
+        try:
+            os.remove(part)
+        except OSError:
+            pass
         return None
 
 
@@ -475,7 +485,8 @@ def load_notes(version_change=None):
     from .model import normalize_note, clean_notes, repair_note_ids
     from .categories import adopt_categories_of, persist_categories
 
-    report = {"version_backup_path": None, "cleanup_report": None,
+    report = {"version_backup_path": None, "version_backup_failed": False,
+              "cleanup_report": None,
               "notes_file_corrupt": False, "corrupt_backup_path": None,
               "categories_adopted": [],
               "fresh_notebook": not os.path.exists(paths.DATA_FILE)}
@@ -486,6 +497,9 @@ def load_notes(version_change=None):
         # automatically: old backups are the user's to throw away.
         if version_change and version_change[0] == "up":
             report["version_backup_path"] = backup_notes_file()
+            # Said at the start (announce_startup_changes): a safety net that
+            # could not be made read the same as one never promised.
+            report["version_backup_failed"] = report["version_backup_path"] is None
         try:
             with open(paths.DATA_FILE, "r", encoding="utf-8") as f:
                 raw = json.load(f)
@@ -528,8 +542,13 @@ def load_notes(version_change=None):
     # The one-time cleanup rewrites the file, so it waits out a launch that
     # just declared the file unreadable: the startup notice is promising
     # those bytes are still on disk (and an empty list has nothing to clean).
-    if not settings.get("cleanup_done") and not report["notes_file_corrupt"]:
-        backup_path = backup_notes_file()
+    cleanup_due = not settings.get("cleanup_done") and not report["notes_file_corrupt"]
+    backup_path = backup_notes_file() if cleanup_due else None
+    if cleanup_due and backup_path is None and os.path.exists(paths.DATA_FILE):
+        # The cleanup removes notes; with no copy of them made (a full disk)
+        # it waits for a launch that can make one.
+        cleanup_due = False
+    if cleanup_due:
         # The cleanup renumbers every id from 1, so the remembered open note
         # is re-pointed by identity, or forgotten if the cleanup removed it.
         # ISSUES_LOG, smaller lessons: load_notes.

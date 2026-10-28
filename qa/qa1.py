@@ -8839,6 +8839,26 @@ check('load_notes takes a safety backup when VERSION_CHANGE reports an upgrade',
       app._version_backup_path is not None and os.path.exists(app._version_backup_path))
 if app._version_backup_path:
     os.remove(app._version_backup_path)
+# ...and when the disk cannot hold that copy, the notice says there is none:
+# it used to say nothing, which read the same as a copy never promised
+# (2026-10-28, the final audit).
+from noteorganizer.core import storage as _vb_storage
+_vb_copy2 = _vb_storage.shutil.copy2
+_vb_storage.shutil.copy2 = lambda *a, **k: (_ for _ in ()).throw(OSError(28, 'disk full'))
+_vb_said = []
+_vb_info = app.show_info
+app.show_info = lambda *a, **k: _vb_said.append(' '.join(map(str, a)))
+try:
+    app._version_backup_path = None
+    app.load_notes()
+    app.announce_startup_changes()
+finally:
+    _vb_storage.shutil.copy2 = _vb_copy2
+    app.show_info = _vb_info
+check(f'an update whose safety copy cannot be saved says there is none '
+      f'({" ".join(_vb_said)[-140:]!r})',
+      any('could not be saved, so there is none' in s for s in _vb_said))
+app._version_backup_failed = False
 NO.VERSION_CHANGE = _original_version_change
 
 # ---- APP-WIDE SHORTCUTS: Ctrl+N / Ctrl+S / Ctrl+F (bind_all) ----

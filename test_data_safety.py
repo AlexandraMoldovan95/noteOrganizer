@@ -97,6 +97,42 @@ if backup_path:
     os.remove(backup_path)
 os.remove(NO.DATA_FILE)
 
+# On a full disk the copy stopped partway and left a cut-off file under the
+# backup's name, the update's notice said nothing of it, and the one-time
+# cleanup went ahead with no copy at all (2026-10-28, the final audit).
+from noteorganizer.core import storage as _bk_storage
+with open(NO.DATA_FILE, 'w', encoding='utf-8') as f:
+    json.dump([{'id': 1, 'title': 'Real note', 'body': 'x'},
+               {'id': 2, 'title': '', 'body': ''}], f)
+_bk_settings = _bk_storage.load_settings()
+_bk_storage.save_settings({k: v for k, v in _bk_settings.items() if k != 'cleanup_done'})
+_bk_copy2 = _bk_storage.shutil.copy2
+
+
+def _bk_full(src, dst, *a, **k):
+    with open(dst, 'w') as f:
+        f.write('[{"id": 1, "ti')
+    raise OSError(28, 'No space left on device')
+
+
+_bk_storage.shutil.copy2 = _bk_full
+try:
+    _bk_none = NO.backup_notes_file()
+    _bk_left = [n for n in os.listdir(os.path.dirname(os.path.abspath(NO.DATA_FILE)))
+                if n.startswith('notes_data_backup_')]
+    _bk_notes, _bk_report = _bk_storage.load_notes(('up', '0.1.0', '0.2.0'))
+finally:
+    _bk_storage.shutil.copy2 = _bk_copy2
+check(f'a backup the disk cannot hold leaves no cut-off file under its name ({_bk_left})',
+      _bk_none is None and not _bk_left)
+check('...the load after an update says the safety copy could not be made',
+      _bk_report.get('version_backup_failed') is True)
+check('...and the one-time cleanup waits for a launch that can keep a copy',
+      _bk_report.get('cleanup_report') is None and len(_bk_notes) == 2
+      and not _bk_storage.load_settings().get('cleanup_done'))
+_bk_storage.save_settings(_bk_settings)
+os.remove(NO.DATA_FILE)
+
 # ---- _timestamped_backup(): the migration-path backup helper ----
 tmpdir = tempfile.mkdtemp()
 try:
