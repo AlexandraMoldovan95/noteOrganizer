@@ -8219,5 +8219,82 @@
       "qa7"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "DR41",
+    "about": "a note that no longer repeats shows a kept day's own words on that date",
+    "edits": [
+      {
+        "file": "noteorganizer/core/recurrence.py",
+        "find": "    if not is_recurring(note):\n        return note\n    return day_as_kept(note, occurrence_date)\n",
+        "replace": "    return day_as_kept(note, occurrence_date)\n"
+      }
+    ],
+    "must_fail": [
+      "a note that no longer repeats is itself on every day, kept days or not",
+      "...and its calendar row is the note's own, with no day mark"
+    ],
+    "suites": [
+      "test_recurrence",
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR42",
+    "about": "a one-off whose date the old series deleted falls off the calendar",
+    "edits": [
+      {
+        "file": "noteorganizer/core/recurrence.py",
+        "find": "        if range_start <= anchor <= range_end and one_off not in set(skip):\n",
+        "replace": "        if range_start <= anchor <= range_end and one_off not in exceptions:\n"
+      }
+    ],
+    "must_fail": [
+      "...and is on the calendar on its date though the series deleted that day",
+      "a series turned off keeps its days unused"
+    ],
+    "suites": [
+      "test_recurrence",
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR43",
+    "about": "a one-off's calendar row carries a kept day's ✎ mark",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/calendar_view.py",
+        "find": "    if is_recurring(base_note) and date_str in (base_note.get(\"overrides\") or {}):\n        # This day was edited",
+        "replace": "    if date_str in (base_note.get(\"overrides\") or {}):\n        # This day was edited"
+      }
+    ],
+    "must_fail": [
+      "...and its calendar row is the note's own, with no day mark"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR44",
+    "about": "the save that decides whether days are worth keeping reads what they show, so a one-off's days look empty and are dropped",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            shown = day_as_kept(note, day)\n",
+        "replace": "            shown = effective_note(note, day)\n"
+      }
+    ],
+    "must_fail": [
+      "a one-off note keeps days with text no copy holds when it is saved",
+      "turned off in the editor, then rewritten: every day's own text is still"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
   }
 ]

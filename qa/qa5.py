@@ -1660,6 +1660,45 @@ with open('notes_data.json', encoding='utf-8') as _f:
 check(f"turned off in the editor, then rewritten: every day's own text is still "
       f"in the file ({sorted(app.find_note(1).get('overrides') or {})})",
       'room 9' in _rd_disk and 'DAY 21' in _rd_disk)
+# ...and the days it keeps steer nothing while it does not repeat: opened from
+# its date on the calendar, the one-off showed its first day's words and the
+# save wrote them over the note; a deleted first day hid it (round 4).
+_ro_fixture()
+app.notes[0]['overrides']['2026-09-07'] = {'title': 'Kickoff',
+                                           'body': 'FIRST DAY ONLY: room 4'}
+app.notes[1].update({'title': 'Gym', 'date': '2026-09-08',
+                     'recurrence': {'freq': 'weekly'}, 'exceptions': ['2026-09-08'],
+                     'overrides': {'2026-09-15': {'body': 'GYM DAY: legs'}}})
+app.notes[1] = NO.normalize_note(app.notes[1])
+app.save_notes()
+app._themed_dialog = lambda *a, **k: True
+try:
+    for _kd_id in (1, 2):
+        app.open_note_in_tab(app.find_note(_kd_id)); app.update()
+        app.rec_freq_var.set(NO.FREQ_LABELS[''])
+        app.on_recurrence_changed(); app.update()
+        app.save_current_note(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+from noteorganizer.ui import calendar_view as _kd_cv
+_kd_row = _kd_cv._day_row_parts(app, app.find_note(1), '2026-09-07')
+check(f'...and its calendar row is the note\'s own, with no day mark ({_kd_row[:2]})',
+      'Standup' in _kd_row[0] and '✎' not in ''.join(map(str, _kd_row[:2])))
+app._open_note_from_calendar(app.find_note(1), '2026-09-07'); app.update()
+_kd_shown =(app.title_entry.get(), app.body_text.get('1.0', 'end-1c').strip())
+app.open_note_in_tab(app.find_note(2)); app.update()
+_kd_note = app.find_note(1)
+_kd_gym = [n.get('title') for n in app.notes_on_date('2026-09-08')]
+check(f"a series turned off keeps its days unused: opened from its calendar date "
+      f"it shows and keeps its own words ({_kd_shown}, stored "
+      f"{(_kd_note['title'], _kd_note['body'][:12])}), and a deleted first day no "
+      f"longer hides it ({_kd_gym})",
+      _kd_shown == ('Standup', 'SERIES TEXT')
+      and (_kd_note['title'], _kd_note['body']) == ('Standup', 'SERIES TEXT')
+      and '2026-09-07' in (_kd_note.get('overrides') or {})
+      and not app.find_note(2)['recurrence'].get('freq')
+      and app.find_note(2).get('exceptions') == ['2026-09-08']
+      and 'Gym' in _kd_gym)
 # A big delete saved first, the repeat turned off after: the turn-off's copy
 # keeps the deleted words with the series. Only the other order was kept.
 _ro_fixture()

@@ -748,6 +748,25 @@ check('...and the answers are the ones the calendar gives day by day: moved days
       _agree_moves)
 check('...and days off the schedule', _agree_off)
 
+# ---- Days a note keeps after its repeat is turned off steer nothing ----
+# Kept for a turn-back-on (2026-10-28, the final audit's third round), they
+# were still read: the one-off showed its first day's words on its date, and a
+# deleted first day took it off the calendar (round 4).
+_kd = NO.normalize_note({'id': 1, 'title': 'Weekly sync', 'body': 'SERIES TEXT',
+           'date': '2026-09-07', 'recurrence': {'freq': ''},
+           'exceptions': ['2026-09-07'],
+           'overrides': {'2026-09-07': {'title': 'Kickoff', 'body': 'FIRST DAY'}}})
+check('a note that no longer repeats is itself on every day, kept days or not',
+      NO.effective_note(_kd, '2026-09-07') is _kd)
+check('...and is on the calendar on its date though the series deleted that day',
+      [str(x) for x in NO.expand_occurrences(_kd, date(2026, 9, 1), date(2026, 9, 30))]
+      == ['2026-09-07'])
+_kd_series = dict(_kd, recurrence={'freq': 'weekly'})
+check('...while a series still shows its day\'s own words',
+      NO.effective_note(_kd_series, '2026-09-07').get('body') == 'FIRST DAY')
+check('...and what a kept day holds is still read, for the saves that keep it',
+      NO.day_as_kept(_kd, '2026-09-07').get('body') == 'FIRST DAY')
+
 
 print()
 print(f"FAILURES: {fails if fails else 'none'}")

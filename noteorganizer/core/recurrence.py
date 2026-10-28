@@ -729,8 +729,10 @@ def _expand_rule(note, range_start, range_end, limit=None, skip=()):
     exceptions = set(note.get("exceptions") or []) | set(skip)
 
     if not rec["freq"]:
+        # The note's own deleted days belong to the series it was: a turned-off
+        # series whose first day was deleted fell off the calendar.
         one_off = format_date(anchor)
-        if range_start <= anchor <= range_end and one_off not in exceptions:
+        if range_start <= anchor <= range_end and one_off not in set(skip):
             return [one_off]
         return []
 
@@ -1202,6 +1204,17 @@ def effective_note(note, occurrence_date):
     day, and otherwise a *copy* with the overridden fields replaced — the
     stored note is never modified.
     """
+    # A note that no longer repeats keeps its days only for a turn-back-on:
+    # read here, a day's old words stood in for the note on its date.
+    if not is_recurring(note):
+        return note
+    return day_as_kept(note, occurrence_date)
+
+
+def day_as_kept(note, occurrence_date):
+    """The note with *occurrence_date*'s own edit applied, whether or not it
+    still repeats: what that day holds, for the saves that decide whether
+    a day is worth keeping. What a day SHOWS is :func:`effective_note`."""
     override = (note.get("overrides") or {}).get(occurrence_date)
     if not isinstance(override, dict):
         return note

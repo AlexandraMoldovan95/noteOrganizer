@@ -428,6 +428,7 @@ from noteorganizer.core.recurrence import (
     expand_occurrences,
     next_occurrence_on_or_after,
     effective_note,
+    day_as_kept,
     day_matches_series,
     moved_from,
     drawn_moves,
@@ -19429,7 +19430,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # a share code is no longer in the editor.
         self._arrived_uid = ""
 
-        shown = effective_note(note, occurrence_date) if occurrence_date else note
+        # The day worked out above: a one-off opened from its calendar date
+        # showed a kept day's words, and the save wrote them over the note.
+        shown = effective_note(note, day) if day else note
 
         # Clear out any pending style left over from whatever note was open
         # before, BEFORE inserting this note's body — the insert hook that
@@ -21042,8 +21045,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Undo that might never be clicked, and the copy replaced the note's
         # own rescue copy -- a big delete's text in no file, the window's
         # close counting an Undo that died with it.
+        # What each day holds, asked of a note that may no longer repeat:
+        # what it shows would say none of its days held anything.
         for day in (note.get("overrides") or {}):
-            shown = effective_note(note, day)
+            shown = day_as_kept(note, day)
             if any((shown.get(key) or "") != (note.get(key) or "")
                    for key in ("title", "body", "comments")):
                 return True

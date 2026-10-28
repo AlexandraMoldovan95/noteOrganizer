@@ -84,7 +84,9 @@ def _day_row_parts(app, base_note, date_str):
     if is_recurring(base_note):
         title_text = "🔁 " + title_text
     icons = ""
-    if date_str in (base_note.get("overrides") or {}):
+    # A series' marks only: a note that no longer repeats keeps its days
+    # unused, for a turn-back-on (effective_note).
+    if is_recurring(base_note) and date_str in (base_note.get("overrides") or {}):
         # This day was edited with "only this occurrence" — it
         # keeps its own content and series edits don't reach it.
         icons += "  ✎"
@@ -116,7 +118,7 @@ def _day_note_key(base_note, date_str):
     return (base_note.get("id"), _note_str(note, "title"), _note_str(note, "body"),
             _note_str(note, "comments"), repr(note.get("checklist")),
             len(note.get("attachments") or []),
-            date_str in (base_note.get("overrides") or {}),
+            is_recurring(base_note) and date_str in (base_note.get("overrides") or {}),
             moved_from(base_note, date_str))
 
 
@@ -1517,7 +1519,7 @@ class CalendarViewMixin:
         text_only = re.sub(r"\n{3,}", "\n\n", text_only).strip("\n")
 
         chips = []
-        if date_str in (base_note.get("overrides") or {}):
+        if is_recurring(base_note) and date_str in (base_note.get("overrides") or {}):
             chips.append("✎ edited for this day")
         came = moved_from(base_note, date_str)
         if came is not None:
