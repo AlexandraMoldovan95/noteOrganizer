@@ -1455,6 +1455,17 @@
     "expect": "killed"
   },
   {
+    "id": "KR10",
+    "about": "a ring's two remembered colours keep the theme they were drawn in",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            if hasattr(w, \"_ring_rest\"):\n                self._recolor_ring(w, remap, letters, held)\n",
+               "replace": ""}],
+    "must_fail": ["after a switch the reminder bar's two Tab stops rest in the new accent",
+                  "...and with the keyboard on its ✕ the ring is the new theme's words"],
+    "suites": ["qa4"],
+    "expect": "killed"
+  },
+  {
     "id": "A01",
     "about": "a highlight given in an open cell reaches the note only when the cell closes",
     "edits": [

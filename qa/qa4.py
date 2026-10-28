@@ -276,6 +276,55 @@ check('and its ring is tracked, not frozen at build',
               for w, m in app.themed_widgets))
 _probe_btn.destroy(); _probe_dd.destroy(); _probe_txt.destroy(); app.update()
 
+# ---- THEME: the keyboard's ring keeps its colours across a switch ----
+# Round 2 of the final audit: the reminder bar's message and ✕ are Tab stops
+# ringed in the bar's own words' colour, remembered when the bar is drawn. A
+# switch kept the old accent round them, and dark_slate's near-black ring on
+# light's violet read at 3:1 where light's own white reads at 5.7:1.
+import datetime as _rb_dt
+_rb_theme = app.theme_name
+# The bar stands above the notebook, which Settings takes off the window.
+_rb_settings = getattr(app, '_settings_open', False)
+if _rb_settings:
+    app.hide_settings_page()
+app.set_theme('dark_slate'); app.update()
+app._render_reminder_bar(2, _rb_dt.date.today().strftime('%Y-%m-%d'))
+app.update()
+_rb_stops = [w for w in app.reminder_bar.winfo_children()
+             if getattr(w, '_key_press', None) is not None]
+app.set_theme('light'); app.update()
+
+
+def _rb_resting(w):
+    return (str(w.cget('highlightbackground')).lower(), str(w._ring_on).lower())
+
+
+check(f'after a switch the reminder bar\'s two Tab stops rest in the new accent '
+      f'and are ringed in its words ({[_rb_resting(w) for w in _rb_stops]})',
+      len(_rb_stops) == 2 and all(
+          _rb_resting(w) == (app.colors['accent'].lower(),
+                             app._on_fill('accent').lower()) for w in _rb_stops))
+_rb_seen = None
+if _rb_stops:
+    _rb_stops[-1].focus_force()
+    for _ in range(40):
+        app.update()
+        try:
+            if app.focus_get() is _rb_stops[-1]:
+                break
+        except KeyError:
+            pass
+        time.sleep(0.02)
+    app.update()
+    _rb_seen = (str(_rb_stops[-1].cget('highlightbackground')).lower(),
+                str(_rb_stops[-1].cget('highlightcolor')).lower())
+check(f'...and with the keyboard on its ✕ the ring is the new theme\'s words '
+      f'({_rb_seen})', _rb_seen == (app._on_fill('accent').lower(),) * 2)
+app.dismiss_reminder()
+app.set_theme(_rb_theme); app.update()
+if _rb_settings:
+    app.show_settings_page(); app.update()
+
 # ---- THEME sweep round 2: caret, checkbox wells, press colours ----
 # The adversarial review widened the class: every long-lived text field's
 # caret (insertbackground) was frozen at build — invisible after a

@@ -13428,10 +13428,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                    for opt, key in keys.items()})
                 except tk.TclError:
                     pass
+            if hasattr(w, "_ring_rest"):
+                self._recolor_ring(w, remap, letters, held)
             for child in w.winfo_children():
                 walk(child)
 
         try:
+            held = str(self.tk.call("focus"))
             walk(self)
         except tk.TclError:
             pass
@@ -13444,6 +13447,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # when it shows. (The one-note view has no colour of its own.)
         if getattr(self, "_day_panel_mode", "empty") == "list":
             self.show_day_list()
+
+    def _recolor_ring(self, w, remap, letters, held):
+        """The keyboard's ring keeps its two colours on the widget, for its
+        coming and going (_ring_shown), where the walk above cannot see them:
+        the reminder bar's kept an old theme's accent and words. They follow
+        as the walk's own colours do -- words on a fill follow the fill."""
+        rest, on = w._ring_rest, w._ring_on
+        if rest is not None and str(rest).lower() in remap:
+            w._ring_rest = remap[str(rest).lower()]
+        if on is not None:
+            on = str(on).lower()
+            try:
+                if on in letters:
+                    w._ring_on = letters_on(str(w.cget("bg")))
+                elif on in remap:
+                    w._ring_on = remap[on]
+            except tk.TclError:
+                pass
+        self._ring_shown(w, held == str(w))
 
     def _refresh_placeholder_colors(self):
         # self._placeholders only ever grows (add_placeholder() appends,

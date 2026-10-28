@@ -438,7 +438,9 @@ left click, which the app's `<ButtonPress-1>` there outranks.
 The ring is the theme's text colour (`focus_ring`), measured by the contrast gate, and it is both
 border colours while the keyboard is on a control: Windows draws no focus colour round a label,
 only its resting one ([the story](ISSUES_LOG.md#the-app-the-keyboard-could-reach-only-half-of)).
-qa6 asks every page whether a click can press anything Tab cannot reach.
+The two colours a control remembers for its ring follow a theme switch in the straggler pass
+(`_recolor_ring`), as its own colours do. qa6 asks every page whether a click can press anything
+Tab cannot reach.
 
 ### Theme tracking — two different patterns, on purpose
 

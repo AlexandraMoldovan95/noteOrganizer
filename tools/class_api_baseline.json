@@ -576,6 +576,7 @@
   "_recolor_checklist_boxes": "(self)",
   "_recolor_existing_combo_popups": "(self)",
   "_recolor_note_cards": "(self)",
+  "_recolor_ring": "(self, w, remap, letters, held)",
   "_recolor_settings_nav_icons": "(self)",
   "_recolor_stragglers": "(self)",
   "_recolor_table_grids": "(self)",
