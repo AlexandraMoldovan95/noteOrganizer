@@ -44,6 +44,20 @@ MAX_CHECKLIST_ITEMS = 1000
 # machine; real notebooks hold tens of files, so none is ever cut short.
 MAX_ATTACHMENTS = 200
 
+# Days coloured, or marked with emoji, on the calendar: every day of 54 years.
+# Each rides every settings write, and a backup's million made every note take
+# seconds to open (ISSUES_LOG: "Limits that held at the door but not after it").
+MAX_DAY_DECORATIONS = 20_000
+# A marker is one emoji from the picker; the longest, joiners in, is far less.
+MAX_DAY_MARKER_CHARS = 16
+
+
+def is_calendar_day(value):
+    """Whether *value* names a day as the calendar writes and looks one up:
+    a real date, spelled ``YYYY-MM-DD``. Any other key was never drawn."""
+    day = parse_date(value) if isinstance(value, str) else None
+    return day is not None and format_date(day) == value
+
 
 NOTE_DEFAULTS = {
     # Identity, which "id" is not: two devices both number a new note

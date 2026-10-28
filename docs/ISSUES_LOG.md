@@ -2313,7 +2313,9 @@ drops where a file came from switches off defences the app never sees, so it car
 - Ctrl+V of 600,000 characters of plain text pasted all of them, and every key after took more
   than a second;
 - a table on the clipboard — 161 KB of HTML, or 74 KB copied from a spreadsheet — became a note
-  of 210 million characters, 1.2 GB of memory, and every save took half a minute.
+  of 210 million characters, 1.2 GB of memory, and every save took half a minute;
+- a backup whose settings carried a million day colours (2.4 MB packed) made every note take
+  seconds to open and the app twenty to start, for good.
 
 **Root cause:** every one had a limit, and every limit was checked where the data came in and
 nowhere after it.
@@ -2335,6 +2337,10 @@ nowhere after it.
   rows is 210 million spaces. A sum was capped; the padding is a product. The same padding ran
   when the caret left a table, when a cell was written and when cells were pasted in, and a row
   of 30,000 pasted cells also added 30,000 columns to every row.
+- *The day colours.* Each colour's value was checked; how many there were, and whether each key
+  was a day at all, was not. The import took them whole, and every settings write — one for each
+  note opened — rewrote all 62 MB of them. The day markers were capped at three a day, at any
+  length each, and the list of collapsed groups could stop the app starting with one wrong value.
 
 **Fix:**
 
@@ -2355,6 +2361,12 @@ nowhere after it.
   ceiling; the 161 KB table now goes in as its 95,000 characters. test_tables checks the lengths
   worked out ahead against what is then built, on 400 random tables; qa1 pastes the spreadsheet
   and the 30,000 cells; mutants IX10–IX13.
+- *The day colours.* The start and the import read them through one door: real days only, as the
+  calendar writes them, a marker an emoji's length, and at most 20,000 days of each — every day
+  of 54 years. The calendar refuses a 20,001st, so a start never drops one, and what a start does
+  not keep leaves the file. The probe's import now keeps none of its million, and a note opens in
+  a hundredth of a second. qa3 imports the backup and loads the file; mutants IX14–IX17, and I02
+  and I03 aim at the shared door.
 
 **Takeaway:** a limit on what comes in says nothing about what is then done with it. Ask what the
 work costs at the limit — a capped number squared is not capped — and count every door to it, not

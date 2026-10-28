@@ -393,6 +393,9 @@ from noteorganizer.core.model import (
     HIDDEN_IN_NAMES,
     attachment_display_name,
     export_file_stem,
+    MAX_DAY_DECORATIONS,
+    MAX_DAY_MARKER_CHARS,
+    is_calendar_day,
 )
 
 
@@ -895,32 +898,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if purged:
                 save_trash(self.trash)
 
-        # User-chosen colors for individual calendar days (date -> #hex).
-        # Each value passes sanitize_color: settings.json is hand-editable
-        # and rides inside backups, and one garbage value here reached
-        # render_calendar's configure() on every launch — the make-the-app-
-        # unopenable class, through the calendar's door.
-        saved_day_colors = load_settings().get("day_colors")
-        self.day_colors = {}
-        if isinstance(saved_day_colors, dict):
-            for d, c in saved_day_colors.items():
-                c = sanitize_color(c)
-                if isinstance(d, str) and c:
-                    self.day_colors[d] = c
-
-        # User-chosen emoji markers for individual calendar days (date -> list
-        # of emoji characters), independent of any note. E.g. flag a day with
-        # a couple of markers even before you've written a note for it.
-        # Capped at 3 per day on the way in — the same cap the picker
-        # enforces — so a hand-edited file can't stack hundreds of markers
-        # into every day cell's redraw.
-        saved_day_emoji = load_settings().get("day_emoji")
-        self.day_emoji = {}
-        if isinstance(saved_day_emoji, dict):
-            for d, v in saved_day_emoji.items():
-                kept = self._clean_day_markers(v)
-                if kept:
-                    self.day_emoji[d] = kept
+        # User-chosen colors for individual calendar days (date -> #hex) and
+        # emoji markers (date -> up to 3), independent of any note.
+        self._load_day_decorations()
         self.current_occurrence_date = None  # set when opened from a calendar day
         self.themed_widgets = []
 
@@ -12076,21 +12056,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Calendar day colours and emoji markers ride the backup's
         # settings.json exactly like categories do, and used to be dropped
         # the same way. Additive — a day this device already decorated
-        # keeps its own decoration — and validated on the way in: the
-        # colours through sanitize_color, the markers as up-to-3 non-empty
-        # strings, matching the picker's own cap.
-        restored_decor = 0
-        for d, c in (state.get("imported_day_colors") or {}).items():
-            c = sanitize_color(c)
-            if isinstance(d, str) and c and d not in self.day_colors:
-                self.day_colors[d] = c
-                restored_decor += 1
-        for d, v in (state.get("imported_day_emoji") or {}).items():
-            if isinstance(d, str) and d not in self.day_emoji:
-                kept = self._clean_day_markers(v)
-                if kept:
-                    self.day_emoji[d] = kept
-                    restored_decor += 1
+        # keeps its own decoration — and validated on the way in, as the
+        # start validates this device's own (_take_day_decorations).
+        restored_decor = self._take_day_decorations(
+            state.get("imported_day_colors"), state.get("imported_day_emoji"))
         if restored_decor:
             save_setting("day_colors", dict(self.day_colors))
             save_setting("day_emoji", dict(self.day_emoji))
@@ -14281,7 +14250,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # list; sorting still applies within each group.
         self.group_by_category = tk.BooleanVar(
             value=bool(load_settings().get("group_by_category", False)))
-        self.collapsed_groups = set(load_settings().get("collapsed_groups", []))
+        # Category names only, no more than there can be categories: a list
+        # in a hand-edited settings.json holding a dict stopped the app
+        # starting, and one of a million names rode every settings write.
+        saved_groups = load_settings().get("collapsed_groups")
+        self.collapsed_groups = (
+            {g for g in saved_groups[:MAX_CATEGORIES] if isinstance(g, str)}
+            if isinstance(saved_groups, list) else set())
         group_row = tk.Frame(self.sidebar)
         self.track_theme(group_row, bg="sidebar")
         group_row.pack(fill="x", padx=15, pady=(0, 8))
@@ -19518,14 +19493,59 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _clean_day_markers(value):
         """A day's markers as kept: up to three non-empty strings, each
         without the emoji variation selector -- older pickers wrote it, Tk
-        draws it as a gap, and the picker would not know its own heart."""
+        draws it as a gap, and the picker would not know its own heart --
+        and each an emoji's length (MAX_DAY_MARKER_CHARS): a backup's
+        markers 100,000 characters long were drawn into the day cells."""
         if isinstance(value, str):
             value = [value]           # the one-marker format older files carry
         if not isinstance(value, list):
             return []
-        kept = [without_variation_selector(e) for e in value
-                if isinstance(e, str)]
+        kept = [without_variation_selector(e) for e in value[:64]
+                if isinstance(e, str) and len(e) <= MAX_DAY_MARKER_CHARS]
         return [e for e in kept if e][:3]
+
+    def _load_day_decorations(self):
+        """This device's day colours and markers, read at the start through
+        _take_day_decorations: settings.json is hand-editable and rides
+        inside backups, and one garbage colour reached render_calendar's
+        configure() on every launch. What is not kept leaves the file too:
+        every settings write carries the whole file, and a million day
+        colours made each one take seconds, at every note opened."""
+        self.day_colors, self.day_emoji = {}, {}
+        saved = load_settings()
+        raw_colors, raw_markers = saved.get("day_colors"), saved.get("day_emoji")
+        self._take_day_decorations(raw_colors, raw_markers)
+        for key, raw, kept in (("day_colors", raw_colors, self.day_colors),
+                               ("day_emoji", raw_markers, self.day_emoji)):
+            if isinstance(raw, dict) and len(raw) != len(kept):
+                save_setting(key, dict(kept))
+
+    def _take_day_decorations(self, colors, markers):
+        """Day colours and markers from a settings file -- this device's at
+        the start, a backup's on import -- each taken for a day that has
+        none yet: a real day (is_calendar_day), a colour sanitize_color
+        keeps, markers as _clean_day_markers keeps them, and no more than
+        MAX_DAY_DECORATIONS of either.
+
+        Returns:
+            How many were taken.
+        """
+        taken = 0
+        for store, raw, clean in ((self.day_colors, colors, sanitize_color),
+                                  (self.day_emoji, markers,
+                                   self._clean_day_markers)):
+            if not isinstance(raw, dict):
+                continue
+            for day, value in raw.items():
+                if len(store) >= MAX_DAY_DECORATIONS:
+                    break
+                if day in store or not is_calendar_day(day):
+                    continue
+                kept = clean(value)
+                if kept:
+                    store[day] = kept
+                    taken += 1
+        return taken
 
 
 

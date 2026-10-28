@@ -847,7 +847,8 @@ You can also mark the day itself, independent of any note on it — right-click 
   colour as the day's number.
 
 Both can be cleared from the same menu, and both clears offer an **Undo** in the banner — as
-does saving the marker picker with nothing picked.
+does saving the marker picker with nothing picked. The app keeps up to 20,000 coloured days and
+20,000 marked ones — every day of more than fifty years; past that it asks you to clear one first.
 
 ![Calendar day colouring](screenshots/calendar-day-color.png)
 

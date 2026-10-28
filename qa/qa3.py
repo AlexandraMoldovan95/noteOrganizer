@@ -1060,6 +1060,83 @@ check('an imported trash attachment never shares a LOCAL TRASH file',
           NO.ATTACHMENTS_DIR, _ft['attachments'][0]['stored_as'])))
 os.remove(_cz)
 
+# A CRAFTED backup's settings.json: a million day colours under keys that are
+# no dates, and markers 100,000 characters long. Adopted whole, every note
+# then took three seconds to open -- each open rewrote the 62 MB file -- and
+# restart took twenty, for good (2026-10-28). Real days only, as the
+# calendar writes them, markers as the picker makes them, and at most
+# MAX_DAY_DECORATIONS of each.
+_dc_before = dict(app.day_colors)
+_de_before = dict(app.day_emoji)
+_dz = os.path.join(tempfile.gettempdir(), 'qa3_day_decor.zip')
+_dz_colors = {'not-a-date-%06d' % i: '#ff0000' for i in range(30000)}
+_dz_colors.update({'2031-%02d-%02d' % (m, d): '#00aa00'
+                   for m in range(1, 13) for d in range(1, 29)})
+_dz_colors.update({'2031-1-5': '#00aa00', ' 2031-02-02': '#00aa00'})
+_dz_marks = {'2031-03-03': ['⭐' * 100000, '\U0001F382'],
+             '2031-03-04': ['\U0001F382']}
+with zipfile.ZipFile(_dz, 'w') as zf:
+    zf.writestr('notes_data.json', '[]')
+    zf.writestr('settings.json', json.dumps({'day_colors': _dz_colors,
+                                             'day_emoji': _dz_marks}))
+fd.askopenfilename = lambda **k: _dz
+app.import_data()
+t0 = time.time()
+while app._import_state is not None and time.time() - t0 < 30:
+    app.update()
+_dz_new = {d: c for d, c in app.day_colors.items() if d not in _dc_before}
+check(f'a backup\'s day colours come in for real days only '
+      f'({len(_dz_new)} of {len(_dz_colors):,})',
+      len(_dz_new) == 12 * 28
+      and all(NO.parse_date(d) and len(d) == 10 for d in app.day_colors))
+check(f'...and its markers as the picker makes them '
+      f'({app.day_emoji.get("2031-03-03")})',
+      app.day_emoji.get('2031-03-03') == ['\U0001F382']
+      and app.day_emoji.get('2031-03-04') == ['\U0001F382'])
+_dz_saved = NO.load_settings()
+check('...and the settings file keeps what was kept, not what came',
+      len(_dz_saved.get('day_colors') or {}) == len(app.day_colors)
+      and os.path.getsize(NO.SETTINGS_FILE) < 1_000_000)
+# Past the ceiling, a backup's days stop coming in and this device's stay.
+import datetime as _dzdt
+_dz_many = {(_dzdt.date(1900, 1, 1) + _dzdt.timedelta(days=i)).isoformat(): '#0000aa'
+            for i in range(NO.MAX_DAY_DECORATIONS)}
+with zipfile.ZipFile(_dz, 'w') as zf:
+    zf.writestr('notes_data.json', '[]')
+    zf.writestr('settings.json', json.dumps({'day_colors': _dz_many}))
+app.import_data()
+t0 = time.time()
+while app._import_state is not None and time.time() - t0 < 60:
+    app.update()
+check(f'a backup carrying more days than the app keeps fills it to '
+      f'{NO.MAX_DAY_DECORATIONS:,} and no further ({len(app.day_colors):,})',
+      len(app.day_colors) == NO.MAX_DAY_DECORATIONS
+      and all(app.day_colors.get(d) == c for d, c in _dz_new.items()))
+app.day_colors = dict(_dc_before)
+app.day_emoji = dict(_de_before)
+NO.save_setting('day_colors', dict(app.day_colors))
+NO.save_setting('day_emoji', dict(app.day_emoji))
+os.remove(_dz)
+# The start reads this device's own file the same way, and writes back
+# what it kept: left in the file, every settings write carried it on.
+_ds = NO.load_settings()
+_ds['day_colors'] = dict(_dz_colors)
+_ds['day_emoji'] = dict(_dz_marks)
+_ds['collapsed_groups'] = [{'a': 1}, 'General']
+NO.save_settings(_ds)
+app._load_day_decorations()
+_ds_after = NO.load_settings()
+check(f'the start keeps real days only and writes back what it kept '
+      f'({len(app.day_colors)} colours, {len(_ds_after.get("day_colors") or {})} in the file)',
+      len(app.day_colors) == 12 * 28
+      and len(_ds_after.get('day_colors') or {}) == 12 * 28
+      and app.day_emoji.get('2031-03-03') == ['\U0001F382'])
+app.day_colors = dict(_dc_before)
+app.day_emoji = dict(_de_before)
+NO.save_setting('day_colors', dict(app.day_colors))
+NO.save_setting('day_emoji', dict(app.day_emoji))
+NO.save_setting('collapsed_groups', [])
+
 # ---- SHARE-CODE decode: every refusal branch (coverage-lift C16) ----
 # Each malformed-input class must raise ValueError with a HUMAN message
 # (the UI shows it verbatim) — never a raw exception, never success.

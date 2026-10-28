@@ -43,6 +43,7 @@ from datetime import datetime, timedelta, date as date_cls
 from types import SimpleNamespace
 
 from ..core.model import (
+    MAX_DAY_DECORATIONS,
     _darken_hex,
     _extract_first_emoji,
     _note_str,
@@ -2017,6 +2018,14 @@ class CalendarViewMixin:
 
         def on_pick(color):
             old = self.day_colors.get(date_str)
+            # The most a start or a backup keeps (MAX_DAY_DECORATIONS): a
+            # day past it is refused here, never dropped at the next start.
+            if (color and old is None
+                    and len(self.day_colors) >= MAX_DAY_DECORATIONS):
+                self._show_toast(
+                    f"You have coloured {MAX_DAY_DECORATIONS:,} days, which is "
+                    "the most the app keeps. Clear one first.", kind="info")
+                return
             if color:
                 self.day_colors[date_str] = color
             else:
@@ -2248,6 +2257,12 @@ class CalendarViewMixin:
 
         def save_and_close():
             had = list(self.day_emoji.get(date_str) or [])
+            if (pending and not had
+                    and len(self.day_emoji) >= MAX_DAY_DECORATIONS):
+                self._show_toast(
+                    f"You have marked {MAX_DAY_DECORATIONS:,} days, which is "
+                    "the most the app keeps. Clear one first.", kind="info")
+                return
             if pending:
                 self.day_emoji[date_str] = list(pending)
             else:

@@ -2687,8 +2687,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            for d, v in saved_day_emoji.items():\n                kept = self._clean_day_markers(v)\n",
-        "replace": "            for d, v in saved_day_emoji.items():\n                kept = [e for e in v if isinstance(e, str) and e][:3] if isinstance(v, list) else []\n"
+        "find": "        self._take_day_decorations(raw_colors, raw_markers)\n",
+        "replace": "        self._take_day_decorations(raw_colors, None)\n        self.day_emoji.update({d: [e for e in v if isinstance(e, str) and e][:3] for d, v in (raw_markers or {}).items() if isinstance(v, list)})\n"
       }
     ],
     "must_fail": ["a day's markers saved with the variation selector come in without it"],
@@ -2701,8 +2701,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            if isinstance(d, str) and d not in self.day_emoji:\n                kept = self._clean_day_markers(v)\n",
-        "replace": "            if isinstance(d, str) and d not in self.day_emoji:\n                kept = [e for e in v if isinstance(e, str) and e][:3] if isinstance(v, list) else []\n"
+        "find": "        restored_decor = self._take_day_decorations(\n            state.get(\"imported_day_colors\"), state.get(\"imported_day_emoji\"))\n",
+        "replace": "        restored_decor = self._take_day_decorations(\n            state.get(\"imported_day_colors\"), None)\n        self.day_emoji.update({d: [e for e in v if isinstance(e, str) and e][:3] for d, v in (state.get(\"imported_day_emoji\") or {}).items() if isinstance(v, list) and d not in self.day_emoji})\n"
       }
     ],
     "must_fail": ["a marker the backup carries with the variation selector comes back without it"],
@@ -7340,6 +7340,79 @@
     ],
     "suites": [
       "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "IX14",
+    "about": "a day colour or marker is taken under any key, a date or not",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                if day in store or not is_calendar_day(day):\n",
+        "replace": "                if day in store:\n"
+      }
+    ],
+    "must_fail": [
+      "a backup's day colours come in for real days only",
+      "the start keeps real days only and writes back what it kept"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "IX15",
+    "about": "a backup's day colours are taken however many there are",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                if len(store) >= MAX_DAY_DECORATIONS:\n                    break\n",
+        "replace": "                if False:\n                    break\n"
+      }
+    ],
+    "must_fail": [
+      "a backup carrying more days than the app keeps fills it to"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "IX16",
+    "about": "a day's marker is kept at any length",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                if isinstance(e, str) and len(e) <= MAX_DAY_MARKER_CHARS]\n",
+        "replace": "                if isinstance(e, str)]\n"
+      }
+    ],
+    "must_fail": [
+      "...and its markers as the picker makes them"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "IX17",
+    "about": "the start keeps a settings file's dropped day colours in the file",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if isinstance(raw, dict) and len(raw) != len(kept):\n                save_setting(key, dict(kept))\n",
+        "replace": "            if False:\n                save_setting(key, dict(kept))\n"
+      }
+    ],
+    "must_fail": [
+      "the start keeps real days only and writes back what it kept"
+    ],
+    "suites": [
+      "qa3"
     ],
     "expect": "killed"
   }
