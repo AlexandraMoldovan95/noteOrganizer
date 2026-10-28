@@ -10609,6 +10609,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if older:
             who = "It is" if count == 1 else f"{older} of them are"
             message += f"\n\n{who} OLDER than the copy on this device."
+        # One rescue copy per note: an update's takes the place of one the
+        # note still needs, so that is said rather than done in silence.
+        rescued = sum(1 for mine, _theirs in known if self._holds_unspent_rescue(mine))
+        if rescued:
+            who = "One of them holds" if count > 1 and rescued == 1 else (
+                "It holds" if count == 1 else f"{rescued} of them hold")
+            message += (f"\n\n{who} an earlier version that “↩ Restore "
+                        f"previous” can bring back; updating replaces it with "
+                        f"the version from before this update.")
         choice = self._themed_dialog(
             f"{count} note{plural} you already have",
             message,
@@ -10816,8 +10825,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     "Same note, a different version",
                     "This note is already here, and the two differ.\n\n"
                     "Updating replaces what is on this device; you can undo "
-                    "it with “↩ Restore previous”.\n"
-                    "Adding leaves both, so you can compare them and "
+                    "it with “↩ Restore previous”."
+                    + (self._REPLACES_EARLIER_RESCUE
+                       if self._holds_unspent_rescue(mine) else "")
+                    + "\nAdding leaves both, so you can compare them and "
                     "delete one.",
                     kind="question",
                     buttons=[("Cancel", "cancel"),
@@ -20611,12 +20622,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         for key, _label in self._PREV_EXTRA_LABELS:
             if key in prev:
                 note[key] = copy.deepcopy(prev[key])
-        # A repeat this ends takes the series' days, which the copy above
-        # now holds. Left in the note, out of sight, the next save dropped
-        # them with no copy anywhere.
-        for key in DAY_FIELDS:
-            if replaced is not None and key in replaced and key not in prev:
-                note[key] = [] if key == "exceptions" else {}
         if note.get("category") not in CATEGORY_COLORS:
             note["category"] = "General"
         # The days it brings back follow the same rule: a day filed under
@@ -20942,6 +20947,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     # Said wherever a save turns a repeat off and the rescue copy takes the
     # days' own text.
+    # Said by an update's question when it replaces a rescue copy the note
+    # still needs: there is one copy per note.
+    _REPLACES_EARLIER_RESCUE = (
+        "\nThe earlier version “↩ Restore previous” holds for this note now is "
+        "replaced by the one from before this update.")
+
+    @staticmethod
+    def _holds_unspent_rescue(note):
+        """Whether *note* holds a rescue copy with something the note lacks."""
+        return isinstance(note.get("_prev"), dict) and not rescue_copy_spent(note)
+
     _REPEAT_OFF_KEPT = (" — the repeat is off; ↩ Restore previous brings it "
                         "back with every day's own text")
 
@@ -20955,13 +20971,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return self._days_hold_own_text(note)
 
     def _days_kept_off_repeat(self, note):
-        """Whether *note*, which does not repeat, still holds days with text
-        of their own. Every route that ends a repeat moves its days into the
-        rescue copy (days_to_rescue), so days still here came another way --
-        a file this app did not write -- and are in no other copy. The save
-        that clears a one-off note's days keeps these; they come back if the
-        repeat does."""
-        return not is_recurring(note) and self._days_hold_own_text(note)
+        """Whether the save that ends *note*'s repeat, or keeps it off, keeps
+        its days: when any of them holds text of its own. The rescue copy
+        takes a copy of them, but it is one slot, and days only there were
+        erased by the next copy made (2026-10-28, the final audit). Kept,
+        they also come back if the repeat does."""
+        return self._days_hold_own_text(note)
 
     @staticmethod
     def _days_hold_own_text(note):
@@ -21010,14 +21025,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         it, with its own copy of the text it took away. The turn-off came
         first in what the person did, but it is saved last, and its copy,
         taken from the note the held saves left, replaced the delete's: the
-        deleted text was in no file. The copy is known by identity, so it
-        is never taken for one an earlier visit made."""
+        deleted text was in no file.
+
+        The other order is the same loss: a big delete saved first, the
+        repeat turned off after. A text copy the note does not hold again
+        (rescue_copy_spent) gives its text to the turn-off's copy too, so
+        Restore previous brings back the words and the series together
+        (2026-10-28, the final audit)."""
         prev = self._whole_note_rescue_copy(note)
         held = getattr(self, "_held_text_rescue", None)
         self._held_text_rescue = None
-        if held is not None and note.get("_prev") is held:
+        existing = note.get("_prev")
+        if held is not None and existing is held:
             for key in self._RESCUE_TEXT_KEYS:
                 prev[key] = copy.deepcopy(held.get(key))
+        elif (isinstance(existing, dict)
+              and set(existing) <= set(self._RESCUE_TEXT_KEYS)
+              and not rescue_copy_spent(note)):
+            for key in self._RESCUE_TEXT_KEYS:
+                prev[key] = copy.deepcopy(existing.get(key, prev[key]))
         return prev
 
     def _write_series_owned(self, note, date_value, recurrence, schedule=True):
@@ -21332,9 +21358,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # shopping list cleared once went to disk with no copy.
                 rescue_due = rescue_copy_due(note.get("title", ""), note.get("body", ""),
                                              title, body)
-                # The repeat going off takes every day's own text with it
-                # (below): kept whole, with the repeat and the days, so
-                # Restore previous brings the series back as it was.
+                # The repeat going off: the note as it was, repeat and days,
+                # becomes the rescue copy, so Restore previous brings the
+                # series back; the days' own text stays in the note as well.
                 days_lost = repeat_off_kept = self._repeat_off_loses_days(
                     note, recurrence)
                 days_kept = self._days_kept_off_repeat(note)
@@ -21368,9 +21394,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 note["checklist"] = [dict(it) for it in self._get_checklist()]
                 note["updated"] = now
                 if not recurrence["freq"] and not days_kept:
-                    # No longer repeating: leftover per-occurrence data would
-                    # be invisible clutter, so drop it -- a day's own text
-                    # only once the rescue copy above holds it.
+                    # No longer repeating: days with no text of their own
+                    # (a colour, a category) would be invisible clutter, so
+                    # they go; a day's own text stays (_days_kept_off_repeat).
                     note["exceptions"] = []
                     note["overrides"] = {}
                     note["moved"] = {}

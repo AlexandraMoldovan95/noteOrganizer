@@ -756,8 +756,9 @@ To put it back, move it to its own date, press **↺ Reset this day…** beside 
 right-click it in the calendar and choose **↺ Reset this day to the series…**. The date always goes
 back; when the day has text of its own, you choose whether the text goes back to the series' too,
 or stays. Deleting a moved day removes it, and its
-Undo brings it back moved. Turning the repeat off takes the moves with the days, and **↩ Restore
-previous** brings them back.
+Undo brings it back moved. Turning the repeat off keeps the days' own text and their moves with
+the note, out of sight, and **↩ Restore previous** brings the series back with them; turn the
+repeat on again and they show again.
 
 ### Moving or ending a series
 

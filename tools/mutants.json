@@ -4336,7 +4336,7 @@
     "edits": [{"file": "note_organizer.py",
                "find": "                    note[\"overrides\"] = {}\n                    note[\"moved\"] = {}\n",
                "replace": "                    note[\"overrides\"] = {}\n"}],
-    "must_fail": ["turning the repeat off takes the moves with the days, into the rescue copy"],
+    "must_fail": ["turning off a repeat whose days hold no text of their own leaves no moves behind"],
     "suites": ["qa5"],
     "expect": "killed"
   },
@@ -4346,8 +4346,7 @@
     "edits": [{"file": "note_organizer.py",
                "find": "        for key in (\"date\", \"recurrence\", \"exceptions\", \"overrides\", \"moved\"):\n",
                "replace": "        for key in (\"date\", \"recurrence\", \"exceptions\", \"overrides\"):\n"}],
-    "must_fail": ["turning the repeat off takes the moves with the days, into the rescue copy",
-                  "...and Restore previous brings the series back with its day moved"],
+    "must_fail": ["turning the repeat off copies the moves with the days into the rescue copy"],
     "suites": ["qa5"],
     "expect": "killed"
   },
@@ -6415,13 +6414,13 @@
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "    prev.update(taken)\n    note[\"_prev\"] = prev\n",
-        "replace": "    taken = {}\n    note[\"_prev\"] = prev\n"
+        "find": "        prev.update(days_to_rescue(note, fresh[\"recurrence\"]))\n",
+        "replace": "        pass\n"
       }
     ],
     "must_fail": [
       "a share code that ends a repeat keeps the series' days in the rescue copy",
-      "a share code that ends the repeat keeps the series' days in the rescue"
+      "a share code that ends the repeat copies the series' days into the rescue"
     ],
     "suites": [
       "test_data_safety",
@@ -7522,6 +7521,100 @@
     ],
     "suites": [
       "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR29",
+    "about": "a share code ending a repeat moves the series' days out of the note into the one copy slot",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    if \"overrides\" not in fields and \"recurrence\" in fields:\n        prev.update(days_to_rescue(note, fresh[\"recurrence\"]))\n    note[\"_prev\"] = prev\n    for field in fields:\n        note[field] = copy.deepcopy(fresh[field])\n",
+        "replace": "    taken = {}\n    if \"overrides\" not in fields and \"recurrence\" in fields:\n        taken = days_to_rescue(note, fresh[\"recurrence\"])\n        prev.update(taken)\n    note[\"_prev\"] = prev\n    for field in fields:\n        note[field] = copy.deepcopy(fresh[field])\n    for key in taken:\n        note[key] = copy.deepcopy(NOTE_DEFAULTS[key])\n"
+      }
+    ],
+    "must_fail": [
+      "...and the note keeps them too, so no later copy can take them",
+      "a second code that turns the repeat back on finds every day's own text",
+      "a share code that ends the repeat copies the series' days into the rescue"
+    ],
+    "suites": [
+      "test_data_safety",
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR30",
+    "about": "turning a repeat off in the editor drops the days' own text from the note, leaving it only in the one copy slot",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                days_kept = self._days_kept_off_repeat(note)\n",
+        "replace": "                days_kept = self._days_kept_off_repeat(note) and not is_recurring(note)\n"
+      }
+    ],
+    "must_fail": [
+      "turned off in the editor, then rewritten: every day's own text is still"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR31",
+    "about": "a table's padding counts as text lost, so one wider cell replaces the rescue copy",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    old_body, body = _without_padding(old_body), _without_padding(body)\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a cell grown wider is no loss to keep a copy for"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR32",
+    "about": "a turn-off after a big delete replaces the delete's copy with the note as it stands",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        elif (isinstance(existing, dict)\n              and set(existing) <= set(self._RESCUE_TEXT_KEYS)\n",
+        "replace": "        elif (False and isinstance(existing, dict)\n              and set(existing) <= set(self._RESCUE_TEXT_KEYS)\n"
+      }
+    ],
+    "must_fail": [
+      "a big delete, then the repeat turned off: the copy holds the deleted words",
+      "...and outside that wait too"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR33",
+    "about": "an update replaces an earlier rescue copy without saying so",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                    + (self._REPLACES_EARLIER_RESCUE\n                       if self._holds_unspent_rescue(mine) else \"\")\n",
+        "replace": "                    + \"\"\n"
+      }
+    ],
+    "must_fail": [
+      "an update that would replace an earlier version Restore previous holds"
+    ],
+    "suites": [
+      "qa5"
     ],
     "expect": "killed"
   }

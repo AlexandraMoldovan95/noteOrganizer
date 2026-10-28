@@ -3205,12 +3205,20 @@ check("a share code that ends a repeat keeps the series' days in the rescue copy
       _off_prev.get("overrides") == _off_days
       and _off_prev.get("exceptions") == ["2026-10-26"]
       and (_off_prev.get("recurrence") or {}).get("freq") == "weekly")
-check("...and the note no longer holds them out of sight",
-      _off_note["overrides"] == {} and _off_note["exceptions"] == []
-      and _off_note["moved"] == {})
+# ...COPIED, and kept in the note too: moved into the one copy slot, the
+# next copy made over it -- a second update, a big rewrite -- erased them
+# (2026-10-28, the final audit's third round).
+check("...and the note keeps them too, so no later copy can take them",
+      _off_note["overrides"] == _off_days and _off_note["exceptions"] == ["2026-10-26"])
 check("...and the copy keeps them across a save and a reload",
       (_model_mod.normalize_note(json.loads(json.dumps(_off_note)))
        .get("_prev") or {}).get("overrides") == _off_days)
+_model_mod.apply_shared_update(_off_note, {
+    "title": "Gym", "body": "Warm up!!", "date": "2026-10-05",
+    "recurrence": {"freq": "weekly"}})
+check("a second code that turns the repeat back on finds every day's own text",
+      _off_note["overrides"] == _off_days
+      and _model_mod.is_recurring(_off_note))
 _on_note = _model_mod.normalize_note({
     "id": 1, "title": "Gym", "date": "2026-10-05",
     "recurrence": {"freq": "weekly"}, "overrides": copy_mod.deepcopy(_off_days)})
@@ -3229,6 +3237,19 @@ _rs_copy = _model_mod.copy_replaced_by_restore(
 check("a restore that ends a repeat keeps the series' days in its copy",
       _rs_copy is not None and _rs_copy.get("overrides") == _off_days
       and (_rs_copy.get("recurrence") or {}).get("freq") == "weekly")
+
+# What a save loses is measured in cells, not in the padding lining a table
+# up: one cell grown wider re-pads every row, and read as the whole table
+# lost, its copy replaced the rescue copy the note held (2026-10-28).
+_pad_old = ("Shopping\n| Item     | Qty |\n| -------- | --- |\n| milk     | 1   |\n"
+            "| bread    | 2   |\n| eggs     | 12  |\n| apples   | 6   |")
+_pad_new = ("Shopping\n| Item                  | Qty |\n| --------------------- | --- |\n"
+            "| oat milk, semi-skimmed | 1   |\n| bread                 | 2   |\n"
+            "| eggs                  | 12  |\n| apples                | 6   |")
+check("a cell grown wider is no loss to keep a copy for",
+      not _model_mod.rescue_copy_due("List", _pad_old, "List", _pad_new))
+check("...while a table emptied of its rows still is",
+      _model_mod.rescue_copy_due("List", _pad_old, "List", "Shopping\n| Item | Qty |\n| --- | --- |"))
 
 # The restore's own list of what it can put back must be exactly what an
 # update can replace beyond the text -- a field added to one without the

@@ -1593,10 +1593,11 @@ try:
 finally:
     app._themed_dialog = _ro_real_dlg
 _rd = app.find_note(1)
-check(f"a share code that ends the repeat keeps the series' days in the rescue "
-      f"copy, not out of sight in the note "
+check(f"a share code that ends the repeat copies the series' days into the rescue "
+      f"copy and keeps them in the note "
       f"({sorted(_rd.get('overrides') or {})}, {sorted(_rd.get('_prev') or {})})",
-      _rd['recurrence'].get('freq') in (None, '') and not _rd.get('overrides')
+      _rd['recurrence'].get('freq') in (None, '')
+      and sorted(_rd.get('overrides') or {}) == ['2026-09-14', '2026-09-21']
       and sorted((_rd.get('_prev') or {}).get('overrides') or {})
       == ['2026-09-14', '2026-09-21'])
 _rd_back = _rd_edit_and_restore()
@@ -1619,7 +1620,8 @@ finally:
 _rd = app.find_note(1)
 check(f"a restore that ends the repeat keeps the days in the copy it keeps in "
       f"its turn ({sorted((_rd.get('_prev') or {}).get('overrides') or {})})",
-      not _rd['recurrence'].get('freq') and not _rd.get('overrides')
+      not _rd['recurrence'].get('freq')
+      and sorted(_rd.get('overrides') or {}) == ['2026-09-14', '2026-09-21']
       and sorted((_rd.get('_prev') or {}).get('overrides') or {})
       == ['2026-09-14', '2026-09-21'])
 _rd_back = _rd_edit_and_restore()
@@ -1640,6 +1642,62 @@ app.save_current_note(); app.update()
 check('a one-off note keeps days with text no copy holds when it is saved',
       'room 9' in (app.find_note(1).get('overrides') or {})
       .get('2026-09-14', {}).get('body', ''))
+# The repeat turned off in the editor copies the days and keeps them: in the
+# one copy slot alone, the next big rewrite's copy erased them (2026-10-28,
+# the final audit's third round).
+_ro_fixture()
+app.notes[0]['body'] = 'SERIES TEXT ' + 'long words ' * 10
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.rec_freq_var.set(NO.FREQ_LABELS[''])
+app.on_recurrence_changed(); app.update()
+app.save_current_note(); app.update()
+app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'Something else entirely')
+app.save_current_note(); app.update()
+with open('notes_data.json', encoding='utf-8') as _f:
+    _rd_disk = _f.read()
+check(f"turned off in the editor, then rewritten: every day's own text is still "
+      f"in the file ({sorted(app.find_note(1).get('overrides') or {})})",
+      'room 9' in _rd_disk and 'DAY 21' in _rd_disk)
+# A big delete saved first, the repeat turned off after: the turn-off's copy
+# keeps the deleted words with the series. Only the other order was kept.
+_ro_fixture()
+app.notes[0]['body'] = 'SERIES TEXT ' + 'long words ' * 10
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'x')
+app.save_current_note(); app.update()
+app.rec_freq_var.set(NO.FREQ_LABELS[''])
+app.on_recurrence_changed(); app.update()
+app.save_current_note(); app.update()
+_rd_prev = app.find_note(1).get('_prev') or {}
+# One rescue copy per note: an update's takes the place of one the note still
+# needs, so the question says so rather than doing it in silence.
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'uid': _rd_uid, 'title': 'Passport',
+                                'body': 'Passport.'})]
+app.notes[0]['_prev'] = {'title': 'Passport', 'body': 'Passport. The blue jacket pocket.',
+                         'formatting': [], 'paragraphs': [], 'comments': ''}
+app.save_notes()
+_rd_said = []
+app._themed_dialog = lambda *a, **k: (_rd_said.append(a[1] if len(a) > 1 else ''), 'cancel')[1]
+try:
+    if not app._is_placed(app.import_panel):
+        app.toggle_import_panel(); app.update()
+    app.import_box.delete('1.0', 'end')
+    app.import_box.insert('1.0', NO.encode_share_code({'uid': _rd_uid, 'title': 'Passport',
+                                                       'body': 'Passport, renewed.'}))
+    app._do_inline_import(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+check(f"an update that would replace an earlier version Restore previous holds "
+      f"says so ({' '.join(_rd_said)[-90:]!r})",
+      any('replaced by the one from before this update' in s for s in _rd_said))
+check(f"a big delete, then the repeat turned off: the copy holds the deleted words "
+      f"and the series ({(_rd_prev.get('body') or '')[:20]!r}, "
+      f"{(_rd_prev.get('recurrence') or {}).get('freq')})",
+      (_rd_prev.get('body') or '').startswith('SERIES TEXT')
+      and (_rd_prev.get('recurrence') or {}).get('freq') == 'weekly')
 
 # ---- "THIS OCCURRENCE ONLY" KEEPS WHAT A DAY CANNOT HOLD ----
 # The day's text goes to the day; a file attached and a tick made in the
@@ -2759,9 +2817,10 @@ _rn_bd = ((app.find_note(1) or {}).get('body'), _rn_days()[0],
 check(f'a big delete made while a turn-off waits keeps its text in the '
       f'rescue copy the turn-off makes ({_rn_bd})',
       _rn_ok and _rn_bd == ('short', '', True, 'weekly', ['2026-09-14']))
-# ...within that wait only: with the repeat picked again in between, a later
-# turn-off's copy is the note as it stands, as after any big delete followed
-# by a turn-off -- not the text from before a delete the person had kept.
+# ...and outside that wait too: with the repeat picked again in between, a
+# later turn-off's copy still keeps the words the delete took, which the
+# note does not hold again. Taken as "the note as it stands", the deleted
+# words were in no file (2026-10-28, the final audit's third round).
 _rn_fresh(_RN_LONG)
 _rn_ok = _rn_pick(NO.FREQ_LABELS[''])
 app.body_text.delete('1.0', 'end')
@@ -2772,9 +2831,9 @@ app._autosave_now(); app.update()
 _rn_ok = _rn_pick(NO.FREQ_LABELS['']) and _rn_ok
 app.open_note_in_tab(app.find_note(2)); app.update()
 _rn_bd = (_rn_prev().get('body'), (_rn_prev().get('recurrence') or {}).get('freq'))
-check(f'...and only within that wait: a turn-off made after the repeat was '
-      f'picked again keeps the note as it stands ({_rn_bd})',
-      _rn_ok and _rn_bd == ('short', 'weekly'))
+check(f'...and outside that wait too: a turn-off made after the repeat was '
+      f'picked again keeps the deleted words with the series ({_rn_bd})',
+      _rn_ok and _rn_bd == (_RN_LONG, 'weekly'))
 # The Undo of one day's delete leaves the series view be: it opened the day,
 # which left the series and made its waiting turn-off -- the day just put
 # back went with every other.
@@ -4077,8 +4136,8 @@ check('...and its Undo brings it back moved, with its own text',
       .endswith('(Sat)')
       and _mv_on('2026-10-17') == [1])
 
-# The series counts its moved days; a repeat turned off takes them along into
-# the rescue copy, and Restore previous brings them back.
+# The series counts its moved days; a repeat turned off copies them with the
+# days into the rescue copy, keeps them, and Restore previous brings them back.
 app.open_note_in_tab(app.find_note(1)); app.update()
 check(f'the series counts its moved days above the note ({_rn_banner()!r})',
       '· 1 day moved (↷)' in _rn_banner())
@@ -4091,13 +4150,30 @@ app.ask_yes_no = lambda *a, **k: True
 app.restore_previous_version(); app.update()
 _dm_record()
 _mv_s = app.find_note(1)
-check(f"turning the repeat off takes the moves with the days, into the rescue copy "
-      f"({_mv_off})",
-      _mv_off == ('', {}, {'2026-10-12': '2026-10-17'}))
+check(f"turning the repeat off copies the moves with the days into the rescue copy "
+      f"and keeps them ({_mv_off})",
+      _mv_off == ('', {'2026-10-12': '2026-10-17'}, {'2026-10-12': '2026-10-17'}))
 check('...and Restore previous brings the series back with its day moved',
       _mv_s['recurrence']['freq'] == 'weekly'
       and _mv_s.get('moved') == {'2026-10-12': '2026-10-17'}
       and _mv_on('2026-10-17') == [1])
+# A series whose days hold no text of their own leaves no clutter behind:
+# its moves go with the repeat.
+app.notes.append(NO.normalize_note({
+    'id': 77, 'title': 'Plain series', 'body': 'x', 'date': '2026-10-05',
+    'recurrence': {'freq': 'weekly'}, 'moved': {'2026-10-12': '2026-10-17'}}))
+app.save_notes()
+app.open_note_in_tab(app.find_note(77)); app.update()
+app.rec_freq_var.set(NO.FREQ_LABELS['']); app.on_recurrence_changed(); app.update()
+app.save_current_note(); app.update()
+_mv_n = app.find_note(77)
+check(f"turning off a repeat whose days hold no text of their own leaves no moves "
+      f"behind ({_mv_n.get('moved')})",
+      _mv_n.get('moved') == {} and not _mv_n['recurrence'].get('freq'))
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.open_tabs = [t for t in app.open_tabs if t['state'].get('selected_note_id') != 77]
+app.notes = [n for n in app.notes if n.get('id') != 77]
+app.save_notes()
 
 # The buttons are long-lived: every colour they have follows the theme. And a
 # moved day with text of its own -- both buttons, the longest date line -- asks

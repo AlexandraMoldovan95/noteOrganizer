@@ -20,7 +20,7 @@ from datetime import datetime
 from .categories import CATEGORY_COLORS
 from .formatting import (normalize_formatting, normalize_paragraphs,
                          clamp_spans_per_line)
-from .tables import with_caret_line
+from .tables import with_caret_line, is_table_row
 from .recurrence import (
     normalize_recurrence,
     parse_date,
@@ -210,10 +210,9 @@ DAY_FIELDS = ("exceptions", "overrides", "moved")
 def days_to_rescue(before, recurrence):
     """The days of *before* that writing *recurrence* over it takes away:
     none unless it repeats now and will not after, and only the kinds it
-    holds. Whatever ends a repeat keeps these in its rescue copy. A share
-    code turning the repeat off kept them only in the note, out of sight,
-    and the next save dropped them with no copy anywhere (2026-10-28, the
-    final audit). Copies, so the caller may clear the note's own."""
+    holds. Whatever ends a repeat COPIES these into its rescue copy and
+    leaves the note's own: one copy slot, and the next copy erased days
+    moved there (2026-10-28, the final audit, rounds two and three)."""
     if not is_recurring(before) or is_recurring({"recurrence": recurrence}):
         return {}
     return {key: copy.deepcopy(before[key]) for key in DAY_FIELDS if before.get(key)}
@@ -239,16 +238,14 @@ def apply_shared_update(note, incoming, fields=UPDATABLE_FROM_SHARED):
     for field in fields:
         if field not in prev:
             prev[field] = copy.deepcopy(note.get(field, NOTE_DEFAULTS.get(field)))
-    # A share code's repeat turned off takes this device's days with it;
-    # a backup brings its own (UPDATABLE_FROM_BACKUP).
-    taken = ({} if "overrides" in fields or "recurrence" not in fields
-             else days_to_rescue(note, fresh["recurrence"]))
-    prev.update(taken)
+    # A share code's repeat turned off: this device's days are copied beside
+    # the repeat they hang on, and stay in the note -- moved, the next copy
+    # erased them. A backup brings its own (UPDATABLE_FROM_BACKUP).
+    if "overrides" not in fields and "recurrence" in fields:
+        prev.update(days_to_rescue(note, fresh["recurrence"]))
     note["_prev"] = prev
     for field in fields:
         note[field] = copy.deepcopy(fresh[field])
-    for key in taken:
-        note[key] = copy.deepcopy(NOTE_DEFAULTS[key])
     note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     return note
 
@@ -294,6 +291,20 @@ def text_lost(old, new):
     return len(old) - start - end
 
 
+_PADDING = re.compile(r" {2,}|-{2,}")
+
+
+def _without_padding(body):
+    """*body* with each table row's padding taken out: what a save loses is
+    measured in cells, not in the spaces and dashes lining them up. A cell
+    grown wider re-pads every row, and read as the whole table lost, its
+    copy replaced the rescue copy the note held (2026-10-28, the audit)."""
+    if "|" not in body:
+        return body
+    return "\n".join(_PADDING.sub(lambda m: m.group()[0], line) if is_table_row(line)
+                     else line for line in body.split("\n"))
+
+
 def rescue_copy_due(old_title, old_body, title, body):
     """Whether a save of *title* and *body* over *old_title* and *old_body*
     keeps the old text as the rescue copy "↩ Restore previous" brings back:
@@ -301,6 +312,7 @@ def rescue_copy_due(old_title, old_body, title, body):
     short note, 70% and 15 characters at least. Counted by what is gone, not
     by how much shorter the text got. ISSUES_LOG: "The safety net that
     measured the wrong thing"."""
+    old_body, body = _without_padding(old_body), _without_padding(body)
     old_len = len(old_title) + len(old_body)
     if old_len == 0:
         return False
@@ -315,10 +327,9 @@ def rescue_copy_due(old_title, old_body, title, body):
 def copy_replaced_by_restore(note, prev):
     """What "↩ Restore previous" keeps of the version it replaces, to be
     the rescue copy in its turn: its text, each other field *prev* brings
-    back, and the series' days when the restore ends the repeat
-    (days_to_rescue; the caller clears the note's). None when it holds
-    nothing the restored version lacks: a button offering that would
-    mislead."""
+    back, and a copy of the series' days when the restore ends the repeat
+    (days_to_rescue; the note keeps its own). None when it holds nothing
+    the restored version lacks: a button offering that would mislead."""
     title = note.get("title") or ""
     taken = {key: days for key, days in
              (days_to_rescue(note, prev["recurrence"]) if "recurrence" in prev else {}).items()
