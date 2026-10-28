@@ -5946,7 +5946,7 @@
     "id": "RD01",
     "about": "most of a short note replaced keeps no rescue copy (test case 692)",
     "edits": [{"file": "noteorganizer/core/model.py",
-               "find": "    return lost >= 15 and lost >= old_len * 0.7\n",
+               "find": "    return lost >= 15 and lost >= size * 0.7\n",
                "replace": "    return False\n"}],
     "must_fail": ["a short note replaced by a new line keeps a copy (test case 692)",
                   "a short note replaced by a new line before the autosave keeps its words"],
@@ -9174,6 +9174,24 @@
     ],
     "suites": [
       "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR60",
+    "about": "the rescue copy's shares set words lost against a length that counts a table's padding, so half a table deleted reads as a quarter",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    size = _measured(old_title) + _measured(old_body) or old_len\n",
+        "replace": "    size = old_len\n"
+      }
+    ],
+    "must_fail": [
+      "...and five rows of a table's eight deleted at once keep one"
+    ],
+    "suites": [
+      "test_data_safety"
     ],
     "expect": "killed"
   }

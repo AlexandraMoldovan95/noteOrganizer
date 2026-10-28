@@ -3376,6 +3376,21 @@ _col_full = "\n".join(line + " a long note about where to buy it |"
                       if line.startswith("|") else line for line in _col_old.split("\n"))
 check("...while a column of words deleted still keeps one",
       _model_mod.rescue_copy_due("t", _col_full, "t", _col_old))
+# ...and so do five rows of eight: words gone were set against a length that
+# counts the padding, and half a table read as a quarter (round 5).
+from noteorganizer.core import tables as _tables_mod
+# Short cells, as a shopping list's: their padding is most of each row.
+_trip_lines = ["Groceries"] + _tables_mod.format_table([["Item", "Qty", "Ok"]] + [
+    list(row) for row in (("tea", "1", "y"), ("jam", "2", "n"), ("oat", "1", "y"),
+                          ("egg", "6", "y"), ("fig", "3", "n"), ("rye", "1", "y"),
+                          ("soy", "2", "n"), ("nut", "4", "y"))])
+_trip_old = "\n".join(_trip_lines)
+_trip_cut = "\n".join(_trip_lines[:2] + _trip_lines[7:])
+_trip_lost = _model_mod._lost(_trip_old, _trip_cut)
+check("...and five rows of a table's eight deleted at once keep one (%d of %d "
+      "characters, %d lost)" % (len(_trip_cut), len(_trip_old), _trip_lost),
+      _model_mod.rescue_copy_due("t", _trip_old, "t", _trip_cut)
+      and 40 < _trip_lost < 0.3 * len(_trip_old))
 
 # The restore's own list of what it can put back must be exactly what an
 # update can replace beyond the text -- a field added to one without the

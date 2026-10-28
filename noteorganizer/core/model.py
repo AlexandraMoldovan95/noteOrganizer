@@ -333,6 +333,11 @@ def _lost(old, new):
     return min(text_lost(old, new), words_lost(old, new))
 
 
+def _measured(text):
+    """*text*'s length as words_lost counts it: each word with one space."""
+    return sum(len(word) + 1 for word in text.split())
+
+
 def rescue_copy_due(old_title, old_body, title, body):
     """Whether a save of *title* and *body* over *old_title* and *old_body*
     keeps the old text as the rescue copy "↩ Restore previous" brings back:
@@ -346,9 +351,12 @@ def rescue_copy_due(old_title, old_body, title, body):
     if len(title) + len(body) == 0:
         return True
     lost = _lost(old_title, title) + _lost(old_body, body)
-    if lost > 40 and (lost >= old_len * 0.3 or lost >= 200):
+    # The shares in the units the loss is counted in: set against a length
+    # with a table's padding in it, half a table deleted read as a quarter.
+    size = _measured(old_title) + _measured(old_body) or old_len
+    if lost > 40 and (lost >= size * 0.3 or lost >= 200):
         return True
-    return lost >= 15 and lost >= old_len * 0.7
+    return lost >= 15 and lost >= size * 0.7
 
 
 def copy_replaced_by_restore(note, prev):
