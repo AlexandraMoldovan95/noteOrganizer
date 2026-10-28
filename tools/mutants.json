@@ -6707,5 +6707,23 @@
       "qa6"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "DR24",
+    "about": "the day's reminder bar is packed before the notebook while Settings has unpacked it",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/calendar_view.py",
+        "find": "        page = (self.settings_page if getattr(self, \"_settings_open\", False)\n                else self.notebook)\n",
+        "replace": "        page = self.notebook\n"
+      }
+    ],
+    "must_fail": [
+      "with Settings open, the new day's reminder shows above it"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
   }
 ]

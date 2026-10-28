@@ -199,6 +199,37 @@ _md_said = [str(w.cget('text')) for w in app8b.reminder_bar.winfo_children()
             if isinstance(w, tk.Label)]
 check(f"across midnight the new day's reminder replaces the old one ({_md_said})",
       app8b._reminder_bar_day == _md_today and any('1 note for today' in t for t in _md_said))
+# ...with Settings open too. Settings unpacks the notebook, Tk refused to put
+# the bar before it, the error left the day used up unseen, and the watch
+# never looked again (2026-10-28, the final audit).
+app8b.dismiss_reminder()
+_md_settings = NO.load_settings()
+_md_settings.pop('reminder_last_shown', None)
+NO.save_settings(_md_settings)
+app8b.show_settings_page(); app8b.update()
+_md_errors = []
+_md_report = app8b.report_callback_exception
+app8b.report_callback_exception = lambda *a: _md_errors.append(str(a[1]))
+_md_after = app8b.after
+_md_rearmed = []
+app8b.after = lambda ms, fn=None, *a: (_md_rearmed.append(ms) if fn == app8b._watch_the_day
+                                       else None, _md_after(ms, fn, *a))[1]
+try:
+    app8b._reminder_day = '2026-01-01'
+    try:
+        app8b._watch_the_day()
+    except Exception as _md_exc:   # this check's FAIL, not the suite's end
+        _md_errors.append(repr(_md_exc))
+    app8b.update()
+finally:
+    del app8b.after
+    app8b.report_callback_exception = _md_report
+check(f'with Settings open, the new day\'s reminder shows above it and the '
+      f'watch goes on (errors {_md_errors}, re-armed {_md_rearmed})',
+      not _md_errors and _md_rearmed == [60_000]
+      and app8b.reminder_bar.winfo_manager() == 'pack'
+      and NO.load_settings().get('reminder_last_shown') == _md_today)
+app8b.hide_settings_page(); app8b.update()
 app8b.destroy()
 try:
     app8b._watch_the_day()

@@ -1098,16 +1098,21 @@ class CalendarViewMixin:
         due = self.notes_on_date(today)
         if not due:
             return
-        # Mark as shown for today so it won't reappear on the next launch.
+        self._render_reminder_bar(len(due), today)
+        # Marked once it is on screen, so it won't reappear on the next
+        # launch. Marked first, a bar that failed to draw was spent unseen.
         settings["reminder_last_shown"] = today
         save_settings(settings)
-        self._render_reminder_bar(len(due), today)
 
     def _render_reminder_bar(self, count, today):
         self._reminder_bar_day = today
         for w in self.reminder_bar.winfo_children():
             w.destroy()
-        self.reminder_bar.pack(fill="x", side="top", before=self.notebook)
+        # Above whichever page is showing: with Settings open the notebook
+        # is not packed, and Tk refused to pack the bar before it.
+        page = (self.settings_page if getattr(self, "_settings_open", False)
+                else self.notebook)
+        self.reminder_bar.pack(fill="x", side="top", before=page)
 
         noun = "note" if count == 1 else "notes"
         # Written out day first, as every date in the app is shown.
@@ -1171,12 +1176,16 @@ class CalendarViewMixin:
         if not self._still_alive():
             return
         today = datetime.now().strftime("%Y-%m-%d")
-        if today != getattr(self, "_reminder_day", today):
-            if getattr(self, "_reminder_bar_day", None) not in (None, today):
-                self.dismiss_reminder()
-            self.maybe_show_reminder()
-        self._reminder_day = today
-        self.after(60_000, self._watch_the_day)
+        try:
+            if today != getattr(self, "_reminder_day", today):
+                if getattr(self, "_reminder_bar_day", None) not in (None, today):
+                    self.dismiss_reminder()
+                self.maybe_show_reminder()
+        finally:
+            # Whatever the look met, the next one comes: an error here used
+            # to end the watch for the rest of the session.
+            self._reminder_day = today
+            self.after(60_000, self._watch_the_day)
 
     def show_day_summary_tooltip(self, date_str):
         """Compact, TITLES-ONLY list for hovering the day cell itself (not a
