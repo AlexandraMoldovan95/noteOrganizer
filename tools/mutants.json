@@ -8201,5 +8201,23 @@
       "qa6"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "RT24",
+    "about": "an attachment's name is packed before its ✕, so a long name squeezes the ✕ out of the row",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "            remove_btn.pack(side=\"right\", padx=4, pady=2)\n",
+        "replace": "            name_lbl.pack(side=\"left\", fill=\"x\", expand=True, padx=7, pady=3)\n            remove_btn.pack(side=\"right\", padx=4, pady=2)\n"
+      }
+    ],
+    "must_fail": [
+      "a long-named attachment keeps its ✕ in the row"
+    ],
+    "suites": [
+      "qa7"
+    ],
+    "expect": "killed"
   }
 ]

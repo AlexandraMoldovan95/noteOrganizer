@@ -1403,6 +1403,15 @@ check(f'a label too long for its row keeps its type in sight ({_ll_text[:20]!r}.
       # Its own border and padding are a few pixels a side: the pieces are
       # measured one by one, so a pixel or two over still draws every letter.
       and _ll_lbl.winfo_reqwidth() <= _ll_lbl.winfo_width() + 3)
+# ...and the ✕ stays in the row: packed after the name, the name's length took
+# the whole row and a long-named file could not be removed from it.
+_ll_row = app.attachments_frame.winfo_children()[0].winfo_children()[0]
+_ll_x = next((w for w in _ll_row.winfo_children() if isinstance(w, tk.Button)), None)
+check(f'a long-named attachment keeps its ✕ in the row '
+      f'({_ll_x.winfo_x() if _ll_x else None} + {_ll_x.winfo_width() if _ll_x else None} '
+      f'of {_ll_row.winfo_width()} px)',
+      _ll_x is not None and _ll_x.winfo_ismapped() and _ll_x.winfo_width() > 10
+      and _ll_x.winfo_x() + _ll_x.winfo_width() <= _ll_row.winfo_width())
 
 # ---- A colon never reaches a stored name ----
 # The resolver refuses a stored name holding one: on Windows it names a

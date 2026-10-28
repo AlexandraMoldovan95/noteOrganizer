@@ -594,7 +594,6 @@ class AttachmentsMixin:
             name_lbl = tk.Label(top_row, text=f"{icon} {display_name}", font=("Segoe UI", 9),
                                  anchor="w", cursor="hand2",
                                  bg=self.colors["card"], fg=self.colors["text"])
-            name_lbl.pack(side="left", fill="x", expand=True, padx=7, pady=3)
             # The type always shows: a long name gives way before it, not at
             # the row's edge, where blank-looking characters hid ".rdp".
             kind = file_type_of(display_name)
@@ -615,6 +614,9 @@ class AttachmentsMixin:
                 bg=self.colors["danger"], fg=self._on_fill("danger")
             )
             remove_btn.pack(side="right", padx=4, pady=2)
+            # Packed after the ✕, so a long name cannot squeeze it out of the
+            # row; made before it, so Tab still reaches the name first.
+            name_lbl.pack(side="left", fill="x", expand=True, padx=7, pady=3)
 
             if not can_preview_inline:
                 # Common image formats show large, right in the app (see
