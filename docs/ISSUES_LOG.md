@@ -2320,6 +2320,10 @@ checked, so a change of copy can no longer drop it unseen.
 `test_data_safety` (the marks on Windows); qa7 puts a raw crafted record in the editor and clicks
 each kind; mutants AX01–AX12.
 
+Round three found an edge. A label padded with blank-looking characters the hidden list does not
+name (U+2800, a Hangul filler) still pushed the real type past the row's end; a name too long for
+its row now gives way before its type, so ".rdp" always shows (mutant RT19).
+
 **Takeaway:** a label is a claim about a file; what a person sees is read from the file that will
 open. And where the safe kinds are few and the dangerous ones are anything else, list the safe
 ones: a list of what is dangerous is wrong the day it is written, and wrong quietly. A copy that

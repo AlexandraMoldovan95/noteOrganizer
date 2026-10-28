@@ -1385,6 +1385,24 @@ check(f'a photo label over another kind of file shows that kind: its name, '
       '📄 Holiday photo.rdp' in _row_texts
       and not any('🖼' in t or '\u202e' in t for t in _row_texts)
       and any('Opens in your default app' in t for t in _row_texts))
+# A label too long for the row gives way before its type, never at the edge:
+# padded with blank-looking characters, "Holiday photo.jpg" over an .rdp hid
+# the ".rdp" beyond the row's end (round 3 of the final audit).
+app.current_attachments = [{'filename': 'Holiday photo.jpg' + '\u2800' * 120 + '.jpg',
+                            'stored_as': '20261001120000000001_trip.rdp'}]
+app.refresh_attachments_list(); app.update(); app.update()
+_ll_lbl = next((w for w in app.attachments_frame.winfo_children()[0]
+                .winfo_children()[0].winfo_children()
+                if isinstance(w, tk.Label)), None)
+_ll_text = str(_ll_lbl.cget('text')) if _ll_lbl is not None else ''
+check(f'a label too long for its row keeps its type in sight ({_ll_text[:20]!r}...'
+      f'{_ll_text[-6:]!r}, {_ll_lbl.winfo_reqwidth() if _ll_lbl else None} of '
+      f'{_ll_lbl.winfo_width() if _ll_lbl else None} px)',
+      _ll_lbl is not None and _ll_text.endswith('\u2026.rdp')
+      and _ll_text.startswith('📄 Holiday photo.jpg')
+      # Its own border and padding are a few pixels a side: the pieces are
+      # measured one by one, so a pixel or two over still draws every letter.
+      and _ll_lbl.winfo_reqwidth() <= _ll_lbl.winfo_width() + 3)
 
 # ---- A colon never reaches a stored name ----
 # The resolver refuses a stored name holding one: on Windows it names a

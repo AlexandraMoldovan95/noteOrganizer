@@ -38,9 +38,10 @@ from PIL import Image, ImageTk
 
 from ..core import paths
 from ..core.model import (MAX_ATTACHMENTS, attachment_display_name,
-                          how_to_open)
+                          file_type_of, how_to_open)
 from ..core.storage import (_attachment_path_within, _delete_attachment_files,
                             attachment_names_in)
+from .calendar_view import _fit_title
 
 
 class AttachmentsMixin:
@@ -594,6 +595,13 @@ class AttachmentsMixin:
                                  anchor="w", cursor="hand2",
                                  bg=self.colors["card"], fg=self.colors["text"])
             name_lbl.pack(side="left", fill="x", expand=True, padx=7, pady=3)
+            # The type always shows: a long name gives way before it, not at
+            # the row's edge, where blank-looking characters hid ".rdp".
+            kind = file_type_of(display_name)
+            cut = display_name.lower().rfind(kind) if kind else -1
+            if cut > 0:
+                _fit_title(self, name_lbl, f"{icon} ", display_name[:cut],
+                           display_name[cut:], self._measuring_font(("Segoe UI", 9)))
             name_lbl.bind("<Button-1>", lambda e, idx=i: self.open_attachment(idx))
             # A Tab stop that Space and Return open, as a click does: the ✕
             # beside it was all the keyboard could reach. Its ring rests in

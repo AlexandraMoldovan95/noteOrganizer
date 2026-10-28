@@ -8107,5 +8107,23 @@
       "qa7"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "RT19",
+    "about": "an attachment's long label runs past the row's edge, its type with it",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "            if cut > 0:\n                _fit_title(",
+        "replace": "            if False:\n                _fit_title("
+      }
+    ],
+    "must_fail": [
+      "a label too long for its row keeps its type in sight"
+    ],
+    "suites": [
+      "qa7"
+    ],
+    "expect": "killed"
   }
 ]
