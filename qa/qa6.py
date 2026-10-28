@@ -5321,6 +5321,70 @@ app.save_notes()
 app.refresh_note_list()
 _kv_settle()
 
+# ---- A POPUP THAT GROWS STAYS INSIDE THE WINDOW ----
+# Round 4: the template editor grew with its checklist and never scrolled,
+# placed once for the height it opened at: 25 items, or one long one, put
+# Save, Category and the Add box below the screen. The picker did the same
+# with as many templates. What grows scrolls, and a popup that grows is
+# placed again.
+def _gp_inside(w):
+    bottom = app.winfo_rooty() + app.winfo_height()
+    return (w is not None and w.winfo_ismapped()
+            and w.winfo_rooty() + w.winfo_height() <= bottom + 1
+            and w.winfo_rooty() >= app.winfo_rooty() - 1)
+
+
+app.geometry('900x600')
+_kv_settle(10)
+_gp_seen = {}
+try:
+    # Opened small, so it is placed for a short editor, then grown by
+    # the Add box -- 24 items and one long one -- past the window's height.
+    app._edit_template({'name': 'Packing', 'checklist': [{'text': 'socks'}]},
+                       lambda: None)
+    _kv_settle(10)
+    _gp_pop = app._mini_popup
+    _gp_add = list(_tl_entries(_gp_pop))[-1]       # the checklist's Add box
+    _gp_seen['typing in its Add box'] = _take_focus(_gp_add)
+    for _gp_i in range(25):
+        _gp_add.insert(0, 'w ' * 900 if _gp_i == 24 else 'item %d' % _gp_i)
+        app.event_generate('<Return>')             # Tk sends it to the box
+        app.update()
+    _kv_settle(10)
+    _gp_seen['editor'] = _gp_inside(_gp_pop)
+    _gp_seen['its Save'] = _gp_inside(find_btn_qa6(_gp_pop, 'Save'))
+    app._bring_into_sight(_gp_add)
+    _kv_settle(4)
+    _gp_seen['its Add box, brought into sight'] = _gp_inside(_gp_add)
+finally:
+    app._dismiss_mini_popup()
+    app.update()
+_gp_kept = list(app.templates)
+app.templates = [{'name': 'Template %d' % _gp_i, 'body': 'x'} for _gp_i in range(40)]
+try:
+    app.show_template_picker()
+    _kv_settle(10)
+    _gp_pick = app._mini_popup
+    _gp_last = [b for b in _tl_widgets(_gp_pick, tk.Button)
+                if 'Template 39' in str(b.cget('text'))]
+    _gp_seen['picker'] = _gp_inside(_gp_pick)
+    if _gp_last:
+        app._bring_into_sight(_gp_last[0])
+        _kv_settle(4)
+    _gp_seen['its last template, brought into sight'] = bool(_gp_last) and _gp_inside(_gp_last[0])
+finally:
+    app._dismiss_mini_popup()
+    app.templates = _gp_kept
+    app.geometry('1100x750')
+    _kv_settle(6)
+check(f"the template editor grown to 26 items, and the picker with 40 "
+      f"templates, stay inside a 900x600 window, what they hold in reach "
+      f"({_gp_seen})", len(_gp_seen) == 6 and all(_gp_seen.values()))
+app.notes = []
+app.save_notes()
+app.refresh_note_list()
+_kv_settle()
+
 # ---- KEYBOARD: a tick box is looked at the moment it is pressed ----
 # Round 3 of the final audit: the look after Space waited 100 ms for every
 # Tk button, though a tick box runs its command at once. A template's tick

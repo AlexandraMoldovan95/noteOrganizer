@@ -920,6 +920,7 @@ class DialogsMixin:
             pop.attributes("-topmost", True)
         except tk.TclError:
             pass
+        placed = {}
 
         def reposition(event=None):
             try:
@@ -958,13 +959,20 @@ class DialogsMixin:
                     above_y = ay - ph - 2
                     # If it also doesn't fit above, clamp within the app window.
                     y = above_y if above_y >= win_top + 8 else max(win_top + 8, win_bottom - ph - 8)
+                # And never past the bottom: "above" an anchor scrolled below
+                # the fold (the editor's Use template) ran past it.
+                y = max(win_top + 8, min(y, win_bottom - ph - 8))
 
                 # Horizontal: align left edges, nudge in if it would run past
                 # the app window's own right edge.
                 x = ax
                 if x + pw > win_right - 8:
                     x = max(win_left + 8, win_right - pw - 8)
-                pop.wm_geometry(f"+{int(x)}+{int(y)}")
+                # Only a move that moves it: placing it where it stands
+                # tells its <Configure> again, which would place it again.
+                if placed.get("at") != (int(x), int(y)):
+                    placed["at"] = (int(x), int(y))
+                    pop.wm_geometry(f"+{int(x)}+{int(y)}")
             except tk.TclError:
                 pass
 
@@ -989,6 +997,13 @@ class DialogsMixin:
         # Live-track the app window while this popup is open (move + resize).
         # Taken off again when this popup goes, whichever way it goes.
         self._bind_window_for_popup(pop, "<Configure>", throttled_reposition)
+        # ...and the popup's own size: one that grows -- a row added, a part
+        # shown -- was placed for its old height and ran past the window.
+        pop.bind("<Configure>", lambda e: (throttled_reposition()
+                                           if e.widget is pop else None), add="+")
+        # Once more when the moment has passed: it can grow during the first
+        # placing itself, before that binding was there to hear it.
+        throttled_reposition()
         # Never clobber a popup's OWN Escape: a nested dropdown binds
         # Escape→close-just-this-list before being placed, and replacing
         # that here made Escape tear down the HOST editor the list sits
@@ -1029,6 +1044,63 @@ class DialogsMixin:
         on a multi-monitor setup either."""
         self._place_dropdown_popup(pop, anchor_widget, anchor_xy=anchor_xy,
                                    keyboard_from=keyboard_from)
+
+    def _scrolling_rows(self, parent, bg, pop):
+        """A frame packed into *parent* for the part of *pop* that grows with
+        what it holds, shown in a viewport that scrolls once the popup would
+        be taller than the app window: the template editor with 25 checklist
+        items, and the picker with as many templates, ran off the screen,
+        Save and the last templates with them. Tab and the arrows bring what
+        they land on into sight (_bring_into_sight), the wheel scrolls it."""
+        holder = tk.Frame(parent, bg=bg)
+        holder.pack(side="top", fill="both", expand=True)
+        view = tk.Canvas(holder, bg=bg, highlightthickness=0, bd=0,
+                         width=1, height=1)
+        bar = ttk.Scrollbar(holder, orient="vertical", command=view.yview)
+        view.configure(yscrollcommand=bar.set)
+        rows = tk.Frame(view, bg=bg)
+        view.create_window(0, 0, window=rows, anchor="nw")
+        view.pack(side="left", fill="both", expand=True)
+        pending = {"job": None}
+
+        def fit():
+            pending["job"] = None
+            try:
+                pop.update_idletasks()
+                w, h = rows.winfo_reqwidth(), rows.winfo_reqheight()
+                others = pop.winfo_reqheight() - view.winfo_reqheight()
+                shown = min(h, max(self.px(80), self.winfo_height() - 16 - others))
+                view.configure(width=w, height=shown, scrollregion=(0, 0, w, h))
+                if h > shown:
+                    bar.pack(side="right", fill="y", before=view)
+                else:
+                    bar.pack_forget()
+            except tk.TclError:
+                pass
+
+        def fit_later(_e=None):
+            if pending["job"] is None:
+                pending["job"] = self.after_idle(fit)
+
+        def wheel(event):
+            w = event.widget
+            if (isinstance(w, (str, tk.Text))
+                    or not str(w).startswith(str(holder) + ".")
+                    or not self._is_placed(bar)):
+                return None
+            up = getattr(event, "delta", 0) > 0 or getattr(event, "num", 0) == 4
+            view.yview_scroll(-2 if up else 2, "units")
+            return "break"
+
+        rows.bind("<Configure>", fit_later, add="+")
+        self._bind_window_for_popup(pop, "<Configure>", fit_later)
+        for seq in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+            pop.bind(seq, wheel, add="+")
+        # Not fitted now: its update_idletasks would map the popup before it
+        # is placed, and -topmost set after that does not stick (ISSUES_LOG:
+        # "The template editor that "did nothing" when clicked").
+        fit_later()
+        return rows
 
     def _maybe_dismiss_mini_popup(self, event):
         pop = getattr(self, "_mini_popup", None)

@@ -8996,5 +8996,77 @@
       "qa6"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "RU26",
+    "about": "the template editor grows with its checklist and never scrolls",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "        frame = self._scrolling_rows(shell, self.colors[\"card\"], pop)\n",
+        "replace": "        frame = tk.Frame(shell, bg=self.colors[\"card\"])\n        frame.pack(fill=\"both\", expand=True)\n"
+      }
+    ],
+    "must_fail": [
+      "the template editor grown to 26 items, and the picker with 40 templates, stay inside a 900x600 window, what they hold in reach"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RU27",
+    "about": "the template picker grows with its templates and never scrolls",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        rows = self._scrolling_rows(frame, self.colors[\"card\"], pop)\n",
+        "replace": "        rows = frame\n"
+      }
+    ],
+    "must_fail": [
+      "the template editor grown to 26 items, and the picker with 40 templates, stay inside a 900x600 window, what they hold in reach"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RU28",
+    "about": "a popup that grows is not placed again, and runs past the window",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "        pop.bind(\"<Configure>\", lambda e: (throttled_reposition()\n                                           if e.widget is pop else None), add=\"+\")\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "the template editor grown to 26 items, and the picker with 40 templates, stay inside a 900x600 window, what they hold in reach"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RU29",
+    "about": "a popup placed above an anchor below the fold runs past the window's bottom",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "                y = max(win_top + 8, min(y, win_bottom - ph - 8))\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "the template editor grown to 26 items, and the picker with 40 templates, stay inside a 900x600 window, what they hold in reach"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
   }
 ]

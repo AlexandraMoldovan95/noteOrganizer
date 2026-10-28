@@ -303,7 +303,9 @@ while _stack9:
 # winfo_manager, not winfo_ismapped: the packing is synchronous, the OS
 # mapping is not -- twice the real-Windows run saw the drawn canvas
 # still unmapped and called a healthy preview absent.
-_pc9 = [c for c in _canv9 if c.winfo_manager() and c.find_all()]
+# A canvas of drawn items, not the editor's viewport, which holds a window.
+_pc9 = [c for c in _canv9 if c.winfo_manager() and c.find_all()
+        and any(c.type(i) != 'window' for i in c.find_all())]
 check(f'pasting a table shows the drawn preview '
       f'({len(_pc9[0].find_all()) if _pc9 else 0} items)',
       len(_pc9) == 1 and len(_pc9[0].find_all()) >= 8)

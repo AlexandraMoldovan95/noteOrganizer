@@ -20313,12 +20313,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                   font=("Segoe UI", 9, "bold"), bd=0).pack(side="right")
 
         # A name drawn whole sized the popup: 300 letters made it wider than
-        # any screen, 5,000 passed X's limit. Kept whole, drawn cut.
+        # any screen, 5,000 passed X's limit. Kept whole, drawn cut. And the
+        # list scrolls once it is taller than the window leaves room for.
         name_font = self._cal_font(("Segoe UI", 10))[0]
+        rows = self._scrolling_rows(frame, self.colors["card"], pop)
         for tpl in self.templates:
             name = self._fit_name(tpl.get("name", "Untitled template"),
                                   name_font, self.px(360))
-            b = tk.Button(frame, text=f"🧩  {name}", anchor="w",
+            b = tk.Button(rows, text=f"🧩  {name}", anchor="w",
                           command=lambda t=tpl: self._apply_template(t),
                           relief="flat", cursor="hand2", bg=self.colors["sidebar"],
                           fg=self.colors["text"], font=("Segoe UI", 10))

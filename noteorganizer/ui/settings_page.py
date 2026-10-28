@@ -961,10 +961,10 @@ class SettingsPageMixin:
         pop.edited_template = tpl
         pop.wm_overrideredirect(True)
         pop.configure(bg=self.colors["accent"])
-        frame = tk.Frame(pop, bg=self.colors["card"], padx=12, pady=12)
-        frame.pack(padx=1, pady=1)
+        shell = tk.Frame(pop, bg=self.colors["card"], padx=12, pady=12)
+        shell.pack(padx=1, pady=1)
 
-        head = tk.Frame(frame, bg=self.colors["card"])
+        head = tk.Frame(shell, bg=self.colors["card"])
         head.pack(fill="x", pady=(0, 8))
         tk.Label(head, text=("New template" if is_new else "Edit template"),
                  bg=self.colors["card"], fg=self.colors["text"],
@@ -972,6 +972,10 @@ class SettingsPageMixin:
         tk.Button(head, text="✕", command=self._dismiss_mini_popup, relief="flat",
                   cursor="hand2", bg=self.colors["card"], fg=self.colors["subtext"],
                   font=("Segoe UI", 10, "bold"), bd=0).pack(side="right")
+        # Everything between the header and Save scrolls once the editor is
+        # taller than the window: it grew with its checklist, and 25 items,
+        # or one long one, put Save, Category and the Add box off the screen.
+        frame = self._scrolling_rows(shell, self.colors["card"], pop)
 
         def field(label, initial, height=1, limit=None):
             tk.Label(frame, text=label, bg=self.colors["card"], fg=self.colors["subtext"],
@@ -1349,7 +1353,7 @@ class SettingsPageMixin:
             live()
             self._render_statistics()
 
-        btns = tk.Frame(frame, bg=self.colors["card"])
+        btns = tk.Frame(shell, bg=self.colors["card"])
         btns.pack(fill="x", pady=(4, 0))
         tk.Button(btns, text="Save", command=save, relief="flat", cursor="hand2",
                   bg=self.colors["accent"], fg=self._on_fill("accent"),

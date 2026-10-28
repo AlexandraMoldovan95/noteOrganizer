@@ -683,6 +683,7 @@
   "_screen_room": "(self)",
   "_scroll_list_drag_near_edge": "(self)",
   "_scroll_row_into_view": "(self, rec)",
+  "_scrolling_rows": "(self, parent, bg, pop)",
   "_search_query": "(self)",
   "_search_texts": "(note)",
   "_second_press_of_double_click": "(self, event)",
