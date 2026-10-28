@@ -6799,5 +6799,55 @@
       "qa1"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "AX01",
+    "about": "a backup's attachment label is kept whatever file it is written over",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "        item[\"filename\"] = attachment_display_name(display, item[\"stored_as\"])\n",
+               "replace": "        item[\"filename\"] = display\n"}],
+    "must_fail": ["a backup's label ends in the type of the file that opens"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "AX02",
+    "about": "a shown attachment name keeps the characters that reorder or hide text",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "    name = HIDDEN_IN_NAMES.sub(\"\", filename if isinstance(filename, str) else \"\")\n",
+               "replace": "    name = filename if isinstance(filename, str) else \"\"\n"}],
+    "must_fail": ["a shown name keeps no character that reorders or hides text"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "AX03",
+    "about": "the attachment row shows the record's label as it came",
+    "edits": [{"file": "noteorganizer/ui/attachments.py",
+               "find": "            display_name = attachment_display_name(att.get(\"filename\"), att.get(\"stored_as\"))\n",
+               "replace": "            display_name = att.get(\"filename\") or \"\"\n"}],
+    "must_fail": ["a photo label over another kind of file shows that kind"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "AX04",
+    "about": "the attachment row's icon and hint are judged from the label",
+    "edits": [{"file": "noteorganizer/ui/attachments.py",
+               "find": "                att.get(\"stored_as\") or display_name) in PREVIEWED_IN_APP\n",
+               "replace": "                att.get(\"filename\") or display_name) in PREVIEWED_IN_APP\n"}],
+    "must_fail": ["a photo label over another kind of file shows that kind"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "AX05",
+    "about": "the unsafe-file warning quotes the label instead of the file that opens",
+    "edits": [{"file": "noteorganizer/ui/attachments.py",
+               "find": "            original_name = attachment_display_name(attachment.get(\"filename\"), stored_as)\n",
+               "replace": "            original_name = attachment.get(\"filename\", stored_as)\n"}],
+    "must_fail": ["the warning names the file by the type that opens, not the label"],
+    "suites": ["qa7"],
+    "expect": "killed"
   }
 ]

@@ -192,6 +192,7 @@ is in the table below as well.
 | [The app the keyboard could reach only half of](#the-app-the-keyboard-could-reach-only-half-of) | A mouse binding is not a control; ask every page what a click can press that Tab cannot reach. And a focus ring is a claim about the screen: Windows draws none round a label. | next |
 | [The plain paste with no ceiling](#the-plain-paste-with-no-ceiling) | A limit with a way round is not a limit: protect every door to what it protects. | next |
 | [Round two: each fix's next door](#round-two-each-fixs-next-door) | A fix is for the behaviour, not the route it was reported on; ask every other road that reaches it. | next |
+| [The photo that was a remote connection](#the-photo-that-was-a-remote-connection) | What a person sees about a file is read from the file that will open, never from a label beside it. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -2230,6 +2231,33 @@ route to the same behaviour.
 
 **Takeaway:** a fix is for the behaviour, not the route it was reported on. Before calling it
 done, name the behaviour and ask every other road that reaches it.
+
+### The photo that was a remote connection
+
+*(2026-10-28 · found by the final audit's second round, with a crafted backup)*
+
+**Symptom:** a backup's note listed "🖼 Holiday photo.jpg", with the picture icon and without the
+"Opens in your default app" hint. Clicked, it handed Windows an `.rdp` file: a remote-desktop
+connection, not a photo. The same note could show "Wallpaper.png" over a `.theme`, and a label
+holding a right-to-left override showed its letters in another order.
+
+**Root cause:** an attachment record has two names. `stored_as` is the file on disk, and the open,
+its warning and the alias guard had all learned to judge that one ("A file with two names").
+`filename` is a label. The row took its text, its icon and the choice of hint from it, and the
+warning quoted it. The app never writes a pair that disagrees — it stores "stamp_" plus the
+original name — so nothing checked that the two agree, and a backup can write any label over any
+file.
+
+**Fix:** `normalize_note` makes the label end in the type of the file that opens ("Holiday
+photo.rdp") and takes out the characters that reorder or hide text: the controls, and the bidi
+marks, overrides and isolates. The row, the remove question, the warning and the note list's hover
+card read the name through the same `attachment_display_name`, so a record that never passed
+`normalize_note` shows the same. The icon and the hint come from the stored file, as the click
+does. A record the app made itself shows exactly as before. `test_data_safety`; qa7 puts a raw
+crafted record in the editor; mutants AX01–AX05.
+
+**Takeaway:** a label is a claim about a file. What a person sees about it — the name, the icon,
+the hint under it — is read from the file that will open, the way the safety check already was.
 
 
 ## Tk & platform gotchas

@@ -1243,7 +1243,7 @@ _real_startfile = NO.os.startfile if hasattr(NO.os, 'startfile') else None
 NO.os.startfile = lambda p, *a, **k: _opened.append(p)
 _asked = []
 _real_ask_lnk = app.ask_yes_no
-app.ask_yes_no = lambda t, m, **k: (_asked.append((t, k)), False)[1]
+app.ask_yes_no = lambda t, m, **k: (_asked.append((t, k, m)), False)[1]
 try:
     app.open_attachment(0)
     app.update()
@@ -1252,6 +1252,12 @@ finally:
 check('opening a .lnk asks first, with the warning glyph',
       len(_asked) == 1 and _asked[0][1].get('icon') == 'warning'
       and _asked[0][1].get('default') == 'no')
+# The warning names the file by the type that opens: quoting the label, it
+# called a ".pdf" dangerous, which teaches a person to click past it.
+check('the warning names the file by the type that opens, not the label '
+      f'({_asked[0][2][:40] if _asked else None!r})',
+      len(_asked) == 1 and '“invoice.lnk”' in _asked[0][2]
+      and 'invoice.pdf' not in _asked[0][2])
 check('and answering No does not launch it',
       _opened == [])
 app.ask_yes_no = lambda *a, **k: True
@@ -1263,6 +1269,24 @@ finally:
     if _real_startfile is not None:
         NO.os.startfile = _real_startfile
 check('answering Yes is what actually opens it', len(_opened) == 1)
+
+# ---- The row shows the file that opens, not the label ----
+# A backup can label any file as anything: "Holiday photo.jpg" over an
+# .rdp drew a photo's icon and no hint, and the click handed Windows a
+# remote connection. The record goes in raw, past normalize_note, with a
+# right-to-left override in its label, so the row's own reading is what is
+# checked. ISSUES_LOG: "The photo that was a remote connection".
+with open(os.path.join(NO.ATTACHMENTS_DIR, '20261001120000000001_trip.rdp'), 'wb') as f:
+    f.write(b'full address:s:example.invalid')
+app.current_attachments = [{'filename': 'Holiday photo\u202e.jpg',
+                            'stored_as': '20261001120000000001_trip.rdp'}]
+app.refresh_attachments_list(); app.update()
+_row_texts = find_all_labels(app.attachments_frame)
+check(f'a photo label over another kind of file shows that kind: its name, '
+      f'no picture icon, and the outside-app hint ({_row_texts!r})',
+      '📄 Holiday photo.rdp' in _row_texts
+      and not any('🖼' in t or '\u202e' in t for t in _row_texts)
+      and any('Opens in your default app' in t for t in _row_texts))
 
 # ---- A trailing dot cannot smuggle it past the gate ----
 # Windows strips trailing dots/spaces when it OPENS a path, so

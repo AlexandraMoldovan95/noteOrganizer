@@ -398,6 +398,68 @@ def _bare_file_name(name):
     return os.path.basename(name.replace("\\", "/")).rstrip(". ")
 
 
+# What changes how a name reads without being seen -- controls, bidi marks
+# and overrides (U+202E shows "Invoice<U+202E>fdp.exe" as "Invoiceexe.pdf"),
+# line separators, the BOM -- out of every name shown and every name written.
+HIDDEN_IN_NAMES = re.compile(
+    r"[\x00-\x1f\x7f-\x9f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069"
+    r"\u2028\u2029\ufeff]")
+
+
+def _type_suffix(name):
+    """The last dot and what follows it, as typed; "" when there is none."""
+    name = name.rstrip(". ")
+    dot = name.rfind(".")
+    return name[dot:] if dot >= 0 else ""
+
+
+def file_type_of(name):
+    """The kind of file *name* is as Windows opens it: what follows the last
+    dot, lower-case, once the trailing dots and spaces Windows ignores are
+    gone; "" when there is none. Not os.path.splitext, for which ".rdp" has
+    no extension: to Windows it is an .rdp file, and the app's stamp_ prefix
+    made "stamp_.bashrc" a .bashrc where the person's own name was not."""
+    if not isinstance(name, str):
+        return ""
+    return _type_suffix(os.path.basename(name.replace("\\", "/"))).lower()
+
+
+# The pictures the app shows itself, large, instead of handing them to
+# Windows (ui/attachments.py, _show_image_preview). Asked of the stored file,
+# never of the label: the row's icon, its hint and the click all agree.
+PREVIEWED_IN_APP = frozenset({".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"})
+
+
+def attachment_display_name(filename, stored_as):
+    """The name a person is shown for an attachment: *filename*, a label a
+    backup can write over any file, cleaned of HIDDEN_IN_NAMES and made to
+    end in the type of *stored_as*, the file that opens ("Holiday photo.jpg"
+    over an .rdp shows "Holiday photo.rdp"). The app's own records already
+    agree, so they show as they were; a second pass changes nothing.
+    ISSUES_LOG: "The photo that was a remote connection"."""
+    stored = stored_as if isinstance(stored_as, str) else ""
+    stored_name = HIDDEN_IN_NAMES.sub("", os.path.basename(stored.replace("\\", "/")))
+    name = HIDDEN_IN_NAMES.sub("", filename if isinstance(filename, str) else "")
+    if not name.strip(". "):
+        name = stored_name
+    if not stored:
+        return name
+    # Cleaned too, so the name shown never carries a hidden character the
+    # stored one has. A type that held one is no type Windows knows.
+    real = HIDDEN_IN_NAMES.sub("", file_type_of(stored))
+    if file_type_of(name) == real:
+        return name
+    stem = name.rstrip(". ")
+    if real:
+        stem = stem[:len(stem) - len(_type_suffix(stem))]
+    else:
+        # A file with no type shows none: "photo.tar.jpg" over a file that
+        # has none would still read as a .tar.
+        while _type_suffix(stem):
+            stem = stem[:len(stem) - len(_type_suffix(stem))].rstrip(". ")
+    return (stem + real) or stored_name
+
+
 def normalize_note(note):
     """Guarantee every note has every field, with the right type. Older notes
     were saved before 'comments', 'date', 'color' and 'attachments' existed,
@@ -573,6 +635,9 @@ def normalize_note(note):
             item["stored_as"] = _bare_file_name(display)
             if not item["stored_as"]:
                 continue
+        # The label agrees with the file that opens, and hides nothing.
+        # ISSUES_LOG: "The photo that was a remote connection".
+        item["filename"] = attachment_display_name(display, item["stored_as"])
         attachments.append(item)
         if len(attachments) >= MAX_ATTACHMENTS:
             # Same class as the checklist cap above: an unbounded list a

@@ -389,6 +389,7 @@ from noteorganizer.core.model import (
     sanitize_color,
     MAX_CHECKLIST_ITEMS,
     MAX_ATTACHMENTS,
+    attachment_display_name,
 )
 
 
@@ -21696,7 +21697,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 line("Color", shown["color"])
             atts = shown["attachments"]
             if atts:
-                line("Attachments", ", ".join(str(a.get("filename") or "?") for a in atts))
+                line("Attachments", ", ".join(
+                    attachment_display_name(a.get("filename"), a.get("stored_as")) or "?"
+                    for a in atts if isinstance(a, dict)))
             # As held, not shaped: a load backfills a missing stamp with now.
             created = note.get("created")
             if isinstance(created, str) and created:

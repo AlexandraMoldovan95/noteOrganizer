@@ -37,7 +37,8 @@ from datetime import datetime
 from PIL import Image, ImageTk
 
 from ..core import paths
-from ..core.model import MAX_ATTACHMENTS
+from ..core.model import (MAX_ATTACHMENTS, PREVIEWED_IN_APP,
+                          attachment_display_name, file_type_of)
 from ..core.storage import (_attachment_path_within, _delete_attachment_files,
                             attachment_names_in)
 
@@ -88,13 +89,16 @@ class AttachmentsMixin:
         for src_path in filepaths:
             original_name = os.path.basename(src_path)
             unique_name = f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{original_name}"
+            # Shown as every other route shows it, so the save's
+            # normalize_note finds nothing to change.
+            shown = attachment_display_name(original_name, unique_name)
             dest_path = os.path.join(paths.ATTACHMENTS_DIR, unique_name)
             try:
                 shutil.copy2(src_path, dest_path)
             except (IOError, OSError) as e:
-                self.show_error("Couldn't attach file", f"Failed to attach '{original_name}':\n{e}")
+                self.show_error("Couldn't attach file", f"Failed to attach '{shown}':\n{e}")
                 continue
-            self.current_attachments.append({"filename": original_name, "stored_as": unique_name})
+            self.current_attachments.append({"filename": shown, "stored_as": unique_name})
             added_any = True
         self.refresh_attachments_list()
         if added_any:
@@ -112,7 +116,7 @@ class AttachmentsMixin:
         # glyph, No pre-selected, Escape backs out.
         if not self.ask_yes_no(
                 "Remove attachment",
-                f"Remove “{target.get('filename', 'this file')}” from the "
+                f"Remove “{attachment_display_name(target.get('filename'), target.get('stored_as')) or 'this file'}” from the "
                 "note?\n\nThe stored copy is deleted with it — this can't "
                 "be undone.",
                 icon="warning", default="no"):
@@ -158,27 +162,26 @@ class AttachmentsMixin:
                 self.show_warning("File missing", "This attached file can't be found on disk.")
                 return
 
-            original_name = attachment.get("filename", stored_as)
+            # The name the question quotes ends in the type of the file
+            # that opens, whatever label the record carries.
+            original_name = attachment_display_name(attachment.get("filename"), stored_as)
             # The safety decision keys off the REAL on-disk file's
             # extension (stored_as preserves the original extension — see
             # add_attachment), NOT the display filename a crafted note
             # controls separately, so a ".exe" masquerading as "doc.pdf"
-            # can't skip the warning. Trailing dots/spaces come off first,
-            # because Windows strips them when it OPENS a path: to
-            # splitext, "invoice.lnk. " has no extension at all, while
-            # os.startfile on that same string executes invoice.lnk —
-            # normalize_note already stores clean names, and this repeats
-            # the rstrip at the sink so the two can never disagree even
-            # for a record that predates that rule.
+            # can't skip the warning. file_type_of drops the trailing
+            # dots/spaces Windows strips when it OPENS a path ("invoice.lnk. "
+            # executes invoice.lnk), repeated here at the sink for a record
+            # that predates normalize_note's rule.
             # And from the file the path resolved to, which is the one
             # startfile opens: the resolver refuses aliases, this repeats it.
-            ext = os.path.splitext(os.path.basename(path).rstrip(". "))[1].lower()
+            ext = file_type_of(os.path.basename(path))
 
             # Pillow decodes all of these — shown large, right in the app,
             # instead of handing off to whatever image viewer Windows has
             # associated with the file type. Anything else still opens
             # externally below.
-            if ext in (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"):
+            if ext in PREVIEWED_IN_APP:
                 self._show_image_preview(path, original_name)
                 return
 
@@ -496,10 +499,12 @@ class AttachmentsMixin:
             # and left the editor holding the PREVIOUS note's checklist,
             # which the next save wrote onto the wrong note. A blank name
             # draws an odd row; a crash here corrupts data.
-            display_name = att.get("filename") or att.get("stored_as") or ""
-            ext = os.path.splitext(display_name)[1].lower()
-            icon = "🖼" if ext in (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp") else "📄"
-            can_preview_inline = ext in (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp")
+            # The name, the icon and the hint all from the file that opens,
+            # as the click is: a label is whatever a backup wrote.
+            display_name = attachment_display_name(att.get("filename"), att.get("stored_as"))
+            can_preview_inline = file_type_of(
+                att.get("stored_as") or display_name) in PREVIEWED_IN_APP
+            icon = "🖼" if can_preview_inline else "📄"
 
             row = tk.Frame(self.attachments_frame, bg=self.colors["card"])
             row.pack(fill="x", pady=2)

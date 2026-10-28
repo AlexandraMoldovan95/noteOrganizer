@@ -1551,6 +1551,36 @@ try:
 except RecursionError:
     _copy_ok = False
 check("so a note carrying one can still be duplicated", _copy_ok)
+# The label is only a label. A backup can write "Holiday photo.jpg" over
+# an .rdp, and the row showed a photo while Windows opened a remote
+# connection. normalize_note makes the shown name end in the type of the
+# file that opens, and takes out what reorders or hides text.
+# ISSUES_LOG: "The photo that was a remote connection".
+from noteorganizer.core.model import attachment_display_name as _dn
+_label = _nn_att({"id": 1, "title": "x", "attachments": [
+    {"filename": "Holiday photo.jpg", "stored_as": "20261001120000000001_trip.rdp"},
+    {"filename": "photo.tar.jpg", "stored_as": "20261001_photo"},
+    {"filename": "x", "stored_as": ".rdp"}]})
+check("a backup's label ends in the type of the file that opens (%s)"
+      % [a["filename"] for a in _label["attachments"]],
+      [a["filename"] for a in _label["attachments"]]
+      == ["Holiday photo.rdp", "photo", "x.rdp"])
+_hidden = ("\x00\x07\x1b\x7f\x85\x9f\u061c\u200e\u200f\u202a\u202b\u202c"
+           "\u202d\u202e\u2066\u2067\u2068\u2069\u2028\u2029\ufeff")
+_bidi = _nn_att({"id": 1, "title": "x", "attachments": [
+    {"filename": "Invoice\u202efdp.exe", "stored_as": "20261001_inv.exe"},
+    {"filename": "a" + _hidden + "b.txt", "stored_as": "20261001_ab.txt"}]})
+check("a shown name keeps no character that reorders or hides text (%r)"
+      % [a["filename"] for a in _bidi["attachments"]],
+      [a["filename"] for a in _bidi["attachments"]] == ["Invoicefdp.exe", "ab.txt"])
+_own = ["report.pdf", "Photo.JPG", "README", ".bashrc", "Ünïcödé €.docx",
+        "a b.tar.gz", "שלום.txt",
+        "family \U0001F468\u200d\U0001F469\u200d\U0001F467.png"]
+check("...while a name the app stored itself is shown as it was, every time",
+      all(_dn(n, "20261028120000000000_" + n) == n
+          and _dn(_dn(n, "20261028120000000000_" + n), "20261028120000000000_" + n) == n
+          for n in _own)
+      and _nn_att(_label)["attachments"] == _label["attachments"])
 # Defensive: under a mutant that breaks the guard the outsider is gone,
 # and a bare remove would crash the run before its footer. The checks
 # already recorded their verdicts; this only lets the suite finish.
