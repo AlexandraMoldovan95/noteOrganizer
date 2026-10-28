@@ -9473,5 +9473,23 @@
       "qa7"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "DR66",
+    "about": "a merge marker under a row too short to have its column reads past that row, and Export note and Ctrl+C raise",
+    "edits": [
+      {
+        "file": "noteorganizer/core/tables.py",
+        "find": "            elif value == MERGE_UP and r > 0 and c < len(rows[r - 1]):\n",
+        "replace": "            elif value == MERGE_UP and r > 0:\n"
+      }
+    ],
+    "must_fail": [
+      "a merge marker under a row without its column is content"
+    ],
+    "suites": [
+      "test_tables"
+    ],
+    "expect": "killed"
   }
 ]

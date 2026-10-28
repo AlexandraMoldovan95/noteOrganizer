@@ -243,6 +243,16 @@ check(f"and the covered positions ({len(_m_covered)})",
 _orphans, _orphan_covered = tables.merge_map([["<", "a"], ["^", "b"]])
 check("an orphan marker stays ordinary content",
       _orphans == {} and _orphan_covered == set())
+# ...and so does a "^" under a row too short to have its column: reading that
+# cell raised, and Export note and Ctrl+C with it (round 5 of the final audit).
+try:
+    _ragged = tables.merge_map([["a", "b"], ["^", "^", "^"]])
+    _ragged_html = note_to_html("| a | b |\n| ^ | ^ | ^ |")
+except Exception as _ragged_exc:
+    _ragged, _ragged_html = repr(_ragged_exc), ""
+check(f"a merge marker under a row without its column is content ({_ragged})",
+      _ragged == ({(0, 0): (2, 1), (0, 1): (2, 1)}, {(1, 0), (1, 1)})
+      and "<table" in _ragged_html)
 
 # The bug as reported: a spreadsheet header with rowspan and colspan sheared
 # every row under it one column left, so the symbol columns came out empty.

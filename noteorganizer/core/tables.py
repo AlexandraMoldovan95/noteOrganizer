@@ -503,7 +503,9 @@ def merge_map(rows):
                 left = anchor_of.get((r, c - 1), (r, c - 1))
                 if rows[left[0]][left[1]] not in (MERGE_LEFT, MERGE_UP):
                     anchor_of[(r, c)] = left
-            elif value == MERGE_UP and r > 0:
+            # A row above too short to have this column is nothing to attach
+            # to: reading it raised, and Export note and Ctrl+C with it.
+            elif value == MERGE_UP and r > 0 and c < len(rows[r - 1]):
                 above = anchor_of.get((r - 1, c), (r - 1, c))
                 if rows[above[0]][above[1]] not in (MERGE_LEFT, MERGE_UP):
                     anchor_of[(r, c)] = above
