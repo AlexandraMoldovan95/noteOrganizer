@@ -9302,5 +9302,23 @@
       "qa6"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "RV02",
+    "about": "the put-away watcher reads a part laid out again, not yet mapped, as put away",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "            if (laid_out or str(self.tk.call(\"focus\", \"-lastfor\", top)) != str(held)\n",
+        "replace": "            if (str(self.tk.call(\"focus\", \"-lastfor\", top)) != str(held)\n"
+      }
+    ],
+    "must_fail": [
+      "a toolbar re-dealt by a resize keeps the keyboard on B"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
   }
 ]

@@ -1887,11 +1887,17 @@ class DialogsMixin:
             if not held.winfo_exists():
                 return
             top = held.winfo_toplevel()
+            # Laid out again, it maps once its row's new size settles: pack
+            # asks the parent first, so a toolbar re-dealt by a resize read as
+            # put away, and the keyboard went on into the note.
+            part, laid_out = held, True
+            while laid_out and part is not None and part is not top:
+                laid_out, part = bool(part.winfo_manager()), part.master
             now = str(self.tk.call("focus"))
-            if (str(self.tk.call("focus", "-lastfor", top)) != str(held)
+            if (laid_out or str(self.tk.call("focus", "-lastfor", top)) != str(held)
                     or (now and self.nametowidget(now).winfo_toplevel() is not top)
                     or held.winfo_viewable() or not top.winfo_viewable()):
-                return      # moved since, back in sight, or the window away
+                return      # laid out again, moved since, in sight, or the window away
             target, at = getattr(self, "_last_press", (None, 0.0))
             if not (target is not None and time.monotonic() - at < 1.0
                     and not isinstance(target, str) and target.winfo_exists()

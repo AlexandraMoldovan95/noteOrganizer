@@ -5276,6 +5276,32 @@ check(f"a tab left with the keyboard on the note list takes it off the list "
       _pa_on_list and _pa_h is not None and bool(_pa_h.winfo_viewable()))
 app.notebook.select(app.TAB_NOTES)
 _kv_settle(4)
+# Round 5: a toolbar re-dealt by a resize read as put away -- pack maps a
+# button laid out again once its row's new size settles -- and the keyboard
+# went from B into the note. The case is the watcher looking at B unmapped.
+_rb_bold = app._fmt_buttons['bold']
+_rb_looked, _rb_rows = [], []
+_rb_real_off = app._keyboard_off_part
+app._keyboard_off_part = lambda held: (_rb_looked.append(
+    (held is _rb_bold, bool(held.winfo_viewable()))), _rb_real_off(held))[1]
+try:
+    _rb_took = _take_focus(_rb_bold)
+    _rb_need = sum(w.winfo_reqwidth() + p[0] + p[1]
+                   for w, p, *_r in app._fmt_bar_items)
+    for _rb_width in (_rb_need + 50, _rb_need // 2, _rb_need + 50):
+        app._reflow_format_bar(_rb_width)              # one row, two, one again
+        _rb_rows.append(sum(app._fmt_rows_used))
+        _kv_settle(6)
+    _rb_h = _pa_holder()
+finally:
+    del app._keyboard_off_part
+    app._reflow_format_bar()
+    _kv_settle(4)
+check(f"a toolbar re-dealt by a resize keeps the keyboard on B (rows {_rb_rows}; "
+      f"looked at B unmapped: {(True, False) in _rb_looked}; on {_rb_h})",
+      _rb_took and len(_rb_rows) == 3 and _rb_rows[0] == _rb_rows[2] == 1
+      and _rb_rows[1] > 1 and (True, False) in _rb_looked
+      and _rb_h is _rb_bold)
 app.notes = []
 app.save_notes()
 app.refresh_note_list()
