@@ -3941,8 +3941,9 @@ def _hs_disk():
 
 
 _hs_dirs = []
+_hs_slept = []
 try:
-    _storage.time.sleep = lambda s: None
+    _storage.time.sleep = _hs_slept.append
     for _hs_case in ("moment", "start", "later"):
         _hs_dirs.append(tempfile.mkdtemp(prefix="nd_heldset_"))
         _paths.configure(_hs_dirs[-1])
@@ -3956,6 +3957,11 @@ try:
         try:
             _hs_got = _storage.load_settings()
             _hs_held = _paths.writes_held(_paths.SETTINGS_FILE)
+            # Every later read is one try: retried each time, a hold for the
+            # run cost a second a read -- the start 19 s, a note click 4 (round 5).
+            _hs_waits = len(_hs_slept)
+            _hs_later = [_storage.load_settings() for _ in range(5)]
+            _hs_waits = len(_hs_slept) - _hs_waits
             _storage.save_setting("last_open_note_id", 7)
             _hs_saved = _hs_disk().get("last_open_note_id") == 7
             _hs_notes, _hs_report = (_storage.load_notes() if _hs_case == "start"
@@ -3975,6 +3981,10 @@ try:
                   and not _hs_saved and not _hs_aside and _hs_disk() == _hs_real
                   and _hs_report.get("cleanup_report") is None
                   and len(_hs_notes) == 2)
+            check("...and only the run's first read waits for it: five later reads "
+                  "try once each (%d waits)" % _hs_waits,
+                  _hs_waits == 0
+                  and _hs_later == [{_storage.TRASH_WINDOW_UNKNOWN: True}] * 5)
         else:
             check("refused later on, the last good read stands in, and a setting "
                   "saved keeps every other (%s)" % _hs_disk(),

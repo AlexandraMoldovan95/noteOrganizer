@@ -8392,7 +8392,7 @@
     "edits": [
       {
         "file": "noteorganizer/core/storage.py",
-        "find": "            if known is None:\n                text = _read_data_file(paths.SETTINGS_FILE)\n            else:\n",
+        "find": "            if known is None and first:\n                text = _read_data_file(paths.SETTINGS_FILE)\n            else:\n",
         "replace": "            if False:\n                text = _read_data_file(paths.SETTINGS_FILE)\n            else:\n"
       }
     ],
@@ -9120,6 +9120,24 @@
     ],
     "suites": [
       "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR57",
+    "about": "every settings read waits through the start's retries, so a file held for the run costs a second a read",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "            if known is None and first:\n",
+        "replace": "            if known is None:\n"
+      }
+    ],
+    "must_fail": [
+      "...and only the run's first read waits for it"
+    ],
+    "suites": [
+      "test_data_safety"
     ],
     "expect": "killed"
   }

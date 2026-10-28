@@ -88,20 +88,24 @@ def json_from_text(text):
 #: The settings as last read or written whole this run, with the file they
 #: are of, for a read the system refuses later on (see load_settings).
 _settings_read = (None, None)
+#: The settings file whose first read this run was made, with its retries.
+_settings_tried = None
 
 
 def load_settings():
     """The settings, read fresh: callers change a key and write it all back.
     A read the system refuses (another program holding the file) is not
-    damage: at the start it is tried as the notes are, and a file never read
-    is not written that run; later the last good read stands in. Its
-    place-holder, written back with one key, replaced the person's categories,
-    theme and Trash window (2026-10-28, the final audit's fourth round)."""
-    global _settings_read
+    damage: the run's first read is tried as the notes are, and a file never
+    read is not written that run; later the last good read stands in, or one
+    try. Retried at every read, a hold kept the start 19 s (fourth and fifth
+    rounds of the final audit, 2026-10-28)."""
+    global _settings_read, _settings_tried
     known = _settings_read[1] if _settings_read[0] == paths.SETTINGS_FILE else None
+    first = _settings_tried != paths.SETTINGS_FILE
+    _settings_tried = paths.SETTINGS_FILE
     if os.path.exists(paths.SETTINGS_FILE):
         try:
-            if known is None:
+            if known is None and first:
                 text = _read_data_file(paths.SETTINGS_FILE)
             else:
                 with open(paths.SETTINGS_FILE, "r", encoding="utf-8") as f:
