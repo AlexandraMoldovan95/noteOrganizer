@@ -101,6 +101,7 @@ __all__ = [
     "effective_note",
     "day_matches_series",
     "moved_from",
+    "drawn_moves",
     "move_day",
     "off_schedule_days",
     "describe_recurrence",
@@ -547,20 +548,135 @@ def expand_occurrences(note, range_start, range_end, limit=None):
     # is still one the rule gives and was not deleted: a move outlives
     # neither. The new date may lie past the rule's end or before its start;
     # the person chose it.
-    drawn = set(dates)
     exceptions = set(note.get("exceptions") or [])
+    here = []
     for orig, new in moved.items():
         day = parse_date(new) if isinstance(new, str) else None
-        if (day is None or new in drawn or orig in exceptions
-                or not range_start <= day <= range_end):
-            continue
-        origin = parse_date(orig) if isinstance(orig, str) else None
-        if origin is None or _expand_rule(note, origin, origin) != [orig]:
+        if (day is not None and orig not in exceptions
+                and range_start <= day <= range_end):
+            here.append((orig, new))
+    if not here:
+        return dates
+    # Whether the rule still gives each day is asked of all of them at once:
+    # asked one by one, a series that stops after N times walked from its
+    # first day for every moved day in the range (_rule_days_among).
+    gives = _rule_days_among(note, [orig for orig, _new in here])
+    drawn = set(dates)
+    for orig, new in here:
+        if new in drawn or orig not in gives:
             continue
         dates.append(new)
         drawn.add(new)
     dates.sort()
     return dates[:limit] if limit is not None else dates
+
+
+def _rule_days_among(note, days):
+    """Which of *days* -- date strings -- the note's rule itself gives, its
+    deleted and moved days aside: ``_expand_rule(note, d, d) == [d]`` for
+    every *d* of them, asked in one go.
+
+    Asked one day at a time, the question re-read the whole series each
+    time, and the callers asked it once for every moved or edited day: a
+    series holding 5,000 moved days took a minute and a half to open, at
+    every launch while it was the note last open (ISSUES_LOG: "Limits that
+    held at the door but not after it"). The answer is the same; only the
+    asking changed:
+
+    * a rule with no count jumps straight to the day asked
+      (:func:`_expand_rule`), so each day costs the same whatever the span
+      -- they are asked one by one, with nothing re-read between them;
+    * a rule that stops after N times is walked from its first day whatever
+      is asked, so it is walked ONCE, over the span of every day asked: the
+      walk each single question took, up to each day, bounded by its N.
+
+    A spelling of a date other than ``YYYY-MM-DD`` is never a day the rule
+    gives, as it never equalled what the rule wrote.
+    """
+    wanted = {}
+    for text in days:
+        when = parse_date(text) if isinstance(text, str) else None
+        if when is not None:
+            wanted.setdefault(when, []).append(text)
+    if not wanted:
+        return set()
+    # Deleted days are the caller's to judge; the rule's days are asked here.
+    bare = dict(note, exceptions=[])
+    if normalize_recurrence(note.get("recurrence"))["count"] > 0:
+        hits = set(_expand_rule(bare, min(wanted), max(wanted)))
+    else:
+        hits = set()
+        for when in wanted:
+            hits.update(_expand_rule(bare, when, when))
+    return {text for texts in wanted.values() for text in texts
+            if text in hits}
+
+
+def _drawn_on_days(note, whens):
+    """``{d: expand_occurrences(note, d, d)}`` for every date *d* in
+    *whens*, worked out at once: the rule asked once for all of them
+    (_rule_days_among), and the moved days read once, not once per date.
+    For a question asked about many single days -- which days show a moved
+    day, which edited days the schedule still reaches."""
+    whens = set(whens)
+    if not whens:
+        return {}
+    moved = _moves(note)
+    exceptions = set(note.get("exceptions") or [])
+    own = {when: format_date(when) for when in whens}
+    candidates = []
+    if moved:
+        for orig, new in moved.items():
+            day = parse_date(new) if isinstance(new, str) else None
+            if day in whens and orig not in exceptions:
+                candidates.append((orig, new, day))
+    gives = _rule_days_among(
+        note, list(own.values()) + [orig for orig, _new, _day in candidates])
+    out, seen = {}, {}
+    for when, text in own.items():
+        # The rule's own day, unless deleted or moved away (expand_occurrences
+        # skips both).
+        mine = ([text] if text in gives and text not in exceptions
+                and text not in moved else [])
+        out[when], seen[when] = mine, set(mine)
+    # ...then each moved day held there, in the order expand_occurrences
+    # takes them, once per spelling.
+    for orig, new, day in candidates:
+        if orig in gives and new not in seen[day]:
+            out[day].append(new)
+            seen[day].add(new)
+    for days in out.values():
+        days.sort()
+    return out
+
+
+def drawn_moves(note):
+    """The series' moved days whose date shows that day, as ``(date the
+    rule gives it, date it is on)`` pairs in the note's order.
+
+    The question the editor's banner ("5 days moved") and the History ask of
+    each moved day -- does the calendar, asked about its new date, show
+    exactly it -- asked of all of them at once (_drawn_on_days). Asked one
+    day at a time, each question read every moved day of the series.
+    """
+    moved = _moves(note)
+    if not moved:
+        return []
+    pairs = [(orig, new, parse_date(new) if isinstance(new, str) else None)
+             for orig, new in moved.items()]
+    shown = _drawn_on_days(note, [day for _o, _n, day in pairs
+                                  if day is not None])
+    return [(orig, new) for orig, new, day in pairs
+            if day is not None and shown[day] == [new]]
+
+
+def _moved_from_map(note):
+    """:func:`moved_from` for every date at once: ``{date: date it came
+    from}``, the first move wins as there."""
+    came = {}
+    for orig, new in _moves(note).items():
+        came.setdefault(new, orig)
+    return came
 
 
 def moved_from(note, day):
@@ -905,6 +1021,10 @@ def history_entries(notes, query="", year_bucket="All", today=None, memo=None):
             off = memo.get(off_key)
             if off is None:
                 off = memo[off_key] = frozenset(off_schedule_days(note))
+            # Where each day came from, and which moved days are drawn: once
+            # per series, not once per day listed -- asked per day, both read
+            # every moved day each time (drawn_moves).
+            came = _moved_from_map(note)
 
             children = []
             any_child_match = False
@@ -928,7 +1048,7 @@ def history_entries(notes, query="", year_bucket="All", today=None, memo=None):
                         "title": (ov.get("title") or title),
                         "edited": edited,
                         "off_schedule": False,
-                        "moved_from": moved_from(note, day),
+                        "moved_from": came.get(day),
                     })
                 # A bounded series lists its days from its rule, so a day it
                 # no longer has was in no row at all: listed here too, marked.
@@ -977,17 +1097,17 @@ def history_entries(notes, query="", year_bucket="All", today=None, memo=None):
                         # Listed as a day of the series, and opened as one: a
                         # day the calendar does not have.
                         "off_schedule": day in off,
-                        "moved_from": None if day in off else moved_from(note, day),
+                        "moved_from": None if day in off else came.get(day),
                     })
                 # A day moved to another date is listed as well, edits of its
                 # own or not: where it went is worth finding. Only while the
-                # calendar draws it there (expand_occurrences).
-                for orig, new in _moves(note).items():
+                # calendar draws it there (drawn_moves), worked out once for
+                # what the series is (`memo`).
+                if "drawn" not in known:
+                    known["drawn"] = drawn_moves(note)
+                for orig, new in known["drawn"]:
                     if (new in overrides or not is_date(new) or not bucket_ok(new)
                             or not base_matches):
-                        continue
-                    day = parse_date(new)
-                    if expand_occurrences(note, day, day) != [new]:
                         continue
                     children.append({
                         "date": new,
@@ -1151,14 +1271,15 @@ def off_schedule_days(note):
     # Asked with no day skipped, so a skipped day reads as on the schedule
     # here -- and is left out above, as a deletion rather than a fall.
     schedule = dict(note, exceptions=[])
-    off = []
-    for day in sorted(d for d in overrides if isinstance(d, str)):
-        when = parse_date(day)
-        if when is None or day in exceptions:
-            continue
-        if expand_occurrences(schedule, when, when) != [day]:
-            off.append(day)
-    return off
+    asked = [(day, when) for day, when in
+             ((d, parse_date(d)) for d in sorted(
+                 d for d in overrides if isinstance(d, str)))
+             if when is not None and day not in exceptions]
+    # What expand_occurrences(schedule, when, when) says of each day, worked
+    # out for all of them at once: asked once per edited day, it read every
+    # moved day each time (_drawn_on_days).
+    shown = _drawn_on_days(schedule, [when for _day, when in asked])
+    return [day for day, when in asked if shown[when] != [day]]
 
 
 def describe_recurrence(note):

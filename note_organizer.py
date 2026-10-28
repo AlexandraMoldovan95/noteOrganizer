@@ -423,6 +423,7 @@ from noteorganizer.core.recurrence import (
     effective_note,
     day_matches_series,
     moved_from,
+    drawn_moves,
     move_day,
     off_schedule_days,
     describe_recurrence,
@@ -15649,11 +15650,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     text += " · 1 day keeps its own edits (✎)"
                 elif n_over > 1:
                     text += f" · {n_over} days keep their own edits (✎)"
-                # Days held on another date, where the calendar draws them.
-                n_moved = sum(
-                    1 for new in (note.get("moved") or {}).values()
-                    if parse_date(new) and expand_occurrences(
-                        note, parse_date(new), parse_date(new)) == [new])
+                # Days held on another date, where the calendar draws them --
+                # all of them judged at once: asked of the calendar one day
+                # at a time, 5,000 moved days took a minute and a half to
+                # open, at every launch while it was the note last open.
+                n_moved = len(drawn_moves(note))
                 if n_moved == 1:
                     text += " · 1 day moved (↷)"
                 elif n_moved > 1:

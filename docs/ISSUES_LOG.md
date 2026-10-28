@@ -193,6 +193,7 @@ is in the table below as well.
 | [The plain paste with no ceiling](#the-plain-paste-with-no-ceiling) | A limit with a way round is not a limit: protect every door to what it protects. | next |
 | [Round two: each fix's next door](#round-two-each-fixs-next-door) | A fix is for the behaviour, not the route it was reported on; ask every other road that reaches it. | next |
 | [The photo that was a remote connection](#the-photo-that-was-a-remote-connection) | What a person sees about a file is read from the file that will open; where the safe kinds are few, list those, not the dangerous ones. | next |
+| [Limits that held at the door but not after it](#limits-that-held-at-the-door-but-not-after-it) | A cap on what comes in is not a cap on what is done with it: bound the work at the limit, and everything a load keeps. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -2300,6 +2301,32 @@ each kind; mutants AX01–AX12.
 open. And where the safe kinds are few and the dangerous ones are anything else, list the safe
 ones: a list of what is dangerous is wrong the day it is written, and wrong quietly. A copy that
 drops where a file came from switches off defences the app never sees, so it carries that too.
+
+### Limits that held at the door but not after it
+
+*(2026-10-28 · found by the final audit's second round, with files and clipboards made to hurt)*
+
+**Symptom:** a backup holding one repeating note with 5,000 moved days took a minute and a half
+to open that note — and the same again at every launch, for as long as it was the note last open.
+
+**Root cause:** the limit was there. A load keeps at most 5,000 moved days, the number a rule may
+generate, because each is worked out on every calendar draw. But it was checked where the data
+came in, and nowhere after it. The editor's banner ("5,000 days moved") counted them by asking
+the calendar about each moved day in turn, and each question read every moved day of the series:
+5,000 questions of 5,000 readings, twenty-five million in all. The History asked the same way, the
+count of days whose own edits fell off the schedule likewise, and the load itself looked each move
+up along the whole list of deleted days. A cap of 5,000 was a cap on the input, and a promise of
+twenty-five million on the work.
+
+**Fix:** each of those questions is now asked of all the days at once. The rule is asked once for
+every day in question — a repeat that stops after N times is walked once from its first day, not
+once per moved day — and the moved days are read once, not once per day. The answers are the
+same, which the unit suite checks against the old day-by-day questions on 300 random series. The
+note opens in under half a second, restart included. test_recurrence counts how often the moved
+days are read whole, never the time, so a slow machine cannot fail it; mutants IX01–IX04.
+
+**Takeaway:** a limit on what comes in says nothing about what is then done with it. Ask what the
+work costs at the limit: a capped number squared is not capped.
 
 
 ## Tk & platform gotchas

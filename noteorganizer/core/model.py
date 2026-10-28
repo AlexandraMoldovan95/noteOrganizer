@@ -627,10 +627,13 @@ def normalize_note(note):
     # the same one, no two days on one date, and no move of a deleted day.
     # Capped as a rule's days are: each is worked out on every calendar draw.
     moved, held_on = {}, set()
+    # A set: the sorted list, walked whole for every moved day, took the
+    # square of their number to load.
+    deleted = set(clean["exceptions"])
     for orig, new in sorted((k, v) for k, v in clean["moved"].items()
                             if isinstance(k, str) and isinstance(v, str)):
         if (parse_date(orig) and parse_date(new) and orig != new
-                and new not in held_on and orig not in clean["exceptions"]):
+                and new not in held_on and orig not in deleted):
             moved[orig] = new
             held_on.add(new)
             if len(moved) >= MAX_OCCURRENCES:

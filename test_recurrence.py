@@ -615,6 +615,140 @@ check('the "until" of a repeat is shown day first',
       == 'Every 2 weeks, until 31.12.2026')
 
 
+# ---- moved days at the cap: the per-day questions asked of all at once ----
+# A series with 5,000 moved days (the cap normalize_note keeps) took 90 s to
+# open: the banner, the History and the days off the schedule each asked the
+# calendar about one day at a time, and every question read every moved day
+# (ISSUES_LOG: "Limits that held at the door but not after it"). Measured as
+# WORK -- how many times the moved days are read whole -- never as time, so
+# a slow machine cannot fail it: the old shape read them once per day asked,
+# 2,000 times here; the new one a handful of times in all.
+import random as _random
+from datetime import timedelta as _td
+import noteorganizer.core.recurrence as _R
+from noteorganizer.core.recurrence import drawn_moves as _drawn
+
+
+class _ReadCount(dict):
+    """The moved days, counting each time they are walked whole."""
+    reads = 0
+
+    def items(self):
+        _ReadCount.reads += 1
+        return super().items()
+
+    def __iter__(self):
+        _ReadCount.reads += 1
+        return super().__iter__()
+
+
+def _whole_reads(fn):
+    _ReadCount.reads = 0
+    fn()
+    return _ReadCount.reads
+
+
+_CAP_N = 2000
+_cap_note = NO.normalize_note({
+    'id': 1, 'title': 's', 'date': '2020-01-01',
+    'recurrence': {'freq': 'daily'},
+    'moved': {(date(2020, 1, 1) + _td(days=i)).isoformat():
+              (date(2040, 1, 1) + _td(days=i)).isoformat() for i in range(_CAP_N)},
+    'overrides': {(date(2030, 1, 1) + _td(days=i)).isoformat(): {'title': 'o'}
+                  for i in range(_CAP_N)}})
+_cap_note['moved'] = _ReadCount(_cap_note['moved'])
+
+check(f'the banner counts {_CAP_N:,} moved days reading them a few times in '
+      'all, not once per day',
+      _whole_reads(lambda: _drawn(_cap_note)) <= 10
+      and len(_drawn(_cap_note)) == _CAP_N)
+check('...the days off the schedule likewise',
+      _whole_reads(lambda: _off(_cap_note)) <= 10)
+check('...and the History likewise',
+      _whole_reads(lambda: _hist([_cap_note], today=_H_TODAY)) <= 20
+      and _hist([_cap_note], today=_H_TODAY)[0]['n_moved'] == _CAP_N)
+_walks = [0]
+_real_rule = _R._expand_rule
+
+
+def _counting_rule(*args, **kwargs):
+    _walks[0] += 1
+    return _real_rule(*args, **kwargs)
+
+
+_R._expand_rule = _counting_rule
+try:
+    _drawn(dict(_cap_note, recurrence={'freq': 'daily', 'count': 5000}))
+finally:
+    _R._expand_rule = _real_rule
+check('a series that stops after N times is walked once for all its moved '
+      'days, not once per day from its first',
+      _walks[0] <= 2)
+
+
+class _EqCount(str):
+    """A deleted day, counting each comparison made against it."""
+    compared = 0
+    __hash__ = str.__hash__
+
+    def __eq__(self, other):
+        _EqCount.compared += 1
+        return str.__eq__(self, other)
+
+
+_EqCount.compared = 0
+_ld = NO.normalize_note({
+    'id': 1, 'date': '2020-01-01', 'recurrence': {'freq': 'daily'},
+    'exceptions': [_EqCount((date(2020, 1, 1) + _td(days=i)).isoformat())
+                   for i in range(_CAP_N)],
+    'moved': {(date(2020, 1, 1) + _td(days=i)).isoformat():
+              (date(2200, 1, 1) + _td(days=i)).isoformat() for i in range(_CAP_N)}})
+check('a load of 2,000 deleted days and 2,000 moves of them looks each move '
+      'up once, not along every deleted day',
+      _ld['moved'] == {} and _EqCount.compared <= 10 * _CAP_N)
+
+
+def _per_day_moves(note):
+    """The banner's question as it was asked, one day at a time."""
+    return [(o, n) for o, n in (note.get('moved') or {}).items()
+            if NO.parse_date(n) and NO.expand_occurrences(
+                note, NO.parse_date(n), NO.parse_date(n)) == [n]]
+
+
+def _per_day_off(note):
+    sched = dict(note, exceptions=[])
+    exc = set(note.get('exceptions') or [])
+    return [d for d in sorted(note.get('overrides') or {})
+            if NO.parse_date(d) and d not in exc
+            and NO.expand_occurrences(sched, NO.parse_date(d), NO.parse_date(d)) != [d]]
+
+
+_rng = _random.Random(20261028)
+_agree_moves = _agree_off = True
+for _i in range(300):
+    _a = date(2026, 1, 1) + _td(days=_rng.randint(-300, 300))
+    _span = [(_a + _td(days=_rng.randint(-20, 700))).isoformat() for _ in range(40)]
+    _sn = NO.normalize_note({
+        'id': 1, 'date': _a.isoformat(),
+        'recurrence': {'freq': _rng.choice(['daily', 'weekly', 'monthly', 'yearly']),
+                       'interval': _rng.choice([1, 2, 3]),
+                       'count': _rng.choice([0, 0, 6, 40]),
+                       'weekdays': _rng.sample(range(7), _rng.randint(0, 3)),
+                       'month_days': _rng.sample(range(1, 32), _rng.randint(0, 2)),
+                       'month_day_policy': _rng.choice(['clamp', 'skip'])},
+        'exceptions': _rng.sample(_span, _rng.randint(0, 6)),
+        # a date written with a space is a different text for the same day
+        'moved': {_rng.choice(_span): _rng.choice(_span) + _rng.choice(['', '', ' '])
+                  for _ in range(_rng.randint(0, 15))},
+        'overrides': {_rng.choice(_span): {'title': 't'}
+                      for _ in range(_rng.randint(0, 10))}})
+    _agree_moves = _agree_moves and _drawn(_sn) == _per_day_moves(_sn)
+    _agree_off = _agree_off and _off(_sn) == _per_day_off(_sn)
+check('...and the answers are the ones the calendar gives day by day: moved days',
+      _agree_moves)
+check('...and days off the schedule', _agree_off)
+
+
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
 

@@ -3344,8 +3344,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/recurrence.py",
-        "find": "        if expand_occurrences(schedule, when, when) != [day]:\n            off.append(day)\n",
-        "replace": "        if False:\n            off.append(day)\n"
+        "find": "    return [day for day, when in asked if shown[when] != [day]]\n",
+        "replace": "    return [day for day, when in asked if False]\n"
       }
     ],
     "must_fail": ["a day the rule no longer lands on is off the schedule"],
@@ -3358,8 +3358,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/recurrence.py",
-        "find": "        if when is None or day in exceptions:\n            continue\n        if expand_occurrences(schedule, when, when)",
-        "replace": "        if when is None:\n            continue\n        if expand_occurrences(schedule, when, when)"
+        "find": "             if when is not None and day not in exceptions]\n",
+        "replace": "             if when is not None]\n"
       }
     ],
     "must_fail": ["a day deleted from the series is not counted as off it"],
@@ -7101,6 +7101,81 @@
                "replace": "                pil_img = Image.open(path)\n"}],
     "must_fail": ["a picture of another kind under a .png name is not decoded"],
     "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "IX01",
+    "about": "the moved days are asked of the calendar one day at a time again",
+    "edits": [
+      {
+        "file": "noteorganizer/core/recurrence.py",
+        "find": "    whens = set(whens)\n    if not whens:\n        return {}\n",
+        "replace": "    whens = set(whens)\n    if whens:\n        return {w: expand_occurrences(note, w, w) for w in whens}\n    return {}\n"
+      }
+    ],
+    "must_fail": [
+      "the banner counts 2,000 moved days reading them a few times in all, not once per day",
+      "...the days off the schedule likewise",
+      "...and the History likewise"
+    ],
+    "suites": [
+      "test_recurrence"
+    ],
+    "expect": "killed",
+    "note": "The answers stay the same (the agreement checks pass); only the work goes back to the square of the moved days."
+  },
+  {
+    "id": "IX02",
+    "about": "a series that stops after N times is walked from its first day for every moved day",
+    "edits": [
+      {
+        "file": "noteorganizer/core/recurrence.py",
+        "find": "    if normalize_recurrence(note.get(\"recurrence\"))[\"count\"] > 0:\n        hits = set(_expand_rule(bare, min(wanted), max(wanted)))\n",
+        "replace": "    if False:\n        hits = set(_expand_rule(bare, min(wanted), max(wanted)))\n"
+      }
+    ],
+    "must_fail": [
+      "a series that stops after N times is walked once for all its moved days, not once per day from its first"
+    ],
+    "suites": [
+      "test_recurrence"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "IX03",
+    "about": "the History looks up where each edited day came from along every moved day",
+    "edits": [
+      {
+        "file": "noteorganizer/core/recurrence.py",
+        "find": "                        \"moved_from\": None if day in off else came.get(day),\n",
+        "replace": "                        \"moved_from\": None if day in off else moved_from(note, day),\n"
+      }
+    ],
+    "must_fail": [
+      "...and the History likewise"
+    ],
+    "suites": [
+      "test_recurrence"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "IX04",
+    "about": "a load looks each move up along the whole list of deleted days",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "                and new not in held_on and orig not in deleted):\n",
+        "replace": "                and new not in held_on and orig not in clean[\"exceptions\"]):\n"
+      }
+    ],
+    "must_fail": [
+      "a load of 2,000 deleted days and 2,000 moves of them looks each move up once, not along every deleted day"
+    ],
+    "suites": [
+      "test_recurrence"
+    ],
     "expect": "killed"
   }
 ]
