@@ -2970,6 +2970,17 @@ inside one. It is the class's check rather than a list of the instances, so the 
 drawn with a mouse binding alone turns it red. Each route has its own checks and mutants (KF, KD,
 KP, KB, KC in `tools/mutants.json`).
 
+**Round 2, the fix's neighbourhood walked a day later:** six more, each fixed as a class. A popup
+with no choices landed on the ✕ its header builds first, so a space typed into a new template's
+name closed the editor; it lands in its first box to type in now. Every "Show N more" left the
+keyboard on the window, about a hundred Tabs back: Tk's own buttons take Space through their
+class binding, which never reached the put-it-back step, and run the command 100 ms after the
+key. The binding is wrapped once, and a template checklist's tick box was found on the same road.
+Keyboard shortcuts, all labels, could not be scrolled at all; Page Up and Down, the arrows, Home
+and End scroll every Settings section. The click counter never counted a left click, because Tk
+runs only a tag's most specific binding. The reminder bar's ring kept an old theme's colours, and
+a banner hid the Undo the keyboard was on without moving it. Mutants KR01–KR12.
+
 **Takeaway:** a mouse binding is not a control; a control is what both hands can press. And a
 focus ring is a claim about the screen: Tk saying the keyboard is there, and a colour option
 saying what to draw, were both true while nothing was drawn — look at the picture.

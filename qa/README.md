@@ -1148,3 +1148,14 @@ A new surface joins this list the moment it ships.
   took the guard out survived. A check that asserts something is *not*
   there re-asserts, right before it, that the thing would otherwise be
   there (`fixture: ...`).
+- **Space on one of Tk's own buttons runs its command 100 ms later.**
+  Tk answers the key by scheduling `tk::ButtonInvokeEnd` (8.6.15 on
+  Windows, 8.6.16 in the Linux image), so a check that generates
+  `<space>` and reads the result after one `update()` reads the moment
+  before the press. Found when the first fix for "Show N more" looked for
+  the keyboard straight after the key and saw the button still standing.
+  Settle past it, as qa6's `_kr_press` does. And a widget found by walking
+  the whole Settings content may live in a section that is hidden but
+  alive (General, Appearance and the other sections built once): a check
+  of "the box on this page" found General's name box behind Keyboard
+  shortcuts. Look inside the section showing (`settings_<key>_panel`).
