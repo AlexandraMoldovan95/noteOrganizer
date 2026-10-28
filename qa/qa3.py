@@ -3790,6 +3790,18 @@ try:
     check(f'a Windows sign-out keeps a template half written in its editor, beside '
           f'the one that has its name, asking nothing ({_st_names}, asked {_st_asked})',
           _st_names == ['Week plan', 'Week plan (2)'] and not _st_asked)
+    # A sign-out can be cancelled, and the editor stays. It went on editing
+    # the template it had opened, so a second sign-out added a "(3)", and its
+    # own Save and close asked about work already written (round 4).
+    _st_boxes[1].insert('end', 'Monday')
+    app.on_session_end(); app.update()
+    _st_again = [(t.get('name'), t.get('title')) for t in NO.load_templates()]
+    _st_clean = app._mini_popup._confirm_dismiss()
+    check(f'...and a second sign-out after one cancelled writes it again in its own '
+          f'place, leaving the editor nothing unsaved ({_st_again}, {_st_clean}, '
+          f'asked {_st_asked})',
+          _st_again == [('Week plan', ''), ('Week plan (2)', 'Monday')]
+          and _st_clean is True and not _st_asked)
 finally:
     app.ask_yes_no, app.ask_yes_no_cancel, app.show_warning = _st_real
     app._dismiss_mini_popup()

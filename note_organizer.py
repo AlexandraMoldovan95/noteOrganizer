@@ -1282,6 +1282,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         entry.configure(validate="key",
                         validatecommand=(entry.register(within), "%P", "%s"))
 
+        def paste(_event=None):
+            # Tk's own paste, off X11, deletes the selection and inserts as two
+            # edits: the delete passed, the insert was refused, and the words
+            # typed were gone. Weighed whole first, and refused whole.
+            raw, _cut = self._clipboard_text(entry)
+            if raw is None:
+                return None
+            try:
+                chosen = (entry.index("sel.last") - entry.index("sel.first")
+                          if entry.selection_present() else 0)
+            except tk.TclError:
+                chosen = 0
+            if len(entry.get()) - chosen + len(raw) <= limit:
+                return None
+            self.after_idle(lambda: self.set_status(
+                f"{what} can be up to {limit:,} characters"))
+            return "break"
+        entry.bind("<<Paste>>", paste, add="+")
+
     # How close to the cap the counter starts showing. Far enough out to be
     # a warning rather than a surprise, close enough that an ordinary title
     # never sees it.

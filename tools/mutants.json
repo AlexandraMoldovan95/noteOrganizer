@@ -9068,5 +9068,59 @@
       "qa6"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "RU30",
+    "about": "after a quiet save at a cancelled sign-out, the editor goes on editing the template it opened",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "            tpl, is_new, opened_snapshot = new_tpl, False, collect()\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "...and a second sign-out after one cancelled writes it again in its own place"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RU31",
+    "about": "the template preview is drawn again at every key, its tables changed or not",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "        if blocks and getattr(canvas, \"_preview_drawn\", None) == drawn:\n            return blocks\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "the template preview is drawn again only when its tables change"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RU32",
+    "about": "a paste over a selection in a limited box is left to Tk's two edits",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        entry.bind(\"<<Paste>>\", paste, add=\"+\")\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a paste past a box's limit over its selection keeps what was typed"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
   }
 ]

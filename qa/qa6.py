@@ -5433,6 +5433,66 @@ check(f'Space on a template\'s tick box, then Tab 40 ms later, goes on from '
       _cb_after is not None and _cb_on_x is False
       and not isinstance(_cb_after, tk.Toplevel))
 
+# ---- THE TEMPLATE PREVIEW IS DRAWN AGAIN ONLY WHEN ITS TABLES CHANGE ----
+# Round 4: every key in the template editor redrew one canvas item per line
+# of every cell -- 0.16 s a key for one paste of line breaks -- though the
+# tables are out of the box's sight and typing never changes them.
+_pv_ids = []
+try:
+    app._edit_template({'name': 'Prev', 'body': '| a | b |\n| --- | --- |\n| '
+                        + '<br>'.join(['x'] * 200) + ' | y |'}, lambda: None)
+    _kv_settle(6)
+    _pv_pop = app._mini_popup
+    _pv_body = [t for t in _tl_widgets(_pv_pop, tk.Text) if int(t.cget('height')) >= 4][0]
+    _pv_cv = [c for c in _tl_widgets(_pv_pop, tk.Canvas) if c.find_all()
+              and any(c.type(i) != 'window' for i in c.find_all())][0]
+    for _pv_change in (False, False, True):
+        if _pv_change:
+            _pv_body.insert('3.2', 'w')                # inside the table's cell
+        app._draw_template_table_preview(_pv_cv, _pv_body)
+        _pv_ids.append(_pv_cv.find_all())
+finally:
+    app._dismiss_mini_popup()
+    app.update()
+check(f"the template preview is drawn again only when its tables change "
+      f"({[len(i) for i in _pv_ids]} items; kept: {len(_pv_ids) == 3 and _pv_ids[0] == _pv_ids[1]}, "
+      f"redrawn: {len(_pv_ids) == 3 and _pv_ids[1] != _pv_ids[2]})",
+      len(_pv_ids) == 3 and len(_pv_ids[0]) > 200 and _pv_ids[0] == _pv_ids[1]
+      and _pv_ids[1] != _pv_ids[2])
+
+# ---- A PASTE OVER A SELECTION IN A LIMITED BOX IS WEIGHED WHOLE ----
+# Round 4: off X11, Tk's own paste deletes the selection and inserts as two
+# edits; the delete passed the limit's check, the insert did not, and what
+# was typed was gone. Windows' paste is run here on every system.
+_wp_real_bind = str(app.tk.call('bind', 'Entry', '<<Paste>>'))
+_wp_real_read = NO.clipboard.read_text
+_wp_kept = None
+app.tk.call('bind', 'Entry', '<<Paste>>',
+            'catch {%W delete sel.first sel.last}\n'
+            '%W insert insert [::tk::GetSelection %W CLIPBOARD]\n'
+            'tk::EntrySeeInsert %W')
+try:
+    app._edit_template(None, lambda: None)
+    _kv_settle(6)
+    _wp_box = list(_tl_entries(app._mini_popup))[-1]       # the checklist's Add box
+    _wp_box.insert(0, 'y' * 1900)
+    _wp_box.selection_range(0, 'end')
+    app.clipboard_clear()
+    app.clipboard_append('z' * 2500)
+    NO.clipboard.read_text = lambda: 'z' * 2500
+    _wp_box.event_generate('<<Paste>>')
+    app.update()
+    _wp_kept = _wp_box.get()
+finally:
+    NO.clipboard.read_text = _wp_real_read
+    app.tk.call('bind', 'Entry', '<<Paste>>', _wp_real_bind)
+    app.clipboard_clear()
+    app._dismiss_mini_popup()
+    app.update()
+check(f"a paste past a box's limit over its selection keeps what was typed "
+      f"({len(_wp_kept) if _wp_kept is not None else None} characters kept)",
+      _wp_kept == 'y' * 1900)
+
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")
 

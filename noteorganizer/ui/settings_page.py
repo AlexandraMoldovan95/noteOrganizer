@@ -844,12 +844,21 @@ class SettingsPageMixin:
         when there is nothing to draw."""
         from noteorganizer.core import tables as core_tables
         from noteorganizer.core.themes import hairline, inset_surface
-        canvas.delete("all")
         text = body_text.get("1.0", "end-1c")
         blocks = core_tables.find_blocks(text)
+        lines = text.split("\n")
+        # Drawn again only when what it draws changed: every key redrew one
+        # item per line of every cell, 0.16 s a key for one paste of breaks,
+        # and the tables are out of the box's sight, so typing never does.
+        drawn = (tuple("\n".join(lines[a:b + 1]) for a, b in blocks),
+                 hairline(self.colors), inset_surface(self.colors),
+                 self.colors["card"], self.colors["text"], self.px(22))
+        if blocks and getattr(canvas, "_preview_drawn", None) == drawn:
+            return blocks
+        canvas._preview_drawn = drawn
+        canvas.delete("all")
         if not blocks:
             return []
-        lines = text.split("\n")
         # One font for every redraw, so a width measured once is remembered
         # (_measure_text): the preview is drawn again at every key.
         font = self._measuring_font(("Consolas", 9))
@@ -1402,6 +1411,7 @@ class SettingsPageMixin:
             template is kept, under its own name when that is free, else
             beside the one that has it -- never over it. It used to go with
             the session (2026-10-28, the final audit)."""
+            nonlocal tpl, is_new, opened_snapshot
             if collect() == opened_snapshot:
                 return
             new_tpl = collect()
@@ -1416,6 +1426,11 @@ class SettingsPageMixin:
             else:
                 self.templates.append(new_tpl)
             save_templates(self.templates)
+            # The sign-out can still be cancelled, and the editor then stays:
+            # it edits what was just written, or a second sign-out added a
+            # "Name (2)" and its own Save asked about a name it held itself.
+            tpl, is_new, opened_snapshot = new_tpl, False, collect()
+            pop.edited_template = new_tpl
 
         pop._confirm_dismiss = confirm_dismiss
         pop._save_without_asking = save_quietly
