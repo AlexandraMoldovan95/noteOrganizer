@@ -8089,5 +8089,23 @@
       "qa6"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "RT18",
+    "about": "a picture of a kind the preview does not read is called unreadable, with no way to open it",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "                self._cannot_preview(path)\n",
+        "replace": "                self.show_warning(\"Can't preview this file\",\n                                  \"This file couldn't be read as an image.\")\n"
+      }
+    ],
+    "must_fail": [
+      "a picture of another kind under a .png name is not decoded, and is offered to the program the computer opens it with"
+    ],
+    "suites": [
+      "qa7"
+    ],
+    "expect": "killed"
   }
 ]

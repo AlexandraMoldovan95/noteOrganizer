@@ -119,6 +119,7 @@
   "_cancel_list_drag": "(self)",
   "_cancel_pending_autosave": "(self)",
   "_cancel_share_search": "(self)",
+  "_cannot_preview": "(self, path)",
   "_canvas_width_sync": "(self, canvas, item)",
   "_canvas_window_item": "(canvas, child)",
   "_cap_paste": "(text)",

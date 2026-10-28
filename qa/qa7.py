@@ -1066,8 +1066,14 @@ check('Close button dismisses the preview', app._mini_popup is None)
 
 app.current_attachments = [{'filename': 'corrupt.png', 'stored_as': 'corrupt.png'}]
 app.refresh_attachments_list(); app.update()
-app.open_attachment(0)
-app.update()
+# It is offered to Windows now (below); answered No here, so nothing opens.
+_cp_real_ask = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: False
+try:
+    app.open_attachment(0)
+    app.update()
+finally:
+    app.ask_yes_no = _cp_real_ask
 check('corrupt image file handled gracefully, no crash', app._mini_popup is None)
 
 # ---- THE PREVIEW APPEARS AT ONCE, AND AGAIN FROM MEMORY ----
@@ -1286,18 +1292,29 @@ check(f'a later frame past the pixel budget is never decoded: the first shows '
 _mf_ico = os.path.join(_pv_dir, 'icon_named.png')
 _pv_Image.new('RGBA', (64, 64), (0, 120, 0, 255)).save(
     _mf_ico, format='ICO', sizes=[(16, 16), (64, 64)])
-_mf_told = []
-_mf_real_warn = app.show_warning
-app.show_warning = lambda t, m, **k: _mf_told.append(t)
+# ...and it is not called unreadable with no way to open it: it is offered to
+# the program the computer opens its kind with, as a picture too large is.
+_mf_told, _mf_opened = [], []
+_mf_real_warn, _mf_real_ask = app.show_warning, app.ask_yes_no
+_mf_real_start = getattr(NO.os, 'startfile', None)
+app.show_warning = lambda t, m, **k: _mf_told.append(('told', t))
+app.ask_yes_no = lambda t, m, **k: (_mf_told.append(('asked', t)), True)[1]
+NO.os.startfile = lambda p, *a, **k: _mf_opened.append(os.path.basename(p))
 try:
     app._show_image_preview(_mf_ico, 'icon_named.png'); app.update()
     _mf_ico_shown = app._mini_popup is not None
 finally:
-    app.show_warning = _mf_real_warn
+    app.show_warning, app.ask_yes_no = _mf_real_warn, _mf_real_ask
+    if _mf_real_start is None:
+        del NO.os.startfile
+    else:
+        NO.os.startfile = _mf_real_start
     app._dismiss_mini_popup(); app.update()
-check(f'a picture of another kind under a .png name is not decoded, and '
-      f'says it cannot be previewed ({_mf_told})',
-      _mf_told == ["Can't preview this file"] and not _mf_ico_shown)
+check(f'a picture of another kind under a .png name is not decoded, and is '
+      f'offered to the program the computer opens it with ({_mf_told}, '
+      f'opened {_mf_opened})',
+      _mf_told == [('asked', "Can't preview this file")] and not _mf_ico_shown
+      and _mf_opened == ['icon_named.png'])
 
 # ---- A shortcut file is dangerous too (product review T0-8) ----
 # The warn-before-opening list covered the 1990s executables and missed

@@ -2113,7 +2113,10 @@ as a strip fifteen pixels tall, its frames never filled the 64 MB, and the app s
 as long as the preview was open. The canvas pixels decoded are now counted across the animation,
 up to four times the still budget (a 4K animation still plays two dozen frames), and the frames
 kept stop at 1,000; the GIF now decodes four frames and lets the file go. qa7 plays an animation
-under each limit; mutants RT03, RT04.
+under each limit; mutants RT03, RT04. The same round found the decoders' limit a dead end: a
+scanner's TIFF saved as `.jpg` was called "couldn't be read as an image", true of the preview and
+not of the file, with no way to open it. It is offered to the program the computer opens its kind
+with, as a picture too large is; mutant RT18.
 
 **Takeaway:** a limit has to hold while the thing it limits is being built, not only once it is
 finished — and for every part of it, not the first.

@@ -237,8 +237,10 @@ class AttachmentsMixin:
                 # the preview is for may read it.
                 pil_img = Image.open(path, formats=self.PREVIEW_DECODERS)
             except Exception:
-                self.show_warning("Can't preview this file",
-                                 "This file couldn't be read as an image.")
+                # Not a picture the preview reads -- a scanner's TIFF saved
+                # as .jpg -- or no picture at all: offered to Windows, not
+                # called unreadable with no way to open it.
+                self._cannot_preview(path)
                 return
             try:
                 animated = bool(getattr(pil_img, "is_animated", False))
@@ -439,6 +441,16 @@ class AttachmentsMixin:
     # it shows (PREVIEWED_IN_APP). A JPEG holding several pictures (MPO)
     # comes through the JPEG decoder, and its frames are judged one by one.
     PREVIEW_DECODERS = ("PNG", "JPEG", "GIF", "BMP", "WEBP")
+
+    def _cannot_preview(self, path):
+        """Offer a file the preview's decoders do not read to the program
+        Windows opens its kind with, as one too large to show is offered."""
+        if self.ask_yes_no(
+                "Can't preview this file",
+                "Note Organizer can't show this file itself. Open it in the "
+                "program your computer uses for it?", icon="question",
+                default="yes"):
+            self._open_externally(path)
 
     def _too_big_to_preview(self, path):
         """Offer the image to the program Windows opens it with, rather
