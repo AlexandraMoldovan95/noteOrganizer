@@ -4908,6 +4908,54 @@ check(f'the template editor\'s name, title and checklist boxes refuse what '
       and all(v == (0, k[0]) for k, v in _tl_kept.items())
       and any('A checklist item can be up to 2,000 characters' in t for t in _tl_told))
 
+# ---- KEYBOARD: a tick box is looked at the moment it is pressed ----
+# Round 3 of the final audit: the look after Space waited 100 ms for every
+# Tk button, though a tick box runs its command at once. A template's tick
+# box redraws its list, the keyboard fell to the editor's own window, and a
+# Tab inside those 100 ms went to the header's ✕, whose next Space closed the
+# editor without a question.
+def _cb_boxes(w):
+    for c in w.winfo_children():
+        if isinstance(c, tk.Checkbutton):
+            yield c
+        yield from _cb_boxes(c)
+
+
+_cb_after = None
+_cb_on_x = None
+try:
+    app._edit_template({'name': 'CbTemplate', 'title': '', 'body': '',
+                        'category': 'General',
+                        'checklist': [{'text': 'one', 'done': False},
+                                      {'text': 'two', 'done': False}]},
+                       lambda: None)
+    app.update()
+    _cb_pop = app._mini_popup
+    _cb_first = next(_cb_boxes(_cb_pop), None) if _cb_pop is not None else None
+    if _cb_first is not None and _take_focus(_cb_first):
+        _cb_first.event_generate('<space>')
+        app.update()                    # what a person's next key waits for
+        time.sleep(0.04)
+        try:
+            _cb_now = app.nametowidget(str(app.tk.call('focus', '-lastfor', _cb_pop)))
+        except (KeyError, tk.TclError):
+            _cb_now = _cb_pop
+        _cb_now.event_generate('<Tab>')
+        _kv_settle(10)
+        try:
+            _cb_after = app.nametowidget(str(app.tk.call('focus', '-lastfor', _cb_pop)))
+        except (KeyError, tk.TclError):
+            _cb_after = None
+        _cb_on_x = (isinstance(_cb_after, tk.Button)
+                    and str(_cb_after.cget('text')) == '✕')
+finally:
+    app._dismiss_mini_popup()
+    app.update()
+check(f'Space on a template\'s tick box, then Tab 40 ms later, goes on from '
+      f'the box, not to the editor\'s ✕ ({_cb_after})',
+      _cb_after is not None and _cb_on_x is False
+      and not isinstance(_cb_after, tk.Toplevel))
+
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")
 

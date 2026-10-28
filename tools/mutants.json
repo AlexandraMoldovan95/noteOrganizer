@@ -8125,5 +8125,23 @@
       "qa7"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "RT20",
+    "about": "a tick box is looked at 100 ms after Space, as a button is",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "                    after = (\"after 100 [list {} %W]\" if cls == \"Button\"\n                             else \"{} %W\").format(ends)\n",
+        "replace": "                    after = \"after 100 [list {} %W]\".format(ends)\n"
+      }
+    ],
+    "must_fail": [
+      "Space on a template's tick box, then Tab 40 ms later, goes on from the box"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
   }
 ]

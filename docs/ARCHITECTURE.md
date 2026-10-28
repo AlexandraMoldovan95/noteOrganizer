@@ -434,7 +434,8 @@ window — or on the popup's own window, which counts as nowhere too. It goes to
 control's place now (`_keyboard_stays`). A drawn control's press reaches that through the bind
 tag; Tk's own buttons take Space through their class binding, which the app wraps once at start
 (`_tk_press_starts` / `_tk_press_ends`). The look afterwards waits for the command, which Tk runs
-100 ms after the key, and for a question the press asked; it leaves the keyboard alone after a
+100 ms after the key (a tick box runs its own at once, and is looked at at once), and for a
+question the press asked; it leaves the keyboard alone after a
 click, or when a question or popup went with the button. That click is counted per mouse button:
 Tk runs only a tag's most specific binding, and a bare `<ButtonPress>` on "all" never heard a
 left click, which the app's `<ButtonPress-1>` there outranks. A button its own press hid with its

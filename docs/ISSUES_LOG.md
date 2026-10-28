@@ -3179,6 +3179,9 @@ sight. The new Page Down did nothing there, and Tab, Space, Backspace and Ctrl+V
 which was saved. Settings now takes the keyboard from the page it hides onto the section's entry
 and gives it back on the way out, a box out of sight is no longer "a box being typed in", and the
 note list put away by a click on its arrow hands the keyboard to the arrow. Mutants RT09–RT12.
+Last, the look after Space waited 100 ms for every Tk button, though a tick box runs its command
+at once: a Tab inside those 100 ms after ticking a template's item went to the editor's ✕. A tick
+box is looked at the moment it is pressed. Mutant RT20.
 
 **Takeaway:** a mouse binding is not a control; a control is what both hands can press. And a
 focus ring is a claim about the screen: Tk saying the keyboard is there, and a colour option

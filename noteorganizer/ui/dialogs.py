@@ -1287,7 +1287,9 @@ class DialogsMixin:
         # runs the command and never _key_press: a "Show 25 more" that goes
         # as it draws the next page left the keyboard on the window. Tk runs
         # a Button's command 100 ms after the key, so the look afterwards is
-        # a timer made just after Tk's own, which Tcl runs after it.
+        # a timer made just after Tk's own, which Tcl runs after it. A tick
+        # box runs its command at once, and so is looked at at once: a Tab
+        # in the 100 ms after it landed on the template editor's ✕.
         self._tk_presses = {}
         starts = self.register(self._tk_press_starts)
         ends = self.register(self._tk_press_ends)
@@ -1295,9 +1297,10 @@ class DialogsMixin:
             try:
                 script = str(self.tk.call("bind", cls, "<Key-space>"))
                 if script.strip():
+                    after = ("after 100 [list {} %W]" if cls == "Button"
+                             else "{} %W").format(ends)
                     self.tk.call("bind", cls, "<Key-space>",
-                                 f"{starts} %W\n{script}\n"
-                                 f"after 100 [list {ends} %W]")
+                                 f"{starts} %W\n{script}\n{after}")
             except tk.TclError:
                 pass
 
