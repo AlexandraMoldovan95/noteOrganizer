@@ -561,6 +561,20 @@ def load_notes(version_change=None):
     return notes, report
 
 
+def json_text(value):
+    """*value* as a data file holds it: the text _write_json_atomic writes,
+    and a backup export packs from what the app holds."""
+    # Mended only when needed: mend_surrogates rebuilds the notebook (a
+    # quarter of an autosave at 5,000 notes), while asking the dumped text
+    # whether it encodes is one C pass, and the bytes come out the same.
+    text = json.dumps(value, indent=2, ensure_ascii=False)
+    try:
+        text.encode("utf-8")
+    except UnicodeEncodeError:
+        text = json.dumps(mend_surrogates(value), indent=2, ensure_ascii=False)
+    return text
+
+
 def mend_surrogates(value):
     """Recombine UTF-16 surrogate pairs into the characters they spell.
 
@@ -618,15 +632,7 @@ def _write_json_atomic(path, value):
     """
     tmp_path = path + ".tmp"
     try:
-        # Mended only when needed: mend_surrogates rebuilds the notebook (a
-        # quarter of an autosave at 5,000 notes), while asking the dumped text
-        # whether it encodes is one C pass, and the bytes come out the same.
-        text = json.dumps(value, indent=2, ensure_ascii=False)
-        try:
-            text.encode("utf-8")
-        except UnicodeEncodeError:
-            text = json.dumps(mend_surrogates(value), indent=2,
-                              ensure_ascii=False)
+        text = json_text(value)
         with open(tmp_path, "w", encoding="utf-8") as f:
             # One string, one write: json.dump streams the same bytes in
             # thousands of pieces, twice the time at 1,000 notes (36 ms to 18).

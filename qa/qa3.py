@@ -3355,6 +3355,44 @@ finally:
     app._notes_unsaved = False
 app.notes = []; app.save_notes()
 
+# The failed save's message sends the person to Settings → Backup → Export,
+# and that backup was packed from the file on disk: "Export complete",
+# without the very changes it was made to rescue (2026-10-28, the final
+# audit). It packs what the app holds now.
+_xf_note = NO.normalize_note({'id': 1, 'title': 'Chapter', 'body': 'Chapter one draft.'})
+app.notes = [_xf_note]; app.save_notes()
+app.open_note_in_tab(_xf_note); app.update()
+_xf_zip = os.path.join(tempfile.gettempdir(), 'qa3_export_after_failed_save.zip')
+if os.path.exists(_xf_zip):
+    os.remove(_xf_zip)
+_xf_said = []
+_xf_real = (app.show_error, app.show_info)
+app.show_error = lambda *a, **k: _xf_said.append(a[0] if a else '')
+app.show_info = lambda *a, **k: _xf_said.append(a[0] if a else '')
+os.makedirs(NO.DATA_FILE + '.tmp')
+try:
+    app.body_text.insert('end-1c', ' Three hours of work typed today.')
+    app._flush_autosave(leaving=False); app.update()
+    _xf_failed = app._notes_unsaved
+    fd.asksaveasfilename = lambda **k: _xf_zip
+    app.export_data()
+    t0 = time.time()
+    while app._export_state is not None and time.time() - t0 < 10:
+        app.update()
+    with zipfile.ZipFile(_xf_zip) as _zf:
+        _xf_packed = json.loads(_zf.read('notes_data.json').decode('utf-8'))
+    check(f'after a failed save, the backup the app advises holds the changes the '
+          f'file lacks ({[n.get("body") for n in _xf_packed]}; said {_xf_said})',
+          _xf_failed and 'Export complete' in _xf_said
+          and any('Three hours of work' in (n.get('body') or '') for n in _xf_packed))
+finally:
+    os.rmdir(NO.DATA_FILE + '.tmp')
+    app.show_error, app.show_info = _xf_real
+    app._notes_unsaved = False
+    if os.path.exists(_xf_zip):
+        os.remove(_xf_zip)
+app.notes = []; app.save_notes()
+
 # Signing out of Windows, restarting or shutting down ends the process
 # without the close: Tk's WM_SAVE_YOURSELF comes instead, and the last
 # typing was left unsaved. on_session_end saves it, asking nothing.

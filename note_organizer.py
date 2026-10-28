@@ -256,6 +256,7 @@ from noteorganizer.core.storage import (
     load_settings,
     save_settings,
     mend_surrogates,
+    json_text,
     normalize_template,
     load_templates,
     save_templates,
@@ -1983,21 +1984,27 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         )
         if not save_path:
             return
+        # The last typing first, as every route that saves on its way does.
+        self._flush_autosave(leaving=False)
 
         # Build the file list up front (fast — just enumerating), so the
         # progress bar has a real total to work against, not a guess.
-        entries = []  # list of (source_path, arcname)
-        if os.path.exists(DATA_FILE):
-            entries.append((DATA_FILE, "notes_data.json"))
+        # The notes, Trash and templates are what the app holds, written
+        # out here on the main thread (bytes, not a path): after a failed
+        # save they are ahead of their files, the failure's own message
+        # sends the person here, and a backup packed from the files said
+        # "Export complete" without the work it was made to rescue.
+        entries = []  # list of (source path or bytes, arcname)
+        entries.append((json_text(self.notes).encode("utf-8"), "notes_data.json"))
         if os.path.exists(SETTINGS_FILE):
             entries.append((SETTINGS_FILE, "settings.json"))
         # A backup is only a backup if it carries the WHOLE notebook:
         # templates and the trash used to be silently left out, and moving
         # to another device lost them.
-        if os.path.exists(TEMPLATES_FILE):
-            entries.append((TEMPLATES_FILE, "templates.json"))
-        if os.path.exists(TRASH_FILE):
-            entries.append((TRASH_FILE, "trash.json"))
+        if self.templates or os.path.exists(TEMPLATES_FILE):
+            entries.append((json_text(self.templates).encode("utf-8"), "templates.json"))
+        if self.trash or os.path.exists(TRASH_FILE):
+            entries.append((json_text(self.trash).encode("utf-8"), "trash.json"))
         if os.path.isdir(ATTACHMENTS_DIR):
             for filename in os.listdir(ATTACHMENTS_DIR):
                 full_path = os.path.join(ATTACHMENTS_DIR, filename)
@@ -2022,11 +2029,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # Same one-safe-way rule as _write_json_atomic.
             tmp_path = save_path + ".tmp"
             try:
-                with open(tmp_path, "wb") as raw, zipfile.ZipFile(
-                        StoppableFile(raw, stop), "w", zipfile.ZIP_DEFLATED) as zf:
-                    for i, (src, arcname) in enumerate(entries, start=1):
-                        zf.write(src, arcname=arcname)
-                        state["current"] = i
+                with open(tmp_path, "wb") as raw:
+                    with zipfile.ZipFile(StoppableFile(raw, stop), "w",
+                                         zipfile.ZIP_DEFLATED) as zf:
+                        for i, (src, arcname) in enumerate(entries, start=1):
+                            if isinstance(src, bytes):
+                                zf.writestr(arcname, src)
+                            else:
+                                zf.write(src, arcname=arcname)
+                            state["current"] = i
+                    # On the disk before it replaces the backup of that
+                    # name, the only copy off this computer.
+                    raw.flush()
+                    os.fsync(raw.fileno())
                 # Asked of what was written, by the import's own rules: a
                 # backup that cannot be restored is not put in place.
                 with zipfile.ZipFile(tmp_path, "r") as written:
@@ -11265,6 +11280,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         try:
             with open(tmp_path, "w", encoding="utf-8") as f:
                 f.write(content)
+                # On the disk before it replaces a file of that name.
+                f.flush()
+                os.fsync(f.fileno())
             os.replace(tmp_path, path)
         except (IOError, OSError) as exc:
             try:

@@ -61,6 +61,7 @@ import os
 import shutil
 import sys
 import tempfile
+import time
 from datetime import datetime
 
 
@@ -317,43 +318,60 @@ def count_notes_in(path):
 NOTEBOOK_COMPANIONS = ("trash.json", "templates.json")
 
 
-def _copy_whole(src, dst):
+def _copy_whole(src, dst, tries=1):
     """Copy *src* to *dst* whole or not at all: beside it first, then
     replaced in one step. Copied in place, a start killed mid-copy left a
-    truncated file that every later "copy only if missing" kept for good."""
+    truncated file that every later "copy only if missing" kept for good.
+    *tries*: a file another program holds a moment (a scanner, a sync
+    tool) gets that many attempts, half a second apart."""
     part = dst + ".part"
-    try:
-        shutil.copy2(src, part)
-        os.replace(part, dst)
-        return True
-    except (IOError, OSError):
+    for attempt in range(tries):
+        if attempt:
+            time.sleep(0.5)
         try:
-            os.remove(part)
-        except OSError:
-            pass
-        return False
+            shutil.copy2(src, part)
+            # On the disk before the rename (the notes file among these is
+            # the copy's "done" mark): a power cut could leave it empty.
+            with open(part, "ab") as f:
+                os.fsync(f.fileno())
+            os.replace(part, dst)
+            return True
+        except (IOError, OSError):
+            try:
+                os.remove(part)
+            except OSError:
+                pass
+    return False
 
 
 def _copy_companions(src_dir, dest_dir):
     """The Trash and the templates, copied only where the notebook has none:
-    never over a file of its own."""
+    never over a file of its own. Returns the names that could not be."""
+    failed = []
     for name in NOTEBOOK_COMPANIONS:
         src = os.path.join(src_dir, name)
         dst = os.path.join(dest_dir, name)
-        if os.path.isfile(src) and not os.path.exists(dst):
-            _copy_whole(src, dst)
+        if (os.path.isfile(src) and not os.path.exists(dst)
+                and not _copy_whole(src, dst, tries=3)):
+            failed.append(name)
+    return failed
 
 
 def _copy_attachments(src_dir, dest_dir):
+    """Every attached file the notebook lacks. Returns the names that could
+    not be copied."""
     src_attach = os.path.join(src_dir, "attachments")
     if not os.path.isdir(src_attach):
-        return
+        return []
     os.makedirs(dest_dir, exist_ok=True)
+    failed = []
     for filename in os.listdir(src_attach):
         src = os.path.join(src_attach, filename)
         dst = os.path.join(dest_dir, filename)
-        if os.path.isfile(src) and not os.path.exists(dst):
-            _copy_whole(src, dst)
+        if (os.path.isfile(src) and not os.path.exists(dst)
+                and not _copy_whole(src, dst, tries=3)):
+            failed.append(filename)
+    return failed
 
 
 def _timestamped_backup(path, label):
@@ -506,6 +524,8 @@ def run_migrations(app_dir):
         try:
             with open(tmp_path, "w", encoding="utf-8") as f:
                 json.dump(settings, f, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
             os.replace(tmp_path, settings_path)
         except (IOError, OSError):
             try:
@@ -565,14 +585,22 @@ def run_migrations(app_dir):
             shutil.copy2(legacy_settings, settings_path)
         except (IOError, OSError):
             pass
+    elif (durable and os.path.exists(legacy_settings)
+          and not os.path.exists(settings_path)):
+        # The old app's own settings, unreadable: there the Trash's window
+        # is unknown, and nothing leaves it. Copied as it is, it reads the
+        # same way here and the start says so; left behind, the default 30
+        # days emptied a Trash its owner kept longer (2026-10-28, the audit).
+        _copy_whole(legacy_settings, settings_path)
     # On the same evidence: a Trash or templates file beside another
     # program's notes is not ours to bring in. The old app's own store needs
     # no evidence -- its settings.json may be the file that cannot be read.
+    missing = []
     if ours or durable:
-        _copy_companions(best_dir, app_dir)
+        missing += _copy_companions(best_dir, app_dir)
 
     for d in get_legacy_dirs(app_dir):
-        _copy_attachments(d, attachments_path)
+        missing += _copy_attachments(d, attachments_path)
 
     if not _copy_whole(os.path.join(best_dir, "notes_data.json"), notes_path):
         return None
@@ -582,6 +610,13 @@ def run_migrations(app_dir):
         + (f"Imported {best_count} note(s) from:\n{best_dir}" if best_count
            else f"Brought in the notebook from:\n{best_dir}")
     )
+    if missing:
+        # Said, never passed over: the notes file marks the copy done, and
+        # no later start looks at the old folder again.
+        shown = ", ".join(missing[:5]) + (
+            f" and {len(missing) - 5} more" if len(missing) > 5 else "")
+        message += (f"\n\nThese files could not be copied, and are only in "
+                    f"the folder above: {shown}.")
     if durable:
         message += "\n\nThe notebook there is kept as it was."
     return message

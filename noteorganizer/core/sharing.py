@@ -371,6 +371,10 @@ def copy_file_until_stopped(src, dst, stop):
     try:
         with open(src, "rb") as fin, open(dst, "wb") as fout:
             shutil.copyfileobj(StoppableFile(fin, stop), fout, 1 << 20)
+            # On the disk before the caller's rename, as every data file is
+            # (_write_json_atomic): a power cut could leave an empty file.
+            fout.flush()
+            os.fsync(fout.fileno())
         shutil.copystat(src, dst)
     except BaseException:
         try:

@@ -3675,8 +3675,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/paths.py",
-        "find": "        dst = os.path.join(dest_dir, name)\n        if os.path.isfile(src) and not os.path.exists(dst):\n",
-        "replace": "        dst = os.path.join(dest_dir, name)\n        if os.path.isfile(src):\n"
+        "find": "        if (os.path.isfile(src) and not os.path.exists(dst)\n                and not _copy_whole(src, dst, tries=3)):\n            failed.append(name)\n",
+        "replace": "        if (os.path.isfile(src)\n                and not _copy_whole(src, dst, tries=3)):\n            failed.append(name)\n"
       }
     ],
     "must_fail": ["a run from source keeps its own Trash, and takes the templates it lacks"],
@@ -5113,8 +5113,8 @@
     "id": "ST09",
     "about": "the export writes its zip straight to the file, so nothing can stop it",
     "edits": [{"file": "note_organizer.py",
-               "find": "                        StoppableFile(raw, stop), \"w\", zipfile.ZIP_DEFLATED) as zf:\n",
-               "replace": "                        raw, \"w\", zipfile.ZIP_DEFLATED) as zf:\n"}],
+               "find": "                    with zipfile.ZipFile(StoppableFile(raw, stop), \"w\",\n",
+               "replace": "                    with zipfile.ZipFile(raw, \"w\",\n"}],
     "must_fail": ["fixture: an export is held mid-write"],
     "suites": ["qa3"],
     "expect": "killed"
@@ -6048,8 +6048,8 @@
     "id": "MG02",
     "about": "an attachment is copied straight onto its name, so a kill leaves it truncated",
     "edits": [{"file": "noteorganizer/core/paths.py",
-               "find": "        shutil.copy2(src, part)\n        os.replace(part, dst)\n",
-               "replace": "        shutil.copy2(src, dst)\n"}],
+               "find": "            shutil.copy2(src, part)\n",
+               "replace": "            shutil.copy2(src, dst)\n            part = dst\n"}],
     "must_fail": ["a first start killed while copying files leaves no notes file to mark it done"],
     "suites": ["test_data_safety"],
     "expect": "killed",
@@ -6272,8 +6272,8 @@
     "id": "MG04",
     "about": "the old store's Trash and templates wait on a settings file that may be unreadable",
     "edits": [{"file": "noteorganizer/core/paths.py",
-               "find": "    if ours or durable:\n        _copy_companions(best_dir, app_dir)\n",
-               "replace": "    if ours:\n        _copy_companions(best_dir, app_dir)\n"}],
+               "find": "    if ours or durable:\n        missing += _copy_companions(best_dir, app_dir)\n",
+               "replace": "    if ours:\n        missing += _copy_companions(best_dir, app_dir)\n"}],
     "must_fail": ["an empty old notebook is brought in with its Trash and templates"],
     "suites": ["test_data_safety"],
     "expect": "killed",
@@ -6521,6 +6521,135 @@
     ],
     "suites": [
       "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR11",
+    "about": "the backup export packs the notes file on disk, not what the app holds",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        entries.append((json_text(self.notes).encode(\"utf-8\"), \"notes_data.json\"))\n",
+        "replace": "        entries.append((DATA_FILE, \"notes_data.json\"))\n"
+      }
+    ],
+    "must_fail": [
+      "after a failed save, the backup the app advises holds the changes"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR15",
+    "about": "an old notebook whose settings cannot be read comes without them, and the default window empties its Trash",
+    "edits": [
+      {
+        "file": "noteorganizer/core/paths.py",
+        "find": "    elif (durable and os.path.exists(legacy_settings)\n          and not os.path.exists(settings_path)):\n",
+        "replace": "    elif False:\n"
+      }
+    ],
+    "must_fail": [
+      "...and its Trash keeps the window its settings left unknown"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed",
+    "note": "Killed on Windows, where the profile-folder migration checks run."
+  },
+  {
+    "id": "DR16",
+    "about": "a file another program holds a moment at the first start is never copied",
+    "edits": [
+      {
+        "file": "noteorganizer/core/paths.py",
+        "find": "        if (os.path.isfile(src) and not os.path.exists(dst)\n                and not _copy_whole(src, dst, tries=3)):\n            failed.append(filename)\n",
+        "replace": "        if (os.path.isfile(src) and not os.path.exists(dst)\n                and not _copy_whole(src, dst, tries=1)):\n            failed.append(filename)\n"
+      }
+    ],
+    "must_fail": [
+      "a file held a moment at the first start is copied on a later try"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed",
+    "note": "Killed on Windows, where the profile-folder migration checks run."
+  },
+  {
+    "id": "DR17",
+    "about": "files the first start could not copy go unnamed",
+    "edits": [
+      {
+        "file": "noteorganizer/core/paths.py",
+        "find": "    if missing:\n        # Said, never passed over",
+        "replace": "    if False:\n        # Said, never passed over"
+      }
+    ],
+    "must_fail": [
+      "...and one that cannot be copied is named in the message"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed",
+    "note": "Killed on Windows, where the profile-folder migration checks run."
+  },
+  {
+    "id": "DR20",
+    "about": "the backup export replaces the previous backup before its bytes reach the disk",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                    raw.flush()\n                    os.fsync(raw.fileno())\n",
+        "replace": "                    raw.flush()\n"
+      }
+    ],
+    "must_fail": [
+      "every file renamed into place is written to the disk first"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR21",
+    "about": "a migrated file is renamed into place before its bytes reach the disk",
+    "edits": [
+      {
+        "file": "noteorganizer/core/paths.py",
+        "find": "            with open(part, \"ab\") as f:\n                os.fsync(f.fileno())\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "every file renamed into place is written to the disk first"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR22",
+    "about": "an imported attached file is renamed into place before its bytes reach the disk",
+    "edits": [
+      {
+        "file": "noteorganizer/core/sharing.py",
+        "find": "            fout.flush()\n            os.fsync(fout.fileno())\n",
+        "replace": "            fout.flush()\n"
+      }
+    ],
+    "must_fail": [
+      "every file renamed into place is written to the disk first"
+    ],
+    "suites": [
+      "test_data_safety"
     ],
     "expect": "killed"
   }

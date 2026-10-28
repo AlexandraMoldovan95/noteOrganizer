@@ -534,6 +534,59 @@ try:
                   all(os.path.exists(os.path.join(_pe_home, n))
                       for n in ('notes_data.json', 'trash.json', 'templates.json'))
                   and 'Brought in' in _pe_msg)
+            # Its settings could not be read, so there the Trash's window is
+            # unknown and nothing leaves it: the same here, or the default
+            # 30 days emptied that Trash at the first start (2026-10-28).
+            from noteorganizer.core import storage as _pe_storage
+            _pe_prev = NO_paths.APP_DIR
+            try:
+                NO_paths.configure(_pe_home)
+                _pe_window = _pe_storage.trash_retention_days()
+            finally:
+                NO_paths.configure(_pe_prev)
+            check(f'...and its Trash keeps the window its settings left unknown '
+                  f'({_pe_how}: {_pe_window})', _pe_window is None)
+        # A file the first start cannot copy (another program holds it) is
+        # tried again, then named: the notes file marks the copy done, and
+        # "Imported" said nothing of a Trash left behind (2026-10-28).
+        _pf_user = os.path.join(_pr_root, 'user_held')
+        os.environ['USERPROFILE'] = _pf_user
+        os.environ['APPDATA'] = os.path.join(_pf_user, 'AppData', 'Roaming')
+        _pf_old, _pf_home = NO_paths.get_appdata_dir(), NO_paths.get_user_notebook_dir()
+        os.makedirs(os.path.join(_pf_old, 'attachments'))
+        os.makedirs(_pf_home)
+        for _pf_name, _pf_text in (('notes_data.json', '[{"id": 1, "title": "A"}]'),
+                                   ('settings.json', '{"app_version": "0.97.405"}'),
+                                   ('trash.json', '[]'),
+                                   (os.path.join('attachments', 'held.bin'), 'x'),
+                                   (os.path.join('attachments', 'free.bin'), 'y')):
+            with open(os.path.join(_pf_old, _pf_name), 'w', encoding='utf-8') as f:
+                f.write(_pf_text)
+        _pf_copy2 = NO_paths.shutil.copy2
+        _pf_tries = {}
+
+        def _pf_held(src, dst, *a, **k):
+            name = os.path.basename(src)
+            _pf_tries[name] = _pf_tries.get(name, 0) + 1
+            if name == 'trash.json' or (name == 'held.bin' and _pf_tries[name] < 3):
+                raise PermissionError('held by another program')
+            return _pf_copy2(src, dst, *a, **k)
+        NO_paths.shutil.copy2 = _pf_held
+        _pf_sleep = NO_paths.time.sleep
+        NO_paths.time.sleep = lambda s: None
+        try:
+            _pf_msg = NO_paths.run_migrations(_pf_home) or ''
+        finally:
+            NO_paths.shutil.copy2 = _pf_copy2
+            NO_paths.time.sleep = _pf_sleep
+        check(f'a file held a moment at the first start is copied on a later try '
+              f'({_pf_tries})',
+              os.path.exists(os.path.join(_pf_home, 'attachments', 'held.bin'))
+              and os.path.exists(os.path.join(_pf_home, 'attachments', 'free.bin')))
+        check(f'...and one that cannot be copied is named in the message '
+              f'({_pf_msg[-90:]!r})',
+              'could not be copied' in _pf_msg and 'trash.json' in _pf_msg
+              and 'held.bin' not in _pf_msg)
         os.environ['USERPROFILE'] = _pr_user
         os.environ['APPDATA'] = os.path.join(_pr_user, 'AppData', 'Roaming')
     # The second barrier: even listed as a leftover, the profile's notebook
@@ -3373,6 +3426,33 @@ for _limit, _small in (("MAX_DECOMPRESSED_BYTES", 1000), ("MAX_SHARE_CODE_CHARS"
         setattr(_sh, _limit, _saved_limit)
     check("no code is made past the import's %s either" % _limit,
           _answer.startswith("refused: ") and "too much for one code" in _answer)
+
+# ---- Every file renamed into place is on the disk first ----
+# A power cut just after a rename can leave the new name pointing at bytes
+# never written. One writer of six waited for them (_write_json_atomic): the
+# backup export over the previous backup, the migrated notes file that marks
+# a copy done and the import's attached files did not (2026-10-28, the final
+# audit). Read in the source, so a seventh cannot be added without it: each
+# os.replace has an fsync, or a call to the copier that has one, in the
+# lines before it.
+_fs_files = ["note_organizer.py"] + sorted(
+    os.path.join(_root, _name)
+    for _root, _dirs, _names in os.walk("noteorganizer") for _name in _names
+    if _name.endswith(".py"))
+_fs_bare = []
+for _fs_file in _fs_files:
+    with open(_fs_file, encoding="utf-8") as _f:
+        _fs_lines = _f.read().split("\n")
+    for _n, _line in enumerate(_fs_lines):
+        if "os.replace(" in _line and not _line.lstrip().startswith("#"):
+            _before = "\n".join(_fs_lines[max(0, _n - 25):_n])
+            if "os.fsync(" not in _before and "copy_file_until_stopped(" not in _before:
+                _fs_bare.append("%s:%d" % (_fs_file, _n + 1))
+with open(os.path.join("noteorganizer", "core", "sharing.py"), encoding="utf-8") as _f:
+    _fs_copier = _f.read().split("def copy_file_until_stopped", 1)[-1].split("\ndef ", 1)[0]
+check("every file renamed into place is written to the disk first (%s)"
+      % (_fs_bare or "all"),
+      not _fs_bare and "os.fsync(" in _fs_copier)
 
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
