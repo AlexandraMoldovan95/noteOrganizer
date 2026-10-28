@@ -2376,6 +2376,12 @@ nowhere after it.
   word. The probe's import takes a tenth of a second and the picker a third.
   test_data_safety loads the file, qa3 imports the backup and saves one too many; mutants
   IX18–IX20.
+- *The reading.* The same probes found a pasted page's own reading slow: 10 MB of paragraphs
+  parsed to the end after the ceiling had been passed (7 s), the styles moved once per shift of
+  every padded cell, and the structure at a copy's start marker looked for each stray end tag
+  along every open table. The page is now read no further than the ceiling, the shifts are summed
+  once, and the open tags are counted; the slowest probe takes half a second. test_richtext
+  counts what is fed to the parser and what is compared; mutants IX21–IX22.
 
 **Takeaway:** a limit on what comes in says nothing about what is then done with it. Ask what the
 work costs at the limit — a capped number squared is not capped — and count every door to it, not

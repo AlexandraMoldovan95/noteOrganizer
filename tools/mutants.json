@@ -7469,5 +7469,41 @@
       "qa3"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "IX21",
+    "about": "a pasted page is read to its end, past the paste ceiling",
+    "edits": [
+      {
+        "file": "noteorganizer/core/richtext.py",
+        "find": "            if reader.text_cut:\n                break\n",
+        "replace": "            if False:\n                break\n"
+      }
+    ],
+    "must_fail": [
+      "a 10 MB page past the paste ceiling is read only as far as it"
+    ],
+    "suites": [
+      "test_richtext"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "IX22",
+    "about": "every stray end tag before a copy's marker walks the open tags",
+    "edits": [
+      {
+        "file": "noteorganizer/core/clipboard.py",
+        "find": "        if self.how_many.get(tag):\n",
+        "replace": "        if tag in self.open:\n"
+      }
+    ],
+    "must_fail": [
+      "stray end tags before a copy's marker are not looked for along every open table"
+    ],
+    "suites": [
+      "test_richtext"
+    ],
+    "expect": "killed"
   }
 ]

@@ -53,6 +53,9 @@ from .formatting import (
 # knobs so much as a refusal to let one paste produce a note nobody can
 # edit -- the same reasoning as the title cap.
 MAX_PASTE_CHARS = 100_000
+# How much of a pasted page html_to_note reads before asking whether the
+# ceiling has been passed: small beside a page, large beside a parser call.
+_FEED_PIECE = 65_536
 MAX_PASTE_SPANS = 2_000
 
 # Tags that mean "a new line starts here".
@@ -571,7 +574,14 @@ def html_to_note(fragment, report=None):
     # the fragment still means the earlier newlines were markup, not content.
     reader.keep_newlines = not _BLOCK_TAG_RE.search(fragment or "")
     try:
-        reader.feed(fragment or "")
+        # Fed a piece at a time, and no further once the text has passed the
+        # ceiling: nothing after it is kept, and a 10 MB page was read to its
+        # end all the same, for seconds.
+        fragment = fragment or ""
+        for at in range(0, len(fragment), _FEED_PIECE):
+            reader.feed(fragment[at:at + _FEED_PIECE])
+            if reader.text_cut:
+                break
         reader.close()
     except Exception:
         # html.parser is forgiving, but a pasted page is arbitrary input and

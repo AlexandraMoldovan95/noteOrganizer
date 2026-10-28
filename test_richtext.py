@@ -1088,6 +1088,76 @@ _mn_took = _time.perf_counter() - _mn_started
 check(f"misnested markup is read in one pass ({_mn_took:.2f} s), its text whole",
       _mn_text == "Hello world" and _mn_took < 2.0)
 
+# ---- A page past the ceiling is read only as far as the ceiling ----
+# Nothing after it is kept, and 10 MB of paragraphs was parsed to its end
+# all the same, for seconds (2026-10-28). Counted in characters fed to
+# the parser, never in time.
+from noteorganizer.core import richtext as _rtx
+from noteorganizer.core import clipboard as _clipx
+from noteorganizer.core.formatting import shift_spans as _shift
+import random as _rnd
+
+_fed = [0]
+_real_feed = _rtx._Reader.feed
+
+
+def _counting_feed(self, data):
+    _fed[0] += len(data)
+    return _real_feed(self, data)
+
+
+_rtx._Reader.feed = _counting_feed
+try:
+    _big_page = "<p>x</p>" * 1_250_000
+    _big_text = html_to_note(_big_page)[0]
+finally:
+    _rtx._Reader.feed = _real_feed
+check(f"a 10 MB page past the paste ceiling is read only as far as it "
+      f"({_fed[0]:,} of {len(_big_page):,} characters)",
+      _fed[0] < 1_000_000 and 0 < len(_big_text) <= MAX_PASTE_CHARS)
+
+
+def _shift_one_by_one(spans, shifts):
+    return [dict(s, start=s["start"] + sum(d for at, d in shifts if at < s["start"]),
+                 end=s["end"] + sum(d for at, d in shifts if at < s["end"]))
+            for s in spans]
+
+
+_sr = _rnd.Random(20261028)
+_shift_agree = True
+for _i in range(300):
+    _spans = [{"start": a, "end": a + _sr.randint(0, 9), "style": "bold"}
+              for a in (_sr.randint(0, 60) for _ in range(_sr.randint(0, 6)))]
+    _shifts = [(_sr.randint(0, 70), _sr.choice([-2, -1, 1, 3]))
+               for _ in range(_sr.randint(0, 12))]
+    _shift_agree = _shift_agree and _shift(_spans, _shifts) == _shift_one_by_one(_spans, _shifts)
+check("spans move by summed shifts exactly as they did one shift at a time",
+      _shift_agree)
+
+# The structure open at a copy's start marker: every stray end tag walked
+# the list of open ones, and 30,000 unclosed tables with as many stray
+# </td> took seconds. Counted as comparisons with the list, never time.
+_open_reader = _clipx._OpenAtMarker()
+_open_reader.feed("<table>" * 3000 + "</td>" * 3000)
+_walks = [0]
+
+
+class _CountingList(list):
+    def __contains__(self, item):
+        _walks[0] += 1
+        return list.__contains__(self, item)
+
+
+_open_reader2 = _clipx._OpenAtMarker()
+_open_reader2.open = _CountingList()
+_open_reader2.feed("<table>" * 3000 + "</td>" * 3000)
+check(f"stray end tags before a copy's marker are not looked for along every "
+      f"open table ({_walks[0]:,} walks)",
+      _walks[0] == 0 and _open_reader.open == ["table"] * 3000
+      and _clipx.fragment_of("<table><tr><!--StartFragment--><td>a</td>"
+                             "<!--EndFragment--></tr></table>")
+      == "<table><tr><td>a</td></tr></table>")
+
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
 

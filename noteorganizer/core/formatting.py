@@ -839,18 +839,24 @@ def shift_spans(spans, shifts):
     """
     if not shifts:
         return spans
+    # Every offset in *shifts* describes the text as it was, so each one has
+    # to be judged against the span as it was. Adding the deltas one at a
+    # time and comparing against the running total counted a later shift as
+    # being "before" a span it had itself pushed past: with two cells padded
+    # on one row, the bold in the first cell ended up in the second.
+    # Renumbering never showed it, because a line rarely has more than one
+    # marker widening before the same word. The shifts before an offset are
+    # summed off sorted totals: walked whole for every span, 2,000 styled
+    # pieces in a pasted table of thousands of padded cells took seconds.
+    order = sorted(shifts)
+    places = [at for at, _delta in order]
+    totals = [0]
+    for _at, delta in order:
+        totals.append(totals[-1] + delta)
     out = []
     for span in spans:
-        start, end = span["start"], span["end"]
-        # Every offset in *shifts* describes the text as it was, so each one
-        # has to be judged against the span as it was. Adding the deltas one
-        # at a time and comparing against the running total counted a later
-        # shift as being "before" a span it had itself pushed past: with two
-        # cells padded on one row, the bold in the first cell ended up in the
-        # second. Renumbering never showed it, because a line rarely has more
-        # than one marker widening before the same word.
         moved = dict(span)
-        moved["start"] = start + sum(d for at, d in shifts if at < start)
-        moved["end"] = end + sum(d for at, d in shifts if at < end)
+        moved["start"] = span["start"] + totals[bisect.bisect_left(places, span["start"])]
+        moved["end"] = span["end"] + totals[bisect.bisect_left(places, span["end"])]
         out.append(moved)
     return out

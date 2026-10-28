@@ -131,18 +131,26 @@ class _OpenAtMarker(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
         self.open = []
+        # How many of each tag are open: asked of the list itself, every
+        # stray end tag walked it whole, and 30,000 unclosed tables with as
+        # many stray </td> took seconds to read.
+        self.how_many = dict.fromkeys(_STRUCTURE, 0)
 
     def handle_starttag(self, tag, attrs):
         if tag not in _STRUCTURE:
             return
         while self.open and self.open[-1] in _ENDS.get(tag, ()):
-            self.open.pop()
+            self.how_many[self.open.pop()] -= 1
         self.open.append(tag)
+        self.how_many[tag] += 1
 
     def handle_endtag(self, tag):
-        if tag in self.open:
-            while self.open.pop() != tag:
-                pass
+        if self.how_many.get(tag):
+            while True:
+                closed = self.open.pop()
+                self.how_many[closed] -= 1
+                if closed == tag:
+                    break
 
 
 def fragment_of(document):
