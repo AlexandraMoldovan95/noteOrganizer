@@ -196,6 +196,7 @@ is in the table below as well.
 | [Limits that held at the door but not after it](#limits-that-held-at-the-door-but-not-after-it) | A cap on what comes in is not a cap on what is done with it: bound the work at the limit, and everything a load keeps. | next |
 | [Round three: one rescue copy, and files another program holds](#round-three-one-rescue-copy-and-files-another-program-holds) | A store with one slot keeps only the last thing put in it; and a file that could not be opened is not a file that could not be read. | next |
 | [Round four: days kept but not used, loss counted in words, and a run that saves nothing](#round-four-days-kept-but-not-used-loss-counted-in-words-and-a-run-that-saves-nothing) | A value kept "only for later" is still read now by everything that read it before; a measure of harm needs a lower bound as well as an upper one. | next |
+| [Round four: what a click put away, and what a screen can draw](#round-four-what-a-click-put-away-and-what-a-screen-can-draw) | A limit on what is typed is no limit on what is drawn; and a part hidden with the keyboard inside is one rule, not a list. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -2548,6 +2549,64 @@ the flush took "no note, no tab" to mean "nothing typed".
 Find every reader before deciding a field is inert. And a measure of harm needs a lower bound as
 well as an upper one; two crude counts that each never undershoot are, at their minimum, a fair
 one.
+
+### Round four: what a click put away, and what a screen can draw
+
+*(2026-10-28 · found by the final audit's fourth break-it round, which attacked round three's fixes
+by name; this is its interface half)*
+
+**Symptom:**
+- **Past what X can draw.** A table whose cells hold line breaks ended the app on Linux, no crash
+  log, inside both table limits: one cell of 1,000, or a paste of 250 spreadsheet rows of four-line
+  addresses. At every start after, too, the note being last open. A sweep of every widget sized
+  by what it shows found the same end from a template named by a pasted page (Save as template's
+  box had no limit), a backup's attachment label of 60,000 letters, a title of 3,000 lines in the
+  day's list, and a question quoting a long name. On Windows the effect is unmeasured; a popup
+  wider than the screen at the least.
+- **Buttons pushed out of their row.** In Settings > Templates a 50-letter name took the pencil's
+  room and 80 the bin's: the template could be neither edited nor deleted. The category row, a
+  statistics pill and the picture preview's Close did the same.
+- **Keys under a picture.** The preview is a frame over the window. Opened by a click, it left
+  the caret in the note under it; Delete or a letter pressed at the picture edited that note, and
+  it was saved. Tab walked from its Close into the note.
+- **A part put away with the keyboard in it.** A click takes no keyboard. Folding the checklist
+  with the caret in its Add box left it there: x and Return added an item nobody saw, and it was
+  saved. So did the calculator, a Settings section left, a panel closed.
+- **Smaller.** Every animated PNG raised halfway through its preview, its file held open. A table
+  cell's menu had no key, and its two palettes closed at the first Tab. The template editor and the
+  picker grew with what they held and never scrolled, Save below the screen. And six lows.
+
+**Root cause:** round three's limits counted what is typed, and every drawer took what it was
+handed whole. A label, a button or a canvas is as large as what it shows, and X makes no window
+past 32,767 pixels: a limit on characters is no limit on lines, nor on what a backup brings. The
+keyboard's gaps were one gap: a part of the window put away or covered while the keyboard was in
+it. Only the pages fixed one by one in round three, Settings and the sidebar, moved it.
+
+**Fix:**
+- A table is also judged by its drawn height, every line of every row counted at the size it would
+  be drawn; its cell editor stops at the same size and scrolls inside.
+- Nothing stored is cut. Every box that names something keeps the limit, and every drawer of a
+  name draws one line, cut (`one_line`, `_fit_title`, `_fit_name`). A question lays out at most
+  12,000 characters and 300 lines, its start and its end kept.
+- A row's buttons are packed before the name that stretches. A scan found every row packed that
+  way, and each hit was read.
+- The preview takes the keyboard on Close however it was opened, and Tab walks its two buttons.
+  Frame times are whole milliseconds; a preview that fails half built is taken down, its file let go.
+- One watcher (`_watch_parts_put_away`): a part its geometry manager forgets while the keyboard is
+  inside hands it to the control just clicked, or to the next one on. A tab left takes it off
+  anything out of sight.
+- Shift+F10 in a cell opens its menu, a palette it opens takes the keyboard, and the keyboard comes
+  back to the cell.
+- What grows in a popup scrolls (`_scrolling_rows`), a popup that grows is placed again, and none
+  is placed past the window's bottom.
+- Lows: a dotted I's cut, Settings' way back to a cell or the find box, the preview redrawn only
+  when its tables change, a paste over a selection weighed whole, and the quiet template save at a
+  cancelled sign-out.
+- qa1, qa3, qa6, qa7, qa9; mutants RU01–RU32.
+
+**Takeaway:** a limit on what is typed is no limit on what is drawn: every drawer of outside content
+needs a size it never passes. And when a fix moves the keyboard off one hidden part, ask what else
+can be hidden with the keyboard inside. The answer is one rule, not a list.
 
 
 ## Tk & platform gotchas
