@@ -9532,5 +9532,23 @@
       "test_recurrence"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "DR69",
+    "about": "a list's markers count as words lost, so numbers turned to bullets replace the rescue copy of a paragraph deleted before",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    return strip_list_markers(text).split()\n",
+        "replace": "    return text.split()\n"
+      }
+    ],
+    "must_fail": [
+      "...nor a list's markers changed: numbers to bullets, bullets one level in"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
   }
 ]

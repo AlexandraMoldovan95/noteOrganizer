@@ -3401,6 +3401,24 @@ check("a column added, removed empty, or a list renumbered is no loss either "
       not _model_mod.rescue_copy_due("t", _col_old, "t", _col_new)
       and not _model_mod.rescue_copy_due("t", _col_new, "t", _col_old)
       and not _model_mod.rescue_copy_due("t", _steps, "t", _steps_in))
+# ...nor a list's markers changed: numbers turned to bullets, or bullets one
+# level in, counted each "1." as a word lost, and the copy of a paragraph
+# deleted before was replaced (round 5, found on Android first).
+_mk_items = ["milk", "eggs", "bread", "butter", "flour", "sugar", "salt",
+             "apples", "pears", "rice", "beans", "tea", "coffee", "onion"]
+_mk_num = "\n".join("%d. %s" % (i + 1, w) for i, w in enumerate(_mk_items))
+_mk_bul = "\n".join("• " + w for w in _mk_items)
+_mk_in = "\n".join("◦ " + w for w in _mk_items)
+from collections import Counter as _Counter
+# The markers counted as words would pass the bars: what this check rules out.
+_mk_as_words = sum((len(w) + 1) * n for w, n in
+                   (_Counter(_mk_num.split()) - _Counter(_mk_bul.split())).items())
+check("...nor a list's markers changed: numbers to bullets, bullets one level in "
+      "(as words %d, now %d)" % (_mk_as_words, _model_mod.words_lost(_mk_num, _mk_bul)),
+      not _model_mod.rescue_copy_due("t", _mk_num, "t", _mk_bul)
+      and not _model_mod.rescue_copy_due("t", _mk_bul, "t", _mk_in)
+      and _mk_as_words > 40 and _model_mod.text_lost(_mk_num, _mk_bul) > 0.3 * len(_mk_num)
+      and _model_mod.rescue_copy_due("t", _mk_num, "t", "\n".join(_mk_num.split("\n")[:3])))
 check("...nor one letter changed in a paragraph written without spaces",
       not _model_mod.rescue_copy_due("t", _cjk, "t", _cjk.replace("季度", "月份", 1)))
 _col_full = "\n".join(line + " a long note about where to buy it |"

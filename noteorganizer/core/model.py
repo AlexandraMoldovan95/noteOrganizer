@@ -20,7 +20,7 @@ from datetime import datetime
 
 from .categories import CATEGORY_COLORS
 from .formatting import (normalize_formatting, normalize_paragraphs,
-                         clamp_spans_per_line)
+                         clamp_spans_per_line, strip_list_markers)
 from .tables import with_caret_line
 from .recurrence import (
     normalize_recurrence,
@@ -344,10 +344,16 @@ def words_lost(old, new):
     """How many characters of the words in *old* are not in *new*, each word
     counted as often as it appears, with the space it went with: the bars
     rescue_copy_due sets count spaces too. A word moved, or a cell padded
-    wider, is not lost; a word with one letter changed is lost whole."""
-    gone = Counter(old.split())
-    gone.subtract(new.split())
+    wider, is not lost; a word with one letter changed is lost whole. A
+    list's markers are no words: numbers turned to bullets lost none."""
+    gone = Counter(_words(old))
+    gone.subtract(_words(new))
     return sum((len(word) + 1) * count for word, count in gone.items() if count > 0)
+
+
+def _words(text):
+    """*text*'s words, each line's list marker left out (strip_list_markers)."""
+    return strip_list_markers(text).split()
 
 
 def _lost(old, new):
@@ -361,7 +367,7 @@ def _lost(old, new):
 
 def _measured(text):
     """*text*'s length as words_lost counts it: each word with one space."""
-    return sum(len(word) + 1 for word in text.split())
+    return sum(len(word) + 1 for word in _words(text))
 
 
 def rescue_copy_due(old_title, old_body, title, body):
