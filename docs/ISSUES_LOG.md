@@ -194,6 +194,7 @@ is in the table below as well.
 | [Round two: each fix's next door](#round-two-each-fixs-next-door) | A fix is for the behaviour, not the route it was reported on; ask every other road that reaches it. | next |
 | [The photo that was a remote connection](#the-photo-that-was-a-remote-connection) | What a person sees about a file is read from the file that will open; where the safe kinds are few, list those, not the dangerous ones. | next |
 | [Limits that held at the door but not after it](#limits-that-held-at-the-door-but-not-after-it) | A cap on what comes in is not a cap on what is done with it: bound the work at the limit, and everything a load keeps. | next |
+| [Round three: one rescue copy, and files another program holds](#round-three-one-rescue-copy-and-files-another-program-holds) | A store with one slot keeps only the last thing put in it; and a file that could not be opened is not a file that could not be read. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -2228,7 +2229,9 @@ route to the same behaviour.
 
 **Fix:**
 - Whatever ends a repeat keeps the series' days in the rescue copy (`days_to_rescue`), and the
-  save that clears a one-off note's days keeps days no copy holds.
+  save that clears a one-off note's days keeps days no copy holds. Moving them there was itself a
+  loss, which round three made a copy
+  ([Round three](#round-three-one-rescue-copy-and-files-another-program-holds)).
 - The export packs what the app holds.
 - A backup's window is taken only when it is longer.
 - The close and the end of a session run one list of saves (`_save_on_the_way_out`). The session
@@ -2392,6 +2395,51 @@ nowhere after it.
 **Takeaway:** a limit on what comes in says nothing about what is then done with it. Ask what the
 work costs at the limit — a capped number squared is not capped — and count every door to it, not
 the one the limit was written for.
+
+### Round three: one rescue copy, and files another program holds
+
+*(2026-10-28 · found by the final audit's third break-it round, which attacked round two's fixes
+by name)*
+
+**Symptom:**
+- **Days erased.** Round two's fix for a share code that ends a repeat *moved* the series' own day
+  text into the rescue copy. A second code that turned the repeat back on, or a big rewrite after
+  the repeat was put back by hand, erased the days with no word. Before that fix they had stayed
+  in the note.
+- **The copy replaced.** Widening one table cell re-pads every row, which read as the whole table
+  lost. Its copy replaced the rescue copy the note held. A big delete saved first, then the
+  repeat turned off, lost the deleted words the same way.
+- **A held notes file.** One held by another program at the start read as unreadable. Its copy
+  failed for the same reason, and the first keystroke's autosave replaced fifty notes with one.
+  At the first start of a new version, the copy of the old notebook gave the notes file one try
+  and returned in silence when it was held. The app then opened empty, its first save wrote a
+  notes file, and the old notebook was never looked at again.
+- **Smaller gaps.** The export on such a start packed an empty notebook as "Export complete". A
+  template half written in its editor went with a Windows sign-out. An import's "cut short" line
+  outlived a re-import that finished.
+
+**Root cause:** a note has one rescue copy. Anything that writes a new one takes the old one's place,
+so whatever lives only there lives one save. Separately, a read that failed was taken for a file
+that could not be parsed, and a copy that failed for the same reason was taken for an ordinary
+failure.
+
+**Fix:**
+- Whatever ends a repeat copies the days into the rescue copy and keeps them in the note.
+- Loss is measured in cells, not padding (`_without_padding`).
+- A turn-off's copy keeps the text of a copy the note does not hold again, whatever came first.
+- An update's question says when it replaces such a copy.
+- The start reads its data files three times, half a second apart. A file it can neither read
+  nor copy is never written over that run (`paths.hold_writes`), and the start says so.
+- The first start's copy of the old notebook is all or nothing for the notes and settings, and
+  writes nothing until it succeeds.
+- The export refuses on a start that could not read the notes.
+- The session end saves a template editor's work beside any template of its name.
+- A finished import takes its line back.
+- `test_data_safety`, qa3, qa5; mutants DR29–DR40.
+
+**Takeaway:** a store with one slot keeps only the last thing put in it. Before moving anything
+into it, ask what else will write there next. And a file that could not be opened is not a file
+that could not be read: one is a moment, the other is damage.
 
 
 ## Tk & platform gotchas
