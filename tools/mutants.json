@@ -6187,11 +6187,19 @@
   {
     "id": "GF01",
     "about": "an animation keeps every decoded frame while its first loop plays",
-    "edits": [{"file": "noteorganizer/ui/attachments.py",
-               "find": "                        and source is not None and held > self.PREVIEW_MEMORY_BYTES:\n",
-               "replace": "                        and source is not None and held < 0:\n"}],
-    "must_fail": ["a long animation keeps only the frames that fit, at their own size"],
-    "suites": ["qa7"],
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "                            state[\"held\"] > self.PREVIEW_MEMORY_BYTES\n",
+        "replace": "                            state[\"held\"] < 0\n"
+      }
+    ],
+    "must_fail": [
+      "a long animation keeps only the frames that fit, at their own size"
+    ],
+    "suites": [
+      "qa7"
+    ],
     "expect": "killed"
   },
   {
@@ -7085,11 +7093,19 @@
   {
     "id": "AX16",
     "about": "an animation's later frame is decoded whatever its size",
-    "edits": [{"file": "noteorganizer/ui/attachments.py",
-               "find": "                        past_budget = (source.size[0] * source.size[1]\n",
-               "replace": "                        past_budget = False and (source.size[0] * source.size[1]\n"}],
-    "must_fail": ["a later frame past the pixel budget is never decoded"],
-    "suites": ["qa7"],
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "                            canvas_px > self.PREVIEW_PIXEL_BUDGET\n",
+        "replace": "                            False\n"
+      }
+    ],
+    "must_fail": [
+      "a later frame past the pixel budget is never decoded"
+    ],
+    "suites": [
+      "qa7"
+    ],
     "expect": "killed"
   },
   {
@@ -7776,6 +7792,42 @@
     ],
     "must_fail": [
       "a file whose name holds a colon is stored without one, and opens"
+    ],
+    "suites": [
+      "qa7"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RT03",
+    "about": "an animation's frames are judged one by one, never together",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "                            or state[\"decoded\"] + canvas_px\n                            > self.ANIMATION_PIXEL_BUDGET)\n",
+        "replace": "                            )\n"
+      }
+    ],
+    "must_fail": [
+      "an animation stops decoding once its frames together pass the pixel budget"
+    ],
+    "suites": [
+      "qa7"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RT04",
+    "about": "an animation keeps any number of frames that fit the memory",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "                            or len(frames) >= self.PREVIEW_MAX_FRAMES):\n",
+        "replace": "                            ):\n"
+      }
+    ],
+    "must_fail": [
+      "an animation stops decoding once its frames together pass the pixel budget"
     ],
     "suites": [
       "qa7"

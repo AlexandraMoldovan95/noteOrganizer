@@ -2106,6 +2106,15 @@ could be a TIFF, an icon set, or an EPS that Pillow hands to Ghostscript. Nothin
 decodes an outside image. qa7 plays a JPEG holding a small and a large picture, and previews an
 icon set named `.png`; mutants AX16, AX17.
 
+**Every frame, together** *(2026-10-28 · the third round)*: each frame passed, and the frames
+together had no limit. Pillow composites every frame onto the whole canvas, so a 105 KB GIF of
+3,000 one-pixel frames on a 50,000×999 canvas cost a 50-megapixel decode on every 10 ms tick. Shown
+as a strip fifteen pixels tall, its frames never filled the 64 MB, and the app stayed 98% busy for
+as long as the preview was open. The canvas pixels decoded are now counted across the animation,
+up to four times the still budget (a 4K animation still plays two dozen frames), and the frames
+kept stop at 1,000; the GIF now decodes four frames and lets the file go. qa7 plays an animation
+under each limit; mutants RT03, RT04.
+
 **Takeaway:** a limit has to hold while the thing it limits is being built, not only once it is
 finished — and for every part of it, not the first.
 

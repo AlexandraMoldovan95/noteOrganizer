@@ -314,15 +314,21 @@ class AttachmentsMixin:
         # when an animation actually starts — any code checking it directly
         # (rather than via getattr with a default) can rely on that.
         if source is not None or len(frames) > 1:
-            state = {"i": 0}
+            # What the frames kept hold, and the canvas pixels decoded so far:
+            # counted as each frame comes, not summed again on every tick.
+            state = {"i": 0,
+                     "held": sum(f.width() * f.height() * 4 for f in frames),
+                     "decoded": (source.size[0] * source.size[1]
+                                 if source is not None else 0)}
 
             def _next_frame():
                 if not img_lbl.winfo_exists():
                     return
                 nxt = state["i"] + 1
-                held = sum(f.width() * f.height() * 4 for f in frames)
                 if nxt >= len(frames) and self._preview_source is source \
-                        and source is not None and held > self.PREVIEW_MEMORY_BYTES:
+                        and source is not None and (
+                            state["held"] > self.PREVIEW_MEMORY_BYTES
+                            or len(frames) >= self.PREVIEW_MAX_FRAMES):
                     # Kept frames past what the cache may hold: a 33 KB GIF
                     # ran the app out of memory. It plays the part that fits.
                     self._release_preview_source()
@@ -336,13 +342,21 @@ class AttachmentsMixin:
                         source.seek(nxt)
                         # Judged before it is decoded, as the first frame is:
                         # seeking reads a frame's size, not its pixels, and a
-                        # later frame can be any size the file likes.
-                        past_budget = (source.size[0] * source.size[1]
-                                       > self.PREVIEW_PIXEL_BUDGET)
+                        # later frame can be any size the file likes. Each
+                        # frame is composited onto the whole canvas, so the
+                        # animation's frames are judged together as well.
+                        canvas_px = source.size[0] * source.size[1]
+                        past_budget = (
+                            canvas_px > self.PREVIEW_PIXEL_BUDGET
+                            or state["decoded"] + canvas_px
+                            > self.ANIMATION_PIXEL_BUDGET)
                         if not past_budget:
-                            frames.append(ImageTk.PhotoImage(
-                                _scaled(source.convert("RGBA"), grow=False)))
+                            shown = ImageTk.PhotoImage(
+                                _scaled(source.convert("RGBA"), grow=False))
+                            frames.append(shown)
                             delays.append(source.info.get("duration", 100) or 100)
+                            state["decoded"] += canvas_px
+                            state["held"] += shown.width() * shown.height() * 4
                     except EOFError:
                         # The last frame has been seen: from here on the
                         # animation plays from memory, and so does the next
@@ -360,7 +374,9 @@ class AttachmentsMixin:
                         if past_budget:
                             # A frame past the budget ends it the same way:
                             # a TIFF's 169-megapixel second page took 46 s and
-                            # 2 GB. ISSUES_LOG: "The preview that kept every frame".
+                            # 2 GB, and a 105 KB GIF of one-pixel frames on a
+                            # 50-megapixel canvas kept the app busy for
+                            # minutes. ISSUES_LOG: "The preview that kept every frame".
                             self._release_preview_source()
                             nxt = 0
                 elif nxt >= len(frames):
@@ -397,6 +413,13 @@ class AttachmentsMixin:
     # program Windows opens images with shows it instead. Asked of every
     # frame of an animation, before that frame is decoded.
     PREVIEW_PIXEL_BUDGET = 50_000_000
+    # The canvas pixels decoded for one animation, all its frames together:
+    # Pillow composites every frame onto the whole canvas, and a wide canvas
+    # shown as a strip a few pixels tall never fills PREVIEW_MEMORY_BYTES.
+    # A 4K animation still plays two dozen frames.
+    ANIMATION_PIXEL_BUDGET = 4 * PREVIEW_PIXEL_BUDGET
+    # And the frames kept: one of a single pixel still costs Tk an image.
+    PREVIEW_MAX_FRAMES = 1_000
     # The only decoders the preview lets Pillow use: those of the pictures
     # it shows (PREVIEWED_IN_APP). A JPEG holding several pictures (MPO)
     # comes through the JPEG decoder, and its frames are judged one by one.

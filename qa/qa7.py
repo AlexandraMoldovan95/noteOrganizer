@@ -1188,6 +1188,41 @@ try:
 finally:
     del app.PREVIEW_MEMORY_BYTES
 
+# ...and so is the work of decoding it. Pillow composites every frame onto
+# the whole canvas, and a 105 KB GIF of one-pixel frames on a 50-megapixel
+# canvas, shown as a strip a few pixels tall, never filled the memory: the
+# app was busy for minutes. The frames are judged together (here room for
+# five canvases) and counted (here three), each playing the part it has.
+_ab_gif = os.path.join(_pv_dir, 'wide_anim.gif')
+_ab_frames = [_pv_Image.new('RGB', (200, 100), (0, 0, 0)) for _i in range(12)]
+for _i, _f in enumerate(_ab_frames):
+    _f.putpixel((_i * 7, _i), (255, 255, 255))
+_ab_frames[0].save(_ab_gif, save_all=True, append_images=_ab_frames[1:],
+                   duration=20, loop=0)
+_ab_kept = {}
+for _ab_attr, _ab_value in (('ANIMATION_PIXEL_BUDGET', 200 * 100 * 5),
+                            ('PREVIEW_MAX_FRAMES', 3)):
+    getattr(app, '_preview_cache', {}).clear()
+    setattr(app, _ab_attr, _ab_value)
+    try:
+        app._show_image_preview(_ab_gif, 'wide_anim.gif')
+        _pv_end = time.time() + 10
+        while app._preview_source is not None and time.time() < _pv_end:
+            app.update(); time.sleep(0.01)
+        _ab_kept[_ab_attr] = (len(app._image_preview_ref or []),
+                              app._preview_source is None)
+        app._dismiss_mini_popup(); app.update()
+    finally:
+        delattr(app, _ab_attr)
+check(f'an animation stops decoding once its frames together pass the pixel '
+      f'budget, and once it holds as many frames as it may ({_ab_kept})',
+      _ab_kept == {'ANIMATION_PIXEL_BUDGET': (5, True),
+                   'PREVIEW_MAX_FRAMES': (3, True)})
+check(f'...a budget that still lets a 4K animation play two dozen frames '
+      f'({app.ANIMATION_PIXEL_BUDGET // (3840 * 2160)})',
+      app.ANIMATION_PIXEL_BUDGET // (3840 * 2160) >= 24
+      and app.ANIMATION_PIXEL_BUDGET <= 10 * app.PREVIEW_PIXEL_BUDGET)
+
 # An image too large to decode here is offered to the program Windows opens
 # images with: a 439 KB PNG of 12000x12000 peaked at 1.7 GB in the preview.
 _pv_asked = []
