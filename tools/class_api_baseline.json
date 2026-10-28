@@ -413,6 +413,7 @@
   "_leave_settings_for_the_editor": "(self)",
   "_left_out_message": "(self, left_out, lead='Everything else in this note is saved, but not:')",
   "_light_arrows": "(self, arrows, on)",
+  "_limit_entry": "(self, entry, limit, what)",
   "_list_activate": "(self, _event=None)",
   "_list_aware_delete": "(self, event=None, virtual=None)",
   "_list_depth_for": "(self, scrolled_px)",

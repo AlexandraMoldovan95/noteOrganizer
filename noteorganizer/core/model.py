@@ -39,6 +39,10 @@ from .recurrence import (
 # kill the app with a pasted share code (see normalize_note).
 MAX_CHECKLIST_ITEMS = 1000
 
+# And the longest item: each is drawn as one wrapped label, as tall as its text,
+# and a pasted page or a share code made one tens of thousands of pixels tall.
+MAX_CHECKLIST_ITEM_CHARS = 2_000
+
 # The same ceiling for attachments, which render a row of widgets each and
 # arrive by the same untrusted routes. 200 paint in about 0.6 s on a fast
 # machine; real notebooks hold tens of files, so none is ever cut short.
@@ -696,7 +700,8 @@ def normalize_note(note):
             text = item.get("text", "")
             if not isinstance(text, str):
                 text = ""
-            checklist.append({"text": text, "done": bool(item.get("done"))})
+            checklist.append({"text": text[:MAX_CHECKLIST_ITEM_CHARS],
+                              "done": bool(item.get("done"))})
         if len(checklist) >= MAX_CHECKLIST_ITEMS:
             break
     clean["checklist"] = checklist

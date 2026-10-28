@@ -2417,6 +2417,15 @@ single paste or a backup's template can hold. The editor's own grid had long sin
 drawing so a width is remembered between keys. Each probe's drawing takes a hundredth of a second.
 qa6 counts the measures asked of Tk for a 6,000-character cell, never the time; mutant RT13.
 
+And one more door with no limit at all: the checklist's "Add item" box. A pasted page became one
+item, drawn as one wrapped label as tall as its text — on Linux the app died drawing 30,000
+characters, past X's 32,767-pixel window — and a 490-character share code carried a 60,000-character
+item in. Every route to an item now keeps 2,000 characters: the note's and the template editor's
+boxes refuse a key or a paste past it and say so, as the title's box does, and `normalize_note`
+and `normalize_template` cut what a share code, a backup or an old file brings. The template
+editor's name and title boxes keep the note title's 200. test_data_safety, qa1 and qa6; mutants
+RT14–RT17.
+
 **Takeaway:** a limit on what comes in says nothing about what is then done with it. Ask what the
 work costs at the limit — a capped number squared is not capped — and count every door to it, not
 the one the limit was written for.

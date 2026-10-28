@@ -59,7 +59,7 @@ from ..core.recurrence import describe_recurrence, is_recurring, show_date
 # Shortens with an ellipsis rather than by slicing: a title cut at N
 # characters with nothing to show for it is the same defect as a
 # sentence clipped by a layout, only cheaper to make.
-from ..core.model import _truncate, normalize_note
+from ..core.model import MAX_CHECKLIST_ITEM_CHARS, _truncate, normalize_note
 from ..core.storage import (
     TRASH_RETENTION_DAYS,
     trash_retention_days,
@@ -959,7 +959,7 @@ class SettingsPageMixin:
                   cursor="hand2", bg=self.colors["card"], fg=self.colors["subtext"],
                   font=("Segoe UI", 10, "bold"), bd=0).pack(side="right")
 
-        def field(label, initial, height=1):
+        def field(label, initial, height=1, limit=None):
             tk.Label(frame, text=label, bg=self.colors["card"], fg=self.colors["subtext"],
                      font=("Segoe UI", 8, "bold"), anchor="w").pack(fill="x", pady=(4, 0))
             if height == 1:
@@ -970,6 +970,8 @@ class SettingsPageMixin:
                 e.pack(fill="x", ipady=3)
                 self._add_paste_menu(e)
                 self._guard_entry_astral(e)
+                if limit is not None:
+                    self._limit_entry(e, *limit)
                 return var
             else:
                 t = tk.Text(frame, height=height, width=40, relief="flat",
@@ -988,8 +990,11 @@ class SettingsPageMixin:
                 t.bind("<<PasteSelection>>", self._paste_selection_capped)
                 return t
 
-        name_var = field("Template name", data["name"])
-        title_var = field("Note title (optional)", data["title"])
+        # The note's own title box holds TITLE_MAX_LEN; these two took any paste.
+        name_var = field("Template name", data["name"],
+                         limit=(self.TITLE_MAX_LEN, "A template name"))
+        title_var = field("Note title (optional)", data["title"],
+                          limit=(self.TITLE_MAX_LEN, "A note title"))
         body_txt = field("Note body", data["body"], height=4)
         # Its styles and list lines ride on the text as tags, as in the
         # editor, so an edit carries them along. Kept as offsets beside the
@@ -1241,9 +1246,10 @@ class SettingsPageMixin:
         cl_entry.pack(side="left", fill="x", expand=True, ipady=3)
         self._add_paste_menu(cl_entry)
         self._guard_entry_astral(cl_entry)
+        self._limit_entry(cl_entry, MAX_CHECKLIST_ITEM_CHARS, "A checklist item")
 
         def add_tpl_item():
-            text = cl_add_var.get().strip()
+            text = cl_add_var.get().strip()[:MAX_CHECKLIST_ITEM_CHARS]
             if not text:
                 return
             tpl_checklist.append({"text": text, "done": False})

@@ -8012,5 +8012,82 @@
       "qa6"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "RT14",
+    "about": "a note's checklist item of any length comes in whole",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "            checklist.append({\"text\": text[:MAX_CHECKLIST_ITEM_CHARS],\n",
+        "replace": "            checklist.append({\"text\": text,\n"
+      }
+    ],
+    "must_fail": [
+      "normalize_note, normalize_template and a share code keep a checklist item to MAX_CHECKLIST_ITEM_CHARS"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RT15",
+    "about": "a template's checklist item of any length comes in whole",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "                      else \"\")[:MAX_CHECKLIST_ITEM_CHARS],\n",
+        "replace": "                      else \"\"),\n"
+      }
+    ],
+    "must_fail": [
+      "normalize_note, normalize_template and a share code keep a checklist item to MAX_CHECKLIST_ITEM_CHARS"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RT16",
+    "about": "the checklist's Add box takes a paste of any length",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._limit_entry(entry, MAX_CHECKLIST_ITEM_CHARS, \"A checklist item\")\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "the checklist's Add box refuses what passes an item's limit"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RT17",
+    "about": "the template editor's name, title and checklist boxes take a paste of any length",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                if limit is not None:\n                    self._limit_entry(e, *limit)\n",
+        "replace": ""
+      },
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "        self._limit_entry(cl_entry, MAX_CHECKLIST_ITEM_CHARS, \"A checklist item\")\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "the template editor's name, title and checklist boxes refuse what passes their limits"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
   }
 ]

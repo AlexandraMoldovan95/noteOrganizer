@@ -2388,6 +2388,31 @@ check("normalize_note caps the checklist at the data choke point",
       len(_bomb["checklist"]) == _model.MAX_CHECKLIST_ITEMS)
 check("and the cap is far above any real list",
       _model.MAX_CHECKLIST_ITEMS >= 500)
+# ...and each item's length: one item is drawn as one wrapped label as tall as
+# its text, and a 490-character share code carried a 60,000-character item in
+# (2026-10-28, the final audit's third round). Cut where every route passes,
+# a template's own door included.
+from noteorganizer.core import sharing as _sharingCL
+from noteorganizer.core.storage import normalize_template as _ntCL
+_cl_long = "w" * 60000
+_cl_note = _model.normalize_note(
+    {"id": 1, "title": "long", "checklist": [{"text": _cl_long, "done": True},
+                                             {"text": "short", "done": False}]})
+_cl_tpl = _ntCL({"name": "t", "checklist": [{"text": _cl_long, "done": False}]})
+_cl_shared = _sharingCL.decode_share_code(_sharingCL.encode_share_code(
+    [{"id": 1, "title": "long", "checklist": [{"text": _cl_long, "done": False}]}]))
+_cl_in = _model.normalize_note(_cl_shared[0]) if _cl_shared else {"checklist": []}
+check("normalize_note, normalize_template and a share code keep a checklist "
+      "item to MAX_CHECKLIST_ITEM_CHARS (%s)"
+      % [len(i["text"]) for i in _cl_note["checklist"] + _cl_tpl["checklist"]
+         + _cl_in["checklist"]],
+      [i["text"] for i in _cl_note["checklist"]]
+      == ["w" * _model.MAX_CHECKLIST_ITEM_CHARS, "short"]
+      and _cl_note["checklist"][0]["done"] is True
+      and [len(i["text"]) for i in _cl_tpl["checklist"] + _cl_in["checklist"]]
+      == [_model.MAX_CHECKLIST_ITEM_CHARS] * 2)
+check("...and the limit is far above any real item",
+      _model.MAX_CHECKLIST_ITEM_CHARS >= 1000)
 
 # ---- The rescue copy survives a restart (T0-6) ----
 # _prev is written to disk by the save that shrank the note, but was not

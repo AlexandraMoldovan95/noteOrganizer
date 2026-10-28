@@ -4869,6 +4869,45 @@ check(f'the template preview shortens a {len(_tp_cell):,}-character cell in a fe
       and _tp_shown[0].endswith('…') and len(_tp_shown[0]) < 100
       and _tp_cell.startswith(_tp_shown[0][:-1]))
 
+# ---- THE TEMPLATE EDITOR'S BOXES HAVE LIMITS OF THEIR OWN ----
+# Round 3 of the final audit: the checklist's box took a paste of any length,
+# one item drawn as one label as tall as its text, and so did the template's
+# name and title. Each keeps a limit now, as the note's own title box does.
+def _tl_entries(w):
+    for c in w.winfo_children():
+        if isinstance(c, tk.Entry):
+            yield c
+        yield from _tl_entries(c)
+
+
+_tl_told = []
+_tl_real_status = app.set_status
+app.set_status = lambda text, *a, **k: _tl_told.append(text)
+_tl_kept = {}
+try:
+    app._edit_template(None, lambda: None)
+    app.update()
+    _tl_pop = app._mini_popup
+    _tl_boxes = list(_tl_entries(_tl_pop)) if _tl_pop is not None else []
+    for _tl_box, _tl_limit in zip(_tl_boxes[:3], (app.TITLE_MAX_LEN, app.TITLE_MAX_LEN,
+                                                   NO.MAX_CHECKLIST_ITEM_CHARS)):
+        _tl_box.delete(0, 'end')
+        _tl_box.insert(0, 'q' * (_tl_limit + 1))      # a paste past the limit
+        _tl_whole = _tl_box.get()
+        _tl_box.insert(0, 'q' * _tl_limit)            # one at the limit
+        _tl_box.insert('end', 'q')                    # and a key past it
+        _tl_kept[_tl_limit, len(_tl_kept)] = (len(_tl_whole), len(_tl_box.get()))
+    app.update()
+finally:
+    app.set_status = _tl_real_status
+    app._dismiss_mini_popup()
+    app.update()
+check(f'the template editor\'s name, title and checklist boxes refuse what '
+      f'passes their limits, and say so ({_tl_kept}; {_tl_told[:1]})',
+      len(_tl_kept) == 3
+      and all(v == (0, k[0]) for k, v in _tl_kept.items())
+      and any('A checklist item can be up to 2,000 characters' in t for t in _tl_told))
+
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")
 

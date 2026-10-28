@@ -390,6 +390,7 @@ from noteorganizer.core.model import (
     content_signature,
     sanitize_color,
     MAX_CHECKLIST_ITEMS,
+    MAX_CHECKLIST_ITEM_CHARS,
     MAX_ATTACHMENTS,
     DANGEROUS_EXTENSIONS,
     HIDDEN_IN_NAMES,
@@ -1261,6 +1262,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             lambda: self.set_status(
                 f"A note title can be up to {self.TITLE_MAX_LEN} characters"))
         return False
+
+    def _limit_entry(self, entry, limit, what):
+        """Keep *entry* to *limit* characters, as the title's box is kept: a
+        key or a paste past it is refused, and the status bar says why. A
+        value already longer -- a template from a backup -- still shortens.
+        Registered on the entry, so the command goes with it."""
+        def within(proposed, current):
+            if len(proposed) <= limit or len(proposed) < len(current):
+                return True
+            # Deferred, as for the title: Tk turns validation off if the
+            # command touches a widget while it runs.
+            self.after_idle(lambda: self.set_status(
+                f"{what} can be up to {limit:,} characters"))
+            return False
+        entry.configure(validate="key",
+                        validatecommand=(entry.register(within), "%P", "%s"))
 
     # How close to the cap the counter starts showing. Far enough out to be
     # a warning rather than a surprise, close enough that an ordinary title
@@ -12476,6 +12493,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                          font=("Segoe UI", 10), bg=self.colors["sidebar"],
                          fg=self.colors["text"], insertbackground=self.colors["text"])
         self._guard_entry_astral(entry)
+        # A paste of a whole page became one item, drawn as one label as
+        # tall as its text: the same limit every route to an item keeps.
+        self._limit_entry(entry, MAX_CHECKLIST_ITEM_CHARS, "A checklist item")
         entry.pack(side="left", fill="x", expand=True, ipady=4)
         entry.bind("<Return>", lambda e: self._add_checklist_item())
         self._add_paste_menu(entry)
@@ -12716,7 +12736,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         button it leaves the keyboard where it is: the person is on their
         way somewhere else."""
         var = getattr(self, "checklist_add_var", None)
-        text = var.get().strip() if var is not None else ""
+        text = var.get().strip()[:MAX_CHECKLIST_ITEM_CHARS] if var is not None else ""
         if not text:
             return
         self._get_checklist().append({"text": text, "done": False})
@@ -12725,7 +12745,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._render_checklist_items()
 
     def _add_checklist_item(self):
-        text = self.checklist_add_var.get().strip()
+        text = self.checklist_add_var.get().strip()[:MAX_CHECKLIST_ITEM_CHARS]
         if not text:
             return
         items = self._get_checklist()

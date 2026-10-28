@@ -15774,6 +15774,39 @@ check(f'Return on the sidebar\'s arrow folds the sidebar away and back '
       _ka_shown and _ka_folded and not app._sidebar_hidden)
 set_body('')
 
+# ---- A CHECKLIST ITEM HAS A LIMIT OF ITS OWN ----
+# Round 3 of the final audit: the "Add item" box was a paste route outside
+# every ceiling. A pasted page became one item, drawn as one wrapped label as
+# tall as its text -- on Linux the app died drawing it -- and a 490-character
+# share code carried one in. The box keeps MAX_CHECKLIST_ITEM_CHARS, and so
+# does every load (test_data_safety).
+app.new_note(); app.update()
+_cl_box = app.checklist_add_entry
+_cl_told = []
+_cl_real_status = app.set_status
+app.set_status = lambda text, *a, **k: _cl_told.append(text)
+try:
+    app.checklist_add_var.set('')
+    _cl_box.insert(0, 'y' * (NO.MAX_CHECKLIST_ITEM_CHARS + 1))   # a paste past it
+    _cl_whole = app.checklist_add_var.get()
+    _cl_box.insert(0, 'z' * NO.MAX_CHECKLIST_ITEM_CHARS)
+    _cl_box.insert('end', 'z')                                   # a key past it
+    _cl_at = len(app.checklist_add_var.get())
+    app._add_checklist_item()
+    app.update()
+finally:
+    app.set_status = _cl_real_status
+_cl_items = [len(it.get('text', '')) for it in app._get_checklist()]
+check(f'the checklist\'s Add box refuses what passes an item\'s limit, says so, '
+      f'and adds what fits ({len(_cl_whole)}, {_cl_at}, {_cl_items}; '
+      f'{_cl_told[:1]})',
+      _cl_whole == '' and _cl_at == NO.MAX_CHECKLIST_ITEM_CHARS
+      and _cl_items == [NO.MAX_CHECKLIST_ITEM_CHARS]
+      and any(f'{NO.MAX_CHECKLIST_ITEM_CHARS:,} characters' in t for t in _cl_told))
+app.checklist_add_var.set('')
+app._cancel_pending_autosave()
+app.new_note(); app.update()
+
 # ---- CLOSING SAVES SILENTLY (dead last: it destroys the app) ----
 # The quit-time "Unsaved notes" ask could only ever cover the last
 # half-second of typing; the app now trusts its own autosave and closes
