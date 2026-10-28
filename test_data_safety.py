@@ -2855,6 +2855,47 @@ check("...and its rescue copy holds what they replaced",
       and (_bk_note.get("_prev") or {}).get("pinned") is False
       and (_bk_note.get("_prev") or {}).get("overrides") == {})
 
+# A share code turning a series' repeat off kept the series' own days in
+# the note, out of sight, and its rescue copy without them: the next save
+# dropped the days with no copy anywhere, and Restore previous brought the
+# repeat back empty (2026-10-28, the final audit).
+_off_days = {"2026-10-12": {"body": "Leg day: squats"}}
+_off_note = _model_mod.normalize_note({
+    "id": 1, "title": "Gym", "body": "Warm up", "date": "2026-10-05",
+    "recurrence": {"freq": "weekly"}, "exceptions": ["2026-10-26"],
+    "overrides": copy_mod.deepcopy(_off_days)})
+_model_mod.apply_shared_update(_off_note, {
+    "title": "Gym", "body": "Warm up!", "date": "2026-10-05", "recurrence": {}})
+_off_prev = _off_note.get("_prev") or {}
+check("a share code that ends a repeat keeps the series' days in the rescue copy",
+      _off_prev.get("overrides") == _off_days
+      and _off_prev.get("exceptions") == ["2026-10-26"]
+      and (_off_prev.get("recurrence") or {}).get("freq") == "weekly")
+check("...and the note no longer holds them out of sight",
+      _off_note["overrides"] == {} and _off_note["exceptions"] == []
+      and _off_note["moved"] == {})
+check("...and the copy keeps them across a save and a reload",
+      (_model_mod.normalize_note(json.loads(json.dumps(_off_note)))
+       .get("_prev") or {}).get("overrides") == _off_days)
+_on_note = _model_mod.normalize_note({
+    "id": 1, "title": "Gym", "date": "2026-10-05",
+    "recurrence": {"freq": "weekly"}, "overrides": copy_mod.deepcopy(_off_days)})
+_model_mod.apply_shared_update(_on_note, {
+    "title": "Gym (v2)", "date": "2026-10-05", "recurrence": {"freq": "daily"}})
+check("a share code that keeps a repeat leaves this device's days in the note",
+      _on_note["overrides"] == _off_days
+      and "overrides" not in (_on_note.get("_prev") or {}))
+# The restore's own copy: putting back a version that did not repeat over
+# a series with days of its own.
+_rs_note = _model_mod.normalize_note({
+    "id": 1, "title": "Gym", "body": "Warm up", "date": "2026-10-05",
+    "recurrence": {"freq": "weekly"}, "overrides": copy_mod.deepcopy(_off_days)})
+_rs_copy = _model_mod.copy_replaced_by_restore(
+    _rs_note, {"title": "Gym", "body": "Warm up", "recurrence": {}})
+check("a restore that ends a repeat keeps the series' days in its copy",
+      _rs_copy is not None and _rs_copy.get("overrides") == _off_days
+      and (_rs_copy.get("recurrence") or {}).get("freq") == "weekly")
+
 # The restore's own list of what it can put back must be exactly what an
 # update can replace beyond the text -- a field added to one without the
 # other is the drift this closes.

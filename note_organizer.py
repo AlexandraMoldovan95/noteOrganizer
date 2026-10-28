@@ -379,6 +379,7 @@ from noteorganizer.core.model import (
     UPDATABLE_FROM_SHARED,
     UPDATABLE_FROM_BACKUP,
     PREV_TEXT_FIELDS,
+    DAY_FIELDS,
     note_richness,
     note_is_empty,
     reading_time,
@@ -20341,6 +20342,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         for key, _label in self._PREV_EXTRA_LABELS:
             if key in prev:
                 note[key] = copy.deepcopy(prev[key])
+        # A repeat this ends takes the series' days, which the copy above
+        # now holds. Left in the note, out of sight, the next save dropped
+        # them with no copy anywhere.
+        for key in DAY_FIELDS:
+            if replaced is not None and key in replaced and key not in prev:
+                note[key] = [] if key == "exceptions" else {}
         if note.get("category") not in CATEGORY_COLORS:
             note["category"] = "General"
         # The days it brings back follow the same rule: a day filed under
@@ -20676,6 +20683,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         text."""
         if not is_recurring(note) or recurrence.get("freq"):
             return False
+        return self._days_hold_own_text(note)
+
+    def _days_kept_off_repeat(self, note):
+        """Whether *note*, which does not repeat, still holds days with text
+        of their own. Every route that ends a repeat moves its days into the
+        rescue copy (days_to_rescue), so days still here came another way --
+        a file this app did not write -- and are in no other copy. The save
+        that clears a one-off note's days keeps these; they come back if the
+        repeat does."""
+        return not is_recurring(note) and self._days_hold_own_text(note)
+
+    @staticmethod
+    def _days_hold_own_text(note):
+        """Whether a day of *note* shows a title, text or comments of its
+        own."""
         # A day deleted a moment ago is not counted, though its Undo is still
         # on offer: the turn-off takes nothing of it -- the person deleted it,
         # and once the series is gone its Undo says the day can't come back
@@ -20749,7 +20771,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if rescued:
             note["_prev"] = self._whole_note_rescue_copy(note)
         if schedule:
-            if not recurrence["freq"]:
+            if not recurrence["freq"] and not self._days_kept_off_repeat(note):
                 note["exceptions"] = []
                 note["overrides"] = {}
                 note["moved"] = {}
@@ -21046,6 +21068,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # Restore previous brings the series back as it was.
                 days_lost = repeat_off_kept = self._repeat_off_loses_days(
                     note, recurrence)
+                days_kept = self._days_kept_off_repeat(note)
                 if days_lost:
                     note["_prev"] = self._turn_off_rescue_copy(note)
                 elif rescue_due:
@@ -21075,7 +21098,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 note["recurrence"] = recurrence
                 note["checklist"] = [dict(it) for it in self._get_checklist()]
                 note["updated"] = now
-                if not recurrence["freq"]:
+                if not recurrence["freq"] and not days_kept:
                     # No longer repeating: leftover per-occurrence data would
                     # be invisible clutter, so drop it -- a day's own text
                     # only once the rescue copy above holds it.

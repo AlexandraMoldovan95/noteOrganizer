@@ -29,6 +29,7 @@ from .recurrence import (
     expand_occurrences,
     OVERRIDABLE_FIELDS,
     MAX_OCCURRENCES,
+    is_recurring,
 )
 
 # ---- Note schema + one-time cleanup ----
@@ -188,6 +189,21 @@ UPDATABLE_FROM_BACKUP = UPDATABLE_FROM_SHARED + [
 # an update, and "↩ Restore previous" puts that back as well.
 PREV_TEXT_FIELDS = ("title", "body", "formatting", "paragraphs", "comments")
 
+# A series' own days, which hang on its repeat and mean nothing without one.
+DAY_FIELDS = ("exceptions", "overrides", "moved")
+
+
+def days_to_rescue(before, recurrence):
+    """The days of *before* that writing *recurrence* over it takes away:
+    none unless it repeats now and will not after, and only the kinds it
+    holds. Whatever ends a repeat keeps these in its rescue copy. A share
+    code turning the repeat off kept them only in the note, out of sight,
+    and the next save dropped them with no copy anywhere (2026-10-28, the
+    final audit). Copies, so the caller may clear the note's own."""
+    if not is_recurring(before) or is_recurring({"recurrence": recurrence}):
+        return {}
+    return {key: copy.deepcopy(before[key]) for key in DAY_FIELDS if before.get(key)}
+
 
 def apply_shared_update(note, incoming, fields=UPDATABLE_FROM_SHARED):
     """Overwrite *note*'s *fields* from *incoming* (normalised first),
@@ -209,9 +225,16 @@ def apply_shared_update(note, incoming, fields=UPDATABLE_FROM_SHARED):
     for field in fields:
         if field not in prev:
             prev[field] = copy.deepcopy(note.get(field, NOTE_DEFAULTS.get(field)))
+    # A share code's repeat turned off takes this device's days with it;
+    # a backup brings its own (UPDATABLE_FROM_BACKUP).
+    taken = ({} if "overrides" in fields or "recurrence" not in fields
+             else days_to_rescue(note, fresh["recurrence"]))
+    prev.update(taken)
     note["_prev"] = prev
     for field in fields:
         note[field] = copy.deepcopy(fresh[field])
+    for key in taken:
+        note[key] = copy.deepcopy(NOTE_DEFAULTS[key])
     note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     return note
 
@@ -277,20 +300,26 @@ def rescue_copy_due(old_title, old_body, title, body):
 
 def copy_replaced_by_restore(note, prev):
     """What "↩ Restore previous" keeps of the version it replaces, to be
-    the rescue copy in its turn -- its text, and each other field *prev*
-    brings back -- so the same button brings it back; spent, the copy took
-    everything written since the deletion with no way back. None when it
-    holds nothing the restored version lacks (an emptied note, words the
-    restored text contains): a button offering that back would mislead."""
+    the rescue copy in its turn: its text, each other field *prev* brings
+    back, and the series' days when the restore ends the repeat
+    (days_to_rescue; the caller clears the note's). None when it holds
+    nothing the restored version lacks: a button offering that would
+    mislead."""
     title = note.get("title") or ""
+    taken = {key: days for key, days in
+             (days_to_rescue(note, prev["recurrence"]) if "recurrence" in prev else {}).items()
+             if key not in prev}
     nothing_lost = ((note.get("body") or "").strip() in (prev.get("body") or "")
                     and (not title.strip() or title == (prev.get("title") or ""))
                     and all(prev[key] == note.get(key, NOTE_DEFAULTS.get(key))
-                            for key in prev if key not in PREV_TEXT_FIELDS))
+                            for key in prev if key not in PREV_TEXT_FIELDS)
+                    and not taken)
     if nothing_lost:
         return None
-    return {key: copy.deepcopy(note.get(key, NOTE_DEFAULTS.get(key)))
+    kept = {key: copy.deepcopy(note.get(key, NOTE_DEFAULTS.get(key)))
             for key in list(PREV_TEXT_FIELDS) + [k for k in prev if k not in PREV_TEXT_FIELDS]}
+    kept.update(taken)
+    return kept
 
 
 def shared_update_changes(note, incoming, fields=UPDATABLE_FROM_SHARED):

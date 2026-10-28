@@ -174,6 +174,8 @@
   "_date_and_repeat_to_store": "(self)",
   "_day_is_free": "(self, note, day, to)",
   "_day_mode": "(self)",
+  "_days_hold_own_text": "(note)",
+  "_days_kept_off_repeat": "(self, note)",
   "_days_left_in_trash": "(self, deleted_at)",
   "_delete_category": "(self, name, redraw)",
   "_delete_note": "(self, note, occurrence_date)",

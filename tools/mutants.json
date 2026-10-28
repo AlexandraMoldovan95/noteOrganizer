@@ -6278,5 +6278,63 @@
     "suites": ["test_data_safety"],
     "expect": "killed",
     "note": "Killed on Windows, where the app runs; elsewhere the profile folder is the AppData equivalent and these checks do not run."
+  },
+  {
+    "id": "DR01",
+    "about": "a share code ending a repeat leaves the series' days out of sight in the note, and out of the rescue copy",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    prev.update(taken)\n    note[\"_prev\"] = prev\n",
+        "replace": "    taken = {}\n    note[\"_prev\"] = prev\n"
+      }
+    ],
+    "must_fail": [
+      "a share code that ends a repeat keeps the series' days in the rescue copy",
+      "a share code that ends the repeat keeps the series' days in the rescue"
+    ],
+    "suites": [
+      "test_data_safety",
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR02",
+    "about": "a restore that ends a repeat keeps the version it replaces without the series' days",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "             if key not in prev}\n    nothing_lost",
+        "replace": "             if key not in prev and False}\n    nothing_lost"
+      }
+    ],
+    "must_fail": [
+      "a restore that ends a repeat keeps the series' days in its copy",
+      "a restore that ends the repeat keeps the days in the copy"
+    ],
+    "suites": [
+      "test_data_safety",
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR03",
+    "about": "the save of a one-off note drops days with text no copy holds",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                if not recurrence[\"freq\"] and not days_kept:\n",
+        "replace": "                if not recurrence[\"freq\"]:\n"
+      }
+    ],
+    "must_fail": [
+      "a one-off note keeps days with text no copy holds when it is saved"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
   }
 ]

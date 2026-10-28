@@ -1549,6 +1549,98 @@ check(f'...while a day differing only in its colour keeps the rescue copy '
       _ro_asked == [] and app.find_note(1)['recurrence']['freq'] == 'weekly'
       and (app.find_note(1).get('_prev') or {}).get('body') == 'AN OLDER VERSION')
 
+# ---- A REPEAT ENDED ANOTHER WAY KEEPS ITS DAYS TOO ----
+# A share code whose copy does not repeat, answered Update, and a Restore
+# previous of a version that did not repeat, both ended the repeat outside
+# the editor's save: the days stayed in the note out of sight, the rescue
+# copy had no room for them, and the next small edit's save dropped them
+# with no copy anywhere (2026-10-28, the final audit).
+_rd_uid = '11111111-2222-3333-4444-555555555555'
+
+
+def _rd_edit_and_restore():
+    """One small edit, its autosave, then Restore previous answered Yes:
+    note 1's repeat and day text after, and whether the words are on disk."""
+    app.open_note_in_tab(app.find_note(1)); app.update()
+    app.body_text.insert('end-1c', ' and stretch'); app.update()
+    app._flush_autosave(); app.update()
+    _after_edit = sorted(app.find_note(1).get('overrides') or {})
+    app.ask_yes_no = lambda *a, **k: True
+    try:
+        app.restore_previous_version(); app.update()
+    finally:
+        app.ask_yes_no = _ro_yes
+    n = app.find_note(1)
+    with open('notes_data.json', encoding='utf-8') as _f:
+        _disk = _f.read()
+    return (_after_edit, n['recurrence'].get('freq'),
+            NO.effective_note(n, '2026-09-14').get('body'), 'room 9' in _disk)
+
+
+_ro_fixture()
+app.notes[0]['uid'] = _rd_uid
+app.save_notes()
+app.open_note_in_tab(app.find_note(2)); app.update()
+_rd_code = NO.encode_share_code({'uid': _rd_uid, 'title': 'Standup',
+                                 'body': 'SERIES TEXT, fixed', 'date': '2026-09-07',
+                                 'recurrence': {}})
+app._themed_dialog = lambda *a, **k: 'update'
+try:
+    if not app._is_placed(app.import_panel):
+        app.toggle_import_panel(); app.update()
+    app.import_box.delete('1.0', 'end'); app.import_box.insert('1.0', _rd_code)
+    app._do_inline_import(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+_rd = app.find_note(1)
+check(f"a share code that ends the repeat keeps the series' days in the rescue "
+      f"copy, not out of sight in the note "
+      f"({sorted(_rd.get('overrides') or {})}, {sorted(_rd.get('_prev') or {})})",
+      _rd['recurrence'].get('freq') in (None, '') and not _rd.get('overrides')
+      and sorted((_rd.get('_prev') or {}).get('overrides') or {})
+      == ['2026-09-14', '2026-09-21'])
+_rd_back = _rd_edit_and_restore()
+check(f'...and after one small edit Restore previous brings the series back with '
+      f'every day\'s own text ({_rd_back})',
+      _rd_back[1:] == ('weekly', 'DAY TEXT: room 9', True))
+# Restore previous of a version that did not repeat, over a series with
+# days of its own: the copy it keeps in its turn holds the days.
+_ro_fixture()
+app.notes[0]['_prev'] = {'title': 'Standup', 'body': 'SERIES TEXT',
+                         'formatting': [], 'paragraphs': [], 'comments': '',
+                         'recurrence': {'freq': ''}}
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.restore_previous_version(); app.update()
+finally:
+    app.ask_yes_no = _ro_yes
+_rd = app.find_note(1)
+check(f"a restore that ends the repeat keeps the days in the copy it keeps in "
+      f"its turn ({sorted((_rd.get('_prev') or {}).get('overrides') or {})})",
+      not _rd['recurrence'].get('freq') and not _rd.get('overrides')
+      and sorted((_rd.get('_prev') or {}).get('overrides') or {})
+      == ['2026-09-14', '2026-09-21'])
+_rd_back = _rd_edit_and_restore()
+check(f'...and restoring back after an edit brings the series and its days '
+      f'({_rd_back})', _rd_back[1:] == ('weekly', 'DAY TEXT: room 9', True))
+# Days a file left on a note that does not repeat are in no other copy:
+# the save that clears a one-off note's days keeps these.
+app.new_note(); app.update()
+app.notes = [
+    NO.normalize_note({'id': 1, 'title': 'Standup', 'body': 'SERIES TEXT',
+                       'date': '2026-09-07', 'recurrence': {},
+                       'overrides': {'2026-09-14': {'body': 'DAY TEXT: room 9'}}}),
+    NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.body_text.insert('end-1c', ' more'); app.update()
+app.save_current_note(); app.update()
+check('a one-off note keeps days with text no copy holds when it is saved',
+      'room 9' in (app.find_note(1).get('overrides') or {})
+      .get('2026-09-14', {}).get('body', ''))
+
 # ---- "THIS OCCURRENCE ONLY" KEEPS WHAT A DAY CANNOT HOLD ----
 # The day's text goes to the day; a file attached and a tick made in the
 # same visit belong to the series -- a day has nowhere to keep either --
