@@ -8355,7 +8355,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                if not self._editor_state_has_content(self.capture_editor_state()):\n                    return True\n",
+        "find": "                if not (self._editor_state_has_content(self.capture_editor_state())\n                        or (pending is not None and pending.get().strip())):\n                    return True\n",
         "replace": "                if True:\n                    return True\n"
       }
     ],
@@ -9138,6 +9138,24 @@
     ],
     "suites": [
       "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR58",
+    "about": "the blank editor's question leaves the checklist's Add box out, so an item typed there is cleared by Ctrl+N",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                if not (self._editor_state_has_content(self.capture_editor_state())\n                        or (pending is not None and pending.get().strip())):\n",
+        "replace": "                if not (self._editor_state_has_content(self.capture_editor_state())):\n"
+      }
+    ],
+    "must_fail": [
+      "...and an item typed in its checklist's Add box is saved by Ctrl+N"
+    ],
+    "suites": [
+      "qa3"
     ],
     "expect": "killed"
   }

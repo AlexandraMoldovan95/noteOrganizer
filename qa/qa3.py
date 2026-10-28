@@ -3709,6 +3709,26 @@ check(f'typing in the blank editor a delete leaves is saved by any way out '
       and all(s[1] == (None, 0) for s in _be_saved))
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
+# ...an item typed in its checklist's Add box too: the blank editor's question
+# left that box out, and Ctrl+N cleared it (round 5).
+app._themed_dialog = lambda *a, **k: True
+try:
+    _be_doomed = NO.normalize_note({'id': 4251, 'title': 'Gone', 'body': 'old'})
+    app.notes = [_be_doomed]; app.save_notes()
+    app.open_note_in_tab(_be_doomed); app.update()
+    app.delete_current_note(); app.update()
+    _be_state = (app.selected_note_id, len(app.open_tabs))
+    app.checklist_add_var.set('pack the bags')
+    app.open_blank_tab(); app.update()
+    _be_items = [i.get('text') for n in json.load(open(NO.DATA_FILE, encoding='utf-8'))
+                 for i in (n.get('checklist') or [])]
+finally:
+    app._themed_dialog = _be_real[1]
+check(f'...and an item typed in its checklist\'s Add box is saved by Ctrl+N '
+      f'({_be_state}, {_be_items})',
+      _be_state == (None, 0) and _be_items == ['pack the bags'])
+app.new_note(); app.update()
+app.notes = []; app.save_notes()
 
 # ...and saves all the close saves (one list, _save_on_the_way_out). Its own
 # copy had drifted: a date typed short was left unsettled, so unsaved, and a

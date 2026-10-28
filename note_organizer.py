@@ -18788,8 +18788,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # The blank editor a delete leaves, or a start with no note open,
             # still takes typing, and the autosave just cancelled was all that
             # would have kept it: a click away within half a second lost it.
+            # An item typed in the checklist's Add box counts as typing too.
             try:
-                if not self._editor_state_has_content(self.capture_editor_state()):
+                pending = getattr(self, "checklist_add_var", None)
+                if not (self._editor_state_has_content(self.capture_editor_state())
+                        or (pending is not None and pending.get().strip())):
                     return True
             except Exception:
                 self._log_swallowed("flush: blank editor")
