@@ -621,7 +621,9 @@ def run_migrations(app_dir):
         # All or nothing for what says what the notebook is: nothing is
         # written here this run, so the next start tries again. ISSUES_LOG:
         # "Round three: one rescue copy, and files another program holds".
-        for name in ("notes_data.json",) + NOTEBOOK_COMPANIONS:
+        # The settings too: written at once by the start, they made this run
+        # a first one -- a welcome note, an "Export complete" over nothing.
+        for name in ("notes_data.json", "settings.json") + NOTEBOOK_COMPANIONS:
             hold_writes(os.path.join(app_dir, name))
         return (f"Your notebook in:\n{best_dir}\ncould not be brought in this "
                 "time — another program may be holding its files. Nothing is "

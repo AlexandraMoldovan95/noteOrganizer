@@ -9,6 +9,7 @@ empty default, after the unreadable bytes are kept aside -- and every
 writer goes through one atomic helper. docs/CODE_TOUR.md walks through it.
 """
 
+import copy
 import json
 import os
 import re
@@ -84,15 +85,38 @@ def json_from_text(text):
 
 # ---- Settings file (read/modify/write, so keys never clobber each other) ----
 
+#: The settings as last read or written whole this run, with the file they
+#: are of, for a read the system refuses later on (see load_settings).
+_settings_read = (None, None)
+
+
 def load_settings():
+    """The settings, read fresh: callers change a key and write it all back.
+    A read the system refuses (another program holding the file) is not
+    damage: at the start it is tried as the notes are, and a file never read
+    is not written that run; later the last good read stands in. Its
+    place-holder, written back with one key, replaced the person's categories,
+    theme and Trash window (2026-10-28, the final audit's fourth round)."""
+    global _settings_read
+    known = _settings_read[1] if _settings_read[0] == paths.SETTINGS_FILE else None
     if os.path.exists(paths.SETTINGS_FILE):
         try:
-            with open(paths.SETTINGS_FILE, "r", encoding="utf-8") as f:
-                data = json_from_text(f.read())
+            if known is None:
+                text = _read_data_file(paths.SETTINGS_FILE)
+            else:
+                with open(paths.SETTINGS_FILE, "r", encoding="utf-8") as f:
+                    text = f.read()
+            data = json_from_text(text)
             if isinstance(data, dict):
+                _settings_read = (paths.SETTINGS_FILE, data)
                 return data
-        except (*paths.JSON_UNREADABLE, IOError, OSError):
+        except (*paths.JSON_UNREADABLE, ValueError):
             pass
+        except OSError:
+            if known is not None:
+                return copy.deepcopy(known)
+            paths.hold_writes(paths.SETTINGS_FILE)
+            return {TRASH_WINDOW_UNKNOWN: True}
         # Reached only when the file exists but held nothing usable —
         # keep its bytes before the next save replaces them.
         _preserve_corrupt(paths.SETTINGS_FILE)
@@ -109,7 +133,11 @@ def save_settings(settings):
 
     Returns:
         ``(True, None)`` on success, or ``(False, exception)``."""
-    return _write_json_atomic(paths.SETTINGS_FILE, settings)
+    global _settings_read
+    ok, exc = _write_json_atomic(paths.SETTINGS_FILE, settings)
+    if ok:
+        _settings_read = (paths.SETTINGS_FILE, settings)
+    return ok, exc
 
 
 
@@ -591,9 +619,10 @@ def load_notes(version_change=None):
 
     settings = load_settings()
     # The one-time cleanup rewrites the file, so it waits out a launch that
-    # just declared the file unreadable: the startup notice is promising
-    # those bytes are still on disk (and an empty list has nothing to clean).
-    cleanup_due = not settings.get("cleanup_done") and not report["notes_file_corrupt"]
+    # just declared the file unreadable (the notice promises its bytes), and
+    # settings it could not read, where "not done" only means unknown.
+    cleanup_due = (not settings.get("cleanup_done") and not report["notes_file_corrupt"]
+                   and TRASH_WINDOW_UNKNOWN not in settings)
     backup_path = backup_notes_file() if cleanup_due else None
     if cleanup_due and backup_path is None and os.path.exists(paths.DATA_FILE):
         # The cleanup removes notes; with no copy of them made (a full disk)
@@ -707,10 +736,12 @@ def _write_json_atomic(path, value):
         ``(True, None)`` on success, or ``(False, exception)``.
     """
     if paths.writes_held(path):
+        # Worded for both holds: a file the start could not read, and one a
+        # first start could not bring in from an older notebook (no file yet).
         exc = PermissionError(
-            13, "Not saved: this file could not be read when Note Organizer "
-            "started, and no copy of it could be kept, so nothing is written "
-            "over it until Note Organizer is opened again", path)
+            13, "Not saved: Note Organizer could not open this file, or bring "
+            "it in, when it started, so nothing is written to it until Note "
+            "Organizer is opened again", path)
         _report_write_failure(path, exc)
         return False, exc
     tmp_path = path + ".tmp"

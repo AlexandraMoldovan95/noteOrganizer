@@ -898,7 +898,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # but not on a launch whose notes file could not be read: the list
         # is empty then, so no file a note still uses would be spared.
         self.trash = load_trash()
-        if self._corrupt_notes_report is None:
+        if not self._notes_file_unread():
             self.trash, purged = purge_expired_trash(self.trash, self.notes)
             if purged:
                 save_trash(self.trash)
@@ -1687,22 +1687,44 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 msg += (
                     "\n\nA copy of it could not be kept either — another "
                     "program may be holding the file. Note Organizer will "
-                    "not save anything over it in this session, so nothing "
-                    "you type now is kept. Close Note Organizer and open it "
-                    "again; if this comes back, back up notes_data.json "
-                    "from the data folder first."
+                    "not save anything over it in this session: anything "
+                    "you write now is kept only by Settings → Backup → "
+                    "Export. Close Note Organizer and open it again; if "
+                    "this comes back, back up notes_data.json from the data "
+                    "folder first."
                 )
             lines.append(msg)
 
         # Set by load_settings on an unreadable settings.json; said once,
         # and the Trash keeps everything until a window is chosen again.
-        if get_setting(TRASH_WINDOW_UNKNOWN) is True:
+        if _core_paths.writes_held(SETTINGS_FILE):
+            # Not damaged: refused, most likely held by another program. Its
+            # defaults stand in, and none of them is written over the file.
+            lines.append(
+                "Your settings file couldn't be opened — another program may "
+                "be holding it. Note Organizer uses its own defaults this "
+                "time, saves no setting until it is opened again, and removes "
+                "nothing from the Trash.")
+        elif get_setting(TRASH_WINDOW_UNKNOWN) is True:
             save_setting(TRASH_WINDOW_UNKNOWN, "told")
             lines.append(
                 "Your settings file couldn't be read, so Note Organizer "
                 "doesn't know how long you chose to keep deleted notes. "
                 "Nothing will be removed from the Trash until you choose "
                 "again in Settings → Recently deleted.")
+        # A Trash or templates file held the same way showed an empty page,
+        # and every delete answered "Is the disk full?" (round 4).
+        held = [what for path, what in ((TRASH_FILE, "the Trash (Recently deleted)"),
+                                        (TEMPLATES_FILE, "your templates"))
+                if _core_paths.writes_held(path)]
+        if held:
+            them = len(held) > 1
+            lines.append(
+                f"{' and '.join(held).capitalize()} couldn't be opened — another "
+                f"program may be holding {'them' if them else 'the file'} — so "
+                f"this time {'they show' if them else 'it shows'} empty, and "
+                "nothing is saved there until Note Organizer is opened again. "
+                "Nothing is lost.")
 
         # Recorded by _settle_background_work_at_close, said once.
         cut = get_setting("backup_cut_short", None, expect=dict)
@@ -1857,11 +1879,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._corrupt_notes_report = ""
         return notes
 
+    def _notes_file_unread(self):
+        """Whether this run holds none of the notes its file has: a start that
+        could not read it, or could not bring an older notebook in (its
+        writes held, paths.hold_writes). What the app holds then is only what
+        was written since -- a backup of it is not a backup of the notebook."""
+        return (getattr(self, "_corrupt_notes_report", None) is not None
+                or _core_paths.writes_held(DATA_FILE))
+
     def _maybe_seed_welcome_note(self):
         """A first install opens on the welcome note -- once ever: a notebook
         that had no notes file this launch, and was never offered it before.
         Remembered as the note last open, so the start-up reopen shows it."""
-        if not getattr(self, "_fresh_notebook", False):
+        # Not on a start that could not bring the notebook in: no notes file
+        # looked like a first install, and the note's refused save came first.
+        if not getattr(self, "_fresh_notebook", False) or self._notes_file_unread():
             return None
         if load_settings().get("welcome_offered"):
             return None
@@ -1913,6 +1945,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._notes_unsaved = not ok
         if ok:
             return True
+        # Never a dialog inside a sign-out: Windows waits on it, then ends the
+        # process anyway. The crash log has the failure (_report_write_failure).
+        if getattr(self, "_ending_session", False):
+            return False
+        if _core_paths.writes_held(DATA_FILE):
+            # A held run saves nothing until it is opened again: the advice
+            # below (make a change and it saves) is false there, and it came
+            # back at every pause in typing. Said once, then on the status line.
+            if getattr(self, "_held_save_said", False):
+                self.set_status("Not saved — nothing is saved in this session; "
+                                "Settings → Backup → Export keeps what you wrote")
+                return False
+            self._held_save_said = True
+            self.show_error(
+                "Nothing is saved in this session",
+                "When Note Organizer started it could not open your notes, so "
+                "it writes nothing over them until it is opened again. The "
+                "notes you already had are safe where they are.\n\n"
+                "What you write now stays only on screen. To keep it, use "
+                "Settings → Backup → Export: the backup holds what you wrote "
+                "in this session. Then close Note Organizer and open it again.")
+            return False
         self.show_error(
             "Couldn't save your notes",
             "Your notes could not be written to disk. What you changed since "
@@ -1999,14 +2053,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # A start that could not read the notes file holds none, and the
         # backup packs what the app holds: it said "Export complete" over an
         # empty notebook, on the very launch whose warning sends people here.
-        if self._corrupt_notes_report is not None:
+        # Notes written since are another matter: on a run that saves nothing
+        # the backup is their only way out, so it is made, and says so.
+        session_only = self._notes_file_unread()
+        if session_only and not self.notes:
             self.show_warning(
                 "Nothing to back up yet",
-                "Your notes file could not be read when Note Organizer "
-                "started, so the app holds none of your notes and a backup "
-                "made now would hold none either. The file itself is "
-                "untouched. Close Note Organizer and open it again; the "
-                "warning at the start says what was kept.")
+                "Your notes could not be opened when Note Organizer started, "
+                "so the app holds none of them and a backup made now would "
+                "hold none either. They are untouched where they are. Close "
+                "Note Organizer and open it again; the warning at the start "
+                "says what happened.")
             return
         default_name = f"NotesBackup_{datetime.now().strftime('%Y-%m-%d')}.zip"
         save_path = filedialog.asksaveasfilename(
@@ -2049,7 +2106,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     entries.append((full_path, os.path.join("attachments", filename)))
 
         self._export_state = {"current": 0, "total": len(entries), "done": False,
-                              "error": None, "save_path": save_path}
+                              "error": None, "save_path": save_path,
+                              "session_only": len(self.notes) if session_only else None}
         self.export_progress_bar.configure(maximum=max(len(entries), 1), value=0)
         self.export_progress_lbl.config(text=f"Exporting… 0 / {len(entries)} files")
         self.export_progress_frame.place(relx=0.5, rely=1.0, anchor="s", y=-14)
@@ -2128,6 +2186,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if state["error"]:
                 self.show_error("Export failed",
                                f"Couldn't create the backup file:\n{state['error']}")
+            elif state.get("session_only") is not None:
+                # Not remembered as the notebook's backup: it holds none of it.
+                self.show_info(
+                    "Backup of this session saved",
+                    f"Saved to:\n{state['save_path']}\n\n"
+                    f"It holds the {state['session_only']} note(s) written since "
+                    "Note Organizer started, and not your notes file, which "
+                    "could not be opened then. Close Note Organizer and open it "
+                    "again; '⬇ Import' brings this backup's notes in beside "
+                    "yours.")
             else:
                 self._remember_finished_export()
                 self.show_info(
@@ -11795,6 +11863,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if self._export_state is not None or self._import_state is not None:
             self.set_status("An export or import is already running — "
                             "let it finish first.")
+            return
+        # A run that saves no notes took the backup's Trash and templates and
+        # said "Import complete", its notes in no file (round 4 of the audit).
+        if _core_paths.writes_held(DATA_FILE):
+            self.show_warning(
+                "Import after reopening",
+                "When Note Organizer started it could not open your notes, so "
+                "nothing is saved in this session, and an import now would be "
+                "lost when the app closes. Close Note Organizer, open it "
+                "again, and import then.")
             return
         zip_path = filedialog.askopenfilename(
             title="Choose a notes backup (.zip) to import",
@@ -22067,7 +22145,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.show_warning(
                 "Nothing was deleted",
                 "The Trash could not be saved, so the note stays where it is. "
-                "Is the disk full? Details are in crash_log.txt.")
+                + ("Its file could not be opened when Note Organizer started, "
+                   "so nothing is saved to it until the app is opened again."
+                   if _core_paths.writes_held(TRASH_FILE) else
+                   "Is the disk full? Details are in crash_log.txt."))
             return None
         return self.trash[before:]
 

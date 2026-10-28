@@ -2520,8 +2520,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        if not getattr(self, \"_fresh_notebook\", False):\n            return None\n        if load_settings().get(\"welcome_offered\"):\n",
-        "replace": "        if load_settings().get(\"welcome_offered\"):\n"
+        "find": "        if not getattr(self, \"_fresh_notebook\", False) or self._notes_file_unread():\n            return None\n        if load_settings().get(\"welcome_offered\"):\n",
+        "replace": "        if self._notes_file_unread():\n            return None\n        if load_settings().get(\"welcome_offered\"):\n"
       }
     ],
     "must_fail": ["an emptied notebook gets no welcome note"],
@@ -3403,8 +3403,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/storage.py",
-        "find": "        return {TRASH_WINDOW_UNKNOWN: True}\n",
-        "replace": "        return {}\n"
+        "find": "        # write turns \"unknown\" into \"never chosen\" (TRASH_WINDOW_UNKNOWN).\n        return {TRASH_WINDOW_UNKNOWN: True}\n",
+        "replace": "        # write turns \"unknown\" into \"never chosen\" (TRASH_WINDOW_UNKNOWN).\n        return {}\n"
       }
     ],
     "must_fail": ["an unreadable settings file leaves the window not known"],
@@ -3574,8 +3574,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        if get_setting(TRASH_WINDOW_UNKNOWN) is True:\n",
-        "replace": "        if False:\n"
+        "find": "        elif get_setting(TRASH_WINDOW_UNKNOWN) is True:\n",
+        "replace": "        elif False:\n"
       }
     ],
     "must_fail": ["window not known: the next start says the Trash keeps everything"],
@@ -3936,7 +3936,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        if self._corrupt_notes_report is None:\n            self.trash, purged",
+        "find": "        if not self._notes_file_unread():\n            self.trash, purged",
         "replace": "        if True:\n            self.trash, purged"
       }
     ],
@@ -7711,7 +7711,7 @@
     "edits": [
       {
         "file": "noteorganizer/core/paths.py",
-        "find": "        for name in (\"notes_data.json\",) + NOTEBOOK_COMPANIONS:\n            hold_writes(os.path.join(app_dir, name))\n        return (",
+        "find": "        for name in (\"notes_data.json\", \"settings.json\") + NOTEBOOK_COMPANIONS:\n            hold_writes(os.path.join(app_dir, name))\n        return (",
         "replace": "        return None\n        return ("
       }
     ],
@@ -7730,7 +7730,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        if self._corrupt_notes_report is not None:\n            self.show_warning(\n                \"Nothing to back up yet\",",
+        "find": "        if session_only and not self.notes:\n            self.show_warning(\n                \"Nothing to back up yet\",",
         "replace": "        if False:\n            self.show_warning(\n                \"Nothing to back up yet\","
       }
     ],
@@ -8346,6 +8346,151 @@
     ],
     "must_fail": [
       "typing in the blank editor a delete leaves is saved by any way out"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR48",
+    "about": "a settings file the system refuses is taken for damage: copied aside, its place-holder handed to a read-modify-write",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "        except OSError:\n            if known is not None:\n                return copy.deepcopy(known)\n            paths.hold_writes(paths.SETTINGS_FILE)\n            return {TRASH_WINDOW_UNKNOWN: True}\n",
+        "replace": "        except OSError:\n            pass\n"
+      }
+    ],
+    "must_fail": [
+      "held for the whole start, it is not taken for damage",
+      "refused later on, the last good read stands in"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR49",
+    "about": "the start reads the settings file once, a moment's hold taken for good",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "            if known is None:\n                text = _read_data_file(paths.SETTINGS_FILE)\n            else:\n",
+        "replace": "            if False:\n                text = _read_data_file(paths.SETTINGS_FILE)\n            else:\n"
+      }
+    ],
+    "must_fail": [
+      "a settings file held for a moment at the start is read on a later try"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR50",
+    "about": "the one-time cleanup runs on settings the start could not read",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "                   and TRASH_WINDOW_UNKNOWN not in settings)\n",
+        "replace": "                   and True)\n"
+      }
+    ],
+    "must_fail": [
+      "held for the whole start, it is not taken for damage"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR51",
+    "about": "a first start that could not bring the notebook in still writes settings, and reads as a first run",
+    "edits": [
+      {
+        "file": "noteorganizer/core/paths.py",
+        "find": "        for name in (\"notes_data.json\", \"settings.json\") + NOTEBOOK_COMPANIONS:\n",
+        "replace": "        for name in (\"notes_data.json\",) + NOTEBOOK_COMPANIONS:\n"
+      }
+    ],
+    "must_fail": [
+      "a notes file held at the first start says the notebook could not come"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR52",
+    "about": "a held run raises the old save dialog, with advice that cannot work there, at every pause",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if _core_paths.writes_held(DATA_FILE):\n            # A held run saves nothing until it is opened again: the advice\n",
+        "replace": "        if False:\n            # A held run saves nothing until it is opened again: the advice\n"
+      }
+    ],
+    "must_fail": [
+      "a held run says once that nothing is saved, then only on the status line"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR53",
+    "about": "a held run imports a backup whose notes no file will keep",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if _core_paths.writes_held(DATA_FILE):\n            self.show_warning(\n                \"Import after reopening\",\n",
+        "replace": "        if False:\n            self.show_warning(\n                \"Import after reopening\",\n"
+      }
+    ],
+    "must_fail": [
+      "...refuses an import before a file is picked"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR54",
+    "about": "a failed save raises its dialog inside a Windows sign-out",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if getattr(self, \"_ending_session\", False):\n            return False\n        if _core_paths.writes_held(DATA_FILE):\n",
+        "replace": "        if _core_paths.writes_held(DATA_FILE):\n"
+      }
+    ],
+    "must_fail": [
+      "...and a Windows sign-out shows no dialog"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR55",
+    "about": "an unread start refuses to back up the notes written since it, their only way out",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if session_only and not self.notes:\n",
+        "replace": "        if session_only:\n"
+      }
+    ],
+    "must_fail": [
+      "...while notes written since it are backed up"
     ],
     "suites": [
       "qa3"

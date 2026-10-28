@@ -3529,21 +3529,85 @@ try:
     _xf_real_warn = app.show_warning
     app.show_warning = lambda *a, **k: _xf_said.append(a[0] if a else '')
     app._corrupt_notes_report = ''
+    _xf_had = app.notes
+    app.notes = []
     try:
         app.export_data(); app.update()
     finally:
+        app.notes = _xf_had
         app._corrupt_notes_report = None
         app.show_warning = _xf_real_warn
     check(f'a start that could not read the notes file refuses to export an empty '
           f'backup ({_xf_said})',
           'Nothing to back up yet' in _xf_said and not _xf_asked
           and app._export_state is None)
+    # ...but notes written since are another matter: on a run that saves
+    # nothing the backup is their only way out, and it says what it holds.
+    _xf_said.clear()
+    fd.asksaveasfilename = lambda **k: _xf_zip
+    app._corrupt_notes_report = ''
+    try:
+        app.export_data()
+        t0 = time.time()
+        while app._export_state is not None and time.time() - t0 < 10:
+            app.update()
+    finally:
+        app._corrupt_notes_report = None
+    with zipfile.ZipFile(_xf_zip) as _zf:
+        _xf_packed = json.loads(_zf.read('notes_data.json').decode('utf-8'))
+    check(f'...while notes written since it are backed up, said to be all it holds '
+          f'({_xf_said}, {len(_xf_packed)})',
+          _xf_said == ['Backup of this session saved']
+          and [n.get('id') for n in _xf_packed] == [n.get('id') for n in app.notes])
 finally:
     os.rmdir(NO.DATA_FILE + '.tmp')
     app.show_error, app.show_info = _xf_real
     app._notes_unsaved = False
     if os.path.exists(_xf_zip):
         os.remove(_xf_zip)
+app.notes = []; app.save_notes()
+
+# A run whose notes file is held (neither read nor copied at the start, or
+# not brought in from an older notebook) saves nothing. Every way out it gave
+# was closed: a dialog at every pause with advice that cannot work there, an
+# import that said "Import complete" with its notes in no file, a dialog
+# inside a Windows sign-out (round 4).
+_hr_said, _hr_status = [], []
+_hr_real = (app.show_error, app.show_warning, app.set_status)
+app.show_error = lambda *a, **k: _hr_said.append(a[0] if a else '')
+app.show_warning = lambda *a, **k: _hr_said.append(a[0] if a else '')
+app.set_status = lambda text, *a, **k: _hr_status.append(text)
+_hr_picked = []
+_hr_real_pick = fd.askopenfilename
+fd.askopenfilename = lambda **k: (_hr_picked.append(1), '')[1]
+NO._core_paths.hold_writes(NO.DATA_FILE)
+try:
+    app.new_note(); app.update()
+    for _hr_words in ('first words', ' and more'):
+        app.body_text.insert('end-1c', _hr_words)
+        app._flush_autosave(leaving=False); app.update()
+    _hr_saves = list(_hr_said)
+    _hr_said.clear()
+    app.import_data(); app.update()
+    _hr_import = list(_hr_said)
+    _hr_said.clear()
+    app._held_save_said = False          # as if not yet said: the sign-out's own
+    app.body_text.insert('end-1c', ' at the end')
+    app.on_session_end(); app.update()
+    _hr_session = list(_hr_said)
+finally:
+    NO._core_paths.WRITES_HELD.clear()
+    app.show_error, app.show_warning, app.set_status = _hr_real
+    fd.askopenfilename = _hr_real_pick
+    app._held_save_said = False
+check(f'a held run says once that nothing is saved, then only on the status line '
+      f'({_hr_saves}, {_hr_status[-1:]})',
+      _hr_saves == ['Nothing is saved in this session']
+      and any('nothing is saved in this session' in s for s in _hr_status))
+check(f'...refuses an import before a file is picked ({_hr_import}, {_hr_picked})',
+      _hr_import == ['Import after reopening'] and not _hr_picked)
+check(f'...and a Windows sign-out shows no dialog ({_hr_session})', _hr_session == [])
+app.new_note(); app.update()
 app.notes = []; app.save_notes()
 
 # Signing out of Windows, restarting or shutting down ends the process

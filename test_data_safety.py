@@ -652,7 +652,10 @@ try:
         check(f'a notes file held at the first start says the notebook could not '
               f'come, and nothing is written in its place ({_pn_msg[:60]!r})',
               'could not be brought in' in _pn_msg and not os.path.exists(_pn_notes)
-              and NO_paths.writes_held(_pn_notes))
+              and NO_paths.writes_held(_pn_notes)
+              # The settings too: written at once, they made the run a first
+              # one, with a welcome note and an "Export complete" over nothing.
+              and NO_paths.writes_held(os.path.join(_pn_home, 'settings.json')))
         NO_paths.WRITES_HELD.clear()
         _pn_msg = NO_paths.run_migrations(_pn_home) or ''
         check('...and the next start brings it in',
@@ -3908,6 +3911,82 @@ finally:
     _paths.WRITES_HELD.clear()
     _paths.configure(_hw_prev)
     shutil.rmtree(_hw_dir, ignore_errors=True)
+
+# ---- The settings file held the same way ----
+# Left out of round three's retries, a refused read took the place-holder for
+# the file: the cleanup ran again, and save_setting wrote the place-holder and
+# one key over the person's categories and theme (round 4).
+_hs_prev = _paths.APP_DIR
+_hs_real_open = open
+_hs_sleep = _storage.time.sleep
+_hs_real = {"categories": {"Work": "#123456"}, "theme": "dark_slate",
+            "cleanup_done": False}
+
+
+def _hs_refusing(times):
+    left = {"n": times}
+
+    def _open(path, *a, **k):
+        if (os.path.abspath(str(path)) == os.path.abspath(_paths.SETTINGS_FILE)
+                and left["n"] != 0):
+            left["n"] -= 1
+            raise PermissionError(13, "held by another program")
+        return _hs_real_open(path, *a, **k)
+    return _open
+
+
+def _hs_disk():
+    with _hs_real_open(_paths.SETTINGS_FILE, encoding="utf-8") as f:
+        return json.load(f)
+
+
+_hs_dirs = []
+try:
+    _storage.time.sleep = lambda s: None
+    for _hs_case in ("moment", "start", "later"):
+        _hs_dirs.append(tempfile.mkdtemp(prefix="nd_heldset_"))
+        _paths.configure(_hs_dirs[-1])
+        with _hs_real_open(_paths.SETTINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(_hs_real, f)
+        with _hs_real_open(_paths.DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump([{"id": 1, "title": "a"}, {"id": 2, "title": ""}], f)
+        if _hs_case == "later":
+            _storage.load_settings()                       # read whole once
+        _storage.open = _hs_refusing(1 if _hs_case == "moment" else -1)
+        try:
+            _hs_got = _storage.load_settings()
+            _hs_held = _paths.writes_held(_paths.SETTINGS_FILE)
+            _storage.save_setting("last_open_note_id", 7)
+            _hs_saved = _hs_disk().get("last_open_note_id") == 7
+            _hs_notes, _hs_report = (_storage.load_notes() if _hs_case == "start"
+                                     else (None, {}))
+        finally:
+            del _storage.open
+        _hs_aside = [p for p in os.listdir(_paths.APP_DIR) if p.startswith("settings_corrupt_")]
+        if _hs_case == "moment":
+            check("a settings file held for a moment at the start is read on a "
+                  "later try (%s, held %s)" % (sorted(_hs_got), _hs_held),
+                  _hs_got.get("theme") == "dark_slate" and not _hs_held and _hs_saved)
+        elif _hs_case == "start":
+            check("held for the whole start, it is not taken for damage: no copy "
+                  "aside, never written over, and the cleanup waits (%s, %s, %s)"
+                  % (_hs_aside, _hs_disk(), _hs_report.get("cleanup_report")),
+                  _hs_got == {_storage.TRASH_WINDOW_UNKNOWN: True} and _hs_held
+                  and not _hs_saved and not _hs_aside and _hs_disk() == _hs_real
+                  and _hs_report.get("cleanup_report") is None
+                  and len(_hs_notes) == 2)
+        else:
+            check("refused later on, the last good read stands in, and a setting "
+                  "saved keeps every other (%s)" % _hs_disk(),
+                  _hs_got.get("categories") == {"Work": "#123456"} and not _hs_held
+                  and _hs_saved and not _hs_aside
+                  and _hs_disk() == dict(_hs_real, last_open_note_id=7))
+        _paths.WRITES_HELD.clear()
+finally:
+    _storage.time.sleep = _hs_sleep
+    _paths.configure(_hs_prev)
+    for _d in _hs_dirs:
+        shutil.rmtree(_d, ignore_errors=True)
 
 # ---- Every file renamed into place is on the disk first ----
 # A power cut just after a rename can leave the new name pointing at bytes
