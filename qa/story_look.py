@@ -522,6 +522,39 @@ finally:
     del app.wait_variable
 _scene_took_its_own = True
 """),
+    # An attachment's row: a name too long for it gives way before its type,
+    # which always shows, and the name is a Tab stop with its ring (the final
+    # audit's third round). No other scene shows an attachment row.
+    ("28-an-attachment-row-with-a-long-name", """
+app._dismiss_mini_popup()
+app.hide_settings_page()
+app.notebook.select(app.TAB_NOTES)
+# Fixed dates: the editor's foot shows them, and today's would differ each run.
+app.new_note()
+app.update()
+app.notes[0]['created'] = app.notes[0]['updated'] = '2026-09-01 09:00:00'
+app.open_note_in_tab(app.notes[0])
+app.update()
+_long = ('Minutes of the quarterly planning meeting with the whole team, '
+         * 3 + 'final.pdf')
+app.current_attachments = [
+    {'filename': _long, 'stored_as': '20261028090000000000_' + _long},
+    {'filename': 'photo.jpg', 'stored_as': '20261028090000000001_photo.jpg'}]
+app.refresh_attachments_list()
+app.update()
+app.update_idletasks()
+app.editor_canvas.yview_moveto(1.0)
+app.update()
+app.focus_force()
+app.update()
+_names = [w for row in app.attachments_frame.winfo_children()
+          for part in row.winfo_children() for w in part.winfo_children()
+          if isinstance(w, tk.Label) and 'Minutes' in str(w.cget('text'))]
+if _names:
+    _names[0].focus_set()
+app.update()
+app.update_idletasks()
+"""),
 ]
 
 SEED = [
