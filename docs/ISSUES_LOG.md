@@ -2320,9 +2320,12 @@ checked, so a change of copy can no longer drop it unseen.
 `test_data_safety` (the marks on Windows); qa7 puts a raw crafted record in the editor and clicks
 each kind; mutants AX01–AX12.
 
-Round three found an edge. A label padded with blank-looking characters the hidden list does not
-name (U+2800, a Hangul filler) still pushed the real type past the row's end; a name too long for
-its row now gives way before its type, so ".rdp" always shows (mutant RT19).
+Round three found two edges. A label padded with blank-looking characters the hidden list does not
+name (U+2800 and U+3164 among them) still pushed the real type past the row's end; a name too long
+for its row now gives way before its type, so ".rdp" always shows (mutant RT19). And a backup
+cannot carry each file's own mark: a zip holds no streams, so a restore marks every file with the
+zip's mark only, and a backup kept on this computer or a USB stick restores its files unmarked.
+ARCHITECTURE said Windows' defences were kept; it now says where they are not.
 
 **Takeaway:** a label is a claim about a file; what a person sees is read from the file that will
 open. And where the safe kinds are few and the dangerous ones are anything else, list the safe

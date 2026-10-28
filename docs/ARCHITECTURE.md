@@ -233,6 +233,14 @@ out (`zone_mark_of`, `put_zone_mark` in `core/sharing.py`), as Explorer's own un
 attached by hand keeps its own, because `shutil.copy2` copies the stream on Windows. A disk that
 keeps no streams goes without, and the import carries on.
 
+What a backup cannot carry is each file's own mark. A zip holds no streams, and the export writes
+the attachments as plain files, so a restore marks every file with the zip's mark and nothing
+else. A backup the app wrote on this computer, or one kept on a USB stick or a network share,
+carries no mark, and the files it restores come back without theirs — including a download that
+was marked when it was attached. A `.docx` among them, which opens without a question, then
+opens outside Office's Protected View, and a program opened past the app's warning meets no
+SmartScreen check; the kinds that ask still ask.
+
 ### Recurrence model
 
 A recurring note is stored once — the "base" note carries a `recurrence` rule (frequency,
