@@ -7994,5 +7994,23 @@
       "qa6"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "RT13",
+    "about": "the template preview shortens a long cell a letter at a time again",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                            shown = self._ellipsize(\n                                seg, font, max(w_span - 2 * pad_x, 1))\n",
+        "replace": "                            shown = seg\n                            if font.measure(seg) > w_span - 2 * pad_x:\n                                while (len(shown) > 1 and\n                                       font.measure(shown + \"\\u2026\")\n                                       > w_span - 2 * pad_x):\n                                    shown = shown[:-1]\n                                shown += \"\\u2026\"\n"
+      }
+    ],
+    "must_fail": [
+      "the template preview shortens a"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
   }
 ]

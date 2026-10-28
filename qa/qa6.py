@@ -4830,6 +4830,45 @@ app.save_notes()
 app.refresh_note_list()
 _kv_settle()
 
+# ---- THE TEMPLATE EDITOR'S TABLE PREVIEW SHORTENS A LONG CELL BY HALVES ----
+# Round 3 of the final audit: a cell wider than its column was shortened a
+# letter at a time, the rest measured whole at each step, on every key typed
+# in the body: 2 s a key at 12 rows of 1,200 characters, minutes for one long
+# cell. Counted in measures asked of Tk, never in time.
+import tkinter.font as _tp_font
+_tp_cell = 'lorem ipsum ' * 500
+_tp_body = tk.Text(app)
+_tp_body.insert('1.0', '| Item | Notes |\n| --- | --- |\n| one | ' + _tp_cell + ' |')
+_tp_canvas = tk.Canvas(app)
+_tp_calls = [0]
+_tp_real_measure = _tp_font.Font.measure
+
+
+def _tp_count(self, *a, **k):
+    _tp_calls[0] += 1
+    return _tp_real_measure(self, *a, **k)
+
+
+_tp_font.Font.measure = _tp_count
+try:
+    app._measure_text_cache = {}        # the first drawing: nothing remembered
+    app._draw_template_table_preview(_tp_canvas, _tp_body)
+    _tp_first = _tp_calls[0]
+    app._draw_template_table_preview(_tp_canvas, _tp_body)
+    _tp_again = _tp_calls[0] - _tp_first
+finally:
+    _tp_font.Font.measure = _tp_real_measure
+_tp_shown = [_tp_canvas.itemcget(i, 'text') for i in _tp_canvas.find_all()
+             if _tp_canvas.type(i) == 'text'
+             and _tp_canvas.itemcget(i, 'text').startswith('lorem')]
+_tp_body.destroy(); _tp_canvas.destroy()
+check(f'the template preview shortens a {len(_tp_cell):,}-character cell in a few '
+      f'dozen measures, not one per letter ({_tp_first}, then {_tp_again} drawn '
+      f'again; shows {_tp_shown[0][:16] if _tp_shown else None!r}...)',
+      _tp_first <= 80 and _tp_again <= 4 and len(_tp_shown) == 1
+      and _tp_shown[0].endswith('…') and len(_tp_shown[0]) < 100
+      and _tp_cell.startswith(_tp_shown[0][:-1]))
+
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")
 

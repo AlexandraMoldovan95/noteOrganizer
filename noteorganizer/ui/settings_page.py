@@ -836,7 +836,9 @@ class SettingsPageMixin:
         if not blocks:
             return []
         lines = text.split("\n")
-        font = tkfont.Font(family="Consolas", size=9)
+        # One font for every redraw, so a width measured once is remembered
+        # (_measure_text): the preview is drawn again at every key.
+        font = self._measuring_font(("Consolas", 9))
         pad_x, row_h, y = 6, self.px(22), 2
         rule = hairline(self.colors)
         max_x = self.px(100)
@@ -856,7 +858,7 @@ class SettingsPageMixin:
                 if column and column.get("hidden"):
                     widths.append(self.px(8))
                     continue
-                longest = max((font.measure(seg) for r in rows
+                longest = max((self._measure_text(font, seg) for r in rows
                                if c < len(r)
                                and r[c] not in (core_tables.MERGE_LEFT,
                                                 core_tables.MERGE_UP)
@@ -902,13 +904,10 @@ class SettingsPageMixin:
                         segs = core_tables.cell_display_lines(value)
                         top = row_ys[r] + (cell_h - len(segs) * row_h) / 2
                         for li, seg in enumerate(segs):
-                            shown = seg
-                            if font.measure(seg) > w_span - 2 * pad_x:
-                                while (len(shown) > 1 and
-                                       font.measure(shown + "\u2026")
-                                       > w_span - 2 * pad_x):
-                                    shown = shown[:-1]
-                                shown += "\u2026"
+                            # Halved, not cut a letter at a time: a long cell
+                            # was measured whole once per letter, 2 s a key.
+                            shown = self._ellipsize(
+                                seg, font, max(w_span - 2 * pad_x, 1))
                             canvas.create_text(
                                 x + pad_x, top + li * row_h + row_h / 2,
                                 anchor="w",

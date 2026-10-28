@@ -2409,6 +2409,14 @@ nowhere after it.
   file, the backup's files and a share code are now read through one reader that mends what an
   escape spells. test_data_safety reads each with one in it; mutant IX23.
 
+**Round three** *(2026-10-28)*: the template editor's table preview shortened a cell wider than its
+column a letter at a time, measuring the rest whole at each step, and it is drawn again at every
+key: 2 s a key under 12 rows of 1,200-character cells, minutes for one cell of 99,000, which a
+single paste or a backup's template can hold. The editor's own grid had long since halved instead
+(`_ellipsize`, whose widths are remembered); the preview now does the same, with one font for every
+drawing so a width is remembered between keys. Each probe's drawing takes a hundredth of a second.
+qa6 counts the measures asked of Tk for a 6,000-character cell, never the time; mutant RT13.
+
 **Takeaway:** a limit on what comes in says nothing about what is then done with it. Ask what the
 work costs at the limit — a capped number squared is not capped — and count every door to it, not
 the one the limit was written for.
