@@ -166,8 +166,7 @@ def normalize_template(tpl):
 def load_templates():
     if os.path.exists(paths.TEMPLATES_FILE):
         try:
-            with open(paths.TEMPLATES_FILE, "r", encoding="utf-8") as f:
-                data = json_from_text(f.read())
+            data = json_from_text(_read_data_file(paths.TEMPLATES_FILE))
             if isinstance(data, list):
                 kept = []
                 for t in data:
@@ -205,8 +204,7 @@ def load_trash():
     and the real notes could not be restored."""
     if os.path.exists(paths.TRASH_FILE):
         try:
-            with open(paths.TRASH_FILE, "r", encoding="utf-8") as f:
-                data = json_from_text(f.read())
+            data = json_from_text(_read_data_file(paths.TRASH_FILE))
             if isinstance(data, list):
                 kept = [e for e in data if isinstance(e, dict)]
                 if len(kept) != len(data):
@@ -439,9 +437,32 @@ from noteorganizer.core.duplicates import (
 )
 
 
-# One implementation, shared with the pre-configure migration code in
-# paths.py (which cannot import this module back without a cycle).
-_preserve_corrupt = paths.preserve_corrupt_file
+def _preserve_corrupt(path):
+    """Keep an unreadable data file's bytes aside (paths.preserve_corrupt_file,
+    shared with the pre-configure migration). When even that fails, nothing
+    may write over the file this run (paths.hold_writes): its bytes are in no
+    other copy."""
+    kept = paths.preserve_corrupt_file(path)
+    if kept is None:
+        paths.hold_writes(path)
+    return kept
+
+
+def _read_data_file(path):
+    """The text of a data file read once at the start, tried three times half
+    a second apart when the system refuses it: a scanner or a sync tool holds
+    a file for a moment, and that moment read as an empty notebook."""
+    for attempt in range(3):
+        if attempt:
+            time.sleep(0.5)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read()
+        except UnicodeDecodeError:
+            raise
+        except OSError:
+            if attempt == 2:
+                raise
 
 
 def backup_notes_file():
@@ -526,8 +547,7 @@ def load_notes(version_change=None):
             # could not be made read the same as one never promised.
             report["version_backup_failed"] = report["version_backup_path"] is None
         try:
-            with open(paths.DATA_FILE, "r", encoding="utf-8") as f:
-                raw = json_from_text(f.read())
+            raw = json_from_text(_read_data_file(paths.DATA_FILE))
         except (*paths.JSON_UNREADABLE, IOError, OSError):
             raw = None
         if not isinstance(raw, list):
@@ -680,6 +700,13 @@ def _write_json_atomic(path, value):
     Returns:
         ``(True, None)`` on success, or ``(False, exception)``.
     """
+    if paths.writes_held(path):
+        exc = PermissionError(
+            13, "Not saved: this file could not be read when Note Organizer "
+            "started, and no copy of it could be kept, so nothing is written "
+            "over it until Note Organizer is opened again", path)
+        _report_write_failure(path, exc)
+        return False, exc
     tmp_path = path + ".tmp"
     try:
         text = json_text(value)

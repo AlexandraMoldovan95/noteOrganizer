@@ -349,7 +349,8 @@ while not _msgs5b and _time5.time() - _t05b < 3:
 _st5._preserve_corrupt = _real_pres5
 check('a failed preserve is announced with the do-not-save warning',
       bool(_msgs5b)
-      and 'Preserving a copy of it also failed' in _msgs5b[0][1])
+      and 'A copy of it could not be kept either' in _msgs5b[0][1]
+      and 'will not save anything over it' in _msgs5b[0][1])
 app5d.destroy()
 
 # ============================================================

@@ -1662,10 +1662,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     "for help with the preserved file."
                 )
             else:
+                # Nothing writes over it this run (storage._preserve_corrupt):
+                # said so, with the likeliest cause, a file another program
+                # holds, which opening the app again usually cures.
                 msg += (
-                    "\n\nPreserving a copy of it also failed, so do not "
-                    "save over it: close the app and back up "
-                    "notes_data.json from the data folder first."
+                    "\n\nA copy of it could not be kept either — another "
+                    "program may be holding the file. Note Organizer will "
+                    "not save anything over it in this session, so nothing "
+                    "you type now is kept. Close Note Organizer and open it "
+                    "again; if this comes back, back up notes_data.json "
+                    "from the data folder first."
                 )
             lines.append(msg)
 
@@ -1971,6 +1977,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.set_status("An export or import is already running — "
                             "let it finish first.")
             return
+        # A start that could not read the notes file holds none, and the
+        # backup packs what the app holds: it said "Export complete" over an
+        # empty notebook, on the very launch whose warning sends people here.
+        if self._corrupt_notes_report is not None:
+            self.show_warning(
+                "Nothing to back up yet",
+                "Your notes file could not be read when Note Organizer "
+                "started, so the app holds none of your notes and a backup "
+                "made now would hold none either. The file itself is "
+                "untouched. Close Note Organizer and open it again; the "
+                "warning at the start says what was kept.")
+            return
         default_name = f"NotesBackup_{datetime.now().strftime('%Y-%m-%d')}.zip"
         save_path = filedialog.asksaveasfilename(
             title="Export your notes to a backup file",
@@ -1996,11 +2014,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             entries.append((SETTINGS_FILE, "settings.json"))
         # A backup is only a backup if it carries the WHOLE notebook:
         # templates and the trash used to be silently left out, and moving
-        # to another device lost them.
-        if self.templates or os.path.exists(TEMPLATES_FILE):
-            entries.append((json_text(self.templates).encode("utf-8"), "templates.json"))
-        if self.trash or os.path.exists(TRASH_FILE):
-            entries.append((json_text(self.trash).encode("utf-8"), "trash.json"))
+        # to another device lost them. Held as nothing while the file is
+        # there, they travel as the file is: one this start could not read
+        # keeps its bytes in the backup instead of an empty list.
+        for held, path, arcname in ((self.templates, TEMPLATES_FILE, "templates.json"),
+                                    (self.trash, TRASH_FILE, "trash.json")):
+            if held:
+                entries.append((json_text(held).encode("utf-8"), arcname))
+            elif os.path.exists(path):
+                entries.append((path, arcname))
         if os.path.isdir(ATTACHMENTS_DIR):
             for filename in os.listdir(ATTACHMENTS_DIR):
                 full_path = os.path.join(ATTACHMENTS_DIR, filename)

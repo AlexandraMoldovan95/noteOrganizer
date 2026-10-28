@@ -623,6 +623,40 @@ try:
               f'({_pf_msg[-90:]!r})',
               'could not be copied' in _pf_msg and 'trash.json' in _pf_msg
               and 'held.bin' not in _pf_msg)
+        # The notes file itself held: all or nothing. It returned in silence,
+        # the app opened empty, its first save wrote a notes file, and the
+        # old notebook was never looked at again (2026-10-28, round three).
+        _pn_user = os.path.join(_pr_root, 'user_notes_held')
+        os.environ['USERPROFILE'] = _pn_user
+        os.environ['APPDATA'] = os.path.join(_pn_user, 'AppData', 'Roaming')
+        _pn_old, _pn_home = NO_paths.get_appdata_dir(), NO_paths.get_user_notebook_dir()
+        os.makedirs(_pn_old)
+        os.makedirs(_pn_home)
+        for _pn_name, _pn_text in (('notes_data.json', '[{"id": 1, "title": "A"}]'),
+                                   ('settings.json', '{"app_version": "0.97.405"}')):
+            with open(os.path.join(_pn_old, _pn_name), 'w', encoding='utf-8') as f:
+                f.write(_pn_text)
+
+        def _pn_held(src, dst, *a, **k):
+            if os.path.basename(src) == 'notes_data.json':
+                raise PermissionError('held by another program')
+            return _pf_copy2(src, dst, *a, **k)
+        NO_paths.shutil.copy2 = _pn_held
+        NO_paths.time.sleep = lambda s: None
+        try:
+            _pn_msg = NO_paths.run_migrations(_pn_home) or ''
+        finally:
+            NO_paths.shutil.copy2 = _pf_copy2
+            NO_paths.time.sleep = _pf_sleep
+        _pn_notes = os.path.join(_pn_home, 'notes_data.json')
+        check(f'a notes file held at the first start says the notebook could not '
+              f'come, and nothing is written in its place ({_pn_msg[:60]!r})',
+              'could not be brought in' in _pn_msg and not os.path.exists(_pn_notes)
+              and NO_paths.writes_held(_pn_notes))
+        NO_paths.WRITES_HELD.clear()
+        _pn_msg = NO_paths.run_migrations(_pn_home) or ''
+        check('...and the next start brings it in',
+              NO_paths.count_notes_in(_pn_notes) == 1 and 'Imported 1' in _pn_msg)
         os.environ['USERPROFILE'] = _pr_user
         os.environ['APPDATA'] = os.path.join(_pr_user, 'AppData', 'Roaming')
     # The second barrier: even listed as a leftover, the profile's notebook
@@ -3728,6 +3762,63 @@ for _limit, _small in (("MAX_DECOMPRESSED_BYTES", 1000), ("MAX_SHARE_CODE_CHARS"
         setattr(_sh, _limit, _saved_limit)
     check("no code is made past the import's %s either" % _limit,
           _answer.startswith("refused: ") and "too much for one code" in _answer)
+
+# ---- A notes file another program holds at the start ----
+# It read as unreadable, its copy failed for the same reason, and the first
+# keystroke's autosave replaced fifty notes with one (2026-10-28, the final
+# audit's third round). Read again a moment later, and never written over
+# while neither it nor a copy of it could be read.
+_hw_dir = tempfile.mkdtemp(prefix="nd_held_")
+_hw_prev = _paths.APP_DIR
+try:
+    _paths.configure(_hw_dir)
+    with open(_paths.DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump([{"id": 1, "title": "Important"}], f)
+    _hw_real_open = open
+    _hw_tries = {"n": 0}
+
+    def _hw_flaky(path, *a, **k):
+        if os.path.abspath(str(path)) == os.path.abspath(_paths.DATA_FILE) and _hw_tries["n"] < 1:
+            _hw_tries["n"] += 1
+            raise PermissionError(13, "held by another program")
+        return _hw_real_open(path, *a, **k)
+
+    _hw_sleep = _storage.time.sleep
+    _storage.open = _hw_flaky
+    _storage.time.sleep = lambda s: None
+    try:
+        _hw_notes, _hw_report = _storage.load_notes()
+    finally:
+        del _storage.open
+        _storage.time.sleep = _hw_sleep
+    check("a notes file held for a moment at the start is read on a later try",
+          [n.get("title") for n in _hw_notes] == ["Important"]
+          and not _hw_report.get("notes_file_corrupt"))
+    # Held for good: here a folder stands where the file is, which neither
+    # reads nor copies, on Windows and elsewhere alike.
+    os.remove(_paths.DATA_FILE)
+    os.makedirs(_paths.DATA_FILE)
+    _storage.time.sleep = lambda s: None
+    try:
+        _hw_notes, _hw_report = _storage.load_notes()
+    finally:
+        _storage.time.sleep = _hw_sleep
+    # The other program lets go: the notes are back as they were, and the
+    # first save of this run must still leave them alone.
+    os.rmdir(_paths.DATA_FILE)
+    with open(_paths.DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump([{"id": 1, "title": "Important"}], f)
+    _hw_ok, _hw_exc = _storage.save_notes([{"id": 1, "title": "Shopping"}])
+    with open(_paths.DATA_FILE, encoding="utf-8") as f:
+        _hw_disk = [n.get("title") for n in json.load(f)]
+    check(f"a notes file neither read nor copied is never written over this run "
+          f"({_hw_ok}, {_hw_disk})",
+          _hw_report.get("notes_file_corrupt") and _hw_report.get("corrupt_backup_path") is None
+          and not _hw_ok and _hw_disk == ["Important"])
+finally:
+    _paths.WRITES_HELD.clear()
+    _paths.configure(_hw_prev)
+    shutil.rmtree(_hw_dir, ignore_errors=True)
 
 # ---- Every file renamed into place is on the disk first ----
 # A power cut just after a rename can leave the new name pointing at bytes

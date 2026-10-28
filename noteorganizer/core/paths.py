@@ -76,6 +76,21 @@ from datetime import datetime
 #: are.
 JSON_UNREADABLE = (json.JSONDecodeError, UnicodeDecodeError, RecursionError)
 
+#: Data files this run must not write: one it could neither read nor keep a
+#: copy of. Another program holding the notes file at the start made it read
+#: as empty, its copy failed for the same reason, and the first keystroke's
+#: autosave replaced fifty notes with one (2026-10-28, the final audit).
+WRITES_HELD = set()
+
+
+def hold_writes(path):
+    """Refuse every write to *path* for the rest of this run."""
+    WRITES_HELD.add(os.path.normcase(os.path.abspath(path)))
+
+
+def writes_held(path):
+    return os.path.normcase(os.path.abspath(path)) in WRITES_HELD
+
 
 # ---- Storage location ----
 #
@@ -579,19 +594,17 @@ def run_migrations(app_dir):
     # settings.json there -- another program's -- used to be adopted
     # wholesale as this app's preferences.
     ours = os.path.exists(legacy_settings) and _looks_like_our_settings(legacy_settings)
+    settings_came = True
     if ours:
         _preserve_settings_if_unreadable(settings_path)
-        try:
-            shutil.copy2(legacy_settings, settings_path)
-        except (IOError, OSError):
-            pass
+        settings_came = _copy_whole(legacy_settings, settings_path, tries=3)
     elif (durable and os.path.exists(legacy_settings)
           and not os.path.exists(settings_path)):
         # The old app's own settings, unreadable: there the Trash's window
         # is unknown, and nothing leaves it. Copied as it is, it reads the
         # same way here and the start says so; left behind, the default 30
         # days emptied a Trash its owner kept longer (2026-10-28, the audit).
-        _copy_whole(legacy_settings, settings_path)
+        settings_came = _copy_whole(legacy_settings, settings_path, tries=3)
     # On the same evidence: a Trash or templates file beside another
     # program's notes is not ours to bring in. The old app's own store needs
     # no evidence -- its settings.json may be the file that cannot be read.
@@ -602,8 +615,18 @@ def run_migrations(app_dir):
     for d in get_legacy_dirs(app_dir):
         missing += _copy_attachments(d, attachments_path)
 
-    if not _copy_whole(os.path.join(best_dir, "notes_data.json"), notes_path):
-        return None
+    if not (settings_came
+            and _copy_whole(os.path.join(best_dir, "notes_data.json"), notes_path,
+                            tries=3)):
+        # All or nothing for what says what the notebook is: nothing is
+        # written here this run, so the next start tries again. ISSUES_LOG:
+        # "Round three: one rescue copy, and files another program holds".
+        for name in ("notes_data.json",) + NOTEBOOK_COMPANIONS:
+            hold_writes(os.path.join(app_dir, name))
+        return (f"Your notebook in:\n{best_dir}\ncould not be brought in this "
+                "time — another program may be holding its files. Nothing is "
+                "saved here until it can be: close Note Organizer and open it "
+                "again.")
 
     message = (
         f"Your notes now live in this folder:\n{app_dir}\n\n"

@@ -3505,6 +3505,23 @@ try:
           f'file lacks ({[n.get("body") for n in _xf_packed]}; said {_xf_said})',
           _xf_failed and 'Export complete' in _xf_said
           and any('Three hours of work' in (n.get('body') or '') for n in _xf_packed))
+    # A start that could not read the notes file holds none: the export said
+    # "Export complete" over an empty notebook (round three). It refuses.
+    _xf_said.clear()
+    _xf_asked = []
+    fd.asksaveasfilename = lambda **k: (_xf_asked.append(1), _xf_zip)[1]
+    _xf_real_warn = app.show_warning
+    app.show_warning = lambda *a, **k: _xf_said.append(a[0] if a else '')
+    app._corrupt_notes_report = ''
+    try:
+        app.export_data(); app.update()
+    finally:
+        app._corrupt_notes_report = None
+        app.show_warning = _xf_real_warn
+    check(f'a start that could not read the notes file refuses to export an empty '
+          f'backup ({_xf_said})',
+          'Nothing to back up yet' in _xf_said and not _xf_asked
+          and app._export_state is None)
 finally:
     os.rmdir(NO.DATA_FILE + '.tmp')
     app.show_error, app.show_info = _xf_real

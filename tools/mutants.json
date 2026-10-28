@@ -7617,5 +7617,96 @@
       "qa5"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "DR34",
+    "about": "a data file held for a moment at the start is read once, and taken for unreadable",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "        except OSError:\n            if attempt == 2:\n                raise\n",
+        "replace": "        except OSError:\n            if attempt == 0:\n                raise\n"
+      }
+    ],
+    "must_fail": [
+      "a notes file held for a moment at the start is read on a later try"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR35",
+    "about": "a data file neither read nor copied at the start is left writable",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "    if kept is None:\n        paths.hold_writes(path)\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a notes file neither read nor copied is never written over this run"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR36",
+    "about": "the writer ignores the files this run must not write",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "    if paths.writes_held(path):\n",
+        "replace": "    if False:\n"
+      }
+    ],
+    "must_fail": [
+      "a notes file neither read nor copied is never written over this run"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR37",
+    "about": "the first start's copy of an old notebook whose notes file is held returns in silence",
+    "edits": [
+      {
+        "file": "noteorganizer/core/paths.py",
+        "find": "        for name in (\"notes_data.json\",) + NOTEBOOK_COMPANIONS:\n            hold_writes(os.path.join(app_dir, name))\n        return (",
+        "replace": "        return None\n        return ("
+      }
+    ],
+    "must_fail": [
+      "a notes file held at the first start says the notebook could not"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed",
+    "note": "Killed on Windows, where the profile-folder migration checks run."
+  },
+  {
+    "id": "DR38",
+    "about": "a start that could not read the notes file exports an empty backup as complete",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if self._corrupt_notes_report is not None:\n            self.show_warning(\n                \"Nothing to back up yet\",",
+        "replace": "        if False:\n            self.show_warning(\n                \"Nothing to back up yet\","
+      }
+    ],
+    "must_fail": [
+      "a start that could not read the notes file refuses to export an empty"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
   }
 ]
