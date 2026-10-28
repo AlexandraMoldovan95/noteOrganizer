@@ -15,12 +15,13 @@ import math
 import os
 import re
 import uuid
+from collections import Counter
 from datetime import datetime
 
 from .categories import CATEGORY_COLORS
 from .formatting import (normalize_formatting, normalize_paragraphs,
                          clamp_spans_per_line)
-from .tables import with_caret_line, is_table_row
+from .tables import with_caret_line
 from .recurrence import (
     normalize_recurrence,
     parse_date,
@@ -313,18 +314,23 @@ def text_lost(old, new):
     return len(old) - start - end
 
 
-_PADDING = re.compile(r" {2,}|-{2,}")
+def words_lost(old, new):
+    """How many characters of the words in *old* are not in *new*, each word
+    counted as often as it appears, with the space it went with: the bars
+    rescue_copy_due sets count spaces too. A word moved, or a cell padded
+    wider, is not lost; a word with one letter changed is lost whole."""
+    gone = Counter(old.split())
+    gone.subtract(new.split())
+    return sum((len(word) + 1) * count for word, count in gone.items() if count > 0)
 
 
-def _without_padding(body):
-    """*body* with each table row's padding taken out: what a save loses is
-    measured in cells, not in the spaces and dashes lining them up. A cell
-    grown wider re-pads every row, and read as the whole table lost, its
-    copy replaced the rescue copy the note held (2026-10-28, the audit)."""
-    if "|" not in body:
-        return body
-    return "\n".join(_PADDING.sub(lambda m: m.group()[0], line) if is_table_row(line)
-                     else line for line in body.split("\n"))
+def _lost(old, new):
+    """What a save of *new* over *old* takes away: the smaller of two counts
+    that each never come out under it. text_lost read a column added to every
+    row, or a list renumbered, as the whole span lost; words_lost reads one
+    letter changed in a paragraph with no spaces (Chinese, Japanese) as the
+    paragraph lost (2026-10-28, the final audit's fourth round)."""
+    return min(text_lost(old, new), words_lost(old, new))
 
 
 def rescue_copy_due(old_title, old_body, title, body):
@@ -334,13 +340,12 @@ def rescue_copy_due(old_title, old_body, title, body):
     short note, 70% and 15 characters at least. Counted by what is gone, not
     by how much shorter the text got. ISSUES_LOG: "The safety net that
     measured the wrong thing"."""
-    old_body, body = _without_padding(old_body), _without_padding(body)
     old_len = len(old_title) + len(old_body)
     if old_len == 0:
         return False
     if len(title) + len(body) == 0:
         return True
-    lost = text_lost(old_title, title) + text_lost(old_body, body)
+    lost = _lost(old_title, title) + _lost(old_body, body)
     if lost > 40 and (lost >= old_len * 0.3 or lost >= 200):
         return True
     return lost >= 15 and lost >= old_len * 0.7

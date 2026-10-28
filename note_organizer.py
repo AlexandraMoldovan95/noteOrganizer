@@ -21073,11 +21073,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     # The text fields a rescue copy of text alone holds.
     _RESCUE_TEXT_KEYS = ("title", "body", "formatting", "paragraphs", "comments")
 
-    def _turn_off_rescue_copy(self, note):
+    def _turn_off_rescue_copy(self, note, takes_text=False):
         """The rescue copy a repeat's turn-off makes: *note* whole, its
         repeat and days included (_whole_note_rescue_copy) -- with the text
         of a rescue copy a save made while that turn-off waited, if the note
-        still holds it.
+        still holds it. *takes_text*: this save takes text away as well, and
+        the note's text as it stands is the newest, kept as any big delete's.
 
         A held save stores everything but the turn-off, a big delete among
         it, with its own copy of the text it took away. The turn-off came
@@ -21097,7 +21098,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if held is not None and existing is held:
             for key in self._RESCUE_TEXT_KEYS:
                 prev[key] = copy.deepcopy(held.get(key))
-        elif (isinstance(existing, dict)
+        elif (not takes_text and isinstance(existing, dict)
               and set(existing) <= set(self._RESCUE_TEXT_KEYS)
               and not rescue_copy_spent(note)):
             for key in self._RESCUE_TEXT_KEYS:
@@ -21423,7 +21424,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     note, recurrence)
                 days_kept = self._days_kept_off_repeat(note)
                 if days_lost:
-                    note["_prev"] = self._turn_off_rescue_copy(note)
+                    # One save that also clears the text: an older copy's text
+                    # in place of it left the newest words in no file (round 4).
+                    note["_prev"] = self._turn_off_rescue_copy(
+                        note, takes_text=rescue_due)
                 elif rescue_due:
                     note["_prev"] = {
                         "title": note.get("title", ""),

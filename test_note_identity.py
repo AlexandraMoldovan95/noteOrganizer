@@ -27,6 +27,7 @@ from noteorganizer.core.model import (
     rescue_copy_spent,
     split_by_identity,
     text_lost,
+    words_lost,
     new_note_uid,
     normalize_note,
 )
@@ -340,6 +341,11 @@ _para = "x" * 200 + "\n" + "an old paragraph of three hundred characters " * 6 +
 check('text_lost counts what neither end keeps',
       text_lost("abcdef", "abXYef") == 2 and text_lost("abc", "abc") == 0
       and text_lost("abc", "") == 3 and text_lost("", "new") == 0)
+check('words_lost counts the words gone, each with its space, as often as they '
+      'were there',
+      words_lost("milk eggs milk", "eggs milk") == 5
+      and words_lost("one two", "two  one") == 0
+      and words_lost("a b", "a B") == 2 and words_lost("", "new") == 0)
 check('a short note replaced by a new line keeps a copy (test case 692)',
       rescue_copy_due("", _short, "", "A new line"))
 check('a paragraph replaced by another as long keeps a copy',

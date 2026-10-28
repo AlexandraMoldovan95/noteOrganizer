@@ -1738,6 +1738,31 @@ check(f"a big delete, then the repeat turned off: the copy holds the deleted wor
       f"{(_rd_prev.get('recurrence') or {}).get('freq')})",
       (_rd_prev.get('body') or '').startswith('SERIES TEXT')
       and (_rd_prev.get('recurrence') or {}).get('freq') == 'weekly')
+# ...but when the turn-off's own save also clears the text, the words it takes
+# are the newest: the older copy's text in their place left them in no file
+# (round 4). Select all, type, pick "Does not repeat" and Save, in one save.
+_ro_fixture()
+app.notes[0]['body'] = 'OLD DRAFT ' + 'old words ' * 10
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'kept line')
+app.save_current_note(); app.update()
+app.body_text.insert('end-1c', ' NEW WORK ' + 'fresh words ' * 30)
+app.save_current_note(); app.update()
+app._themed_dialog = lambda *a, **k: True
+try:
+    app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'done')
+    app.rec_freq_var.set(NO.FREQ_LABELS[''])
+    app.on_recurrence_changed(); app.update()
+    app.save_current_note(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+_rd_prev = app.find_note(1).get('_prev') or {}
+check(f"a turn-off whose own save clears the text keeps that text, the newest, with "
+      f"the series ({(_rd_prev.get('body') or '')[:20]!r}, "
+      f"{(_rd_prev.get('recurrence') or {}).get('freq')})",
+      'NEW WORK' in (_rd_prev.get('body') or '')
+      and (_rd_prev.get('recurrence') or {}).get('freq') == 'weekly')
 
 # ---- "THIS OCCURRENCE ONLY" KEEPS WHAT A DAY CANNOT HOLD ----
 # The day's text goes to the day; a file attached and a tick made in the

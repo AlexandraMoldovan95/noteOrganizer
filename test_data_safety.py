@@ -3346,6 +3346,33 @@ check("a cell grown wider is no loss to keep a copy for",
       not _model_mod.rescue_copy_due("List", _pad_old, "List", _pad_new))
 check("...while a table emptied of its rows still is",
       _model_mod.rescue_copy_due("List", _pad_old, "List", "Shopping\n| Item | Qty |\n| --- | --- |"))
+# ...nor a change made to every row: a column added or an empty one removed,
+# a numbered list renumbered by a step put in, each read as the whole span
+# between its first and last change lost, and its copy replaced the one the
+# note held (2026-10-28, the final audit's fourth round).
+_col_old = "\n".join(["Pie"] + ["| %s | %d |" % (w, i) for i, w in enumerate(
+    ["flour", "butter", "sugar", "apples", "cinnamon", "lemon", "salt", "egg"])])
+_col_new = "\n".join(line + "  |" if line.startswith("|") else line
+                     for line in _col_old.split("\n"))
+_steps = "\n".join("%d. Step number %d of the recipe" % (i, i) for i in range(1, 13))
+_steps_in = _steps.replace("1. Step number 1 of the recipe",
+                           "1. Step number 1 of the recipe\n2. Wash the bowl")
+for i in range(12, 1, -1):
+    _steps_in = _steps_in.replace("\n%d. Step number %d" % (i, i),
+                                  "\n%d. Step number %d" % (i + 1, i))
+_cjk = "今天我们讨论了下个季度的计划以及每个人负责的部分和截止日期" * 3
+check("a column added, removed empty, or a list renumbered is no loss either "
+      "(%s)" % [_model_mod.rescue_copy_due("t", a, "t", b) for a, b in (
+          (_col_old, _col_new), (_col_new, _col_old), (_steps, _steps_in))],
+      not _model_mod.rescue_copy_due("t", _col_old, "t", _col_new)
+      and not _model_mod.rescue_copy_due("t", _col_new, "t", _col_old)
+      and not _model_mod.rescue_copy_due("t", _steps, "t", _steps_in))
+check("...nor one letter changed in a paragraph written without spaces",
+      not _model_mod.rescue_copy_due("t", _cjk, "t", _cjk.replace("季度", "月份", 1)))
+_col_full = "\n".join(line + " a long note about where to buy it |"
+                      if line.startswith("|") else line for line in _col_old.split("\n"))
+check("...while a column of words deleted still keeps one",
+      _model_mod.rescue_copy_due("t", _col_full, "t", _col_old))
 
 # The restore's own list of what it can put back must be exactly what an
 # update can replace beyond the text -- a field added to one without the

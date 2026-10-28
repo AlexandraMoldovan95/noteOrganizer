@@ -7597,16 +7597,17 @@
   },
   {
     "id": "DR31",
-    "about": "a table's padding counts as text lost, so one wider cell replaces the rescue copy",
+    "about": "what a save loses is the span between its first and last change, so a cell grown wider or a column added replaces the rescue copy",
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "    old_body, body = _without_padding(old_body), _without_padding(body)\n",
-        "replace": ""
+        "find": "    return min(text_lost(old, new), words_lost(old, new))\n",
+        "replace": "    return text_lost(old, new)\n"
       }
     ],
     "must_fail": [
-      "a cell grown wider is no loss to keep a copy for"
+      "a cell grown wider is no loss to keep a copy for",
+      "a column added, removed empty, or a list renumbered is no loss either"
     ],
     "suites": [
       "test_data_safety"
@@ -7619,7 +7620,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        elif (isinstance(existing, dict)\n              and set(existing) <= set(self._RESCUE_TEXT_KEYS)\n",
+        "find": "        elif (not takes_text and isinstance(existing, dict)\n              and set(existing) <= set(self._RESCUE_TEXT_KEYS)\n",
         "replace": "        elif (False and isinstance(existing, dict)\n              and set(existing) <= set(self._RESCUE_TEXT_KEYS)\n"
       }
     ],
@@ -8291,6 +8292,42 @@
     "must_fail": [
       "a one-off note keeps days with text no copy holds when it is saved",
       "turned off in the editor, then rewritten: every day's own text is still"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR45",
+    "about": "words_lost counts a word without its space, under the bars rescue_copy_due sets",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    return sum((len(word) + 1) * count for word, count in gone.items() if count > 0)\n",
+        "replace": "    return sum(len(word) * count for word, count in gone.items() if count > 0)\n"
+      }
+    ],
+    "must_fail": [
+      "words_lost counts the words gone, each with its space"
+    ],
+    "suites": [
+      "test_note_identity"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR46",
+    "about": "a turn-off whose own save clears the text keeps an older copy's text in place of the newest",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                        note, takes_text=rescue_due)\n",
+        "replace": "                        note, takes_text=False)\n"
+      }
+    ],
+    "must_fail": [
+      "a turn-off whose own save clears the text keeps that text, the newest"
     ],
     "suites": [
       "qa5"
