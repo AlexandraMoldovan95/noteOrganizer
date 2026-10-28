@@ -3583,9 +3583,11 @@ fd.askopenfilename = lambda **k: (_hr_picked.append(1), '')[1]
 NO._core_paths.hold_writes(NO.DATA_FILE)
 try:
     app.new_note(); app.update()
+    _hr_after = []
     for _hr_words in ('first words', ' and more'):
         app.body_text.insert('end-1c', _hr_words)
         app._flush_autosave(leaving=False); app.update()
+        _hr_after.append(_hr_status[-1] if _hr_status else '')
     _hr_saves = list(_hr_said)
     _hr_said.clear()
     app.import_data(); app.update()
@@ -3604,6 +3606,10 @@ check(f'a held run says once that nothing is saved, then only on the status line
       f'({_hr_saves}, {_hr_status[-1:]})',
       _hr_saves == ['Nothing is saved in this session']
       and any('nothing is saved in this session' in s for s in _hr_status))
+check(f'...the status line saying so from the first save, never "Auto-saved" '
+      f'({[s[:24] for s in _hr_after]})',
+      len(_hr_after) == 2
+      and all('nothing is saved in this session' in s for s in _hr_after))
 check(f'...refuses an import before a file is picked ({_hr_import}, {_hr_picked})',
       _hr_import == ['Import after reopening'] and not _hr_picked)
 check(f'...and a Windows sign-out shows no dialog ({_hr_session})', _hr_session == [])

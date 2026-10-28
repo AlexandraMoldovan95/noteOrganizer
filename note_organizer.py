@@ -1973,10 +1973,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if _core_paths.writes_held(DATA_FILE):
             # A held run saves nothing until it is opened again: the advice
             # below (make a change and it saves) is false there, and it came
-            # back at every pause in typing. Said once, then on the status line.
+            # back at every pause in typing. Said once, and on the status line
+            # the first time too: the save's own "Auto-saved" stood under it.
+            self.set_status("Not saved — nothing is saved in this session; "
+                            "Settings → Backup → Export keeps what you wrote")
             if getattr(self, "_held_save_said", False):
-                self.set_status("Not saved — nothing is saved in this session; "
-                                "Settings → Backup → Export keeps what you wrote")
                 return False
             self._held_save_said = True
             self.show_error(
