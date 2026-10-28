@@ -6278,8 +6278,8 @@
     "id": "SE01",
     "about": "a Windows sign-out saves nothing",
     "edits": [{"file": "note_organizer.py",
-               "find": "        self._ending_session = True\n        try:\n            self._save_on_the_way_out()\n",
-               "replace": "        self._ending_session = True\n        try:\n            self._cancel_pending_autosave()\n"}],
+               "find": "            self._save_on_the_way_out()\n        except Exception:\n            self._log_swallowed(\"session end: final save\")\n",
+               "replace": "            self._cancel_pending_autosave()\n        except Exception:\n            self._log_swallowed(\"session end: final save\")\n"}],
     "must_fail": ["a Windows sign-out saves the last typing, asking nothing"],
     "suites": ["qa3"],
     "expect": "killed"
@@ -6472,8 +6472,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        self._ending_session = True\n        try:\n            self._save_on_the_way_out()\n",
-        "replace": "        self._ending_session = True\n        try:\n            self._flush_autosave(leaving=False)\n"
+        "find": "            self._save_on_the_way_out()\n        except Exception:\n            self._log_swallowed(\"session end: final save\")\n",
+        "replace": "            self._flush_autosave(leaving=False)\n        except Exception:\n            self._log_swallowed(\"session end: final save\")\n"
       }
     ],
     "must_fail": [
@@ -7703,6 +7703,42 @@
     ],
     "must_fail": [
       "a start that could not read the notes file refuses to export an empty"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR39",
+    "about": "the end of a Windows session drops a template half written in its editor",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if callable(quiet):\n                try:\n                    quiet()\n",
+        "replace": "            if False:\n                try:\n                    quiet()\n"
+      }
+    ],
+    "must_fail": [
+      "a Windows sign-out keeps a template half written in its editor"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR40",
+    "about": "an import that finishes leaves the 'cut short' line of the one a sign-out stopped",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._take_back_cut_short(\"import\")\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "...and an import that then finishes takes that word back"
     ],
     "suites": [
       "qa3"

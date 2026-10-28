@@ -12253,6 +12253,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if unchanged:
             known_note += (f" {unchanged} note(s) were already here, "
                            "unchanged, and were skipped.")
+        # An import a cancelled sign-out stopped left word for the next
+        # start; this one finished, so that word is no longer true.
+        self._take_back_cut_short("import")
         self.show_info("Import complete",
                        f"Added {len(to_import) + len(copies)} note(s) from the backup."
                        f"{known_note}{skipped_note}{extras_note}")
@@ -22256,6 +22259,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         (2026-10-28, the final audit). See _settle_backups_at_session_end."""
         self._ending_session = True
         try:
+            # A popup holding typed work (the template editor) keeps it: the
+            # close asks it, and the session asks nothing.
+            pop = getattr(self, "_mini_popup", None)
+            quiet = getattr(pop, "_save_without_asking", None) if pop is not None else None
+            if callable(quiet):
+                try:
+                    quiet()
+                except Exception:
+                    self._log_swallowed("session end: popup's work")
             self._save_on_the_way_out()
         except Exception:
             self._log_swallowed("session end: final save")

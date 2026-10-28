@@ -2895,6 +2895,22 @@ try:
     _words = _next_start_says()
     check(f'the next start says Windows cut it short ({_words[:120]!r})',
           'qa3_held_import.zip' in _words and 'when Windows signed out' in _words)
+    # ...and a re-import that finishes takes that word back: it said "nothing
+    # was kept" after the person had done just what it asked (round three).
+    NO.save_setting('backup_cut_short',
+                    {'kind': 'import', 'file': _hb_zip, 'when': 'session'})
+    _sx.update(on=None)
+    _sx_real_dlg = app._themed_dialog
+    app._themed_dialog = lambda *a, **k: True
+    try:
+        app.import_data()
+        _sx_wait(lambda: app._import_state is None, 15)
+        app.update()
+    finally:
+        app._themed_dialog = _sx_real_dlg
+    check('...and an import that then finishes takes that word back',
+          NO.get_setting('backup_cut_short') is None
+          and any(n.get('title') == 'Film' for n in app.notes))
     # An export the process died in leaves its unfinished file beside the
     # target; the next start that says so takes it away.
     with open(_he_zip + '.tmp', 'wb') as _fh:
@@ -3602,6 +3618,39 @@ finally:
     app.ask_yes_no, app._themed_dialog, app.show_error = _se2_real
     app._notes_unsaved = False
 app.notes = []; app.save_notes()
+
+# ...and keeps a template half written in its editor: the close asks it, the
+# session asks nothing, and the work went with the session (round three).
+app.templates = [NO.normalize_template({'name': 'Week plan', 'body': 'Mon'})]
+NO.save_templates(app.templates)
+app.show_settings_page(); app.update()
+app.toggle_settings_panel('templates'); app.update()
+_st_asked = []
+_st_real = (app.ask_yes_no, app.ask_yes_no_cancel, app.show_warning)
+app.ask_yes_no = app.ask_yes_no_cancel = app.show_warning = (
+    lambda *a, **k: (_st_asked.append(a[0] if a else ''), None)[1])
+try:
+    app._edit_template(None, lambda: None); app.update()
+    _st_boxes = []
+
+    def _st_walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Entry):
+                _st_boxes.append(c)
+            _st_walk(c)
+    _st_walk(app._mini_popup)
+    _st_boxes[0].delete(0, 'end')
+    _st_boxes[0].insert(0, 'Week plan')
+    app.on_session_end(); app.update()
+    _st_names = [t.get('name') for t in NO.load_templates()]
+    check(f'a Windows sign-out keeps a template half written in its editor, beside '
+          f'the one that has its name, asking nothing ({_st_names}, asked {_st_asked})',
+          _st_names == ['Week plan', 'Week plan (2)'] and not _st_asked)
+finally:
+    app.ask_yes_no, app.ask_yes_no_cancel, app.show_warning = _st_real
+    app._dismiss_mini_popup()
+    app.hide_settings_page(); app.update()
+app.templates = []; NO.save_templates(app.templates)
 
 # A backup's Trash brings its window when this notebook never chose one:
 # the default 30 days then emptied, at the next start, a Trash its owner

@@ -1371,7 +1371,28 @@ class SettingsPageMixin:
                 return False
             return True                   # No: close without saving
 
+        def save_quietly():
+            """The end of a Windows session, which asks nothing: a changed
+            template is kept, under its own name when that is free, else
+            beside the one that has it -- never over it. It used to go with
+            the session (2026-10-28, the final audit)."""
+            if collect() == opened_snapshot:
+                return
+            new_tpl = collect()
+            taken = {t.get("name") for t in self.templates if t is not tpl}
+            base = new_tpl.get("name") or "Untitled template"
+            name, n = base, 2
+            while name in taken:
+                name, n = f"{base} ({n})", n + 1
+            new_tpl["name"] = name
+            if not is_new and tpl in self.templates:
+                self.templates[self.templates.index(tpl)] = new_tpl
+            else:
+                self.templates.append(new_tpl)
+            save_templates(self.templates)
+
         pop._confirm_dismiss = confirm_dismiss
+        pop._save_without_asking = save_quietly
         # Ctrl+S while the keyboard is in this editor (_shortcut_save_now).
         pop._save_from_keyboard = save
         if anchor_widget is not None and anchor_widget.winfo_exists():
