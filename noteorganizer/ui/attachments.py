@@ -331,11 +331,12 @@ class AttachmentsMixin:
                               relief="flat", cursor="hand2", bg=self.colors["card"],
                               fg=self.colors["text"], font=("Segoe UI", 9))
         close_btn.pack(side="right", ipadx=6, ipady=2)
-        tk.Button(header, text="Open externally",
-                  command=lambda: (self._dismiss_mini_popup(), self._open_externally(path)),
-                  relief="flat", cursor="hand2", bg=self.colors["accent"],
-                  fg=self._on_fill("accent"), font=("Segoe UI", 9)
-                  ).pack(side="right", padx=(0, 6), ipadx=6, ipady=2)
+        open_btn = tk.Button(
+            header, text="Open externally",
+            command=lambda: (self._dismiss_mini_popup(), self._open_externally(path)),
+            relief="flat", cursor="hand2", bg=self.colors["accent"],
+            fg=self._on_fill("accent"), font=("Segoe UI", 9))
+        open_btn.pack(side="right", padx=(0, 6), ipadx=6, ipady=2)
 
         img_lbl = tk.Label(overlay, image=frames[0], bg=self.colors["bg"])
         img_lbl.pack(padx=16, pady=(4, 16))
@@ -424,12 +425,31 @@ class AttachmentsMixin:
         if getattr(self, "_mini_popup_escape_bind", None) is None:
             self._mini_popup_escape_bind = self.bind(
                 "<Escape>", self._escape_backs_out, add="+")
-        # Opened from the keyboard (Space or Return on the row), it takes the
-        # keyboard on Close, and gives it back to the row when it goes.
+        # On Close however it was opened, and back on the way out: a frame
+        # over the window, not a window, so a click left the caret in the
+        # note under it and Tab walked there -- keys edited a hidden note.
         opener = getattr(self, "_key_pressing", None)
-        if opener is not None:
-            self.update_idletasks()        # placed now, so it can take it
-            close_btn.focus_set()
+        if opener is None:
+            try:
+                opener = self.nametowidget(
+                    str(self.tk.call("focus", "-lastfor", self)))
+            except (KeyError, tk.TclError):
+                opener = None
+        self.update_idletasks()            # placed now, so it can take it
+        close_btn.focus_set()
+        buttons = (close_btn, open_btn)
+
+        def cycle(button, step):
+            buttons[(buttons.index(button) + step) % len(buttons)].focus_set()
+            return "break"
+
+        # Tab and Shift+Tab walk its two buttons and come back round, as a
+        # dialog's answers do (<<PrevWindow>>: X11's ISO_Left_Tab).
+        for b in buttons:
+            b.bind("<Tab>", lambda e, b=b: cycle(b, 1))
+            for seq in ("<Shift-Tab>", "<<PrevWindow>>"):
+                b.bind(seq, lambda e, b=b: cycle(b, -1))
+        if opener is not None and opener is not self:
             path, place = str(overlay), self._place_of(opener)
             clicks = getattr(self, "_pointer_presses", 0)
             overlay.bind("<Destroy>", lambda e: (

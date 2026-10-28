@@ -4463,6 +4463,44 @@ check(f"...Return on a picture's shows it with the keyboard on Close ({_ka_previ
       f"{_ka_on_close}), Escape shuts it ({_ka_shut}), and the keyboard goes back "
       f"to the row ({_ka_back})",
       _ka_preview and _ka_on_close and _ka_shut and _ka_back)
+# A click's preview takes the keyboard too, and Tab stays on its two buttons:
+# a frame over the window, it left the caret in the note under it and Tab
+# walked there, so keys typed at a picture edited a note nobody could see.
+_kp_inside, _kp_pop, _kp_typed, _kp_open, _kp_back = [], None, None, False, False
+_kp_in_body = False
+try:
+    _kp_in_body = _take_focus(app.body_text)
+    app.body_text.tag_add('sel', '1.0', 'end-1c')
+    _qa_click(_ka_names[1])
+    _kv_settle()
+    _kp_pop = app._mini_popup
+    # Generated on the window, so Tk sends each key where the keyboard is.
+    for _kp_key in ('<KeyPress-Delete>', '<KeyPress-BackSpace>', '<KeyPress-x>'):
+        app.event_generate(_kp_key)
+        _kv_settle(2)
+    _kp_typed = app.body_text.get('1.0', 'end-1c')
+    for _kp_key in ['<Tab>'] * 3 + ['<Shift-Tab>'] * 3:
+        app.event_generate(_kp_key)
+        _kv_settle(2)
+        _kp_h = _ka_holder()
+        _kp_inside.append(_kp_h is not None and _kp_pop is not None
+                          and str(_kp_h).startswith(str(_kp_pop) + '.'))
+    _kp_open = _kp_pop is not None and app._mini_popup is _kp_pop
+    app.event_generate('<Escape>')
+    _kv_settle()
+    _kp_back = _ka_holder() is app.body_text
+finally:
+    app._dismiss_mini_popup()
+app._flush_autosave()
+_kp_saved = (app.find_note(801) or {}).get('body')
+check(f"a picture's preview opened by a click takes the keyboard, so keys "
+      f"typed at it leave the note alone ({_kp_in_body}, body {_kp_typed!r}, "
+      f"saved {_kp_saved!r}), and Escape gives it back ({_kp_back})",
+      _kp_in_body and _kp_pop is not None and _kp_typed == 'x'
+      and _kp_saved == 'x' and _kp_back)
+check(f"...and Tab and Shift+Tab walk its two buttons only ({_kp_inside}, "
+      f"still open {_kp_open})", len(_kp_inside) == 6 and all(_kp_inside)
+      and _kp_open)
 app.notebook.select(app.TAB_CALENDAR)
 app.cal_year, app.cal_month = 2026, 10
 app.render_calendar()

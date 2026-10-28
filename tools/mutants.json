@@ -7876,8 +7876,8 @@
     "edits": [
       {
         "file": "noteorganizer/ui/attachments.py",
-        "find": "            close_btn.focus_set()\n",
-        "replace": ""
+        "find": "        close_btn.focus_set()\n        buttons = (close_btn, open_btn)\n",
+        "replace": "        buttons = (close_btn, open_btn)\n"
       }
     ],
     "must_fail": [
@@ -8566,6 +8566,42 @@
     ],
     "suites": [
       "qa7"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RU04",
+    "about": "a picture's preview opened by a click leaves the keyboard in the note under it",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "        self.update_idletasks()            # placed now, so it can take it\n        close_btn.focus_set()\n",
+        "replace": "        self.update_idletasks()            # placed now, so it can take it\n        if getattr(self, \"_key_pressing\", None) is not None:\n            close_btn.focus_set()\n"
+      }
+    ],
+    "must_fail": [
+      "a picture's preview opened by a click takes the keyboard, so keys typed at it leave the note alone"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RU05",
+    "about": "Tab walks out of a picture's preview into the note under it",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "            b.bind(\"<Tab>\", lambda e, b=b: cycle(b, 1))\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "...and Tab and Shift+Tab walk its two buttons only"
+    ],
+    "suites": [
+      "qa6"
     ],
     "expect": "killed"
   }
