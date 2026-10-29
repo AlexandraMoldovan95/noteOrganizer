@@ -203,6 +203,7 @@ is in the table below as well.
 | [Round six: a restore on a run that saves nothing, and ceilings kept at the load](#round-six-a-restore-on-a-run-that-saves-nothing-and-ceilings-kept-at-the-load) | "A failed write leaves a duplicate at worst" promises a next write; a ceiling kept at the load is one the editor crosses; and two apps keep one thing in one place. | next |
 | [Round six: the keyboard out of a cell, and a list's pieces parked beside it](#round-six-the-keyboard-out-of-a-cell-and-a-lists-pieces-parked-beside-it) | A limit justified by one measurement holds only for what was measured; and a place is counted in the list, not in the piece it happens to be drawn in. | next |
 | [The test that took the computer down](#the-test-that-took-the-computer-down) | A test is a guest on the computer it runs on: it never sizes itself from a bound a mutant can change, and the runner holds the ceiling the test forgot. | next |
+| [Round seven: a copy taken for the series', and what one slot holds](#round-seven-a-copy-taken-for-the-series-and-what-one-slot-holds) | A rule about "the copy" says which copy, by what it holds; a rule inside the shaping of a note runs in every comparison too; each new reason to fill one slot is a new way to empty it. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -2800,6 +2801,66 @@ close finished an export's work without the poll's knowledge of what the export 
 run whose writes are all refused there is no next write, so the lists in memory must stay what the
 files are. A ceiling kept at the load is a ceiling the editor crosses: every door that adds must
 ask it. And when two programs keep one notebook, a thing they both keep lives in one place.
+
+### Round seven: a copy taken for the series', and what one slot holds
+
+*(2026-10-29 · found by the final audit's seventh break-it round, which attacked round six's fixes
+by name; this is its data half)*
+
+**Symptom:**
+- **The same backup twice, and the earlier version gone.** After a backup's Update of a repeating
+  note, importing the same backup again said the note was "edited elsewhere", and the default
+  Update replaced the only earlier version: the series, with each day's own text, was in no file.
+  This is the loss "Importing the same backup twice, the second time" was about, come back.
+- **Two letters of comments cleared, a deleted body gone.** A big delete of a note's body kept a
+  rescue copy. Then clearing a comment of two letters made a new copy of the note as it stood,
+  over the first: the deleted words were in no file, and nothing said so.
+- **Restore previous over new comments.** Comments typed after a big delete were written over by
+  "↩ Restore previous", with no copy of them kept and the question saying nothing (found on
+  Android; the same rule here).
+- **A sign-out during an import's question.** The import's files, already copied, and its
+  unpacked backup stayed behind, and the next start said nothing.
+- **Smaller:** a start that set an unreadable notes file aside deleted attached files its unread
+  notes use; the retry for a lock file another program holds never ran on Windows; a full
+  checklist's Add box advised "Delete an item to make room" after leaving the note had cleared the
+  box; a held templates file's backup kept the file's template over one the session made again
+  under its name; and a sign-out at 1,000 templates wrote one the next start cut, unsaid. A series
+  the phone's 0.12.0 had turned off and back on, its days in the copy alone, never took them back.
+
+**Root cause:** round six taught a note's read to take a turned-off series' days back from its
+rescue copy, and told "the series' own copy" from an update's by whether it repeats. An update's
+copy of a series repeats too. And the read is not only the load: the update's own comparison
+normalises the note, so the copy's days made an unchanged note read as changed. The comments, now
+a trigger for the one slot, filled it over a body's copy as no edit of them had before. The
+restore weighed the texts it writes over by a list that left one out. And the import cleared its
+"running" state before its questions, so a session that ended then found nothing to settle.
+
+**Fix:**
+- Days come back only from a series' own copy, told by its shape: a turn-off's copy, on either app,
+  holds the text, the date, the repeat and the days, and none of what only an update's copy holds
+  (`_series_own_copy`). The update's comparison reads the note without its copy. A series turned
+  back on as it was takes its days back when the copy is that same series.
+- A save due for the comments alone, over a copy the note does not hold again, keeps that copy's
+  words and takes only the comments, in a turn-off's save too, as the turn-off already kept a
+  waiting copy's words.
+- `copy_replaced_by_restore` weighs the comments, and the styles of the same words.
+- An import's questions are known to the end of a session (`_import_asking`): word for the next
+  start, which takes its files and unpacked backup out (`_drop_left_import`, only bare names in
+  attachments and only a `notes_import_` folder in the temporary folder, since settings.json is a
+  file another program can write); an answer takes the word back.
+- A notes file set aside unreadable keeps every attached file, as a held one does
+  (`_UNREAD_AT_LOAD`). The lock's retry reads `EACCES`, which is how `open()` reports a sharing
+  violation; the test holds the file for real. Words a full list's Add box could not take wait
+  for their note, and the window's close asks before losing them. A held templates file's backup
+  carries both versions of a name, the session's first. A sign-out at 1,000 templates writes none
+  more, and the next start says so.
+- `test_data_safety`, qa3, qa5; mutants DR95–DR110, with DR02, DR40, DR46, DR65, DR74, DR77 and
+  DR92 re-aimed.
+
+**Takeaway:** a rule about "the copy" has to say which copy. Asked by whether it repeats, an
+update's copy of a series passed for the series' own; asked by what it holds, it does not. And a
+rule that runs inside `normalize_note` runs wherever a note is shaped, the comparisons included.
+One slot holds one version: each new reason to fill it is a new way to empty it.
 
 ### Round six: the keyboard out of a cell, and a list's pieces parked beside it
 
