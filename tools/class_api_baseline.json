@@ -404,6 +404,7 @@
   "_holds_unspent_rescue": "(note)",
   "_icon_button": "(self, parent, kind, command=None, danger=False, bg_key='card', tip=None, removes_row=False, takes_event=False, keys=None)",
   "_icon_files": "(self)",
+  "_in_sight": "(self, widget)",
   "_insert_emoji_from_toolbar": "(self)",
   "_insert_table": "(self, rows, columns)",
   "_insert_title": "(self, text)",

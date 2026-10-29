@@ -10729,6 +10729,60 @@
     "expect": "killed"
   },
   {
+    "id": "RZ07",
+    "about": "a limited box on the note's page takes the status line for seen because it is mapped, scrolled out of sight",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if self._in_sight(self.status_lbl):\n",
+        "replace": "            if self.status_lbl.winfo_viewable():\n"
+      }
+    ],
+    "must_fail": [
+      "the note's page says a paste cut to fit where it is seen"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RZ08",
+    "about": "the title says a paste it shortened on the status line alone, out of sight",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self._say_by_the_box(\n                self.title_entry,\n                f\"Pasted title shortened to {self.TITLE_MAX_LEN} characters\")\n",
+        "replace": "            self.set_status(\n                f\"Pasted title shortened to {self.TITLE_MAX_LEN} characters\")\n"
+      }
+    ],
+    "must_fail": [
+      "the note's page says a paste cut to fit where it is seen"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RZ10",
+    "about": "a title pasted with its line break is weighed as copied, and called shortened",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if len(whole) > len(clipped):\n",
+        "replace": "        if len(pasted) > len(clipped):\n"
+      }
+    ],
+    "must_fail": [
+      "a title pasted with its line break, or a double space, is not said to be shortened"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
     "id": "DR91",
     "about": "a note read keeps a turned-off series' own-text days only in its rescue copy, as the phone wrote it",
     "edits": [

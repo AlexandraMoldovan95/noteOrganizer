@@ -1268,7 +1268,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Deferred: Tk turns validation off if the validate command touches
         # a widget while it runs, and the status bar is a widget.
         self.after_idle(
-            lambda: self.set_status(
+            lambda: self._say_by_the_box(
+                self.title_entry,
                 f"A note title can be up to {self.TITLE_MAX_LEN} characters"))
         return False
 
@@ -1326,19 +1327,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _say_by_the_box(self, box, text):
         """*text* on the status line -- and, while that is out of sight, on
-        the line the popup *box* is in keeps for such words (``_say_here``).
-        The template editor opens from Settings, and the status line, inside
-        the note's page, stood hidden behind it: a paste into its name was
-        cut without a word."""
+        the line the popup *box* is in keeps for such words (``_say_here``),
+        or in a banner over the window. The template editor opens from
+        Settings, and the status line, inside the note's page, stood hidden
+        behind it: a paste into its name was cut without a word. On the note's
+        page it stands at the foot of the scrolled editor, mapped and out of
+        sight at ordinary sizes, and a paste into the checklist's Add box was
+        cut without a word there too (_in_sight)."""
         self.set_status(text)
         try:
-            if self.status_lbl.winfo_viewable():
+            if self._in_sight(self.status_lbl):
                 return
             say_here = getattr(box.winfo_toplevel(), "_say_here", None)
         except tk.TclError:
             return
         if say_here is not None:
             say_here(text)
+        else:
+            # Not over an Undo still on offer: the words stay on the line.
+            self._show_toast(text, kind="info", yield_to_action=True)
 
     # How close to the cap the counter starts showing. Far enough out to be
     # a warning rather than a surprise, close enough that an ordinary title
@@ -1480,14 +1487,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pass
         room = self.TITLE_MAX_LEN - len(self.title_entry.get())
         if room <= 0:
-            self.set_status(
+            self._say_by_the_box(
+                self.title_entry,
                 f"A note title can be up to {self.TITLE_MAX_LEN} characters")
             return "break"
-        clipped = " ".join(pasted.split())[:room]
+        # Weighed as it goes in, on one line: weighed as copied, a line
+        # copied with its line break, or CR LF, read as shortened.
+        whole = " ".join(pasted.split())
+        clipped = whole[:room]
         self.title_entry.insert("insert", clipped)
         self._refresh_title_count()
-        if len(pasted) > len(clipped):
-            self.set_status(
+        if len(whole) > len(clipped):
+            self._say_by_the_box(
+                self.title_entry,
                 f"Pasted title shortened to {self.TITLE_MAX_LEN} characters")
         return "break"
 

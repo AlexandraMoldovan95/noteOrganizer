@@ -2433,6 +2433,32 @@ class DialogsMixin:
         except (tk.TclError, AttributeError, ValueError, TypeError):
             pass
 
+    def _in_sight(self, widget):
+        """Whether *widget* stands where the person can see it: mapped, and
+        wholly inside the view of every canvas it is scrolled on, as
+        _bring_into_sight would leave it. winfo_viewable() alone means mapped:
+        the note page's status line, at the foot of the scrolled editor, is
+        mapped while far below the view at the window's own sizes."""
+        try:
+            if not widget.winfo_viewable():
+                return False
+            child = widget
+            while child is not None and not isinstance(child, (tk.Tk, tk.Toplevel)):
+                parent = child.master
+                box = (self._drawn_box(parent, child)
+                       if isinstance(parent, tk.Canvas) and isinstance(child, tk.Frame)
+                       else None)
+                if box is not None:
+                    top = box[1] + self._offset_within(widget, child, "y")
+                    shown = parent.canvasy(0)
+                    if (top < shown or top + widget.winfo_height()
+                            > shown + parent.winfo_height()):
+                        return False
+                child = parent
+            return True
+        except (tk.TclError, AttributeError, ValueError, TypeError):
+            return False
+
     @staticmethod
     def _canvas_window_item(canvas, child):
         for item in canvas.find_all():

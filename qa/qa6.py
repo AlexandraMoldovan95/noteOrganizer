@@ -5203,6 +5203,85 @@ check(f"the template editor, opened from Settings, says in itself that a paste "
           f'{app.TITLE_MAX_LEN} characters']
       and _lw_seen.get('ten lines that fit') == (1999, 0)
       and _lw_seen.get('eleven lines, shortened') == (NO.MAX_CHECKLIST_ITEM_CHARS, 0, 10))
+
+# Round 7: on the note's page the status line stands at the foot of the
+# scrolled editor -- mapped, and far below the view at the window's own
+# sizes -- and a paste cut to fit the checklist's Add box or the title was
+# said there, where nobody saw it. Out of sight, it is said in a banner over
+# the window; in sight, on the line alone.
+_ns_seen = {}
+_ns_geo = app.geometry()
+_ns_real_read = NO.clipboard.read_text
+
+
+def _ns_banner():
+    return (str(app.toast_lbl.cget('text'))
+            if app.toast_frame.winfo_manager() == 'place' else None)
+
+
+def _ns_paste(box, text, read_text=True):
+    app._hide_toast()
+    if read_text:
+        NO.clipboard.read_text = lambda: text
+    app.clipboard_clear()
+    app.clipboard_append(text)
+    box.delete(0, 'end')
+    box.event_generate('<<Paste>>')
+    _kv_settle(3)
+    return len(box.get()), _ns_banner()
+
+
+try:
+    app.geometry('900x600'); _kv_settle(6)
+    app.notebook.select(app.TAB_NOTES)
+    app.new_note(); _kv_settle(4)
+    if not app._checklist_open:
+        app.toggle_checklist_section()
+    _kv_settle(6)
+    app.editor_canvas.yview_moveto(0); _kv_settle(4)
+    _ns_seen['status line in sight'] = app._in_sight(app.status_lbl)
+    _ns_seen['Add box'] = _ns_paste(app.checklist_add_entry, 'x' * 2500)
+    _ns_seen['title'] = _ns_paste(app.title_entry, 'T' * 300, read_text=False)
+    app.editor_canvas.yview_moveto(1.0); _kv_settle(4)
+    _ns_seen['status line in sight, scrolled down'] = app._in_sight(app.status_lbl)
+    _ns_seen['Add box, the line in sight'] = _ns_paste(app.checklist_add_entry, 'x' * 2500)
+finally:
+    NO.clipboard.read_text = _ns_real_read
+    app.checklist_add_entry.delete(0, 'end')
+    app.title_entry.delete(0, 'end')
+    app._hide_toast()
+    app.geometry(_ns_geo); _kv_settle(6)
+check(f"the note's page says a paste cut to fit where it is seen: in a banner "
+      f"while its status line is scrolled away, on the line alone in sight ({_ns_seen})",
+      _ns_seen.get('status line in sight') is False
+      and _ns_seen.get('Add box') == (
+          2000, 'i  Pasted text shortened: a checklist item can be up to 2,000 characters')
+      and _ns_seen.get('title') == (200, 'i  Pasted title shortened to 200 characters')
+      and _ns_seen.get('status line in sight, scrolled down') is True
+      and _ns_seen.get('Add box, the line in sight') == (2000, None))
+
+# ...and a title is weighed as it goes in, on one line: a line copied with its
+# line break, or Windows' CR LF, was "shortened" by the space it lost.
+_tw_told = []
+_tw_real_status = app.set_status
+try:
+    app.new_note(); _kv_settle(4)
+    app.set_status = lambda text, *a, **k: _tw_told.append(text)
+    for _tw_paste in ('Shopping list\n', 'Shopping list\r\n', 'Shopping  list'):
+        app.title_entry.delete(0, 'end')
+        app.clipboard_clear()
+        app.clipboard_append(_tw_paste)
+        app.title_entry.event_generate('<<Paste>>')
+        _kv_settle(2)
+    _tw_kept = app.title_entry.get()
+finally:
+    app.set_status = _tw_real_status
+    app.title_entry.delete(0, 'end')
+check(f"a title pasted with its line break, or a double space, is not said to be "
+      f"shortened ({_tw_kept!r}; said {_tw_told})",
+      _tw_kept == 'Shopping list'
+      and not [t for t in _tw_told if 'shortened' in t])
+
 _nm_kept = list(app.templates)
 app.templates = [{'name': _nm_long, 'body': 'x'}, {'name': _nm_lines, 'body': 'y'}]
 _nm_picker = _nm_buttons = None
