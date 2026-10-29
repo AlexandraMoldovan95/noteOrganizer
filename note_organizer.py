@@ -11370,16 +11370,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._share_list_wrap = list_wrap
         canvas = tk.Canvas(list_wrap, bg=self.colors["sidebar"], highlightthickness=0)
         sb = ttk.Scrollbar(list_wrap, orient="vertical", command=canvas.yview)
-        inner = tk.Frame(canvas, bg=self.colors["sidebar"])
-        cwin = canvas.create_window((0, 0), window=inner, anchor="nw")
-
-        def _fit(e=None):
-            canvas.configure(scrollregion=canvas.bbox("all"))
-            # Make the inner frame span the canvas width so checkboxes fill it.
-            canvas.itemconfig(cwin, width=canvas.winfo_width())
-        inner.bind("<Configure>", _fit)
-        canvas.bind("<Configure>", _fit)
-        canvas.configure(yscrollcommand=sb.set)
+        # Pages go in under the boxes already drawn, past what one frame can
+        # scroll through (RowStack); each chunk spans the canvas.
+        inner = self._row_stack(canvas, scrolled=sb.set).group(bg="sidebar",
+                                                               every=32)
         # Pack scrollbar FIRST so it always keeps its width, then the canvas.
         sb.pack(side="right", fill="y")
         canvas.pack(side="left", fill="both", expand=True)
@@ -11404,6 +11398,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # ticked ids that had no tick box on screen, which is how the first
         # version of this was caught.
         rendered = {"ids": []}
+        wheeled = set()     # the chunks given the wheel
 
         def _revealed():
             """The ids the panel is actually showing right now."""
@@ -11460,7 +11455,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 lines.append("No notes match.")
             made = []
             for text in lines:
-                line = tk.Label(inner, text=text, font=("Segoe UI", 8),
+                line = tk.Label(inner.add(), text=text, font=("Segoe UI", 8),
                                 anchor="w", justify="left",
                                 wraplength=self.px(200),
                                 bg=self.colors["sidebar"],
@@ -11485,7 +11480,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 var = self._share_vars[n["id"]]
                 title = (n["title"].strip() or "(untitled)")[:24]
                 extra = " 📎" if n.get("attachments") else ""
-                cb = tk.Checkbutton(inner, text=title + extra, variable=var,
+                cb = tk.Checkbutton(inner.add(), text=title + extra, variable=var,
                                     command=refresh_select_all_label,
                                     font=("Segoe UI", 8), anchor="w")
                 self._drawn_tick_box(cb, "sidebar", "text", track=False)
@@ -11493,8 +11488,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 made.append(cb)
             remaining = len(notes) - min(len(notes), shown["n"])
             if remaining > 0:
-                more = tk.Button(inner, text=f"Show {min(remaining, SHARE_PAGE_SIZE)} more "
-                                             f"({remaining} not shown)",
+                more = tk.Button(inner.add(), text=f"Show {min(remaining, SHARE_PAGE_SIZE)} more "
+                                                   f"({remaining} not shown)",
                                  relief="flat", cursor="hand2",
                                  bg=self.colors["card"], fg=self.colors["text"],
                                  font=("Segoe UI", 8))
@@ -11502,16 +11497,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 more.pack(fill="x", pady=(4, 2))
                 made.append(more)
             # The wheel, so scrolling works with the cursor anywhere over the
-            # list: the list itself once, then only what each page adds.
-            for w in ([inner] if first == 0 else made):
+            # list: a new chunk and all in it once, then what a page adds.
+            for w in [c for c in inner.chunks if c not in wheeled] + [
+                    w for w in made if w.master in wheeled]:
                 self._bind_mousewheel_recursive(w, self._share_checklist_canvas)
+            wheeled.update(inner.chunks)
             # "Show 100 more" reveals notes that are not ticked, so a button
             # reading "Unselect all" would be wrong the moment the page grows.
             refresh_select_all_label()
 
         def redraw():
-            for w in inner.winfo_children():
-                w.destroy()
+            inner.clear()
+            wheeled.clear()
             rendered["ids"] = []
             render_checkboxes()
 
@@ -11535,7 +11532,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             """Draw the list for the search as it stands now."""
             self._cancel_share_search()
             try:
-                if not inner.winfo_exists():
+                if not canvas.winfo_exists():
                     return
             except tk.TclError:
                 return
@@ -12018,7 +12015,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             {"text": it.get("text", ""), "done": bool(it.get("done"))}
             for it in note.get("checklist", []) if isinstance(it, dict)
         ]
-        if hasattr(self, "checklist_items_frame"):
+        if hasattr(self, "_checklist_rows"):
             self._render_checklist_items()
         if self._working_checklist and not self._checklist_open:
             self.toggle_checklist_section()
@@ -12722,17 +12719,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._checklist_list_wrap = wrap
         canvas = tk.Canvas(wrap, bg=self.colors["card"], highlightthickness=0)
         sb = ttk.Scrollbar(wrap, orient="vertical", command=canvas.yview)
-        self.checklist_items_frame = tk.Frame(canvas, bg=self.colors["card"])
-        self.checklist_items_frame.bind(
-            "<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        cwin = canvas.create_window((0, 0), window=self.checklist_items_frame, anchor="nw")
-        canvas.bind("<Configure>", self._canvas_width_sync(canvas, cwin))
-        canvas.configure(yscrollcommand=sb.set)
+        wheel = lambda e: self._panel_or_page_wheel(canvas, e)  # noqa: E731
+        # Four to a chunk: an item of 2,000 letters stands 3,462 px tall in a
+        # 640 px window at 300% (measured); four stay far under the parking place.
+        self._checklist_rows = self._row_stack(
+            canvas, scrolled=sb.set,
+            on_chunk=lambda chunk: chunk.bind("<MouseWheel>", wheel)
+        ).group(every=4)
         sb.pack(side="right", fill="y")
         canvas.pack(side="left", fill="both", expand=True)
         self._checklist_canvas = canvas
-        self._bind_wheel_tree(self.checklist_items_frame,
-                              lambda e: self._panel_or_page_wheel(canvas, e))
         # Bound once, on tags every row's widgets carry: a binding per
         # widget is one more Tcl command for every row drawn.
         self.bind_class("ChecklistRowButton", "<ButtonPress-1>",
@@ -12812,7 +12808,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         rows drawn are recorded (see _checklist_rows_current), so a
         change can touch the one row it concerns instead of all of them.
         """
-        if not hasattr(self, "checklist_items_frame"):
+        if not hasattr(self, "_checklist_rows"):
             return
         self._update_checklist_progress()
         if not getattr(self, "_checklist_open", False):
@@ -12820,11 +12816,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # the next open redraws it.
             self._checklist_drawn = None
             return
-        for w in self.checklist_items_frame.winfo_children():
-            w.destroy()
+        self._checklist_rows.clear()
         items = self._get_checklist()
         if not items:
-            tk.Label(self.checklist_items_frame, text="No items yet — add one below.",
+            tk.Label(self._checklist_rows.add(), text="No items yet — add one below.",
                      bg=self.colors["card"], fg=self.colors["subtext"],
                      font=("Segoe UI", 9), anchor="w").pack(fill="x", padx=4, pady=6)
         self._checklist_drawn = {
@@ -12832,18 +12827,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "rows": [self._build_checklist_row(idx, item)
                      for idx, item in enumerate(items)]}
 
-    def _build_checklist_row(self, idx, item):
-        """One row, packed at the end. Returns its record for the drawn
+    def _build_checklist_row(self, idx, item, into=None, before=None):
+        """One row, packed at the end -- of the chunk *into*, if given -- or,
+        with *before*, in that row's place. Returns its record for the drawn
         list: ``[item, row frame, (text, done) as drawn]``."""
+        if before is not None:
+            into = before.master
         # The border is the ring of the item the keyboard is on, card-
         # coloured until then (_ring_checklist_row).
-        row = tk.Frame(self.checklist_items_frame, bg=self.colors["card"],
-                       highlightthickness=1,
+        row = tk.Frame(into if into is not None else self._checklist_rows.add(),
+                       bg=self.colors["card"], highlightthickness=1,
                        highlightbackground=self.colors["card"],
                        highlightcolor=self.colors["card"])
         row.palette_keys = {"highlightbackground": "card",
                             "highlightcolor": "card"}
-        row.pack(fill="x", pady=1)
+        if before is None:
+            row.pack(fill="x", pady=1)
+        else:
+            # Tab walks the stacking order, which packing leaves alone.
+            row.pack(fill="x", pady=1, before=before)
+            row.lower(before)
         record = [item, row, (item.get("text", ""), bool(item.get("done")))]
         var = tk.IntVar(value=1 if item.get("done") else 0)
 
@@ -12891,7 +12894,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # This row goes, the others stay: rebuilding every row
                 # took over two seconds at 200 items.
                 drawn["rows"].pop(index)
-                row.destroy()
+                self._checklist_rows.discard(row)
                 self._update_checklist_progress()
             else:
                 self._render_checklist_items()
@@ -13027,7 +13030,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         self._get_checklist().append({"text": text, "done": False})
         var.set("")
-        if hasattr(self, "checklist_items_frame"):
+        if hasattr(self, "_checklist_rows"):
             self._render_checklist_items()
 
     def _add_checklist_item(self):
@@ -13046,8 +13049,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # One new row, not the whole list again: rebuilding every row
             # took over two seconds per add at 200 items.
             if not drawn["rows"]:
-                for w in self.checklist_items_frame.winfo_children():
-                    w.destroy()          # the "No items yet" line
+                self._checklist_rows.clear()     # the "No items yet" line
             drawn["rows"].append(self._build_checklist_row(len(items) - 1,
                                                            item))
             self._update_checklist_progress()
@@ -13081,14 +13083,31 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             rows = drawn["rows"]
             rows[at], rows[to] = rows[to], rows[at]
             upper, lower = rows[min(at, to)][1], rows[max(at, to)][1]
-            upper.pack_configure(before=lower)
-            # Tab walks the stacking order, which packing leaves alone.
-            upper.lower(lower)
+            if upper.master is lower.master:
+                upper.pack_configure(before=lower)
+                # Tab walks the stacking order, which packing leaves alone.
+                upper.lower(lower)
+            else:
+                self._trade_checklist_chunks(rows, min(at, to))
         else:
             self._render_checklist_items()
         self._schedule_autosave()
         self._show_checklist_row(item)
         return True
+
+    def _trade_checklist_chunks(self, rows, i):
+        """Rows *i* and *i* + 1 of the drawn list, already traded in it,
+        trade places on screen across two chunks (RowStack), which a row
+        cannot leave: each is made again in the other's place."""
+        going_up, going_down = rows[i][1], rows[i + 1][1]
+        above, below = going_down.master, going_up.master
+        rest = below.pack_slaves()[1:2]
+        going_up.destroy()
+        going_down.destroy()
+        rows[i] = self._build_checklist_row(i, rows[i][0], into=above)
+        rows[i + 1] = (self._build_checklist_row(i + 1, rows[i + 1][0], before=rest[0])
+                       if rest else
+                       self._build_checklist_row(i + 1, rows[i + 1][0], into=below))
 
     def _move_checklist_by_key(self, box, step):
         """Alt+Up/Down on an item's tick box, or its arrows: the item moves,
@@ -13118,9 +13137,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         row, canvas = rec[1], self._checklist_canvas
         try:
             self.update_idletasks()
-            total = max(1, self.checklist_items_frame.winfo_height())
-            top = row.winfo_y() / total
-            bottom = (row.winfo_y() + row.winfo_height()) / total
+            stack = self._checklist_rows.stack
+            total, y = max(1, stack.total), stack.y_of(row)
+            if y is None:
+                return None
+            top = y / total
+            bottom = (y + row.winfo_height()) / total
             first, last = canvas.yview()
             if top < first:
                 canvas.yview_moveto(top)
@@ -13768,8 +13790,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         current palette. The rows rebuild on every note load, so tracking
         them would leak (the note-card lesson); the straggler net covers
         their bg/fg but not selectcolor/activebackground."""
-        frame = getattr(self, "checklist_items_frame", None)
-        if frame is None:
+        rows = getattr(self, "_checklist_rows", None)
+        if rows is None:
             return
 
         def walk(w):
@@ -13783,11 +13805,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 walk(c)
 
         try:
-            walk(frame)
+            for chunk in rows.chunks:
+                walk(chunk)
             # The straggler pass laid every row's border to the new card;
             # the row the keyboard is on keeps its ring.
             held = self.focus_get()
-            if isinstance(held, tk.Checkbutton) and held.master.master is frame:
+            if isinstance(held, tk.Checkbutton) and held.master.master in rows.chunks:
                 self._ring_checklist_row(held, True)
         except (tk.TclError, KeyError):
             pass
@@ -18529,7 +18552,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.current_attachments = list(st["attachments"])
         self.refresh_attachments_list()
         self._working_checklist = [dict(it) for it in st.get("checklist", [])]
-        if hasattr(self, "checklist_items_frame"):
+        if hasattr(self, "_checklist_rows"):
             self._render_checklist_items()
         self._sync_checklist_open_state()
         self._sync_calculator_open_state()
@@ -19676,7 +19699,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # it was saved there on the way out, or dropped with that note.
         if hasattr(self, "checklist_add_var"):
             self.checklist_add_var.set("")
-        if hasattr(self, "checklist_items_frame"):
+        if hasattr(self, "_checklist_rows"):
             self._render_checklist_items()
         self._sync_checklist_open_state()
         self._sync_calculator_open_state()
@@ -19787,7 +19810,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # here (see new_note).
         if hasattr(self, "checklist_add_var"):
             self.checklist_add_var.set("")
-        if hasattr(self, "checklist_items_frame"):
+        if hasattr(self, "_checklist_rows"):
             self._render_checklist_items()
         self._sync_checklist_open_state()
         self._sync_calculator_open_state()
@@ -20404,11 +20427,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # any screen, 5,000 passed X's limit. Kept whole, drawn cut. And the
         # list scrolls once it is taller than the window leaves room for.
         name_font = self._cal_font(("Segoe UI", 10))[0]
-        rows = self._scrolling_rows(frame, self.colors["card"], pop)
+        rows = self._scrolling_rows(frame, "card", pop).group(every=32)
         for tpl in self.templates:
             name = self._fit_name(tpl.get("name", "Untitled template"),
                                   name_font, self.px(360))
-            b = tk.Button(rows, text=f"🧩  {name}", anchor="w",
+            b = tk.Button(rows.add(), text=f"🧩  {name}", anchor="w",
                           command=lambda t=tpl: self._apply_template(t),
                           relief="flat", cursor="hand2", bg=self.colors["sidebar"],
                           fg=self.colors["text"], font=("Segoe UI", 10))
@@ -20469,7 +20492,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             {"text": it.get("text", ""), "done": bool(it.get("done"))}
             for it in tpl.get("checklist", []) if isinstance(it, dict)
         ]
-        if hasattr(self, "checklist_items_frame"):
+        if hasattr(self, "_checklist_rows"):
             self._render_checklist_items()
         # If the template has checklist items, open the section so they're
         # visible right away instead of hidden behind the button.
@@ -22127,14 +22150,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if in_step and drawn["rows"]:
             # The one row back where it was, the others untouched.
             at = min(index, len(drawn["rows"]))
-            record = self._build_checklist_row(at, item)
-            if at < len(drawn["rows"]):
-                after = drawn["rows"][at][1]
-                record[1].pack_configure(before=after)
-                # The stacking order too, not only the packing: Tab walks
-                # the tick boxes in it, and winfo_children() lists the rows
-                # in it -- a row put back in the middle was reached last.
-                record[1].lower(after)
+            after = drawn["rows"][at][1] if at < len(drawn["rows"]) else None
+            above = drawn["rows"][at - 1][1] if at else None
+            if after is None:
+                record = self._build_checklist_row(at, item)
+            elif above is not None and above.master is not after.master:
+                # At a chunk's edge, back at the end of the chunk it left: put
+                # before the next one's first row, that chunk grew each time.
+                record = self._build_checklist_row(at, item, into=above.master)
+            else:
+                # The stacking order too, not only the packing: Tab walks the
+                # tick boxes in it -- a row put back in the middle was last.
+                record = self._build_checklist_row(at, item, before=after)
             drawn["rows"].insert(at, record)
             self._update_checklist_progress()
         else:

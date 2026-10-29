@@ -500,7 +500,7 @@ check('history section is now actually packed on screen',
 # a row is the thing wired to _calc_insert_formula -- so it is now asked by
 # the binding rather than by the widget class, which also stops a second
 # explanatory line from breaking it.
-history_labels = [w for w in app.calculator_history_frame.winfo_children()
+history_labels = [w for w in app.calculator_history_rows.rows()
                   if isinstance(w, tk.Label) and '<Button-1>' in w.bind()]
 # 5 successful "="es so far this test (7x8, 9-4, 6+6, sqrt9, 3^3) — the
 # 5/0 division-by-zero attempt correctly did NOT add an entry.
@@ -508,7 +508,7 @@ check('history shows one entry per past calculation', len(history_labels) == 5)
 # And the hint itself: a row that inserts into the note on a plain click,
 # with nothing saying so, is what this row of the register was about.
 _calc_hint = [str(w.cget('text')) for w in
-              app.calculator_history_frame.winfo_children()
+              app.calculator_history_rows.rows()
               if isinstance(w, tk.Label) and '<Button-1>' not in w.bind()]
 check('the history says what clicking a line does',
       any('insert' in t.lower() for t in _calc_hint))
@@ -10110,7 +10110,7 @@ check(f'Show more in Share adds the rest under the boxes already drawn '
       f'({len(_sm_after)} boxes)',
       len(_sm_after) == 130 and _sm_after[:100] == _sm_first
       and all(b.winfo_exists() for b in _sm_first)
-      and bool(_sm_after[-1].bind('<MouseWheel>'))
+      and all(b.bind('<MouseWheel>') for b in _sm_after[100:])
       and not [b for b in _walk_widgets(app.share_panel, tk.Button)
                if str(b.cget('text')).startswith('Show ')])
 app.toggle_share_panel(); app.update()
@@ -10993,7 +10993,7 @@ app._working_checklist = [{'text': 'first', 'done': False},
                           {'text': 'third', 'done': False}]
 app._render_checklist_items(); app.update()
 _fc_bin = None
-for _row in app.checklist_items_frame.winfo_children():
+for _row in app._checklist_rows.rows():
     for _w in _row.winfo_children():
         if isinstance(_w, tk.Button) and '🗑' in str(_w.cget('text')):
             _fc_bin = _w
@@ -11070,7 +11070,7 @@ def _cu_texts():
 
 
 def _cu_bin(position):
-    _cu_rows = [w for w in app.checklist_items_frame.winfo_children()
+    _cu_rows = [w for w in app._checklist_rows.rows()
                 if isinstance(w, tk.Frame)]
     if not (0 <= position < len(_cu_rows)):
         return None
@@ -11112,7 +11112,7 @@ check('checklist undo: it comes back in the MIDDLE, not appended',
       _cu_texts() == ['milk', 'bread', 'eggs'])
 check('checklist undo: the rows on screen come back with it',
       [str(_w.cget('text'))
-       for _r in app.checklist_items_frame.winfo_children()
+       for _r in app._checklist_rows.rows()
        for _w in _r.winfo_children()
        if isinstance(_w, tk.Label) and str(_w.cget('text')) != '▲\n▼']
       == ['milk', 'bread', 'eggs'])
@@ -15201,14 +15201,14 @@ set_body('')
 # the widgets themselves: the rows that should stay are the SAME widgets
 # afterwards, which is what a rebuild cannot fake.
 def _cl_rows():
-    return [str(_w) for _w in app.checklist_items_frame.winfo_children()
+    return [str(_w) for _w in app._checklist_rows.rows()
             if isinstance(_w, tk.Frame)]
 
 
 def _cl_texts():
     """Each row's item text, in Tab order -- its ▲ ▼ are a Label too."""
     return [str(_c.cget('text'))
-            for _r in app.checklist_items_frame.winfo_children()
+            for _r in app._checklist_rows.rows()
             if isinstance(_r, tk.Frame)
             for _c in _r.winfo_children() if isinstance(_c, tk.Label)
             and str(_c.cget('text')) != '▲\n▼']
@@ -15260,7 +15260,7 @@ check('checklist rows: opening the section builds them',
 check('checklist rows: fixture with two items reading the same',
       _cu_setup(['milk', 'milk']))
 _cu_press(1)
-_cl_box = [_c for _r in app.checklist_items_frame.winfo_children()
+_cl_box = [_c for _r in app._checklist_rows.rows()
            if isinstance(_r, tk.Frame)
            for _c in _r.winfo_children() if isinstance(_c, tk.Checkbutton)]
 if len(_cl_box) == 1:
@@ -15320,7 +15320,7 @@ check('double-click: a quick click on a bin elsewhere is a click of its own',
 # drawn rows trades with them: each row's box, bin and arrows close over
 # their own item, so a record left behind makes one act on another's item.
 def _mv_rows():
-    return [w for w in app.checklist_items_frame.winfo_children()
+    return [w for w in app._checklist_rows.rows()
             if isinstance(w, tk.Frame)]
 
 
@@ -15328,8 +15328,9 @@ _MV_ARROWS = '▲\n▼'
 
 
 def _mv_packed_texts():
+    """The rows as drawn: chunk after chunk, each in its packing order."""
     return [str(_c.cget('text'))
-            for _r in app.checklist_items_frame.pack_slaves()
+            for _k in app._checklist_rows.chunks for _r in _k.pack_slaves()
             for _c in _r.winfo_children() if isinstance(_c, tk.Label)
             and str(_c.cget('text')) != _MV_ARROWS]
 
@@ -15445,7 +15446,7 @@ check(f'move: the item with the keyboard has a ring round its row, and only '
       f'that row ({_mv_ring_3}, then {_mv_rings()})',
       _mv_ring_3 == [3] and _mv_rings() == [1])
 from _qa_support import ring_mismatches as _mv_ring_mismatches
-_mv_bad_rings = _mv_ring_mismatches(app.checklist_items_frame)
+_mv_bad_rings = _mv_ring_mismatches(app._checklist_rows)
 check(f'move: every row draws its border in one colour, the keyboard in it '
       f'or not ({_mv_bad_rings})', not _mv_bad_rings)
 _mv_r0 = _mv_rows()[0]

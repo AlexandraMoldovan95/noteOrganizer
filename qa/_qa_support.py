@@ -684,3 +684,31 @@ def leaves_nothing_behind(app, redraw, times):
         said += "; once: " + ", ".join(
             "%s +%d" % kv for kv in once.most_common(6))
     return growth < LEAK_FLOOR, said
+
+
+# Tk keeps a canvas window's place, and X a window's, in 16 bits: one frame
+# holding a list could not be scrolled further than this.
+ONE_FRAME_REACH = 32_767
+
+
+def reaches_the_end(app, canvas, last, settle):
+    """Whether a list drawn on *canvas* -- longer than one frame could ever
+    be scrolled through, or the check proves nothing -- shows *last*, its
+    last control, once scrolled to its end: ``(ok, said)``. *settle* lets
+    the app lay out and draw before *last* is looked at."""
+    try:
+        region = [float(v) for v in str(canvas.cget("scrollregion")).split()]
+    except (tk.TclError, ValueError):
+        region = []
+    tall = region[3] - region[1] if len(region) == 4 else 0
+    canvas.yview_moveto(1.0)
+    settle()
+    view = canvas.winfo_height()
+    top = last.winfo_rooty() - canvas.winfo_rooty()
+    bottom = top + last.winfo_height()
+    # All of it, or -- a row taller than the view -- its last pixels.
+    seen = (bool(last.winfo_viewable()) and 0 < bottom <= view
+            and (top >= 0 or last.winfo_height() > view))
+    return (tall > ONE_FRAME_REACH + view and seen,
+            "%d px of rows; the last at %d in a view of %d%s"
+            % (tall, top, view, "" if last.winfo_viewable() else ", not drawn"))

@@ -361,7 +361,7 @@ def _wells_ok():
                 hits.append(well == app.colors['check_well']
                             and well != str(c.cget('bg')))
             walk(c)
-    walk(app.checklist_items_frame)
+    walk(app._checklist_rows)
     return bool(hits) and all(hits)
 def _find_btn_text(root, txt):
     for c in root.winfo_children():

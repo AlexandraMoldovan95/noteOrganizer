@@ -718,42 +718,35 @@ class SettingsPageMixin:
         self._resize_handles_pending.append((wrap, 100, 800))
         canvas = tk.Canvas(wrap, bg=self.colors["card"], highlightthickness=0)
         sb = ttk.Scrollbar(wrap, orient="vertical", command=canvas.yview)
-        rows = tk.Frame(canvas, bg=self.colors["card"])
-        rows.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        cwin = canvas.create_window((0, 0), window=rows, anchor="nw")
-        canvas.bind("<Configure>", self._canvas_width_sync(canvas, cwin))
-        canvas.configure(yscrollcommand=sb.set)
         sb.pack(side="right", fill="y")
         canvas.pack(side="left", fill="both", expand=True)
         self._active_panel_canvas = canvas
 
-        # The frame outlives every redraw: it gets the wheel once, here, and
-        # each redraw gives it only to the rows it builds -- as the Trash and
-        # Categories panels do. Re-binding the frame itself left a Tcl
-        # command behind at every save, delete and rename of a template.
+        # Each redraw gives the wheel to what it builds, chunks included (a
+        # chunk dies with its rows): binding a frame that outlived the
+        # redraws left a Tcl command behind at every save, delete and rename.
         wheel = lambda e: self._panel_or_page_wheel(canvas, e)  # noqa: E731
-        rows.bind("<MouseWheel>", wheel)
+        rows = self._row_stack(canvas, scrolled=sb.set).group(every=32)
 
         def redraw():
             # A list this section no longer shows: rebuilt since, its rows
             # are gone, and there is nothing to redraw.
-            if not rows.winfo_exists():
+            if not canvas.winfo_exists():
                 return
-            for w in rows.winfo_children():
-                w.destroy()
+            rows.clear()
             if not self.templates:
-                tk.Label(rows, text="No templates yet. Create one below, or use "
-                                    "“Save as template” on a note.",
+                tk.Label(rows.add(), text="No templates yet. Create one below, or use "
+                                          "“Save as template” on a note.",
                          bg=self.colors["card"], fg=self.colors["subtext"],
                          font=("Segoe UI", 9), wraplength=self.px(460), justify="left"
                          ).pack(pady=10, padx=6, anchor="w")
             else:
                 for i, tpl in enumerate(self.templates):
                     if i:
-                        self._row_divider(rows)
-                    self._build_template_row(rows, tpl, redraw)
-            for child in rows.winfo_children():
-                self._bind_wheel_tree(child, wheel)
+                        self._row_divider(rows.add())
+                    self._build_template_row(rows.add(), tpl, redraw)
+            for chunk in rows.chunks:
+                self._bind_wheel_tree(chunk, wheel)
         redraw()
         self._refresh_templates_panel = redraw
 
@@ -984,14 +977,15 @@ class SettingsPageMixin:
         # Everything between the header and Save scrolls once the editor is
         # taller than the window: it grew with its checklist, and 25 items,
         # or one long one, put Save, Category and the Add box off the screen.
-        frame = self._scrolling_rows(shell, self.colors["card"], pop)
+        stack = self._scrolling_rows(shell, "card", pop)
+        fields = stack.group()
 
         def field(label, initial, height=1, limit=None):
-            tk.Label(frame, text=label, bg=self.colors["card"], fg=self.colors["subtext"],
+            tk.Label(fields.add(), text=label, bg=self.colors["card"], fg=self.colors["subtext"],
                      font=("Segoe UI", 8, "bold"), anchor="w").pack(fill="x", pady=(4, 0))
             if height == 1:
                 var = tk.StringVar(value=initial)
-                e = tk.Entry(frame, textvariable=var, relief="flat", font=("Segoe UI", 10),
+                e = tk.Entry(fields.add(), textvariable=var, relief="flat", font=("Segoe UI", 10),
                              bg=self.colors["sidebar"], fg=self.colors["text"],
                              insertbackground=self.colors["text"], width=40)
                 e.pack(fill="x", ipady=3)
@@ -1001,7 +995,7 @@ class SettingsPageMixin:
                     self._limit_entry(e, *limit)
                 return var
             else:
-                t = tk.Text(frame, height=height, width=40, relief="flat",
+                t = tk.Text(fields.add(), height=height, width=40, relief="flat",
                             font=("Segoe UI", 10), bg=self.colors["sidebar"],
                             fg=self.colors["text"], insertbackground=self.colors["text"],
                             wrap="word")
@@ -1034,7 +1028,7 @@ class SettingsPageMixin:
         # The holder is packed NOW, right under the body box, so the
         # preview appears here rather than at the frame's tail when it
         # first shows up.
-        preview_holder = tk.Frame(frame, bg=self.colors["card"])
+        preview_holder = tk.Frame(fields.add(), bg=self.colors["card"])
         preview_holder.pack(fill="x")
         preview_lbl = tk.Label(preview_holder, text="Table preview",
                                bg=self.colors["card"],
@@ -1113,6 +1107,9 @@ class SettingsPageMixin:
                 preview_hscroll.grid(row=1, column=0, sticky="ew")
             else:
                 preview_hscroll.grid_forget()
+            # A table grown wider at the same height resizes no chunk: the
+            # editor is measured again for it.
+            stack.changed()
 
         def paste_and_preview(_e=None):
             # One combined handler: the table-aware paste returns "break"
@@ -1178,10 +1175,11 @@ class SettingsPageMixin:
             {"text": it.get("text", ""), "done": bool(it.get("done"))}
             for it in data.get("checklist", []) if isinstance(it, dict)
         ]
-        tk.Label(frame, text="Checklist", bg=self.colors["card"], fg=self.colors["subtext"],
-                 font=("Segoe UI", 8, "bold"), anchor="w").pack(fill="x", pady=(6, 0))
-        tpl_cl_list_frame = tk.Frame(frame, bg=self.colors["sidebar"])
-        tpl_cl_list_frame.pack(fill="x", pady=(0, 2))
+        tk.Label(fields.add(), text="Checklist", bg=self.colors["card"],
+                 fg=self.colors["subtext"], font=("Segoe UI", 8, "bold"),
+                 anchor="w").pack(fill="x", pady=(6, 0))
+        # Its own block, as tall as a note's checklist can be (RowStack).
+        tpl_cl_rows = stack.group(bg="sidebar", pady=(0, 2), every=4)
         # Each row's tick box, by item, for the keyboard after a move.
         tpl_boxes = {}
 
@@ -1199,17 +1197,16 @@ class SettingsPageMixin:
                 box.focus_set()
 
         def render_tpl_checklist():
-            for w in tpl_cl_list_frame.winfo_children():
-                w.destroy()
+            tpl_cl_rows.clear()
             tpl_boxes.clear()
             if not tpl_checklist:
-                tk.Label(tpl_cl_list_frame, text="No items yet — type below and press Enter.",
+                tk.Label(tpl_cl_rows.add(), text="No items yet — type below and press Enter.",
                          bg=self.colors["sidebar"], fg=self.colors["subtext"],
                          font=("Segoe UI", 8), anchor="w").pack(fill="x", padx=6, pady=4)
                 return
             for item in tpl_checklist:
                 # The border is the ring of the item the keyboard is on.
-                row = tk.Frame(tpl_cl_list_frame, bg=self.colors["sidebar"],
+                row = tk.Frame(tpl_cl_rows.add(), bg=self.colors["sidebar"],
                                highlightthickness=1,
                                highlightbackground=self.colors["sidebar"],
                                highlightcolor=self.colors["sidebar"])
@@ -1265,7 +1262,8 @@ class SettingsPageMixin:
 
         render_tpl_checklist()
 
-        cl_add_row = tk.Frame(frame, bg=self.colors["card"])
+        below = stack.group()
+        cl_add_row = tk.Frame(below.add(), bg=self.colors["card"])
         cl_add_row.pack(fill="x", pady=(0, 6))
         cl_add_var = tk.StringVar()
         cl_entry = tk.Entry(cl_add_row, textvariable=cl_add_var, relief="flat",
@@ -1291,11 +1289,11 @@ class SettingsPageMixin:
                   font=("Segoe UI", 9, "bold"), cursor="hand2"
                   ).pack(side="left", padx=(6, 0), ipadx=8, ipady=2)
 
-        tk.Label(frame, text="Category", bg=self.colors["card"], fg=self.colors["subtext"],
+        tk.Label(below.add(), text="Category", bg=self.colors["card"], fg=self.colors["subtext"],
                  font=("Segoe UI", 8, "bold"), anchor="w").pack(fill="x", pady=(4, 0))
         cat_var = tk.StringVar(value=data["category"] if data["category"] in CATEGORY_COLORS else "General")
         cat_menu = self._build_themed_dropdown(
-            frame, cat_var, lambda: list(CATEGORY_COLORS.keys()),
+            below.add(), cat_var, lambda: list(CATEGORY_COLORS.keys()),
             on_change=lambda v: None,
             dot_color_fn=lambda v: CATEGORY_COLORS.get(v), width_chars=16,
             nested=True)
@@ -1742,14 +1740,12 @@ class SettingsPageMixin:
         self._resize_handles_pending.append((wrap, 100, 800))
         canvas = tk.Canvas(wrap, bg=self.colors["card"], highlightthickness=0)
         sb = ttk.Scrollbar(wrap, orient="vertical", command=canvas.yview)
-        rows = tk.Frame(canvas, bg=self.colors["card"])
-        rows.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        cwin = canvas.create_window((0, 0), window=rows, anchor="nw")
-        canvas.bind("<Configure>", self._canvas_width_sync(canvas, cwin))
-        canvas.configure(yscrollcommand=sb.set)
         sb.pack(side="right", fill="y")
         canvas.pack(side="left", fill="both", expand=True)
         self._active_panel_canvas = canvas
+        # Each page goes in under the last, so the rows grow past what one
+        # frame can scroll through (RowStack).
+        rows = self._row_stack(canvas, scrolled=sb.set).group(every=16)
 
         # Paginated: rendering all 600+ rows (and recursively binding the
         # mousewheel across every one of them) at once was measurably slow —
@@ -1875,17 +1871,14 @@ class SettingsPageMixin:
             shown_count["n"] = max(PAGE_SIZE, shown_count["n"])
             redraw()
 
-        # The frame holding the rows outlives every redraw, so it gets the
-        # wheel once, here; each redraw gives it only to what it builds.
-        # Binding a fresh handler on the frame itself every time left one
-        # more Tcl command behind per redraw, for good -- every Restore,
-        # Delete, page and toast Undo while the panel was on screen.
+        # Each redraw gives the wheel to what it builds, its chunks included,
+        # which die with their rows: a fresh handler on a frame outliving the
+        # redraws left a Tcl command behind for good at every one of them.
         wheel = lambda e: self._panel_or_page_wheel(canvas, e)  # noqa: E731
-        rows.bind("<MouseWheel>", wheel)
 
         def wheel_on_rows():
-            for child in rows.winfo_children():
-                self._bind_wheel_tree(child, wheel)
+            for chunk in rows.chunks:
+                self._bind_wheel_tree(chunk, wheel)
 
         def ordered_trash():
             # str(): a hand-edited trash.json can hold a number or a list
@@ -1901,11 +1894,11 @@ class SettingsPageMixin:
             drawn["ids"] = drawn["ids"][:first] + [
                 id(e) for e in ordered[first:shown_count["n"]]]
             for entry in ordered[first:shown_count["n"]]:
-                self._build_trash_row(rows, entry, redraw,
+                self._build_trash_row(rows.add(), entry, redraw,
                                       on_tick=refresh_restore_btn)
             remaining = len(ordered) - min(len(ordered), shown_count["n"])
             if remaining > 0:
-                more = tk.Button(rows, text=f"Show {min(remaining, PAGE_SIZE)} more "
+                more = tk.Button(rows.add(), text=f"Show {min(remaining, PAGE_SIZE)} more "
                                             f"({remaining} not shown)",
                                  relief="flat", cursor="hand2",
                                  bg=self.colors["sidebar"], fg=self.colors["text"],
@@ -1926,18 +1919,20 @@ class SettingsPageMixin:
                 redraw()
                 return
             button.destroy()
-            before = set(rows.winfo_children())
+            before = set(rows.chunks) | set(rows.rows())
             draw_rows(ordered, first)
-            for child in rows.winfo_children():
-                if child not in before:
-                    self._bind_wheel_tree(child, wheel)
+            for chunk in rows.chunks:
+                if chunk not in before:
+                    chunk.bind("<MouseWheel>", wheel)
+                for child in chunk.winfo_children():
+                    if child not in before:
+                        self._bind_wheel_tree(child, wheel)
             refresh_restore_btn()
 
         def redraw():
-            for w in rows.winfo_children():
-                w.destroy()
+            rows.clear()
             if not self.trash:
-                tk.Label(rows, text="Trash is empty.", bg=self.colors["card"],
+                tk.Label(rows.add(), text="Trash is empty.", bg=self.colors["card"],
                          fg=self.colors["subtext"], font=("Segoe UI", 10)).pack(pady=20)
                 wheel_on_rows()
                 # Emptied with notes ticked, "Restore 3 selected" stayed up
@@ -2035,14 +2030,12 @@ class SettingsPageMixin:
         self._resize_handles_pending.append((wrap, 120, 800))
         canvas = tk.Canvas(wrap, bg=self.colors["card"], highlightthickness=0)
         sb = ttk.Scrollbar(wrap, orient="vertical", command=canvas.yview)
-        inner = tk.Frame(canvas, bg=self.colors["card"])
-        inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        cwin = canvas.create_window((0, 0), window=inner, anchor="nw")
-        canvas.bind("<Configure>", self._canvas_width_sync(canvas, cwin))
-        canvas.configure(yscrollcommand=sb.set)
         sb.pack(side="right", fill="y")
         canvas.pack(side="left", fill="both", expand=True)
         self._active_panel_canvas = canvas
+        # Each group is a block of its own, its copies in chunks: pages grow
+        # past what one frame can scroll through, and so can one group.
+        stack = self._row_stack(canvas, scrolled=sb.set)
 
         del_vars = []  # (var, note, group) across all groups
         all_group_vars = []  # list of per-group var lists, for the "clean up everything" button
@@ -2054,13 +2047,12 @@ class SettingsPageMixin:
             all_group_vars.append(group_vars)
             del_vars.extend((var, note, group) for var, note in zip(group_vars, group))
         wheel = lambda e: self._panel_or_page_wheel(canvas, e)  # noqa: E731
-        inner.bind("<MouseWheel>", wheel)
+        canvas.bind("<MouseWheel>", wheel)      # the gaps between the groups
 
         def draw_group(group, group_vars):
-            box = tk.Frame(inner, bg=self.colors["sidebar"])
-            box.pack(fill="x", pady=5, padx=2)
+            box = stack.group(bg="sidebar", padx=2, pady=(5, 5), every=32)
             title = (group[0].get("title") or "").strip() or "(untitled)"
-            tk.Label(box, text=f"“{title[:36]}” — {len(group)} copies",
+            tk.Label(box.add(), text=f"“{title[:36]}” — {len(group)} copies",
                      font=("Segoe UI", 10, "bold"), bg=self.colors["sidebar"],
                      fg=self.colors["text"], anchor="w").pack(fill="x", padx=10, pady=(8, 2))
 
@@ -2069,7 +2061,7 @@ class SettingsPageMixin:
                len({bool(n.get("attachments")) for n in group}) > 1:
                 hints.append("attachments")
             if hints:
-                tk.Label(box, text=f"↳ differing {' & '.join(hints)} will be merged "
+                tk.Label(box.add(), text=f"↳ differing {' & '.join(hints)} will be merged "
                                    "into a kept copy",
                          font=("Segoe UI", 7, "italic"), bg=self.colors["sidebar"],
                          fg=self.colors["accent_text"], anchor="w",
@@ -2084,7 +2076,7 @@ class SettingsPageMixin:
                 if updated and updated != created:
                     meta += f" · updated {show_date(updated[:10])}"
                 cb = tk.Checkbutton(
-                    box, text=f"Delete this copy   ({meta})" if meta else "Delete this copy",
+                    box.add(), text=f"Delete this copy   ({meta})" if meta else "Delete this copy",
                     variable=var, font=("Segoe UI", 8), anchor="w")
                 self._drawn_tick_box(cb, "sidebar", "text", track=False)
                 cb.pack(fill="x", padx=20)
@@ -2099,7 +2091,7 @@ class SettingsPageMixin:
                 for v in gv:
                     v.set(0)
 
-            btn_row = tk.Frame(box, bg=self.colors["sidebar"])
+            btn_row = tk.Frame(box.add(), bg=self.colors["sidebar"])
             btn_row.pack(fill="x", padx=10, pady=(2, 8))
             tk.Button(btn_row, text="Tick all but first", command=check_all_but_first,
                       bg=self.colors["card"], fg=self.colors["text"], relief="flat",
@@ -2109,7 +2101,8 @@ class SettingsPageMixin:
                       bg=self.colors["card"], fg=self.colors["subtext"], relief="flat",
                       font=("Segoe UI", 8), cursor="hand2"
                       ).pack(side="left", padx=(6, 0), ipadx=6, ipady=2)
-            self._bind_wheel_tree(box, wheel)
+            for chunk in box.chunks:
+                self._bind_wheel_tree(chunk, wheel)
 
         # A page of groups at a time. Every group was drawn at once --
         # 676 widgets for the hundred groups of a 5,000-note notebook, most of
@@ -2121,7 +2114,7 @@ class SettingsPageMixin:
 
         def draw_next_page():
             if drawn["more"] is not None:
-                drawn["more"].destroy()
+                stack.drop(drawn["more"])
                 drawn["more"] = None
             start = drawn["n"]
             drawn["n"] = min(len(groups), start + DUP_PAGE_SIZE)
@@ -2129,14 +2122,17 @@ class SettingsPageMixin:
                 draw_group(groups[gi], all_group_vars[gi])
             remaining = len(groups) - drawn["n"]
             if remaining > 0:
-                drawn["more"] = tk.Button(
-                    inner, text=f"Show {min(remaining, DUP_PAGE_SIZE)} more groups "
-                                f"({remaining} not shown)",
+                drawn["more"] = stack.group()
+                more = tk.Button(
+                    drawn["more"].add(),
+                    text=f"Show {min(remaining, DUP_PAGE_SIZE)} more groups "
+                         f"({remaining} not shown)",
                     command=draw_next_page, relief="flat", cursor="hand2",
                     bg=self.colors["sidebar"], fg=self.colors["text"],
                     font=("Segoe UI", 8))
-                drawn["more"].pack(fill="x", pady=(6, 2), ipady=4)
-                drawn["more"].bind("<MouseWheel>", wheel)
+                more.pack(fill="x", pady=(6, 2), ipady=4)
+                for chunk in drawn["more"].chunks:
+                    self._bind_wheel_tree(chunk, wheel)
 
         draw_next_page()
 

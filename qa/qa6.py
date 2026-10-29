@@ -2588,13 +2588,16 @@ _lk_clean, _lk_said = _qa_leaves_nothing_behind(app, _lk_redraw, 30)
 check(f'redrawing Recently deleted leaves no Tcl command behind ({_lk_said})',
       _lk_clean)
 _lk_canvas = app._active_panel_canvas
-_lk_items = _lk_canvas.find_all()
-_lk_rows = (_lk_canvas.nametowidget(_lk_canvas.itemcget(_lk_items[0], 'window'))
-            if _lk_items else None)
+# The rows stand in chunks on the canvas (RowStack): the wheel on each chunk
+# covers what lies between the rows, as it did on the one frame.
+_lk_stack = getattr(_lk_canvas, '_row_stack', None)
+_lk_chunks = ([c for g in _lk_stack.groups for c in g.chunks]
+              if _lk_stack is not None else [])
+_lk_rows = _lk_stack.rows() if _lk_stack is not None else []
 check('...while the wheel still reaches the list and every row in it',
-      _lk_rows is not None and bool(_lk_rows.bind('<MouseWheel>'))
-      and len(_lk_rows.winfo_children()) >= 3
-      and all(r.bind('<MouseWheel>') for r in _lk_rows.winfo_children()))
+      bool(_lk_chunks) and all(c.bind('<MouseWheel>') for c in _lk_chunks)
+      and len(_lk_rows) >= 3
+      and all(r.bind('<MouseWheel>') for r in _lk_rows))
 app.trash = []; NO.save_trash(app.trash)
 # A hand-edited trash.json can hold a deleted_at that is not text (the
 # backup import keeps text only): sorting it beside the dates, and showing
@@ -2611,9 +2614,8 @@ try:
 except Exception as _od_exc:   # noqa: BLE001 -- the check reports it
     _od_err = repr(_od_exc)
 _od_canvas = app._active_panel_canvas
-_od_items = _od_canvas.find_all()
-_od_rows = (_od_canvas.nametowidget(_od_canvas.itemcget(_od_items[0], 'window'))
-            if _od_items else None)
+_od_rows = getattr(_od_canvas, '_row_stack', None)
+_od_rows = _od_rows.groups[0] if _od_rows is not None else None
 
 
 def _od_texts(w):
@@ -4095,7 +4097,7 @@ app.toggle_settings_panel('trash')
 _kv_settle(20)
 _kv_list = app._active_panel_canvas
 _kv_page = app.settings_canvas
-_kv_rows = [w for w in _kv_list.winfo_children()[0].winfo_children()
+_kv_rows = [w for w in _kv_list._row_stack.rows()
             if getattr(w, '_trash_buttons', None)]
 _kv_first = (next(c for c in _kv_rows[0].winfo_children()
                   if isinstance(c, tk.Checkbutton)) if _kv_rows else None)

@@ -191,16 +191,14 @@ class CalculatorPanelMixin:
         hist_wrap.pack_propagate(False)
         hist_canvas = tk.Canvas(hist_wrap, bg=self.colors["card"], highlightthickness=0)
         hist_sb = ttk.Scrollbar(hist_wrap, orient="vertical", command=hist_canvas.yview)
-        self.calculator_history_frame = tk.Frame(hist_canvas, bg=self.colors["card"])
-        self.calculator_history_frame.bind(
-            "<Configure>", lambda e: hist_canvas.configure(scrollregion=hist_canvas.bbox("all")))
-        hist_cwin = hist_canvas.create_window((0, 0), window=self.calculator_history_frame, anchor="nw")
-        hist_canvas.bind("<Configure>", self._canvas_width_sync(hist_canvas, hist_cwin))
-        hist_canvas.configure(yscrollcommand=hist_sb.set)
         hist_sb.pack(side="right", fill="y")
         hist_canvas.pack(side="left", fill="both", expand=True)
-        self._bind_wheel_tree(self.calculator_history_frame,
-                              lambda e: self._panel_or_page_wheel(hist_canvas, e))
+        wheel = lambda e: self._panel_or_page_wheel(hist_canvas, e)  # noqa: E731
+        # A long sitting's sums, past what one frame can scroll through.
+        self.calculator_history_rows = self._row_stack(
+            hist_canvas, scrolled=hist_sb.set,
+            on_chunk=lambda chunk: chunk.bind("<MouseWheel>", wheel)
+        ).group(every=32)
         self._calc_render_history()
 
     def _toggle_calc_more(self):
@@ -298,12 +296,12 @@ class CalculatorPanelMixin:
         self.calculator_insert_btn.config(state=("normal" if enabled else "disabled"))
 
     def _calc_render_history(self):
-        if not hasattr(self, "calculator_history_frame"):
+        rows = getattr(self, "calculator_history_rows", None)
+        if rows is None:
             return
-        for w in self.calculator_history_frame.winfo_children():
-            w.destroy()
+        rows.clear()
         if not self._calc_history:
-            tk.Label(self.calculator_history_frame, text="No calculations yet.",
+            tk.Label(rows.add(), text="No calculations yet.",
                      bg=self.colors["card"], fg=self.colors["subtext"],
                      font=("Segoe UI", 8), anchor="w").pack(fill="x", padx=6, pady=4)
             return
@@ -315,13 +313,13 @@ class CalculatorPanelMixin:
         # "⬇ Insert into note" is a few centimetres above. Same shape as the
         # line the attachment rows carry ("Opens in your default app for this
         # file type"), and only drawn when there is something to click.
-        tk.Label(self.calculator_history_frame,
+        tk.Label(rows.add(),
                  text="Click a line to insert it into the note",
                  bg=self.colors["card"], fg=self.colors["subtext"],
                  font=("Segoe UI", 7), anchor="w").pack(fill="x", padx=6,
                                                         pady=(2, 1))
         for entry in self._calc_history:
-            lbl = tk.Label(self.calculator_history_frame, text=entry,
+            lbl = tk.Label(rows.add(), text=entry,
                            bg=self.colors["card"], fg=self.colors["subtext"],
                            font=("Consolas", 9), anchor="e", justify="right",
                            cursor="hand2")

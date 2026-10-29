@@ -71,6 +71,222 @@ def message_shown(message):
     return head + "\n…\n" + tail
 
 
+class RowStack:
+    """A scrolled list's rows, built into chunk frames of a few rows each
+    that the stack places on *canvas* itself. One frame holding them all
+    stopped scrolling at about 32,767 px: Tk keeps a canvas window's place,
+    and X a window's, in 16 bits (ISSUES_LOG: "The list that ended in the
+    middle"). A chunk near the view stands at its true place, every other
+    one parked out of sight above -- placed, never unmapped, so Tab reaches
+    it."""
+
+    # How far above the view a chunk is parked, and the furthest any stands:
+    # X keeps a window's place in 16 bits, and Windows its place on the screen
+    # (parked 32,000 px below, a row was pinned at 32,767 inside its chunk).
+    PARK = 20_000
+    # Rows to a chunk unless a list says otherwise (a checklist's are four of
+    # up to 3,462 px each): every chunk stays far under PARK.
+    EVERY = 8
+
+    def __init__(self, app, canvas, scrolled=None, on_chunk=None,
+                 on_change=None, own_width=False):
+        self.app, self.canvas = app, canvas
+        self.scrolled, self.on_chunk, self.on_change = (scrolled, on_chunk,
+                                                        on_change)
+        # Given its width by its popup (set_width), as wide as the widest row,
+        # as one frame was -- the picker's heading is wider; else the canvas's.
+        self.own_width = own_width
+        self.groups = []
+        self.total = self.widest = 0
+        self._box = {}          # chunk -> (x0, y0, x1, y1) on the canvas
+        self._placed = {}       # chunk -> the y it stands at now
+        self._width = None      # the width the chunks are given, once known
+        self._job = None
+        canvas._row_stack = self
+        canvas.configure(yscrollcommand=self._scrolled)
+        canvas.bind("<Configure>", self._resized, add="+")
+
+    def group(self, bg="card", padx=0, pady=(0, 0), every=EVERY):
+        """Rows that read as one block, below those already asked for: *bg*
+        is a palette key, *padx* and *pady* its margins."""
+        group = _RowGroup(self, bg, padx, pady, every)
+        self.groups.append(group)
+        return group
+
+    def drop(self, group):
+        """*group* gone, and its rows with it."""
+        group.clear()
+        self.groups.remove(group)
+
+    def rows(self):
+        return [row for group in self.groups for row in group.rows()]
+
+    def box(self, chunk):
+        """Where *chunk* stands on the canvas, as a window item's bbox."""
+        return self._box.get(chunk)
+
+    def y_of(self, widget):
+        """The canvas y of *widget*'s top, wherever its chunk is placed."""
+        y, w = 0, widget
+        while w is not None and w.master is not self.canvas:
+            y, w = y + w.winfo_y(), w.master
+        box = self._box.get(w)
+        return None if box is None else box[1] + y
+
+    def size(self):
+        """(widest, total) as the rows stand now, laid out first."""
+        if self._job is not None:
+            try:
+                self.canvas.after_cancel(self._job)
+            except tk.TclError:
+                pass
+        self._restack(notify=False)
+        return self.widest, self.total
+
+    def changed(self):
+        """Stack the chunks again once the moment has passed."""
+        if self._job is None:
+            try:
+                self._job = self.canvas.after_idle(self._restack)
+            except tk.TclError:
+                pass
+
+    def _new_chunk(self, group):
+        chunk = tk.Frame(self.canvas, bg=self.app.colors[group.bg])
+        later = None if group is self.groups[-1] else next(
+            (g.chunks[0] for g in self.groups[self.groups.index(group) + 1:]
+             if g.chunks), None)
+        if later is not None:
+            chunk.lower(later)      # Tab follows the stacking order
+        width = {"width": max(1, self._width - 2 * group.padx)} if self._width else {}
+        chunk.place(x=group.padx, y=-self.PARK, **width)
+        self._placed[chunk] = -self.PARK
+        chunk.bind("<Configure>", self._chunk_resized)
+        group.chunks.append(chunk)
+        if self.on_chunk is not None:
+            self.on_chunk(chunk)
+        self.changed()
+        return chunk
+
+    def _forget(self, chunk):
+        self._box.pop(chunk, None)
+        self._placed.pop(chunk, None)
+
+    def _chunk_resized(self, event):
+        box = self._box.get(event.widget)
+        if box is None or box[3] - box[1] != event.height:
+            self.changed()
+
+    def _resized(self, event):
+        if not self.own_width:
+            self.set_width(event.width)
+        self._follow()
+
+    def set_width(self, width):
+        """Every chunk *width* wide. Measured where the rows were laid out
+        first: read mid-layout, a wrapped row's width swung for good."""
+        if width > 1 and width != self._width:
+            self._width = width
+            for group in self.groups:
+                for chunk in group.chunks:
+                    chunk.place_configure(width=max(1, width - 2 * group.padx))
+            self.changed()
+
+    def _scrolled(self, first, last):
+        if self.scrolled is not None:
+            self.scrolled(first, last)
+        self._follow()
+
+    def _restack(self, notify=True):
+        self._job = None
+        boxes, y, widest = {}, 0, 0
+        try:
+            if not self.canvas.winfo_exists():
+                return
+            for group in self.groups:
+                if not group.chunks:
+                    continue
+                y += group.pady[0]
+                for chunk in group.chunks:
+                    # An emptied frame keeps the size it had; it takes none.
+                    held = self.canvas.tk.call("winfo", "children", chunk)
+                    h = chunk.winfo_reqheight() if held else 0
+                    w = chunk.winfo_reqwidth()
+                    boxes[chunk] = (group.padx, y, (self._width or w) - group.padx, y + h)
+                    widest = max(widest, w + 2 * group.padx)
+                    y += h
+                y += group.pady[1]
+        except tk.TclError:
+            return
+        grew = (y, widest) != (self.total, self.widest)
+        self._box, self.total, self.widest = boxes, y, widest
+        try:
+            self.canvas.configure(
+                scrollregion=(0, 0, max(1, self._width or widest), y))
+        except tk.TclError:
+            return
+        self._follow()
+        if notify and grew and self.on_change is not None:
+            self.on_change()
+
+    def _follow(self):
+        """Each chunk near the view to its true place, the rest out of sight:
+        only what moved is placed again, not the whole list."""
+        try:
+            top = self.canvas.canvasy(0)
+            view = max(1, self.canvas.winfo_height())
+            for chunk, (_x0, y0, _x1, y1) in self._box.items():
+                if y1 <= y0 or y1 <= top - view or y0 >= top + 2 * view:
+                    want = -self.PARK
+                else:
+                    want = max(-self.PARK, min(self.PARK, int(round(y0 - top))))
+                if self._placed.get(chunk) != want:
+                    self._placed[chunk] = want
+                    chunk.place_configure(y=want)
+        except tk.TclError:
+            pass
+
+
+class _RowGroup:
+    """One block of a RowStack, built a chunk at a time."""
+
+    def __init__(self, stack, bg, padx, pady, every):
+        self.stack, self.bg, self.padx, self.pady = stack, bg, padx, pady
+        self.every = every
+        self.chunks = []
+
+    def add(self):
+        """The frame the next row is made in and packed into."""
+        if self.chunks and len(self.chunks[-1].winfo_children()) < self.every:
+            return self.chunks[-1]
+        return self.stack._new_chunk(self)
+
+    def rows(self):
+        return [row for chunk in self.chunks for row in chunk.winfo_children()]
+
+    def winfo_children(self):
+        """Its rows, as the frame it stands for listed them: a walk down the
+        widget tree from where that frame stood still reaches every row."""
+        return self.rows()
+
+    def clear(self):
+        for chunk in self.chunks:
+            self.stack._forget(chunk)
+            chunk.destroy()
+        self.chunks = []
+        self.stack.changed()
+
+    def discard(self, row):
+        """Destroy *row*, and its chunk with it once that holds nothing."""
+        chunk = row.master
+        row.destroy()
+        if chunk in self.chunks and not chunk.winfo_children():
+            self.chunks.remove(chunk)
+            self.stack._forget(chunk)
+            chunk.destroy()
+        self.stack.changed()
+
+
 class DialogsMixin:
     """Dialogs, dropdowns and popups for :class:`NoteOrganizer`.
 
@@ -1045,21 +1261,23 @@ class DialogsMixin:
         self._place_dropdown_popup(pop, anchor_widget, anchor_xy=anchor_xy,
                                    keyboard_from=keyboard_from)
 
-    def _scrolling_rows(self, parent, bg, pop):
-        """A frame packed into *parent* for the part of *pop* that grows with
-        what it holds, shown in a viewport that scrolls once the popup would
-        be taller than the app window: the template editor with 25 checklist
-        items, and the picker with as many templates, ran off the screen,
-        Save and the last templates with them. Tab and the arrows bring what
-        they land on into sight (_bring_into_sight), the wheel scrolls it."""
+    def _row_stack(self, canvas, **options):
+        """A RowStack drawing a list's rows on *canvas*."""
+        return RowStack(self, canvas, **options)
+
+    def _scrolling_rows(self, parent, bg_key, pop):
+        """A RowStack packed into *parent* for the part of *pop* that grows
+        with what it holds, shown in a viewport that scrolls once the popup
+        would be taller than the app window: the template editor with 25
+        checklist items, and the picker with as many templates, ran off the
+        screen, Save and the last templates with them. Tab and the arrows
+        bring what they land on into sight, the wheel scrolls it."""
+        bg = self.colors[bg_key]
         holder = tk.Frame(parent, bg=bg)
         holder.pack(side="top", fill="both", expand=True)
         view = tk.Canvas(holder, bg=bg, highlightthickness=0, bd=0,
                          width=1, height=1)
         bar = ttk.Scrollbar(holder, orient="vertical", command=view.yview)
-        view.configure(yscrollcommand=bar.set)
-        rows = tk.Frame(view, bg=bg)
-        view.create_window(0, 0, window=rows, anchor="nw")
         view.pack(side="left", fill="both", expand=True)
         pending = {"job": None}
 
@@ -1067,10 +1285,11 @@ class DialogsMixin:
             pending["job"] = None
             try:
                 pop.update_idletasks()
-                w, h = rows.winfo_reqwidth(), rows.winfo_reqheight()
+                w, h = stack.size()
                 others = pop.winfo_reqheight() - view.winfo_reqheight()
                 shown = min(h, max(self.px(80), self.winfo_height() - 16 - others))
-                view.configure(width=w, height=shown, scrollregion=(0, 0, w, h))
+                stack.set_width(w)
+                view.configure(width=max(1, w), height=max(1, shown))
                 if h > shown:
                     bar.pack(side="right", fill="y", before=view)
                 else:
@@ -1082,6 +1301,9 @@ class DialogsMixin:
             if pending["job"] is None:
                 pending["job"] = self.after_idle(fit)
 
+        stack = self._row_stack(view, scrolled=bar.set, on_change=fit_later,
+                                own_width=True)
+
         def wheel(event):
             w = event.widget
             if (isinstance(w, (str, tk.Text))
@@ -1092,7 +1314,6 @@ class DialogsMixin:
             view.yview_scroll(-2 if up else 2, "units")
             return "break"
 
-        rows.bind("<Configure>", fit_later, add="+")
         self._bind_window_for_popup(pop, "<Configure>", fit_later)
         for seq in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
             pop.bind(seq, wheel, add="+")
@@ -1100,7 +1321,7 @@ class DialogsMixin:
         # is placed, and -topmost set after that does not stick (ISSUES_LOG:
         # "The template editor that "did nothing" when clicked").
         fit_later()
-        return rows
+        return stack
 
     def _maybe_dismiss_mini_popup(self, event):
         pop = getattr(self, "_mini_popup", None)
@@ -1660,12 +1881,25 @@ class DialogsMixin:
         gather(top)
         if not drawn:
             return found
-        return sorted(found, key=lambda w: (w.winfo_rooty(), w.winfo_rootx()))
+        return sorted(found, key=lambda w: (self._root_y(w), w.winfo_rootx()))
 
-    @staticmethod
-    def _centre_of(w):
+    def _centre_of(self, w):
         return (w.winfo_rootx() + w.winfo_width() / 2,
-                w.winfo_rooty() + w.winfo_height() / 2)
+                self._root_y(w) + w.winfo_height() / 2)
+
+    def _root_y(self, w):
+        """*w*'s rooty where it stands in its list, though a row stack has
+        its chunk placed out of sight (RowStack): sorted by that place, the
+        picker's last templates came first."""
+        y, child = w.winfo_rooty(), w
+        while child.master is not None and not isinstance(child, (tk.Tk, tk.Toplevel)):
+            canvas = child.master
+            stack = getattr(canvas, "_row_stack", None)
+            box = stack.box(child) if stack is not None else None
+            if box is not None:
+                y += int(round(box[1] - canvas.canvasy(0))) - child.winfo_y()
+            child = canvas
+        return y
 
     def _key_walk(self, widget, step):
         """Up, Down, Left and Right go to the nearest choice that way, Home
@@ -1929,7 +2163,7 @@ class DialogsMixin:
             while child is not None and not isinstance(child, (tk.Tk, tk.Toplevel)):
                 parent = child.master
                 if (isinstance(parent, tk.Canvas) and isinstance(child, tk.Frame)
-                        and child.winfo_manager() == "canvas"):
+                        and self._drawn_box(parent, child) is not None):
                     self._show_on_canvas(parent, child, widget, part)
                 child = parent
         except (tk.TclError, AttributeError, ValueError, TypeError):
@@ -1943,6 +2177,17 @@ class DialogsMixin:
                 return item
         return None
 
+    def _drawn_box(self, canvas, child):
+        """Where *canvas* draws *child*, in its own coordinates: a window
+        item's box, or a row stack's chunk's (RowStack); else None."""
+        stack = getattr(canvas, "_row_stack", None)
+        if stack is not None and stack.box(child) is not None:
+            return stack.box(child)
+        if child.winfo_manager() != "canvas":
+            return None
+        item = self._canvas_window_item(canvas, child)
+        return canvas.bbox(item) if item is not None else None
+
     def _offset_within(self, widget, page, axis):
         """How far *widget* lies from *page*'s top (axis "y") or left edge.
         A canvas on the way is crossed by its scroll, which it updates at
@@ -1950,12 +2195,11 @@ class DialogsMixin:
         total, w = 0.0, widget
         while w is not None and w is not page:
             parent = w.master
-            item = (self._canvas_window_item(parent, w)
-                    if isinstance(parent, tk.Canvas)
-                    and w.winfo_manager() == "canvas" else None)
-            if item is not None:
+            box = (self._drawn_box(parent, w)
+                   if isinstance(parent, tk.Canvas) else None)
+            if box is not None:
                 shown = parent.canvasy(0) if axis == "y" else parent.canvasx(0)
-                total += parent.bbox(item)[1 if axis == "y" else 0] - shown
+                total += box[1 if axis == "y" else 0] - shown
             else:
                 total += w.winfo_y() if axis == "y" else w.winfo_x()
             w = parent
@@ -1964,10 +2208,9 @@ class DialogsMixin:
     def _show_on_canvas(self, canvas, page, widget, part=None):
         """Scroll *canvas*, which draws *page*, until *widget* (or *part* of
         it) is inside its view with a small margin -- the least movement."""
-        item = self._canvas_window_item(canvas, page)
-        if item is None:
+        box = self._drawn_box(canvas, page)
+        if box is None:
             return
-        box = canvas.bbox(item)
         region = str(canvas.cget("scrollregion")).split() or canvas.bbox("all")
         if not box or not region or len(region) != 4:
             return

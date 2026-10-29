@@ -775,7 +775,7 @@ def chapter_7():
     if not app._checklist_open:
         app.checklist_btn.invoke()
         app.update()
-    for box in [w for w in _all_children(app.checklist_items_frame)
+    for box in [w for w in _all_children(app._checklist_canvas)
                 if isinstance(w, tk.Checkbutton)]:
         if box.cget("variable") and int(app.getvar(box.cget("variable"))):
             box.invoke()

@@ -730,8 +730,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            for w in ([inner] if first == 0 else made):",
-        "replace": "            for w in ([inner] if first == 0 else []):"
+        "find": "                    w for w in made if w.master in wheeled]:\n",
+        "replace": "                    w for w in made if False]:\n"
       }
     ],
     "must_fail": ["Show more in Share adds the rest under the boxes already drawn"],
@@ -2221,7 +2221,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            if isinstance(held, tk.Checkbutton) and held.master.master is frame:\n                self._ring_checklist_row(held, True)\n",
+        "find": "            if isinstance(held, tk.Checkbutton) and held.master.master in rows.chunks:\n                self._ring_checklist_row(held, True)\n",
         "replace": ""
       }
     ],
@@ -9008,8 +9008,8 @@
     "edits": [
       {
         "file": "noteorganizer/ui/settings_page.py",
-        "find": "        frame = self._scrolling_rows(shell, self.colors[\"card\"], pop)\n",
-        "replace": "        frame = tk.Frame(shell, bg=self.colors[\"card\"])\n        frame.pack(fill=\"both\", expand=True)\n"
+        "find": "        stack = self._scrolling_rows(shell, \"card\", pop)\n",
+        "replace": "        _grow = tk.Canvas(shell, bg=self.colors[\"card\"], highlightthickness=0,\n                          width=1, height=1)\n        _grow.pack(fill=\"both\", expand=True)\n        stack = self._row_stack(_grow, on_change=lambda: _grow.configure(\n            width=stack.widest, height=stack.total))\n"
       }
     ],
     "must_fail": [
@@ -9026,8 +9026,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        rows = self._scrolling_rows(frame, self.colors[\"card\"], pop)\n",
-        "replace": "        rows = frame\n"
+        "find": "        rows = self._scrolling_rows(frame, \"card\", pop).group(every=32)\n",
+        "replace": "        _grow = tk.Canvas(frame, bg=self.colors[\"card\"], highlightthickness=0,\n                          width=1, height=1)\n        _grow.pack(fill=\"both\", expand=True)\n        _stack = self._row_stack(_grow, on_change=lambda: _grow.configure(\n            width=_stack.widest, height=_stack.total))\n        rows = _stack.group(every=32)\n"
       }
     ],
     "must_fail": [
@@ -9550,5 +9550,327 @@
       "test_data_safety"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "RW01",
+    "about": "a row stack never places a chunk at its true place near the view",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "                    want = max(-self.PARK, min(self.PARK, int(round(y0 - top))))\n",
+        "replace": "                    want = -self.PARK\n"
+      }
+    ],
+    "must_fail": [
+      "a note's checklist longer than one frame can scroll shows its last item",
+      "the picker with 1,000 templates scrolls to the last",
+      "every Trash control Tab lands on is in sight"
+    ],
+    "suites": [
+      "qa2",
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RW02",
+    "about": "bringing a widget into sight passes over a row stack's chunks",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "        if stack is not None and stack.box(child) is not None:\n            return stack.box(child)\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "the picker with 1,000 templates scrolls to the last",
+      "every Trash control Tab lands on is in sight"
+    ],
+    "suites": [
+      "qa2",
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RW03",
+    "about": "the arrows sort a row stack's choices by where a chunk out of sight is parked",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "                y += int(round(box[1] - canvas.canvasy(0))) - child.winfo_y()\n",
+        "replace": "                pass\n"
+      }
+    ],
+    "must_fail": [
+      "the picker with 1,000 templates scrolls to the last"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed",
+    "note": "1,000 templates leave the last chunk short: by the parked places, End finds the 31st of another chunk."
+  },
+  {
+    "id": "RW04",
+    "about": "a chunk made for a block above others is stacked after them, where Tab reaches it last",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "        if later is not None:\n            chunk.lower(later)      # Tab follows the stacking order\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "the template editor with 70 long checklist items scrolls to its Add box"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RW05",
+    "about": "a checklist item moved over a chunk's edge is packed into the other chunk",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if upper.master is lower.master:\n",
+        "replace": "            if True:\n"
+      }
+    ],
+    "must_fail": [
+      "Alt+Down over the edge of a chunk moves the item"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RW06",
+    "about": "a checklist item put back at a chunk's edge goes into the next chunk",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            elif above is not None and above.master is not after.master:\n",
+        "replace": "            elif False:\n"
+      }
+    ],
+    "must_fail": [
+      "an item deleted at the end of a chunk and put back stands there again"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RW07",
+    "about": "a template's table grown wider at the same height leaves the editor as narrow as it was",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "            # A table grown wider at the same height resizes no chunk: the\n            # editor is measured again for it.\n            stack.changed()\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a template's table widened at the same height widens its editor"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RW08",
+    "about": "the note's checklist is one frame again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        ).group(every=4)\n",
+        "replace": "        ).group(every=10 ** 9)\n"
+      }
+    ],
+    "must_fail": [
+      "a note's checklist longer than one frame can scroll shows its last item"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed",
+    "note": "All its rows in one chunk: one frame again, held at the 16 bits of a window's place on every system."
+  },
+  {
+    "id": "RW09",
+    "about": "the template picker is one frame again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        rows = self._scrolling_rows(frame, \"card\", pop).group(every=32)\n",
+        "replace": "        rows = self._scrolling_rows(frame, \"card\", pop).group(every=10 ** 9)\n"
+      }
+    ],
+    "must_fail": [
+      "the picker with 1,000 templates scrolls to the last"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed",
+    "note": "All its rows in one chunk: one frame again, held at the 16 bits of a window's place on every system."
+  },
+  {
+    "id": "RW10",
+    "about": "the template editor's checklist is one frame again",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "        tpl_cl_rows = stack.group(bg=\"sidebar\", pady=(0, 2), every=4)\n",
+        "replace": "        tpl_cl_rows = stack.group(bg=\"sidebar\", pady=(0, 2), every=10 ** 9)\n"
+      }
+    ],
+    "must_fail": [
+      "the template editor with 70 long checklist items scrolls to its Add box"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed",
+    "note": "All its rows in one chunk: one frame again, held at the 16 bits of a window's place on every system."
+  },
+  {
+    "id": "RW11",
+    "about": "Settings > Templates is one frame again",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "        rows = self._row_stack(canvas, scrolled=sb.set).group(every=32)\n",
+        "replace": "        rows = self._row_stack(canvas, scrolled=sb.set).group(every=10 ** 9)\n"
+      }
+    ],
+    "must_fail": [
+      "Settings > Templates with 1,000 templates scrolls to the last"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed",
+    "note": "All its rows in one chunk: one frame again, held at the 16 bits of a window's place on every system."
+  },
+  {
+    "id": "RW12",
+    "about": "Recently deleted is one frame again",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "        rows = self._row_stack(canvas, scrolled=sb.set).group(every=16)\n",
+        "replace": "        rows = self._row_stack(canvas, scrolled=sb.set).group(every=10 ** 9)\n"
+      }
+    ],
+    "must_fail": [
+      "Recently deleted with 1,000 rows on its page scrolls to the last"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed",
+    "note": "All its rows in one chunk: one frame again, held at the 16 bits of a window's place on every system."
+  },
+  {
+    "id": "RW13",
+    "about": "a group of Duplicates is one frame again",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "            box = stack.group(bg=\"sidebar\", padx=2, pady=(5, 5), every=32)\n",
+        "replace": "            box = stack.group(bg=\"sidebar\", padx=2, pady=(5, 5), every=10 ** 9)\n"
+      }
+    ],
+    "must_fail": [
+      "Duplicates with a group of 2,400 copies scrolls"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed",
+    "note": "All its rows in one chunk: one frame again, held at the 16 bits of a window's place on every system."
+  },
+  {
+    "id": "RW14",
+    "about": "the Share list is one frame again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        inner = self._row_stack(canvas, scrolled=sb.set).group(bg=\"sidebar\",\n                                                               every=32)\n",
+        "replace": "        inner = self._row_stack(canvas, scrolled=sb.set).group(bg=\"sidebar\",\n                                                               every=10 ** 9)\n"
+      }
+    ],
+    "must_fail": [
+      "Share with every page of 2,500 notes shown scrolls to the last box"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed",
+    "note": "All its rows in one chunk: one frame again, held at the 16 bits of a window's place on every system."
+  },
+  {
+    "id": "RW15",
+    "about": "the day's list is one frame again",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/calendar_view.py",
+        "find": "        inner = self._row_stack(canvas, scrolled=sb.set).group(bg=\"sidebar\",\n                                                               every=32)\n",
+        "replace": "        inner = self._row_stack(canvas, scrolled=sb.set).group(bg=\"sidebar\",\n                                                               every=10 ** 9)\n"
+      }
+    ],
+    "must_fail": [
+      "a day of 1,000 notes scrolls to the last"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed",
+    "note": "All its rows in one chunk: one frame again, held at the 16 bits of a window's place on every system."
+  },
+  {
+    "id": "RW16",
+    "about": "the History's rows are one frame again",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/calendar_view.py",
+        "find": "        self._history_rows = self._cal_stack.group(bg=\"bg\", padx=30,\n                                                   pady=(0, 10), every=32)\n",
+        "replace": "        self._history_rows = self._cal_stack.group(bg=\"bg\", padx=30,\n                                                   pady=(0, 10), every=10 ** 9)\n"
+      }
+    ],
+    "must_fail": [
+      "the History with 30 series of 50 days unfolded scrolls"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed",
+    "note": "All its rows in one chunk: one frame again, held at the 16 bits of a window's place on every system."
+  },
+  {
+    "id": "RW17",
+    "about": "the calculator's history is one frame again",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/calculator_panel.py",
+        "find": "        ).group(every=32)\n",
+        "replace": "        ).group(every=10 ** 9)\n"
+      }
+    ],
+    "must_fail": [
+      "the calculator's history of 2,500 sums scrolls to the oldest"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed",
+    "note": "All its rows in one chunk: one frame again, held at the 16 bits of a window's place on every system."
   }
 ]

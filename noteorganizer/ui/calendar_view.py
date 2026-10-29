@@ -279,21 +279,16 @@ class CalendarViewMixin:
         def _cal_view_moved(first, last, _set=cal_sb.set):
             _set(first, last)
             self._cal_scroll_moved(first)
-        self.cal_scroll_canvas.configure(yscrollcommand=_cal_view_moved)
         cal_sb.pack(side="right", fill="y")
         self.cal_scroll_canvas.pack(side="left", fill="both", expand=True)
 
-        self.cal_scroll_inner = tk.Frame(self.cal_scroll_canvas)
+        # The month, its day and the register's head in one chunk; the
+        # register's rows below it, in chunks of their own: its pages, each
+        # series unfolded to up to 50 days, grow without end (RowStack).
+        self._cal_stack = self._row_stack(self.cal_scroll_canvas,
+                                          scrolled=_cal_view_moved)
+        self.cal_scroll_inner = self._cal_stack.group(bg="bg").add()
         self.track_theme(self.cal_scroll_inner, bg="bg")
-        self._cal_scroll_win = self.cal_scroll_canvas.create_window(
-            (0, 0), window=self.cal_scroll_inner, anchor="nw")
-
-        def _cal_scroll_config(e):
-            self.cal_scroll_canvas.configure(scrollregion=self.cal_scroll_canvas.bbox("all"))
-        self.cal_scroll_inner.bind("<Configure>", _cal_scroll_config)
-        self.cal_scroll_canvas.bind(
-            "<Configure>",
-            lambda e: self.cal_scroll_canvas.itemconfig(self._cal_scroll_win, width=e.width))
         self._bind_mousewheel_recursive(self.cal_scroll_inner, self.cal_scroll_canvas)
 
         # Day panel: appears only when a day is selected, at the bottom of the
@@ -1364,26 +1359,25 @@ class CalendarViewMixin:
         body.pack(fill="both", expand=True, padx=15, pady=(0, 10))
         canvas = tk.Canvas(body, bg=self.colors["sidebar"], highlightthickness=0)
         sb = ttk.Scrollbar(body, orient="vertical", command=canvas.yview)
-        inner = tk.Frame(canvas, bg=self.colors["sidebar"])
-        inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        win = canvas.create_window((0, 0), window=inner, anchor="nw")
-        canvas.bind("<Configure>", lambda e: canvas.itemconfig(win, width=e.width))
-        canvas.configure(yscrollcommand=sb.set)
         canvas.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
+        # A day can hold every note there is: past what one frame scrolls.
+        inner = self._row_stack(canvas, scrolled=sb.set).group(bg="sidebar",
+                                                               every=32)
 
         day_notes = _notes_on_day(self, date_str)
         rows = _day_list_rows(self, day_notes, date_str)
         self._day_panel_shows = ("list", date_str, _day_list_key(rows), None)
         if not day_notes:
-            tk.Label(inner, text="No notes for this day yet.",
+            tk.Label(inner.add(), text="No notes for this day yet.",
                      bg=self.colors["sidebar"], fg=self.colors["subtext"],
                      font=("Segoe UI", 10)).pack(pady=10)
-            self._bind_mousewheel_recursive(inner, canvas)
+            for chunk in inner.chunks:
+                self._bind_mousewheel_recursive(chunk, canvas)
             return
 
         for base_note, (title_text, icons, color) in rows:
-            row = tk.Frame(inner, bg=self.colors["card"], cursor="hand2")
+            row = tk.Frame(inner.add(), bg=self.colors["card"], cursor="hand2")
             # The keyboard's ring rests in the row's own fill; the title's
             # padding gives back the pixel it takes.
             self._ring_round(row)
@@ -1419,7 +1413,8 @@ class CalendarViewMixin:
                             self.show_day_note(n, d), menu=_context)
 
         # Bind the wheel now that every note row exists.
-        self._bind_mousewheel_recursive(inner, canvas)
+        for chunk in inner.chunks:
+            self._bind_mousewheel_recursive(chunk, canvas)
 
     def _open_note_from_grid(self, base_note, date_str):
         """Land on ONE note from a chip in the month grid.
@@ -1649,8 +1644,8 @@ class CalendarViewMixin:
         self.close_day_panel()
         self.cal_grid_frame.pack_forget()
         self._history_visible = True
-        self.history_frame.pack(side="top", fill="both", expand=True,
-                                padx=30, pady=(0, 10))
+        # Its 10 px below go under the rows, which stand under this chunk.
+        self.history_frame.pack(side="top", fill="both", expand=True, padx=30)
         if hasattr(self, "_history_toggle_btn"):
             self._history_toggle_btn.configure(text="📅 Calendar")
         self._render_calendar_history()
@@ -1658,6 +1653,7 @@ class CalendarViewMixin:
     def _hide_calendar_history(self):
         self._history_visible = False
         self.history_frame.pack_forget()
+        self._history_rows.clear()
         self.cal_grid_frame.pack(side="top", fill="both", expand=True,
                                  padx=30, pady=(0, 10))
         if hasattr(self, "_history_toggle_btn"):
@@ -1699,13 +1695,10 @@ class CalendarViewMixin:
             b.pack(side="left", padx=(0, 6), ipadx=8, ipady=2)
             self._history_chip_btns[bucket] = b
 
-        self._history_rows = tk.Frame(self.history_frame)
-        self.track_theme(self._history_rows, bg="bg")
-        self._history_rows.pack(fill="both", expand=True)
-        # The frame outlives every render, so its wheel is bound here, once;
-        # each render binds only the rows it makes (see there).
-        self._bind_mousewheel_recursive(self._history_rows,
-                                        self.cal_scroll_canvas)
+        # The rows stand below this chunk, in chunks a render makes and takes
+        # away (RowStack): the wheel goes to each one as it is made.
+        self._history_rows = self._cal_stack.group(bg="bg", padx=30,
+                                                   pady=(0, 10), every=32)
 
     def _history_set_bucket(self, bucket):
         self._history_bucket = bucket
@@ -1743,8 +1736,7 @@ class CalendarViewMixin:
                 pass
         if not (self._history_visible and self._history_built):
             return
-        for w in self._history_rows.winfo_children():
-            w.destroy()
+        self._history_rows.clear()
 
         # Active-chip styling rides every render (including theme ones).
         for bucket, b in self._history_chip_btns.items():
@@ -1759,7 +1751,7 @@ class CalendarViewMixin:
         entries = self._history_entries_now()
 
         if not entries:
-            lbl = tk.Label(self._history_rows,
+            lbl = tk.Label(self._history_rows.add(),
                            text=("No calendar entries match." if query or
                                  self._history_bucket != "All" else
                                  "Nothing on the calendar yet — give a note "
@@ -1767,6 +1759,8 @@ class CalendarViewMixin:
                            font=("Segoe UI", 10), bg=self.colors["bg"],
                            fg=self.colors["subtext"])
             lbl.pack(pady=20)
+            for chunk in self._history_rows.chunks:
+                self._bind_mousewheel_recursive(chunk, self.cal_scroll_canvas)
             return
         self._history_draw_rows(entries, 0)
 
@@ -1778,13 +1772,13 @@ class CalendarViewMixin:
     def _history_draw_rows(self, entries, first):
         """The rows for entries[first:] up to the page's end, under any
         already drawn, and the button for the rest."""
-        before = set(self._history_rows.winfo_children())
+        before = set(self._history_rows.chunks) | set(self._history_rows.rows())
 
         def one_row(parent, parts, fg, command, context_cmd=None, indent=0,
                     bold=False):
             """`parts` is (before the title, the title, after it): only the
             title gives way when the row is too narrow for all three."""
-            row = tk.Frame(parent, bg=self.colors["card"], cursor="hand2")
+            row = tk.Frame(parent.add(), bg=self.colors["card"], cursor="hand2")
             self._ring_round(row)       # the title's padding holds its pixel
             row.pack(fill="x", pady=1, padx=(indent, 0))
             lbl = tk.Label(row, anchor="w", bg=self.colors["card"], fg=fg)
@@ -1891,7 +1885,7 @@ class CalendarViewMixin:
                             indent=26)
                     if entry["children_kind"] == "edited":
                         info = tk.Label(
-                            self._history_rows,
+                            self._history_rows.add(),
                             text=("    …every other day of this series shows "
                                   "the series content"),
                             font=("Segoe UI", 8), anchor="w",
@@ -1901,7 +1895,7 @@ class CalendarViewMixin:
         self._history_more_btn = None
         if len(entries) > self._history_shown:
             more = tk.Button(
-                self._history_rows,
+                self._history_rows.add(),
                 text=f"Show more ({len(entries) - self._history_shown} left)",
                 relief="flat", cursor="hand2", font=("Segoe UI", 9, "bold"),
                 bg=self.colors["card"], fg=self.colors["accent_text"],
@@ -1911,12 +1905,16 @@ class CalendarViewMixin:
             more.pack(fill="x", pady=(6, 2))
             self._history_more_btn = more
 
-        # The rows are new; the frame holding them is bound once, where it
-        # is built -- binding it again here left one more Tcl command
+        # Only what is new: a chunk and all in it, and a row added to an old
+        # chunk -- binding again what was bound left one more Tcl command
         # behind at every render, for as long as the app ran.
-        for row in self._history_rows.winfo_children():
-            if row not in before:
-                self._bind_mousewheel_recursive(row, self.cal_scroll_canvas)
+        for chunk in self._history_rows.chunks:
+            if chunk not in before:
+                self._bind_mousewheel_recursive(chunk, self.cal_scroll_canvas)
+                continue
+            for row in chunk.winfo_children():
+                if row not in before:
+                    self._bind_mousewheel_recursive(row, self.cal_scroll_canvas)
 
     def _history_toggle_group(self, note_id):
         if note_id in self._history_expanded:

@@ -252,7 +252,7 @@ def s06():
     app._working_checklist = [
         {'text': 'pack the bags', 'done': True},
         {'text': 'call the venue', 'done': False}]
-    if hasattr(app, 'checklist_items_frame'):
+    if hasattr(app, '_checklist_rows'):
         app._render_checklist_items()
     if not app._checklist_open:
         app.toggle_checklist_section()
