@@ -4503,6 +4503,45 @@ check(f"a picture's preview opened by a click takes the keyboard, so keys "
 check(f"...and Tab and Shift+Tab walk its two buttons only ({_kp_inside}, "
       f"still open {_kp_open})", len(_kp_inside) == 6 and all(_kp_inside)
       and _kp_open)
+# Round 6: Enter presses the preview's button the keyboard is on, as Space
+# does and as a question's answers take it -- a Tk button answers Space alone,
+# and Enter on Close did nothing. And Open externally opens the picture: a
+# name reused below it in the same function made it open the overlay's name.
+# The keypad's Enter is asked where Tk can make one: Tk on Windows has no
+# keycode for KP_Enter (qa9's questions say the same).
+_kr_seen, _kr_opened = {}, []
+_kr_keys = [('<Return>', 0), ('<Return>', 1)]
+if not sys.platform.startswith('win'):
+    _kr_keys.insert(1, ('<KP_Enter>', 0))
+app._open_externally = lambda path, *a, **k: _kr_opened.append(os.path.basename(path))
+try:
+    for _kr_key, _kr_steps in _kr_keys:
+        _take_focus(app.body_text)
+        _qa_click(_ka_names[1])
+        _kv_settle()
+        _kr_pop = app._mini_popup
+        for _ in range(_kr_steps):                      # Tab to Open externally
+            app.event_generate('<Tab>')
+            _kv_settle(2)
+        _kr_held = _ka_holder()
+        _kr_on = (str(_kr_held.cget('text'))
+                  if isinstance(_kr_held, tk.Button) and _kr_pop is not None
+                  and str(_kr_held).startswith(str(_kr_pop) + '.') else None)
+        if _kr_on is not None:
+            _kr_held.event_generate(_kr_key)
+            _kv_settle()
+        _kr_seen[f'{_kr_key} on {_kr_on}'] = (app._mini_popup is None,
+                                              _ka_holder() is app.body_text)
+finally:
+    del app._open_externally
+    app._dismiss_mini_popup()
+    _kv_settle()
+check(f"Enter (and the keypad's, off Windows) presses the preview's Close, and its "
+      f"Open externally opens the picture ((closed, keyboard back in the note): "
+      f"{_kr_seen}; opened {_kr_opened})",
+      _kr_seen == {f'{k} on {"Open externally" if s else "✕ Close"}': (True, True)
+                   for k, s in _kr_keys}
+      and _kr_opened == ['20261002120000000000_kb.png'])
 # Round 5: Ctrl+F and Ctrl+N gave the keyboard to a box under the preview,
 # left open over it, and the keys went into a note nobody could see. The
 # shortcut closes it, as a click outside does. Ctrl+N last: it clears the note.

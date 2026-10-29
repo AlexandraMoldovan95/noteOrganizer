@@ -10567,6 +10567,42 @@
     "expect": "killed"
   },
   {
+    "id": "RY15",
+    "about": "Enter on the picture preview's buttons does nothing, as a Tk button answers Space alone",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "            for seq in (\"<Return>\", \"<KP_Enter>\"):\n",
+        "replace": "            for seq in ():\n"
+      }
+    ],
+    "must_fail": [
+      "Enter (and the keypad's, off Windows) presses the preview's Close"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RY16",
+    "about": "the preview's Open externally opens the overlay's name, the picture's path reused below it",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "            shown_at, place = str(overlay), self._place_of(opener)\n",
+        "replace": "            path = shown_at = str(overlay)\n            place = self._place_of(opener)\n"
+      }
+    ],
+    "must_fail": [
+      "Enter (and the keypad's, off Windows) presses the preview's Close"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
     "id": "RY17",
     "about": "long checklist items moved together by the keyboard gather in one chunk, never chunked again",
     "edits": [

@@ -474,17 +474,23 @@ class AttachmentsMixin:
             return "break"
 
         # Tab and Shift+Tab walk its two buttons and come back round, as a
-        # dialog's answers do (<<PrevWindow>>: X11's ISO_Left_Tab).
+        # dialog's answers do (<<PrevWindow>>: X11's ISO_Left_Tab). And Enter
+        # presses the one holding the keyboard, as a dialog's do: a Tk button
+        # answers Space alone, and Enter on Close did nothing.
         for b in buttons:
             b.bind("<Tab>", lambda e, b=b: cycle(b, 1))
             for seq in ("<Shift-Tab>", "<<PrevWindow>>"):
                 b.bind(seq, lambda e, b=b: cycle(b, -1))
+            for seq in ("<Return>", "<KP_Enter>"):
+                b.bind(seq, lambda e, b=b: (b.invoke(), "break")[1])
         if opener is not None and opener is not self:
-            path, place = str(overlay), self._place_of(opener)
+            # Not named *path*: Open externally's command reads the picture's
+            # path when pressed, and it opened the overlay's name instead.
+            shown_at, place = str(overlay), self._place_of(opener)
             clicks = getattr(self, "_pointer_presses", 0)
             overlay.bind("<Destroy>", lambda e: (
-                self._keyboard_back(path, place, clicks)
-                if str(e.widget) == path else None), add="+")
+                self._keyboard_back(shown_at, place, clicks)
+                if str(e.widget) == shown_at else None), add="+")
         # Click-outside-to-dismiss, matching every other in-app overlay —
         # bound on a short delay so the click that OPENED this preview isn't
         # also immediately seen as a click "outside" it. Bound for THIS
