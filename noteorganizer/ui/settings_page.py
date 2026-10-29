@@ -1179,7 +1179,7 @@ class SettingsPageMixin:
                  fg=self.colors["subtext"], font=("Segoe UI", 8, "bold"),
                  anchor="w").pack(fill="x", pady=(6, 0))
         # Its own block, as tall as a note's checklist can be (RowStack).
-        tpl_cl_rows = stack.group(bg="sidebar", pady=(0, 2), every=4)
+        tpl_cl_rows = stack.group(bg="sidebar", pady=(0, 2), every=32)
         # Each row's tick box, by item, for the keyboard after a move.
         tpl_boxes = {}
 

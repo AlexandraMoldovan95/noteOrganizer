@@ -9554,12 +9554,12 @@
   },
   {
     "id": "RW01",
-    "about": "a row stack never places a chunk at its true place near the view",
+    "about": "a row stack never places a chunk at its true place in the view",
     "edits": [
       {
         "file": "noteorganizer/ui/dialogs.py",
-        "find": "                    want = max(-self.PARK, min(self.PARK, int(round(y0 - top))))\n",
-        "replace": "                    want = -self.PARK\n"
+        "find": "                    want = (x0, int(round(y0 - top)))\n",
+        "replace": "                    want = parked\n"
       }
     ],
     "must_fail": [
@@ -9654,7 +9654,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            elif above is not None and above.master is not after.master:\n",
+        "find": "            elif above is not None and group.room(above.master):\n",
         "replace": "            elif False:\n"
       }
     ],
@@ -9690,8 +9690,13 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        ).group(every=4)\n",
+        "find": "        ).group(every=32)\n",
         "replace": "        ).group(every=10 ** 9)\n"
+      },
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "        return self.height(chunk) < self.stack.TALLEST\n",
+        "replace": "        return True\n"
       }
     ],
     "must_fail": [
@@ -9711,6 +9716,11 @@
         "file": "note_organizer.py",
         "find": "        rows = self._scrolling_rows(frame, \"card\", pop).group(every=32)\n",
         "replace": "        rows = self._scrolling_rows(frame, \"card\", pop).group(every=10 ** 9)\n"
+      },
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "        return self.height(chunk) < self.stack.TALLEST\n",
+        "replace": "        return True\n"
       }
     ],
     "must_fail": [
@@ -9728,8 +9738,13 @@
     "edits": [
       {
         "file": "noteorganizer/ui/settings_page.py",
-        "find": "        tpl_cl_rows = stack.group(bg=\"sidebar\", pady=(0, 2), every=4)\n",
+        "find": "        tpl_cl_rows = stack.group(bg=\"sidebar\", pady=(0, 2), every=32)\n",
         "replace": "        tpl_cl_rows = stack.group(bg=\"sidebar\", pady=(0, 2), every=10 ** 9)\n"
+      },
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "        return self.height(chunk) < self.stack.TALLEST\n",
+        "replace": "        return True\n"
       }
     ],
     "must_fail": [
@@ -9749,6 +9764,11 @@
         "file": "noteorganizer/ui/settings_page.py",
         "find": "        rows = self._row_stack(canvas, scrolled=sb.set).group(every=32)\n",
         "replace": "        rows = self._row_stack(canvas, scrolled=sb.set).group(every=10 ** 9)\n"
+      },
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "        return self.height(chunk) < self.stack.TALLEST\n",
+        "replace": "        return True\n"
       }
     ],
     "must_fail": [
@@ -9768,6 +9788,11 @@
         "file": "noteorganizer/ui/settings_page.py",
         "find": "        rows = self._row_stack(canvas, scrolled=sb.set).group(every=16)\n",
         "replace": "        rows = self._row_stack(canvas, scrolled=sb.set).group(every=10 ** 9)\n"
+      },
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "        return self.height(chunk) < self.stack.TALLEST\n",
+        "replace": "        return True\n"
       }
     ],
     "must_fail": [
@@ -9787,6 +9812,11 @@
         "file": "noteorganizer/ui/settings_page.py",
         "find": "            box = stack.group(bg=\"sidebar\", padx=2, pady=(5, 5), every=32)\n",
         "replace": "            box = stack.group(bg=\"sidebar\", padx=2, pady=(5, 5), every=10 ** 9)\n"
+      },
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "        return self.height(chunk) < self.stack.TALLEST\n",
+        "replace": "        return True\n"
       }
     ],
     "must_fail": [
@@ -9806,6 +9836,11 @@
         "file": "note_organizer.py",
         "find": "        inner = self._row_stack(canvas, scrolled=sb.set).group(bg=\"sidebar\",\n                                                               every=32)\n",
         "replace": "        inner = self._row_stack(canvas, scrolled=sb.set).group(bg=\"sidebar\",\n                                                               every=10 ** 9)\n"
+      },
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "        return self.height(chunk) < self.stack.TALLEST\n",
+        "replace": "        return True\n"
       }
     ],
     "must_fail": [
@@ -9825,6 +9860,11 @@
         "file": "noteorganizer/ui/calendar_view.py",
         "find": "        inner = self._row_stack(canvas, scrolled=sb.set).group(bg=\"sidebar\",\n                                                               every=32)\n",
         "replace": "        inner = self._row_stack(canvas, scrolled=sb.set).group(bg=\"sidebar\",\n                                                               every=10 ** 9)\n"
+      },
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "        return self.height(chunk) < self.stack.TALLEST\n",
+        "replace": "        return True\n"
       }
     ],
     "must_fail": [
@@ -9844,6 +9884,11 @@
         "file": "noteorganizer/ui/calendar_view.py",
         "find": "        self._history_rows = self._cal_stack.group(bg=\"bg\", padx=30,\n                                                   pady=(0, 10), every=32)\n",
         "replace": "        self._history_rows = self._cal_stack.group(bg=\"bg\", padx=30,\n                                                   pady=(0, 10), every=10 ** 9)\n"
+      },
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "        return self.height(chunk) < self.stack.TALLEST\n",
+        "replace": "        return True\n"
       }
     ],
     "must_fail": [
@@ -9863,6 +9908,11 @@
         "file": "noteorganizer/ui/calculator_panel.py",
         "find": "        ).group(every=32)\n",
         "replace": "        ).group(every=10 ** 9)\n"
+      },
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "        return self.height(chunk) < self.stack.TALLEST\n",
+        "replace": "        return True\n"
       }
     ],
     "must_fail": [
@@ -10250,6 +10300,150 @@
     ],
     "suites": [
       "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RY01",
+    "about": "a chunk out of sight is parked only above the view, where one taller than its parking place hangs over the list",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "            parked = (-self.PARK, -self.PARK)\n",
+        "replace": "            parked = (0, -self.PARK)\n"
+      }
+    ],
+    "must_fail": [
+      "a chunk taller than its parking place is parked beside the list"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RY02",
+    "about": "a chunk scrolled further into than its parking place is held there, short of its true place",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "                    want = (x0, int(round(y0 - top)))\n",
+        "replace": "                    want = (x0, max(-self.PARK, int(round(y0 - top))))\n"
+      }
+    ],
+    "must_fail": [
+      "a chunk taller than its parking place is parked beside the list"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RY03",
+    "about": "a chunk takes rows by count alone, however tall they make it",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "        return self.height(chunk) < self.stack.TALLEST\n",
+        "replace": "        return True\n"
+      }
+    ],
+    "must_fail": [
+      "a checklist of 40 items of 100 lines is built in chunks inside 16 bits"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RY04",
+    "about": "a chunk's first item put back by Undo goes into the full chunk before it, which grows",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            elif above is not None and group.room(above.master):\n",
+        "replace": "            elif above is not None:\n"
+      }
+    ],
+    "must_fail": [
+      "an item deleted at the end of a chunk and put back stands there again"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RY05",
+    "about": "an item alone in its chunk, put back between two full chunks, goes into the next one",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                    at, item, into=group.chunk_before(after.master))\n",
+        "replace": "                    at, item, before=after)\n"
+      }
+    ],
+    "must_fail": [
+      "an item deleted at the end of a chunk and put back stands there again"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RY06",
+    "about": "a scroll step moves every chunk within a view above and two below, as before",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "                if y1 <= y0 or y1 <= top or y0 >= top + view:\n",
+        "replace": "                if y1 <= y0 or y1 <= top - view or y0 >= top + 2 * view:\n"
+      }
+    ],
+    "must_fail": [
+      "a scroll step of a 1,000-item checklist moves only the chunks in sight"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RY07",
+    "about": "the note's checklist goes four short items to a chunk again, and more chunks move at each scroll step",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        ).group(every=32)\n",
+        "replace": "        ).group(every=4)\n"
+      }
+    ],
+    "must_fail": [
+      "a scroll step of a 1,000-item checklist moves only the chunks in sight"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RY17",
+    "about": "long checklist items moved together by the keyboard gather in one chunk, never chunked again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                if any(group.height(c) > 4 * group.stack.TALLEST for c in chunks):\n                    self._render_checklist_items()\n",
+        "replace": "                pass\n"
+      }
+    ],
+    "must_fail": [
+      "long checklist items moved together by Alt+Up are chunked again"
+    ],
+    "suites": [
+      "qa2"
     ],
     "expect": "killed"
   }

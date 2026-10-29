@@ -71,22 +71,59 @@ def message_shown(message):
     return head + "\n…\n" + tail
 
 
+def _natural_height(widget):
+    """How tall *widget* stands once laid out: Tk's own height, or, for a
+    frame whose children pack has not yet arranged, theirs -- the tallest of
+    those packed side by side, and those one above the other added. A row is
+    measured as it is made, before an idle round lays it out, when its own
+    requested height still reads 1."""
+    kids = widget.winfo_children()
+    if not kids:
+        return widget.winfo_reqheight()
+    across = above = 0
+    for kid in kids:
+        height = _natural_height(kid)
+        try:
+            info = [str(v) for v in kid.tk.splitlist(
+                kid.tk.call("pack", "info", kid))]
+            side = info[info.index("-side") + 1]
+        except (tk.TclError, ValueError, IndexError):
+            side = "top"            # not packed: counted in full
+        if side in ("left", "right"):
+            across = max(across, height)
+        else:
+            above += height
+    try:
+        edge = 2 * (int(str(widget.cget("bd")))
+                    + int(str(widget.cget("highlightthickness"))))
+    except (tk.TclError, ValueError):
+        edge = 0
+    return max(widget.winfo_reqheight(), edge + above + across)
+
+
 class RowStack:
     """A scrolled list's rows, built into chunk frames of a few rows each
     that the stack places on *canvas* itself. One frame holding them all
     stopped scrolling at about 32,767 px: Tk keeps a canvas window's place,
     and X a window's, in 16 bits (ISSUES_LOG: "The list that ended in the
-    middle"). A chunk near the view stands at its true place, every other
-    one parked out of sight above -- placed, never unmapped, so Tab reaches
+    middle"). A chunk in the view stands at its true place, every other one
+    parked out of sight beside it -- placed, never unmapped, so Tab reaches
     it."""
 
-    # How far above the view a chunk is parked, and the furthest any stands:
-    # X keeps a window's place in 16 bits, and Windows its place on the screen
-    # (parked 32,000 px below, a row was pinned at 32,767 inside its chunk).
+    # Where a chunk out of sight is parked: this far left of the view and
+    # this far above it. Beside the view it never reaches it, whatever its
+    # height: parked only above, a chunk taller than this hung down over the
+    # rows in sight. And inside 16 bits: X keeps a window's place in its
+    # parent in 16 bits, and Windows its place on the screen (parked 32,000
+    # px below, a row was pinned at 32,767 inside its chunk).
     PARK = 20_000
-    # Rows to a chunk unless a list says otherwise (a checklist's are four of
-    # up to 3,462 px each): every chunk stays far under PARK.
+    # Rows to a chunk unless a list says otherwise...
     EVERY = 8
+    # ...and no row more once a chunk is this tall, measured as its rows are
+    # made: a chunk in the view stands at its true place, which X and Windows
+    # draw only inside 16 bits, and four checklist items of 100 lines, or of
+    # 2,000 wide letters, stood up to 42,656 px at 300%.
+    TALLEST = 4_000
 
     def __init__(self, app, canvas, scrolled=None, on_chunk=None,
                  on_change=None, own_width=False):
@@ -99,7 +136,7 @@ class RowStack:
         self.groups = []
         self.total = self.widest = 0
         self._box = {}          # chunk -> (x0, y0, x1, y1) on the canvas
-        self._placed = {}       # chunk -> the y it stands at now
+        self._placed = {}       # chunk -> the (x, y) it stands at now
         self._width = None      # the width the chunks are given, once known
         self._job = None
         canvas._row_stack = self
@@ -159,18 +196,24 @@ class RowStack:
         width before the frames around it had heard."""
         (self.on_change or self.changed)()
 
-    def _new_chunk(self, group):
+    def _new_chunk(self, group, before=None):
+        """A new chunk at the end of *group*, or in its middle, just ahead of
+        its chunk *before*."""
         chunk = tk.Frame(self.canvas, bg=self.app.colors[group.bg])
-        later = None if group is self.groups[-1] else next(
-            (g.chunks[0] for g in self.groups[self.groups.index(group) + 1:]
-             if g.chunks), None)
+        later = before if before is not None else (
+            None if group is self.groups[-1] else next(
+                (g.chunks[0] for g in self.groups[self.groups.index(group) + 1:]
+                 if g.chunks), None))
         if later is not None:
             chunk.lower(later)      # Tab follows the stacking order
         width = {"width": max(1, self._width - 2 * group.padx)} if self._width else {}
-        chunk.place(x=group.padx, y=-self.PARK, **width)
-        self._placed[chunk] = -self.PARK
+        chunk.place(x=-self.PARK, y=-self.PARK, **width)
+        self._placed[chunk] = (-self.PARK, -self.PARK)
         chunk.bind("<Configure>", self._chunk_resized)
-        group.chunks.append(chunk)
+        if before is not None:
+            group.chunks.insert(group.chunks.index(before), chunk)
+        else:
+            group.chunks.append(chunk)
         if self.on_chunk is not None:
             self.on_chunk(chunk)
         self.changed()
@@ -238,19 +281,26 @@ class RowStack:
             self.on_change()
 
     def _follow(self):
-        """Each chunk near the view to its true place, the rest out of sight:
-        only what moved is placed again, not the whole list."""
+        """Each chunk in the view to its true place, the rest parked beside
+        it: only what moved is placed again. A chunk out of the view stays
+        parked as the list scrolls -- one stood at its true place for a view
+        above and two below, and each scroll step moved them all, three to
+        ten times what drawing the step cost."""
         try:
             top = self.canvas.canvasy(0)
             view = max(1, self.canvas.winfo_height())
-            for chunk, (_x0, y0, _x1, y1) in self._box.items():
-                if y1 <= y0 or y1 <= top - view or y0 >= top + 2 * view:
-                    want = -self.PARK
+            parked = (-self.PARK, -self.PARK)
+            for chunk, (x0, y0, _x1, y1) in self._box.items():
+                if y1 <= y0 or y1 <= top or y0 >= top + view:
+                    want = parked
                 else:
-                    want = max(-self.PARK, min(self.PARK, int(round(y0 - top))))
+                    # Its true place, however far above: clamped to the
+                    # parking place, a chunk scrolled 20,000 px into stood
+                    # short of it, and its last rows were never drawn.
+                    want = (x0, int(round(y0 - top)))
                 if self._placed.get(chunk) != want:
                     self._placed[chunk] = want
-                    chunk.place_configure(y=want)
+                    chunk.place_configure(x=want[0], y=want[1])
         except tk.TclError:
             pass
 
@@ -262,12 +312,35 @@ class _RowGroup:
         self.stack, self.bg, self.padx, self.pady = stack, bg, padx, pady
         self.every = every
         self.chunks = []
+        self._heights = {}      # chunk -> {row: height}, as room() measured it
 
     def add(self):
         """The frame the next row is made in and packed into."""
-        if self.chunks and len(self.chunks[-1].winfo_children()) < self.every:
+        if self.chunks and self.room(self.chunks[-1]):
             return self.chunks[-1]
         return self.stack._new_chunk(self)
+
+    def room(self, chunk):
+        """Whether *chunk* may take one row more: it holds fewer than its
+        count, and stands shorter than the stack's TALLEST."""
+        if len(chunk.winfo_children()) >= self.every:
+            return False
+        return self.height(chunk) < self.stack.TALLEST
+
+    def height(self, chunk):
+        """How tall *chunk* stands by its rows' heights, each measured once,
+        when first asked (_natural_height)."""
+        heights = self._heights.setdefault(chunk, {})
+        total = 0
+        for row in chunk.winfo_children():
+            if row not in heights:
+                heights[row] = _natural_height(row)
+            total += heights[row]
+        return total
+
+    def chunk_before(self, chunk):
+        """A new, empty chunk in this block, standing just above *chunk*."""
+        return self.stack._new_chunk(self, before=chunk)
 
     def rows(self):
         return [row for chunk in self.chunks for row in chunk.winfo_children()]
@@ -282,14 +355,17 @@ class _RowGroup:
             self.stack._forget(chunk)
             chunk.destroy()
         self.chunks = []
+        self._heights = {}
         self.stack.changed()
 
     def discard(self, row):
         """Destroy *row*, and its chunk with it once that holds nothing."""
         chunk = row.master
         row.destroy()
+        self._heights.get(chunk, {}).pop(row, None)
         if chunk in self.chunks and not chunk.winfo_children():
             self.chunks.remove(chunk)
+            self._heights.pop(chunk, None)
             self.stack._forget(chunk)
             chunk.destroy()
         self.stack.changed()
@@ -1892,6 +1968,10 @@ class DialogsMixin:
         return sorted(found, key=lambda w: (self._root_y(w), w.winfo_rootx()))
 
     def _centre_of(self, w):
+        # The x as it is: a chunk parked beside the view puts every choice in
+        # it the same 20,000 px to the left, and the one list of choices on a
+        # stack (the picker) is a single column -- Up and Down still find the
+        # nearest. A popup with choices beside a stack would ask its x too.
         return (w.winfo_rootx() + w.winfo_width() / 2,
                 self._root_y(w) + w.winfo_height() / 2)
 

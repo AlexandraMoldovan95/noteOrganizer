@@ -12750,12 +12750,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         canvas = tk.Canvas(wrap, bg=self.colors["card"], highlightthickness=0)
         sb = ttk.Scrollbar(wrap, orient="vertical", command=canvas.yview)
         wheel = lambda e: self._panel_or_page_wheel(canvas, e)  # noqa: E731
-        # Four to a chunk: an item of 2,000 letters stands 3,462 px tall in a
-        # 640 px window at 300% (measured); four stay far under the parking place.
+        # Thirty-two short items to a chunk, fewer once it is RowStack.TALLEST:
+        # an item of 100 lines, or 2,000 wide letters, stands up to 10,662 px at
+        # 300%. Every chunk in sight moves at each scroll step; with four to a
+        # chunk a step of a long list cost 12 ms on Windows, with 32, 7.
         self._checklist_rows = self._row_stack(
             canvas, scrolled=sb.set,
             on_chunk=lambda chunk: chunk.bind("<MouseWheel>", wheel)
-        ).group(every=4)
+        ).group(every=32)
         sb.pack(side="right", fill="y")
         canvas.pack(side="left", fill="both", expand=True)
         self._checklist_canvas = canvas
@@ -13124,7 +13126,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # Tab walks the stacking order, which packing leaves alone.
                 upper.lower(lower)
             else:
+                group, chunks = self._checklist_rows, (upper.master, lower.master)
                 self._trade_checklist_chunks(rows, min(at, to))
+                # A long item traded into a chunk makes it taller, and long
+                # items moved there one by one passed what X and Windows can
+                # place. Far past RowStack.TALLEST, the rows are chunked again.
+                if any(group.height(c) > 4 * group.stack.TALLEST for c in chunks):
+                    self._render_checklist_items()
         else:
             self._render_checklist_items()
         self._schedule_autosave()
@@ -22259,16 +22267,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             at = min(index, len(drawn["rows"]))
             after = drawn["rows"][at][1] if at < len(drawn["rows"]) else None
             above = drawn["rows"][at - 1][1] if at else None
+            group = self._checklist_rows
             if after is None:
                 record = self._build_checklist_row(at, item)
-            elif above is not None and above.master is not after.master:
-                # At a chunk's edge, back at the end of the chunk it left: put
-                # before the next one's first row, that chunk grew each time.
-                record = self._build_checklist_row(at, item, into=above.master)
-            else:
+            elif above is not None and above.master is after.master:
                 # The stacking order too, not only the packing: Tab walks the
                 # tick boxes in it -- a row put back in the middle was last.
                 record = self._build_checklist_row(at, item, before=after)
+            elif above is not None and group.room(above.master):
+                # At a chunk's edge, into the side with room for it: the
+                # chunk it left. Always put above, a chunk's first row went
+                # into the chunk before, which grew with every delete and
+                # Undo, taller than its parking place.
+                record = self._build_checklist_row(at, item, into=above.master)
+            elif group.room(after.master):
+                record = self._build_checklist_row(at, item, before=after)
+            else:
+                # Alone in its chunk, which went with it: a chunk of its own.
+                record = self._build_checklist_row(
+                    at, item, into=group.chunk_before(after.master))
             drawn["rows"].insert(at, record)
             self._update_checklist_progress()
         else:
