@@ -1165,7 +1165,10 @@ def _ll_cl_shown():
 
 # A row cannot leave its chunk: Alt+Down over the edge of one makes both rows
 # again, each in the other's place, and the keyboard goes with the item.
-_LL_N = app._checklist_rows.every              # short items to a chunk
+# Short items to a chunk, as the list says -- at most 64 here: a mutant that
+# makes the list one frame says 10 ** 9, and the fixtures below were built
+# that long, so the suite never reached its end.
+_LL_N = min(app._checklist_rows.every, 64)
 app._working_checklist = [{'text': f'item {i}', 'done': False}
                           for i in range(2 * _LL_N)]
 app._render_checklist_items(); _ll_settle()
@@ -1520,7 +1523,7 @@ def _ll_tpl_bin_by_key(count, at):
 # delete: alone in its chunk, the last item's bin sent the keyboard past the
 # block's end, to "+ Add" -- the place counted the chunk among the canvas's.
 app._edit_template(None, lambda: None); _ll_settle(4)
-_LL_T = 2 * _ll_stack_canvas(app._mini_popup)._row_stack.groups[1].every
+_LL_T = 2 * min(_ll_stack_canvas(app._mini_popup)._row_stack.groups[1].every, 64)
 app._dismiss_mini_popup(); _ll_settle()
 _ll_tkeys = {'end of a chunk': _ll_tpl_bin_by_key(_LL_T, _LL_T // 2 - 1),
              'first of a chunk': _ll_tpl_bin_by_key(_LL_T, _LL_T // 2),
