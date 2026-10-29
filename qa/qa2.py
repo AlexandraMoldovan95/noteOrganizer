@@ -1373,8 +1373,13 @@ app.notes = []
 app.toggle_settings_panel('duplicates'); _ll_settle()
 app.hide_settings_page(); _ll_settle()
 
-# Share: 2,500 notes, every page shown, the last box ticks.
+# Share: 2,500 notes, every page shown, the last box ticks. The two images
+# every drawn tick box shows are painted once, not for each box made: each
+# paint redrew every box before it, and these 2,500 took 150 s on Windows.
 app.notes = [_ll_note(80000 + i, title=f'Shared {i:04d}') for i in range(2500)]
+_ll_paints = []
+_ll_paint = app._paint_tick_images
+app._paint_tick_images = lambda: (_ll_paints.append(1), _ll_paint())[1]
 app.toggle_share_panel(); _ll_settle(6)
 _ll_view = app._share_checklist_canvas
 for _ in range(40):
@@ -1384,7 +1389,11 @@ for _ in range(40):
         break
     _ll_more.invoke(); app.update()
 _ll_settle(6)
+del app._paint_tick_images
 _ll_boxes = [c for c in _ll_all(_ll_view) if isinstance(c, tk.Checkbutton)]
+check(f'2,500 drawn tick boxes paint the images they share no more than once '
+      f'({len(_ll_paints)} paints for {len(_ll_boxes)} boxes)',
+      len(_ll_boxes) == 2500 and len(_ll_paints) <= 1)
 _ll_ok, _ll_said = (_ll_reaches(app, _ll_view, _ll_boxes[-1], _ll_settle)
                     if _ll_boxes else (False, 'no boxes'))
 _ll_shared = None

@@ -9872,5 +9872,23 @@
     ],
     "expect": "killed",
     "note": "All its rows in one chunk: one frame again, held at the 16 bits of a window's place on every system."
+  },
+  {
+    "id": "RW18",
+    "about": "a drawn tick box paints the images every box shares again, and each paint redraws every box made before it",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        empty, ticked = (getattr(self, \"_tick_images\", None)\n                         or self._paint_tick_images())\n",
+        "replace": "        empty, ticked = self._paint_tick_images()\n"
+      }
+    ],
+    "must_fail": [
+      "2,500 drawn tick boxes paint the images they share no more than once"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed"
   }
 ]

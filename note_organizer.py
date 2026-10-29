@@ -13626,7 +13626,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Give a tick box that carries words a drawn box. `bg` and `fg`
         are palette keys; `track` for a box that lives as long as the app
         (one rebuilt with its panel takes the colours as they are)."""
-        empty, ticked = self._paint_tick_images()
+        # Painted once; a theme switch paints them again. Painted for every
+        # box, each paint redrew every box made before: 2,500 took 150 s.
+        empty, ticked = (getattr(self, "_tick_images", None)
+                         or self._paint_tick_images())
         box.configure(indicatoron=False, image=empty, selectimage=ticked,
                       compound="left", relief="flat", offrelief="flat",
                       overrelief="flat", bd=0, highlightthickness=0,
