@@ -13058,25 +13058,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         text = var.get().strip()[:MAX_CHECKLIST_ITEM_CHARS] if var is not None else ""
         if not text or self._checklist_full(self._get_checklist(), text):
             return
-        self._get_checklist().append({"text": text, "done": False})
+        self._append_checklist_item(text)
         var.set("")
-        if hasattr(self, "_checklist_rows"):
-            self._render_checklist_items()
 
-    def _add_checklist_item(self):
-        text = self.checklist_add_var.get().strip()[:MAX_CHECKLIST_ITEM_CHARS]
-        if not text:
-            return
+    def _append_checklist_item(self, text):
+        """*text* as the list's last item: one new row when the rows on screen
+        are this list's, the whole list drawn otherwise. The Add box taken on
+        a save rebuilt every row, 2.2 s at 1,000 (round 6 of the audit)."""
         items = self._get_checklist()
-        if self._checklist_full(items, text):
-            return  # the words stay in the box
         drawn = getattr(self, "_checklist_drawn", None)
         in_step = (getattr(self, "_checklist_open", False)
                    and _checklist_rows_current(
                        drawn, items, getattr(self, "theme_name", None)))
         item = {"text": text, "done": False}
         items.append(item)
-        self.checklist_add_var.set("")
         if in_step:
             # One new row, not the whole list again: rebuilding every row
             # took over two seconds per add at 200 items.
@@ -13085,8 +13080,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             drawn["rows"].append(self._build_checklist_row(len(items) - 1,
                                                            item))
             self._update_checklist_progress()
-        else:
+        elif hasattr(self, "_checklist_rows"):
             self._render_checklist_items()
+
+    def _add_checklist_item(self):
+        text = self.checklist_add_var.get().strip()[:MAX_CHECKLIST_ITEM_CHARS]
+        if not text:
+            return
+        if self._checklist_full(self._get_checklist(), text):
+            return  # the words stay in the box
+        self._append_checklist_item(text)
+        self.checklist_add_var.set("")
         self._schedule_autosave()
         try:
             self.checklist_add_entry.focus_set()

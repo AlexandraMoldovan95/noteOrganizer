@@ -3899,6 +3899,25 @@ check(f'a checklist of 1,000 items refuses a 1,001st at every door, and says so 
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
 
+# The Add box taken by a save that stays on the note (Export, a day moved)
+# rebuilt every row, 2.2 s at 1,000 (round 6): one row is added, as Add does.
+_pr_note = NO.normalize_note({'id': 4256, 'title': 'Rows', 'body': 'b', 'checklist': [
+    {'text': 'row %d' % i, 'done': False} for i in range(30)]})
+app.notes = [_pr_note]; app.save_notes()
+app.open_note_in_tab(_pr_note); app.update()
+if not app._checklist_open:
+    app.toggle_checklist_section(); app.update()
+_pr_first = app._checklist_drawn['rows'][0][1] if app._checklist_drawn['rows'] else None
+app.checklist_add_var.set('row 30')
+app._flush_autosave(leaving=False); app.update()
+_pr_rows = app._checklist_drawn['rows']
+check(f'the Add box taken by a save that stays adds one row, the others kept '
+      f'({len(_pr_rows)})',
+      _pr_first is not None and len(_pr_rows) == 31 and _pr_rows[0][1] is _pr_first
+      and [i.get('text') for i in app._get_checklist()][-1] == 'row 30')
+app.new_note(); app.update()
+app.notes = []; app.save_notes()
+
 # Use template dropped an item typed in the Add box: in a new note nothing
 # asked (the question's test left the box out), and over a saved note Yes
 # lost what the autosave had not yet written (round 6). A new note's box is

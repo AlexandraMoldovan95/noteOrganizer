@@ -13,6 +13,7 @@
   "_align_lines": "(self, line_numbers, align)",
   "_align_table_block": "(self, line_no)",
   "_align_table_on_leaving": "(self, event=None)",
+  "_append_checklist_item": "(self, text)",
   "_apply_body_color": "(self, kind, hex_color)",
   "_apply_body_font": "(self, style, value)",
   "_apply_font_runs": "(self, text_widget, spans)",

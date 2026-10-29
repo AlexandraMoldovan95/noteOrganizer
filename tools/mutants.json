@@ -10006,7 +10006,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        if self._checklist_full(items, text):\n            return  # the words stay in the box\n",
+        "find": "        if self._checklist_full(self._get_checklist(), text):\n            return  # the words stay in the box\n",
         "replace": ""
       }
     ],
@@ -10024,8 +10024,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        if not text or self._checklist_full(self._get_checklist(), text):\n            return\n        self._get_checklist().append",
-        "replace": "        if not text:\n            return\n        self._get_checklist().append"
+        "find": "        if not text or self._checklist_full(self._get_checklist(), text):\n            return\n        self._append_checklist_item(text)",
+        "replace": "        if not text:\n            return\n        self._append_checklist_item(text)"
       }
     ],
     "must_fail": [
@@ -10229,6 +10229,24 @@
     "must_fail": [
       "an export of the session alone, finished at the close",
       "...and one that left a held file out says so at the next start"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR90",
+    "about": "the Add box taken by a save rebuilds every row of the checklist",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._append_checklist_item(text)\n        var.set(\"\")",
+        "replace": "        self._get_checklist().append({\"text\": text, \"done\": False})\n        var.set(\"\")\n        self._render_checklist_items()"
+      }
+    ],
+    "must_fail": [
+      "the Add box taken by a save that stays adds one row"
     ],
     "suites": [
       "qa3"
