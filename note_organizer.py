@@ -13181,11 +13181,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         way somewhere else."""
         var = getattr(self, "checklist_add_var", None)
         text = var.get().strip()[:MAX_CHECKLIST_ITEM_CHARS] if var is not None else ""
-        note = (self.find_note(self.selected_note_id)
-                if self.selected_note_id is not None else None)
-        if note is not None:
+        uid = self._open_note_uid()
+        if uid:
             # What waits is what the box holds now: emptied, nothing does.
-            self._add_box_waiting.pop(note["uid"], None)
+            self._add_box_waiting.pop(uid, None)
         if not text:
             return
         items = self._get_checklist()
@@ -13193,12 +13192,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # Full: the words wait for this note, back in its Add box when it
             # is opened again. Leaving cleared the box, and "Delete an item to
             # make room" could no longer be done (round 7 of the audit).
-            if note is not None:
-                self._add_box_waiting[note["uid"]] = text
-            self._checklist_full(items, text, waits=note is not None)
+            if uid:
+                self._add_box_waiting[uid] = text
+            self._checklist_full(items, text, waits=bool(uid))
             return
         self._append_checklist_item(text)
         var.set("")
+
+    def _open_note_uid(self):
+        """The identity of the note the editor holds, or None (a new note)."""
+        note = (self.find_note(self.selected_note_id)
+                if self.selected_note_id is not None else None)
+        return (note.get("uid") or None) if note is not None else None
 
     def _append_checklist_item(self, text):
         """*text* as the list's last item: one new row when the rows on screen
@@ -13230,10 +13235,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return  # the words stay in the box
         self._append_checklist_item(text)
         self.checklist_add_var.set("")
-        note = (self.find_note(self.selected_note_id)
-                if self.selected_note_id is not None else None)
-        if note is not None:
-            self._add_box_waiting.pop(note["uid"], None)    # added: none waits
+        self._add_box_waiting.pop(self._open_note_uid(), None)    # added: none waits
         self._schedule_autosave()
         try:
             self.checklist_add_entry.focus_set()

@@ -10896,7 +10896,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                self._add_box_waiting[note[\"uid\"]] = text\n",
+        "find": "                self._add_box_waiting[uid] = text\n",
         "replace": "                pass\n"
       }
     ],

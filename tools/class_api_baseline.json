@@ -536,6 +536,7 @@
   "_open_move_day_picker": "(self)",
   "_open_note_from_calendar": "(self, base_note, date_str, whole_series=False)",
   "_open_note_from_grid": "(self, base_note, date_str)",
+  "_open_note_uid": "(self)",
   "_open_table_size_popup": "(self)",
   "_open_today_from_reminder": "(self, today)",
   "_opened_from_keyboard": "(self, opener)",

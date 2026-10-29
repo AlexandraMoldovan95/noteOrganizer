@@ -2984,18 +2984,25 @@ try:
           NO.get_setting('backup_cut_short') is None
           and not os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _sq_name)))
     # The session ended after all: the files stayed, and the next start
-    # takes them out, the Film note's own file untouched.
-    os.makedirs(_sq_said['temp_dir'], exist_ok=True)
+    # takes them out, the Film note's own file untouched. Named here when the
+    # word above left none, so a broken record fails this check, not the run.
+    _sq_temp = _sq_said.get('temp_dir') or os.path.join(
+        tempfile.gettempdir(), 'notes_import_qa3_session')
+    os.makedirs(_sq_temp, exist_ok=True)
     with open(os.path.join(NO.ATTACHMENTS_DIR, _sq_name), 'wb') as _fh:
         _fh.write(b'cut')
-    NO.save_setting('backup_cut_short', _sq_said)
+    NO.save_setting('backup_cut_short', dict(
+        {'kind': 'import', 'file': _hb_zip, 'when': 'session'}, **_sq_said))
     _words = _next_start_says()
     check(f'...and when it ended, the next start takes them out and says so '
           f'({_words[:60]!r})',
           'when Windows signed out' in _words
           and not os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _sq_name))
-          and not os.path.exists(_sq_said['temp_dir'])
+          and not os.path.exists(_sq_temp)
           and os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _hb_name)))
+    _ri_shutil.rmtree(_sq_temp, ignore_errors=True)
+    if os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _sq_name)):
+        os.remove(os.path.join(NO.ATTACHMENTS_DIR, _sq_name))
 finally:
     _sx['go'] = True
     NO.StoppableFile, _hs.StoppableFile = _kept_stoppable
@@ -4051,10 +4058,11 @@ app.notes = []; app.save_notes()
 # A full checklist's Add box taken on leaving said "Delete an item to make
 # room", and the words went with the box (round 7): they wait for the note,
 # back in its box when it opens again, and the window's close asks first.
-_cw_said, _cw_asked = [], []
-_cw_real = (app.show_info, app.ask_yes_no)
+_cw_said, _cw_asked, _cw_closed = [], [], []
+_cw_real = (app.show_info, app.ask_yes_no, app.destroy)
 app.show_info = lambda *a, **k: _cw_said.append(a[1] if len(a) > 1 else '')
 app.ask_yes_no = lambda t, *a, **k: (_cw_asked.append(t), False)[1]     # "No"
+app.destroy = lambda: _cw_closed.append(1)   # a close that asks nothing must not end the run
 try:
     _cw_full = NO.normalize_note({'id': 4258, 'title': 'Big list', 'body': 'b', 'checklist': [
         {'text': 'item %d' % i, 'done': False} for i in range(1000)]})
@@ -4069,9 +4077,9 @@ try:
     app.open_note_in_tab(_cw_other); app.update()
     _cw_said_n = len(_cw_said)
     app.on_app_close(); app.update()
-    _cw_open = app.winfo_exists()
+    _cw_open = not _cw_closed
 finally:
-    app.show_info, app.ask_yes_no = _cw_real
+    app.show_info, app.ask_yes_no, app.destroy = _cw_real
     app._add_box_waiting.clear()
     app.checklist_add_var.set('')
 check(f'words a full checklist could not take wait in its Add box for the note, and '
