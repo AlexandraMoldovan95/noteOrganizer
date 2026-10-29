@@ -137,6 +137,15 @@ Docker (`tools/linux-ci/` — build once, then
 Xvfb-only behaviours that used to surface as red CI runs can be caught
 before the push.
 
+**A test run is a guest on the computer it runs on.** Every runner holds
+itself and all it starts to a memory ceiling (`tools/guest.py`: 4,096 MB
+a process, 8,192 MB in all, on Windows), and the gate "a test run is a
+guest" fails a runner that does not. One heavy job at a time: a full
+suite, a mutant run, the Linux image, the Android build or its emulator
+walk -- never two at once on the owner's machine. Three at once, with a
+runaway test among them, took the desktop down
+([the story](../docs/ISSUES_LOG.md#the-test-that-took-the-computer-down)).
+
 ## Stories: the app walked, not questioned
 
 `py qa/story_note_travels.py` is a different kind of check, and it exists
@@ -283,6 +292,12 @@ A new surface joins this list the moment it ships.
   that crashes the import prints no failures at all, and reads as
   "survived nothing" when it really ran nothing (this exact false-clean
   happened here once; the runner refuses it).
+- **A fixture never sizes itself from a value a mutant can change.** A
+  mutant made a long list's chunk a billion rows, and checks that built
+  "two chunks' worth" began building two billion: 43 GB, and the owner's
+  desktop crashed. Read the size from the code if the check needs it, but
+  cap what is built
+  ([the story](../docs/ISSUES_LOG.md#the-test-that-took-the-computer-down)).
 - **A check a mutant can lead to a question records the question; it
   never waits for one.** The date checks of 0.84.338 left a note with no
   stub on `_themed_dialog`, and under a mutant that left the date out,

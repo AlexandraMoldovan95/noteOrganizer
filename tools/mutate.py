@@ -52,6 +52,8 @@ import sys
 import tempfile
 import time
 
+import guest  # tools/guest.py: the memory ceiling for a run
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 CATALOGUE = os.path.join(HERE, "mutants.json")
@@ -73,8 +75,8 @@ def fresh_copy():
     for path in glob.glob(os.path.join(ROOT, "qa", "*.py")):
         shutil.copy2(path, os.path.join(dest, "qa"))
     os.makedirs(os.path.join(dest, "tools"))
-    shutil.copy2(os.path.join(ROOT, "tools", "run_tests.py"),
-                 os.path.join(dest, "tools"))
+    for name in ("run_tests.py", "guest.py"):
+        shutil.copy2(os.path.join(ROOT, "tools", name), os.path.join(dest, "tools"))
     return dest
 
 
@@ -161,6 +163,16 @@ def load_catalogue():
 
 def main(argv):
     sys.stdout.reconfigure(encoding="utf-8")
+    # A flag it does not know is not an empty list of ids: "--help" ran the
+    # whole catalogue, hours of it (2026-10-29).
+    unknown = [a for a in argv[1:] if a.startswith("-") and a != "--self-test"]
+    if unknown:
+        print(__doc__)
+        print("not a flag this runner knows: %s" % " ".join(unknown))
+        return 2
+    # The memory ceiling, for every suite run below.
+    for line in guest.settle():
+        print(line)
     entries = load_catalogue()
     if "--self-test" in argv:
         todo = [e for e in entries if e.get("self_test")]

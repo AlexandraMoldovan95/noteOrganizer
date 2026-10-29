@@ -42,6 +42,8 @@ import sys
 import tempfile
 import time
 
+import guest  # tools/guest.py: the memory ceiling for a run
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Copied into the scratch folder. The package has to travel with the entry
@@ -118,6 +120,11 @@ STATIC = [
     # licenses the build bundles name it.
     ("what ships is what is tested",
      [sys.executable, os.path.join("tools", "check_shipped.py")]),
+    # The tenth, added 2026-10-29: every runner sets guest.py's memory
+    # ceiling, and the ceiling holds -- a test took 43 GB and the desktop
+    # went down with it.
+    ("a test run is a guest",
+     [sys.executable, os.path.join("tools", "check_guest.py")]),
 ]
 
 
@@ -285,6 +292,9 @@ def main(argv):
             return 2
 
     print(f"project : {ROOT}")
+    # Before anything is started: every script below inherits the ceiling.
+    for line in guest.settle():
+        print(line)
     scratch = build_scratch()
     print(f"scratch : {scratch}")
     print(f"running : {len(statics) + len(scripts)} check(s)\n")
@@ -357,6 +367,9 @@ def main(argv):
             shutil.rmtree(scratch, ignore_errors=True)
 
     print()
+    peak = guest.memory_peak()
+    if peak:
+        print(peak)
     if scripts:
         print(f"Individual checks run: {sum(counted.values()):,} (unit suites "
               f"{counted['unit']:,}, qa suite {counted['qa']:,}).")

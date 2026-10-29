@@ -51,6 +51,10 @@ CHAPTERS = [
 def drive():
     sys.stdout.reconfigure(encoding="utf-8")
     root = _root()
+    sys.path.insert(0, os.path.join(root, "tools"))
+    import guest  # the memory ceiling for this run (tools/guest.py)
+    for line in guest.settle():
+        print(line)
     work = tempfile.mkdtemp(prefix="audit-")
     shutil.copy2(os.path.join(root, "note_organizer.py"), work)
     shutil.copytree(os.path.join(root, "noteorganizer"),

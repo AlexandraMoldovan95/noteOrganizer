@@ -338,6 +338,12 @@ afterward — the project's own files are only ever read (`py
 tools/run_tests.py`, or `py tools/run_tests.py qa6` for one script). The
 manual ritual below is the fallback, and the reason that tool exists.
 
+The machine is the owner's, too (2026-10-29): every runner holds what it
+starts to a memory ceiling (`tools/guest.py`, gated), and only one heavy
+job runs at a time — a suite, mutants, the Linux image, the Android build
+or its emulator. A runaway test once took 43 GB and the owner's desktop
+with it ([the story](docs/ISSUES_LOG.md#the-test-that-took-the-computer-down)).
+
 Instead (by hand): copy `note_organizer.py`, the `noteorganizer/` package,
 and the target test script into a scratch directory **outside the project
 tree entirely** (e.g. the session's own scratchpad folder), and run and

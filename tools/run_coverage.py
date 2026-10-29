@@ -82,6 +82,9 @@ def main(argv):
     except ImportError:
         print("The 'coverage' package is missing:  py -m pip install coverage")
         return 2
+    import guest  # the memory ceiling for this run (tools/guest.py)
+    for line in guest.settle():
+        print(line)
 
     fail_under = None
     if "--fail-under" in argv:

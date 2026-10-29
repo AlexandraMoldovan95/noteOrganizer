@@ -210,6 +210,9 @@ def main():
     p.add_argument("--deep", action="store_true", help="also measure at the list's end")
     args = p.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
+    import guest  # the memory ceiling for this run (tools/guest.py)
+    for line in guest.settle():
+        print(line)
     sides = [("this tree", ROOT)] + ([("against", args.against)] if args.against else [])
     keys = ["startup", "rebuild", "save", "memory", "match"] + (["deep", "pin"] if args.deep else [])
     rows = []

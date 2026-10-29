@@ -859,6 +859,10 @@ def compare(new_dir):
 
 def main():
     accept = "--accept" in sys.argv
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    import guest  # the memory ceiling for this run (tools/guest.py)
+    for line in guest.settle():
+        print(line)
     work, run = take_the_pictures()
     shots = os.path.join(work, "shots")
     taken = sorted(os.listdir(shots)) if os.path.isdir(shots) else []

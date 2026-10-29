@@ -71,6 +71,9 @@ def _run_gate(label, args):
 
 
 def main():
+    import guest  # the memory ceiling for this run (tools/guest.py)
+    for line in guest.settle():
+        print(line)
     scanned = []
     for layer in ("core", "ui"):
         scanned += [os.path.join("noteorganizer", layer, f)
