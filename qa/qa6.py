@@ -5459,6 +5459,80 @@ check(f"Enter, and Tab at the last cell, that take a table past what is drawn pu
       f"note, the row typed into): {_tt_flip})",
       _tt_flip == {'<Return>': (True, True, ['Eggs', '12<br>x']),
                    '<Tab>': (True, True, ['x', ''])})
+
+# Round 6: Escape in a cell, and Ctrl+V of copied cells, closed the editor
+# holding the keyboard and left it on nothing -- what was typed next went
+# nowhere, and Tab began again at the tab strip. Escape leaves it in the
+# note's text under the table, where the caret goes from a drawn table's
+# lines; a paste of cells brings it back to the cell, as the same paste from
+# the cell's menu does, or into the table's text once the paste takes the
+# table past what is drawn. And Enter mid-cell taking the table past it puts
+# the caret after the break it made, not at the cell's end.
+_tw_seen = {}
+_tw_cases = (
+    ('Escape', 994, '| A | B |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |\nafter',
+     '<Escape>', None, None),
+    ('Ctrl+V of cells', 995, '| A | B |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |\nafter',
+     '<Control-v>', 'p\tq', None),
+    ('Ctrl+V of cells past the drawn limit', 996,
+     '| Name | Qty |\n| Milk | 2 |\n| Eggs | 12 |\nafter', '<Control-v>',
+     'x\ty\nz\tw', None),
+    ('Enter mid-cell past the drawn limit', 997,
+     '| Name | Qty |\n| Milk | 2 |\n| Eggs | 12 |\nafter', '<Return>', None, '1.2'))
+for _tw_name, _tw_id, _tw_body, _tw_key, _tw_clip, _tw_caret in _tw_cases:
+    _tw_grid = _tt_open(_tw_id, _tw_body)
+    try:
+        if _tw_grid is None:
+            continue
+        if 'limit' in _tw_name:
+            app.MAX_DRAWN_TABLE_PX = app._grid_row_height() * _tw_grid['nrows']
+        if _tw_clip is not None:
+            app.clipboard_clear()
+            app.clipboard_append(_tw_clip)
+        app._open_cell_editor(_tw_grid, 2, 0, select=False)
+        _kv_settle(4)
+        _tw_entry = app._cell_editor['entry']
+        _take_focus(_tw_entry)
+        if _tw_caret is not None:
+            _tw_entry.mark_set('insert', _tw_caret)
+        _tw_entry.event_generate(_tw_key)
+        _kv_settle(4)
+        _tw_ed = app._cell_editor
+        _tw_held = _pa_holder()
+        _tw_where = ('the cell' if _tw_ed is not None and _tw_held is _tw_ed['entry']
+                     and (_tw_ed['r'], _tw_ed['c']) == (2, 0)
+                     else 'the note' if _tw_held is app.body_text else str(_tw_held))
+        app.event_generate('<KeyPress-x>')             # where the keyboard is
+        _kv_settle(2)
+        if _tw_ed is not None and app._cell_editor is _tw_ed:
+            _tw_typed = _tw_ed['entry'].get('1.0', 'end-1c')
+        else:
+            _tw_typed = tuple(app.body_text.get(f'{n}.0', f'{n}.end') for n in (3, 5))
+        _tw_seen[_tw_name] = (_tw_where, _tw_typed)
+    finally:
+        app.__dict__.pop('MAX_DRAWN_TABLE_PX', None)
+        app._close_cell_editor()
+        app.update()
+
+
+def _tw_cells(name):
+    """Where the keyboard was, and the cells of line 3 and line 5 after."""
+    where, typed = _tw_seen.get(name, (None, ('', '')))
+    if isinstance(typed, str):
+        return where, typed
+    return where, NO.core_tables.split_row(typed[0]), typed[1]
+
+
+check(f"every way out of a table cell leaves the keyboard somewhere: Escape under "
+      f"the table, a paste of cells back in the cell or in the table's text, "
+      f"Enter mid-cell after its break ((where, what the next key typed): "
+      f"{_tw_seen})",
+      _tw_cells('Escape') == ('the note', ['1', '2'], 'xafter')
+      and _tw_cells('Ctrl+V of cells') == ('the cell', 'px')
+      and _tw_cells('Ctrl+V of cells past the drawn limit')[:2] == ('the note',
+                                                                      ['xx', 'y'])
+      and _tw_cells('Enter mid-cell past the drawn limit')[:2] == (
+          'the note', ['Eg<br>xgs', '12']))
 app.notes = []
 app.save_notes()
 app.refresh_note_list()

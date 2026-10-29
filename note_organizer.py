@@ -3826,8 +3826,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # used to close the editor without a commit, and the keystrokes
         # only ever reach the text through one, so a quick Escape threw
         # the cell's typing away.
-        entry.bind("<Escape>",
-                   lambda _e: (self._commit_cell_editor(), "break")[1])
+        entry.bind("<Escape>", lambda _e: self._editor_escape())
         entry.bind("<FocusOut>",
                    lambda _e, this=entry: self.after_idle(
                        lambda: self._maybe_close_cell_editor(this)))
@@ -4110,6 +4109,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             entry.insert("insert", "\n")
             entry.tag_add("cellalign", "1.0", "end")
             caret = entry.index("insert")
+            typed = entry.get("1.0", "insert")
         except tk.TclError:
             return "break"
         info, r, c = editor["info"], editor["r"], editor["c"]
@@ -4126,7 +4126,34 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 except tk.TclError:
                     pass
         elif fresh is None:
+            self._keyboard_to_kept_table(anchor_line, r, c, typed=typed)
+        return "break"
+
+    def _editor_escape(self):
+        """Escape leaves the cell, keeping what was typed, and the keyboard
+        goes to the note's text under the table -- where the caret always
+        goes from a drawn table's lines (_caret_out_of_hidden) -- or, when
+        the commit left the table as text, into it at the cell. The editor
+        held it, and Tk left it on the window once the editor went: what was
+        typed next went nowhere, and Tab began again at the tab strip."""
+        editor = getattr(self, "_cell_editor", None)
+        if not editor:
+            return "break"
+        info, r, c = editor["info"], editor["r"], editor["c"]
+        anchor_line = self._grid_first_line(info)
+        self._commit_cell_editor()
+        fresh = (self._grid_at_line(anchor_line)
+                 if anchor_line is not None else None)
+        if fresh is None:
             self._keyboard_to_kept_table(anchor_line, r, c)
+        elif self._keyboard_nowhere():
+            b = self.body_text
+            try:
+                b.mark_set("insert", f"{anchor_line + fresh['nrows']}.0")
+                b.see("insert")
+            except tk.TclError:
+                pass
+            self._keyboard_to(b)
         return "break"
 
     def _editor_fit_window(self):
@@ -6742,6 +6769,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                  if anchor_line is not None else None)
         if fresh is not None:
             self._grid_paste_cells(fresh, r, c)
+        # Back in the cell the paste began at, as the same paste from the
+        # cell's menu brings it -- or in the table's text, once the paste took
+        # it past what is drawn. The editor the commit closed held it, and
+        # what was typed next went nowhere.
+        self._grid_keyboard_back(anchor_line, r, c)
         return "break"
 
     def _grid_menu_from_keys(self, info):
@@ -6800,12 +6832,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         else:
             self._keyboard_to(self.body_text)
 
-    def _keyboard_to_kept_table(self, first, r, c):
+    def _keyboard_to_kept_table(self, first, r, c, typed=None):
         """The keyboard into the text of the table starting on line *first*,
         at the end of data row *r*'s cell *c* -- past a row's last cell, the
         next row's first, as Tab walks. A commit that takes a table past what
         is drawn leaves it as text: its editor went, and the keys typed next
-        went nowhere, or to wherever the note's own caret had been left."""
+        went nowhere, or to wherever the note's own caret had been left.
+
+        *typed*: the cell's text before the editor's caret, when Enter made a
+        line break mid-cell -- the caret goes after that break, as the editor
+        had it. At the cell's end, the next letters followed its old tail."""
         if not self._keyboard_nowhere():
             return
         b = self.body_text
@@ -6821,7 +6857,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 r, c = r + 1, 0
             i = row_line(r)
             bounds = core_tables.cell_bounds(block[i])
-            end = bounds[min(max(c, 0), len(bounds) - 1)][1] if bounds else 0
+            start, end = bounds[min(max(c, 0), len(bounds) - 1)] if bounds else (0, 0)
+            if typed is not None:
+                # As the commit stores it: ends of spaces trimmed, each line
+                # break written <br>, a pipe written "/".
+                stored = typed.lstrip(" \t").replace(core_tables.CELL, "/")
+                end = min(end, start + len(stored.replace(
+                    "\n", core_tables.LINE_BREAK)))
             b.mark_set("insert", f"{span[0] + i}.{self._tk_col(block[i], end)}")
             b.see("insert")
         self._keyboard_to(b)

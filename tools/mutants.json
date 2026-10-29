@@ -10477,6 +10477,60 @@
     "note": "Either route alone brings the keyboard to the right row: the Trash's own after its redraw, and the one every press of a Tk button takes (_tk_press_ends) a moment later. The first edit alone survives for that reason, so both are reverted here."
   },
   {
+    "id": "RY10",
+    "about": "Escape in a table cell closes it and leaves the keyboard on nothing",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        entry.bind(\"<Escape>\", lambda _e: self._editor_escape())\n",
+        "replace": "        entry.bind(\"<Escape>\",\n                   lambda _e: (self._commit_cell_editor(), \"break\")[1])\n"
+      }
+    ],
+    "must_fail": [
+      "every way out of a table cell leaves the keyboard somewhere"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RY11",
+    "about": "Ctrl+V of copied cells pastes them and leaves the keyboard on nothing",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._grid_keyboard_back(anchor_line, r, c)\n        return \"break\"\n\n    def _grid_menu_from_keys",
+        "replace": "        return \"break\"\n\n    def _grid_menu_from_keys"
+      }
+    ],
+    "must_fail": [
+      "every way out of a table cell leaves the keyboard somewhere"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RY12",
+    "about": "Enter mid-cell that leaves the table as text puts the caret at the cell's end",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if typed is not None:\n",
+        "replace": "            if False:\n"
+      }
+    ],
+    "must_fail": [
+      "every way out of a table cell leaves the keyboard somewhere"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
     "id": "RY17",
     "about": "long checklist items moved together by the keyboard gather in one chunk, never chunked again",
     "edits": [

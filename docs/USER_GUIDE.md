@@ -307,7 +307,7 @@ A table works the way a spreadsheet has taught your hands to expect:
 | **Tab** | Moves to the next cell, and is one way to leave the cell you are typing in. On the very last cell it adds a fresh row, so a whole table can be filled without touching the mouse. |
 | **Shift+Tab** | Goes back to the previous cell. |
 | **Enter** (or **Shift+Enter**) | Starts a new line *inside* the cell — the whole row grows to fit, on screen the moment you press it, so nothing below is ever covered. Stored as Markdown's own `<br>`, so export still round-trips. |
-| **Escape** | Leaves the cell and keeps what you typed in it (clicking anywhere else works too). |
+| **Escape** | Leaves the cell and keeps what you typed in it (clicking anywhere else works too); the cursor goes to the line under the table. |
 | **Delete** | Clears the selected block of cells. |
 | **Ctrl+A** | Selects the whole cell. |
 
@@ -1076,7 +1076,7 @@ keys that only mean something inside a list, in the find bar, or on the note lis
 | **Tab** / **Shift+Tab** | in a list | Pushes an item one level in / pulls it back out. |
 | **Tab** / **Shift+Tab** | in a table | Moves to the next / previous cell; Tab on the very last cell adds a fresh row. |
 | **Enter** / **Shift+Enter** | in a table | Starts a new line inside the cell. |
-| **Escape** | in a table | Leaves the cell, keeping what you typed. |
+| **Escape** | in a table | Leaves the cell, keeping what you typed; the cursor goes under the table. |
 | **Ctrl+A** | in a table | Selects the whole cell. |
 | **Ctrl+C** / **Ctrl+V** | in a table | Copies the selected cells / pastes them in the same shape. |
 | **Delete** | in a table | Clears the selected cells. |
