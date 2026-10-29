@@ -2627,23 +2627,39 @@ by name)*
   checklist's Add box was cleared by Ctrl+N.
 - **"Export complete" without the templates.** With `templates.json` held at the start, one
   template saved in the session became the backup's whole `templates.json`.
+- **A list's markers taken for lost words.** A numbered list of fourteen lines turned to bullets
+  counted every "1." and "•" as a word deleted, and replaced the rescue copy of a paragraph
+  deleted before (found on Android; the rule was the same here).
+- **A series turned back on, hidden.** A repeat turned off keeps its days while any holds text.
+  Turned back on from another date, a day the old series had deleted could be the new one's first,
+  and it was hidden, with no screen to bring it back.
 - **Smaller:** the refused writes of a held file raised a banner at every note opened, over a
   delete's Undo; the start announced a held file's categories as gone missing; a run that saves
-  nothing showed "Auto-saved" under its own message after the first save; and a lock file held a
-  moment at the start let a second window open the same notebook once it was let go.
+  nothing showed "Auto-saved" under its own message after the first save; a lock file held a
+  moment at the start let a second window open the same notebook once it was let go; and a
+  table with a "^" under a row too short to have its column made Export note and Ctrl+C fail.
 
 **Root cause:** each round-four fix answered its question in one place and left a sibling asking
 the old one. The retries meant for the run's first read had no record that it was made. Loss was
 counted in words, but its shares were still taken of a length with the padding in it: two units
-in one fraction. The turn-off's new rule was put in one of its two branches. The blank editor's
-test asked the editor's state, which leaves out the Add box. And the export trusted that what
-the app holds is never less than its files, which a held start had made untrue.
+in one fraction. And a "word" was any run of letters between spaces, a list's markers included.
+The turn-off's new rule was put in one of its two branches. The blank editor's test asked the
+editor's state, which leaves out the Add box. The export trusted that what the app holds is never
+less than its files, which a held start had made untrue. Round four kept a series' days for its
+return without asking whether it returned as the same series. And the table reader looked up the
+cell above a "^" without asking whether that row had the column.
 
 **Fix:**
 - Only the run's first read of `settings.json` waits for it (`_settings_tried`); every later read
   tries once. The other data files are read once a run and keep their retries.
 - A save's loss and its shares are in one unit: the old text measured as the loss is, each word
-  with one space (`_measured`).
+  with one space (`_measured`). A line's words are counted after its list marker
+  (`strip_list_markers`).
+- A series turned back on with another date or rule drops the old series' deleted days, which
+  hold nothing and stay in the rescue copy (`kept_days_fit`), in the editor and in a share code's
+  update. Days with their own text stay in the note, the owner's choice: left only in the one
+  rescue copy, the next copy would erase them.
+- A "^" with no cell above it stays content, as one in the first row always has.
 - A turn-off that takes text keeps the newest text first, whichever copy is there.
 - The blank editor's question counts the checklist's Add box.
 - A templates or Trash file the start could not read is read at the export and joined with the
@@ -2654,9 +2670,9 @@ the app holds is never less than its files, which a held start had made untrue.
 - And in the suite: the waits for an export or import to finish had 5–10 s deadlines, and on a busy
   machine an import outlived one and changed notes under the next checks. They end when the work
   does, with a ceiling of 120 s.
-- `test_data_safety`, qa3, qa5; mutants DR57–DR65, with DR32, DR47, DR49 and RD01 re-aimed. DR60
-  survived the first test, whose table lost enough to pass under the old measure too; the test now
-  first proves the old measure would miss it.
+- `test_data_safety`, `test_recurrence`, `test_tables`, qa3, qa5; mutants DR57–DR69, with DR29,
+  DR32, DR47, DR49 and RD01 re-aimed. DR60 survived the first test, whose table lost enough to pass
+  under the old measure too; the test now first proves the old measure would miss it.
 
 **Takeaway:** a fix that adds a condition to one branch, or a new unit to one side of a fraction,
 has changed a question that was asked in more than one place. Ask it everywhere, in the same units.
