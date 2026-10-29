@@ -59,7 +59,7 @@ suite has had, and what each one really was:
 | Script | Primary ground |
 |---|---|
 | `qa1` | notes, categories, templates — plus the editor's heaviest surfaces: tables, rich text, the find bar, bulk actions |
-| `qa2` | recurrence, calendar, duplicates |
+| `qa2` | recurrence, calendar, duplicates — and every long list built past what one frame can scroll through, asked for its last row |
 | `qa3` | trash, sharing, import/export |
 | `qa4` | theming, stress tests, leak regression — and the note list drawn a screenful at a time, with a save redrawing one card |
 | `qa5` | corrupt data, edge cases |

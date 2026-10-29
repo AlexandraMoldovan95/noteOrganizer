@@ -1334,6 +1334,51 @@ on both apps; `refresh_note_list` compares the search with the one it last drew 
 scrollable canvas whose content gets rebuilt should either reuse this family
 or consciously argue why it can't suffer the same two failures.
 
+### A long list is built in chunks it places itself
+
+A list that can grow past a screen — a note's checklist, the template picker and editor,
+Settings → Templates, Recently deleted, Duplicates, Share, a day's notes, the calendar's History
+and the calculator's history — is a `RowStack` (`ui/dialogs.py`) on its canvas, not one frame.
+Tk works out where a canvas window item stands relative to the view in a 16-bit short
+(`Tk_CanvasWindowCoords`, the same on every system), and X keeps a window's place the same
+way, so one frame holding a list could not be scrolled further than about 32,767 px: the rest
+was never drawn, while the scrollbar reached its end. See
+[The list that ended in the middle](ISSUES_LOG.md#the-list-that-ended-in-the-middle).
+
+A stack builds the rows into chunk frames of a few rows each — `group.add()` hands out the
+frame the next row is made in — and places every chunk itself: near the view at its true
+place, everywhere else parked 20,000 px above the view. The canvas keeps the scroll: its
+scrollregion is the stack's total and its `yscrollcommand` tells the stack to place again, so
+the scrollbar, the wheel and every `yview` reader work as before. A scroll places only the
+chunks whose place changed, and lays out no row.
+
+- **Parked, never unmapped.** A canvas window item out of view is unmapped, and Tab's own test
+  (`tk::FocusOK`) passes over what cannot be viewed: with chunks as window items, Tab from the
+  last row in view went back to the first. A placed chunk out of sight is still mapped, so Tab,
+  the arrows and `_found_at` reach every row as they did.
+- **Parked above, inside 16 bits twice over.** X keeps a window's place in its parent in 16
+  bits; Windows keeps a window's place on the screen in 16 bits. Parked 32,000 px below a canvas
+  that stood 1,143 px down the screen, a chunk's rows passed 32,767 and Windows pinned them
+  there: back in view, the last row stood 376 px above its chunk's top instead of 318 below it.
+  20,000 px above keeps every row of every chunk inside both.
+- **Where a row stands is asked of the stack.** A parked chunk's `winfo_y` is its parking
+  place. `_bring_into_sight`, `_offset_within` and the order the arrows walk (`_root_y`) read a
+  chunk's place from the stack (`_drawn_box`), as they read a window item's box from the canvas.
+- **A row cannot leave its chunk.** Tk gives no widget a new parent. A checklist item moved
+  over a chunk's edge is made again in the other's place (`_trade_checklist_chunks`), and one
+  put back by Undo at an edge goes back to the chunk it left, so no chunk grows. A block in the
+  middle of a stack — the template editor's checklist, between its fields and its Add box —
+  stacks the chunks it makes again before the block below, because Tab follows the stacking
+  order, not the place.
+
+A chunk holds a count of pieces, chosen so the tallest stays far under the parking place: four
+checklist items (one of 2,000 letters stands 3,462 px in a 640 px window at 300%, measured), 32
+one-line rows, 8 by default. Left as one frame, each sized by its own cap and measured at 300%:
+Settings → Categories (200 rows, 17,599 px) and the editor page (a note's 200 attachments,
+25,325 px), against about 33,400 px one frame can be scrolled through; the emoji picker and a
+dialog's message are smaller still. A table is drawn whole only up to 400 rows; the note list
+is one drawing.
+
 ### Showing and hiding asks the layout, not the screen
 
 Every "show this if it is not showing" and "hide this if it is" — Restore previous, the title

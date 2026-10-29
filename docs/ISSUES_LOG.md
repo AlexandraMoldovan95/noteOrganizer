@@ -199,6 +199,7 @@ is in the table below as well.
 | [Round four: what a click put away, and what a screen can draw](#round-four-what-a-click-put-away-and-what-a-screen-can-draw) | A limit on what is typed is no limit on what is drawn; and a part hidden with the keyboard inside is one rule, not a list. | next |
 | [Round five: a retry paid at every read, and shares in the wrong unit](#round-five-a-retry-paid-at-every-read-and-shares-in-the-wrong-unit) | A condition added to one branch, or a unit to one side of a fraction, changes a question asked in more than one place; a check's deadline is a claim about the machine. | next |
 | [Round five: the shortcuts under a picture, and a toolbar laid out again](#round-five-the-shortcuts-under-a-picture-and-a-toolbar-laid-out-again) | A rule about where the keyboard may go is asked of every road that moves it, the app's own shortcuts too; and a part is put away when its manager forgets it, not while it waits to be drawn. | next |
+| [The list that ended in the middle](#the-list-that-ended-in-the-middle) | A widget's place has a limit as well as its size: a list that grows is built in pieces inside both, and whatever reads a position asks where the pieces really stand. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -3432,6 +3433,59 @@ box is looked at the moment it is pressed. Mutant RT20.
 **Takeaway:** a mouse binding is not a control; a control is what both hands can press. And a
 focus ring is a claim about the screen: Tk saying the keyboard is there, and a colour option
 saying what to draw, were both true while nothing was drawn — look at the picture.
+
+### The list that ended in the middle
+
+*(2026-10-28 · found by the final audit's fifth break-it round, which attacked round four's fixes
+by name; the owner chose a list that scrolls to its end over pages)*
+
+**Symptom:** a note's checklist of 1,000 short items, scrolled to its end, showed items 781–785.
+The template picker with 1,000 templates showed "Template 811" at its end, and End put the
+keyboard on "Template 999", which nobody could see. Settings → Templates, the only place a
+template is deleted, ended at about the 712th. The scrollbar reached its end each time. At 225%
+it happened from about 345 checklist items, and with long items from a few dozen. Nothing was
+removed, but Space ticked an item nobody could see, and words typed into the template editor's
+Add box, scrolled out of reach, were saved.
+
+**Root cause:** every long list was one frame placed on a canvas as a window item, and the canvas
+scrolled it. Tk works out where a window item stands relative to the view in a 16-bit short
+(`Tk_CanvasWindowCoords`), the same on every system, and X keeps a window's place in 16 bits as
+well. However far the canvas scrolled, the frame went up at most 32,768 px. Round four had limited
+how tall one widget is drawn; nothing limited how far a frame is scrolled. The same shape stood in
+the template editor, Recently deleted and Share after enough "Show more", Duplicates (one note
+copied a thousand times is one group), a day's notes, the calendar's History (its pages of 50,
+each series unfolded to up to 50 days) and the calculator's history.
+
+**Fix:** a row stack (`RowStack`; see
+[ARCHITECTURE](ARCHITECTURE.md#a-long-list-is-built-in-chunks-it-places-itself)) builds the rows
+into chunk frames of a few rows and places each chunk itself: near the view at its true place,
+the rest parked out of sight above it. The canvas still scrolls, so the scrollbar and the wheel
+are untouched, and a scroll lays out nothing. Two things the first design missed were found
+before code: chunks as window items are unmapped out of view, and Tab skips what is unmapped
+(measured: from the last row in view it went back to the first); and a parked chunk's
+`winfo_y` is its parking place, so bringing a row into sight and the arrows' order ask the
+stack where a chunk stands. A row cannot change its parent in Tk: a checklist item moved over a
+chunk's edge is made again in the other's place. Every list draws exactly as before: each
+drawn widget's place and size, compared with the old code's at 100% and 225% in the Linux
+image, came out the same.
+
+**Two more, found by the checks on Windows:**
+- **Windows keeps a place on the screen in 16 bits.** Parked 32,000 px below a canvas 1,143 px
+  down the screen, a chunk's rows passed 32,767 and Windows pinned them there: back in view, the
+  last of a day's thousand notes stood 376 px above its chunk instead of 318 below. X keeps a
+  place in its parent, so Linux never showed it. Chunks are parked 20,000 px above now.
+- **Each drawn tick box repainted the two images every box shares**, and each paint redrew every
+  box made before it: Share with 2,500 notes, every page shown, took 150 s on Windows before and
+  after the stack, 3.2 s once the images are painted only when missing (a theme switch paints
+  them again).
+
+qa2 builds each of the ten lists past 32,767 px, refuses to judge one that is not, and asks for
+its last row at its end, pressed or ticked from the keyboard; mutants RW01–RW18, with Q12, O16,
+RU26 and RU27 re-aimed.
+
+**Takeaway:** a widget's place has a limit as well as its size, and not the same one on every
+system. A list that grows is built in pieces that each stay inside every limit, and whatever
+reads a position asks where the pieces really stand.
 
 ## Editor & input interaction
 
