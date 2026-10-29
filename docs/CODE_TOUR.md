@@ -115,7 +115,8 @@ docs/                     these documents
 qa/                       headless GUI tests, the stories and the test plan
 test_*.py                 eight unit suites; seven need no window
 tools/                    what CI runs, and the tools behind the docs' numbers
-├── check_*.py            ten static gates: nine in CI, the link check before a push
+├── check_*.py            eleven static gates: ten in CI, the link check before a push
+├── guest.py              a run's turn on the machine, its memory ceiling, the sweep of dead runs' folders
 ├── pre_push_check.py     the gates, locally, in seconds (links in, mutant targets left to CI)
 ├── run_tests.py          the whole suite, safely, from a scratch copy
 ├── run_coverage.py       the whole suite again, measuring what it executes
@@ -126,7 +127,8 @@ tools/                    what CI runs, and the tools behind the docs' numbers
 ├── make_icon.py          draws the app icon, rather than storing one
 ├── make_third_party_notices.py  the licenses the build ships, from the installed copies
 ├── msix/                 packs the build as MSIX, and proves it in Windows Sandbox
-└── linux-ci/             one Docker command reproduces the Ubuntu CI leg
+├── linux_ci.py           the Ubuntu CI leg in Docker: bounded, named, removed on every way out
+└── linux-ci/             the image it runs
 .github/workflows/        CI: tests on Windows and Linux; mutants and stories on demand
 ```
 

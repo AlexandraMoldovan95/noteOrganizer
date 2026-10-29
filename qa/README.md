@@ -169,7 +169,9 @@ jobs at once, with a runaway test among them, took the desktop down
   what the box has — in the Linux image, half the container's 1,536 MB:
   above the box's memory the kernel's OOM killer comes first, with
   SIGKILL and no footer. The figures are sized to measured runs, not to
-  the incident.
+  the incident: in a full run (2026-10-29) the largest process took
+  135 MB on Windows, 146 MB all together, and 141 MB in the Linux image,
+  whose container peaked at 227 MB.
 - **Every child has a bound.** Each child process has a timeout, and a
   hang is a named failure — HANG — after which the run goes on.
 - **Nothing outlives a run.** A scratch folder carries a marker naming
@@ -179,10 +181,13 @@ jobs at once, with a runaway test among them, took the desktop down
   run's own. Pictures a story keeps to be looked at go after seven days.
 - **Docker's VM keeps what it took.** After a Linux run, `wsl --shutdown`
   hands the VM's memory back to Windows (it held 2.2 GB with no container
-  running). The VM's own size is not this repository's: it is set on the
-  machine (`.wslconfig`, `memory=`), 2.8 GB here today, and a reinstall
-  resets it to half the machine's memory. `docker info --format
-  "{{.MemTotal}}"` says what it is.
+  running). It stops every WSL distribution and Docker's engine with
+  them, so first check that nothing else is running there (`docker ps`;
+  `wsl -l --running`); Docker Desktop starts its engine again when asked.
+  The VM's own size is not this repository's: it is set on the machine
+  (`.wslconfig`, `memory=`), 2.8 GB here today, and a reinstall resets it
+  to half the machine's memory. `docker info --format "{{.MemTotal}}"`
+  says what it is.
 
 ## Stories: the app walked, not questioned
 
@@ -205,8 +210,12 @@ pressing the buttons they press — the note card, `📋 Generate code`, the
 dialog's own buttons — with each chapter in **its own process**, so
 "close the app and open it again" is real rather than simulated. It
 photographs the app's window as it goes (only the window: a picture of
-the whole screen took every other open window with it), and the pictures
-are meant to be
+the whole screen took every other open window with it). Every picture —
+the stories', `doc_screenshots`', `visual_scenes'` — goes through one
+shutter, `_qa_support.photograph`: cut to the window and the primary
+screen's work area, and refused, with the program named, when another
+program's window lies over it; `-topmost` alone once let an emulator into
+nineteen documentation pictures. The pictures are meant to be
 looked at: two bugs in this project were invisible in the source and
 obvious in a photograph.
 

@@ -202,7 +202,7 @@ is in the table below as well.
 | [The list that ended in the middle](#the-list-that-ended-in-the-middle) | A widget's place has a limit as well as its size: a list that grows is built in pieces inside both, and whatever reads a position asks where the pieces really stand. | next |
 | [Round six: a restore on a run that saves nothing, and ceilings kept at the load](#round-six-a-restore-on-a-run-that-saves-nothing-and-ceilings-kept-at-the-load) | "A failed write leaves a duplicate at worst" promises a next write; a ceiling kept at the load is one the editor crosses; and two apps keep one thing in one place. | next |
 | [Round six: the keyboard out of a cell, and a list's pieces parked beside it](#round-six-the-keyboard-out-of-a-cell-and-a-lists-pieces-parked-beside-it) | A limit justified by one measurement holds only for what was measured; and a place is counted in the list, not in the piece it happens to be drawn in. | next |
-| [The test that took the computer down](#the-test-that-took-the-computer-down) | A test is a guest on the computer it runs on: it never sizes itself from a bound a mutant can change, and the runner holds the ceiling the test forgot. | next |
+| [The test that took the computer down](#the-test-that-took-the-computer-down) | A test is a guest on the computer it runs on: it never sizes itself from a bound a mutant can change, and the runner holds the ceiling the test forgot. A rule only asked lasts until it is forgotten. | next |
 | [Round seven: a copy taken for the series', and what one slot holds](#round-seven-a-copy-taken-for-the-series-and-what-one-slot-holds) | A rule about "the copy" says which copy, by what it holds; a rule inside the shaping of a note runs in every comparison too; each new reason to fill one slot is a new way to empty it. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
@@ -6324,9 +6324,42 @@ emulator walk and a suite -- ran at once.
   NTFS.
 - A working rule in [qa/README](../qa/README.md#running-anything-here): one heavy job at a time.
 
+**Round seven** *(2026-10-29, the same day)*: the final audit attacked the fix, and found it held
+only where someone had remembered it.
+
+- *One heavy job at a time* was a sentence. Each run made a job of its own, so two runs at once
+  were allowed 8 GB each on a machine with about 4 GB free, and the figures were the incident's,
+  not the need's. A run now takes the machine's turn: an OS lock in the temporary folder, freed
+  when the run ends however it ends. A second run waits, naming the first, and what a run starts
+  shares its turn. The ceiling is 1,024 MB a process and 2,048 MB in all; in a full run the
+  largest process took 135 MB, and all of them together 146 MB.
+- *On Linux* the ceiling was 8,192 MB of address space, above the Docker VM's whole 2.8 GB, so a
+  runaway met the kernel's OOM killer first: SIGKILL, no footer. It is never more than half of
+  what the box has now. In a 512 MB container a child touching 700 MB got MemoryError; under the
+  old figure it was killed. A full Linux run holds under it: its largest process used 141 MB.
+- *A killed docker client* leaves its container running: the Linux suite ran on in the VM, unseen,
+  beside the next run. `tools/linux_ci.py` is the one door, a named container with memory, CPU
+  and time limits and docker's init, which ends itself when its input closes because the runner
+  has gone. Killed outright, the runner left nothing: its container was gone 0.6 s later.
+- *The gate* picked runners by the word `sys.executable` and took `guest.settle()` anywhere in
+  the file, so three tools that build the whole app on the owner's screen passed with no ceiling.
+  It finds runners by what they do now and walks their paths in the syntax tree; thirteen mutants
+  of its rules and three of `guest.py` each fail it.
+- *Three photographers of four* trusted `-topmost`. One shutter (`_qa_support.photograph`) now
+  asks which window is on top across the box, before and after the copy, and refuses the picture
+  when one is another program's. With that question taken away, a window another process kept on
+  top was in "a picture of the app".
+- *Hangs* had no bound in the travel story, the coverage run and the mutant runner, whose own
+  timeout ended the catalogue with a traceback. Every child has a timeout; a hang is a verdict,
+  HANG, and the run goes on.
+- *Leftovers*: killed runs left their copies in the temporary folder, and the suites wrote zips
+  there under fixed names. A scratch folder carries a marker naming its run and a later run
+  removes the dead ones; the suites get a temporary folder of the run's own.
+
 **Takeaway:** a test is a guest on the computer it runs on. A mutant can turn any bound into
 "unbounded", so a test never sizes itself from a bound, and the runner holds the ceiling the test
-forgot.
+forgot. And a rule that is only asked lasts until the day it is forgotten: the turn, the bound on
+each child and the edges of a picture are code now, held by a gate that was watched failing.
 
 ## Smaller lessons, moved out of the code
 

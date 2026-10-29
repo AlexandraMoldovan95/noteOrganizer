@@ -338,11 +338,18 @@ afterward — the project's own files are only ever read (`py
 tools/run_tests.py`, or `py tools/run_tests.py qa6` for one script). The
 manual ritual below is the fallback, and the reason that tool exists.
 
-The machine is the owner's, too (2026-10-29): every runner holds what it
-starts to a memory ceiling (`tools/guest.py`, gated), and only one heavy
-job runs at a time — a suite, mutants, the Linux image, the Android build
-or its emulator. A runaway test once took 43 GB and the owner's desktop
-with it ([the story](docs/ISSUES_LOG.md#the-test-that-took-the-computer-down)).
+The machine is the owner's, too (2026-10-29): only one heavy job runs at
+a time — a suite, mutants, the Linux image, the Android build or its
+emulator. For this repository's runners that is enforced, not asked: each
+calls `guest.settle()` first (`tools/guest.py`, gated by
+`tools/check_guest.py`), which takes the machine's turn — a second run
+waits, naming the first — and holds everything it starts to a memory
+ceiling sized to the need. The Linux image runs only through `py
+tools/linux_ci.py`, never a docker command of one's own: a killed docker
+client leaves its container running. The Android build and its emulator
+take no turn yet; keep them to one at a time by hand. A runaway test once
+took 43 GB and the owner's desktop with it
+([the story](docs/ISSUES_LOG.md#the-test-that-took-the-computer-down)).
 
 Instead (by hand): copy `note_organizer.py`, the `noteorganizer/` package,
 and the target test script into a scratch directory **outside the project

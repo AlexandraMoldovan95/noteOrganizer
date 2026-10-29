@@ -95,6 +95,8 @@ something that does not depend on the agent remembering:
 | Text readable in every theme | **Enforced** in CI (`check_contrast.py`, WCAG AA). |
 | `core/` never imports the interface | **Enforced** by a unit check. |
 | The mutant catalogue still aims at real code | **Enforced** in CI (`check_mutant_targets.py`). |
+| One heavy job at a time; a test held to a memory ceiling, every child to a time limit | **Enforced** for this repository's runners by `tools/guest.py` (an OS lock on the machine, a job object or RLIMIT_AS), and in CI by `check_guest.py`, which finds the runners by what they do. The Linux image runs only through `tools/linux_ci.py`. The Android build and its emulator: **asked**. |
+| A picture of the app shows only the app | **Enforced** by the one shutter every photographer uses (`qa/_qa_support.photograph`): it refuses a picture another program's window is over. |
 | Push, merge, pull requests | **Held by me.** Push asks every time; I open and merge every pull request myself. |
 | The pre-flight, the surface walk, the mutant for each fix, the photographs looked at, the report of what was not covered | **Asked.** Written in CLAUDE.md, checked by my review and by the next round finding what was skipped. |
 

@@ -19,7 +19,11 @@ renders automatically everywhere the docs reference it, no other change needed.
 
 Run it from a scratch copy, never in place -- the qa safety rule applies
 here too, and the script refuses to start beside a `notes_data.json` that
-holds real notes.
+holds real notes. The copy holds `tools/guest.py` and `qa/_qa_support.py`
+beside the script, which refuses to start without them: the first takes the
+machine's turn and the memory ceiling before the app is built, the second is
+the shutter every picture goes through, which refuses one that another
+program's window is over (its docstring says what to copy).
 
 Every picture in the table below has a scene in that file which stages it
 deliberately: it writes a small notebook of its own, opens the panel,
