@@ -1295,13 +1295,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # Shortened to fit, as the title's paste is: refused whole, it
             # looked as if it had failed. In one go -- Tk's own, off X11,
             # deletes the selection and inserts as two edits.
+            # Each line break one character, as Tk's own paste puts it in
+            # (_cap_paste): Windows' clipboard keeps CR LF, so a paste that
+            # fitted was weighed as too long, and the CR went in with it.
             raw, _cut = self._clipboard_text(entry)
             if raw is None:
                 return None
-            # Each line break one character, as Tk's own paste puts it in:
-            # Windows' clipboard keeps CR LF, so a paste that fitted was
-            # weighed as too long, and the CR went in with what was kept.
-            raw = raw.replace("\r\n", "\n").replace("\r", "\n")
             try:
                 chosen = (entry.index("sel.last") - entry.index("sel.first")
                           if entry.selection_present() else 0)
@@ -8283,10 +8282,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     @staticmethod
     def _cap_paste(text):
-        """*text* as a paste may put it in -- its first MAX_PASTE_CHARS
-        characters, the formatted paste's ceiling -- and whether it was cut.
-        The one ceiling every paste route keeps (_clipboard_text, and the
-        routes that read the clipboard or the selection some other way)."""
+        """*text* as a paste may put it in -- each line break one character,
+        as the note keeps it, then its first MAX_PASTE_CHARS characters, the
+        formatted paste's ceiling -- and whether it was cut. The one ceiling
+        every paste route keeps (_clipboard_text, and the routes that read
+        the clipboard or the selection some other way)."""
+        # Before it is weighed: Windows' clipboard keeps CR LF, and a paste
+        # that fitted, weighed at two characters a line, lost its end.
+        text = text.replace("\r\n", "\n").replace("\r", "\n")
         if len(text) > MAX_PASTE_CHARS:
             return text[:MAX_PASTE_CHARS], True
         return text, False

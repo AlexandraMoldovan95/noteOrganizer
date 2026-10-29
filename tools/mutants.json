@@ -10550,16 +10550,17 @@
   },
   {
     "id": "RY14",
-    "about": "a limited box's paste weighs Windows' CR LF as two characters and keeps the CR",
+    "about": "the ceiling every paste keeps weighs Windows' CR LF as two characters, and a limited box keeps the CR",
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            raw = raw.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\")\n",
-        "replace": "            pass\n"
+        "find": "        text = text.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\")\n        if len(text) > MAX_PASTE_CHARS:\n",
+        "replace": "        if len(text) > MAX_PASTE_CHARS:\n"
       }
     ],
     "must_fail": [
-      "the template editor, opened from Settings, says in itself"
+      "the template editor, opened from Settings, says in itself",
+      "a paste of 1,500 lines kept in CR LF fits the ceiling as the note keeps it"
     ],
     "suites": [
       "qa6"

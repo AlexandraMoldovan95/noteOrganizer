@@ -5282,6 +5282,38 @@ check(f"a title pasted with its line break, or a double space, is not said to be
       _tw_kept == 'Shopping list'
       and not [t for t in _tw_told if 'shortened' in t])
 
+# ...and the ceiling every paste keeps weighs a line break as one character,
+# as the note keeps it: Windows' clipboard holds CR LF, and 1,500 lines of 65
+# letters -- 98,999 characters in the note -- weighed 100,498, and the body
+# and the comments lost their ends with "Only the first 100,000 characters".
+_cr_seen, _cr_told = {}, []
+_cr_real = (NO.clipboard.read_text, NO.clipboard.read_html, app.show_info)
+_cr_lines = ['%04d ' % i + 'w' * 60 for i in range(1500)]
+try:
+    app.new_note(); _kv_settle(4)
+    # As the app reads Windows' clipboard (CR LF), and Tk's own as Tk
+    # translates it: a paste that fits is Tk's to make.
+    NO.clipboard.read_text = lambda: '\r\n'.join(_cr_lines)
+    NO.clipboard.read_html = lambda: None
+    app.clipboard_clear()
+    app.clipboard_append('\n'.join(_cr_lines))
+    app.show_info = lambda title, *a, **k: _cr_told.append(title)
+    for _cr_name, _cr_box in (('body', app.body_text), ('comments', app.comments_text)):
+        _cr_box.delete('1.0', 'end')
+        _take_focus(_cr_box)
+        _cr_box.event_generate('<<Paste>>')
+        _kv_settle(3)
+        _cr_kept = _cr_box.get('1.0', 'end-1c')
+        _cr_seen[_cr_name] = (len(_cr_kept), _cr_kept.count('\r'),
+                              _cr_kept.endswith(_cr_lines[-1]))
+        _cr_box.delete('1.0', 'end')
+finally:
+    NO.clipboard.read_text, NO.clipboard.read_html, app.show_info = _cr_real
+    _kv_settle(2)
+check(f"a paste of 1,500 lines kept in CR LF fits the ceiling as the note keeps "
+      f"it, whole, with nothing said ({_cr_seen}; said {_cr_told})",
+      _cr_seen == {'body': (98_999, 0, True), 'comments': (98_999, 0, True)}
+      and _cr_told == [])
 _nm_kept = list(app.templates)
 app.templates = [{'name': _nm_long, 'body': 'x'}, {'name': _nm_lines, 'body': 'y'}]
 _nm_picker = _nm_buttons = None
