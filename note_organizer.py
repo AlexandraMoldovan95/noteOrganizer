@@ -377,6 +377,7 @@ from noteorganizer.core.model import (
     rescue_copy_spent,
     rescue_copy_due,
     kept_days_fit,
+    days_hold_own_text,
     copy_replaced_by_restore,
     find_by_uid,
     split_by_identity,
@@ -21531,14 +21532,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Undo that might never be clicked, and the copy replaced the note's
         # own rescue copy -- a big delete's text in no file, the window's
         # close counting an Undo that died with it.
-        # What each day holds, asked of a note that may no longer repeat:
-        # what it shows would say none of its days held anything.
-        for day in (note.get("overrides") or {}):
-            shown = day_as_kept(note, day)
-            if any((shown.get(key) or "") != (note.get(key) or "")
-                   for key in ("title", "body", "comments")):
-                return True
-        return False
+        # The one answer is the core's, which the read of an older notebook
+        # asks as well (core.model._days_back_from_copy).
+        return days_hold_own_text(note)
 
     @staticmethod
     def _whole_note_rescue_copy(note):

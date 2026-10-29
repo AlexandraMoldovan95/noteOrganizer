@@ -3454,6 +3454,39 @@ check("comments replaced keep a copy, weighed as a text of their own",
                                          _cm_long, _cm_long + " Buy food.")
       and not _model_mod.rescue_copy_due("Dog", _cm_body, "Dog", _cm_body, "", "new"))
 
+# A repeat turned off keeps its days' own text in the note here; the phone,
+# and this app before the final audit, kept them only in the rescue copy,
+# which the next copy erased (round 6, the owner's choice: one place, the
+# note). Brought back into the note as it is read, once.
+_kd_series = {"date": "2026-11-02", "recurrence": {"freq": "weekly", "interval": 1}}
+_kd_days = {"overrides": {"2026-11-09": {"body": "Leg day - knee hurt"}},
+            "exceptions": ["2026-11-16"]}
+_kd_turned_off = _model_mod.normalize_note({
+    "id": 1, "title": "Gym", "body": "Warm up.",
+    "_prev": dict({"title": "Gym", "body": "Warm up."}, **_kd_series, **_kd_days)})
+# A copy that does not repeat holds days an update replaced on purpose:
+# left as it is (the phone's copies of words that carried days were never
+# released, only its turn-off copies, which repeat).
+_kd_carried = _model_mod.normalize_note({
+    "id": 2, "title": "Gym", "body": "Warm up.",
+    "_prev": dict({"title": "Gym", "body": "Warm up. Physio said no squats."}, **_kd_days)})
+_kd_empty_days = _model_mod.normalize_note({   # days with no text of their own
+    "id": 3, "title": "Gym", "body": "Warm up.",
+    "_prev": dict({"title": "Gym", "body": "Warm up."}, exceptions=["2026-11-16"], **_kd_series)})
+_kd_live = _model_mod.normalize_note(dict({"id": 4, "title": "Gym", "body": "Warm up.",
+                                          "_prev": dict(_kd_series, **_kd_days)}, **_kd_series))
+check("an older notebook's days kept only in the rescue copy come back into the note",
+      _kd_turned_off["overrides"] == _kd_days["overrides"]
+      and _kd_turned_off["exceptions"] == ["2026-11-16"]
+      and _kd_turned_off["_prev"].get("overrides") == _kd_days["overrides"])
+check("...but not days that hold no text of their own, nor an update's copy that does "
+      "not repeat, nor a note that still repeats, and a second read changes nothing",
+      _kd_empty_days["exceptions"] == [] and _kd_empty_days["overrides"] == {}
+      and _kd_carried["overrides"] == {} and _kd_carried["_prev"].get("overrides") == _kd_days["overrides"]
+      and _kd_live["overrides"] == {} and _kd_live["_prev"].get("overrides") == _kd_days["overrides"]
+      and _model_mod.normalize_note(_kd_turned_off) == _kd_turned_off
+      and _model_mod.normalize_note(_kd_carried) == _kd_carried)
+
 # The restore's own list of what it can put back must be exactly what an
 # update can replace beyond the text -- a field added to one without the
 # other is the drift this closes.

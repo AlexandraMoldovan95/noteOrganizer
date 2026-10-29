@@ -30,6 +30,7 @@ from .recurrence import (
     expand_occurrences,
     OVERRIDABLE_FIELDS,
     MAX_OCCURRENCES,
+    day_as_kept,
     is_recurring,
 )
 
@@ -239,6 +240,34 @@ def days_to_rescue(before, recurrence):
     if not is_recurring(before) or is_recurring({"recurrence": recurrence}):
         return {}
     return {key: copy.deepcopy(before[key]) for key in DAY_FIELDS if before.get(key)}
+
+
+def days_hold_own_text(note):
+    """Whether a day of *note* shows a title, text or comments of its own --
+    asked of a note that may no longer repeat, so of what each day holds
+    (day_as_kept), not of what it shows."""
+    for day in (note.get("overrides") or {}):
+        shown = day_as_kept(note, day)
+        if any((shown.get(key) or "") != (note.get(key) or "")
+               for key in ("title", "body", "comments")):
+            return True
+    return False
+
+
+def _days_back_from_copy(note):
+    """A note that no longer repeats keeps its days' own text in itself, as
+    a turn-off here does; a turn-off by the phone, or by this app before the
+    final audit, kept them only in the series' copy, which the next copy
+    erased. Brought back into the note once, as it is read (round 6)."""
+    prev = note.get("_prev")
+    # Only the series' own copy: an update's copy of a note that did not
+    # repeat holds the days that update replaced, on purpose.
+    if (not isinstance(prev, dict) or is_recurring(note) or not is_recurring(prev)
+            or any(note.get(key) for key in DAY_FIELDS)):
+        return
+    if days_hold_own_text(prev):
+        for key in DAY_FIELDS:
+            note[key] = copy.deepcopy(prev.get(key) or NOTE_DEFAULTS[key])
 
 
 def kept_days_fit(note, date_value, recurrence):
@@ -830,6 +859,7 @@ def normalize_note(note):
     # a crash on every subsequent launch.
     clean["color"] = sanitize_color(clean.get("color"))
 
+    _days_back_from_copy(clean)
     return clean
 
 

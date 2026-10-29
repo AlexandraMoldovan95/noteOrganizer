@@ -8308,9 +8308,9 @@
     "about": "the save that decides whether days are worth keeping reads what they show, so a one-off's days look empty and are dropped",
     "edits": [
       {
-        "file": "note_organizer.py",
-        "find": "            shown = day_as_kept(note, day)\n",
-        "replace": "            shown = effective_note(note, day)\n"
+        "file": "noteorganizer/core/model.py",
+        "find": "        shown = day_as_kept(note, day)\n",
+        "replace": "        shown = day_as_kept(note, day) if is_recurring(note) else note\n"
       }
     ],
     "must_fail": [
@@ -10617,6 +10617,78 @@
     ],
     "suites": [
       "qa2"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR91",
+    "about": "a note read keeps a turned-off series' own-text days only in its rescue copy, as the phone wrote it",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    _days_back_from_copy(clean)\n    return clean",
+        "replace": "    return clean"
+      }
+    ],
+    "must_fail": [
+      "an older notebook's days kept only in the rescue copy come back into the note"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR92",
+    "about": "an update's copy of a note that did not repeat gives back the days the update replaced",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    if (not isinstance(prev, dict) or is_recurring(note) or not is_recurring(prev)\n",
+        "replace": "    if (not isinstance(prev, dict) or is_recurring(note)\n"
+      }
+    ],
+    "must_fail": [
+      "...but not days that hold no text of their own"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR93",
+    "about": "days with no text of their own are brought back into a note that no longer repeats",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    if days_hold_own_text(prev):\n        for key in DAY_FIELDS:",
+        "replace": "    if True:\n        for key in DAY_FIELDS:"
+      }
+    ],
+    "must_fail": [
+      "...but not days that hold no text of their own"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR94",
+    "about": "the editor loses a day's own text a phone kept only in the rescue copy, at the next big delete",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    _days_back_from_copy(clean)\n    return clean",
+        "replace": "    return clean"
+      }
+    ],
+    "must_fail": [
+      "a day's own text a phone kept only in the rescue copy stays in the note"
+    ],
+    "suites": [
+      "qa3"
     ],
     "expect": "killed"
   }

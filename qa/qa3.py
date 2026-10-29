@@ -3972,6 +3972,27 @@ check(f'comments wiped keep a rescue copy of them ({len(_cw_prev.get("comments",
       _cw_prev.get('comments') == _cw_old)
 app.notes = []; app.save_notes()
 
+# A repeat turned off on the phone kept a day's own text only in the rescue
+# copy; here the next big delete made a copy of words alone, and the day's
+# text was in no file (round 6). A note read keeps those days in itself.
+_pd_note = {'id': 4257, 'title': 'Gym', 'body': 'Warm up.\n' + 'Then the plan for the week. ' * 4,
+            '_prev': {'title': 'Gym', 'body': 'Warm up.', 'date': '2026-11-02',
+                      'recurrence': {'freq': 'weekly', 'interval': 1},
+                      'overrides': {'2026-11-09': {'body': 'Leg day - knee hurt'}}}}
+with open(NO.DATA_FILE, 'w', encoding='utf-8') as _f:
+    json.dump([_pd_note], _f)
+app.notes = app.load_notes(); app.update()
+app.open_note_in_tab(app.notes[0]); app.update()
+app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'Warm up.')
+app._flush_autosave(leaving=True); app.update()
+_pd_kept = next((n for n in json.load(open(NO.DATA_FILE, encoding='utf-8'))
+                 if n.get('id') == 4257), {})
+check(f'a day\'s own text a phone kept only in the rescue copy stays in the note after a '
+      f'big delete here ({_pd_kept.get("overrides")})',
+      (_pd_kept.get('overrides') or {}).get('2026-11-09', {}).get('body') == 'Leg day - knee hurt')
+app.new_note(); app.update()
+app.notes = []; app.save_notes()
+
 # ...and saves all the close saves (one list, _save_on_the_way_out). Its own
 # copy had drifted: a date typed short was left unsettled, so unsaved, and a
 # write that had failed was never tried again (2026-10-28, the final audit).
