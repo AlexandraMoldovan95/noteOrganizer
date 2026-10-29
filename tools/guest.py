@@ -203,7 +203,7 @@ def take_turn(label=None, wait_s=None):
     _lock_file = handle
     _token = "%d-%d" % (os.getpid(), int(time.time() * 1000))
     me = {"pid": os.getpid(), "token": _token, "born": born_at(os.getpid()),
-          "label": label or _label(), "since": time.strftime("%H:%M:%S"),
+          "label": (label or _label()).strip(), "since": time.strftime("%H:%M:%S"),
           "folder": os.getcwd()}
     try:
         with open(os.path.join(folder, HOLDER_NAME), "w", encoding="utf-8") as fh:

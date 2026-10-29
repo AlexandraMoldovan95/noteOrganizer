@@ -146,6 +146,31 @@ def build():
         return 124
 
 
+def worktree_git():
+    """The docker arguments that let git read a worktree inside the image.
+
+    A git worktree's .git is a file naming its git folder by a Windows path,
+    which git in the container cannot follow: the two gates that ask git
+    what is tracked then refuse to run. The repository's common git folder
+    is mounted read-only beside /repo, and git is pointed at this worktree's
+    folder inside it. A plain checkout needs nothing."""
+    dot_git = os.path.join(ROOT, ".git")
+    if not os.path.isfile(dot_git):
+        return []
+    with open(dot_git, encoding="utf-8") as fh:
+        gitdir = fh.read().strip().partition("gitdir:")[2].strip()
+    try:
+        with open(os.path.join(gitdir, "commondir"), encoding="utf-8") as fh:
+            common = os.path.normpath(os.path.join(gitdir, fh.read().strip()))
+    except OSError:
+        return []
+    inside = os.path.relpath(os.path.normpath(gitdir), common).replace(os.sep, "/")
+    return ["--mount", "type=bind,source=%s,target=/gitcommon,readonly" % common,
+            "-e", "GIT_DIR=/gitcommon/%s" % inside, "-e", "GIT_WORK_TREE=/repo",
+            "-e", "GIT_CONFIG_COUNT=1", "-e", "GIT_CONFIG_KEY_0=safe.directory",
+            "-e", "GIT_CONFIG_VALUE_0=*"]
+
+
 def run(args, limit):
     name = "noteorg-ci-%d" % os.getpid()
     born = guest.born_at(os.getpid())
@@ -154,8 +179,8 @@ def run(args, limit):
            "--label", "%s.born=%s" % (LABEL, "" if born is None else "%.3f" % born),
            "--memory", MEMORY, "--memory-swap", MEMORY, "--cpus", CPUS,
            "--pids-limit", PIDS, "-e", "PYTHONUNBUFFERED=1",
-           "--mount", "type=bind,source=%s,target=/repo,readonly" % ROOT,
-           "--entrypoint", "/bin/sh", IMAGE, "-c", INSIDE, "linux_ci", str(limit)] + args
+           "--mount", "type=bind,source=%s,target=/repo,readonly" % ROOT] + worktree_git()
+    cmd += ["--entrypoint", "/bin/sh", IMAGE, "-c", INSIDE, "linux_ci", str(limit)] + args
     print("linux_ci: %s, at most %s of memory, %s CPUs, %d s" % (name, MEMORY, CPUS, limit),
           flush=True)
     # The input is held open and never written: its closing is what tells
