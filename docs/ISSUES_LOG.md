@@ -200,7 +200,9 @@ is in the table below as well.
 | [Round five: a retry paid at every read, and shares in the wrong unit](#round-five-a-retry-paid-at-every-read-and-shares-in-the-wrong-unit) | A condition added to one branch, or a unit to one side of a fraction, changes a question asked in more than one place; a check's deadline is a claim about the machine. | next |
 | [Round five: the shortcuts under a picture, and a toolbar laid out again](#round-five-the-shortcuts-under-a-picture-and-a-toolbar-laid-out-again) | A rule about where the keyboard may go is asked of every road that moves it, the app's own shortcuts too; and a part is put away when its manager forgets it, not while it waits to be drawn. | next |
 | [The list that ended in the middle](#the-list-that-ended-in-the-middle) | A widget's place has a limit as well as its size: a list that grows is built in pieces inside both, and whatever reads a position asks where the pieces really stand. | next |
+| [Round six: a restore on a run that saves nothing, and ceilings kept at the load](#round-six-a-restore-on-a-run-that-saves-nothing-and-ceilings-kept-at-the-load) | "A failed write leaves a duplicate at worst" promises a next write; a ceiling kept at the load is one the editor crosses; and two apps keep one thing in one place. | next |
 | [Round six: the keyboard out of a cell, and a list's pieces parked beside it](#round-six-the-keyboard-out-of-a-cell-and-a-lists-pieces-parked-beside-it) | A limit justified by one measurement holds only for what was measured; and a place is counted in the list, not in the piece it happens to be drawn in. | next |
+| [The test that took the computer down](#the-test-that-took-the-computer-down) | A test is a guest on the computer it runs on: it never sizes itself from a bound a mutant can change, and the runner holds the ceiling the test forgot. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -2729,6 +2731,75 @@ row. And the routes that reopen a cell after a commit had no answer for a grid t
 **Takeaway:** a rule about where the keyboard may go must hold on every road that moves it,
 including the app's own shortcuts. And a part is put away when its manager forgets it, not while it
 waits to be drawn: ask the layout, not the screen.
+
+### Round six: a restore on a run that saves nothing, and ceilings kept at the load
+
+*(2026-10-29 · found by the final audit's sixth break-it round, which attacked round five's fixes
+by name; this is its data half)*
+
+**Symptom:**
+- **A note restored, then in neither file.** On a run that could not read the notes file, Restore
+  in Recently deleted, Restore selected or a delete's Undo took the note out of the Trash in memory
+  while its notes save was refused. The next Delete permanently, Empty trash or delete to the Trash
+  wrote that Trash over the file, and the note was gone, though the start's notice had said the
+  notes already there were safe.
+- **The 1,001st item, there for a day.** A checklist of 1,000 items took one more by Add, by the
+  item waiting in the Add box when the note was left, and by a delete's Undo after an Add into its
+  room. It was drawn and saved, and the next start cut it without a word. The template editor's Add
+  and its waiting item were cut at Save the same way, and the editor closed without asking.
+- **Use template dropped the Add box.** In a new note whose only words were an item in the box,
+  Use template replaced it unasked; over a saved note, "Replace current note?" warned of a loss, and
+  Yes lost what the autosave had not yet written.
+- **Comments wiped, no copy.** 780 characters of comments replaced by "ok" went to disk with no
+  rescue copy; the same words deleted from the body kept one.
+- **A day's own text lost on the way from the phone.** A repeat turned off on the phone kept its
+  days' own text only in the rescue copy; this app keeps them in the note, and here the next big
+  delete made a copy of words alone, so the day's text was in no file (found on Android).
+- **A backup taken for whole.** An export that finished as the window closed was recorded as the
+  last export: a backup of a held run's session alone showed as "Last exported", and files it left
+  out went unnamed.
+- **Smaller:** a held run's Empty trash deleted an attached file that a note in the unread notes
+  file used; and the Add box taken by a save that stays on the note rebuilt every row, 2.2 seconds
+  at 1,000 items.
+
+**Root cause:** each was a rule kept in one place and assumed in another. The restore wrote the
+notes first so that a failed write would leave a duplicate: true only if a later write succeeds,
+and a held run's never does. The checklist's ceiling lived in `normalize_note`, at a load, so every
+door into the editor's list passed it by. Use template asked a content test without the Add box,
+the one route into an empty editor that did not save first. The rescue copy's measure read two of
+the three texts the copy holds. The two apps kept a turned-off series' days in two places. And the
+close finished an export's work without the poll's knowledge of what the export held.
+
+**Fix:**
+- A restore on a run whose notes file is held is refused, with the reason, as an import is
+  ("Restore after reopening"); a notes write that fails on an ordinary run puts both lists back as
+  the files are. No attached file is deleted on a held run (`_delete_attachment_files`).
+- Every door into a checklist refuses the 1,001st item and says so (`_checklist_full`): Add, whose
+  words stay in the box, the Add box taken on leaving, a delete's Undo, the template editor's Add
+  and Save, and Save as template from a full note. The template editor asks on closing over words
+  a full list cannot take.
+- Use template over a saved note saves it first, its Add box too, as Ctrl+N does, and asks
+  nothing: the note is left, not replaced. Over a new note's unsaved content it asks, as test plan
+  case 32 has it, the box counted by the test the blank editor's flush shares
+  (`_editor_holds_typing`).
+- The comments are weighed by the rescue copy's bars as a text of their own: counted in with the
+  body, a long comment would make a whole body deleted read as a small share.
+- One place for a turned-off series' days, the note, the owner's choice: a note read whose
+  series' copy holds days with their own text, and which keeps none itself, takes them in, once
+  (`_days_back_from_copy`, asking the one `days_hold_own_text`). Only the series' own copy: an
+  update's copy of a note that did not repeat holds the days the update replaced, on purpose. The
+  phone keeps them in the note as well (its round six).
+- An export that finishes at the close follows the poll: a backup of the session alone is not
+  remembered, and what its message would have said, the next start says (`_left_out_said`, shared
+  with the poll).
+- The Add box taken by any save adds one row, as Add does (`_append_checklist_item`).
+- `test_data_safety`, qa3, qa6; mutants DR72–DR94, with DR44, DR47, DR58, DR71, DR76 and DR77
+  re-aimed.
+
+**Takeaway:** "a failed write leaves a duplicate at worst" is a promise about the next write. On a
+run whose writes are all refused there is no next write, so the lists in memory must stay what the
+files are. A ceiling kept at the load is a ceiling the editor crosses: every door that adds must
+ask it. And when two programs keep one notebook, a thing they both keep lives in one place.
 
 ### Round six: the keyboard out of a cell, and a list's pieces parked beside it
 
@@ -6155,6 +6226,46 @@ later", with one that a block is still on its way in just after a scroll.
 **Takeaway:** a photograph proves only what was on the screen when it was taken. A page that
 changes with scrolling or time has to be photographed in the state a reader meets it — and the
 behaviour that changes it needs checks of its own, not the photograph's silence.
+
+### The test that took the computer down
+
+*(2026-10-29 · found by the owner: an NVIDIA error on her screen while the final audit's mutants
+ran)*
+
+**Symptom:** the owner saw an error from her graphics software and pressed OK. Windows' logs told
+the rest. For twelve minutes the computer was out of memory: the desktop window manager, which
+draws the screen, crashed and restarted, several services stopped, the AI agent's own process
+died, and Windows deleted the shadow copies of C: -- its restore points and the "Previous
+versions" of files -- because the disk could not keep up. No file of hers was touched; the
+restore points were lost.
+
+**Root cause:** one test process. Windows' low-memory report named it: a `python.exe` holding
+43 GB, with the Android emulator's 6.7 GB beside it. Round six's interface fixer ran mutants that
+make a long list's chunks a billion rows each, so that the list is one frame again; its new qa2
+checks sized their fixture from that very number, and began building two billion rows. Nothing
+held a test to less than all the memory the machine had, and three heavy jobs -- mutants, an
+emulator walk and a suite -- ran at once.
+
+**Fix:**
+- `tools/guest.py`: every runner (`run_tests.py`, `mutate.py`, the story scripts,
+  `run_coverage.py`, `bench.py`, `pre_push_check.py`) calls `guest.settle()` first. On Windows a
+  job object holds each process to 4,096 MB of committed memory and a run's processes together to
+  8,192 MB, and ends them with the runner; elsewhere RLIMIT_AS holds each process to 8,192 MB of
+  address space. A test past it gets MemoryError and fails alone. A run ends by printing the most
+  any process took: 134 MB in the first full run under it, thirty times under the ceiling.
+- A gate, "a test run is a guest" (`tools/check_guest.py`): it finds every runner and fails one
+  that does not settle, and proves on the machine that a process past a 256 MB ceiling fails while
+  one under it runs. Both parts were watched failing with their defence taken away.
+- The qa2 fixtures read a chunk's size from the list but build no more than 64 rows to one.
+- `mutate.py` refuses a flag it does not know: `--help` had started the whole catalogue.
+- Moving the scratch to the other drive was tried and taken back: that drive is exFAT, a check of
+  NTFS's `Zone.Identifier` stream failed there, and the notebooks the tests stand in for live on
+  NTFS.
+- A working rule in [qa/README](../qa/README.md#running-anything-here): one heavy job at a time.
+
+**Takeaway:** a test is a guest on the computer it runs on. A mutant can turn any bound into
+"unbounded", so a test never sizes itself from a bound, and the runner holds the ceiling the test
+forgot.
 
 ## Smaller lessons, moved out of the code
 

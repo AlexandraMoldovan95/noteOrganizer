@@ -433,6 +433,8 @@ The box sits beside the calculator at the same size; when a list gets long, **�
 header grows it to give more room (and it always scrolls, expanded or not). The expanded size is a
 per-view choice — switching notes returns it to the compact size. An item can be up to 2,000
 characters; a longer paste is shortened to fit, as a note's title is, and the status bar says so.
+A checklist holds up to 1,000 items: past that, Add says the list is full and keeps your words in
+the box.
 
 ![Checklist](screenshots/checklist.png)
 
@@ -635,7 +637,9 @@ Trash besides.
 Save any note as a reusable template (📋 **Save as template**), or build one from scratch in
 Settings → Templates. Starting a new note with **Use template** fills in the title, body,
 category, and checklist from the template — the template itself is never affected by what you do
-with the note afterward. Templates don't go to the Trash (Settings → Recently deleted) —
+with the note afterward. Over a note you have open, **Use template** saves that note first and
+starts a new one beside it; over a new note you have started writing, it asks before replacing
+what you wrote. Templates don't go to the Trash (Settings → Recently deleted) —
 deleting one can't be undone, and the confirmation warns you and pre-selects **No**, like every
 irreversible confirmation in the app. The app keeps up to 1,000 templates; a backup brings in
 templates only while there is room. A template's name and its note title can be up to 200
