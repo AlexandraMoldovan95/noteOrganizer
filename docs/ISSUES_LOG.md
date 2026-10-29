@@ -2975,7 +2975,7 @@ press of its own.
 - The arrows read a choice's x where it stands, as its y (`_root_x`).
 - The ceiling every paste keeps weighs a line break as one character, for every route
   (`_cap_paste`).
-- qa2, qa6; mutants RZ01–RZ10, with RY14 and RY17 re-aimed.
+- qa2, qa6; mutants RZ01–RZ12, with RY14 and RY17 re-aimed.
 
 **Measured, not changed: a scroll step that grows with the list.** The round found a checklist
 scroll step costing five to seven times more at 1,000 items than at 100. Measured in one run in

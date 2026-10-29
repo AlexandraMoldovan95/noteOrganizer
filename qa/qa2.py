@@ -1361,7 +1361,9 @@ check(f'a checklist of 40 items of 100 lines is built in chunks inside 16 bits, 
 # ...and long items moved together by the keyboard do not gather in one chunk:
 # each trade over a chunk's edge brings one in, and enough of them passed what
 # X and Windows can place. Past four times TALLEST the rows are chunked again.
-# TALLEST is lowered here, so two items of 100 lines are enough.
+# TALLEST is lowered here, so two items of 100 lines are enough. The move asks
+# at once: a restack's own chunking again comes once for each width, and is
+# taken here as spent, as it is after a window narrowed (round 7).
 _ll_tall = 'line\n' * 99 + 'end'
 app._working_checklist = (
     [{'text': f's{i}', 'done': False} for i in range(3)]
@@ -1372,6 +1374,7 @@ _ll_gather = {}
 try:
     _LLS.TALLEST = 600
     app._render_checklist_items(); _ll_settle(6)
+    _ll_grp.rechunked = True
     _ll_gather['chunks made'] = [len(c.winfo_children()) for c in _ll_grp.chunks]
 
     def _ll_box_of(prefix):
@@ -1389,6 +1392,7 @@ try:
     _ll_gather['keyboard on Ta'] = str(app.tk.call('focus')) == str(_ll_box_of('Ta'))
 finally:
     _LLS.TALLEST = _ll_tallest
+    _ll_grp.rechunked = False
 check(f'long checklist items moved together by Alt+Up are chunked again before '
       f'one chunk holds them all ({_ll_gather})',
       _ll_gather.get('chunks made') == [4, 1, 3]
@@ -1653,9 +1657,16 @@ if _ll_add is not None and _ll_focus(_ll_add):
     if _ll_icons and _ll_focus(_ll_icons[0]):
         _ll_icons[0].event_generate('<Tab>'); _ll_settle(4)
         _ll_seen['Tab from the last row'] = str(app.tk.call('focus')) == str(_ll_add)
+# ...in chunks inside 16 bits, as the note's is: a chunk past them is placed no
+# further than RowStack.REACH, and its last rows, drawn a few hundred px short
+# of their place, could still read as in sight (round 7).
+_ll_cl_chunks = _ll_stack.groups[1].chunks if _ll_stack is not None else []
+_ll_seen['in chunks inside 16 bits'] = (
+    len(_ll_cl_chunks) > 1
+    and max(c.winfo_reqheight() for c in _ll_cl_chunks) < 32_767)
 check(f'the template editor with 70 long checklist items scrolls to its Add box '
       f'and Category ({_ll_said}; {_ll_seen})',
-      _ll_ok and len(_ll_seen) == 3 and all(_ll_seen.values()))
+      _ll_ok and len(_ll_seen) == 4 and all(_ll_seen.values()))
 app._dismiss_mini_popup(); _ll_settle()
 
 
