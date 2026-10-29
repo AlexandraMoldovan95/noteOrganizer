@@ -200,6 +200,7 @@ is in the table below as well.
 | [Round five: a retry paid at every read, and shares in the wrong unit](#round-five-a-retry-paid-at-every-read-and-shares-in-the-wrong-unit) | A condition added to one branch, or a unit to one side of a fraction, changes a question asked in more than one place; a check's deadline is a claim about the machine. | next |
 | [Round five: the shortcuts under a picture, and a toolbar laid out again](#round-five-the-shortcuts-under-a-picture-and-a-toolbar-laid-out-again) | A rule about where the keyboard may go is asked of every road that moves it, the app's own shortcuts too; and a part is put away when its manager forgets it, not while it waits to be drawn. | next |
 | [The list that ended in the middle](#the-list-that-ended-in-the-middle) | A widget's place has a limit as well as its size: a list that grows is built in pieces inside both, and whatever reads a position asks where the pieces really stand. | next |
+| [Round six: the keyboard out of a cell, and a list's pieces parked beside it](#round-six-the-keyboard-out-of-a-cell-and-a-lists-pieces-parked-beside-it) | A limit justified by one measurement holds only for what was measured; and a place is counted in the list, not in the piece it happens to be drawn in. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -2729,6 +2730,70 @@ row. And the routes that reopen a cell after a commit had no answer for a grid t
 including the app's own shortcuts. And a part is put away when its manager forgets it, not while it
 waits to be drawn: ask the layout, not the screen.
 
+### Round six: the keyboard out of a cell, and a list's pieces parked beside it
+
+*(2026-10-29 · found by the final audit's sixth break-it round, which attacked round five's fixes
+by name; this is its interface half)*
+
+**Symptom:**
+- **A piece of a list over the list.** A checklist's chunk parked out of sight grew taller than
+  its 20,000 px parking place and hung down over the rows in view: at 150–300%, the top of a list
+  of long items showed item 9 or 12 where item 0 stood, and Space or a click ticked an item
+  nobody could see. Two roads led there. A chunk's first item deleted and put back by its Undo
+  went into the chunk before, which grew by one at every round; and four items of 100 lines at
+  300% made a chunk of 22,000 to 42,656 px. Scrolled more than 20,000 px into such a chunk, its
+  rows were drawn short of their place and its last ones never shown.
+- **The keyboard sent rows up.** Space on the last item's bin, alone in its chunk, put the
+  keyboard on the chunk before's first item, and the next Space removed that one. Recently
+  deleted did the same 16 rows up, where Restore asks nothing; the template editor sent it to
+  "+ Add".
+- **Out of a cell onto nothing.** Escape in a table cell, the way out the User Guide names, and
+  Ctrl+V of copied cells left the keyboard on nothing: what was typed next went nowhere, and Tab
+  began again at the tab strip.
+- **Smaller.** Each scroll step of a long checklist moved every chunk within a view above it and
+  two below: 18 ms a step on Windows at 1,000 items. Enter mid-cell that left a table as text put
+  the caret at the cell's end. The template editor, opened from Settings, shortened a paste with
+  the word only on the status line hidden behind Settings. A limited box weighed Windows' CR LF
+  as two characters and kept the CR. And Enter on the picture preview's buttons did nothing.
+- **Found by the new check for that last one:** the preview's Open externally opened the
+  overlay's own name, not the picture. Round four's way back for the keyboard reused the name
+  `path` lower down the same function, and the button read the name when pressed.
+
+**Root cause:** round five built a long list in chunks of a count of rows and parked each one a
+fixed 20,000 px above the view, on the strength of one measurement, a row of 2,000 letters.
+Nothing kept a chunk that short, and Undo put a chunk's first row back into the chunk above it.
+Where the keyboard goes after a press was found by its place among its siblings, and a row's
+siblings were now its chunk's: a chunk the redraw did not make again named the wrong rows. The
+cell routes round five fixed were the ones its finding named, while Escape and a paste of cells
+close the editor too. And the scroll placed every chunk near the view, which moves a window for
+each.
+
+**Fix:**
+- A chunk out of sight is parked beside the view, 20,000 px to its left as well as above it, so
+  no height reaches it. One in the view stands at its true place, however far above the view's
+  top that is.
+- A chunk takes no row more once it is 4,000 px tall by its rows' heights as they are made
+  (`RowStack.TALLEST`, `_natural_height`). Undo puts a row back into the side with room, or into
+  a chunk of its own, and long items moved together are chunked again past four times that.
+- A row's place for the keyboard is its place among its block's rows, counted across chunks
+  (`place_of_row`), and the Trash's own route counts the same way.
+- Escape leaves the keyboard in the note's text under the table, where the caret goes from a
+  drawn table's lines. A paste of cells brings it back to the cell, as the paste from the cell's
+  menu does. Enter mid-cell into a table kept as text puts the caret after its break.
+- A scroll step places only the chunks in the view, and short checklist items go 32 to a chunk:
+  18 ms a step became 7 on Windows, measured in one run.
+- The template editor says what its boxes' limits did on a line under its heading
+  (`_say_by_the_box`). A paste is weighed with each line break one character, as Tk's own paste
+  puts it in.
+- Enter presses the preview's buttons, and so does the keypad's where Tk has one. Open
+  externally opens the picture.
+- qa2, qa6; mutants RY01–RY17, with RW01, RW06, RW08–RW17 and KF07 re-aimed.
+
+**Takeaway:** a limit justified by one measurement holds only for what was measured: a piece of a
+list parked a fixed distance away has to be parked where no size of it reaches the view. And a
+place is only as good as the parent it is counted in. Once a list is split into pieces, where a
+row stood is asked of the list, not of the piece.
+
 
 ## Tk & platform gotchas
 
@@ -3473,7 +3538,9 @@ image, came out the same.
 - **Windows keeps a place on the screen in 16 bits.** Parked 32,000 px below a canvas 1,143 px
   down the screen, a chunk's rows passed 32,767 and Windows pinned them there: back in view, the
   last of a day's thousand notes stood 376 px above its chunk instead of 318 below. X keeps a
-  place in its parent, so Linux never showed it. Chunks are parked 20,000 px above now.
+  place in its parent, so Linux never showed it. Chunks are parked 20,000 px above now (and
+  beside the view as well since
+  [round six](#round-six-the-keyboard-out-of-a-cell-and-a-lists-pieces-parked-beside-it)).
 - **Each drawn tick box repainted the two images every box shares**, and each paint redrew every
   box made before it: Share with 2,500 notes, every page shown, took 150 s on Windows before and
   after the stack, 3.2 s once the images are painted only when missing (a theme switch paints

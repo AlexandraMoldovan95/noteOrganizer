@@ -1346,34 +1346,54 @@ was never drawn, while the scrollbar reached its end. See
 [The list that ended in the middle](ISSUES_LOG.md#the-list-that-ended-in-the-middle).
 
 A stack builds the rows into chunk frames of a few rows each — `group.add()` hands out the
-frame the next row is made in — and places every chunk itself: near the view at its true
-place, everywhere else parked 20,000 px above the view. The canvas keeps the scroll: its
-scrollregion is the stack's total and its `yscrollcommand` tells the stack to place again, so
-the scrollbar, the wheel and every `yview` reader work as before. A scroll places only the
-chunks whose place changed, and lays out no row.
+frame the next row is made in — and places every chunk itself: in the view at its true place,
+however far above its top that is, and every other one parked beside the view, 20,000 px to
+its left and above it. The canvas keeps the scroll: its scrollregion is the stack's total and
+its `yscrollcommand` tells the stack to place again, so the scrollbar, the wheel and every
+`yview` reader work as before. A scroll step places only the chunks in the view, coming into it
+or leaving it, and lays out no row: every chunk placed is a window moved, and on Windows a step
+of a 1,000-item checklist cost 18 ms while chunks stood placed a view above and two below it,
+12 ms with only those in sight, and 7 ms once short items went 32 to a chunk.
 
 - **Parked, never unmapped.** A canvas window item out of view is unmapped, and Tab's own test
   (`tk::FocusOK`) passes over what cannot be viewed: with chunks as window items, Tab from the
   last row in view went back to the first. A placed chunk out of sight is still mapped, so Tab,
   the arrows and `_found_at` reach every row as they did.
-- **Parked above, inside 16 bits twice over.** X keeps a window's place in its parent in 16
-  bits; Windows keeps a window's place on the screen in 16 bits. Parked 32,000 px below a canvas
+- **Parked beside, whatever its height, inside 16 bits twice over.** Parked only above, a chunk
+  taller than its parking place hung down over the rows in sight (a delete and its Undo grew
+  one, four long items at 300% made one), and its own rows were drawn where others' should be.
+  Beside the view, no height reaches it. X keeps a window's place in its parent in 16 bits;
+  Windows keeps a window's place on the screen in 16 bits. Parked 32,000 px below a canvas
   that stood 1,143 px down the screen, a chunk's rows passed 32,767 and Windows pinned them
   there: back in view, the last row stood 376 px above its chunk's top instead of 318 below it.
-  20,000 px above keeps every row of every chunk inside both.
+  20,000 px to the left and above keeps every row of every chunk inside both. The arrows still
+  read a parked choice's x as it is: every choice of a parked chunk is the same 20,000 px to
+  the left, and the one list of choices on a stack (the picker) is a single column.
 - **Where a row stands is asked of the stack.** A parked chunk's `winfo_y` is its parking
   place. `_bring_into_sight`, `_offset_within` and the order the arrows walk (`_root_y`) read a
   chunk's place from the stack (`_drawn_box`), as they read a window item's box from the canvas.
+  And where a row stands among its block (`place_of_row`, counted across its chunks) is the
+  place the keyboard goes back to after a press draws the list again (`_place_of`): a place in
+  its chunk named a frame the redraw may not make again, and the keyboard went to another
+  chunk's first row.
 - **A row cannot leave its chunk.** Tk gives no widget a new parent. A checklist item moved
   over a chunk's edge is made again in the other's place (`_trade_checklist_chunks`), and one
-  put back by Undo at an edge goes back to the chunk it left, so no chunk grows. A block in the
-  middle of a stack — the template editor's checklist, between its fields and its Add box —
+  put back by Undo at an edge goes into the side with room — the chunk it left, else the next,
+  else a chunk of its own between them (`room`, `chunk_before`) — so no chunk grows. A block in
+  the middle of a stack — the template editor's checklist, between its fields and its Add box —
   stacks the chunks it makes again before the block below, because Tab follows the stacking
   order, not the place.
 
-A chunk holds a count of pieces, chosen so the tallest stays far under the parking place: four
-checklist items (one of 2,000 letters stands 3,462 px in a 640 px window at 300%, measured), 32
-one-line rows, 8 by default. Left as one frame, each sized by its own cap and measured at 300%:
+A chunk holds at most a count of rows — 32 short checklist items or one-line rows, 16 Trash
+rows, 8 by default — and takes no row more once it is `RowStack.TALLEST` (4,000 px) tall, by
+its rows' heights as they are made (`_natural_height`, before an idle round has laid them out).
+A chunk in the view stands at its true place, which X and Windows draw only inside 16 bits, and
+four checklist items of 100 lines or 2,000 wide letters stood 42,656 px at 300%. A row grown
+after it was made (its words wrapped narrower) can still take a chunk past 4,000 px, and two
+rows of the tallest kind, about 14,000 px each at 300%, make some 28,000: still inside 16 bits.
+A long item moved over a chunk's edge makes that chunk taller, so long items moved together one
+by one could gather in it; past four times `TALLEST` the checklist is chunked again. Left as
+one frame, each sized by its own cap and measured at 300%:
 Settings → Categories (200 rows, 17,599 px) and the editor page (a note's 200 attachments,
 25,325 px), against about 33,400 px one frame can be scrolled through; the emoji picker and a
 dialog's message are smaller still. A table is drawn whole only up to 400 rows; the note list
