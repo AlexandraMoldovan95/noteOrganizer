@@ -137,17 +137,19 @@ class RowStack:
         """(widest, total) as the rows stand now, laid out first."""
         if self._job is not None:
             try:
-                self.canvas.after_cancel(self._job)
+                self.app.after_cancel(self._job)
             except tk.TclError:
                 pass
         self._restack(notify=False)
         return self.widest, self.total
 
     def changed(self):
-        """Stack the chunks again once the moment has passed."""
+        """Stack the chunks again once the moment has passed. Asked of the
+        app: a canvas destroyed first took the waiting call's command with
+        it, and Tk reported "invalid command name"."""
         if self._job is None:
             try:
-                self._job = self.canvas.after_idle(self._restack)
+                self._job = self.app.after_idle(self._restack)
             except tk.TclError:
                 pass
 
