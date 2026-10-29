@@ -134,7 +134,9 @@ is the static half (the cheap gates CI runs first, compile-all
 included; its docstring lists them) you run before *every* push. The CI's **Linux leg** runs locally too, in
 Docker, through one door: `py tools/linux_ci.py` (the image is built
 once with `py tools/linux_ci.py --build`; `py tools/linux_ci.py qa5` runs
-one script, `--script qa/probe_bar_width.py` a probe), so the Xvfb-only
+one script, `--script qa/probe_bar_width.py` a probe, and `--probe
+<file>` an audit's own probe from a folder below the temporary folder,
+which it sees as `/work`), so the Xvfb-only
 behaviours that used to surface as red CI runs can be caught before the
 push. Never a bare docker command of your own: a docker client that is
 killed leaves its container running in Docker's VM, out of sight, beside
