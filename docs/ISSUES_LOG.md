@@ -204,6 +204,7 @@ is in the table below as well.
 | [Round six: the keyboard out of a cell, and a list's pieces parked beside it](#round-six-the-keyboard-out-of-a-cell-and-a-lists-pieces-parked-beside-it) | A limit justified by one measurement holds only for what was measured; and a place is counted in the list, not in the piece it happens to be drawn in. | next |
 | [The test that took the computer down](#the-test-that-took-the-computer-down) | A test is a guest on the computer it runs on: it never sizes itself from a bound a mutant can change, and the runner holds the ceiling the test forgot. A rule only asked lasts until it is forgotten. | next |
 | [Round seven: a copy taken for the series', and what one slot holds](#round-seven-a-copy-taken-for-the-series-and-what-one-slot-holds) | A rule about "the copy" says which copy, by what it holds; a rule inside the shaping of a note runs in every comparison too; each new reason to fill one slot is a new way to empty it. | next |
+| [Round seven: a list's pieces measured once, and Enter held down](#round-seven-a-lists-pieces-measured-once-and-enter-held-down) | A measure taken once is a measure of that moment: what can change after it tells what read it, or is read again; and a key held down is many presses. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -2925,6 +2926,72 @@ each.
 list parked a fixed distance away has to be parked where no size of it reaches the view. And a
 place is only as good as the parent it is counted in. Once a list is split into pieces, where a
 row stood is asked of the list, not of the piece.
+
+### Round seven: a list's pieces measured once, and Enter held down
+
+*(2026-10-29 · found by the final audit's seventh break-it round, which attacked round six's fixes
+by name; this is its interface half)*
+
+**Symptom:**
+- **A list blank past 16 bits, again.** Long checklist items gathered by moves in a wide window,
+  then the window narrowed to its minimum: a chunk measured at 13,740 px stood 41,684. Scrolled
+  more than 32,768 px into it, the list was blank, and Space ticked an item nobody could see.
+- **Enter held on a picture.** Its preview opened and shut over and over: Close took the
+  keyboard and the next repeat, the name got the keyboard back and the next.
+- **A paste cut without a word on the note's page.** The checklist's Add box and the title said
+  a shortened paste on the status line, which stands at the foot of the scrolled editor, out of
+  sight at the window's own sizes. And a title pasted with its line break was said to be
+  shortened when nothing was cut.
+- **Left in the template picker** went to a template 30 further down, in a chunk parked out of
+  sight.
+- **CR LF weighed twice.** On Windows a paste into the body or the comments just under the
+  100,000-character ceiling lost its end, one character for every line break past it, and was
+  said to be cut at 100,000.
+
+**Root cause:** each was a measure taken once, or of the wrong thing. A chunk's height was its
+rows' heights as they were made, and a checklist label is made at its starting wrap and wrapped
+narrower later; round six's guard against tall chunks compared that first measure with a
+bound, and nothing else ever asked. The arrows corrected a parked chunk's y but not its x. The
+status line was taken as seen because it was mapped. The ceiling weighed the clipboard's text
+before its line breaks were made the note's, and the title weighed what was copied, not what it
+kept. And a key held down repeats -- Windows sends presses alone, X11 a release and a press at
+one time stamp -- and a control Enter's press handed the keyboard to took each repeat as a
+press of its own.
+
+**Fix:**
+- A chunk's height is read as its rows stand (`_RowGroup.height`): a row wrapped again is
+  measured again (`rewrapped`), a row made later is wrapped as its block's rows last were
+  (`_wrap_as_its_rows`), and the height laid out counts when it is more. A block whose rows
+  grow past four times `TALLEST`, with more than twice it beside the tallest row (`too_tall`),
+  is chunked again by its owner once for each width (`_rechunk_too_tall`); the note's checklist
+  keeps its view and the keyboard on its item (`_chunk_checklist_again`). The moves' guard asks
+  the same question. Whatever its rows do, no chunk is placed past 32,767 px (`RowStack.REACH`).
+- Enter held down presses once (`_enter_repeats`): on a drawn control, the preview's buttons
+  and a question's answers. Let go of, it presses again. A press Tk is asked to make carries no
+  time and is never taken for a repeat.
+- A limited box on the note's page, and the title, say what they did on the status line while
+  it is in sight (`_in_sight`: mapped, and inside the view of every canvas it is scrolled on),
+  and in a banner over the window while it is not. A title is weighed as it goes in.
+- The arrows read a choice's x where it stands, as its y (`_root_x`).
+- The ceiling every paste keeps weighs a line break as one character, for every route
+  (`_cap_paste`).
+- qa2, qa6; mutants RZ01–RZ10, with RY14 and RY17 re-aimed.
+
+**Measured, not changed: a scroll step that grows with the list.** The round found a checklist
+scroll step costing five to seven times more at 1,000 items than at 100. Measured in one run in
+the Linux image, three units a step from the top: 2.1 ms a step at 100 items (1,308 widgets in
+the window), 10.9 and 17.4 ms at 1,000 (5,836). With no chunk placed again the step cost 0.2 ms
+at either size; the app's own Python was the same few microseconds a step at both, and so were
+the events a step brought (about 100 exposures). At 1,000 items with the rows of every chunk
+past the fourth destroyed (1,476 widgets, 32 chunks still), a step cost 2.4 ms, as at 100; with
+those chunks unmapped instead, 17.1. So the cost is Tk's and X's, for the one chunk moved into
+the view, and it grows with the windows that exist, mapped or not, not with the chunks. Fewer
+windows to a row (each is five) would be the fix, and that is no small one. Windows was not
+measured here; round six measured 7 ms a step there at 1,000 items.
+
+**Takeaway:** a measure taken once is a measure of that moment. Whatever can change after it -- a
+width, a wrap -- must tell what read it, or be read again where it is used. And a key held down
+is many presses: a control the first press hands the keyboard to must not take the rest.
 
 
 ## Tk & platform gotchas

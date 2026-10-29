@@ -415,6 +415,10 @@ Tk's own buttons take Tab and Space; what the app draws — a canvas, a label, a
 takes neither unless told. So a drawn control is made with `_pressable` (in `ui/dialogs.py`): a
 Tab stop, pressed by Space and Return as a click presses it, its right-click menu on Shift+F10.
 Two bind tags carry this, bound once for the whole app, so a rebuilt list adds no Tcl commands.
+Enter held down presses once (`_enter_repeats`), there, on the picture preview's buttons and on a
+question's answers: a key held repeats, as presses alone on Windows and as a release and a press
+at one time stamp on X11, and the control a press gave the keyboard to took each repeat as a
+press of its own — held on an attachment, the preview opened and shut over and over.
 
 A popup is a window of its own, and Tab never leaves the window it is in. So a popup opened from
 the keyboard takes it (`_keyboard_into_popup`, from `_place_dropdown_popup`, the one door every
@@ -1366,12 +1370,13 @@ of a 1,000-item checklist cost 18 ms while chunks stood placed a view above and 
   Windows keeps a window's place on the screen in 16 bits. Parked 32,000 px below a canvas
   that stood 1,143 px down the screen, a chunk's rows passed 32,767 and Windows pinned them
   there: back in view, the last row stood 376 px above its chunk's top instead of 318 below it.
-  20,000 px to the left and above keeps every row of every chunk inside both. The arrows still
-  read a parked choice's x as it is: every choice of a parked chunk is the same 20,000 px to
-  the left, and the one list of choices on a stack (the picker) is a single column.
-- **Where a row stands is asked of the stack.** A parked chunk's `winfo_y` is its parking
-  place. `_bring_into_sight`, `_offset_within` and the order the arrows walk (`_root_y`) read a
-  chunk's place from the stack (`_drawn_box`), as they read a window item's box from the canvas.
+  20,000 px to the left and above keeps every row of every chunk inside both.
+- **Where a row stands is asked of the stack.** A parked chunk's `winfo_x` and `winfo_y` are its
+  parking place. `_bring_into_sight`, `_offset_within` and the arrows (`_root_x`, `_root_y`,
+  for their order and for the nearest choice each way) read a chunk's place from the stack
+  (`_drawn_box`, `box`), as they read a window item's box from the canvas: read as it was, a
+  parked choice's x put it 20,000 px to the left, and Left in the picker's one column went to a
+  template 30 further down.
   And where a row stands among its block (`place_of_row`, counted across its chunks) is the
   place the keyboard goes back to after a press draws the list again (`_place_of`): a place in
   its chunk named a frame the redraw may not make again, and the keyboard went to another
@@ -1386,14 +1391,25 @@ of a 1,000-item checklist cost 18 ms while chunks stood placed a view above and 
 
 A chunk holds at most a count of rows — 32 short checklist items or one-line rows, 16 Trash
 rows, 8 by default — and takes no row more once it is `RowStack.TALLEST` (4,000 px) tall, by
-its rows' heights as they are made (`_natural_height`, before an idle round has laid them out).
-A chunk in the view stands at its true place, which X and Windows draw only inside 16 bits, and
-four checklist items of 100 lines or 2,000 wide letters stood 42,656 px at 300%. A row grown
-after it was made (its words wrapped narrower) can still take a chunk past 4,000 px, and two
-rows of the tallest kind, about 14,000 px each at 300%, make some 28,000: still inside 16 bits.
-A long item moved over a chunk's edge makes that chunk taller, so long items moved together one
-by one could gather in it; past four times `TALLEST` the checklist is chunked again. Left as
-one frame, each sized by its own cap and measured at 300%:
+its rows' heights as they stand (`_RowGroup.height`). Each row is measured as it is made
+(`_natural_height`, before an idle round has laid it out) and again once its words are wrapped
+again (`rewrapped`); a row made later is wrapped as its block's rows last were
+(`_wrap_as_its_rows`), so it is measured as it will stand; and a chunk's laid-out height counts
+when it is more. A chunk in the view stands at its true place, which X and Windows draw only
+inside 16 bits, and four checklist items of 100 lines or 2,000 wide letters stood 42,656 px at
+300%. Measured once, as made at its labels' first wrap, a chunk of long items narrowed to the
+window's minimum stood 41,684 px where it was taken for 13,740.
+
+Rows that grow after they were chunked — a narrower window wraps them again — or long items
+moved together one by one over a chunk's edge can still make a chunk too tall: past four times
+`TALLEST`, with more than twice it beside its tallest row (`too_tall`). A move asks at once; a
+restack asks for every chunk standing past four times `TALLEST`, and has its block chunked again
+by its owner (`rebuild`, `_rechunk_too_tall`), once for each width, so a block no chunking can
+help is never drawn over and over. The note's checklist does it keeping its view and the
+keyboard on its item (`_chunk_checklist_again`). A chunk built from rows as they stand holds less
+than `TALLEST` beside its last, so one chunked again is never asked of again. And whatever its
+rows do, no chunk is placed past 32,767 px (`RowStack.REACH`): placed there, X drew it nowhere.
+Left as one frame, each sized by its own cap and measured at 300%:
 Settings → Categories (200 rows, 17,599 px) and the editor page (a note's 200 attachments,
 25,325 px), against about 33,400 px one frame can be scrolled through; the emoji picker and a
 dialog's message are smaller still. A table is drawn whole only up to 400 rows; the note list
@@ -1410,6 +1426,12 @@ up with its page; a show that asked it packed a placed widget again, moving it t
 container. `tools/check_one_definition.py` fails on `winfo_ismapped()` outside the three places
 that mean the screen (a tooltip, a click on the Settings page, the calendar's keys). See
 [The button that woke up with its page](ISSUES_LOG.md#the-button-that-woke-up-with-its-page).
+
+Whether the person can see a widget is a third question, and neither answers it: mapped, and
+wholly inside the view of every canvas it is scrolled on (`_in_sight`). The note page's status
+line stands at the foot of the scrolled editor, mapped and far below the view at the window's own
+sizes; a limited box that said a shortened paste there (`_say_by_the_box`) now says it in a
+banner while the line is out of sight.
 
 ### A drag of the window's edge waits for the hand
 

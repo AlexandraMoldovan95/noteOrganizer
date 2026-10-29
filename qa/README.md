@@ -1091,7 +1091,11 @@ A new surface joins this list the moment it ships.
   `<Double-Button-1>` by time and place, so any two generated presses at
   one spot are a double-click to Tk. A check about single clicks spaces
   them in place or passes `time=`; a check about double-clicks passes
-  both times explicitly.
+  both times explicitly. A held key is the same: the app never takes a
+  press of time 0 for Enter held down (`_enter_repeats`), so every other
+  check's Enter is a press of its own, and a check of a held key passes
+  `time=` to each press and release, in both of its shapes (presses alone,
+  as Windows repeats; a release and a press at one time, as X11 does).
 - **The names gate reads the qa scripts and the unit suites too.** A
   name borrowed from a removed block (a seed's `os`, `io`) fails the
   gate the moment the script is read, instead of halfway through a run.

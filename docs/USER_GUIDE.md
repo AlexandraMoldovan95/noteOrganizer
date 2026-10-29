@@ -432,7 +432,8 @@ too). The new order is saved with the note, and a template's checklist moves the
 The box sits beside the calculator at the same size; when a list gets long, **⤢ Expand** in its
 header grows it to give more room (and it always scrolls, expanded or not). The expanded size is a
 per-view choice — switching notes returns it to the compact size. An item can be up to 2,000
-characters; a longer paste is shortened to fit, as a note's title is, and the status bar says so.
+characters; a longer paste is shortened to fit, as a note's title is, and the status bar says so
+— or, while the status bar is scrolled out of sight, a banner at the top of the window.
 A checklist holds up to 1,000 items: past that, Add says the list is full and keeps your words in
 the box. Words left in a full list's box when you open another note wait there for that note while
 the app stays open, and closing the window asks before letting them go.
