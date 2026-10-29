@@ -1772,6 +1772,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     f"The import of {name} was cut short when {when}, so "
                     "nothing from it was kept: no notes and no files. To bring "
                     "it in, import it again (Settings → Backup → Import).")
+            elif cut.get("kind") == "export_partial":
+                # Finished as the window closed, its own message unsaid.
+                count = cut.get("session_only")
+                if isinstance(count, int) and not isinstance(count, bool):
+                    lines.append(
+                        f"The backup saved to {name} as Note Organizer closed "
+                        f"holds only the {count} note(s) written in that "
+                        "session, not your notes file, which could not be "
+                        "opened then. '⬇ Import' brings its notes in beside yours.")
+                named = cut.get("left_out")
+                left = ([n for n in named if isinstance(n, str)]
+                        if isinstance(named, list) else [])
+                if left:
+                    lines.append(
+                        f"The export to {name} finished as Note Organizer "
+                        "closed, but not all of it. " + self._left_out_said(left))
             else:
                 # A process ended mid-export leaves its unfinished file
                 # beside the target (export_data writes there first).
@@ -2243,12 +2259,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._export_state = None
             self._take_back_cut_short("export")
             left = state.get("left_out") or []
-            left_said = ("\n\nLeft out, because another program may be holding "
-                         f"{'them' if len(left) > 1 else 'it'}: "
-                         + ", ".join(left[:5])
-                         + (f" and {len(left) - 5} more" if len(left) > 5 else "")
-                         + ". Close that program and export again to include "
-                         f"{'them' if len(left) > 1 else 'it'}.") if left else ""
+            left_said = ("\n\n" + self._left_out_said(left)) if left else ""
             if state["error"]:
                 self.show_error("Export failed",
                                f"Couldn't create the backup file:\n{state['error']}")
@@ -2273,6 +2284,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 )
             return
         self._export_poll_job = self.after(100, self._poll_export_progress)
+
+    @staticmethod
+    def _left_out_said(left):
+        """The sentence naming the files an export left out, said by its own
+        message or, when the window closed first, by the next start."""
+        them = "them" if len(left) > 1 else "it"
+        return (f"Left out, because another program may be holding {them}: "
+                + ", ".join(left[:5])
+                + (f" and {len(left) - 5} more" if len(left) > 5 else "")
+                + f". Close that program and export again to include {them}.")
 
     @staticmethod
     def _take_back_cut_short(kind):
@@ -2314,9 +2335,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """
         state = self._export_state
         if state is not None and state.get("done") and not state.get("error"):
-            self._remember_finished_export()
             self._take_back_cut_short("export")
             self._export_state = None
+            # As the poll would have: a backup of the session alone is not the
+            # notebook's, and files left out are named -- by the next start,
+            # where the close recorded both as whole (round 6 of the audit).
+            if state.get("session_only") is None:
+                self._remember_finished_export()
+            if state.get("session_only") is not None or state.get("left_out"):
+                save_setting("backup_cut_short", {
+                    "kind": "export_partial", "file": state.get("save_path") or "",
+                    "session_only": state.get("session_only"),
+                    "left_out": list(state.get("left_out") or [])})
         elif state is not None:
             # Stopped past the wait, or still running: no new backup. A
             # window that is closing cannot say so; the next start does.

@@ -2742,6 +2742,29 @@ def _next_start_says():
     return ' '.join(_said)
 
 
+# ...but one finished as the window closed that held only the session's notes,
+# or left a held file out, was recorded as the notebook's backup, whole, and
+# nothing said otherwise (round 6). What its message would have said, the
+# next start says; a backup of the session alone is not remembered.
+NO.save_setting('last_export_at', None)
+app._export_state = {'current': 1, 'total': 1, 'done': True, 'error': None,
+                     'save_path': _he_zip, 'session_only': 2, 'left_out': []}
+app._settle_background_work_at_close()
+_pe_session = (NO.get_setting('last_export_at'), _next_start_says())
+app._export_state = {'current': 1, 'total': 1, 'done': True, 'error': None,
+                     'save_path': _he_zip, 'left_out': ['20250101_tax.xlsx']}
+app._settle_background_work_at_close()
+_pe_left = (NO.get_setting('last_export_at') is not None, _next_start_says())
+check(f'an export of the session alone, finished at the close, is not taken for the '
+      f'backup, and the next start says what it holds ({_pe_session[0]}, '
+      f'{_pe_session[1][:90]!r})',
+      _pe_session[0] is None and 'holds only the 2 note(s)' in _pe_session[1])
+check(f'...and one that left a held file out says so at the next start '
+      f'({_pe_left[1][:120]!r})',
+      _pe_left[0] and 'not all of it' in _pe_left[1] and '20250101_tax.xlsx' in _pe_left[1]
+      and NO.get_setting('backup_cut_short') is None)
+NO.save_setting('last_export_at', None)
+
 app._poll_import_progress = lambda: None
 try:
     for _hb_phase, _hb_marker in (('unpacking', 'qa3_held_import.zip'),

@@ -424,6 +424,7 @@
   "_lay_out_at_window_size": "(self)",
   "_leave_settings_for_the_editor": "(self)",
   "_left_out_message": "(self, left_out, lead='Everything else in this note is saved, but not:')",
+  "_left_out_said": "(left)",
   "_light_arrows": "(self, arrows, on)",
   "_limit_entry": "(self, entry, limit, what)",
   "_list_activate": "(self, _event=None)",

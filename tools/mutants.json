@@ -10197,5 +10197,42 @@
       "test_data_safety"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "DR88",
+    "about": "an export of the session alone, finished as the window closes, is recorded as the notebook's last backup",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if state.get(\"session_only\") is None:\n                self._remember_finished_export()\n            if state.get",
+        "replace": "            self._remember_finished_export()\n            if state.get"
+      }
+    ],
+    "must_fail": [
+      "an export of the session alone, finished at the close"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR89",
+    "about": "an export finished as the window closes leaves no word of what its own message would have said",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if state.get(\"session_only\") is not None or state.get(\"left_out\"):\n                save_setting(\"backup_cut_short\", {",
+        "replace": "            if False:\n                save_setting(\"backup_cut_short\", {"
+      }
+    ],
+    "must_fail": [
+      "an export of the session alone, finished at the close",
+      "...and one that left a held file out says so at the next start"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
   }
 ]
