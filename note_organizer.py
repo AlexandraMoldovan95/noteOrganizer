@@ -12881,6 +12881,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             canvas, scrolled=sb.set,
             on_chunk=lambda chunk: chunk.bind("<MouseWheel>", wheel)
         ).group(every=32)
+        self._checklist_rows.rebuild = self._chunk_checklist_again
         sb.pack(side="right", fill="y")
         canvas.pack(side="left", fill="both", expand=True)
         self._checklist_canvas = canvas
@@ -13091,7 +13092,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # enough that a row could ever be too narrow for it.
         if lbl.winfo_reqwidth() > self.CHECKLIST_SHORT:
             lbl.bindtags(("ChecklistText",) + lbl.bindtags())
+            self._wrap_as_its_rows(lbl, self._checklist_rows)
         return record
+
+    def _wrap_as_its_rows(self, label, block):
+        """*label*, a row's long text just made, wrapped where its *block*'s
+        rows were last wrapped (_wrap_to_width), so the row is measured as it
+        will stand: made at CHECKLIST_WRAP in a narrow window and wrapped
+        narrower later, a chunk of long items stood 2.7 times what it was
+        taken for, past what X and Windows can place."""
+        if block.wrap and block.wrap != int(str(label.cget("wraplength"))):
+            label.configure(wraplength=block.wrap)
 
     def _checklist_button_press(self, event):
         """A press on a row's bin. A double-click's second press lands on
@@ -13152,8 +13163,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                        for option in ("bd", "padx", "highlightthickness"))
         wrap = min(self.CHECKLIST_WRAP, max(self.px(40), width - edge))
         now = int(str(label.cget("wraplength")))
+        # The block of a row stack its row stands in (RowStack): told, so a
+        # chunk's height is read as its rows now stand, and the next row is
+        # made at this wrap.
+        block = self._block_of(label.master)
+        told = getattr(block, "rewrapped", None)
+        if told is not None:
+            block.wrap = wrap
         if now != wrap and (label.winfo_reqwidth() > width or now < wrap):
             label.configure(wraplength=wrap)
+            if told is not None:
+                told(label.master)
 
     def _restyle_checklist_label(self, lbl, done):
         """Dim + strike-through style for completed items (overstrike font).
@@ -13274,7 +13294,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # A long item traded into a chunk makes it taller, and long
                 # items moved there one by one passed what X and Windows can
                 # place. Far past RowStack.TALLEST, the rows are chunked again.
-                if any(group.height(c) > 4 * group.stack.TALLEST for c in chunks):
+                if any(group.too_tall(c) for c in chunks):
                     self._render_checklist_items()
         else:
             self._render_checklist_items()
@@ -13339,6 +13359,47 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                          if isinstance(w, tk.Checkbutton)), None)
         except tk.TclError:
             return None
+
+    def _chunk_checklist_again(self):
+        """The note's checklist drawn again, chunked as its rows now stand
+        (RowStack._rechunk_too_tall): items that grew since they were chunked
+        -- a narrower window wraps long ones again -- made a chunk taller than
+        X and Windows can place, and past 32,767 px into it the list was blank
+        while Space still ticked the items there. The view stays where it
+        was, and the keyboard on the item, and the part of its row, it held."""
+        if not getattr(self, "_checklist_open", False):
+            return
+        drawn = getattr(self, "_checklist_drawn", None) or {}
+        canvas = self._checklist_canvas
+        on = None
+        try:
+            # The window's own record: it holds while another program has the
+            # foreground, where "focus" answers nothing.
+            held = str(self.tk.call("focus", "-lastfor", self))
+            for rec in drawn.get("rows", ()):
+                if held.startswith(str(rec[1]) + "."):
+                    names = [str(w) for w in rec[1].winfo_children()]
+                    on = (rec[0], names.index(held) if held in names else 0)
+                    break
+            top = canvas.canvasy(0)
+        except tk.TclError:
+            return
+        self._render_checklist_items()
+        try:
+            self.update_idletasks()
+            stack = self._checklist_rows.stack
+            stack.size()
+            canvas.yview_moveto(top / max(1, stack.total))
+            # Back where it was -- unless it has gone on somewhere since, a
+            # popup's box: the row it was in is gone, so it is on nothing.
+            if on is not None and self._keyboard_nowhere():
+                rec = next((r for r in self._checklist_drawn["rows"]
+                            if r[0] is on[0]), None)
+                kids = rec[1].winfo_children() if rec is not None else []
+                if kids:
+                    kids[min(on[1], len(kids) - 1)].focus_set()
+        except (tk.TclError, TypeError, KeyError):
+            pass
 
     def _update_checklist_progress(self):
         """The checklist's count on its button and its header -- and, in day

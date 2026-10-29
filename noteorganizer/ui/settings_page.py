@@ -1272,9 +1272,11 @@ class SettingsPageMixin:
                                font=("Segoe UI", 9), anchor="w", wraplength=self.px(320),
                                justify="left")
                 lbl.pack(side="left", fill="x", expand=True, padx=(2, 4))
-                # Wrapped at the width it is given, as in a note's checklist.
+                # Wrapped at the width it is given, as in a note's checklist,
+                # and measured as it will stand.
                 if lbl.winfo_reqwidth() > self.CHECKLIST_SHORT:
                     lbl.bindtags(("ChecklistText",) + lbl.bindtags())
+                    self._wrap_as_its_rows(lbl, tpl_cl_rows)
 
         render_tpl_checklist()
 

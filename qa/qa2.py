@@ -1396,6 +1396,145 @@ check(f'long checklist items moved together by Alt+Up are chunked again before '
       and _ll_gather.get('tallest chunk', 10 ** 9) <= 4 * 600
       and _ll_gather.get('keyboard on Ta') is True)
 
+# Round 7: a chunk was measured once, as its rows were made, and never again.
+# Long items gathered by moves in a wide window, then narrowed, wrapped again
+# and stood 2.7 times what the chunk was taken for -- past what X places, and
+# the list was blank 32,767 px into it while Space ticked an item there. Here
+# a block whose rows grew past four times TALLEST is chunked again, cut where
+# its rows as they now stand reach TALLEST, the keyboard on the item it held;
+# each chunk's height is read as its rows stand, after a wider window too and
+# after a row grown by a route that says nothing. The thirty items are made
+# one chunk, as moves gathered them, TALLEST lifted; then TALLEST is set where
+# four times it lies between the chunk's height wide and narrow, as measured.
+_ll_geo = app.geometry()
+_ll_grow = {}
+_ll_rebuilds = []
+_ll_grp = app._checklist_rows
+_ll_rebuild = _ll_grp.rebuild
+
+
+def _ll_rebuild_seen():
+    _ll_rebuilds.append({'tallest before': max(c.winfo_reqheight()
+                                               for c in _ll_grp.chunks),
+                         'top before': app._checklist_canvas.canvasy(0)})
+    _ll_rebuild()
+    _ll_rebuilds[-1]['top after'] = app._checklist_canvas.canvasy(0)
+
+
+def _ll_honest():
+    """Each chunk's rows above its last, as they stand: under TALLEST."""
+    return [sum(r.winfo_reqheight() for r in c.pack_slaves()[:-1])
+            for c in _ll_grp.chunks]
+
+
+def _ll_measured():
+    """(read, standing) for each chunk: what the stack reads and what is."""
+    return [(_ll_grp.height(c), c.winfo_reqheight()) for c in _ll_grp.chunks]
+
+
+def _ll_one_row(text):
+    app._working_checklist = [{'text': text, 'done': False}]
+    app._render_checklist_items(); _ll_settle(10)
+    return app._checklist_rows.rows()[0].winfo_reqheight()
+
+
+_ll_long = ('plan the garden beds, ' * 30)[:600]
+_ll_tall_t = 600
+try:
+    _ll_grp.rebuild = _ll_rebuild_seen
+    app.geometry('640x600'); _ll_settle(10)
+    _ll_grow['a long row, narrow'] = _ll_one_row('L0 ' + _ll_long)
+    app.geometry('1400x900'); _ll_settle(10)
+    _ll_grow['a long row, wide'] = _ll_one_row('L0 ' + _ll_long)
+    _LLS.TALLEST = 10 ** 9
+    app._working_checklist = (
+        [{'text': f'L{i} {_ll_long}', 'done': False} for i in range(6)]
+        + [{'text': f's{i:02d}', 'done': False} for i in range(24)])
+    app._render_checklist_items(); _ll_settle(10)
+    _ll_grow['gathered, wide'] = _ll_wide = max(c.winfo_reqheight()
+                                                for c in _ll_grp.chunks)
+    _ll_narrow = _ll_wide + 6 * (_ll_grow['a long row, narrow']
+                                 - _ll_grow['a long row, wide'])
+    _ll_tall_t = _LLS.TALLEST = max(50, (_ll_wide + _ll_narrow) // 8)
+    _ll_grow['TALLEST'] = _ll_tall_t
+    _ll_held = next(r for r in app._checklist_drawn['rows']
+                    if r[0]['text'].startswith('L3 '))
+    _ll_hb = next(c for c in _ll_held[1].winfo_children()
+                  if isinstance(c, tk.Checkbutton))
+    _ll_grow['keyboard on L3'] = _ll_focus(_ll_hb)
+    app._bring_into_sight(_ll_hb); _ll_settle(4)
+    del _ll_rebuilds[:]
+    app.geometry('640x600'); _ll_settle(30)
+    app._checklist_rows.stack.size(); _ll_settle(4)
+    _ll_grow['rebuilds'] = _ll_rebuilds[:]
+    _ll_grow['tallest of many rows'] = max(
+        [c.winfo_reqheight() for c in _ll_grp.chunks if len(c.winfo_children()) > 1]
+        or [0])
+    _ll_grow['above the last'] = max(_ll_honest())
+    _ll_now = next((r for r in app._checklist_drawn['rows'] if r[0] is _ll_held[0]), None)
+    _ll_grow['keyboard still on L3'] = _ll_now is not None and str(
+        app.tk.call('focus')) == str(next(
+            c for c in _ll_now[1].winfo_children() if isinstance(c, tk.Checkbutton)))
+    app.geometry('1400x900'); _ll_settle(20)
+    app._checklist_rows.stack.size(); _ll_settle(4)
+    _ll_grow['read as it stands, wide again'] = all(
+        abs(r - s) <= 4 for r, s in _ll_measured())
+    # A row grown by a route that says nothing of it: its words drawn larger.
+    _ll_big = next(c for c in _ll_grp.rows()[0].winfo_children()
+                   if isinstance(c, tk.Label) and str(c.cget('text')).startswith('L'))
+    _ll_big.configure(font=('Segoe UI', 20))
+    _ll_settle(6)
+    _ll_grow['read as it stands, a row grown'] = (
+        _ll_grp.height(_ll_grp.chunks[0]) >= _ll_grp.chunks[0].winfo_reqheight() - 4)
+finally:
+    _LLS.TALLEST = _ll_tallest
+    _ll_grp.rebuild = _ll_rebuild
+    app.geometry(_ll_geo); _ll_settle(10)
+_ll_rb = _ll_grow.get('rebuilds') or [{}]
+check(f'long checklist items that grow in a narrower window are chunked again as '
+      f'they stand, the keyboard and the view kept, and each chunk is read as it '
+      f'stands ({_ll_grow})',
+      _ll_grow.get('a long row, narrow', 0) > 1.5 * _ll_grow.get('a long row, wide', 10 ** 9)
+      and _ll_grow.get('gathered, wide', 10 ** 9) <= 4 * _ll_tall_t
+      and 1 <= len(_ll_rb) <= 2 and _ll_rb[0].get('tallest before', 0) > 4 * _ll_tall_t
+      and abs(_ll_rb[0].get('top before', 0) - _ll_rb[0].get('top after', 10 ** 9)) <= 2
+      and 0 < _ll_grow.get('tallest of many rows', 10 ** 9) <= 4 * _ll_tall_t
+      and _ll_grow.get('above the last', 10 ** 9) < _ll_tall_t + 4
+      and _ll_grow.get('keyboard on L3') is True
+      and _ll_grow.get('keyboard still on L3') is True
+      and _ll_grow.get('read as it stands, wide again') is True
+      and _ll_grow.get('read as it stands, a row grown') is True)
+
+# ...and whatever its rows do, no chunk is placed past the 32,767 px X and
+# Windows keep a window's place in (RowStack.REACH): one that tall, scrolled
+# 33,500 px into, was placed at -33,500, and X drew it nowhere. The reach is
+# lowered here to 5,000 and TALLEST lifted, so a chunk of items of 100 lines
+# passes it without a window taller than 16 bits.
+_ll_reach = {}
+_ll_reach_was = _LLS.REACH
+try:
+    _LLS.TALLEST, _LLS.REACH = 10 ** 9, 5_000
+    app._checklist_rows.every = 64
+    _ll_h = max(1, _ll_one_row('00 ' + 'line\n' * 99 + 'end'))
+    app._working_checklist = [{'text': f'{i:02d} ' + 'line\n' * 99 + 'end', 'done': False}
+                              for i in range(min(60, 9_000 // _ll_h + 1))]
+    app._render_checklist_items(); _ll_settle(10)
+    _ll_stk, _ll_cv = app._checklist_rows.stack, app._checklist_canvas
+    _ll_stk.size(); _ll_settle(4)
+    _ll_c0 = app._checklist_rows.chunks[0]
+    _ll_reach['chunk'] = _ll_c0.winfo_reqheight()
+    if _ll_reach['chunk'] > 6_000 + _ll_cv.winfo_height():
+        _ll_cv.yview_moveto((_ll_stk.box(_ll_c0)[1] + 6_000) / _ll_stk.total)
+        _ll_settle(6)
+        _ll_reach['placed at'] = _ll_c0.winfo_y()
+finally:
+    _LLS.TALLEST, _LLS.REACH = _ll_tallest, _ll_reach_was
+    app._checklist_rows.every = _ll_every
+    _ll_settle(4)
+check(f'a chunk taller than 16 bits is never placed past them ({_ll_reach})',
+      _ll_reach.get('chunk', 0) > 6_000
+      and -5_000 <= _ll_reach.get('placed at', -10 ** 9) <= 0)
+
 # A scroll step moves only the chunks in the view, or coming into it or leaving
 # it: one stood at its true place for a view above and two below, and every
 # step moved them all, 7.4 a step at 1,000 items, 18 ms on Windows. And short

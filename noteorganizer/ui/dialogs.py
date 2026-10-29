@@ -119,11 +119,16 @@ class RowStack:
     PARK = 20_000
     # Rows to a chunk unless a list says otherwise...
     EVERY = 8
-    # ...and no row more once a chunk is this tall, measured as its rows are
-    # made: a chunk in the view stands at its true place, which X and Windows
-    # draw only inside 16 bits, and four checklist items of 100 lines, or of
-    # 2,000 wide letters, stood up to 42,656 px at 300%.
+    # ...and no row more once a chunk is this tall, by its rows' heights as
+    # they stand (_RowGroup.height): a chunk in the view stands at its true
+    # place, which X and Windows draw only inside 16 bits, and four checklist
+    # items of 100 lines, or of 2,000 wide letters, stood up to 42,656 px at
+    # 300%. Rows that grow after they were chunked -- a narrower window wraps
+    # them again -- have their block chunked again (_RowGroup.too_tall).
     TALLEST = 4_000
+    # The farthest from its parent's corner X keeps a window's place, in 16
+    # bits; Windows pins a row there. No chunk is placed past it.
+    REACH = 32_767
 
     def __init__(self, app, canvas, scrolled=None, on_chunk=None,
                  on_change=None, own_width=False):
@@ -261,6 +266,9 @@ class RowStack:
         if width > 1 and width != self._width:
             self._width = width
             for group in self.groups:
+                # Its rows wrap again at this width: chunked again if they
+                # now stand too tall, once for each width (_restack).
+                group.rechunked = False
                 for chunk in group.chunks:
                     chunk.place_configure(width=max(1, width - 2 * group.padx))
             self.changed()
@@ -299,8 +307,30 @@ class RowStack:
         except tk.TclError:
             return
         self._follow()
+        self._rechunk_too_tall()
         if notify and grew and self.on_change is not None:
             self.on_change()
+
+    def _rechunk_too_tall(self):
+        """A block whose rows grew past what its chunks can hold -- a
+        narrower window wraps a checklist's long items again, and a chunk of
+        them measured at 13,740 px stood 41,684 -- is chunked again by its
+        owner (*rebuild*), once for each width, so a block that cannot be
+        helped is never drawn over and over."""
+        tall = 4 * self.TALLEST
+        for group in self.groups:
+            if group.rebuild is None or group.rechunked:
+                continue
+            # Laid out, as a restack reads them: only a chunk that stands
+            # past the bound has its rows looked at.
+            if not any(c in self._box and self._box[c][3] - self._box[c][1] > tall
+                       and group.too_tall(c) for c in group.chunks):
+                continue
+            group.rechunked = True
+            try:
+                self.app.after_idle(group.rebuild)
+            except tk.TclError:
+                pass
 
     def _follow(self):
         """Each chunk in the view to its true place, the rest parked beside
@@ -320,6 +350,11 @@ class RowStack:
                     # parking place, a chunk scrolled 20,000 px into stood
                     # short of it, and its last rows were never drawn.
                     want = (x0, int(round(y0 - top)))
+                    if want[1] < -self.REACH:
+                        # Never past 16 bits, whatever its rows did: placed
+                        # there, X drew it nowhere and the view was blank.
+                        # Its block is chunked again (_rechunk_too_tall).
+                        want = (x0, -self.REACH)
                 if self._placed.get(chunk) != want:
                     self._placed[chunk] = want
                     chunk.place_configure(x=want[0], y=want[1])
@@ -335,6 +370,14 @@ class _RowGroup:
         self.every = every
         self.chunks = []
         self._heights = {}      # chunk -> {row: height}, as room() measured it
+        # The wraplength its rows' long text was last given: a row made later
+        # is made at it, and measured as it will stand.
+        self.wrap = None
+        # Its owner's way to draw its rows again, chunked as they now stand,
+        # when rows grown since they were chunked make a chunk too tall
+        # (RowStack._rechunk_too_tall); asked once for each width.
+        self.rebuild = None
+        self.rechunked = False
 
     def add(self):
         """The frame the next row is made in and packed into."""
@@ -349,16 +392,47 @@ class _RowGroup:
             return False
         return self.height(chunk) < self.stack.TALLEST
 
-    def height(self, chunk):
-        """How tall *chunk* stands by its rows' heights, each measured once,
-        when first asked (_natural_height)."""
-        heights = self._heights.setdefault(chunk, {})
-        total = 0
+    def _row_heights(self, chunk):
+        """Each of *chunk*'s rows' heights: measured when first asked
+        (_natural_height), and again once the row is said to have been
+        wrapped again (rewrapped)."""
+        known = self._heights.get(chunk, {})
+        heights = {}
         for row in chunk.winfo_children():
-            if row not in heights:
+            if row in known:
+                heights[row] = known[row]
+            else:
                 heights[row] = _natural_height(row)
-            total += heights[row]
-        return total
+        # Only the rows it holds: one traded away or destroyed is forgotten.
+        self._heights[chunk] = heights
+        return heights
+
+    def height(self, chunk):
+        """How tall *chunk* stands: its rows' heights (_row_heights), or the
+        height it is laid out at, if that is more. Measured once and never
+        again, a checklist chunk made at its labels' first wrap and narrowed
+        stood 2.7 times what it was taken for."""
+        heights = self._row_heights(chunk)
+        if not heights:
+            return 0
+        return max(sum(heights.values()), chunk.winfo_reqheight())
+
+    def too_tall(self, chunk):
+        """Whether *chunk* must be chunked again: past four times TALLEST,
+        with more than twice it in rows beside its tallest. A chunk made from
+        rows as they stand holds less than TALLEST beside its last, so one
+        chunked again is never asked of again; and a single row that tall is
+        no fault of the chunking."""
+        if self.height(chunk) <= 4 * self.stack.TALLEST:
+            return False
+        rows = [max(h, row.winfo_reqheight())
+                for row, h in self._row_heights(chunk).items()]
+        return sum(rows) - max(rows) > 2 * self.stack.TALLEST
+
+    def rewrapped(self, row):
+        """*row*'s text was wrapped again since it was measured: it is
+        measured again when next asked."""
+        self._heights.get(row.master, {}).pop(row, None)
 
     def chunk_before(self, chunk):
         """A new, empty chunk in this block, standing just above *chunk*."""

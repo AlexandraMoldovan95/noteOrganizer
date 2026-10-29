@@ -10608,12 +10608,102 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                if any(group.height(c) > 4 * group.stack.TALLEST for c in chunks):\n                    self._render_checklist_items()\n",
+        "find": "                if any(group.too_tall(c) for c in chunks):\n                    self._render_checklist_items()\n",
         "replace": "                pass\n"
       }
     ],
     "must_fail": [
       "long checklist items moved together by Alt+Up are chunked again"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RZ01",
+    "about": "a block whose rows grew past what its chunks can hold, in a narrower window, is never chunked again",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "            if group.rebuild is None or group.rechunked:\n                continue\n",
+        "replace": "            if True:\n                continue\n"
+      }
+    ],
+    "must_fail": [
+      "long checklist items that grow in a narrower window are chunked again as they stand"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RZ02",
+    "about": "a checklist row is made at its first wrap again, measured short of what it will stand",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if block.wrap and block.wrap != int(str(label.cget(\"wraplength\"))):\n            label.configure(wraplength=block.wrap)\n",
+        "replace": "        return\n"
+      }
+    ],
+    "must_fail": [
+      "long checklist items that grow in a narrower window are chunked again as they stand"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RZ03",
+    "about": "a row stack is not told when a checklist label is wrapped again, and reads the row at its old height",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if told is not None:\n                told(label.master)\n",
+        "replace": "            pass\n"
+      }
+    ],
+    "must_fail": [
+      "long checklist items that grow in a narrower window are chunked again as they stand"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RZ04",
+    "about": "a chunk's height is its rows' measured heights alone, though a row has grown since by a route that said nothing",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "        return max(sum(heights.values()), chunk.winfo_reqheight())\n",
+        "replace": "        return sum(heights.values())\n"
+      }
+    ],
+    "must_fail": [
+      "long checklist items that grow in a narrower window are chunked again as they stand"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RZ05",
+    "about": "a chunk in the view is placed at its true place past 16 bits, where X draws it nowhere",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "                    if want[1] < -self.REACH:\n",
+        "replace": "                    if False:\n"
+      }
+    ],
+    "must_fail": [
+      "a chunk taller than 16 bits is never placed past them"
     ],
     "suites": [
       "qa2"
