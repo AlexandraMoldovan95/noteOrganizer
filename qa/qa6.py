@@ -5056,6 +5056,59 @@ check(f"Save as template's name box shortens a paste to the note title's "
       _nm_box is not None and _nm_box_len == app.TITLE_MAX_LEN
       and _nm_told[:1] == ['Pasted text shortened: a template name can be up '
                            f'to {app.TITLE_MAX_LEN} characters'])
+
+# Round 6: opened from Settings, where the note's page and its status line
+# stand hidden, the template editor cut a paste without a word on screen; it
+# says so on a line of its own. And a paste is weighed with each line break
+# one character, as Tk's own paste puts it in: Windows' clipboard keeps CR LF,
+# so ten lines that fitted were cut and kept their CRs. The clipboard reads
+# here as the app reads Windows' (CR LF), Tk's own as Tk translates it.
+_lw_seen = {}
+_lw_real_read = NO.clipboard.read_text
+
+
+def _lw_paste(box, lines):
+    NO.clipboard.read_text = lambda: '\r\n'.join(lines)
+    app.clipboard_clear()
+    app.clipboard_append('\n'.join(lines))
+    box.delete(0, 'end')
+    box.event_generate('<<Paste>>')
+    _kv_settle(2)
+    return box.get()
+
+
+try:
+    app.show_settings_page()
+    app.toggle_settings_panel('templates')
+    _kv_settle(6)
+    app._edit_template(None, lambda: None)
+    _kv_settle(6)
+    _lw_pop = app._mini_popup
+    _lw_boxes = list(_tl_entries(_lw_pop))
+    _lw_seen['status line in sight'] = bool(app.status_lbl.winfo_viewable())
+    _lw_paste(_lw_boxes[0], ['Weekly review ' * 25])
+    _lw_seen['said in the editor'] = [
+        str(w.cget('text')) for w in _tl_widgets(_lw_pop, tk.Label)
+        if app._is_placed(w) and 'can be up to' in str(w.cget('text'))]
+    _lw_ten = _lw_paste(_lw_boxes[2], ['w' * 199] * 10)          # 1,999 in all
+    _lw_seen['ten lines that fit'] = (len(_lw_ten), _lw_ten.count('\r'))
+    _lw_eleven = _lw_paste(_lw_boxes[2], ['w' * 199] * 11)       # 2,199
+    _lw_seen['eleven lines, shortened'] = (len(_lw_eleven), _lw_eleven.count('\r'),
+                                           _lw_eleven.count('\n'))
+finally:
+    NO.clipboard.read_text = _lw_real_read
+    app._dismiss_mini_popup()
+    app.hide_settings_page()
+    app.notebook.select(app.TAB_NOTES)
+    _kv_settle(4)
+check(f"the template editor, opened from Settings, says in itself that a paste "
+      f"was shortened, and weighs a line break as one character ({_lw_seen})",
+      _lw_seen.get('status line in sight') is False
+      and _lw_seen.get('said in the editor') == [
+          'Pasted text shortened: a template name can be up to '
+          f'{app.TITLE_MAX_LEN} characters']
+      and _lw_seen.get('ten lines that fit') == (1999, 0)
+      and _lw_seen.get('eleven lines, shortened') == (NO.MAX_CHECKLIST_ITEM_CHARS, 0, 10))
 _nm_kept = list(app.templates)
 app.templates = [{'name': _nm_long, 'body': 'x'}, {'name': _nm_lines, 'body': 'y'}]
 _nm_picker = _nm_buttons = None

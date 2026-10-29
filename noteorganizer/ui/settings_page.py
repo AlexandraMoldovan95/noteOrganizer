@@ -974,6 +974,21 @@ class SettingsPageMixin:
         tk.Button(head, text="✕", command=self._dismiss_mini_popup, relief="flat",
                   cursor="hand2", bg=self.colors["card"], fg=self.colors["subtext"],
                   font=("Segoe UI", 10, "bold"), bd=0).pack(side="right")
+        # What a box's limit did is said here, under the heading: the status
+        # line it was said on stands hidden behind Settings, where this editor
+        # opens, and a paste was shortened without a word (_say_by_the_box).
+        notice = tk.Label(shell, bg=self.colors["card"], fg=self.colors["subtext"],
+                          font=("Segoe UI", 8), anchor="w", justify="left")
+
+        def say_here(text):
+            try:
+                notice.configure(text=one_line(text, 300),
+                                 wraplength=max(self.px(200), head.winfo_width()))
+                if not self._is_placed(notice):
+                    notice.pack(fill="x", pady=(0, 6), after=head)
+            except tk.TclError:
+                pass
+        pop._say_here = say_here
         # Everything between the header and Save scrolls once the editor is
         # taller than the window: it grew with its checklist, and 25 items,
         # or one long one, put Save, Category and the Add box off the screen.

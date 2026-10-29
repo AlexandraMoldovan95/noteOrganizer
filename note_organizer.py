@@ -1271,7 +1271,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _limit_entry(self, entry, limit, what):
         """Keep *entry* to *limit* characters, as the title's box is kept: a
         key past it is refused, a paste past it shortened to fit, and the
-        status bar says so. A value already longer -- a template from a
+        status bar says so -- or, where that is out of sight, the box's own
+        popup (_say_by_the_box). A value already longer -- a template from a
         backup -- still shortens. Registered on the entry, so the command
         goes with it."""
         def within(proposed, current):
@@ -1279,8 +1280,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 return True
             # Deferred, as for the title: Tk turns validation off if the
             # command touches a widget while it runs.
-            self.after_idle(lambda: self.set_status(
-                f"{what} can be up to {limit:,} characters"))
+            self.after_idle(lambda: self._say_by_the_box(
+                entry, f"{what} can be up to {limit:,} characters"))
             return False
         entry.configure(validate="key",
                         validatecommand=(entry.register(within), "%P", "%s"))
@@ -1292,6 +1293,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             raw, _cut = self._clipboard_text(entry)
             if raw is None:
                 return None
+            # Each line break one character, as Tk's own paste puts it in:
+            # Windows' clipboard keeps CR LF, so a paste that fitted was
+            # weighed as too long, and the CR went in with what was kept.
+            raw = raw.replace("\r\n", "\n").replace("\r", "\n")
             try:
                 chosen = (entry.index("sel.last") - entry.index("sel.first")
                           if entry.selection_present() else 0)
@@ -1308,12 +1313,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     self.tk.call("tk::EntrySeeInsert", entry)
             except tk.TclError:
                 return "break"
-            self.set_status(
+            self._say_by_the_box(entry, (
                 f"Pasted text shortened: {what[:1].lower()}{what[1:]} can be up "
                 f"to {limit:,} characters" if room > 0
-                else f"{what} can be up to {limit:,} characters")
+                else f"{what} can be up to {limit:,} characters"))
             return "break"
         entry.bind("<<Paste>>", paste, add="+")
+
+    def _say_by_the_box(self, box, text):
+        """*text* on the status line -- and, while that is out of sight, on
+        the line the popup *box* is in keeps for such words (``_say_here``).
+        The template editor opens from Settings, and the status line, inside
+        the note's page, stood hidden behind it: a paste into its name was
+        cut without a word."""
+        self.set_status(text)
+        try:
+            if self.status_lbl.winfo_viewable():
+                return
+            say_here = getattr(box.winfo_toplevel(), "_say_here", None)
+        except tk.TclError:
+            return
+        if say_here is not None:
+            say_here(text)
 
     # How close to the cap the counter starts showing. Far enough out to be
     # a warning rather than a surprise, close enough that an ordinary title

@@ -10531,6 +10531,42 @@
     "expect": "killed"
   },
   {
+    "id": "RY13",
+    "about": "a limited box in the template editor says what it did only on the status line hidden behind Settings",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if say_here is not None:\n            say_here(text)\n",
+        "replace": "        if False:\n            say_here(text)\n"
+      }
+    ],
+    "must_fail": [
+      "the template editor, opened from Settings, says in itself"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RY14",
+    "about": "a limited box's paste weighs Windows' CR LF as two characters and keeps the CR",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            raw = raw.replace(\"\\r\\n\", \"\\n\").replace(\"\\r\", \"\\n\")\n",
+        "replace": "            pass\n"
+      }
+    ],
+    "must_fail": [
+      "the template editor, opened from Settings, says in itself"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
     "id": "RY17",
     "about": "long checklist items moved together by the keyboard gather in one chunk, never chunked again",
     "edits": [
