@@ -8360,7 +8360,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                if not (self._editor_state_has_content(self.capture_editor_state())\n                        or (pending is not None and pending.get().strip())):\n                    return True\n",
+        "find": "                if not self._editor_holds_typing():\n                    return True\n",
         "replace": "                if True:\n                    return True\n"
       }
     ],
@@ -9148,16 +9148,17 @@
   },
   {
     "id": "DR58",
-    "about": "the blank editor's question leaves the checklist's Add box out, so an item typed there is cleared by Ctrl+N",
+    "about": "the editor's typing test leaves the checklist's Add box out, so an item typed there is cleared by Ctrl+N and by Use template, unasked",
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                if not (self._editor_state_has_content(self.capture_editor_state())\n                        or (pending is not None and pending.get().strip())):\n",
-        "replace": "                if not (self._editor_state_has_content(self.capture_editor_state())):\n"
+        "find": "        return bool(self._editor_state_has_content(self.capture_editor_state())\n                    or (pending is not None and pending.get().strip()))",
+        "replace": "        return bool(self._editor_state_has_content(self.capture_editor_state()))"
       }
     ],
     "must_fail": [
-      "...and an item typed in its checklist's Add box is saved by Ctrl+N"
+      "...and an item typed in its checklist's Add box is saved by Ctrl+N",
+      "Use template asks before replacing a new note"
     ],
     "suites": [
       "qa3"
@@ -10122,6 +10123,24 @@
     ],
     "suites": [
       "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR84",
+    "about": "Use template over a saved note asks to replace it, and Yes loses what the autosave had not written",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if self.selected_note_id is not None:\n            # A saved note is left, not replaced",
+        "replace": "        if False:\n            # A saved note is left, not replaced"
+      }
+    ],
+    "must_fail": [
+      "...and leaves a saved note saved first"
+    ],
+    "suites": [
+      "qa3"
     ],
     "expect": "killed"
   }

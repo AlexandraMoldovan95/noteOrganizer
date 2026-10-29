@@ -18606,6 +18606,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     or st.get("checklist")
                     or freq)
 
+    def _editor_holds_typing(self):
+        """Whether the editor as it is holds anything typed: its content as
+        above, or an item waiting in the checklist's Add box, which no
+        capture reads. The blank editor's flush asks this, and a template
+        about to replace an unsaved note (round 6 of the final audit)."""
+        pending = getattr(self, "checklist_add_var", None)
+        return bool(self._editor_state_has_content(self.capture_editor_state())
+                    or (pending is not None and pending.get().strip()))
+
     def _editing_saved_note(self):
         """True when the editor points at a note that exists on disk — the
         exemption that lets a saved note be deliberately emptied (an
@@ -18880,9 +18889,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # would have kept it: a click away within half a second lost it.
             # An item typed in the checklist's Add box counts as typing too.
             try:
-                pending = getattr(self, "checklist_add_var", None)
-                if not (self._editor_state_has_content(self.capture_editor_state())
-                        or (pending is not None and pending.get().strip())):
+                if not self._editor_holds_typing():
                     return True
             except Exception:
                 self._log_swallowed("flush: blank editor")
@@ -20447,18 +20454,27 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._place_dropdown_popup(pop, anchor)
 
     def _apply_template(self, tpl):
-        """Fill the editor from a template. If the current note has unsaved
-        content, ask before replacing it."""
+        """Fill the editor from a template. A saved note open is left, saved
+        first; a new note's unsaved content is asked about before it is
+        replaced."""
         tpl = normalize_template(tpl)
-        try:
-            st = self.capture_editor_state()
-            # The shared test, so a checklist, attachments or a repeat rule
-            # also earn the "replace?" question — the old three-field list
-            # let a template wipe an attachments-only note without asking.
-            has_content = self._editor_state_has_content(st)
-        except Exception:
-            has_content = False
         self._dismiss_mini_popup()
+        if self.selected_note_id is not None:
+            # A saved note is left, not replaced: its last words and an item
+            # in its Add box go into it first, as every route into an empty
+            # editor saves (Ctrl+N). It was asked "Replace current note?",
+            # and Yes lost what the autosave had not yet written.
+            if self._flush_autosave() is False:
+                return
+            has_content = False
+        else:
+            try:
+                # The shared test, so a checklist, attachments, a repeat rule
+                # or an item in the Add box also earn the "replace?" question:
+                # the Add box alone was dropped unasked (round 6).
+                has_content = self._editor_holds_typing()
+            except Exception:
+                has_content = False
 
         if has_content:
             if not self.ask_yes_no(

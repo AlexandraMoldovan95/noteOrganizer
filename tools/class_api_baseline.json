@@ -219,6 +219,7 @@
   "_editor_flush_type_paint": "(self)",
   "_editor_follows_external_change": "(self, changed_ids)",
   "_editor_font_size": "(self)",
+  "_editor_holds_typing": "(self)",
   "_editor_key_press": "(self, event=None)",
   "_editor_key_release": "(self, event=None)",
   "_editor_newline": "(self)",

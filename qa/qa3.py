@@ -3876,6 +3876,44 @@ check(f'a checklist of 1,000 items refuses a 1,001st at every door, and says so 
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
 
+# Use template dropped an item typed in the Add box: in a new note nothing
+# asked (the question's test left the box out), and over a saved note Yes
+# lost what the autosave had not yet written (round 6). A new note's box is
+# asked about; a saved note is left, saved first, and not asked about.
+_ut_asked = []
+_ut_real = app.ask_yes_no
+app.ask_yes_no = lambda t, *a, **k: (_ut_asked.append(t), False)[1]     # "No"
+_ut_tpl = {'name': 'Packing', 'title': 'Trip', 'body': 'b',
+           'checklist': [{'text': 'socks', 'done': False}]}
+try:
+    app.new_note(); app.update()
+    app.checklist_add_var.set('passport')
+    app._apply_template(dict(_ut_tpl)); app.update()
+    _ut_new = (list(_ut_asked), app.checklist_add_var.get())
+    _ut_asked.clear()
+    app.checklist_add_var.set('')
+    _ut_note = NO.normalize_note({'id': 4254, 'title': 'Kept', 'body': 'old words'})
+    app.notes = [_ut_note]; app.save_notes()
+    app.open_note_in_tab(_ut_note); app.update()
+    app.body_text.insert('end-1c', ' and new ones')
+    app.checklist_add_var.set('towel')
+    app._apply_template(dict(_ut_tpl)); app.update()
+    _ut_kept = next((n for n in json.load(open(NO.DATA_FILE, encoding='utf-8'))
+                     if n.get('id') == 4254), {})
+    _ut_saved = (list(_ut_asked), _ut_kept.get('body'),
+                 [i.get('text') for i in _ut_kept.get('checklist') or []],
+                 app.title_entry.get())
+finally:
+    app.ask_yes_no = _ut_real
+    app.checklist_add_var.set('')
+check(f'Use template asks before replacing a new note whose only words are in its '
+      f'Add box ({_ut_new})', _ut_new == (['Replace current note?'], 'passport'))
+check(f'...and leaves a saved note saved first, its Add box too, without asking '
+      f'({_ut_saved})',
+      _ut_saved == ([], 'old words and new ones', ['towel'], 'Trip'))
+app.new_note(); app.update()
+app.notes = []; app.save_notes()
+
 # ...and saves all the close saves (one list, _save_on_the_way_out). Its own
 # copy had drifted: a date typed short was left unsettled, so unsaved, and a
 # write that had failed was never tried again (2026-10-28, the final audit).
