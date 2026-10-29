@@ -4552,6 +4552,11 @@ _kh_built, _kh_seen = [], {}
 _kh_real_build = app._build_image_preview
 app._build_image_preview = lambda *a, **k: (_kh_built.append(1),
                                             _kh_real_build(*a, **k))[1]
+# Its keys carry times, as a keyboard's do, and are this check's own: kept
+# out of the run's REAL KEYS (_qa_support), which would say someone typed.
+import _qa_support as _kh_support
+_kh_keys_kept = _kh_support.REAL_KEYS
+_kh_support.REAL_KEYS = [('the held-Enter check', 'its own keys')]
 
 
 def _kh_key(kind, when):
@@ -4591,6 +4596,7 @@ finally:
     app._build_image_preview = _kh_real_build
     app._dismiss_mini_popup()
     _kv_settle()
+    _kh_support.REAL_KEYS = _kh_keys_kept
 check(f"Enter held on a picture's name opens its preview once, and held on its "
       f"Close shuts it once ((previews built, the keyboard on): {_kh_seen})",
       _kh_seen == {f'held on the name, {s}': (1, '✕ Close') for s in
@@ -5212,23 +5218,27 @@ check(f"the template editor, opened from Settings, says in itself that a paste "
 _ns_seen = {}
 _ns_geo = app.geometry()
 _ns_real_read = NO.clipboard.read_text
-
-
-def _ns_banner():
-    return (str(app.toast_lbl.cget('text'))
-            if app.toast_frame.winfo_manager() == 'place' else None)
+# The banners the paste raised, as asked for: an autosave's "Note created"
+# can stand on the banner a moment later, and is no answer about the paste.
+_ns_banners = []
+app._show_toast = lambda text, *a, **k: (
+    _ns_banners.append((text, k.get('kind'))),
+    NO.NoteOrganizer._show_toast(app, text, *a, **k))[1]
 
 
 def _ns_paste(box, text, read_text=True):
-    app._hide_toast()
     if read_text:
         NO.clipboard.read_text = lambda: text
     app.clipboard_clear()
     app.clipboard_append(text)
     box.delete(0, 'end')
+    del _ns_banners[:]
     box.event_generate('<<Paste>>')
     _kv_settle(3)
-    return len(box.get()), _ns_banner()
+    kept = len(box.get())
+    if box is app.title_entry:
+        box.delete(0, 'end')            # no note is made of it meanwhile
+    return kept, [t for t, kind in _ns_banners if kind == 'info']
 
 
 try:
@@ -5246,6 +5256,7 @@ try:
     _ns_seen['status line in sight, scrolled down'] = app._in_sight(app.status_lbl)
     _ns_seen['Add box, the line in sight'] = _ns_paste(app.checklist_add_entry, 'x' * 2500)
 finally:
+    del app._show_toast
     NO.clipboard.read_text = _ns_real_read
     app.checklist_add_entry.delete(0, 'end')
     app.title_entry.delete(0, 'end')
@@ -5255,10 +5266,10 @@ check(f"the note's page says a paste cut to fit where it is seen: in a banner "
       f"while its status line is scrolled away, on the line alone in sight ({_ns_seen})",
       _ns_seen.get('status line in sight') is False
       and _ns_seen.get('Add box') == (
-          2000, 'i  Pasted text shortened: a checklist item can be up to 2,000 characters')
-      and _ns_seen.get('title') == (200, 'i  Pasted title shortened to 200 characters')
+          2000, ['Pasted text shortened: a checklist item can be up to 2,000 characters'])
+      and _ns_seen.get('title') == (200, ['Pasted title shortened to 200 characters'])
       and _ns_seen.get('status line in sight, scrolled down') is True
-      and _ns_seen.get('Add box, the line in sight') == (2000, None))
+      and _ns_seen.get('Add box, the line in sight') == (2000, []))
 
 # ...and a title is weighed as it goes in, on one line: a line copied with its
 # line break, or Windows' CR LF, was "shortened" by the space it lost.

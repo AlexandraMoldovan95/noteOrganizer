@@ -10802,6 +10802,42 @@
     "expect": "killed"
   },
   {
+    "id": "RZ11",
+    "about": "the note's checklist chunked again leaves the keyboard on nothing, its item's row gone",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                    kids[min(on[1], len(kids) - 1)].focus_set()\n",
+        "replace": "                    pass\n"
+      }
+    ],
+    "must_fail": [
+      "long checklist items that grow in a narrower window are chunked again as they stand"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RZ12",
+    "about": "the note's checklist chunked again does not put its view back where it was",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            canvas.yview_moveto(top / max(1, stack.total))\n",
+        "replace": "            pass\n"
+      }
+    ],
+    "must_fail": [
+      "long checklist items that grow in a narrower window are chunked again as they stand"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed"
+  },
+  {
     "id": "DR91",
     "about": "a note read keeps a turned-off series' own-text days only in its rescue copy, as the phone wrote it",
     "edits": [

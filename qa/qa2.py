@@ -1471,9 +1471,11 @@ try:
         [c.winfo_reqheight() for c in _ll_grp.chunks if len(c.winfo_children()) > 1]
         or [0])
     _ll_grow['above the last'] = max(_ll_honest())
+    # By the window's own record: under Xvfb, with no window manager, the
+    # resize takes the display's keyboard from the app, and "focus" says "".
     _ll_now = next((r for r in app._checklist_drawn['rows'] if r[0] is _ll_held[0]), None)
     _ll_grow['keyboard still on L3'] = _ll_now is not None and str(
-        app.tk.call('focus')) == str(next(
+        app.tk.call('focus', '-lastfor', app)) == str(next(
             c for c in _ll_now[1].winfo_children() if isinstance(c, tk.Checkbutton)))
     app.geometry('1400x900'); _ll_settle(20)
     app._checklist_rows.stack.size(); _ll_settle(4)

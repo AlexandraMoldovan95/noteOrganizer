@@ -1095,7 +1095,9 @@ A new surface joins this list the moment it ships.
   press of time 0 for Enter held down (`_enter_repeats`), so every other
   check's Enter is a press of its own, and a check of a held key passes
   `time=` to each press and release, in both of its shapes (presses alone,
-  as Windows repeats; a release and a press at one time, as X11 does).
+  as Windows repeats; a release and a press at one time, as X11 does),
+  and keeps them out of the run's `REAL KEYS` (below), which would take
+  them for someone typing.
 - **The names gate reads the qa scripts and the unit suites too.** A
   name borrowed from a removed block (a seed's `os`, `io`) fails the
   gate the moment the script is read, instead of halfway through a run.
