@@ -1236,6 +1236,53 @@ check(f'an item deleted at the end of a chunk and put back stands there again, '
                    'alone between': ([_LL_N, 1, _LL_N], True, 1)})
 
 
+def _ll_after_space(widget):
+    """Space on *widget*, from the keyboard, and the widget holding it after:
+    Tk runs a button's command 100 ms after the key."""
+    if not _ll_focus(widget):
+        return None
+    widget.event_generate('<space>')
+    for _ in range(25):
+        app.update()
+        time.sleep(0.02)
+    try:
+        return app.nametowidget(str(app.tk.call('focus')))
+    except (KeyError, tk.TclError):
+        return None
+
+
+def _ll_row_text(widget, needle):
+    """The words of the row *widget* stands in, or what holds the keyboard."""
+    label = _ll_text(widget.master, needle) if widget is not None else None
+    return str(label.cget('text')) if label is not None else str(widget)[-30:]
+
+
+def _ll_bin_by_key(count, at):
+    app._working_checklist = [{'text': f'item {i}', 'done': False}
+                              for i in range(count)]
+    app._render_checklist_items(); _ll_settle()
+    held = _ll_after_space(_ll_bin_of(app._checklist_rows.rows()[at]))
+    return _ll_row_text(held, 'item ') if isinstance(held, tk.Button) else str(held)[-30:]
+
+
+# Space on a bin: the keyboard goes to the bin drawn in its place -- the next
+# item's, or the new last one's -- wherever the item stood among the chunks.
+# Its place was a place in its chunk: alone in the last one, the chunk went,
+# and the keyboard went to the chunk before's FIRST item, which the next
+# Space removed.
+_LL_E = 2 * _LL_N
+_ll_keys = {'the first': _ll_bin_by_key(_LL_E, 0),
+            'end of a chunk': _ll_bin_by_key(_LL_E, _LL_N - 1),
+            'first of a chunk': _ll_bin_by_key(_LL_E, _LL_N),
+            "the list's last": _ll_bin_by_key(_LL_E, _LL_E - 1),
+            'alone at the end': _ll_bin_by_key(_LL_E + 1, _LL_E)}
+check(f'Space on a checklist bin hands the keyboard to the bin in its place, '
+      f'or to the last, at every place among the chunks ({_ll_keys})',
+      _ll_keys == {'the first': 'item 1', 'end of a chunk': f'item {_LL_N}',
+                   'first of a chunk': f'item {_LL_N + 1}',
+                   "the list's last": f'item {_LL_E - 2}',
+                   'alone at the end': f'item {_LL_E - 1}'})
+
 # A chunk out of sight is parked beside the list, never over it, however tall
 # it has grown; and one scrolled further into than its parking place stands at
 # its true place. Parked only above, a chunk taller than its 20,000 px hung
@@ -1452,6 +1499,38 @@ check(f'the template editor with 70 long checklist items scrolls to its Add box 
 app._dismiss_mini_popup(); _ll_settle()
 
 
+def _ll_tpl_bin_by_key(count, at):
+    """The template editor's checklist of *count* items: Space on item *at*'s
+    bin, and the item whose bin holds the keyboard after."""
+    tpl = {'name': 'Keys', 'title': '', 'body': '', 'comments': '',
+           'category': 'General',
+           'checklist': [{'text': f'item {i}', 'done': False} for i in range(count)]}
+    app._edit_template(tpl, lambda: None); _ll_settle(8)
+    stack = _ll_stack_canvas(app._mini_popup)._row_stack
+    icon = next(c for c in stack.groups[1].rows()[at].winfo_children()
+                if getattr(c, '_icon_kind', None) == 'trash')
+    held = _ll_after_space(icon)
+    said = (_ll_row_text(held, 'item ')
+            if getattr(held, '_icon_kind', None) == 'trash' else str(held)[-30:])
+    app._dismiss_mini_popup(); _ll_settle()
+    return said
+
+
+# The same in the template editor's checklist, drawn again whole at each
+# delete: alone in its chunk, the last item's bin sent the keyboard past the
+# block's end, to "+ Add" -- the place counted the chunk among the canvas's.
+app._edit_template(None, lambda: None); _ll_settle(4)
+_LL_T = 2 * _ll_stack_canvas(app._mini_popup)._row_stack.groups[1].every
+app._dismiss_mini_popup(); _ll_settle()
+_ll_tkeys = {'end of a chunk': _ll_tpl_bin_by_key(_LL_T, _LL_T // 2 - 1),
+             'first of a chunk': _ll_tpl_bin_by_key(_LL_T, _LL_T // 2),
+             'alone at the end': _ll_tpl_bin_by_key(_LL_T + 1, _LL_T)}
+check(f"Space on a template checklist's bin hands the keyboard to the bin in its "
+      f"place, or to the last, at every place among the chunks ({_ll_tkeys})",
+      _ll_tkeys == {'end of a chunk': f'item {_LL_T // 2}',
+                    'first of a chunk': f'item {_LL_T // 2 + 1}',
+                    'alone at the end': f'item {_LL_T - 1}'})
+
 # A table in a template's body given more columns, at the same height and
 # with no scrollbar of its own: no chunk changes height, and the editor is
 # measured again for it all the same. Columns are added until the preview
@@ -1539,6 +1618,40 @@ check(f'Recently deleted with 1,000 rows on its page scrolls to the last, whose 
       f'box ticks ({_ll_said}; {_ll_picked})',
       _ll_ok and _ll_picked == ['↩ Restore 1 selected'])
 
+
+def _ll_trash_by_key(count, at, which):
+    """Recently deleted with *count* rows: Space on row *at*'s Restore or
+    Delete, and whether the keyboard is then on that button of the row drawn
+    in its place, or of the new last row."""
+    app.trash = [{'id': 71000 + i, 'uid': f'lk-{i}', 'title': f'Gone {i:02d}',
+                  'body': 'x', 'category': 'General',
+                  'deleted_at': f'2026-10-{1 + i % 25:02d} 11:{i % 60:02d}:00'}
+                 for i in range(count)]
+    app._trash_panel_redraw(); _ll_settle(6)
+    rows = [r for r in app._active_panel_canvas._row_stack.rows()
+            if getattr(r, '_trash_buttons', None)]
+    titles = [_ll_row_text(r._trash_buttons[which], 'Gone ') for r in rows]
+    held = _ll_after_space(rows[at]._trash_buttons[which])
+    said = (_ll_row_text(held, 'Gone ')
+            if held is not None and getattr(held.master, '_trash_buttons', {})
+            .get(which) is held else str(held)[-30:])
+    return said == (titles[at + 1] if at + 1 < len(titles) else titles[at - 1])
+
+
+# Restore or Delete from the keyboard: the same button of the row drawn in its
+# place. Counted in its chunk, the place sent the keyboard 16 rows up from a
+# last row alone in its chunk -- and a second Space restored a note nobody
+# chose. Sixteen rows to a chunk here.
+app.ask_yes_no = lambda *a, **k: True
+_ll_tr = {'Restore, end of a chunk': _ll_trash_by_key(33, 15, 'restore'),
+          'Restore, first of a chunk': _ll_trash_by_key(33, 16, 'restore'),
+          'Restore, alone at the end': _ll_trash_by_key(33, 32, 'restore'),
+          'Delete, alone at the end': _ll_trash_by_key(33, 32, 'delete')}
+app.ask_yes_no = lambda *a, **k: False
+app.notes = []
+check(f'Restore and Delete pressed by key in Recently deleted hand the keyboard '
+      f'to the same button in the row in its place, at every place among the '
+      f'chunks ({_ll_tr})', all(_ll_tr.values()))
 del app.TRASH_PAGE_SIZE
 app.trash = []
 app._trash_panel_redraw(); _ll_settle()

@@ -1548,18 +1548,22 @@ class SettingsPageMixin:
         def still_in_trash():
             return any(e is entry for e in self.trash)
 
+        # The rows it stands among: its block of the list, across chunks the
+        # redraw makes again (RowStack), not the chunk it was made in.
+        block = self._block_of(row)
+
         def restore():
             keyed = self._holds_keyboard(restore_btn)
-            place = self._trash_row_place(row)
+            place = self._trash_row_place(row, block)
             if still_in_trash():
                 self._restore_from_trash(entry)
             redraw()
             if keyed:
-                self._keyboard_to_trash_row(parent, place, "restore")
+                self._keyboard_to_trash_row(block, place, "restore")
 
         def delete_forever():
             keyed = self._holds_keyboard(delete_btn)
-            place = self._trash_row_place(row)
+            place = self._trash_row_place(row, block)
             if not still_in_trash():
                 redraw()
                 return
@@ -1576,7 +1580,7 @@ class SettingsPageMixin:
                 save_trash(self.trash)
             redraw()
             if keyed:
-                self._keyboard_to_trash_row(parent, place, "delete")
+                self._keyboard_to_trash_row(block, place, "delete")
 
         # Restore made first, Delete packed first: Delete stays at the edge
         # and Tab still reads the row left to right.
@@ -1605,29 +1609,30 @@ class SettingsPageMixin:
         left.pack(side="left", fill="x", expand=True, padx=10, pady=7)
 
     @staticmethod
-    def _trash_row_place(row):
-        """Where *row* stands among the Trash's rows."""
+    def _trash_row_place(row, block):
+        """Where *row* stands among the Trash's rows in *block*."""
         try:
-            rows = [w for w in row.master.winfo_children()
+            rows = [w for w in block.winfo_children()
                     if getattr(w, "_trash_buttons", None)]
             return rows.index(row)
         except (tk.TclError, ValueError):
             return 0
 
-    def _keyboard_to_trash_row(self, rows_frame, place, which):
+    def _keyboard_to_trash_row(self, block, place, which):
         """After a row's Restore or Delete pressed from the keyboard, the
         row drawn in its place takes the keyboard, on the same button --
         or the last row, or what follows the list once it is empty."""
         try:
-            rows = [w for w in rows_frame.winfo_children()
+            rows = [w for w in block.winfo_children()
                     if getattr(w, "_trash_buttons", None)]
+            after = getattr(getattr(block, "stack", None), "canvas", block)
             target = (rows[min(place, len(rows) - 1)]._trash_buttons[which]
-                      if rows else rows_frame.tk_focusNext())
+                      if rows else after.tk_focusNext())
         except (tk.TclError, KeyError, AttributeError):
             return
         if target is not None:
             target.focus_set()
-            rows_frame.update_idletasks()     # the redrawn rows, laid out
+            self.update_idletasks()     # the redrawn rows, laid out
             self._bring_into_sight(target)
 
     def _retention_loss_warning(self, doomed, days, current):

@@ -158,6 +158,28 @@ class RowStack:
     def rows(self):
         return [row for group in self.groups for row in group.rows()]
 
+    def group_of(self, chunk):
+        """The block *chunk* belongs to, or None when it is none of ours."""
+        return next((g for g in self.groups if chunk in g.chunks), None)
+
+    def place_of_row(self, row):
+        """(block, row) for *row*: which block it stands in, and where among
+        that block's rows, counted across its chunks -- or None. Its place in
+        its chunk named a frame the next redraw may not make again: sent
+        there after a press, the keyboard went to another chunk's first row."""
+        group = self.group_of(row.master)
+        if group is None:
+            return None
+        count = 0
+        for chunk in group.chunks:
+            names = self.canvas.tk.splitlist(
+                self.canvas.tk.call("winfo", "children", chunk))
+            if chunk is row.master:
+                return (self.groups.index(group),
+                        count + [str(n) for n in names].index(str(row)))
+            count += len(names)
+        return None
+
     def box(self, chunk):
         """Where *chunk* stands on the canvas, as a window item's bbox."""
         return self._box.get(chunk)
@@ -1865,6 +1887,14 @@ class DialogsMixin:
         return "break"
 
     @staticmethod
+    def _block_of(row):
+        """The rows *row* stands among: its block of a RowStack, across the
+        chunks a redraw makes again, or else its own parent."""
+        stack = getattr(row.master.master, "_row_stack", None)
+        group = stack.group_of(row.master) if stack is not None else None
+        return group if group is not None else row.master
+
+    @staticmethod
     def _place_of(widget):
         """Where *widget* stands: its path and its place among its siblings,
         then its parent's, up to its window -- enough to find what stands
@@ -1873,6 +1903,17 @@ class DialogsMixin:
         w = widget
         try:
             while w is not None and not isinstance(w, (tk.Tk, tk.Toplevel)):
+                # A row of a RowStack: its place among its block's rows, its
+                # chunk passed over -- an index into a chunk the redraw did
+                # not make again sent the keyboard to another chunk's first
+                # row, or, past a block's end, into the next block.
+                stack = getattr(getattr(w.master, "master", None),
+                                "_row_stack", None)
+                at = stack.place_of_row(w) if stack is not None else None
+                if at is not None:
+                    place.append((str(w), at))
+                    w = w.master.master
+                    continue
                 kids = [k for k in w.master.winfo_children()
                         if not isinstance(k, tk.Toplevel)]
                 place.append((str(w), kids.index(w)))
@@ -1898,8 +1939,17 @@ class DialogsMixin:
             return None
         if depth:
             for _path, index in reversed(place[:depth]):
-                kids = [k for k in w.winfo_children()
-                        if not isinstance(k, tk.Toplevel)]
+                if isinstance(index, tuple):
+                    # (block, row) on a RowStack: the row there now, or the
+                    # block's last when it has fewer.
+                    stack = getattr(w, "_row_stack", None)
+                    groups = stack.groups if stack is not None else []
+                    kids = (groups[min(index[0], len(groups) - 1)].rows()
+                            if groups else [])
+                    index = index[1]
+                else:
+                    kids = [k for k in w.winfo_children()
+                            if not isinstance(k, tk.Toplevel)]
                 if not kids:
                     break
                 w = kids[min(index, len(kids) - 1)]

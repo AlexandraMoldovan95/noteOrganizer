@@ -957,11 +957,15 @@
     "id": "KF07",
     "about": "a Trash row's Restore pressed by key leaves the keyboard on nothing",
     "edits": [{"file": "noteorganizer/ui/settings_page.py",
-               "find": "            if keyed:\n                self._keyboard_to_trash_row(parent, place, \"restore\")\n",
-               "replace": "            if False:\n                self._keyboard_to_trash_row(parent, place, \"restore\")\n"}],
+               "find": "            if keyed:\n                self._keyboard_to_trash_row(block, place, \"restore\")\n",
+               "replace": "            if False:\n                self._keyboard_to_trash_row(block, place, \"restore\")\n"},
+              {"file": "noteorganizer/ui/dialogs.py",
+               "find": "            if living is not None and living != place[-1][0]:\n                self._keyboard_stays(widget, place)\n",
+               "replace": "            pass\n"}],
     "must_fail": ["Space on a row's Restore puts that note back"],
     "suites": ["qa3"],
-    "expect": "killed"
+    "expect": "killed",
+    "note": "Two roads bring the keyboard back after a Restore pressed by key: the Trash's own, and the one every Tk button's press takes (_tk_press_ends). The first alone already survived before round six (measured on 2a17ad7), so both are taken away."
   },
   {
     "id": "KF08",
@@ -10428,6 +10432,49 @@
       "qa2"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "RY08",
+    "about": "a row's place, for the keyboard after a press, is its place in its chunk again",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "                at = stack.place_of_row(w) if stack is not None else None\n",
+        "replace": "                at = None\n"
+      }
+    ],
+    "must_fail": [
+      "Space on a checklist bin hands the keyboard to the bin in its place",
+      "Space on a template checklist's bin hands the keyboard to the bin in its place"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RY09",
+    "about": "a Trash row's place is counted in its chunk again, by its own route and by the one every press takes",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "        block = self._block_of(row)\n",
+        "replace": "        block = row.master\n"
+      },
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "                at = stack.place_of_row(w) if stack is not None else None\n",
+        "replace": "                at = None\n"
+      }
+    ],
+    "must_fail": [
+      "Restore and Delete pressed by key in Recently deleted hand the keyboard"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed",
+    "note": "Either route alone brings the keyboard to the right row: the Trash's own after its redraw, and the one every press of a Tk button takes (_tk_press_ends) a moment later. The first edit alone survives for that reason, so both are reverted here."
   },
   {
     "id": "RY17",
