@@ -166,6 +166,7 @@ jobs:
           python tools/check_contrast.py
           python tools/check_mutant_targets.py
           python tools/check_shipped.py
+          python tools/check_guest.py
 
       - name: Recurrence engine tests
         run: python test_recurrence.py

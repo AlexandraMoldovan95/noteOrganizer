@@ -53,7 +53,7 @@ MACHINE_FREE_EXCEPTIONS = {"Bash(rm -rf C:/:*)", "Bash(rm -rf D:/:*)"}
 
 def tracked():
     out = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True,
-                         text=True, encoding="utf-8", errors="replace")
+                         text=True, encoding="utf-8", errors="replace", timeout=120)
     names = [n.strip() for n in out.stdout.splitlines() if n.strip()]
     if out.returncode != 0 or not names:
         print("Cannot list the tracked files (is %s a git checkout?)." % ROOT)
@@ -101,6 +101,8 @@ def machine_free(rule):
 
 
 def main():
+    import guest  # the memory ceiling, before git starts (tools/guest.py)
+    guest.settle(heavy=False)
     names = tracked()
     committed = deny_rules(COMMITTED)
     problems = []

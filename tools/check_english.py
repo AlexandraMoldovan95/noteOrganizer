@@ -166,7 +166,7 @@ def tracked():
     every check that has quietly stopped working.
     """
     out = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True,
-                         text=True, encoding="utf-8", errors="replace")
+                         text=True, encoding="utf-8", errors="replace", timeout=120)
     names = [line.strip() for line in out.stdout.splitlines() if line.strip()]
     if out.returncode != 0 or not names:
         print("Cannot list the tracked files (is %s a git checkout?)." % ROOT)
@@ -198,6 +198,8 @@ def hits_in(relative):
 
 
 def main():
+    import guest  # the memory ceiling, before git starts (tools/guest.py)
+    guest.settle(heavy=False)
     show_all = "--list" in sys.argv
     leaks = []
     named = []

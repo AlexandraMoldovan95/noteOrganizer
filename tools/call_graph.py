@@ -41,7 +41,7 @@ def source(path, rev=None):
         return io.open(os.path.join(ROOT, path), encoding="utf-8").read()
     return subprocess.run(["git", "show", "%s:%s" % (rev, path)], cwd=ROOT,
                           capture_output=True, text=True, encoding="utf-8",
-                          check=True).stdout
+                          check=True, timeout=120).stdout
 
 
 def mixin_paths(rev=None):
@@ -50,7 +50,8 @@ def mixin_paths(rev=None):
         return sorted(os.path.relpath(p, ROOT).replace(os.sep, "/") for p in found)
     listing = subprocess.run(["git", "ls-tree", "--name-only", rev,
                               "noteorganizer/ui/"], cwd=ROOT,
-                             capture_output=True, text=True, check=True).stdout
+                             capture_output=True, text=True, check=True,
+                             timeout=120).stdout
     return sorted(p for p in listing.split() if p.endswith(".py"))
 
 
@@ -90,6 +91,8 @@ def calls_of(fn, names):
 
 
 def main(argv):
+    import guest  # the memory ceiling, before git starts (tools/guest.py)
+    guest.settle(heavy=False)
     rev = argv[argv.index("--rev") + 1] if "--rev" in argv else None
     if "--defined-in" in argv:
         path = argv[argv.index("--defined-in") + 1]

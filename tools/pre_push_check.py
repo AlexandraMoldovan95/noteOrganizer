@@ -38,7 +38,10 @@ WHAT IT RUNS
    still below it are listed, and the list can only shrink.
 8. ``check_shipped`` -- the Pillow CI tests is the one the .exe ships,
    and the licenses the build bundles name it.
-9. ``compile()`` over every tracked ``.py`` in the repo -- tests and qa
+9. ``check_guest`` -- every runner sets tools/guest.py's ceiling before it
+   starts anything and bounds its children; the ceiling and the
+   one-heavy-job turn are proved on this machine.
+10. ``compile()`` over every tracked ``.py`` in the repo -- tests and qa
    scripts included, because a syntax error in a TEST file is exactly
    what the remote runner would otherwise find first (a locally-valid
    PEP 701 f-string once died only on CI's older Python; the interpreter
@@ -63,7 +66,11 @@ ROOT = os.path.dirname(HERE)
 
 def _run_gate(label, args):
     print("== %s" % label, flush=True)
-    proc = subprocess.run([sys.executable] + args, cwd=ROOT)
+    try:
+        proc = subprocess.run([sys.executable] + args, cwd=ROOT, timeout=600)
+    except subprocess.TimeoutExpired:
+        print("\nPRE-PUSH: HANG at '%s' -- it did not finish within 600 s." % label)
+        sys.exit(1)
     if proc.returncode != 0:
         print("\nPRE-PUSH: FAILED at '%s' -- fix it here, not on CI."
               % label)
@@ -71,8 +78,10 @@ def _run_gate(label, args):
 
 
 def main():
-    import guest  # the memory ceiling for this run (tools/guest.py)
-    for line in guest.settle():
+    # The memory ceiling (tools/guest.py). No turn: these gates are small and
+    # quick, and never wait for a suite running elsewhere.
+    import guest
+    for line in guest.settle(heavy=False):
         print(line)
     scanned = []
     for layer in ("core", "ui"):
@@ -121,10 +130,14 @@ def main():
               [os.path.join("tools", "check_contrast.py")])
     _run_gate("what ships is what is tested",
               [os.path.join("tools", "check_shipped.py")])
+    # Every runner settles first and bounds its children, the Linux image has
+    # one door, and the ceiling and the one-heavy-job turn hold here.
+    _run_gate("a test run is a guest",
+              [os.path.join("tools", "check_guest.py")])
 
     print("== every tracked .py compiles", flush=True)
     listed = subprocess.run(["git", "ls-files", "*.py"], cwd=ROOT,
-                            capture_output=True, text=True)
+                            capture_output=True, text=True, timeout=120)
     bad = []
     for rel in listed.stdout.split():
         path = os.path.join(ROOT, rel)

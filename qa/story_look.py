@@ -41,7 +41,6 @@ import os
 import shutil
 import subprocess
 import sys
-import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -208,8 +207,8 @@ _order = app._card_order()
 # Take the desktop foreground back BEFORE placing the focus, not after.
 # The ring is drawn by the app when the list's canvas hears <FocusIn>, and
 # Tk delivers that only while its toplevel really owns the foreground --
-# between scenes the shooter runs PowerShell to make the grab, a separate
-# process that can hold the foreground when this scene starts. With the
+# another process (the terminal; the PowerShell an older shutter ran
+# between scenes) can hold the foreground when this scene starts. With the
 # card widgets this flaked about one run in three: the reference had the
 # ring, the re-take did not, 0.6% apart, and "re-run it until it is green"
 # would have hidden exactly that. Seen by opening the two pictures side by
@@ -684,7 +683,7 @@ SHOOTER = '''
 import io, json, os, subprocess, sys, time
 sys.path.insert(0, ".")
 import note_organizer as NO, tkinter as tk
-from _qa_support import pin_popup_visibility
+from _qa_support import pin_popup_visibility, photograph
 pin_popup_visibility(NO)
 
 app = NO.NoteOrganizer()
@@ -726,24 +725,13 @@ def _days_ago(days):
     day = _dt.date.today() - _dt.timedelta(days=days)
     return day.isoformat() + " 09:00:00"
 
-# PowerShell's CopyFromScreen works in PHYSICAL pixels; Tk reports its
-# geometry in LOGICAL ones. On a display with any scaling the two differ,
-# and a box built from Tk's numbers lands up and to the left of the
-# window: the reference screens carried a strip of the developer's own
-# desktop down their left edge, and lost the right edge of the app.
-# Measured once, here, rather than assumed to be 1.
-from PIL import ImageGrab as _Grab
-SCALE = _Grab.grab().size[0] / float(app.winfo_screenwidth())
-
+# The one shutter (_qa_support.photograph): the window's box, cut to the
+# primary screen's work area, in the screen's own pixels, and no picture at
+# all when another program's window lies over it -- these are committed.
 def _grab_window(name):
-    x = int(round(app.winfo_rootx() * SCALE))
-    y = int(round(app.winfo_rooty() * SCALE))
-    w = int(round(app.winfo_width() * SCALE))
-    h = int(round(app.winfo_height() * SCALE))
-    subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
-                    "-File", "grab.ps1", "-Out", os.path.join("shots", name + ".png"),
-                    "-X", str(x), "-Y", str(y), "-W", str(w), "-H", str(h)],
-                   capture_output=True)
+    taken, why = photograph(app, os.path.join("shots", name + ".png"))
+    if not taken:
+        print("NOT TAKEN %s: %s" % (name, why), flush=True)
 
 scenes = json.load(io.open("scenes.json", encoding="utf-8"))
 for name, script in scenes:
@@ -779,21 +767,13 @@ for name, script in scenes:
 app.destroy()
 '''
 
-GRAB = """param([string]$Out, [int]$X, [int]$Y, [int]$W, [int]$H)
-Add-Type -AssemblyName System.Windows.Forms, System.Drawing
-$bmp = New-Object System.Drawing.Bitmap($W, $H)
-$g = [System.Drawing.Graphics]::FromImage($bmp)
-$g.CopyFromScreen((New-Object System.Drawing.Point($X, $Y)),
-                  [System.Drawing.Point]::Empty,
-                  (New-Object System.Drawing.Size($W, $H)))
-$bmp.Save($Out, [System.Drawing.Imaging.ImageFormat]::Png)
-$g.Dispose(); $bmp.Dispose()
-"""
+# How long the whole set of scenes may take: about two minutes when it works.
+SHOOT_TIMEOUT = 600
 
 
-def take_the_pictures():
-    """Run the app in a scratch copy and photograph each scene."""
-    work = tempfile.mkdtemp(prefix="look-")
+def take_the_pictures(work):
+    """Run the app in a scratch copy and photograph each scene; returns what
+    the shooter printed, or None when it did not finish in time."""
     os.makedirs(os.path.join(work, "shots"))
     shutil.copy2(os.path.join(ROOT, "note_organizer.py"), work)
     shutil.copytree(os.path.join(ROOT, "noteorganizer"),
@@ -807,11 +787,13 @@ def take_the_pictures():
     io.open(os.path.join(work, "scenes.json"), "w", encoding="utf-8").write(
         json.dumps(SCENES))
     io.open(os.path.join(work, "shoot.py"), "w", encoding="utf-8").write(SHOOTER)
-    io.open(os.path.join(work, "grab.ps1"), "w", encoding="utf-8").write(GRAB)
-    run = subprocess.run([sys.executable, "shoot.py"], cwd=work,
-                         capture_output=True, text=True,
-                         encoding="utf-8", errors="replace", timeout=600)
-    return work, run
+    try:
+        run = subprocess.run([sys.executable, "shoot.py"], cwd=work,
+                             capture_output=True, text=True,
+                             encoding="utf-8", errors="replace", timeout=SHOOT_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        return None
+    return (run.stdout or "") + (run.stderr or "")
 
 
 # Below this share of the picture, a difference is rendering noise
@@ -860,17 +842,50 @@ def compare(new_dir):
 def main():
     accept = "--accept" in sys.argv
     sys.path.insert(0, os.path.join(ROOT, "tools"))
-    import guest  # the memory ceiling for this run (tools/guest.py)
-    for line in guest.settle():
+    import guest  # this machine's turn and the memory ceiling (tools/guest.py)
+    for line in guest.settle(label="story_look" + (" --accept" if accept else "")):
         print(line)
-    work, run = take_the_pictures()
+    # Marked as this run's, and removed on every way out: by this run, or by
+    # the next one if this one is killed.
+    work = guest.scratch("look-")
+    kept = False
+    try:
+        code, kept = _look(work, accept)
+        return code
+    finally:
+        if kept:
+            # The changed pictures stay to be looked at; the app's copy goes,
+            # and a later run removes the rest after guest.KEPT_DAYS.
+            for name in os.listdir(work):
+                path = os.path.join(work, name)
+                if name in ("shots", guest.MARKER):
+                    continue
+                if os.path.isdir(path):
+                    shutil.rmtree(path, ignore_errors=True)
+                else:
+                    os.remove(path)
+            guest.keep(work, "story_look: screens that changed")
+        else:
+            guest.remove(work)
+
+
+def _look(work, accept):
+    """Take the pictures and judge them: (exit code, keep the pictures)."""
+    said = take_the_pictures(work)
+    if said is None:
+        print("HANG: the scenes did not finish within %d s." % SHOOT_TIMEOUT)
+        return 2, False
+    # A picture the shutter refused is said, with why: something that is not
+    # the app was over the window, and it is never accepted into qa/screens.
+    for line in said.splitlines():
+        if line.startswith("NOT TAKEN "):
+            print(line)
     shots = os.path.join(work, "shots")
     taken = sorted(os.listdir(shots)) if os.path.isdir(shots) else []
     if not taken:
-        print("NO PICTURES. Either the app did not start or PowerShell wrote none.")
-        print((run.stdout + run.stderr)[-800:])
-        shutil.rmtree(work, ignore_errors=True)
-        return 2
+        print("NO PICTURES. Either the app did not start or the shutter refused them all.")
+        print(said[-800:])
+        return 2, False
 
     if accept:
         # Blessed by the SAME judgement the report prints, so "accepted"
@@ -883,8 +898,7 @@ def main():
         # bytes instead would not fix it, for the same reason.
         results = compare(shots)
         if results is None:
-            shutil.rmtree(work, ignore_errors=True)
-            return 2
+            return 2, False
         if not os.path.isdir(STORE):
             os.makedirs(STORE)
         blessed, left = [], []
@@ -905,13 +919,11 @@ def main():
             print("nothing to accept -- no screen has changed its shape.")
         if left:
             print("left alone: %d unchanged picture(s)." % len(left))
-        shutil.rmtree(work, ignore_errors=True)
-        return 0
+        return 0, False
 
     results = compare(shots)
     if results is None:
-        shutil.rmtree(work, ignore_errors=True)
-        return 2
+        return 2, False
 
     changed = []
     for name, pct, note in results:
@@ -929,10 +941,9 @@ def main():
         print("SCREENS CHANGED: %s" % ", ".join(changed))
         print("The new pictures are in: %s" % shots)
         print("If the change was wanted, accept it with:  py qa/story_look.py --accept")
-        return 1
+        return 1, True
     print("No screen has changed its shape.")
-    shutil.rmtree(work, ignore_errors=True)
-    return 0
+    return 0, False
 
 
 if __name__ == "__main__":

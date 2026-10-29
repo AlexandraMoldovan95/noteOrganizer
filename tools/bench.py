@@ -43,7 +43,6 @@ import shutil
 import statistics
 import subprocess
 import sys
-import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -166,7 +165,8 @@ def notebook(n, seed=7, rich=False):
 
 
 def make_run(tree, n, rich=False):
-    run = tempfile.mkdtemp(prefix="notesorg-bench-")
+    import guest  # marked as this run's: a killed run's copy goes in the next sweep
+    run = guest.scratch("notesorg-bench-")
     shutil.copy2(os.path.join(tree, "note_organizer.py"), run)
     shutil.copytree(os.path.join(tree, "noteorganizer"), os.path.join(run, "noteorganizer"),
                     ignore=shutil.ignore_patterns("__pycache__"))
@@ -198,7 +198,8 @@ def measure(tree, n, rich=False, deep=False):
                 return json.loads(line[6:])
         raise RuntimeError("the probe printed no result:\n" + (proc.stdout + proc.stderr)[-1500:])
     finally:
-        shutil.rmtree(run, ignore_errors=True)
+        import guest
+        guest.remove(run)
 
 
 def main():
@@ -210,8 +211,8 @@ def main():
     p.add_argument("--deep", action="store_true", help="also measure at the list's end")
     args = p.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
-    import guest  # the memory ceiling for this run (tools/guest.py)
-    for line in guest.settle():
+    import guest  # this machine's turn and the memory ceiling (tools/guest.py)
+    for line in guest.settle(label="bench " + " ".join(sys.argv[1:])):
         print(line)
     sides = [("this tree", ROOT)] + ([("against", args.against)] if args.against else [])
     keys = ["startup", "rebuild", "save", "memory", "match"] + (["deep", "pin"] if args.deep else [])
@@ -235,6 +236,9 @@ def main():
         print("%-7d %-10s" % (n, label) + "".join(cells))
     print("(medians of %d runs each%s%s)" % (args.runs, ", interleaved" if args.against else "",
                                              ", styled notes" if args.rich else ""))
+    peak = guest.memory_peak()
+    if peak:
+        print(peak)
 
 
 if __name__ == "__main__":

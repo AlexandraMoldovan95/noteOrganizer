@@ -31,7 +31,6 @@ import re
 import shutil
 import subprocess
 import sys
-import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -82,9 +81,13 @@ def main(argv):
     except ImportError:
         print("The 'coverage' package is missing:  py -m pip install coverage")
         return 2
-    import guest  # the memory ceiling for this run (tools/guest.py)
-    for line in guest.settle():
+    import guest  # this machine's turn and the memory ceiling (tools/guest.py)
+    for line in guest.settle(label="run_coverage " + " ".join(argv)):
         print(line)
+    if sys.platform != "win32":
+        # Stopped from outside: the finally below still removes the scratch.
+        import signal
+        signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
 
     fail_under = None
     if "--fail-under" in argv:
@@ -97,9 +100,27 @@ def main(argv):
         print("Unknown suite(s):", ", ".join(unknown))
         return 2
 
-    cov_dir = tempfile.mkdtemp(prefix="noteorg-coverage-")
+    # Marked as this run's (guest.scratch), and removed on every way out:
+    # if the run is killed before its finally, the next run removes it.
+    cov_dir = guest.scratch("noteorg-coverage-")
+    try:
+        return _measure(cov_dir, wanted, fail_under)
+    finally:
+        guest.remove(cov_dir)
+
+
+# One suite under coverage may take this long (twice run_tests' limit: the
+# tracer slows it). A hang is that suite's failure, named, and the run goes on.
+SUITE_TIMEOUT = 1200
+
+
+def _measure(cov_dir, wanted, fail_under):
     print("scratch  :", cov_dir)
     run_dirs = []
+    # The suites' own temporary files (fixed-name zips, mkdtemp folders) go
+    # in the scratch, so nothing outlives the run.
+    child_tmp = os.path.join(cov_dir, "tmp")
+    os.makedirs(child_tmp)
     # The scratch marker is what lets the qa scripts and test_data_safety
     # run at all: without it they refuse, before measuring anything. This
     # tool once ran without it for weeks and reported a number that was
@@ -107,6 +128,7 @@ def main(argv):
     env_base = dict(os.environ,
                     PYTHONUTF8="1", PYTHONIOENCODING="utf-8",
                     NOTEORG_SCRATCH="1",
+                    TEMP=child_tmp, TMP=child_tmp, TMPDIR=child_tmp,
                     COVERAGE_FILE=os.path.join(cov_dir, ".coverage"))
     for name in wanted:
         d = os.path.join(cov_dir, "run_" + name)
@@ -131,11 +153,22 @@ def main(argv):
     unfinished = []
     for name, d in zip(wanted, run_dirs):
         print("running  :", name, flush=True)
-        r = subprocess.run(
-            [sys.executable, "-m", "coverage", "run", "--parallel-mode",
-             "--rcfile=" + rc, name + ".py"],
-            cwd=d, env=env_base, capture_output=True, text=True,
-            encoding="utf-8", errors="replace")
+        try:
+            r = subprocess.run(
+                [sys.executable, "-m", "coverage", "run", "--parallel-mode",
+                 "--rcfile=" + rc, name + ".py"],
+                cwd=d, env=env_base, capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=SUITE_TIMEOUT)
+        except subprocess.TimeoutExpired as hung:
+            unfinished.append(name)
+            print("  HANG: did not finish within %d s; its last lines:" % SUITE_TIMEOUT)
+            tail = hung.stdout or ""
+            if isinstance(tail, bytes):     # POSIX hands it over undecoded
+                tail = tail.decode("utf-8", "replace")
+            tail = tail.strip()
+            for line in tail.splitlines()[-15:]:
+                print("    " + line)
+            continue
         # A suite that did not reach its own footer measured a fraction of
         # itself; a number built on it is not a measurement.
         if "FAILURES" not in r.stdout and "check(s)" not in r.stdout:
@@ -153,16 +186,16 @@ def main(argv):
 
     subprocess.run([sys.executable, "-m", "coverage", "combine",
                     "--rcfile=" + rc], cwd=cov_dir, env=env_base,
-                   capture_output=True, text=True)
+                   capture_output=True, text=True, timeout=600)
     rep = subprocess.run([sys.executable, "-m", "coverage", "report",
                           "--rcfile=" + rc, "--sort=-miss"],
                          cwd=cov_dir, env=env_base,
-                         capture_output=True, text=True)
+                         capture_output=True, text=True, timeout=600)
     print()
     print(rep.stdout)
     subprocess.run([sys.executable, "-m", "coverage", "json",
                     "--rcfile=" + rc, "-o", "cov.json", "-q"],
-                   cwd=cov_dir, env=env_base, capture_output=True, text=True)
+                   cwd=cov_dir, env=env_base, capture_output=True, text=True, timeout=600)
 
     data = json.load(io.open(os.path.join(cov_dir, "cov.json"),
                              encoding="utf-8"))
@@ -190,7 +223,6 @@ def main(argv):
     for size, path, a, b, fn in regions[:30]:
         print("%4d lines  %-34s %6d-%-6d in %s" % (size, path, a, b, fn))
 
-    shutil.rmtree(cov_dir, ignore_errors=True)
     total = data["totals"]["percent_covered"]
     print("\nTOTAL: %.1f%% of the app's lines executed by the suite" % total)
     if unfinished:

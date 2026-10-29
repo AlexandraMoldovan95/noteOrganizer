@@ -22,7 +22,6 @@ import json
 import os
 import shutil
 import sys
-import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -30,6 +29,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 def main():
     # Titles carry emoji; a Windows console's default code page cannot print them.
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    # The memory ceiling, before the app's code is imported (the repository's
+    # tools/guest.py).
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(HERE)), "tools"))
+    import guest
+    guest.settle(heavy=False)
     parser = argparse.ArgumentParser()
     parser.add_argument("out")
     # site/tools/ is two folders down from the app's repository.
@@ -39,7 +43,8 @@ def main():
     out = os.path.abspath(args.out)
     os.makedirs(out, exist_ok=True)
 
-    work = tempfile.mkdtemp(prefix="no-share-verify-")
+    # Marked (guest.scratch): a run killed before its finally is swept later.
+    work = guest.scratch("noteorg-share-verify-")
     try:
         shutil.copytree(os.path.join(repo, "noteorganizer"), os.path.join(work, "noteorganizer"))
         for name in ("APPDATA", "LOCALAPPDATA"):

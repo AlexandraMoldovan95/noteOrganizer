@@ -15,6 +15,9 @@ import os
 import re
 import sys
 
+import guest  # noqa: E402 -- the memory ceiling, before the app's code (tools/guest.py)
+
+guest.settle(heavy=False)
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from noteorganizer.core import diagnostics  # noqa: E402 -- after the path

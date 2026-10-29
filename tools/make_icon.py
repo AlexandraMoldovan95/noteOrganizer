@@ -546,6 +546,8 @@ def write_every_accent(design=DEFAULT_DESIGN):
 
 
 def main(argv):
+    import guest  # the memory ceiling, before the themes are imported (tools/guest.py)
+    guest.settle(heavy=False)
     os.makedirs(OUT_DIR, exist_ok=True)
     if "--all" in argv:
         print("one icon per accent:")

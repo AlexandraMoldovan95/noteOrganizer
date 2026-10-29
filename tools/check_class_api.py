@@ -94,6 +94,9 @@ def load_baseline():
 
 
 def main(argv):
+    # The memory ceiling, before the app's code is imported (tools/guest.py).
+    import guest
+    guest.settle(heavy=False)
     api, duplicates = current_api()
 
     if duplicates:

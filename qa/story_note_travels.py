@@ -44,7 +44,6 @@ import os
 import shutil
 import subprocess
 import sys
-import tempfile
 import time
 
 RESULTS = "story_results.json"
@@ -63,17 +62,20 @@ def drive():
     sys.stdout.reconfigure(encoding="utf-8")
     root = _project_root()
     sys.path.insert(0, os.path.join(root, "tools"))
-    import guest  # the memory ceiling for this run (tools/guest.py)
-    for line in guest.settle():
+    import guest  # this machine's turn and the memory ceiling (tools/guest.py)
+    for line in guest.settle(label="story_note_travels"):
         print(line)
-    work = tempfile.mkdtemp(prefix="story-")
+    # Marked as this run's: a story killed halfway is removed by the next run.
+    work = guest.scratch("story-")
     shots = os.path.join(work, "shots")
     os.makedirs(shots)
 
     shutil.copy2(os.path.join(root, "note_organizer.py"), work)
     shutil.copytree(os.path.join(root, "noteorganizer"),
                     os.path.join(work, "noteorganizer"))
-    shutil.copy2(os.path.join(root, "qa", "_qa_support.py"), work)
+    # The shutter lives in _qa_support; each chapter settles too (guest).
+    for name in (os.path.join("qa", "_qa_support.py"), os.path.join("tools", "guest.py")):
+        shutil.copy2(os.path.join(root, name), work)
     shutil.copy2(os.path.abspath(__file__),
                  os.path.join(work, "story_note_travels.py"))
 
@@ -127,10 +129,23 @@ def drive():
         print("--- chapter %d: %s" % (number, title))
         if before is not None:
             before(work)
-        run = subprocess.run(
-            [sys.executable, "story_note_travels.py", "--chapter", str(number)],
-            cwd=work, capture_output=True, text=True, env=env,
-            encoding="utf-8", errors="replace")
+        try:
+            run = subprocess.run(
+                [sys.executable, "story_note_travels.py", "--chapter", str(number)],
+                cwd=work, capture_output=True, text=True, env=env,
+                encoding="utf-8", errors="replace", timeout=CHAPTER_TIMEOUT)
+            said = (run.stdout or "") + (run.stderr or "")
+        except subprocess.TimeoutExpired as hung:
+            # A hang is this chapter's failure, named, and the story goes
+            # on: the chapter's own ceiling job ends what it started.
+            said = _text(hung.stdout) + _text(hung.stderr)
+            results.append(("chapter %d finished within %d s" % (number, CHAPTER_TIMEOUT),
+                            False, "HANG"))
+            print("    HANG: chapter %d did not finish within %d s" % (number, CHAPTER_TIMEOUT))
+            for line in said.strip().splitlines()[-6:]:
+                print("      | %s" % line)
+            _clear_results(work)
+            continue
         found = _read_results(work)
         results.extend(found)
         for name, ok, detail in found:
@@ -138,16 +153,23 @@ def drive():
                                    "" if ok else "   <- %s" % detail))
         if not found:
             print("    THE CHAPTER SAID NOTHING (did it crash?)")
-            tail = (run.stdout + run.stderr).strip().splitlines()[-6:]
+            tail = said.strip().splitlines()[-6:]
             for line in tail:
                 print("      | %s" % line)
             results.append(("chapter %d ran" % number, False, "no results"))
         _clear_results(work)
 
     print()
-    shot_files = sorted(os.path.join(shots, f) for f in os.listdir(shots))
+    shot_files = sorted(os.path.join(shots, f) for f in os.listdir(shots)
+                        if f.endswith(".png"))
     for path in shot_files:
         print("picture: %s" % path)
+    # A picture the shutter refused is said, with why: something that is
+    # not the app was over the window.
+    refused = os.path.join(shots, REFUSED)
+    if os.path.exists(refused):
+        for line in io.open(refused, encoding="utf-8").read().splitlines():
+            print("picture NOT taken: %s" % line)
     failed = [name for name, ok, _ in results if not ok]
     print()
     print("STORY FAILURES: %s" % (failed if failed else "none"))
@@ -156,18 +178,34 @@ def drive():
     # run where nobody is forced to look, and therefore the run where
     # looking is worth the most: a story asserts what it was told to
     # assert, and the photograph is the only part that can show something
-    # nobody thought to ask about. On a failure the whole scratch
-    # directory stays, so the notebook it walked can be read too.
-    if not failed:
-        for name in os.listdir(work):
-            if name == "shots":
-                continue
-            path = os.path.join(work, name)
-            if os.path.isdir(path):
-                shutil.rmtree(path, ignore_errors=True)
-            else:
-                os.remove(path)
+    # nobody thought to ask about. On a failure the notebook it walked
+    # stays too, so it can be read. The app's copy goes either way, and a
+    # later run removes the rest after guest.KEPT_DAYS.
+    code = {"note_organizer.py", "noteorganizer", "_qa_support.py", "guest.py",
+            "story_note_travels.py", "__pycache__"}
+    for name in os.listdir(work):
+        if name in ("shots", guest.MARKER) or (failed and name not in code):
+            continue
+        path = os.path.join(work, name)
+        if os.path.isdir(path):
+            shutil.rmtree(path, ignore_errors=True)
+        else:
+            os.remove(path)
+    guest.keep(work, "story_note_travels: photographs%s" % (" and the notebook" if failed else ""))
     return 1 if failed else 0
+
+
+# How long one chapter may take: it starts the app, walks a few screens and
+# photographs them, in well under a minute.
+CHAPTER_TIMEOUT = 600
+# The file in shots/ where a refused picture is named, with why.
+REFUSED = "not-taken.txt"
+
+
+def _text(value):
+    if isinstance(value, bytes):
+        return value.decode("utf-8", "replace")
+    return value or ""
 
 
 def _lose_the_settings(work):
@@ -373,62 +411,26 @@ def _let_it_paint(app, seconds=0.6):
 # The app each chapter built (_chapter_setup), for _photograph to frame.
 _SHOOTING = {}
 
-# Only the app's own window, and only the part of it on the screen's working
-# area. The whole screen was photographed here once -- every other window
-# open on the owner's machine with it. Tk's geometry is in its own pixels,
-# PowerShell's in its own; the script measures their ratio from the two
-# screen widths rather than assuming 1 (see story_look.py), and saves
-# nothing when no part of the window is on the screen. PowerShell declares
-# itself DPI-aware first: unaware, it read the screen's size scaled down
-# while it copied pixels at full size, the ratio came out 1, and the first
-# pictures taken this way still carried a strip of the desktop.
-_SHOT_PS1 = (
-    "param([string]$Out, [int]$X, [int]$Y, [int]$W, [int]$H, [int]$ScreenW,"
-    " [int]$Delay = 1)\n"
-    "Add-Type -TypeDefinition 'using System.Runtime.InteropServices; public"
-    " static class Dpi { [DllImport(\"user32.dll\")] public static extern bool"
-    " SetProcessDPIAware(); }'\n"
-    "[Dpi]::SetProcessDPIAware() | Out-Null\n"
-    "Add-Type -AssemblyName System.Windows.Forms, System.Drawing\n"
-    "Start-Sleep -Seconds $Delay\n"
-    "$scr = [System.Windows.Forms.Screen]::PrimaryScreen\n"
-    "$s = $scr.Bounds.Width / $ScreenW\n"
-    "$box = New-Object System.Drawing.Rectangle([int]($X * $s), [int]($Y * $s),"
-    " [int]($W * $s), [int]($H * $s))\n"
-    "$box.Intersect($scr.WorkingArea)\n"
-    "if ($box.Width -le 0 -or $box.Height -le 0) { exit 3 }\n"
-    "$bmp = New-Object System.Drawing.Bitmap($box.Width, $box.Height)\n"
-    "$g = [System.Drawing.Graphics]::FromImage($bmp)\n"
-    "$g.CopyFromScreen($box.Location, [System.Drawing.Point]::Empty, $box.Size)\n"
-    "$bmp.Save($Out, [System.Drawing.Imaging.ImageFormat]::Png)\n"
-    "$g.Dispose(); $bmp.Dispose()\n")
-
-
 def _photograph(name):
-    """Photograph the app's window -- nothing else on the screen. Best
-    effort: a missing picture is not a failed story, it is a missing
-    picture."""
+    """Photograph the app's window -- nothing else on the screen, through
+    the one shutter (_qa_support.photograph): cut to the window and the
+    primary screen's work area, and refused, with why, when another
+    program's window lies over it. Best effort: a missing picture is not a
+    failed story, it is a missing picture, named in shots/not-taken.txt."""
     app = _SHOOTING.get("app")
-    if app is None:
+    if app is None or sys.platform != "win32":
         return
-    here = os.path.abspath(".")
-    out = os.path.join(here, "shots", name + ".png")
-    script = os.path.join(here, "shot.ps1")
-    io.open(script, "w", encoding="utf-8").write(_SHOT_PS1)
+    from _qa_support import photograph
+    out = os.path.join(os.path.abspath("."), "shots", name + ".png")
     try:
-        # In front, so what lies over the window's box is the window.
         app.lift()
-        app.attributes("-topmost", True)
-        app.update()
-        box = [app.winfo_rootx(), app.winfo_rooty(),
-               app.winfo_width(), app.winfo_height(), app.winfo_screenwidth()]
-        subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
-                        "-File", script, "-Out", out,
-                        "-X", str(box[0]), "-Y", str(box[1]), "-W", str(box[2]),
-                        "-H", str(box[3]), "-ScreenW", str(box[4]), "-Delay", "1"],
-                       capture_output=True, timeout=60)
-    except Exception:
-        pass
+        _let_it_paint(app, 0.3)
+        taken, why = photograph(app, out)
+    except Exception as exc:
+        taken, why = False, "the shutter failed: %s" % exc
+    if not taken:
+        with io.open(os.path.join("shots", REFUSED), "a", encoding="utf-8") as fh:
+            fh.write("%s: %s\n" % (name, why))
 
 
 class Chapter:
@@ -1158,6 +1160,11 @@ CHAPTERS = {1: chapter_1, 2: chapter_2, 3: chapter_3, 4: chapter_4,
 if __name__ == "__main__":
     if "--chapter" in sys.argv:
         number = int(sys.argv[sys.argv.index("--chapter") + 1])
+        # A ceiling of its own before the app is built, inside the driver's
+        # turn (guest.py, copied beside this file into the scratch).
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import guest
+        guest.settle(label="story_note_travels chapter %d" % number)
         story = None
         try:
             CHAPTERS[number]()

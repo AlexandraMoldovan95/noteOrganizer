@@ -131,20 +131,58 @@ real notebook (it has happened; see [CLAUDE.md](../CLAUDE.md),
 `py tools/run_tests.py` does the whole safe-scratch ritual for you and
 is the verdict that counts before a push; `py tools/pre_push_check.py`
 is the static half (the cheap gates CI runs first, compile-all
-included; its docstring lists them) you run before *every* push. The CI's **Linux leg** runs locally too, via
-Docker (`tools/linux-ci/` — build once, then
-`docker run --rm -v "${PWD}:/repo:ro" noteorg-linux-ci`), so the
-Xvfb-only behaviours that used to surface as red CI runs can be caught
-before the push.
+included; its docstring lists them) you run before *every* push. The CI's **Linux leg** runs locally too, in
+Docker, through one door: `py tools/linux_ci.py` (the image is built
+once with `py tools/linux_ci.py --build`; `py tools/linux_ci.py qa5` runs
+one script, `--script qa/probe_bar_width.py` a probe), so the Xvfb-only
+behaviours that used to surface as red CI runs can be caught before the
+push. Never a bare docker command of your own: a docker client that is
+killed leaves its container running in Docker's VM, out of sight, beside
+the next run. The runner names the container, gives it 1,536 MB with no
+swap, two CPUs, a time limit inside it and docker's init, removes it on
+every way out, and ends by printing its memory peak.
 
-**A test run is a guest on the computer it runs on.** Every runner holds
-itself and all it starts to a memory ceiling (`tools/guest.py`: 4,096 MB
-a process, 8,192 MB in all, on Windows), and the gate "a test run is a
-guest" fails a runner that does not. One heavy job at a time: a full
-suite, a mutant run, the Linux image, the Android build or its emulator
-walk -- never two at once on the owner's machine. Three at once, with a
-runaway test among them, took the desktop down
+### A test run is a guest on the computer it runs on
+
+Every runner calls `guest.settle()` (`tools/guest.py`) before it builds
+the app or starts anything. The gate "a test run is a guest"
+(`tools/check_guest.py`) finds runners by what they do — an import of
+the app, the app built, a process started — reads each one's paths with
+the syntax tree, and fails one that starts anything first. Three heavy
+jobs at once, with a runaway test among them, took the desktop down
 ([the story](../docs/ISSUES_LOG.md#the-test-that-took-the-computer-down)).
+
+- **One heavy job at a time, enforced.** A runner takes the machine's
+  turn: an OS lock on `noteorg-guest.lock` in the temporary folder,
+  which the OS frees when the run ends, however it ends. A second run
+  waits and says whose turn it is (`machine : waiting for run_tests
+  (pid 1234, since 14:02:11)`); after an hour (`NOTEORG_GUEST_WAIT`, in
+  seconds) it gives up with exit code 75, BUSY: try again later. What a
+  run starts shares its turn, and never waits on its parent. The static
+  gates alone (`run_tests.py static`, `pre_push_check.py`) take no turn.
+  The Android build and its emulator do not take this lock: for them,
+  one at a time is still a rule to keep by hand.
+- **A ceiling sized to the need.** On Windows a job object holds each
+  process to 1,024 MB of committed memory and a run's processes together
+  to 2,048 MB, and ends them with the runner. On Linux, RLIMIT_AS holds
+  each process to twice that address space, but never more than half of
+  what the box has — in the Linux image, half the container's 1,536 MB:
+  above the box's memory the kernel's OOM killer comes first, with
+  SIGKILL and no footer. The figures are sized to measured runs, not to
+  the incident.
+- **Every child has a bound.** Each child process has a timeout, and a
+  hang is a named failure — HANG — after which the run goes on.
+- **Nothing outlives a run.** A scratch folder carries a marker naming
+  the run that made it, and a later run removes the ones whose run is
+  gone — never a folder without the marker. The suites' own temporary
+  files (fixed-name zips, `mkdtemp()` folders) go in a folder of the
+  run's own. Pictures a story keeps to be looked at go after seven days.
+- **Docker's VM keeps what it took.** After a Linux run, `wsl --shutdown`
+  hands the VM's memory back to Windows (it held 2.2 GB with no container
+  running). The VM's own size is not this repository's: it is set on the
+  machine (`.wslconfig`, `memory=`), 2.8 GB here today, and a reinstall
+  resets it to half the machine's memory. `docker info --format
+  "{{.MemTotal}}"` says what it is.
 
 ## Stories: the app walked, not questioned
 
@@ -497,9 +535,10 @@ A new surface joins this list the moment it ships.
 - **A photograph of a focus ring is a photograph of the desktop foreground.**
   Tk draws a widget's `highlightcolor` only while its toplevel really owns
   the foreground, so `focus_set()` on a card records the focus and draws
-  nothing if another process is in front. `story_look` runs PowerShell
-  between scenes to make each grab, and that process can hold the
-  foreground when the next scene starts — so the focus-ring scene lost its
+  nothing if another process is in front. `story_look` ran PowerShell
+  between scenes to make each grab (the shutter is in-process now,
+  `_qa_support.photograph`), and that process could hold the
+  foreground when the next scene started — so the focus-ring scene lost its
   ring about one run in three, 0.6% apart, reported as a change of shape.
   It passed often enough that the first sighting was written down as
   "observed, not diagnosed" and the next re-run went green — which is how
@@ -663,7 +702,9 @@ A new surface joins this list the moment it ships.
   until shown otherwise.
 - **A red that loses its name costs a day, so the runner writes it down.**
   `tools/run_tests.py` saves a failing run's whole output to
-  `%TEMP%/notesorg-failure-<label>.txt` and prints the path — the terminal
+  `%TEMP%/notesorg-failure-<label>.txt` (or the folder `NOTEORG_FAILURE_DIR`
+  names: `mutate.py` gives each mutant one of its own, so two runs never
+  read each other's) and prints the path — the terminal
   shows a summary, and a summary is what a piped `tail` throws away. The
   static gates had this and the qa half did not, which is how a rare qa3
   red during a full run went undiagnosed: the names scrolled past, the
@@ -794,8 +835,8 @@ A new surface joins this list the moment it ships.
   also been scrolled to the BOTTOM, where removing a card must move the
   view. It now asserts that the list is long enough to scroll and that
   the view is away from the top *before* it measures anything. Reproduce
-  a CI-only failure locally before fixing it — `tools/linux-ci/` is one
-  docker command, and it showed both faults in ten seconds.
+  a CI-only failure locally before fixing it — `py tools/linux_ci.py` is
+  one command, and the Linux image showed both faults in ten seconds.
 - **A surviving mutant is a question, not a verdict.** When a promise is
   held by two independent mechanisms, breaking one leaves the check
   green — and the honest reading is "I broke the wrong thing", not "the
@@ -911,7 +952,8 @@ A new surface joins this list the moment it ships.
   stdout is block-buffered on Linux, so a segfault throws away up to a
   buffer's worth of already-printed lines — the CI log's last PASS
   once pointed ~200 checks before the real crash site. Bisect crashes
-  on the Docker mirror with `-e PYTHONUNBUFFERED=1`; trust exit codes
+  in the Linux image (`py tools/linux_ci.py`, which sets
+  `PYTHONUNBUFFERED=1` in the container); trust exit codes
   and the FAILURES footer, never the visible tail of a dead process.
   `tools/run_tests.py` sets `PYTHONUNBUFFERED` for every script it runs,
   so a local run's tail is honest — that is what located the qa1 hang

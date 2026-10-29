@@ -17,16 +17,31 @@ rather than whatever a dev notebook happened to hold.
 
 RUNNING IT (the qa safety rule applies -- NEVER in place)
 ---------------------------------------------------------
-Copy ``note_organizer.py``, the ``noteorganizer/`` package and this
-script into a scratch folder outside the project tree, then::
+Copy ``note_organizer.py``, the ``noteorganizer/`` package, this script,
+``tools/guest.py`` and ``qa/_qa_support.py`` into a scratch folder outside
+the project tree, then::
 
     py doc_screenshots.py                 # every scene
     py doc_screenshots.py calendar-view   # just one
 
 PNGs land in ``./shots``; copy the ones you want into
 ``docs/screenshots/``. Windows only, like ``visual_scenes.py``, for the
-same reason: ImageGrab needs real win32 windows.
+same reason: ImageGrab needs real win32 windows. guest.py gives the run
+its turn and its memory ceiling before the app is built; _qa_support's
+shutter takes every picture (a picture holds only the app's pixels).
 """
+
+# THE TURN AND THE CEILING FIRST -- this builds the whole app, on the screen.
+import os as _guest_os, sys as _guest_sys
+_guest_sys.path.insert(0, _guest_os.path.dirname(_guest_os.path.abspath(__file__)))
+try:
+    import guest
+    from _qa_support import grab, photograph
+except ImportError as _missing:
+    _guest_sys.exit('REFUSING to run: %s. Copy tools/guest.py and qa/_qa_support.py '
+                    'beside this script (see its docstring).' % _missing)
+for _line in guest.settle(label='doc_screenshots'):
+    print(_line)
 
 # HERMETIC SEED -- same guard as the qa scripts, for the same reason.
 import io as _seed_io, json as _seed_json, os as _seed_os, sys as _seed_sys
@@ -49,8 +64,6 @@ import datetime
 import os
 import sys
 import time
-
-from PIL import ImageGrab
 
 import tkinter as tk
 
@@ -113,83 +126,17 @@ def pump(n=8, sleep=0.03):
         time.sleep(sleep)
 
 
-# ImageGrab works in PHYSICAL pixels; Tk reports window geometry in
-# LOGICAL ones. On a display with any scaling the two differ, and a grab
-# box built from Tk's numbers lands up and to the left of the window --
-# the first retakes cut the calendar's History button off the right edge
-# and included a strip of the window behind. Measured once, here, rather
-# than assumed to be 1.
-SCALE = ImageGrab.grab().size[0] / float(app.winfo_screenwidth())
-print('display scale: %.2f' % SCALE)
-
-
 # ---- Nothing of anybody's screen ends up in these files -------------
 #
-# ImageGrab photographs the SCREEN at the window's coordinates, not the
-# window. Raising ours and setting -topmost is necessary and NOT
-# sufficient: another always-on-top window wins anyway, and on the first
-# full run an Android emulator sat in the middle of nineteen pictures.
-# A browser did it once before that.
-#
-# Being careful is not a mechanism. So before every shutter, points
-# across the box are asked WHICH window is actually on top there. A
-# window belonging to another program means the picture would be of
-# something else -- so it is not taken, and the scene says so.
-
-import ctypes
-from ctypes import wintypes
-
-_user32 = ctypes.windll.user32
-_OUR_PID = os.getpid()
-
-
-class _POINT(ctypes.Structure):
-    _fields_ = [("x", wintypes.LONG), ("y", wintypes.LONG)]
-
-
-def _owner_pid_at(x, y):
-    """Which process owns the window drawn at this screen point."""
-    hwnd = _user32.WindowFromPoint(_POINT(int(x), int(y)))
-    if not hwnd:
-        return None
-    pid = wintypes.DWORD()
-    _user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
-    return pid.value
-
-
-def _foreign_window_over(box, steps=7):
-    """A window from another program, covering any part of the box."""
-    left, top, right, bottom = box
-    seen = set()
-    for i in range(steps):
-        for j in range(steps):
-            x = left + (right - left) * (i + 0.5) / steps
-            y = top + (bottom - top) * (j + 0.5) / steps
-            pid = _owner_pid_at(x, y)
-            if pid and pid != _OUR_PID:
-                seen.add(pid)
-    return sorted(seen)
-
-
-def _window_title_of(pid):
-    """Best-effort name for the intruder, so the message is useful."""
-    titles = []
-
-    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
-    def each(hwnd, _lparam):
-        owner = wintypes.DWORD()
-        _user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner))
-        if owner.value == pid and _user32.IsWindowVisible(hwnd):
-            length = _user32.GetWindowTextLengthW(hwnd)
-            if length:
-                buf = ctypes.create_unicode_buffer(length + 1)
-                _user32.GetWindowTextW(hwnd, buf, length + 1)
-                if buf.value.strip():
-                    titles.append(buf.value.strip())
-        return True
-
-    _user32.EnumWindows(each, 0)
-    return titles[0] if titles else "pid %d" % pid
+# A picture copies the SCREEN at the window's coordinates, not the window.
+# Raising ours and setting -topmost is necessary and NOT sufficient: another
+# always-on-top window wins anyway, and on the first full run an Android
+# emulator sat in the middle of nineteen pictures. A browser did it once
+# before that. So every picture goes through the one shutter
+# (_qa_support.grab/photograph): the box cut to the window and the primary
+# screen's work area, points across it asked WHICH window is on top there
+# before and after the copy, and no picture -- said -- when one is another
+# program's. It also measures the screen's scale for itself.
 
 
 def _top_of_cut_row(edge):
@@ -323,16 +270,11 @@ def capture(name, widgets=None, pad=8, box=None):
         cut = _top_of_cut_row(box[3])
         if cut is not None:
             box = (box[0], box[1], box[2], cut - 2)
-    intruders = _foreign_window_over(box)
-    if intruders:
-        who = ", ".join(_window_title_of(p) for p in intruders)
-        print('  %-22s NOT TAKEN: %s is covering the window' % (name, who))
+    taken, size = photograph(app, os.path.join(OUT, name + '.png'), box=box)
+    if not taken:
+        print('  %-22s NOT TAKEN: %s' % (name, size))
         return
-    box = tuple(int(round(v * SCALE)) for v in box)
-    img = ImageGrab.grab(bbox=box)
-    path = os.path.join(OUT, name + '.png')
-    img.save(path)
-    print('  %-22s %dx%d' % (name, img.size[0], img.size[1]))
+    print('  %-22s %dx%d' % (name, size[0], size[1]))
 
 
 def clean():
@@ -1023,12 +965,9 @@ def demo():
 
     def frame(ms):
         pump(6, 0.02)
-        box = (app.winfo_rootx(), app.winfo_rooty(),
-               app.winfo_rootx() + app.winfo_width(),
-               app.winfo_rooty() + app.winfo_height())
-        if _foreign_window_over(box):
-            raise RuntimeError('another window is covering the app')
-        img = ImageGrab.grab(bbox=tuple(int(round(v * SCALE)) for v in box))
+        img, why = grab(app)
+        if img is None:
+            raise RuntimeError('a frame was not taken: %s' % why)
         frames.append((img.resize((width, int(img.size[1] * width / img.size[0])),
                                   Image.LANCZOS), ms))
 

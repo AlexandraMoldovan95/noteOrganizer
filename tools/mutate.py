@@ -35,6 +35,9 @@ HOW A VERDICT IS REACHED
 5. KILLED only when every suite reached its own FAILURES footer AND every
    must_fail check printed a FAIL line. An expected survivor SURVIVES only
    when every suite ran to the end with no FAIL line at all.
+6. A run that passes its time (600 s a suite, and a margin) is HANG: the
+   runner is ended with its suites, its scratch removed, and the
+   catalogue goes on.
 
     py tools/mutate.py               # the whole catalogue
     py tools/mutate.py D01 E03       # entries whose id starts so
@@ -49,20 +52,23 @@ import os
 import shutil
 import subprocess
 import sys
-import tempfile
-import time
 
-import guest  # tools/guest.py: the memory ceiling for a run
+import guest  # tools/guest.py: the turn and the memory ceiling for a run
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 CATALOGUE = os.path.join(HERE, "mutants.json")
 RUNNER_FOOTERS = (b"check(s) failed", b"check(s) passed")
-TIMEOUT = 1500
+# One mutant's suites may take this long each (run_tests' own limit for a
+# script), plus a margin for the copy: a hang is a verdict, not the end.
+TIMEOUT_PER_SUITE = 600
+TIMEOUT_MARGIN = 300
 
 
 def fresh_copy():
-    dest = tempfile.mkdtemp(prefix="notesorg-mutant-")
+    # Marked as this run's (guest.scratch): if the run is killed, the next
+    # run removes it.
+    dest = guest.scratch("notesorg-mutant-")
     # The licenses are in run_tests.py's payload: qa6 opens them from About.
     for name in ("note_organizer.py", "THIRD_PARTY_NOTICES.txt"):
         shutil.copy2(os.path.join(ROOT, name), dest)
@@ -106,22 +112,37 @@ def does_not_compile(copy_dir, edits):
 
 
 def run_suites(copy_dir, suites):
-    """Run the suites in the copy; return (output text, every suite completed)."""
-    started = time.time()
-    proc = subprocess.run(
-        [sys.executable, os.path.join(copy_dir, "tools", "run_tests.py")]
-        + suites + ["--all-failures"],
-        cwd=copy_dir, capture_output=True, timeout=TIMEOUT)
+    """Run the suites in the copy; return (output text, every suite
+    completed, hung). A run past its time is a HANG: named, and the
+    catalogue goes on."""
+    # The runner writes each failed suite's whole output here, in this
+    # mutant's own folder: under one fixed name in the shared temporary
+    # folder, two runs at once read each other's.
+    failures = os.path.join(copy_dir, "failures")
+    os.makedirs(failures, exist_ok=True)
+    limit = TIMEOUT_PER_SUITE * len(suites) + TIMEOUT_MARGIN
+    try:
+        proc = subprocess.run(
+            [sys.executable, os.path.join(copy_dir, "tools", "run_tests.py")]
+            + suites + ["--all-failures"],
+            cwd=copy_dir, capture_output=True, timeout=limit,
+            env=dict(os.environ, NOTEORG_FAILURE_DIR=failures))
+    except subprocess.TimeoutExpired as hung:
+        # The killed runner's job ends its suite with it; its scratch,
+        # marked as a dead run's, goes in the sweep.
+        guest.sweep()
+        out = (hung.stdout or b"") + (hung.stderr or b"")
+        return (out.decode("utf-8", "replace")
+                + "\nHANG: the suites did not finish within %d s" % limit), False, True
     out = proc.stdout + proc.stderr
     completed = any(f in out for f in RUNNER_FOOTERS)
     # The runner prints its footer even when a suite died halfway; a suite's
     # own FAILURES footer is in the output the runner saves for each failure.
     for suite in suites:
-        saved = os.path.join(tempfile.gettempdir(),
-                             "notesorg-failure-%s.py.txt" % suite)
-        if os.path.exists(saved) and os.path.getmtime(saved) >= started:
+        saved = os.path.join(failures, "notesorg-failure-%s.py.txt" % suite)
+        if os.path.exists(saved):
             completed = completed and b"FAILURES" in io.open(saved, "rb").read()
-    return out.decode("utf-8", "replace"), completed
+    return out.decode("utf-8", "replace"), completed, False
 
 
 def verdict(entry):
@@ -135,9 +156,11 @@ def verdict(entry):
         broken = does_not_compile(copy_dir, entry["edits"])
         if broken:
             return "NO-COMPILE %s" % broken, [], ""
-        text, completed = run_suites(copy_dir, entry["suites"])
+        text, completed, hung = run_suites(copy_dir, entry["suites"])
     finally:
-        shutil.rmtree(copy_dir, ignore_errors=True)
+        guest.remove(copy_dir)
+    if hung:
+        return "HANG", [], text
     if not completed:
         return "NO-RUN", [], text
     fail_lines = [l for l in text.splitlines() if "FAIL" in l
@@ -170,9 +193,13 @@ def main(argv):
         print(__doc__)
         print("not a flag this runner knows: %s" % " ".join(unknown))
         return 2
-    # The memory ceiling, for every suite run below.
-    for line in guest.settle():
+    # This machine's turn and the memory ceiling, for every suite run below.
+    for line in guest.settle(label="mutate " + " ".join(argv[1:])):
         print(line)
+    if sys.platform != "win32":
+        # Stopped from outside: each verdict's finally still removes its copy.
+        import signal
+        signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     entries = load_catalogue()
     if "--self-test" in argv:
         todo = [e for e in entries if e.get("self_test")]

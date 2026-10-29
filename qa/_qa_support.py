@@ -150,6 +150,16 @@ different questions, and a check that wants the second asserts it itself
     fall between two of the three counts, so the smaller growth is the
     one that counts. Four scripts counted this four ways, one of them with
     a timer filter that had stopped filtering.
+
+``photograph(app, path, box=None)`` and ``grab(app, box=None)``
+    The one shutter for every tool that photographs the app (the stories,
+    doc_screenshots, visual_scenes). A picture copies the SCREEN where the
+    window is, so whatever lies over it is saved: an emulator once sat in
+    nineteen documentation pictures, and story_look's are committed. The
+    box is cut to the window and to the primary screen's work area; before
+    and after the copy, points across it are asked which window is on top
+    there, and one of another program's means no picture, said rather than
+    saved. The window is put on top for the shot and taken off after it.
 """
 
 import atexit
@@ -159,6 +169,7 @@ import json
 import os
 import re
 import sys
+import time
 import tkinter as tk
 
 # Set by tools/run_tests.py and by the CI workflow for the scripts they
@@ -712,3 +723,170 @@ def reaches_the_end(app, canvas, last, settle):
     return (tall > ONE_FRAME_REACH + view and seen,
             "%d px of rows; the last at %d in a view of %d%s"
             % (tall, top, view, "" if last.winfo_viewable() else ", not drawn"))
+
+
+# ---- The shutter: a picture of the app holds only the app's pixels ----
+
+# One sample every this many of Tk's pixels, across the box and on its last
+# row and column: a notification is about 100 px tall, and doc_screenshots'
+# old 7 x 7 grid stepped up to 160 px at a time.
+SHUTTER_STEP = 16
+_WIN32 = {}
+
+
+def _win32():
+    if not _WIN32:
+        import ctypes
+        import ctypes.wintypes as wt
+
+        class MonitorInfo(ctypes.Structure):
+            _fields_ = [("cbSize", wt.DWORD), ("rcMonitor", wt.RECT),
+                        ("rcWork", wt.RECT), ("dwFlags", wt.DWORD)]
+
+        user = ctypes.WinDLL("user32", use_last_error=True)
+        user.WindowFromPoint.restype = wt.HWND
+        user.WindowFromPoint.argtypes = [wt.POINT]
+        user.GetWindowThreadProcessId.restype = wt.DWORD
+        user.GetWindowThreadProcessId.argtypes = [wt.HWND, ctypes.POINTER(wt.DWORD)]
+        user.GetAncestor.restype = wt.HWND
+        user.GetAncestor.argtypes = [wt.HWND, ctypes.c_uint]
+        user.MonitorFromWindow.restype = wt.HANDLE
+        user.MonitorFromWindow.argtypes = [wt.HWND, wt.DWORD]
+        user.GetMonitorInfoW.argtypes = [wt.HANDLE, ctypes.POINTER(MonitorInfo)]
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.OpenProcess.restype = wt.HANDLE
+        kernel.OpenProcess.argtypes = [wt.DWORD, wt.BOOL, wt.DWORD]
+        kernel.QueryFullProcessImageNameW.argtypes = [wt.HANDLE, wt.DWORD, wt.LPWSTR,
+                                                      ctypes.POINTER(wt.DWORD)]
+        kernel.CloseHandle.argtypes = [wt.HANDLE]
+        _WIN32.update(ctypes=ctypes, wt=wt, user=user, kernel=kernel, MonitorInfo=MonitorInfo)
+    return _WIN32
+
+
+def _shutter_box(app, box):
+    """*box* (or the whole window) cut to the window and to the work area of
+    the primary screen, in Tk's pixels; (None, why) when nothing is left."""
+    w = _win32()
+    frame = (app.winfo_rootx(), app.winfo_rooty(),
+             app.winfo_rootx() + app.winfo_width(), app.winfo_rooty() + app.winfo_height())
+    box = frame if box is None else tuple(int(round(v)) for v in box)
+    box = (max(box[0], frame[0]), max(box[1], frame[1]),
+           min(box[2], frame[2]), min(box[3], frame[3]))
+    top_level = w["user"].GetAncestor(app.winfo_id(), 2)            # GA_ROOT
+    info = w["MonitorInfo"]()
+    info.cbSize = w["ctypes"].sizeof(info)
+    monitor = w["user"].MonitorFromWindow(top_level, 2)               # NEAREST
+    if not monitor or not w["user"].GetMonitorInfoW(monitor, w["ctypes"].byref(info)):
+        return None, "the screen the window is on could not be read"
+    if not info.dwFlags & 1:                                          # PRIMARY
+        return None, "the window is not on the primary screen"
+    work = info.rcWork
+    box = (max(box[0], work.left), max(box[1], work.top),
+           min(box[2], work.right), min(box[3], work.bottom))
+    if box[2] - box[0] < 2 or box[3] - box[1] < 2:
+        return None, "no part of the window is on the screen"
+    return box, ""
+
+
+def _foreign_over(box):
+    """The pids of other programs' windows on top anywhere in *box*."""
+    w = _win32()
+    own, owners, seen = os.getpid(), {}, set()
+    left, top, right, bottom = box
+    xs = sorted(set(range(left, right, SHUTTER_STEP)) | {right - 1})
+    ys = sorted(set(range(top, bottom, SHUTTER_STEP)) | {bottom - 1})
+    for y in ys:
+        for x in xs:
+            hwnd = w["user"].WindowFromPoint(w["wt"].POINT(x, y))
+            if not hwnd:
+                continue
+            if hwnd not in owners:
+                pid = w["wt"].DWORD()
+                w["user"].GetWindowThreadProcessId(hwnd, w["ctypes"].byref(pid))
+                owners[hwnd] = pid.value
+            if owners[hwnd] and owners[hwnd] != own:
+                seen.add(owners[hwnd])
+    return sorted(seen)
+
+
+def _program_of(pid):
+    """A program's file name, for the message -- never a window's title,
+    which can be anything of hers."""
+    w = _win32()
+    handle = w["kernel"].OpenProcess(0x1000, False, pid)              # QUERY_LIMITED
+    if not handle:
+        return "pid %d" % pid
+    try:
+        size = w["wt"].DWORD(1024)
+        name = w["ctypes"].create_unicode_buffer(1024)
+        if w["kernel"].QueryFullProcessImageNameW(handle, 0, name, w["ctypes"].byref(size)):
+            return "%s (pid %d)" % (os.path.basename(name.value), pid)
+        return "pid %d" % pid
+    finally:
+        w["kernel"].CloseHandle(handle)
+
+
+def _on_top(app):
+    """The window above everything for the shot, its own popups above it:
+    raising the window raises it over its own Toplevels too."""
+    app.attributes("-topmost", True)
+    for child in app.winfo_children():
+        if isinstance(child, tk.Toplevel):
+            try:
+                if child.winfo_ismapped():
+                    if str(child.attributes("-topmost")) in ("1", "True"):
+                        child.attributes("-topmost", True)
+                    child.lift()
+            except tk.TclError:
+                pass
+    app.update()
+    app.update_idletasks()
+
+
+def grab(app, box=None):
+    """The app's window -- or *box*, (left, top, right, bottom) on the screen
+    in Tk's pixels -- as a picture: (image, ''), or (None, why not) when
+    the picture would show anything that is not the app."""
+    if sys.platform != "win32":
+        return None, "photographs are taken on Windows only"
+    from PIL import ImageGrab
+    try:
+        _on_top(app)
+        box, why = _shutter_box(app, box)
+        if box is None:
+            return None, why
+        foreign = _foreign_over(box)
+        for _ in range(3):              # the order on screen can take a moment
+            if not foreign:
+                break
+            time.sleep(0.15)
+            _on_top(app)
+            foreign = _foreign_over(box)
+        if foreign:
+            return None, "%s is over the window" % ", ".join(_program_of(p) for p in foreign)
+        screen = ImageGrab.grab()
+        foreign = _foreign_over(box)
+        if foreign:
+            return None, ("%s came over the window while it was photographed"
+                          % ", ".join(_program_of(p) for p in foreign))
+        scale = screen.size[0] / float(app.winfo_screenwidth())
+        cut = [int(round(v * scale)) for v in box]
+        cut = (max(0, cut[0]), max(0, cut[1]),
+               min(screen.size[0], cut[2]), min(screen.size[1], cut[3]))
+        return screen.crop(cut), ""
+    finally:
+        try:
+            app.attributes("-topmost", False)
+            app.update_idletasks()
+        except tk.TclError:
+            pass
+
+
+def photograph(app, path, box=None):
+    """Save grab(app, box) to *path*: (True, (width, height)), or (False,
+    why not) -- and then nothing is saved."""
+    image, why = grab(app, box)
+    if image is None:
+        return False, why
+    image.save(path)
+    return True, image.size

@@ -93,7 +93,7 @@ def pack(version, args, makeappx):
                                 publisher_display=args.publisher_display, version=version))
     package = os.path.join(OUT, "NoteOrganizer_%s.msix" % version)
     run = subprocess.run([makeappx, "pack", "/d", layout, "/p", package, "/o"],
-                         capture_output=True, text=True)
+                         capture_output=True, text=True, timeout=600)
     shutil.rmtree(layout)
     if run.returncode != 0:
         sys.exit("makeappx failed for %s:\n%s" % (version, (run.stdout + run.stderr)[-2000:]))
@@ -108,6 +108,10 @@ def main():
     parser.add_argument("--update", action="store_true",
                         help="also pack a build one higher, to play an update in Sandbox")
     args = parser.parse_args()
+    # The memory ceiling, before makeappx starts (tools/guest.py, a folder up).
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    import guest
+    guest.settle(heavy=False)
     if not os.path.isfile(os.path.join(DIST, "NoteOrganizer.exe")):
         sys.exit("no build in dist/NoteOrganizer: build the app first")
     if os.path.exists(os.path.join(DIST, "notes_data.json")):
