@@ -4,31 +4,86 @@ On 2026-10-29 a mutant made a qa check size its fixture from a bound the
 mutant had turned into a billion: one python.exe took 43 GB, Windows ran out
 of memory, its desktop window manager crashed, and the shadow copies of C:
 were deleted under the load (ISSUES_LOG: "The test that took the computer
-down"). Every runner -- run_tests.py, mutate.py, the story scripts,
-run_coverage.py, bench.py, pre_push_check.py -- calls ``settle()`` first,
-and the memory ceiling it sets holds for every process the runner starts:
-on Windows a job object holding each process's committed memory and all of
-theirs together, which ends them with the runner; elsewhere RLIMIT_AS, per
-process. A test past it gets MemoryError and fails like any check.
+down"). Three heavy jobs were running at once. Every runner calls
+``settle()`` first, before it builds the app or starts anything, and it does
+three things:
 
-The scratch stays on the system's temporary folder: moved to an exFAT drive,
-a test of NTFS's Zone.Identifier stream failed, and the notebooks the tests
-stand in for live on NTFS.
+1. One heavy job at a time, on the whole machine. A run takes an OS lock on
+   ``noteorg-guest.lock`` in the temporary folder, which the OS frees when
+   the run ends, however it ends. A second run waits, saying whose turn it
+   is. The processes a holder starts share its turn (NOTEORG_GUEST_HOLDER,
+   and failing that their parentage), so a child never waits on its parent.
+   ``heavy=False`` is for a tool whose children are small and short (git, a
+   static check), never for one that builds the app or runs a suite.
+2. The memory ceiling for this process and everything it starts. On
+   Windows a job object holds each process's committed memory and all of
+   theirs together, and ends them with the runner. Elsewhere RLIMIT_AS, per
+   process, never above half of what the box has (a container's cgroup
+   limit, else MemTotal): above that, the kernel's OOM killer arrives first,
+   with SIGKILL and no footer. A test past it gets MemoryError and fails
+   like any check.
+3. The leftovers of runs that died. A scratch folder made with
+   ``scratch()`` carries a marker naming the process that made it; a later
+   run removes the ones whose process is gone. Nothing without the marker
+   is ever touched.
+
+The figures are sized from measurements (qa/README, "Running anything
+here"), not from the incident. The scratch stays on the system's temporary
+folder: moved to an exFAT drive, a test of NTFS's Zone.Identifier stream
+failed, and the notebooks the tests stand in for live on NTFS.
 """
 
+import json
+import os
+import shutil
 import sys
+import tempfile
+import time
 
-PER_PROCESS_MB = 4096
-ALL_TOGETHER_MB = 8192
+PER_PROCESS_MB = 1024
+ALL_TOGETHER_MB = 2048
 
-_job = None   # held for the run's life: its processes end when it closes
+# Where the lock lives: the temporary folder, or this (the gate's own tests).
+LOCK_DIR_ENV = "NOTEORG_GUEST_LOCK_DIR"
+# "pid token lock-folder" of the run whose turn it is, for its children.
+HOLDER_ENV = "NOTEORG_GUEST_HOLDER"
+# How long a run waits for its turn, in seconds; 0 refuses at once.
+WAIT_ENV = "NOTEORG_GUEST_WAIT"
+WAIT_S = 3600
+# The exit code of a run that did not get its turn (EX_TEMPFAIL: try later).
+BUSY = 75
+
+LOCK_NAME = "noteorg-guest.lock"
+HOLDER_NAME = "noteorg-guest.holder"
+
+# The scratch marker. Not a .json: run_tests and the qa scripts wipe *.json
+# in their working folder, and the marker must outlive that.
+MARKER = ".noteorg-scratch"
+# Only folders named so are even opened to look for a marker.
+PREFIXES = ("notesorg-", "noteorg-", "look-", "story-", "audit-")
+# A folder a run kept on purpose (a story's photographs) goes after this.
+KEPT_DAYS = 7
+
+_job = None        # held for the run's life: its processes end when it closes
+_lock_file = None  # held for the run's life: the OS frees the lock with it
+_token = None
 
 
-def settle(per_process_mb=PER_PROCESS_MB, all_together_mb=ALL_TOGETHER_MB):
-    """Set the memory ceiling for this process and every process it starts.
-    Returns the lines a runner prints: what was set, or that it was not and
-    why -- a run is never refused for it, and never silent about it."""
-    return [cap_memory(per_process_mb, all_together_mb)]
+def settle(per_process_mb=PER_PROCESS_MB, all_together_mb=ALL_TOGETHER_MB,
+           label=None, heavy=True, wait_s=None):
+    """Take this run's turn (when heavy), set the memory ceiling, and remove
+    what dead runs left. Returns the lines a runner prints. A run that does
+    not get its turn within ``wait_s`` exits with BUSY; a ceiling the OS
+    will not set is said, never silent, and never refuses a run."""
+    lines = []
+    if heavy:
+        lines.append(take_turn(label, wait_s))
+    lines.append(cap_memory(per_process_mb, all_together_mb))
+    if heavy and _lock_file is not None:
+        swept = sweep()
+        if swept:
+            lines.append(swept)
+    return lines
 
 
 def cap_memory(per_process_mb=PER_PROCESS_MB, all_together_mb=ALL_TOGETHER_MB):
@@ -37,13 +92,46 @@ def cap_memory(per_process_mb=PER_PROCESS_MB, all_together_mb=ALL_TOGETHER_MB):
             _cap_windows(per_process_mb, all_together_mb)
             return ("memory  : at most %s MB a process, %s MB in all"
                     % (format(per_process_mb, ","), format(all_together_mb, ",")))
-        # Address space, not memory used: Python and Tk reserve far more
-        # than they touch, so twice the Windows figure.
-        _cap_posix(per_process_mb * 2)
-        return "memory  : at most %s MB of address space a process" % format(
-            per_process_mb * 2, ",")
+        # Address space, not memory used: Python and Tk reserve more than
+        # they touch, so twice the Windows figure -- but never more than
+        # half of what this box has, or the OOM killer comes first.
+        limit, box = posix_limit_mb(per_process_mb)
+        _cap_posix(limit)
+        return ("memory  : at most %s MB of address space a process (%s)"
+                % (format(limit, ","), box))
     except Exception as exc:   # an OS without the call, or a job that refuses one
         return "memory  : NO ceiling set (%s)" % exc
+
+
+def posix_limit_mb(per_process_mb=PER_PROCESS_MB):
+    """The address-space ceiling for one process here, and what it is half of."""
+    box_mb, where = box_memory_mb()
+    if box_mb is None:
+        return per_process_mb * 2, "this box's memory unknown"
+    limit = min(per_process_mb * 2, box_mb // 2)
+    return limit, "this box has %s MB, %s" % (format(box_mb, ","), where)
+
+
+def box_memory_mb():
+    """What this box has: a cgroup's memory limit when one is set (a
+    container), else the machine's MemTotal."""
+    for path in ("/sys/fs/cgroup/memory.max",                     # cgroup v2
+                 "/sys/fs/cgroup/memory/memory.limit_in_bytes"):  # cgroup v1
+        try:
+            with open(path) as fh:
+                text = fh.read().strip()
+        except OSError:
+            continue
+        if text.isdigit() and int(text) < (1 << 60):
+            return int(text) // (1024 * 1024), "its cgroup limit"
+    try:
+        with open("/proc/meminfo") as fh:
+            for line in fh:
+                if line.startswith("MemTotal:"):
+                    return int(line.split()[1]) // 1024, "MemTotal"
+    except OSError:
+        pass
+    return None, ""
 
 
 def memory_peak():
@@ -63,6 +151,354 @@ def memory_peak():
         return "memory  : the largest finished process used %s MB" % format(kb // 1024, ",")
     except Exception:
         return ""
+
+
+# ---- One heavy job at a time ----
+
+def lock_dir():
+    return os.environ.get(LOCK_DIR_ENV) or tempfile.gettempdir()
+
+
+def take_turn(label=None, wait_s=None):
+    """Wait for this machine's one heavy-job lock and hold it until this
+    process ends; returns the line to print. A child of the holder shares
+    its turn and does not wait."""
+    global _lock_file, _token
+    if _lock_file is not None:
+        return "machine : this run's turn"
+    folder = lock_dir()
+    inherited = _inherited_turn(folder)
+    if wait_s is None:
+        try:
+            wait_s = int(os.environ.get(WAIT_ENV, WAIT_S))
+        except ValueError:
+            wait_s = WAIT_S
+    try:
+        handle = open(os.path.join(folder, LOCK_NAME), "a+b")
+    except OSError as exc:   # said, never silent, and never a refused run
+        return "machine : NO turn taken, the lock could not be opened (%s)" % exc
+    started = time.time()
+    said, last_word = None, started
+    while True:
+        if _try_lock(handle):
+            break
+        holder = read_holder(folder)
+        if holder and (holder.get("token") == inherited
+                       or holder.get("pid") in _ancestors()):
+            handle.close()
+            return ("machine : the turn of the run that started this one (%s)"
+                    % describe(holder))
+        who = describe(holder)
+        waited = time.time() - started
+        if waited >= wait_s:
+            handle.close()
+            print("machine : BUSY -- after %d s it is still the turn of %s; try again "
+                  "later (one heavy job at a time on this computer)" % (waited, who), flush=True)
+            raise SystemExit(BUSY)
+        if who != said or time.time() - last_word >= 60:
+            print("machine : waiting for %s -- one heavy job at a time on this "
+                  "computer (%d s so far, %d at most)" % (who, waited, wait_s), flush=True)
+            said, last_word = who, time.time()
+        time.sleep(2)
+    _lock_file = handle
+    _token = "%d-%d" % (os.getpid(), int(time.time() * 1000))
+    me = {"pid": os.getpid(), "token": _token, "born": born_at(os.getpid()),
+          "label": label or _label(), "since": time.strftime("%H:%M:%S"),
+          "folder": os.getcwd()}
+    try:
+        with open(os.path.join(folder, HOLDER_NAME), "w", encoding="utf-8") as fh:
+            json.dump(me, fh)
+    except OSError:
+        pass
+    os.environ[HOLDER_ENV] = "%s %s" % (_token, folder)
+    import atexit
+    atexit.register(_give_up_turn, folder)
+    return "machine : this run's turn (one heavy job at a time; a run started now waits for it)"
+
+
+def read_holder(folder=None):
+    try:
+        with open(os.path.join(folder or lock_dir(), HOLDER_NAME), encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+
+
+def describe(holder):
+    if not holder:
+        return "another run"
+    return "%s (pid %s, since %s)" % (holder.get("label", "a run"), holder.get("pid"),
+                                      holder.get("since", "?"))
+
+
+def _label():
+    return " ".join([os.path.basename(sys.argv[0])] + sys.argv[1:])[:120] or "python"
+
+
+def _inherited_turn(folder):
+    """The token of the turn this process was started inside, if any."""
+    value = os.environ.get(HOLDER_ENV, "")
+    token, _, where = value.partition(" ")
+    if token and os.path.normcase(os.path.abspath(where)) == os.path.normcase(
+            os.path.abspath(folder)):
+        return token
+    return None
+
+
+def _try_lock(handle):
+    try:
+        if sys.platform == "win32":
+            import msvcrt
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return True
+    except OSError:
+        return False
+
+
+def _give_up_turn(folder):
+    """At an ordinary exit: the holder's name first, then the lock. A run
+    that is killed leaves the name behind, and the OS frees the lock."""
+    global _lock_file
+    holder = read_holder(folder)
+    if holder and holder.get("token") == _token:
+        try:
+            os.remove(os.path.join(folder, HOLDER_NAME))
+        except OSError:
+            pass
+    if _lock_file is not None:
+        try:
+            _lock_file.close()
+        except OSError:
+            pass
+        _lock_file = None
+
+
+# ---- Processes: alive, born when, whose child ----
+
+_KERNEL = []
+
+
+def _kernel32():
+    """(ctypes, wintypes, kernel32) with the calls below declared, once."""
+    if not _KERNEL:
+        import ctypes
+        import ctypes.wintypes as wt
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        k32.OpenProcess.restype = wt.HANDLE
+        k32.OpenProcess.argtypes = [wt.DWORD, wt.BOOL, wt.DWORD]
+        k32.CloseHandle.argtypes = [wt.HANDLE]
+        k32.GetExitCodeProcess.argtypes = [wt.HANDLE, ctypes.POINTER(wt.DWORD)]
+        k32.GetProcessTimes.argtypes = [wt.HANDLE] + [ctypes.POINTER(wt.FILETIME)] * 4
+        k32.CreateToolhelp32Snapshot.restype = wt.HANDLE
+        k32.CreateToolhelp32Snapshot.argtypes = [wt.DWORD, wt.DWORD]
+        _KERNEL.extend([ctypes, wt, k32])
+    return _KERNEL
+
+
+def alive(pid, born=None):
+    """Is the process that wrote a marker still running? Unsure means yes:
+    a folder is removed only when its owner is certainly gone."""
+    if not isinstance(pid, int) or pid <= 0:
+        return False
+    if sys.platform == "win32":
+        ctypes, wt, k32 = _kernel32()
+        handle = k32.OpenProcess(0x1000, False, pid)   # QUERY_LIMITED_INFORMATION
+        if not handle:
+            return ctypes.get_last_error() != 87       # INVALID_PARAMETER: no such pid
+        try:
+            code = wt.DWORD()
+            if k32.GetExitCodeProcess(handle, ctypes.byref(code)) and code.value != 259:
+                return False                           # 259: STILL_ACTIVE
+            started = _born_from_handle(handle)
+        finally:
+            k32.CloseHandle(handle)
+        # The pid is in use: by the same process, or by a later one.
+        return born is None or started is None or abs(started - born) < 2
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return True
+    started = born_at(pid)
+    return born is None or started is None or abs(started - born) < 2
+
+
+def born_at(pid):
+    """When the process started, in seconds since the epoch; None if unknown."""
+    try:
+        if sys.platform == "win32":
+            ctypes, wt, k32 = _kernel32()
+            handle = k32.OpenProcess(0x1000, False, pid)
+            if not handle:
+                return None
+            try:
+                return _born_from_handle(handle)
+            finally:
+                k32.CloseHandle(handle)
+        with open("/proc/%d/stat" % pid) as fh:
+            ticks = int(fh.read().rsplit(")", 1)[1].split()[19])
+        with open("/proc/stat") as fh:
+            boot = next(int(l.split()[1]) for l in fh if l.startswith("btime"))
+        return boot + ticks / float(os.sysconf("SC_CLK_TCK"))
+    except Exception:
+        return None
+
+
+def _born_from_handle(handle):
+    ctypes, wt, k32 = _kernel32()
+    times = [wt.FILETIME() for _ in range(4)]
+    if not k32.GetProcessTimes(handle, *[ctypes.byref(t) for t in times]):
+        return None
+    ft = (times[0].dwHighDateTime << 32) | times[0].dwLowDateTime
+    return ft / 1e7 - 11644473600.0
+
+
+def _ancestors():
+    """The pids of this process's parent, its parent, and so on."""
+    parents = {}
+    try:
+        if sys.platform == "win32":
+            parents = _windows_parents()
+        else:
+            for name in os.listdir("/proc"):
+                if name.isdigit():
+                    try:
+                        with open("/proc/%s/stat" % name) as fh:
+                            parents[int(name)] = int(fh.read().rsplit(")", 1)[1].split()[1])
+                    except (OSError, ValueError, IndexError):
+                        pass
+    except Exception:
+        return set()
+    seen, pid = set(), os.getpid()
+    while pid in parents and len(seen) < 64:
+        pid = parents[pid]
+        if pid in seen or pid <= 0:
+            break
+        seen.add(pid)
+    return seen
+
+
+def _windows_parents():
+    ctypes, wt, k32 = _kernel32()
+
+    class Entry(ctypes.Structure):
+        _fields_ = [("dwSize", wt.DWORD), ("cntUsage", wt.DWORD),
+                    ("th32ProcessID", wt.DWORD), ("th32DefaultHeapID", ctypes.c_size_t),
+                    ("th32ModuleID", wt.DWORD), ("cntThreads", wt.DWORD),
+                    ("th32ParentProcessID", wt.DWORD), ("pcPriClassBase", ctypes.c_long),
+                    ("dwFlags", wt.DWORD), ("szExeFile", ctypes.c_wchar * 260)]
+
+    k32.Process32FirstW.argtypes = [wt.HANDLE, ctypes.POINTER(Entry)]
+    k32.Process32NextW.argtypes = [wt.HANDLE, ctypes.POINTER(Entry)]
+    snap = k32.CreateToolhelp32Snapshot(2, 0)          # TH32CS_SNAPPROCESS
+    if not snap or snap == wt.HANDLE(-1).value:
+        return {}
+    parents = {}
+    try:
+        entry = Entry()
+        entry.dwSize = ctypes.sizeof(Entry)
+        ok = k32.Process32FirstW(snap, ctypes.byref(entry))
+        while ok:
+            parents[entry.th32ProcessID] = entry.th32ParentProcessID
+            ok = k32.Process32NextW(snap, ctypes.byref(entry))
+    finally:
+        k32.CloseHandle(snap)
+    return parents
+
+
+# ---- Scratch folders: made with a marker, removed on every way out ----
+
+def scratch(prefix):
+    """A fresh folder in the temporary folder, marked as this process's, so
+    that a later run can remove it if this one dies before it does."""
+    if not prefix.startswith(PREFIXES):
+        raise ValueError("a scratch folder's name starts with one of %s" % (PREFIXES,))
+    path = tempfile.mkdtemp(prefix=prefix)
+    _write_marker(path, {"pid": os.getpid(), "born": born_at(os.getpid()),
+                         "made_by": _label(), "made": time.time()})
+    return path
+
+
+def keep(path, why):
+    """Mark a scratch folder as kept on purpose (photographs to look at): a
+    later run removes it only after KEPT_DAYS."""
+    marker = read_marker(path) or {}
+    marker.update({"kept": why, "kept_at": time.time()})
+    _write_marker(path, marker)
+
+
+def remove(path):
+    """Remove a scratch folder this module made; anything else is left."""
+    if path and read_marker(path) is not None and _in_temp(path):
+        shutil.rmtree(path, ignore_errors=True)
+
+
+def read_marker(path):
+    try:
+        with open(os.path.join(path, MARKER), encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+
+
+def sweep(folder=None):
+    """Remove the scratch folders whose run is gone; returns the line to
+    print, or '' when there were none."""
+    folder = folder or tempfile.gettempdir()
+    gone, size = 0, 0
+    try:
+        entries = [e for e in os.scandir(folder) if e.name.startswith(PREFIXES)]
+    except OSError:
+        return ""
+    now = time.time()
+    for entry in entries:
+        try:
+            if not entry.is_dir(follow_symlinks=False):
+                continue
+        except OSError:
+            continue
+        marker = read_marker(entry.path)
+        if not isinstance(marker, dict):
+            continue
+        if marker.get("kept"):
+            if now - float(marker.get("kept_at") or now) < KEPT_DAYS * 86400:
+                continue
+        elif alive(marker.get("pid"), marker.get("born")):
+            continue
+        size += _size_of(entry.path)
+        shutil.rmtree(entry.path, ignore_errors=True)
+        if not os.path.exists(entry.path):
+            gone += 1
+    if not gone:
+        return ""
+    return ("leftover: removed %d scratch folder(s) left by runs that died, or kept past "
+            "%d days (%s MB)" % (gone, KEPT_DAYS, format(size // (1024 * 1024), ",")))
+
+
+def _write_marker(path, data):
+    with open(os.path.join(path, MARKER), "w", encoding="utf-8") as fh:
+        json.dump(data, fh)
+
+
+def _in_temp(path):
+    temp = os.path.normcase(os.path.abspath(tempfile.gettempdir()))
+    return os.path.normcase(os.path.abspath(path)).startswith(temp + os.sep)
+
+
+def _size_of(path):
+    total = 0
+    for top, _dirs, files in os.walk(path):
+        for name in files:
+            try:
+                total += os.path.getsize(os.path.join(top, name))
+            except OSError:
+                pass
+    return total
 
 
 def _cap_posix(limit_mb):
