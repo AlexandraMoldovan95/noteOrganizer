@@ -153,6 +153,12 @@ class RowStack:
             except tk.TclError:
                 pass
 
+    def remeasure(self):
+        """Measured again by its popup, once all is laid out: a row grown
+        only wider resizes no chunk, and a restack asked for at once read its
+        width before the frames around it had heard."""
+        (self.on_change or self.changed)()
+
     def _new_chunk(self, group):
         chunk = tk.Frame(self.canvas, bg=self.app.colors[group.bg])
         later = None if group is self.groups[-1] else next(

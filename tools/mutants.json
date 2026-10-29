@@ -9671,7 +9671,7 @@
     "edits": [
       {
         "file": "noteorganizer/ui/settings_page.py",
-        "find": "            # A table grown wider at the same height resizes no chunk: the\n            # editor is measured again for it.\n            stack.changed()\n",
+        "find": "            # A table grown wider at the same height resizes no chunk: the\n            # editor is measured again for it.\n            stack.remeasure()\n",
         "replace": ""
       }
     ],

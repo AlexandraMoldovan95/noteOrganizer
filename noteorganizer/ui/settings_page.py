@@ -1109,7 +1109,7 @@ class SettingsPageMixin:
                 preview_hscroll.grid_forget()
             # A table grown wider at the same height resizes no chunk: the
             # editor is measured again for it.
-            stack.changed()
+            stack.remeasure()
 
         def paste_and_preview(_e=None):
             # One combined handler: the table-aware paste returns "break"
