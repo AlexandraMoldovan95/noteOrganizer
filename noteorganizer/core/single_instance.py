@@ -75,7 +75,10 @@ def acquire(path=None):
             # A sharing violation is another program holding the file a
             # moment, and failing open let a second window in after it:
             # tried again, as the data files are. Past that, the failure mode.
-            if getattr(exc, "winerror", None) != 32 or attempt == 2:
+            # open() reports it as EACCES with no winerror: the C runtime's
+            # errno, not Windows' code (round 7 of the final audit).
+            if (getattr(exc, "winerror", None) != 32
+                    and getattr(exc, "errno", None) != errno.EACCES) or attempt == 2:
                 return True  # see "the deliberate failure mode" above
             time.sleep(0.5)
     try:

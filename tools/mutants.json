@@ -6462,8 +6462,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "             if key not in prev}\n    nothing_lost",
-        "replace": "             if key not in prev and False}\n    nothing_lost"
+        "find": "             if key not in prev}\n    # Everything the restore",
+        "replace": "             if key not in prev and False}\n    # Everything the restore"
       }
     ],
     "must_fail": [
@@ -7775,8 +7775,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        self._take_back_cut_short(\"import\")\n",
-        "replace": ""
+        "find": "        # start; this one finished, so that word is no longer true.\n        self._take_back_cut_short(\"import\")\n",
+        "replace": "        # start; this one finished, so that word is no longer true.\n"
       }
     ],
     "must_fail": [
@@ -8346,7 +8346,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                        note, takes_text=rescue_due)\n",
+        "find": "                        note, takes_text=rescue_due and not comments_alone)\n",
         "replace": "                        note, takes_text=False)\n"
       }
     ],
@@ -9283,7 +9283,7 @@
     "edits": [
       {
         "file": "noteorganizer/core/single_instance.py",
-        "find": "            if getattr(exc, \"winerror\", None) != 32 or attempt == 2:\n",
+        "find": "            if (getattr(exc, \"winerror\", None) != 32\n                    and getattr(exc, \"errno\", None) != errno.EACCES) or attempt == 2:\n",
         "replace": "            if True:\n"
       }
     ],
@@ -10024,8 +10024,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/storage.py",
-        "find": "    if paths.writes_held(paths.DATA_FILE):\n        return\n    for note in notes_or_entries:",
-        "replace": "    for note in notes_or_entries:"
+        "find": "    if paths.writes_held(paths.DATA_FILE) or paths.DATA_FILE in _UNREAD_AT_LOAD:\n",
+        "replace": "    if paths.DATA_FILE in _UNREAD_AT_LOAD:\n"
       }
     ],
     "must_fail": [
@@ -10078,8 +10078,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        if not text or self._checklist_full(self._get_checklist(), text):\n            return\n        self._append_checklist_item(text)",
-        "replace": "        if not text:\n            return\n        self._append_checklist_item(text)"
+        "find": "        items = self._get_checklist()\n        if len(items) >= MAX_CHECKLIST_ITEMS:\n            # Full: the words wait",
+        "replace": "        items = self._get_checklist()\n        if False:\n            # Full: the words wait"
       }
     ],
     "must_fail": [
@@ -10644,8 +10644,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "    if (not isinstance(prev, dict) or is_recurring(note) or not is_recurring(prev)\n",
-        "replace": "    if (not isinstance(prev, dict) or is_recurring(note)\n"
+        "find": "    return (isinstance(prev, dict) and is_recurring(prev)\n",
+        "replace": "    return (isinstance(prev, dict)\n"
       }
     ],
     "must_fail": [
@@ -10689,6 +10689,294 @@
     ],
     "suites": [
       "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR95",
+    "about": "a start that set the notes file aside unreadable deletes attached files its unread notes may use",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "    if paths.writes_held(paths.DATA_FILE) or paths.DATA_FILE in _UNREAD_AT_LOAD:\n",
+        "replace": "    if paths.writes_held(paths.DATA_FILE):\n"
+      }
+    ],
+    "must_fail": [
+      "a start that could not read the notes deletes no attached file"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR96",
+    "about": "an update's copy of a series gives its days back to the note, and the same backup imported again reads as changed",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "            and not any(key in prev for key in _UPDATE_COPY_ONLY))\n",
+        "replace": "            )\n"
+      }
+    ],
+    "must_fail": [
+      "an update's copy of a series gives no days back"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR97",
+    "about": "a series the phone turned back on as it was never takes its days back from its copy",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    if is_recurring(note) and (\n",
+        "replace": "    if is_recurring(note) and True or False and (\n"
+      }
+    ],
+    "must_fail": [
+      "a series the phone turned back on as it was takes its days back"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR98",
+    "about": "a note repeating from another start takes the old series' days from its copy",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    if is_recurring(note) and (\n",
+        "replace": "    if False and (\n"
+      }
+    ],
+    "must_fail": [
+      "...but not days that hold no text of their own"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR99",
+    "about": "an update's comparison reads the note with its rescue copy, whose days make the same note read as changed",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    mine = normalize_note({key: value for key, value in note.items() if key != \"_prev\"})\n",
+        "replace": "    mine = normalize_note(dict(note))\n"
+      }
+    ],
+    "must_fail": [
+      "a note's rescue copy never makes the same note arriving again read as changed"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR100",
+    "about": "Restore previous writes over comments typed since the copy and keeps no copy of them",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "                    and (note.get(\"comments\") or \"\").strip() in (prev.get(\"comments\") or \"\")\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a restore keeps comments typed since the copy"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR101",
+    "about": "Restore previous writes over styles put on the same words and keeps no copy of them",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "                    and (not same_words or (\n",
+        "replace": "                    and (True or (\n"
+      }
+    ],
+    "must_fail": [
+      "a restore keeps comments typed since the copy"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR102",
+    "about": "comments cleared after a big delete replace that delete's copy with the note as it stood",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                comments_alone = (rescue_due and self._holds_unspent_rescue(note)\n",
+        "replace": "                comments_alone = (False and self._holds_unspent_rescue(note)\n"
+      }
+    ],
+    "must_fail": [
+      "comments cleared after a big delete keep that delete's copy"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR103",
+    "about": "a turn-off whose save clears only the comments takes the note's text over a big delete's copy",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                        note, takes_text=rescue_due and not comments_alone)\n",
+        "replace": "                        note, takes_text=rescue_due)\n"
+      }
+    ],
+    "must_fail": [
+      "...and when it clears only the comments, the copy keeps the body"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR104",
+    "about": "a session ending while an import's question waits leaves its copied files and no word of them",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._import_asking = state\n",
+        "replace": "        self._import_asking = None\n"
+      }
+    ],
+    "must_fail": [
+      "a session ending while an import asks leaves word naming what it copied"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR105",
+    "about": "the next start after a session ended on an import's question leaves its files and unpacked backup",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                self._drop_left_import(cut)\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "...and when it ended, the next start takes them out"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR106",
+    "about": "words a full checklist's Add box could not take on leaving are gone with the box",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                self._add_box_waiting[note[\"uid\"]] = text\n",
+        "replace": "                pass\n"
+      }
+    ],
+    "must_fail": [
+      "words a full checklist could not take wait in its Add box"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR107",
+    "about": "the window closes over words a full checklist could not take, asking nothing",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if waiting and not self.ask_yes_no(\n",
+        "replace": "        if False and not self.ask_yes_no(\n"
+      }
+    ],
+    "must_fail": [
+      "words a full checklist could not take wait in its Add box"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR108",
+    "about": "a backup of a held templates file keeps the file's template over one the session made again under its name",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                if arcname == \"templates.json\":\n",
+        "replace": "                if False:\n"
+      }
+    ],
+    "must_fail": [
+      "a templates file unread at the start goes into the backup"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR109",
+    "about": "a sign-out at 1,000 templates writes a 1,001st that the next start cuts, unsaid",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "            elif len(self.templates) >= MAX_TEMPLATES:\n",
+        "replace": "            elif False:\n"
+      }
+    ],
+    "must_fail": [
+      "a sign-out at 1,000 templates writes no 1,001st"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR110",
+    "about": "a lock file another program holds is read by its winerror alone, which open() never sets, so the retry never runs on Windows",
+    "edits": [
+      {
+        "file": "noteorganizer/core/single_instance.py",
+        "find": "                    and getattr(exc, \"errno\", None) != errno.EACCES) or attempt == 2:\n",
+        "replace": "                    and True) or attempt == 2:\n"
+      }
+    ],
+    "must_fail": [
+      "a lock file held a moment by another program is taken on a later try"
+    ],
+    "suites": [
+      "test_data_safety"
     ],
     "expect": "killed"
   }

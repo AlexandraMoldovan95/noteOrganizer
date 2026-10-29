@@ -62,6 +62,7 @@ from ..core.recurrence import describe_recurrence, is_recurring, show_date
 from ..core.model import (MAX_CHECKLIST_ITEM_CHARS, MAX_CHECKLIST_ITEMS, _truncate,
                           checklist_shown, normalize_note)
 from ..core.storage import (
+    MAX_TEMPLATES,
     TRASH_RETENTION_DAYS,
     trash_retention_days,
     trash_window_words,
@@ -1451,6 +1452,11 @@ class SettingsPageMixin:
             new_tpl["name"] = name
             if not is_new and tpl in self.templates:
                 self.templates[self.templates.index(tpl)] = new_tpl
+            elif len(self.templates) >= MAX_TEMPLATES:
+                # Written, the next start keeps the first 1,000 and cut it
+                # unsaid; refused, the next start says so (round 7).
+                save_setting("template_not_kept", name)
+                return
             else:
                 self.templates.append(new_tpl)
             save_templates(self.templates)

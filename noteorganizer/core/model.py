@@ -254,17 +254,35 @@ def days_hold_own_text(note):
     return False
 
 
+# What only an update's copy holds (apply_shared_update, the phone's too): a
+# series' own copy -- a turn-off's, on either app -- holds the text, the date,
+# the repeat and the days, and nothing of these.
+_UPDATE_COPY_ONLY = ("category", "color", "checklist", "pinned")
+
+
+def _series_own_copy(prev):
+    """Whether *prev* is the copy a repeat's turn-off made of its series."""
+    return (isinstance(prev, dict) and is_recurring(prev)
+            and not any(key in prev for key in _UPDATE_COPY_ONLY))
+
+
 def _days_back_from_copy(note):
     """A note that no longer repeats keeps its days' own text in itself, as
     a turn-off here does; a turn-off by the phone, or by this app before the
     final audit, kept them only in the series' copy, which the next copy
-    erased. Brought back into the note once, as it is read (round 6)."""
+    erased. Brought back into the note once, as it is read (round 6) -- and
+    into a note the phone turned back on as it was, which got none of them
+    back (round 7)."""
     prev = note.get("_prev")
-    # Only the series' own copy: an update's copy of a note that did not
-    # repeat holds the days that update replaced, on purpose.
-    if (not isinstance(prev, dict) or is_recurring(note) or not is_recurring(prev)
-            or any(note.get(key) for key in DAY_FIELDS)):
+    # Only the series' own copy: an update's holds days it replaced on
+    # purpose, and taken in they made the same backup read as changed (round 7).
+    if not _series_own_copy(prev) or any(note.get(key) for key in DAY_FIELDS):
         return
+    if is_recurring(note) and (
+            prev.get("date") != note.get("date")
+            or normalize_recurrence(prev.get("recurrence"))
+            != normalize_recurrence(note.get("recurrence"))):
+        return              # another series now: its days are not these
     if days_hold_own_text(prev):
         for key in DAY_FIELDS:
             note[key] = copy.deepcopy(prev.get(key) or NOTE_DEFAULTS[key])
@@ -434,11 +452,23 @@ def copy_replaced_by_restore(note, prev):
     (days_to_rescue; the note keeps its own). None when it holds nothing
     the restored version lacks: a button offering that would mislead."""
     title = note.get("title") or ""
+    body = note.get("body") or ""
     taken = {key: days for key, days in
              (days_to_rescue(note, prev["recurrence"]) if "recurrence" in prev else {}).items()
              if key not in prev}
-    nothing_lost = ((note.get("body") or "").strip() in (prev.get("body") or "")
+    # Everything the restore writes over is weighed: the comments too, and
+    # the styles of the same words. Comments typed since the copy went to no
+    # file, the question saying nothing (round 7 of the final audit).
+    same_words = body == (prev.get("body") or "")
+    lines = len(body.split("\n"))
+    nothing_lost = (body.strip() in (prev.get("body") or "")
                     and (not title.strip() or title == (prev.get("title") or ""))
+                    and (note.get("comments") or "").strip() in (prev.get("comments") or "")
+                    and (not same_words or (
+                        normalize_formatting(note.get("formatting") or [])
+                        == normalize_formatting(prev.get("formatting") or [])
+                        and normalize_paragraphs(note.get("paragraphs") or [], lines)
+                        == normalize_paragraphs(prev.get("paragraphs") or [], lines)))
                     and all(prev[key] == note.get(key, NOTE_DEFAULTS.get(key))
                             for key in prev if key not in PREV_TEXT_FIELDS)
                     and not taken)
@@ -458,7 +488,10 @@ def shared_update_changes(note, incoming, fields=UPDATABLE_FROM_SHARED):
     lose the one earlier version. ISSUES_LOG: "Importing the same backup
     twice, the second time"; smaller lessons: shared_update_changes."""
     fresh = normalize_note(dict(incoming))
-    mine = normalize_note(dict(note))
+    # Without its rescue copy: the copy is not compared, and the read of an
+    # older notebook takes days from it (_days_back_from_copy), which made an
+    # unchanged note read as changed (round 7 of the final audit).
+    mine = normalize_note({key: value for key, value in note.items() if key != "_prev"})
     return any(mine[field] != fresh[field] for field in fields)
 
 

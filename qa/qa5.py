@@ -1790,6 +1790,31 @@ check(f"...and so when a save made while the turn-off waited holds a copy of its
       _rh_held and 'SECOND PART' in (_rd_prev.get('body') or '')
       and (_rd_prev.get('recurrence') or {}).get('freq') == 'weekly'
       and not app.find_note(1)['recurrence'].get('freq'))
+# ...and when the turn-off's save clears only the comments, the copy a big
+# delete made before keeps its words: taken as the newest text, the deleted
+# body was in no file (round 7 of the final audit).
+_ro_fixture()
+app.notes[0]['body'] = 'BODY GONE ' + 'packed words ' * 25
+app.notes[0]['comments'] = 'ok'
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'kept line')
+app.save_current_note(); app.update()
+app._themed_dialog = lambda *a, **k: True
+try:
+    app.comments_text.delete('1.0', 'end')
+    app.rec_freq_var.set(NO.FREQ_LABELS[''])
+    app.on_recurrence_changed(); app.update()
+    app.save_current_note(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+_rc_prev = app.find_note(1).get('_prev') or {}
+check(f"...and when it clears only the comments, the copy keeps the body a big "
+      f"delete took before ({(_rc_prev.get('body') or '')[:12]!r}, "
+      f"{_rc_prev.get('comments')!r}, {(_rc_prev.get('recurrence') or {}).get('freq')})",
+      'BODY GONE' in (_rc_prev.get('body') or '') and _rc_prev.get('comments') == 'ok'
+      and (_rc_prev.get('recurrence') or {}).get('freq') == 'weekly'
+      and not app.find_note(1)['recurrence'].get('freq'))
 # Turned back on from another date, an old deleted day hid the new series' own
 # first day (round 5). Her answer: kept days come back only onto the same date
 # and rule; a deleted day holds nothing, and the rescue copy keeps them all.

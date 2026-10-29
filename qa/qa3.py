@@ -2946,6 +2946,56 @@ try:
     check('the next start says an export was cut short by Windows, and takes '
           'its unfinished file away',
           'when Windows signed out' in _words and not os.path.exists(_he_zip + '.tmp'))
+    # A session that ends while an import's question waits found no import
+    # running: the files it had copied and its unpacked backup stayed, and
+    # nothing was said (round 7). Word for the next start, which takes them out.
+    _sq_film = next(n for n in app.notes if n.get('title') == 'Film')
+    _sq_name = '20261029120000000001_cut.bin'
+    with zipfile.ZipFile(_hb_zip, 'w') as _zf:
+        _zf.writestr('notes_data.json', json.dumps([{
+            'uid': _sq_film['uid'], 'title': 'Film', 'body': 'edited elsewhere',
+            'created': _sq_film.get('created'),
+            'attachments': [{'name': 'cut.bin', 'stored_as': _sq_name}]}]))
+        _zf.writestr('attachments/' + _sq_name, b'cut' * 1000)
+    _sq_seen = {}
+
+    def _sq_dialog(*a, **k):
+        if k.get('kind') != 'question' or 'already have' not in (a[0] if a else ''):
+            return True
+        app.on_session_end()
+        _sq_seen['said'] = NO.get_setting('backup_cut_short')
+        _sq_seen['file'] = os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _sq_name))
+        return 'cancel'
+    app._themed_dialog = _sq_dialog
+    app._ending_session = False
+    try:
+        app.import_data()
+        _sx_wait(lambda: app._import_state is None, 15)
+        app.update()
+    finally:
+        app._themed_dialog = _sx_real_dlg
+        app._ending_session = False
+    _sq_said = _sq_seen.get('said') or {}
+    check(f'a session ending while an import asks leaves word naming what it copied, '
+          f'and keeps the files for the answer ({sorted(_sq_said)}, {_sq_seen.get("file")})',
+          _sq_said.get('kind') == 'import' and _sq_said.get('copied') == [_sq_name]
+          and _sq_said.get('temp_dir') and _sq_seen.get('file') is True)
+    check('...a session that goes on takes the word back with the answer',
+          NO.get_setting('backup_cut_short') is None
+          and not os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _sq_name)))
+    # The session ended after all: the files stayed, and the next start
+    # takes them out, the Film note's own file untouched.
+    os.makedirs(_sq_said['temp_dir'], exist_ok=True)
+    with open(os.path.join(NO.ATTACHMENTS_DIR, _sq_name), 'wb') as _fh:
+        _fh.write(b'cut')
+    NO.save_setting('backup_cut_short', _sq_said)
+    _words = _next_start_says()
+    check(f'...and when it ended, the next start takes them out and says so '
+          f'({_words[:60]!r})',
+          'when Windows signed out' in _words
+          and not os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _sq_name))
+          and not os.path.exists(_sq_said['temp_dir'])
+          and os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _hb_name)))
 finally:
     _sx['go'] = True
     NO.StoppableFile, _hs.StoppableFile = _kept_stoppable
@@ -3760,18 +3810,23 @@ fd.asksaveasfilename = lambda **k: _ht_zip
 try:
     app.notes = [NO.normalize_note({'id': 1, 'title': 'Kept', 'body': 'words'})]
     app.save_notes()
-    for _ht_file in ('[{"name": "Weekly", "body": "a"}, {"name": "Trip", "body": "b"}]',
-                     '{broken'):
+    # The third: a name the session made again, unable to see the file's --
+    # the file's won, and the newest was in no backup (round 7). Both go, the
+    # session's first, as an import keeps the first of a name.
+    for _ht_file, _ht_mine in (
+            ('[{"name": "Weekly", "body": "a"}, {"name": "Trip", "body": "b"}]', 'Made today'),
+            ('{broken', 'Made today'),
+            ('[{"name": "Weekly", "body": "a"}, {"name": "Trip", "body": "b"}]', 'Trip')):
         with open(NO.TEMPLATES_FILE, 'w', encoding='utf-8') as _f:
             _f.write(_ht_file)
         NO._core_paths.hold_writes(NO.TEMPLATES_FILE)
-        app.templates = [{'name': 'Made today', 'body': 'c'}]
+        app.templates = [{'name': _ht_mine, 'body': 'c'}]
         app.export_data()
         t0 = time.time()
         while app._export_state is not None and time.time() - t0 < 120:
             app.update()
         with zipfile.ZipFile(_ht_zip) as _zf:
-            _ht_got.append([t.get('name') for t in
+            _ht_got.append([(t.get('name'), t.get('body')) for t in
                             json.loads(_zf.read('templates.json').decode('utf-8'))])
         NO._core_paths.WRITES_HELD.clear()
 finally:
@@ -3782,8 +3837,10 @@ finally:
         os.remove(_ht_zip)
 check(f'a templates file unread at the start goes into the backup with the '
       f'session\'s, or is named left out ({_ht_got}; {[s[:40] for s in _ht_said]})',
-      _ht_got == [['Weekly', 'Trip', 'Made today'], ['Made today']]
-      and len(_ht_said) == 2 and _ht_said[0].startswith('Export complete ')
+      _ht_got == [[('Made today', 'c'), ('Weekly', 'a'), ('Trip', 'b')],
+                  [('Made today', 'c')],
+                  [('Trip', 'c'), ('Weekly', 'a'), ('Trip', 'b')]]
+      and len(_ht_said) == 3 and _ht_said[0].startswith('Export complete ')
       and 'not all of it' in _ht_said[1] and 'templates.json' in _ht_said[1])
 app.notes = []; app.save_notes()
 
@@ -3972,6 +4029,60 @@ check(f'comments wiped keep a rescue copy of them ({len(_cw_prev.get("comments",
       _cw_prev.get('comments') == _cw_old)
 app.notes = []; app.save_notes()
 
+# ...but a comment of two letters cleared after a big delete replaced that
+# delete's copy with the note as it stood: the deleted body was in no file
+# (round 7). The waiting copy keeps its words and takes the comments.
+_cb_body = ' '.join('Pack item %d for the mountain trip' % i for i in range(20))
+_cb_note = NO.normalize_note({'id': 4257, 'title': 'Trip', 'body': _cb_body, 'comments': 'ok'})
+app.notes = [_cb_note]; app.save_notes()
+app.open_note_in_tab(_cb_note); app.update()
+app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'Trip.')
+app._flush_autosave(leaving=False); app.update()
+app.comments_text.delete('1.0', 'end')
+app._flush_autosave(leaving=True); app.update()
+_cb_prev = (next((n for n in json.load(open(NO.DATA_FILE, encoding='utf-8'))
+                  if n.get('id') == 4257), {}).get('_prev') or {})
+check(f'comments cleared after a big delete keep that delete\'s copy, with the comments '
+      f'({(_cb_prev.get("body") or "")[:14]!r}, {_cb_prev.get("comments")!r})',
+      _cb_prev.get('body') == _cb_body and _cb_prev.get('comments') == 'ok')
+app.new_note(); app.update()
+app.notes = []; app.save_notes()
+
+# A full checklist's Add box taken on leaving said "Delete an item to make
+# room", and the words went with the box (round 7): they wait for the note,
+# back in its box when it opens again, and the window's close asks first.
+_cw_said, _cw_asked = [], []
+_cw_real = (app.show_info, app.ask_yes_no)
+app.show_info = lambda *a, **k: _cw_said.append(a[1] if len(a) > 1 else '')
+app.ask_yes_no = lambda t, *a, **k: (_cw_asked.append(t), False)[1]     # "No"
+try:
+    _cw_full = NO.normalize_note({'id': 4258, 'title': 'Big list', 'body': 'b', 'checklist': [
+        {'text': 'item %d' % i, 'done': False} for i in range(1000)]})
+    _cw_other = NO.normalize_note({'id': 4259, 'title': 'Other', 'body': 'x'})
+    app.notes = [_cw_full, _cw_other]; app.save_notes()
+    app.open_note_in_tab(_cw_full); app.update()
+    app.checklist_add_var.set('buy more boxes')
+    app.open_note_in_tab(_cw_other); app.update()
+    _cw_left = app.checklist_add_var.get()
+    app.open_note_in_tab(_cw_full); app.update()
+    _cw_back = app.checklist_add_var.get()
+    app.open_note_in_tab(_cw_other); app.update()
+    _cw_said_n = len(_cw_said)
+    app.on_app_close(); app.update()
+    _cw_open = app.winfo_exists()
+finally:
+    app.show_info, app.ask_yes_no = _cw_real
+    app._add_box_waiting.clear()
+    app.checklist_add_var.set('')
+check(f'words a full checklist could not take wait in its Add box for the note, and '
+      f'the close asks before losing them ({_cw_left!r}, {_cw_back!r}, {_cw_asked}, '
+      f'{_cw_said[:1]})',
+      _cw_left == '' and _cw_back == 'buy more boxes' and _cw_open
+      and _cw_asked == ['Close without these items?'] and _cw_said_n == 2
+      and 'waits in this note\'s Add box' in (_cw_said[0] if _cw_said else ''))
+app.new_note(); app.update()
+app.notes = []; app.save_notes()
+
 # A repeat turned off on the phone kept a day's own text only in the rescue
 # copy; here the next big delete made a copy of words alone, and the day's
 # text was in no file (round 6). A note read keeps those days in itself.
@@ -4089,6 +4200,42 @@ finally:
     app.ask_yes_no, app.ask_yes_no_cancel, app.show_warning = _st_real
     app._dismiss_mini_popup()
     app.hide_settings_page(); app.update()
+app.templates = []; NO.save_templates(app.templates)
+
+# ...but at 1,000 templates it wrote a 1,001st, which the next start cut,
+# unsaid (round 7): refused at the sign-out, and the next start says so.
+app.templates = [NO.normalize_template({'name': 'T%d' % i, 'body': 'x'})
+                 for i in range(1000)]
+NO.save_templates(app.templates)
+NO.save_setting('template_not_kept', None)
+app.show_settings_page(); app.update()
+app.toggle_settings_panel('templates'); app.update()
+_tf_real = (app.ask_yes_no, app.ask_yes_no_cancel, app.show_warning)
+app.ask_yes_no = app.ask_yes_no_cancel = app.show_warning = lambda *a, **k: None
+try:
+    app._edit_template(None, lambda: None); app.update()
+    _tf_boxes = []
+
+    def _tf_walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Entry):
+                _tf_boxes.append(c)
+            _tf_walk(c)
+    _tf_walk(app._mini_popup)
+    _tf_boxes[0].delete(0, 'end')
+    _tf_boxes[0].insert(0, 'Packing')
+    app.on_session_end(); app.update()
+    with open(NO.TEMPLATES_FILE, encoding='utf-8') as _f:
+        _tf_written = len(json.load(_f))
+    _tf_said = _next_start_says()
+finally:
+    app.ask_yes_no, app.ask_yes_no_cancel, app.show_warning = _tf_real
+    app._dismiss_mini_popup()
+    app.hide_settings_page(); app.update()
+check(f'a sign-out at 1,000 templates writes no 1,001st, and the next start says it '
+      f'was not kept ({_tf_written}, {_tf_said[:70]!r})',
+      _tf_written == 1000 and '“Packing”' in _tf_said and 'was not kept' in _tf_said
+      and NO.get_setting('template_not_kept') is None)
 app.templates = []; NO.save_templates(app.templates)
 
 # A backup's Trash brings its window when this notebook never chose one:

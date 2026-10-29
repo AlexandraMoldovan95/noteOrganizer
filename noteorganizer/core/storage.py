@@ -367,10 +367,10 @@ def _delete_attachment_files(notes_or_entries, spare=()):
     note moved to the Trash may still come back. *spare* names files that
     must survive, those the notes in the app still use, in case a stale row
     acts. ISSUES_LOG: "The Trash that gave notes back one at a time"."""
-    # A run that could not read the notes file holds notes it never saw: a
-    # file none of ITS notes uses may still be one of theirs. Kept, every
-    # file, until a run that has read them (round 6 of the final audit).
-    if paths.writes_held(paths.DATA_FILE):
+    # A run that could not read the notes file -- held, or set aside
+    # unreadable -- holds notes it never saw: every file is kept, until a run
+    # that has read them (rounds 6 and 7 of the final audit).
+    if paths.writes_held(paths.DATA_FILE) or paths.DATA_FILE in _UNREAD_AT_LOAD:
         return
     for note in notes_or_entries:
         for att in attachments_of(note):
@@ -688,7 +688,16 @@ def load_notes(version_change=None):
         except (IOError, OSError):
             pass
 
+    if report["notes_file_corrupt"]:
+        _UNREAD_AT_LOAD.add(paths.DATA_FILE)
+    else:
+        _UNREAD_AT_LOAD.discard(paths.DATA_FILE)
     return notes, report
+
+
+# The notes files whose last load_notes held none of their notes: set aside
+# unreadable, a run's notes are only what it writes (round 7 of the audit).
+_UNREAD_AT_LOAD = set()
 
 
 def json_text(value):

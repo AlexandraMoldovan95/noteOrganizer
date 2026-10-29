@@ -765,6 +765,29 @@ try:
     check('what save_notes wrote is what load_notes reads back',
           [n['title'] for n in _again] == ['Kept', 'Added'])
 
+    # A start that set the notes file aside unreadable holds none of its
+    # notes: a file the Trash's entry shares with one of them is no one's to
+    # delete. Only a held run spared them (round 7 of the final audit).
+    with open(NO_paths.DATA_FILE, 'r', encoding='utf-8') as f:
+        _nu_good = f.read()
+    with open(NO_paths.DATA_FILE, 'w', encoding='utf-8') as f:
+        f.write('{not json')
+    os.makedirs(NO_paths.ATTACHMENTS_DIR, exist_ok=True)
+    _nu_file = os.path.join(NO_paths.ATTACHMENTS_DIR, '20261029_shared.png')
+    _nu_entry = [{'attachments': [{'stored_as': '20261029_shared.png'}]}]
+    with open(_nu_file, 'wb') as f:
+        f.write(b'png')
+    _storage.load_notes()
+    _storage._delete_attachment_files(_nu_entry)
+    _nu_kept = os.path.isfile(_nu_file)
+    with open(NO_paths.DATA_FILE, 'w', encoding='utf-8') as f:
+        f.write(_nu_good)
+    _storage.load_notes()
+    _storage._delete_attachment_files(_nu_entry)
+    check('a start that could not read the notes deletes no attached file; one '
+          'that read them does (kept %s, then %s)' % (_nu_kept, os.path.isfile(_nu_file)),
+          _nu_kept and not os.path.isfile(_nu_file))
+
     # The file keeps its exact shape: a two-space indent, and every
     # character written as itself rather than escaped, so a note in any
     # script stays readable in a text editor and two saves diff cleanly.
@@ -2538,8 +2561,8 @@ try:
     # A lock file another program holds a moment (a sharing violation) is
     # tried again: failing open at once let a second window in once it was
     # let go (round 5). Raised twice, then the file opens: the lock is taken.
-    class _Sharing(PermissionError):
-        winerror = 32
+    # Raised as open() raises it on Windows: EACCES, with no winerror (round 7).
+    _Sharing = PermissionError
 
     _sh_left = {"n": 2}
     _sh_real_open, _sh_real_sleep = open, _si_mod.time.sleep
@@ -2565,6 +2588,36 @@ try:
     check("a lock file held a moment by another program is taken on a later try "
           "(got %s, held %s)" % (_sh_got, _sh_held),
           _sh_got is True and _sh_held is True and _sh_left["n"] == 0)
+
+    if os.name == "nt":
+        # The same, held for real: opened with no sharing, let go 0.3 s later.
+        # A simulated error once carried a winerror open() never sets, and
+        # the retry it proved never ran on Windows (round 7 of the audit).
+        import ctypes as _sh_ct
+        import threading as _sh_th
+        _sh_k32 = _sh_ct.WinDLL("kernel32", use_last_error=True)
+        _sh_k32.CreateFileW.restype = _sh_ct.c_ssize_t     # -1: it failed
+        _sh_k32.CreateFileW.argtypes = [_sh_ct.c_wchar_p, _sh_ct.c_uint32, _sh_ct.c_uint32,
+                                        _sh_ct.c_void_p, _sh_ct.c_uint32, _sh_ct.c_uint32,
+                                        _sh_ct.c_void_p]
+        _sh_k32.CloseHandle.argtypes = [_sh_ct.c_ssize_t]
+        _sh_path = os.path.join(_lock_dir, "sharing_real.lock")
+        # GENERIC_READ | GENERIC_WRITE, no sharing, OPEN_ALWAYS.
+        _sh_hold = _sh_k32.CreateFileW(_sh_path, 0xC0000000, 0, None, 4, 0x80, None)
+        _sh_timer = _sh_th.Timer(0.3, lambda: _sh_k32.CloseHandle(_sh_hold))
+        _sh_timer.start()
+        try:
+            _sh_real_got = _si_mod.acquire(_sh_path)
+            _sh_real_held = _si_mod.held()
+        finally:
+            _sh_timer.join()
+            try:
+                _si_mod.release()
+            except Exception:
+                pass
+        check("a lock file another program holds for real is taken once let go "
+              "(got %s, held %s)" % (_sh_real_got, _sh_real_held),
+              _sh_hold != -1 and _sh_real_got is True and _sh_real_held is True)
 
     # A lock that cannot be created must never stop the app from starting:
     # refusing to open because a LOCK failed is worse than what it guards.
@@ -3473,19 +3526,76 @@ _kd_carried = _model_mod.normalize_note({
 _kd_empty_days = _model_mod.normalize_note({   # days with no text of their own
     "id": 3, "title": "Gym", "body": "Warm up.",
     "_prev": dict({"title": "Gym", "body": "Warm up."}, exceptions=["2026-11-16"], **_kd_series)})
-_kd_live = _model_mod.normalize_note(dict({"id": 4, "title": "Gym", "body": "Warm up.",
-                                          "_prev": dict(_kd_series, **_kd_days)}, **_kd_series))
+# Repeating again on another start: the old series' days are not its own.
+_kd_live = _model_mod.normalize_note({
+    "id": 4, "title": "Gym", "body": "Warm up.", "date": "2026-11-03",
+    "recurrence": {"freq": "weekly", "interval": 1}, "_prev": dict(_kd_series, **_kd_days)})
 check("an older notebook's days kept only in the rescue copy come back into the note",
       _kd_turned_off["overrides"] == _kd_days["overrides"]
       and _kd_turned_off["exceptions"] == ["2026-11-16"]
       and _kd_turned_off["_prev"].get("overrides") == _kd_days["overrides"])
 check("...but not days that hold no text of their own, nor an update's copy that does "
-      "not repeat, nor a note that still repeats, and a second read changes nothing",
+      "not repeat, nor a note repeating from another start, and a second read changes nothing",
       _kd_empty_days["exceptions"] == [] and _kd_empty_days["overrides"] == {}
       and _kd_carried["overrides"] == {} and _kd_carried["_prev"].get("overrides") == _kd_days["overrides"]
       and _kd_live["overrides"] == {} and _kd_live["_prev"].get("overrides") == _kd_days["overrides"]
       and _model_mod.normalize_note(_kd_turned_off) == _kd_turned_off
       and _model_mod.normalize_note(_kd_carried) == _kd_carried)
+# The phone's 0.12.0 turned a series back on as it was with none of its days:
+# repeating, the copy the same series, its days' text in the copy alone, which
+# the next copy of words erased (round 7 of the final audit).
+_kd_back_on = _model_mod.normalize_note(dict(
+    {"id": 5, "title": "Gym", "body": "Warm up.", "_prev": dict(
+        {"title": "Gym", "body": "Warm up."}, **_kd_series, **_kd_days)}, **_kd_series))
+check("a series the phone turned back on as it was takes its days back from its copy",
+      _kd_back_on["overrides"] == _kd_days["overrides"]
+      and _kd_back_on["exceptions"] == ["2026-11-16"])
+# An update's copy repeats when the series here did, and holds the days the
+# update replaced on purpose: taken in, the same backup imported again read
+# as a change, and its Update spent the only earlier version (round 7).
+_kd_updated = _model_mod.normalize_note(dict(
+    {"title": "Gym", "body": "Warm up."}, **_kd_series, **_kd_days))
+_kd_updated["uid"] = "kd-updated"
+_kd_backup = {"uid": "kd-updated", "title": "Gym", "body": "Rowing only.",
+              "created": _kd_updated["created"]}
+_model_mod.apply_shared_update(_kd_updated, _kd_backup, _model_mod.UPDATABLE_FROM_BACKUP)
+_kd_reread = _model_mod.normalize_note(_kd_updated)
+check("an update's copy of a series gives no days back, and the same backup "
+      "again changes nothing (%s)" % sorted(
+          f for f in _model_mod.UPDATABLE_FROM_BACKUP
+          if _model_mod.normalize_note(dict(_kd_reread))[f]
+          != _model_mod.normalize_note(dict(_kd_backup))[f]),
+      _model_mod.is_recurring(_kd_updated["_prev"])
+      and "category" in _kd_updated["_prev"]
+      and _kd_reread["overrides"] == {} and _kd_reread["exceptions"] == []
+      and not _model_mod.shared_update_changes(
+          _kd_reread, _kd_backup, _model_mod.UPDATABLE_FROM_BACKUP))
+# ...nor does a copy of the series taking days a moment ago make the note,
+# held in memory, differ from the same note arriving again.
+_kd_mem = dict(_kd_turned_off, overrides={}, exceptions=[])
+check("a note's rescue copy never makes the same note arriving again read as changed",
+      not _model_mod.shared_update_changes(
+          _kd_mem, {k: v for k, v in _kd_mem.items() if k != "_prev"},
+          _model_mod.UPDATABLE_FROM_BACKUP))
+
+# "↩ Restore previous" weighs all it writes over: comments typed since the
+# copy, and the styles of the same words, went to no file (round 7).
+_rp_prev = {"title": "Trip", "body": "Packing list: boots, rope, map, torch.",
+            "comments": "ok", "formatting": [], "paragraphs": []}
+_rp_note = _model_mod.normalize_note({
+    "id": 6, "title": "Trip", "body": "Packing list:", "_prev": dict(_rp_prev),
+    "comments": "ok. Call the hut warden on Friday about the late arrival."})
+_rp_styled = _model_mod.normalize_note({
+    "id": 7, "title": "Trip", "body": _rp_prev["body"], "comments": "ok",
+    "formatting": [{"start": 0, "end": 7, "style": "bold"}], "_prev": dict(_rp_prev)})
+_rp_plain = _model_mod.normalize_note({
+    "id": 8, "title": "Trip", "body": "Packing list:", "comments": "ok", "_prev": dict(_rp_prev)})
+_rp_kept = _model_mod.copy_replaced_by_restore(_rp_note, _rp_note["_prev"])
+check("a restore keeps comments typed since the copy, and styles put on the same "
+      "words, as the next copy; and nothing when nothing would be lost",
+      _rp_kept is not None and "hut warden" in _rp_kept["comments"]
+      and _model_mod.copy_replaced_by_restore(_rp_styled, _rp_styled["_prev"]) is not None
+      and _model_mod.copy_replaced_by_restore(_rp_plain, _rp_plain["_prev"]) is None)
 
 # The restore's own list of what it can put back must be exactly what an
 # update can replace beyond the text -- a field added to one without the

@@ -892,6 +892,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._categories_adopted = []  # names load_notes brought back from the notes
         self._version_backup_path = None  # filled in by load_notes on a version upgrade
         self._corrupt_notes_report = None  # (flag, preserved-copy path) if the notes file was unreadable
+        # A note's uid -> the words its full checklist's Add box could not
+        # take on the way out, given back to the box when it opens again.
+        self._add_box_waiting = {}
         self.notes = self.load_notes()
         self.selected_note_id = None
 
@@ -1782,6 +1785,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "nothing is saved there until Note Organizer is opened again. "
                 "Nothing is lost.")
 
+        # A template written when Windows signed out, past the most kept.
+        not_kept = get_setting("template_not_kept", None, expect=str)
+        if not_kept:
+            save_setting("template_not_kept", None)
+            lines.append(
+                f"The template “{one_line(not_kept, 80)}”, being written when "
+                f"Windows signed out or shut down, was not kept: you already "
+                f"had {MAX_TEMPLATES:,} templates, which is the most Note "
+                "Organizer keeps.")
+
         # Recorded by _settle_background_work_at_close, said once.
         cut = get_setting("backup_cut_short", None, expect=dict)
         if cut:
@@ -1790,6 +1803,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             when = ("Windows signed out or shut down"
                     if cut.get("when") == "session" else "Note Organizer closed")
             if cut.get("kind") == "import":
+                # Ended while its questions waited: what it copied goes now.
+                self._drop_left_import(cut)
                 lines.append(
                     f"The import of {name} was cut short when {when}, so "
                     "nothing from it was kept: no notes and no files. To bring "
@@ -2178,8 +2193,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 if kept is None:
                     left_out.append(arcname)
                     kept = []
-                seen = {ident(e) for e in kept}
-                kept += [e for e in held if ident(e) not in seen]
+                if arcname == "templates.json":
+                    # A name the session made again, unable to see the file's:
+                    # both travel, the session's first, as an import keeps
+                    # the first of a name. The file's won, and the newest
+                    # was in no backup (round 7 of the audit).
+                    mine = {json_text(e) for e in held}
+                    kept = list(held) + [e for e in kept if json_text(e) not in mine]
+                else:
+                    seen = {ident(e) for e in kept}
+                    kept += [e for e in held if ident(e) not in seen]
                 if kept:
                     entries.append((json_text(kept).encode("utf-8"), arcname))
             elif held:
@@ -2385,6 +2408,27 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if state.get("temp_dir"):
             shutil.rmtree(state["temp_dir"], ignore_errors=True)
         self._drop_unclaimed_import_files(state)
+
+    def _drop_left_import(self, cut):
+        """Take out what an import the end of a session cut short while its
+        questions waited left behind: the files it copied that no note uses,
+        and its unpacked backup. Read from settings.json, which another
+        program can write: only bare names in attachments, and only a
+        notes_import_ folder directly in the temporary folder. Never on a
+        run that holds none of its notes: a file they use would look free."""
+        copied = cut.get("copied")
+        if not self._notes_file_unread():
+            self._drop_unclaimed_import_files(
+                {"copied": [n for n in copied if isinstance(n, str)]
+                 if isinstance(copied, list) else []})
+        temp_dir = cut.get("temp_dir")
+        if not (isinstance(temp_dir, str) and temp_dir):
+            return
+        where = os.path.abspath(temp_dir)
+        if (os.path.dirname(where) == os.path.abspath(tempfile.gettempdir())
+                and os.path.basename(where).startswith("notes_import_")
+                and os.path.isdir(where) and not os.path.islink(where)):
+            shutil.rmtree(where, ignore_errors=True)
 
     def _drop_unclaimed_import_files(self, state):
         """Remove the files a backup import copied into attachments that no
@@ -12354,6 +12398,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         self.export_progress_frame.place_forget()
         self._import_state = None
+        # Its questions wait on the person with the files already copied: the
+        # end of a Windows session meets it here too (round 7 of the audit).
+        self._import_asking = state
+        try:
+            self._merge_finished_import(state)
+        finally:
+            # Answered: the line a session end left for the next start, in
+            # case it ended, is untrue now (_settle_backups_at_session_end).
+            if state.get("asked_at_session_end"):
+                self._take_back_cut_short("import")
+            self._import_asking = None
+
+    def _merge_finished_import(self, state):
+        """The main thread's half of an import whose worker is done: its
+        questions, then the merge, or the files it copied taken back out."""
         temp_dir = state["temp_dir"]
 
         if state["error"]:
@@ -13122,7 +13181,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         way somewhere else."""
         var = getattr(self, "checklist_add_var", None)
         text = var.get().strip()[:MAX_CHECKLIST_ITEM_CHARS] if var is not None else ""
-        if not text or self._checklist_full(self._get_checklist(), text):
+        note = (self.find_note(self.selected_note_id)
+                if self.selected_note_id is not None else None)
+        if note is not None:
+            # What waits is what the box holds now: emptied, nothing does.
+            self._add_box_waiting.pop(note["uid"], None)
+        if not text:
+            return
+        items = self._get_checklist()
+        if len(items) >= MAX_CHECKLIST_ITEMS:
+            # Full: the words wait for this note, back in its Add box when it
+            # is opened again. Leaving cleared the box, and "Delete an item to
+            # make room" could no longer be done (round 7 of the audit).
+            if note is not None:
+                self._add_box_waiting[note["uid"]] = text
+            self._checklist_full(items, text, waits=note is not None)
             return
         self._append_checklist_item(text)
         var.set("")
@@ -13157,6 +13230,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return  # the words stay in the box
         self._append_checklist_item(text)
         self.checklist_add_var.set("")
+        note = (self.find_note(self.selected_note_id)
+                if self.selected_note_id is not None else None)
+        if note is not None:
+            self._add_box_waiting.pop(note["uid"], None)    # added: none waits
         self._schedule_autosave()
         try:
             self.checklist_add_entry.focus_set()
@@ -19925,9 +20002,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         else:
             self._working_checklist = fresh
         # An item half-typed for the note that was open does not follow it
-        # here (see new_note).
+        # here (see new_note); one this note's full list could not take
+        # waits for it (_take_pending_checklist_item).
         if hasattr(self, "checklist_add_var"):
-            self.checklist_add_var.set("")
+            self.checklist_add_var.set(
+                getattr(self, "_add_box_waiting", {}).pop(note.get("uid"), ""))
         if hasattr(self, "_checklist_rows"):
             self._render_checklist_items()
         self._sync_checklist_open_state()
@@ -20695,19 +20774,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "the app keeps. Delete one first.")
         return True
 
-    def _checklist_full(self, items, text):
+    def _checklist_full(self, items, text, waits=False):
         """Whether *items* already hold MAX_CHECKLIST_ITEMS -- and if so, that
         *text* was not added is said. The doors refuse what a start would
         cut (normalize_note): the 1,001st item was drawn and saved, then gone
-        without a word at the next start (round 6 of the final audit)."""
+        without a word at the next start (round 6 of the final audit).
+        *waits*: the words were taken from the Add box on the way out of the
+        note, and wait for it (_take_pending_checklist_item)."""
         if len(items) < MAX_CHECKLIST_ITEMS:
             return False
-        if not getattr(self, "_ending_session", False):
+        # The window's close asks once about every item left waiting instead.
+        if not (getattr(self, "_ending_session", False)
+                or getattr(self, "_closing_window", False)):
             self.show_info(
                 "Checklist full",
                 f"A checklist can have up to {MAX_CHECKLIST_ITEMS:,} items, and "
                 f"this one has them all, so “{one_line(text, 80)}” was not "
-                "added. Delete an item to make room.")
+                + ("added. It waits in this note's Add box until you delete an "
+                   "item to make room, while Note Organizer stays open."
+                   if waits else "added. Delete an item to make room."))
         return True
 
     def save_current_as_template(self):
@@ -21902,6 +21987,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 rescue_due = rescue_copy_due(note.get("title", ""), note.get("body", ""),
                                              title, body,
                                              note.get("comments", ""), comments)
+                # Due for the comments alone, over a copy the note does not
+                # hold again: that copy keeps its words and takes only the
+                # comments this save replaces. Replaced whole, a big delete
+                # of the body before it was in no file, after a comment of
+                # two letters was cleared (round 7 of the final audit).
+                comments_alone = (rescue_due and self._holds_unspent_rescue(note)
+                                  and not rescue_copy_due(note.get("title", ""),
+                                                          note.get("body", ""),
+                                                          title, body))
                 # The repeat going off: the note as it was, repeat and days,
                 # becomes the rescue copy, so Restore previous brings the
                 # series back; the days' own text stays in the note as well.
@@ -21916,9 +22010,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     # One save that also clears the text: an older copy's text
                     # in place of it left the newest words in no file (round 4).
                     note["_prev"] = self._turn_off_rescue_copy(
-                        note, takes_text=rescue_due)
+                        note, takes_text=rescue_due and not comments_alone)
+                    if comments_alone:
+                        note["_prev"]["comments"] = note.get("comments", "")
                 elif rescue_due:
-                    note["_prev"] = {
+                    note["_prev"] = dict(copy.deepcopy(note["_prev"]),
+                                         comments=note.get("comments", "")) if comments_alone else {
                         "title": note.get("title", ""),
                         "body": note.get("body", ""),
                         "formatting": note.get("formatting", []),
@@ -22772,7 +22869,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         if not self._dismiss_mini_popup_asking(holding_work_only=True):
             return
-        if self._save_on_the_way_out() is False:
+        self._closing_window = True
+        try:
+            if self._save_on_the_way_out() is False:
+                return
+        finally:
+            self._closing_window = False
+        # Words a full checklist's Add box could not take wait for their note
+        # while the app is open; closing loses them, so it asks, once for all.
+        waiting = list(self._add_box_waiting.values())
+        if waiting and not self.ask_yes_no(
+                "Close without these items?",
+                f"A checklist can have up to {MAX_CHECKLIST_ITEMS:,} items, and "
+                + ("a full one could not take “%s”" % one_line(waiting[0], 80)
+                   if len(waiting) == 1 else
+                   f"full ones could not take {len(waiting)} items typed in their Add boxes")
+                + ". Close anyway and lose "
+                + ("it" if len(waiting) == 1 else "them") + "?",
+                icon="warning", default="no"):
             return
         if getattr(self, "_notes_unsaved", False) and not self.ask_yes_no(
                 "Close without saving?",
@@ -22863,6 +22977,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             save_setting("backup_cut_short", {
                 "kind": "export", "file": export.get("save_path") or "",
                 "when": "session"})
+        asking = getattr(self, "_import_asking", None)
+        if asking is not None:
+            # Its questions on screen, its files copied: what a session that
+            # ends leaves behind is taken out by the next start, and the
+            # files stay meanwhile, as an answer may still claim them.
+            asking["asked_at_session_end"] = True
+            save_setting("backup_cut_short", {
+                "kind": "import", "file": asking.get("zip") or "", "when": "session",
+                "copied": list(asking.get("copied") or []),
+                "temp_dir": asking.get("temp_dir") or ""})
         state = self._import_state
         if state is None:
             return
