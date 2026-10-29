@@ -476,13 +476,16 @@ class AttachmentsMixin:
         # Tab and Shift+Tab walk its two buttons and come back round, as a
         # dialog's answers do (<<PrevWindow>>: X11's ISO_Left_Tab). And Enter
         # presses the one holding the keyboard, as a dialog's do: a Tk button
-        # answers Space alone, and Enter on Close did nothing.
+        # answers Space alone, and Enter on Close did nothing. Pressed, not
+        # held: the Enter that opened the preview, held, closed it, and the
+        # name it gave the keyboard back to opened it again (_enter_repeats).
         for b in buttons:
             b.bind("<Tab>", lambda e, b=b: cycle(b, 1))
             for seq in ("<Shift-Tab>", "<<PrevWindow>>"):
                 b.bind(seq, lambda e, b=b: cycle(b, -1))
             for seq in ("<Return>", "<KP_Enter>"):
-                b.bind(seq, lambda e, b=b: (b.invoke(), "break")[1])
+                b.bind(seq, lambda e, b=b: (
+                    None if self._enter_repeats(e) else b.invoke(), "break")[1])
         if opener is not None and opener is not self:
             # Not named *path*: Open externally's command reads the picture's
             # path when pressed, and it opened the overlay's name instead.

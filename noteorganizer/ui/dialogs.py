@@ -695,8 +695,12 @@ class DialogsMixin:
             # Space and the mouse, and nothing bound Return. The button
             # holding the keyboard is what Enter presses. A key typed into
             # some other field (Tab stays in the card now, but a timer can
-            # still move the keyboard) is that field's own business.
-            if not innermost():
+            # still move the keyboard) is that field's own business. Asked
+            # first, for every press: Enter held on what opened the question
+            # answered it, and the next repeat asked it again
+            # (_enter_repeats).
+            held = self._enter_repeats(event)
+            if held or not innermost():
                 return
             w = getattr(event, "widget", None)
             if w in dialog_buttons:
@@ -1792,6 +1796,11 @@ class DialogsMixin:
         for button in (1, 2, 3):
             self.bind_all(f"<ButtonPress-{button}>", self._count_pointer_press,
                           add="+")
+        # Enter let go of, wherever the keyboard is: a press after it is a
+        # press of its own, not the key held down (_enter_repeats).
+        self._enter_seen = {}
+        for seq in ("<KeyRelease-Return>", "<KeyRelease-KP_Enter>"):
+            self.bind_all(seq, self._enter_released, add="+")
         # Tk's own buttons take Space through their class binding, which
         # runs the command and never _key_press: a "Show 25 more" that goes
         # as it draws the next page left the keyboard on the window. Tk runs
@@ -1812,6 +1821,47 @@ class DialogsMixin:
                                  f"{starts} %W\n{script}\n{after}")
             except tk.TclError:
                 pass
+
+    # A key held down repeats: X11 sends each repeat as a release and a press
+    # at one time stamp, Windows as a press alone. A press of Enter this soon
+    # after the last, no release between, is the key still held: the slowest
+    # repeat Windows offers comes within a second of the press.
+    KEY_REPEAT_MS = 1_100
+
+    def _enter_repeats(self, event):
+        """Whether *event*, a press, is Enter held down repeating rather than
+        pressed again -- False for any other key. A control Enter's press gave
+        the keyboard to took each repeat as a press of its own: held on an
+        attachment, the picture's preview opened, its Close took the keyboard
+        and the next repeat, the name got it back and the next, over and over.
+        A press Tk is asked to make carries no time, and is never a repeat."""
+        key = getattr(event, "keysym", "")
+        if key not in ("Return", "KP_Enter"):
+            return False
+        when = getattr(event, "time", 0)
+        when = when if isinstance(when, int) else 0
+        seen = getattr(self, "_enter_seen", None)
+        if seen is None:
+            seen = self._enter_seen = {}
+        last = seen.get(key)
+        if not when or last is None:
+            held = False
+        elif last[0] == "press" and last[1] == when:
+            held = last[2]          # the same press, heard twice: one answer
+        elif last[0] == "release":
+            held = last[1] == when
+        else:
+            held = 0 < when - last[1] <= self.KEY_REPEAT_MS
+        seen[key] = ("press", when, held)
+        return held
+
+    def _enter_released(self, event):
+        """Enter let go of: its next press is a press again (_enter_repeats)."""
+        when = getattr(event, "time", 0)
+        if getattr(self, "_enter_seen", None) is None:
+            self._enter_seen = {}
+        self._enter_seen[getattr(event, "keysym", "")] = (
+            "release", when if isinstance(when, int) else 0, False)
 
     def _count_pointer_press(self, event=None):
         self._pointer_presses = getattr(self, "_pointer_presses", 0) + 1
@@ -1932,6 +1982,8 @@ class DialogsMixin:
         press = getattr(widget, "_key_press", None)
         if press is None:
             return None
+        if self._enter_repeats(event):
+            return "break"              # Enter held down: pressed once
         place = self._place_of(widget)
         # A popup this press opens -- wherever it is anchored -- was asked
         # for from the keyboard (_place_dropdown_popup).

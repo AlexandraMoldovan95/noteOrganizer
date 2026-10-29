@@ -10711,6 +10711,24 @@
     "expect": "killed"
   },
   {
+    "id": "RZ06",
+    "about": "Enter held down presses again at every repeat, and a picture's preview opens and shuts over and over",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "        seen[key] = (\"press\", when, held)\n        return held\n",
+        "replace": "        seen[key] = (\"press\", when, held)\n        return False\n"
+      }
+    ],
+    "must_fail": [
+      "Enter held on a picture's name opens its preview once"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
     "id": "DR91",
     "about": "a note read keeps a turned-off series' own-text days only in its rescue copy, as the phone wrote it",
     "edits": [

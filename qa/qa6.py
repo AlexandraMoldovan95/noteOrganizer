@@ -4542,6 +4542,61 @@ check(f"Enter (and the keypad's, off Windows) presses the preview's Close, and i
       _kr_seen == {f'{k} on {"Open externally" if s else "✕ Close"}': (True, True)
                    for k, s in _kr_keys}
       and _kr_opened == ['20261002120000000000_kb.png'])
+# Round 7: Enter held on a picture's name presses it once. The preview gave
+# its Close the keyboard, Close took the next repeat and shut it, the name got
+# the keyboard back and the next one, and the preview opened and shut over and
+# over. A held key repeats as presses alone on Windows, as a release and a
+# press at one time on X11: both are sent, with times, as a held key's come.
+# And let go of, Enter presses again.
+_kh_built, _kh_seen = [], {}
+_kh_real_build = app._build_image_preview
+app._build_image_preview = lambda *a, **k: (_kh_built.append(1),
+                                            _kh_real_build(*a, **k))[1]
+
+
+def _kh_key(kind, when):
+    (_ka_holder() or app).event_generate(f'<Key{kind}-Return>', time=when)
+    _kv_settle(2)
+
+
+def _kh_on():
+    held, pop = _ka_holder(), app._mini_popup
+    if pop is not None and held is not None and str(held).startswith(str(pop) + '.'):
+        return str(held.cget('text'))
+    return 'the name' if held is _ka_names[1] else str(held)[-24:]
+
+
+try:
+    for _kh_shape, _kh_t in (('presses alone', 100_000), ('release and press', 200_000)):
+        del _kh_built[:]
+        _take_focus(_ka_names[1])
+        _kh_key('Press', _kh_t)
+        for _kh_i in range(10):
+            _kh_when = _kh_t + 500 + 33 * _kh_i
+            if _kh_shape == 'release and press':
+                _kh_key('Release', _kh_when)
+            _kh_key('Press', _kh_when)
+        _kh_key('Release', _kh_t + 900)
+        _kh_seen[f'held on the name, {_kh_shape}'] = (len(_kh_built), _kh_on())
+        _kh_key('Press', _kh_t + 1500)                 # pressed again: Close
+        for _kh_i in range(10):
+            _kh_when = _kh_t + 2000 + 33 * _kh_i
+            if _kh_shape == 'release and press':
+                _kh_key('Release', _kh_when)
+            _kh_key('Press', _kh_when)
+        _kh_key('Release', _kh_t + 2400)
+        _kh_seen[f'held on Close, {_kh_shape}'] = (len(_kh_built), _kh_on(),
+                                                   app._mini_popup is None)
+finally:
+    app._build_image_preview = _kh_real_build
+    app._dismiss_mini_popup()
+    _kv_settle()
+check(f"Enter held on a picture's name opens its preview once, and held on its "
+      f"Close shuts it once ((previews built, the keyboard on): {_kh_seen})",
+      _kh_seen == {f'held on the name, {s}': (1, '✕ Close') for s in
+                   ('presses alone', 'release and press')}
+      | {f'held on Close, {s}': (1, 'the name', True) for s in
+         ('presses alone', 'release and press')})
 # Round 5: Ctrl+F and Ctrl+N gave the keyboard to a box under the preview,
 # left open over it, and the keys went into a note nobody could see. The
 # shortcut closes it, as a click outside does. Ctrl+N last: it clears the note.
