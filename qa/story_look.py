@@ -555,6 +555,52 @@ if _names:
 app.update()
 app.update_idletasks()
 """),
+    # A checklist of 1,000 items, every fifth a long one, scrolled to its end:
+    # its last items drawn at the bottom of the list, where one frame holding
+    # them all stopped some 50,000 px short (the final audit's fifth round).
+    ("29-a-long-checklist-at-its-end", """
+app._dismiss_mini_popup()
+app.hide_settings_page()
+app.notebook.select(app.TAB_NOTES)
+app.new_note()
+app.update()
+_long = ('steady ' * 150)[:900]
+app._working_checklist = [
+    {'text': '%03d %s' % (i, _long if i % 5 == 0 else 'pack item number %d' % i),
+     'done': i % 3 == 0} for i in range(1000)]
+if app._checklist_open:
+    app._render_checklist_items()
+else:
+    app.toggle_checklist_section()
+app._cancel_pending_autosave()
+app.update()
+app.update_idletasks()
+app._bring_into_sight(app.checklist_expand_btn)
+app._checklist_canvas.yview_moveto(1.0)
+app.update()
+app._hide_toast()
+app.update()
+app.update_idletasks()
+"""),
+    # The picker with the 1,000 templates a notebook may hold, scrolled to
+    # the last of them.
+    ("30-the-template-picker-at-its-last", """
+app._dismiss_mini_popup()
+app._working_checklist = []
+app._render_checklist_items()
+app.templates = [NO.normalize_template({'name': 'Template %04d' % i, 'body': 'x'})
+                 for i in range(1000)]
+app.show_template_picker()
+app.update()
+app.update_idletasks()
+_views = [w for w in app._mini_popup.winfo_children()]
+while _views and getattr(_views[0], '_row_stack', None) is None:
+    _views = _views[1:] + list(_views[0].winfo_children())
+if _views:
+    _views[0].yview_moveto(1.0)
+app.update()
+app.update_idletasks()
+"""),
 ]
 
 SEED = [
