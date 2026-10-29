@@ -601,6 +601,61 @@ if _views:
 app.update()
 app.update_idletasks()
 """),
+    # The template editor, opened from Settings, saying under its heading that
+    # a paste into its name was shortened: the status line that said it stands
+    # hidden behind Settings (the final audit's sixth round).
+    ("31-the-template-editor-says-a-paste-was-shortened", """
+app._dismiss_mini_popup()
+app.templates = []
+app.show_settings_page()
+app.toggle_settings_panel('templates')
+app.update()
+app._edit_template(None, lambda: None)
+app.update()
+app.update_idletasks()
+_boxes = []
+def _entries(w):
+    for c in w.winfo_children():
+        if isinstance(c, tk.Entry):
+            _boxes.append(c)
+        _entries(c)
+_entries(app._mini_popup)
+_real_read = NO.clipboard.read_text
+NO.clipboard.read_text = lambda: 'Weekly review ' * 25
+try:
+    _boxes[0].delete(0, 'end')
+    _boxes[0].event_generate('<<Paste>>')
+finally:
+    NO.clipboard.read_text = _real_read
+app.update()
+app.update_idletasks()
+"""),
+    # A checklist of sixteen items of 100 lines, at its top: item 00 is what is
+    # drawn there. Chunks taller than their parking place hung over the top of
+    # such a list at 150-300% (the final audit's sixth round).
+    ("32-a-checklist-of-long-items-at-its-top", """
+app._dismiss_mini_popup()
+app.hide_settings_page()
+app.notebook.select(app.TAB_NOTES)
+app.new_note()
+app.update()
+_tall = '\\n'.join('line %d of a long item' % k for k in range(100))
+app._working_checklist = [{'text': '%02d %s' % (i, _tall), 'done': False}
+                          for i in range(16)]
+if app._checklist_open:
+    app._render_checklist_items()
+else:
+    app.toggle_checklist_section()
+app._cancel_pending_autosave()
+app.update()
+app.update_idletasks()
+app._bring_into_sight(app.checklist_expand_btn)
+app._checklist_canvas.yview_moveto(0)
+app.update()
+app._hide_toast()
+app.update()
+app.update_idletasks()
+"""),
 ]
 
 SEED = [
