@@ -3440,6 +3440,19 @@ check("...and five rows of a table's eight deleted at once keep one (%d of %d "
       "characters, %d lost)" % (len(_trip_cut), len(_trip_old), _trip_lost),
       _model_mod.rescue_copy_due("t", _trip_old, "t", _trip_cut)
       and 40 < _trip_lost < 0.3 * len(_trip_old))
+# The comments are a text the copy holds, and the measure left them out: 780
+# characters of them replaced by "ok" kept no copy (round 6). Weighed as a
+# text of their own, so a long comment does not make a whole body deleted
+# read as a small share either.
+_cm_long = " ".join("Remember the vet said %d grams a day" % i for i in range(24))
+_cm_body = "Walk the dog twice a day and keep the lead short near the road."
+check("comments replaced keep a copy, weighed as a text of their own",
+      _model_mod.rescue_copy_due("Dog", _cm_body, "Dog", _cm_body, _cm_long, "ok")
+      and _model_mod.rescue_copy_due("Dog", _cm_body, "Dog", _cm_body, _cm_long, "")
+      and _model_mod.rescue_copy_due("Dog", _cm_body, "Dog", "", _cm_long, _cm_long)
+      and not _model_mod.rescue_copy_due("Dog", _cm_body, "Dog", _cm_body,
+                                         _cm_long, _cm_long + " Buy food.")
+      and not _model_mod.rescue_copy_due("Dog", _cm_body, "Dog", _cm_body, "", "new"))
 
 # The restore's own list of what it can put back must be exactly what an
 # update can replace beyond the text -- a field added to one without the

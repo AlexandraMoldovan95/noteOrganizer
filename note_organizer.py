@@ -21799,7 +21799,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # emptied note counts however short it was: a 17-character
                 # shopping list cleared once went to disk with no copy.
                 rescue_due = rescue_copy_due(note.get("title", ""), note.get("body", ""),
-                                             title, body)
+                                             title, body,
+                                             note.get("comments", ""), comments)
                 # The repeat going off: the note as it was, repeat and days,
                 # becomes the rescue copy, so Restore previous brings the
                 # series back; the days' own text stays in the note as well.

@@ -3914,6 +3914,22 @@ check(f'...and leaves a saved note saved first, its Add box too, without asking 
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
 
+# Comments wiped kept no rescue copy: the save's measure read the title and
+# body only, though the copy holds the comments (round 6).
+_cw_old = ' '.join('Remember the vet said %d grams a day' % i for i in range(24))
+_cw_note = NO.normalize_note({'id': 4255, 'title': 'Dog', 'body': 'Walk twice a day.',
+                              'comments': _cw_old})
+app.notes = [_cw_note]; app.save_notes()
+app.open_note_in_tab(_cw_note); app.update()
+app.comments_text.delete('1.0', 'end')
+app.comments_text.insert('1.0', 'ok')
+app._flush_autosave(leaving=True); app.update()             # leaving saves
+_cw_prev = (next((n for n in json.load(open(NO.DATA_FILE, encoding='utf-8'))
+                  if n.get('id') == 4255), {}).get('_prev') or {})
+check(f'comments wiped keep a rescue copy of them ({len(_cw_prev.get("comments", ""))})',
+      _cw_prev.get('comments') == _cw_old)
+app.notes = []; app.save_notes()
+
 # ...and saves all the close saves (one list, _save_on_the_way_out). Its own
 # copy had drifted: a date typed short was left unsettled, so unsaved, and a
 # write that had failed was never tried again (2026-10-28, the final audit).

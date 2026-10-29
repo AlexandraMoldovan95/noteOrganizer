@@ -370,13 +370,20 @@ def _measured(text):
     return sum(len(word) + 1 for word in _words(text))
 
 
-def rescue_copy_due(old_title, old_body, title, body):
-    """Whether a save of *title* and *body* over *old_title* and *old_body*
-    keeps the old text as the rescue copy "↩ Restore previous" brings back:
-    emptied; more than 40 characters gone, 30% of it or 200; or most of a
-    short note, 70% and 15 characters at least. Counted by what is gone, not
-    by how much shorter the text got. ISSUES_LOG: "The safety net that
-    measured the wrong thing"."""
+def rescue_copy_due(old_title, old_body, title, body, old_comments="", comments=""):
+    """Whether a save keeps the old text as the rescue copy "↩ Restore
+    previous" brings back: emptied; more than 40 characters gone, 30% of it
+    or 200; or most of a short note, 70% and 15 characters at least -- for
+    the title and body, or for the comments as a text of their own (round 6
+    of the final audit). Counted by what is gone. ISSUES_LOG: "The safety
+    net that measured the wrong thing"."""
+    return (_text_rescue_due(old_title, old_body, title, body)
+            or _text_rescue_due("", old_comments, "", comments))
+
+
+def _text_rescue_due(old_title, old_body, title, body):
+    """rescue_copy_due's bars, for one text: a title and a body, or the
+    comments alone."""
     old_len = len(old_title) + len(old_body)
     if old_len == 0:
         return False

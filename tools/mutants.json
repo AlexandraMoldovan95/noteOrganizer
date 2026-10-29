@@ -10143,5 +10143,59 @@
       "qa3"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "DR85",
+    "about": "the save's rescue-copy measure is not given the comments",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                                             title, body,\n                                             note.get(\"comments\", \"\"), comments)",
+        "replace": "                                             title, body)"
+      }
+    ],
+    "must_fail": [
+      "comments wiped keep a rescue copy of them"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR86",
+    "about": "rescue_copy_due leaves the comments out of what it weighs",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    return (_text_rescue_due(old_title, old_body, title, body)\n            or _text_rescue_due(\"\", old_comments, \"\", comments))",
+        "replace": "    return _text_rescue_due(old_title, old_body, title, body)"
+      }
+    ],
+    "must_fail": [
+      "comments replaced keep a copy, weighed as a text of their own"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR87",
+    "about": "the comments are weighed in with the body, so a long comment makes a whole body deleted read as a small share",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    return (_text_rescue_due(old_title, old_body, title, body)\n            or _text_rescue_due(\"\", old_comments, \"\", comments))",
+        "replace": "    return _text_rescue_due(old_title, old_body + \"\\n\" + old_comments, title, body + \"\\n\" + comments)"
+      }
+    ],
+    "must_fail": [
+      "comments replaced keep a copy, weighed as a text of their own"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
   }
 ]
