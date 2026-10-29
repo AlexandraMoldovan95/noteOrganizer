@@ -6,15 +6,27 @@ Windows and the Linux CI image (DejaVu). A layout that fits on one and
 not the other is not a layout, it is a coincidence, so the numbers get
 printed on both rather than assumed from one.
 
-    py qa/probe_bar_width.py
-    docker run --rm -v "${PWD}:/repo:ro" noteorg-linux-ci probe_bar_width
+It writes notes_data.json where it runs, so never in place: copy
+note_organizer.py, the noteorganizer/ package, tools/guest.py and this file
+into a scratch folder and run ``py probe_bar_width.py`` there. In the Linux
+image, the runner does that inside the container:
+
+    py tools/linux_ci.py --script qa/probe_bar_width.py
 """
 import io
 import json
 import os
 import sys
 
-import tkinter as tk
+# The turn and the memory ceiling before the app is built (tools/guest.py,
+# copied beside this file).
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import guest  # noqa: E402
+
+for _line in guest.settle(label="probe_bar_width"):
+    print(_line)
+
+import tkinter as tk  # noqa: E402
 
 if os.path.exists("notes_data.json"):
     prev = json.load(io.open("notes_data.json", encoding="utf-8"))

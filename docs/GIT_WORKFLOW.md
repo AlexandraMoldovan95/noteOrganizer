@@ -89,8 +89,8 @@ git branch -d feat/short-name
 (`git fetch --prune` drops the stale remote-tracking reference for the branch GitHub just
 deleted — without it, `git branch -a` keeps listing ghosts.)
 
-Before pushing a branch, the local Linux CI mirror can save a red remote run — one Docker
-command reproduces the Ubuntu leg; see [`qa/README.md`](../qa/README.md) for it.
+Before pushing a branch, the local Linux CI mirror can save a red remote run — `py
+tools/linux_ci.py` reproduces the Ubuntu leg in Docker; see [`qa/README.md`](../qa/README.md) for it.
 
 **Not happy with the result before committing?** Don't commit. Ask for an adjusted file, replace
 it again, rebuild again, repeat until it looks right — nothing is "saved" in Git until I actually

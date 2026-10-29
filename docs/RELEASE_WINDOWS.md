@@ -49,9 +49,10 @@ rest on every run. To move to a new version:
 1. Change the pin in `requirements.txt` and in
    `tools/linux-ci/Dockerfile`.
 2. Install it: `py -m pip install Pillow==<version>`.
-3. Rebuild the Linux image: `docker build -t noteorg-linux-ci tools/linux-ci`.
+3. Rebuild the Linux image: `py tools/linux_ci.py --build`.
 4. `py tools/make_third_party_notices.py`, then the full suite on both
-   (`py tools/run_tests.py` and the Linux image), then build.
+   (`py tools/run_tests.py`, then `py tools/linux_ci.py` -- one at a time),
+   then build.
 
 ## Microsoft Store (MSIX)
 
