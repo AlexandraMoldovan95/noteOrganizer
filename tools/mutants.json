@@ -9009,7 +9009,7 @@
       {
         "file": "noteorganizer/ui/settings_page.py",
         "find": "        stack = self._scrolling_rows(shell, \"card\", pop)\n",
-        "replace": "        _grow = tk.Canvas(shell, bg=self.colors[\"card\"], highlightthickness=0,\n                          width=1, height=1)\n        _grow.pack(fill=\"both\", expand=True)\n        stack = self._row_stack(_grow, on_change=lambda: _grow.configure(\n            width=stack.widest, height=stack.total))\n"
+        "replace": "        _grow = tk.Canvas(shell, bg=self.colors[\"card\"], highlightthickness=0,\n                          width=self.px(420), height=1)\n        _grow.pack(fill=\"both\", expand=True)\n        stack = self._row_stack(_grow, on_change=lambda: _grow.configure(\n            height=stack.total))\n"
       }
     ],
     "must_fail": [
@@ -9676,7 +9676,7 @@
       }
     ],
     "must_fail": [
-      "a template's table widened at the same height widens its editor"
+      "a template's table given more columns at the same height widens its"
     ],
     "suites": [
       "qa2"

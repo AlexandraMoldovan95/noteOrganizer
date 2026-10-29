@@ -1271,33 +1271,44 @@ check(f'the template editor with 70 long checklist items scrolls to its Add box 
       _ll_ok and len(_ll_seen) == 3 and all(_ll_seen.values()))
 app._dismiss_mini_popup(); _ll_settle()
 
-# A table in a template's body grown wider at the same height: no chunk
-# changes height, and the editor is measured again for it all the same.
-_ll_tpl = {'name': 'Wide', 'title': '', 'body': '| a | b |\n| 1 | 2 |',
+# A table in a template's body given more columns, at the same height and
+# with no scrollbar of its own: no chunk changes height, and the editor is
+# measured again for it all the same. Columns are added until the preview
+# is wider than the editor was, as the fonts on each system decide.
+_ll_tpl = {'name': 'Wide', 'title': '', 'body': '| c0 | c1 |\n| x | x |',
            'comments': '', 'category': 'General', 'checklist': []}
 app._edit_template(_ll_tpl, lambda: None); _ll_settle(10)
 _ll_pop = app._mini_popup
 _ll_view = _ll_stack_canvas(_ll_pop)
 _ll_body = next((t for t in _ll_all(_ll_pop) if isinstance(t, tk.Text)
-                 and '| a |' in t.get('1.0', 'end')), None)
+                 and '| c0 |' in t.get('1.0', 'end')), None)
 _ll_wide = None
 if _ll_view is not None and _ll_body is not None and _ll_focus(_ll_body):
     _ll_was = _ll_view.winfo_width()
-    _ll_body.delete('1.0', 'end')
-    _ll_body.insert('1.0', '| ' + ' | '.join('a wide heading %d' % i for i in range(6))
-                    + ' |\n| ' + ' | '.join(str(i) for i in range(6)) + ' |')
-    _ll_body.event_generate('<KeyRelease-a>'); _ll_settle(10)
-    _ll_prev = [c for c in _ll_all(_ll_pop) if isinstance(c, tk.Canvas)
-                and c.find_all() and c is not _ll_view]
-    _ll_wide = (_ll_was, _ll_view.winfo_width(),
-                [int(str(c.cget('width'))) for c in _ll_prev],
-                bool(_ll_prev) and all(
-                    c.winfo_rootx() + int(str(c.cget('width')))
-                    <= _ll_view.winfo_rootx() + _ll_view.winfo_width() + 1
-                    for c in _ll_prev))
-check(f'a template\'s table widened at the same height widens its editor to show '
-      f'it whole (width before, after, the preview\'s: {_ll_wide})',
-      _ll_wide is not None and _ll_wide[1] > _ll_wide[0] and _ll_wide[3])
+    _ll_prev = next((c for c in _ll_all(_ll_pop) if isinstance(c, tk.Canvas)
+                     and c.find_all() and c is not _ll_view), None)
+    _ll_tall = int(str(_ll_prev.cget('height'))) if _ll_prev is not None else None
+    for _ll_n in range(3, 40):
+        _ll_body.delete('1.0', 'end')
+        _ll_body.insert('1.0', '| ' + ' | '.join('c%d' % i for i in range(_ll_n))
+                        + ' |\n| ' + ' | '.join('x' * _ll_n) + ' |')
+        _ll_body.event_generate('<KeyRelease-a>'); _ll_settle(4)
+        if (_ll_prev is None or getattr(_ll_prev, '_preview_overflows_x', False)
+                or int(str(_ll_prev.cget('width'))) > _ll_was + 20):
+            break
+    _ll_settle(6)
+    if _ll_prev is not None:
+        _ll_wide = {'before': _ll_was, 'after': _ll_view.winfo_width(),
+                    'preview': int(str(_ll_prev.cget('width'))),
+                    'same height': int(str(_ll_prev.cget('height'))) == _ll_tall,
+                    'no scrollbar': not getattr(_ll_prev, '_preview_overflows_x', True),
+                    'shown whole': _ll_prev.winfo_rootx() + int(str(_ll_prev.cget('width')))
+                    <= _ll_view.winfo_rootx() + _ll_view.winfo_width() + 1}
+check(f'a template\'s table given more columns at the same height widens its '
+      f'editor to show it whole ({_ll_wide})',
+      _ll_wide is not None and _ll_wide['preview'] > _ll_wide['before']
+      and _ll_wide['same height'] and _ll_wide['no scrollbar']
+      and _ll_wide['after'] > _ll_wide['before'] and _ll_wide['shown whole'])
 app._dismiss_mini_popup(); _ll_settle()
 
 # Settings > Templates, the only place a template is deleted: its last row's
