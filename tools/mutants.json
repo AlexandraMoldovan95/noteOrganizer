@@ -9926,5 +9926,77 @@
       "qa6"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "DR72",
+    "about": "a restore on a run whose notes file is held goes ahead instead of being refused",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if entries and _core_paths.writes_held(DATA_FILE):",
+        "replace": "        if False:"
+      }
+    ],
+    "must_fail": [
+      "a restore on a held run is refused"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR73",
+    "about": "a restore whose notes write fails leaves the entry out of the Trash in memory",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            del self.notes[kept_count:]\n            self.trash = kept_trash\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a restore whose notes write fails"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR74",
+    "about": "a held run deletes attached files its unread notes may use",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "    if paths.writes_held(paths.DATA_FILE):\n        return\n    for note in notes_or_entries:",
+        "replace": "    for note in notes_or_entries:"
+      }
+    ],
+    "must_fail": [
+      "...and no attached file is deleted on a held run"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR75",
+    "about": "the toast's Undo, refused on a held run, also says there was nothing left to put back",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if restored is None:\n            return  # could not be kept, and said so; still in the Trash\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a restore on a held run is refused"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
   }
 ]

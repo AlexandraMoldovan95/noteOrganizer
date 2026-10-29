@@ -367,6 +367,11 @@ def _delete_attachment_files(notes_or_entries, spare=()):
     note moved to the Trash may still come back. *spare* names files that
     must survive, those the notes in the app still use, in case a stale row
     acts. ISSUES_LOG: "The Trash that gave notes back one at a time"."""
+    # A run that could not read the notes file holds notes it never saw: a
+    # file none of ITS notes uses may still be one of theirs. Kept, every
+    # file, until a run that has read them (round 6 of the final audit).
+    if paths.writes_held(paths.DATA_FILE):
+        return
     for note in notes_or_entries:
         for att in attachments_of(note):
             stored_as = att["stored_as"]

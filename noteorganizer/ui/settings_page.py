@@ -1869,7 +1869,8 @@ class SettingsPageMixin:
             # note back is undone by deleting it again -- which is the button
             # right beside it. One batch: note by note, each restore wrote
             # both files and rebuilt the list and the statistics again.
-            self._restore_trash_entries(picked)
+            if self._restore_trash_entries(picked) is None:
+                return  # could not be kept, and said so; still ticked
             for entry in picked:
                 self._trash_sel.pop(_trash_tick_key(entry), None)
             self.set_status("Restored %d note%s"

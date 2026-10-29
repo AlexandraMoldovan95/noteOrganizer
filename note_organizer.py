@@ -21961,13 +21961,36 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if that write fails, the notes are still in the trash file -- a
         duplicate at worst, where the old order could leave a note in
         neither file.
+
+        Returns None when nothing came back because it could not be kept:
+        on a run whose notes file is held, or when the notes write fails.
+        The lists in memory are then put back as the files are: a Trash
+        held in memory without the entries was written over trash.json by
+        the next Delete or Empty trash, and the note was in neither file
+        (round 6 of the final audit).
         """
+        if entries and _core_paths.writes_held(DATA_FILE):
+            many = len(entries) > 1
+            self.show_warning(
+                "Restore after reopening",
+                "When Note Organizer started it could not open your notes, so "
+                "nothing is saved in this session, and a note restored now "
+                "would be lost when the app closes. %s in Recently deleted: "
+                "close Note Organizer, open it again, and restore %s then."
+                % ("They stay" if many else "It stays", "them" if many else "it"))
+            return None
+        kept_count, kept_trash = len(self.notes), self.trash
         self.notes, self.trash, restored = core_restore_many_from_trash(
             self.notes, self.trash, entries)
         if not restored:
             return restored
-        if self.save_notes():
-            save_trash(self.trash)
+        if not self.save_notes():
+            del self.notes[kept_count:]
+            self.trash = kept_trash
+            self.set_status("Not restored — the notes could not be saved; "
+                            "it stays in Recently deleted")
+            return None
+        save_trash(self.trash)
         self.refresh_note_list()
         self.render_calendar()
         return restored
@@ -22009,6 +22032,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                    if isinstance(e, dict)
                    and (e.get("id"), e.get("deleted_at")) in wanted]
         restored = self._restore_trash_entries(entries)
+        if restored is None:
+            return  # could not be kept, and said so; still in the Trash
 
         if not restored:
             # Emptied, purged, or already put back -- a second click on a

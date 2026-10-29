@@ -3618,6 +3618,70 @@ check(f'...and a Windows sign-out shows no dialog ({_hr_session})', _hr_session 
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
 
+# A restore on a held run took the entry out of the Trash in memory, its notes
+# save refused: the next Delete or Empty trash wrote that Trash over the file,
+# and the note was in neither file (round 6). Refused before anything moves;
+# a notes write that fails on an ordinary run puts the lists back as well; and
+# no attached file is deleted on a held run, one its unread notes may use.
+_rt_file = os.path.join(NO.ATTACHMENTS_DIR, '20261029120000000000_recipe.png')
+os.makedirs(NO.ATTACHMENTS_DIR, exist_ok=True)
+with open(_rt_file, 'wb') as _f:
+    _f.write(b'recipe')
+_rt_entries = [NO.normalize_note({'id': 41, 'title': 'Recipe from mum', 'body': 'flour'}),
+               NO.normalize_note({'id': 42, 'title': 'Old junk', 'body': 'x',
+                                  'attachments': [{'name': 'recipe.png',
+                                                   'stored_as': os.path.basename(_rt_file)}]})]
+for _rt_e in _rt_entries:
+    _rt_e['deleted_at'] = '2026-10-29 09:00:00'
+app.trash = list(_rt_entries); NO.save_trash(app.trash)
+_rt_said, _rt_toasts, _rt_status = [], [], []
+_rt_real = (app.show_error, app.show_warning, app._show_toast, app.set_status)
+app.show_error = lambda *a, **k: _rt_said.append(a[0] if a else '')
+app.show_warning = lambda *a, **k: _rt_said.append(a[0] if a else '')
+app._show_toast = lambda text, *a, **k: _rt_toasts.append(text)
+app.set_status = lambda text, *a, **k: _rt_status.append(text)
+NO._core_paths.hold_writes(NO.DATA_FILE)
+try:
+    _rt_one = app._restore_trash_entries([app.trash[0]])
+    _rt_undo_said = len(_rt_said)
+    app._undo_trash([(41, '2026-10-29 09:00:00')]); app.update()
+    _rt_mem = [e.get('title') for e in app.trash]
+    # The next write of the Trash, as Delete permanently on another entry makes:
+    NO._delete_attachment_files([app.trash[1]],
+                                spare=NO.attachment_names_in(app.notes + [app.trash[0]]))
+    app.trash = [app.trash[0]]; NO.save_trash(app.trash)
+    _rt_file_after = [e.get('title') for e in NO.load_trash()]
+    _rt_kept_file = os.path.exists(_rt_file)
+finally:
+    NO._core_paths.WRITES_HELD.clear()
+_rt_said2 = list(_rt_said)
+_rt_said.clear()
+app.trash = list(_rt_entries[:1]); NO.save_trash(app.trash)
+os.makedirs(NO.DATA_FILE + '.tmp')
+try:
+    _rt_failed = app._restore_trash_entries([app.trash[0]])
+    _rt_after_fail = ([e.get('title') for e in app.trash],
+                      [n.get('title') for n in app.notes])
+finally:
+    os.rmdir(NO.DATA_FILE + '.tmp')
+    app.show_error, app.show_warning, app._show_toast, app.set_status = _rt_real
+    app._notes_unsaved = False
+    if os.path.exists(_rt_file):
+        os.remove(_rt_file)
+check(f'a restore on a held run is refused and says why, the Undo as well '
+      f'({_rt_one}, {_rt_said2}, {_rt_toasts})',
+      _rt_one is None and _rt_said2 == ['Restore after reopening'] * 2
+      and _rt_undo_said == 1 and _rt_toasts == [])
+check(f'...the note still in the Trash after a later Trash write ({_rt_mem}, {_rt_file_after})',
+      _rt_mem == ['Recipe from mum', 'Old junk'] and _rt_file_after == ['Recipe from mum'])
+check(f'...and no attached file is deleted on a held run ({_rt_kept_file})', _rt_kept_file)
+check(f'a restore whose notes write fails leaves the note in the Trash, and says so '
+      f'({_rt_failed}, {_rt_after_fail}, {_rt_status[-1:]})',
+      _rt_failed is None and _rt_after_fail == (['Recipe from mum'], [])
+      and any('Not restored' in s for s in _rt_status))
+app.trash = []; NO.save_trash(app.trash)
+app.notes = []; app.save_notes()
+
 # One attached file another program holds with no sharing failed the whole
 # backup (round 4): it is left out of it, and named.
 _la_file = os.path.join(NO.ATTACHMENTS_DIR, '20261028120000000000_scan.png')
