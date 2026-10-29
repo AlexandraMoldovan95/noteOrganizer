@@ -10765,6 +10765,24 @@
     "expect": "killed"
   },
   {
+    "id": "RZ09",
+    "about": "the arrows read a choice's x where its chunk is parked, and Left in the picker goes to a template out of sight",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/dialogs.py",
+        "find": "        return (self._root_x(w) + w.winfo_width() / 2,\n",
+        "replace": "        return (w.winfo_rootx() + w.winfo_width() / 2,\n"
+      }
+    ],
+    "must_fail": [
+      "Left and Right in the picker leave the keyboard on its template"
+    ],
+    "suites": [
+      "qa2"
+    ],
+    "expect": "killed"
+  },
+  {
     "id": "RZ10",
     "about": "a title pasted with its line break is weighed as copied, and called shortened",
     "edits": [

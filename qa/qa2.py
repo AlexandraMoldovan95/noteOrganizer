@@ -1602,6 +1602,22 @@ if _ll_ok:
 check(f'the picker with 1,000 templates scrolls to the last; End takes the '
       f'keyboard there, in sight, and Up to the one before ({_ll_said}; {_ll_keys})',
       _ll_ok and _ll_keys == [True, True])
+# ...and Left and Right find nothing beside a template in its one column:
+# a chunk parked out of sight stands 20,000 px to the left of the view, and
+# Left went to a template 30 further down, parked there (round 7).
+_ll_sides = {}
+if _ll_ok:
+    _ll_view.yview_moveto(0); _ll_settle()
+    for _ll_at in (0, 5):
+        for _ll_key in ('Left', 'Right'):
+            if _ll_focus(_ll_btns[_ll_at]):
+                _ll_btns[_ll_at].event_generate(f'<KeyPress-{_ll_key}>'); _ll_settle(4)
+                _ll_on = str(app.tk.call('focus'))
+                _ll_sides[f'{_ll_key} from {_ll_at}'] = next(
+                    (k for k, b in enumerate(_ll_btns) if str(b) == _ll_on), _ll_on[-20:])
+check(f'Left and Right in the picker leave the keyboard on its template ({_ll_sides})',
+      _ll_sides == {'Left from 0': 0, 'Right from 0': 0, 'Left from 5': 5,
+                    'Right from 5': 5})
 app._dismiss_mini_popup(); _ll_settle()
 
 # The template editor, its checklist 70 of the longest items: its Add box and

@@ -2141,15 +2141,28 @@ class DialogsMixin:
         gather(top)
         if not drawn:
             return found
-        return sorted(found, key=lambda w: (self._root_y(w), w.winfo_rootx()))
+        return sorted(found, key=lambda w: (self._root_y(w), self._root_x(w)))
 
     def _centre_of(self, w):
-        # The x as it is: a chunk parked beside the view puts every choice in
-        # it the same 20,000 px to the left, and the one list of choices on a
-        # stack (the picker) is a single column -- Up and Down still find the
-        # nearest. A popup with choices beside a stack would ask its x too.
-        return (w.winfo_rootx() + w.winfo_width() / 2,
+        # Both read where the choice stands in its list: a chunk parked beside
+        # the view puts every choice in it 20,000 px to the left as well as
+        # above, and Left in the picker's one column went to a template 30
+        # further down, parked there.
+        return (self._root_x(w) + w.winfo_width() / 2,
                 self._root_y(w) + w.winfo_height() / 2)
+
+    def _root_x(self, w):
+        """*w*'s rootx where it stands in its list, as _root_y reads its y:
+        a chunk in the view stands at its box's left (RowStack._follow)."""
+        x, child = w.winfo_rootx(), w
+        while child.master is not None and not isinstance(child, (tk.Tk, tk.Toplevel)):
+            canvas = child.master
+            stack = getattr(canvas, "_row_stack", None)
+            box = stack.box(child) if stack is not None else None
+            if box is not None:
+                x += int(box[0]) - child.winfo_x()
+            child = canvas
+        return x
 
     def _root_y(self, w):
         """*w*'s rooty where it stands in its list, though a row stack has

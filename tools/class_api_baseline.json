@@ -679,6 +679,7 @@
   "_ring_row": "(self)",
   "_ring_shown": "(self, widget, on)",
   "_ring_to_paint": "(self, note_id)",
+  "_root_x": "(self, w)",
   "_root_y": "(self, w)",
   "_rounded_rect": "(self, canvas, x1, y1, x2, y2, r, **kwargs)",
   "_row_being_typed": "(self)",
