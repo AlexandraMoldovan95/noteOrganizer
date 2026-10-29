@@ -171,7 +171,8 @@ jobs at once, with a runaway test among them, took the desktop down
   SIGKILL and no footer. The figures are sized to measured runs, not to
   the incident: in a full run (2026-10-29) the largest process took
   135 MB on Windows, 146 MB all together, and 141 MB in the Linux image,
-  whose container peaked at 227 MB.
+  whose container peaked at 227 MB; `tools/bench.py` at 10,000 styled
+  notes, scrolled to the list's end, took 265 MB.
 - **Every child has a bound.** Each child process has a timeout, and a
   hang is a named failure — HANG — after which the run goes on.
 - **Nothing outlives a run.** A scratch folder carries a marker naming
