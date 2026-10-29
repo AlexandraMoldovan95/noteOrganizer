@@ -20578,6 +20578,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             st = self.capture_editor_state()
         except Exception:
             st = {}
+        # An item typed in the checklist's Add box and not yet added goes into
+        # the template too; the box keeps it for the note, which leaving adds
+        # it to (_take_pending_checklist_item).
+        var = getattr(self, "checklist_add_var", None)
+        pending = var.get().strip()[:MAX_CHECKLIST_ITEM_CHARS] if var is not None else ""
+        if pending:
+            st["checklist"] = list(st.get("checklist") or []) + [
+                {"text": pending, "done": False}]
         title = (st.get("title") or "").strip()
         body = (st.get("body") or "").strip()
         comments = (st.get("comments") or "").strip()

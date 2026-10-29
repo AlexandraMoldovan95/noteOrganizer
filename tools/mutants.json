@@ -9890,5 +9890,41 @@
       "qa2"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "DR70",
+    "about": "the template editor reads its checklist without the item typed in its Add box, so Save and the question on closing leave it out",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                             + ([{\"text\": pending, \"done\": False}] if pending else []),\n",
+        "replace": "                             ,\n"
+      }
+    ],
+    "must_fail": [
+      "an item typed in a checklist's Add box and not added goes into the template saved"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR71",
+    "about": "Save as template reads a note's checklist without the item typed in its Add box",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if pending:\n            st[\"checklist\"] = list(st.get(\"checklist\") or []) + [\n",
+        "replace": "        if False:\n            st[\"checklist\"] = list(st.get(\"checklist\") or []) + [\n"
+      }
+    ],
+    "must_fail": [
+      "an item typed in a checklist's Add box and not added goes into the template saved"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
   }
 ]

@@ -5639,6 +5639,67 @@ check(f"a paste past a box's limit over its selection replaces it, shortened to 
       f"typed and {_wp_kept.count('z') if _wp_kept is not None else None} pasted)",
       _wp_kept == 'y' * 1800 + 'z' * 200)
 
+# ---- A checklist item left in an Add box goes into the template saved ----
+# Round six of the final audit (a twin the Android fixer named): the template
+# editor's Save, its question on closing and its quiet save read the
+# checklist without the item typed in its Add box and not yet added, so a
+# "passport" typed there and saved was lost with the editor; Save as template
+# read a note's checklist the same way. The note's box keeps its item.
+_pa_seen = {}
+_pa_real_ask = app.ask_yes_no_cancel
+_pa_kept = list(app.templates)
+try:
+    app.templates = []
+    app._edit_template(None, lambda: None)
+    _kv_settle(6)
+    _pa_pop = app._mini_popup
+    _pa_boxes = list(_tl_entries(_pa_pop))
+    _pa_boxes[-1].insert(0, 'passport')                 # typed, never added
+    _pa_asked = []
+    app.ask_yes_no_cancel = lambda *a, **k: (_pa_asked.append(a[0]), None)[1]
+    _pa_seen['closing asks'] = (_pa_pop._confirm_dismiss() is False
+                                and _pa_asked == ['Save changes?'])
+    app.ask_yes_no_cancel = _pa_real_ask
+    _pa_boxes[0].delete(0, 'end')                       # "Untitled template"
+    _pa_boxes[0].insert(0, 'PendTpl')
+    find_btn_qa6(_pa_pop, 'Save').invoke()
+    app.update()
+    _pa_saved = [t for t in app.templates if t.get('name') == 'PendTpl']
+    _pa_seen['Save keeps it'] = (len(_pa_saved) == 1 and [
+        i.get('text') for i in _pa_saved[0].get('checklist', [])] == ['passport'])
+finally:
+    app.ask_yes_no_cancel = _pa_real_ask
+    app._dismiss_mini_popup()
+    app.update()
+app.notes = [NO.normalize_note({'id': 952, 'title': 'PaNote', 'body': 'b',
+                                'checklist': [{'text': 'socks', 'done': False}]})]
+app.save_notes()
+app.refresh_note_list()
+app.open_note_in_tab(app.notes[0])
+_kv_settle(6)
+try:
+    app.checklist_add_var.set('towel')                  # typed, never added
+    app.save_current_as_template()
+    app.update()
+    _pa_name = next(_tl_entries(app._mini_popup), None)
+    if _pa_name is not None:
+        _pa_name.delete(0, 'end')
+        _pa_name.insert(0, 'FromNote')
+        find_btn_qa6(app._mini_popup, 'Save').invoke()
+        app.update()
+    _pa_from = [t for t in app.templates if t.get('name') == 'FromNote']
+    _pa_seen['Save as template keeps it'] = (len(_pa_from) == 1 and [
+        i.get('text') for i in _pa_from[0].get('checklist', [])] == ['socks', 'towel'])
+    _pa_seen["the note's box keeps it"] = app.checklist_add_var.get() == 'towel'
+finally:
+    app.checklist_add_var.set('')
+    app._dismiss_mini_popup()
+    app.templates = _pa_kept
+    app.update()
+check(f"an item typed in a checklist's Add box and not added goes into the "
+      f"template saved, and closing the editor asks about it ({_pa_seen})",
+      len(_pa_seen) == 4 and all(_pa_seen.values()))
+
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")
 

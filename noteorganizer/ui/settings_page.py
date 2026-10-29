@@ -1300,13 +1300,19 @@ class SettingsPageMixin:
         cat_menu.pack(fill="x", pady=(0, 6))
 
         def collect():
+            # An item typed in the Add box and not yet added is part of the
+            # template, as it is of a note left (_take_pending_checklist_item):
+            # Save, the question on closing and the quiet save at a session
+            # end all read this.
+            pending = cl_add_var.get().strip()[:MAX_CHECKLIST_ITEM_CHARS]
             return normalize_template({
                 "name": name_var.get(),
                 "title": title_var.get(),
                 "body": body_txt.get("1.0", "end").rstrip("\n"),
                 "comments": comments_txt.get("1.0", "end").rstrip("\n"),
                 "category": cat_var.get(),
-                "checklist": [dict(it) for it in tpl_checklist],
+                "checklist": [dict(it) for it in tpl_checklist]
+                             + ([{"text": pending, "done": False}] if pending else []),
                 # Read back from the tags the body carries (above): a
                 # template saved from the editor keeps its formatting, on
                 # the words it was on.
