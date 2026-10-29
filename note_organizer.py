@@ -13026,7 +13026,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         way somewhere else."""
         var = getattr(self, "checklist_add_var", None)
         text = var.get().strip()[:MAX_CHECKLIST_ITEM_CHARS] if var is not None else ""
-        if not text:
+        if not text or self._checklist_full(self._get_checklist(), text):
             return
         self._get_checklist().append({"text": text, "done": False})
         var.set("")
@@ -13038,6 +13038,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not text:
             return
         items = self._get_checklist()
+        if self._checklist_full(items, text):
+            return  # the words stay in the box
         drawn = getattr(self, "_checklist_drawn", None)
         in_step = (getattr(self, "_checklist_open", False)
                    and _checklist_rows_current(
@@ -20571,6 +20573,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "the app keeps. Delete one first.")
         return True
 
+    def _checklist_full(self, items, text):
+        """Whether *items* already hold MAX_CHECKLIST_ITEMS -- and if so, that
+        *text* was not added is said. The doors refuse what a start would
+        cut (normalize_note): the 1,001st item was drawn and saved, then gone
+        without a word at the next start (round 6 of the final audit)."""
+        if len(items) < MAX_CHECKLIST_ITEMS:
+            return False
+        if not getattr(self, "_ending_session", False):
+            self.show_info(
+                "Checklist full",
+                f"A checklist can have up to {MAX_CHECKLIST_ITEMS:,} items, and "
+                f"this one has them all, so “{one_line(text, 80)}” was not "
+                "added. Delete an item to make room.")
+        return True
+
     def save_current_as_template(self):
         """Save the current editor content as a reusable template. Asks for a
         template name inline, then stores title/body/comments/category."""
@@ -20583,7 +20600,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # it to (_take_pending_checklist_item).
         var = getattr(self, "checklist_add_var", None)
         pending = var.get().strip()[:MAX_CHECKLIST_ITEM_CHARS] if var is not None else ""
-        if pending:
+        if pending and not self._checklist_full(st.get("checklist") or [], pending):
             st["checklist"] = list(st.get("checklist") or []) + [
                 {"text": pending, "done": False}]
         title = (st.get("title") or "").strip()
@@ -22172,6 +22189,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # identity, not equality, so an item the user has since typed
             # again by hand is not mistaken for this one.
             self._show_toast("That item is already back", kind="info")
+            return
+        # Or grown back to full since, by an item added while the offer was up.
+        if self._checklist_full(items, item.get("text", "")):
             return
         # The list can have shrunk since -- other items deleted while the
         # offer was up -- so the remembered position is a preference, not

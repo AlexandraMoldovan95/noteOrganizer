@@ -3840,6 +3840,42 @@ check(f'...and an item typed in its checklist\'s Add box is saved by Ctrl+N '
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
 
+# A checklist of 1,000 items took a 1,001st by Add, by the box taken on
+# leaving, and by a delete's Undo after an Add into its room: drawn and
+# saved, then cut without a word at the next start (round 6). Each door
+# refuses it and says so; the Add leaves the words in the box.
+_cf_said = []
+_cf_real = app.show_info
+app.show_info = lambda *a, **k: _cf_said.append(a[0] if a else '')
+try:
+    _cf_note = NO.normalize_note({'id': 4252, 'title': 'Big list', 'body': 'b', 'checklist': [
+        {'text': 'item %d' % i, 'done': False} for i in range(1000)]})
+    _cf_other = NO.normalize_note({'id': 4253, 'title': 'Other', 'body': 'x'})
+    app.notes = [_cf_note, _cf_other]; app.save_notes()
+    app.open_note_in_tab(_cf_note); app.update()
+    app.checklist_add_var.set('ADDED 1001')
+    app._add_checklist_item(); app.update()
+    _cf_add = (len(app._get_checklist()), app.checklist_add_var.get(), len(_cf_said))
+    app.open_note_in_tab(_cf_other); app.update()          # the box, on leaving
+    _cf_file = [len(n.get('checklist') or [])
+                for n in json.load(open(NO.DATA_FILE, encoding='utf-8'))]
+    app.open_note_in_tab(_cf_note); app.update()
+    _cf_items = app._get_checklist()
+    _cf_gone = _cf_items.pop(3)                          # deleted, its Undo offered
+    app.checklist_add_var.set('into the room')
+    app._add_checklist_item(); app.update()
+    app._undo_checklist_delete(_cf_items, 3, _cf_gone); app.update()
+    _cf_undo = (len(app._get_checklist()), _cf_gone in app._get_checklist())
+finally:
+    app.show_info = _cf_real
+    app.checklist_add_var.set('')
+check(f'a checklist of 1,000 items refuses a 1,001st at every door, and says so '
+      f'({_cf_add}, {_cf_file}, {_cf_undo}, {_cf_said})',
+      _cf_add == (1000, 'ADDED 1001', 1) and _cf_file == [1000, 0]
+      and _cf_undo == (1000, False) and _cf_said == ['Checklist full'] * 3)
+app.new_note(); app.update()
+app.notes = []; app.save_notes()
+
 # ...and saves all the close saves (one list, _save_on_the_way_out). Its own
 # copy had drifted: a date typed short was left unsettled, so unsaved, and a
 # write that had failed was never tried again (2026-10-28, the final audit).

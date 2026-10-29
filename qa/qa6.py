@@ -5700,6 +5700,68 @@ check(f"an item typed in a checklist's Add box and not added goes into the "
       f"template saved, and closing the editor asks about it ({_pa_seen})",
       len(_pa_seen) == 4 and all(_pa_seen.values()))
 
+# ...and a template's list at 1,000 items: its Add, and words waiting in the
+# box, were cut by normalize_template at Save, unsaid, and the editor closed
+# without asking (round 6). The Add and Save refuse them and say why; closing
+# asks; Save as template from a full note says so too.
+_cfp_seen, _cfp_said = {}, []
+_cfp_real = (app.show_info, app.ask_yes_no_cancel)
+_cfp_kept = list(app.templates)
+app.show_info = lambda *a, **k: _cfp_said.append(a[0] if a else '')
+_cfp_full = [{'text': 'row %d' % i, 'done': False} for i in range(1000)]
+try:
+    app.templates = [NO.normalize_template({'name': 'Full', 'body': 'b',
+                                            'checklist': _cfp_full})]
+    app._edit_template(app.templates[0], lambda: None)
+    _kv_settle(6)
+    _cfp_pop = app._mini_popup
+    _cfp_boxes = list(_tl_entries(_cfp_pop))
+    _cfp_boxes[-1].insert(0, 'passport')
+    find_btn_qa6(_cfp_pop, '+ Add').invoke(); app.update()
+    _cfp_seen['Add refused, words kept'] = (_cfp_boxes[-1].get() == 'passport'
+                                            and _cfp_said == ['Checklist full'])
+    _cfp_asked = []
+    app.ask_yes_no_cancel = lambda *a, **k: (_cfp_asked.append(a[0]), None)[1]
+    _cfp_seen['closing asks'] = (_cfp_pop._confirm_dismiss() is False
+                                 and _cfp_asked == ['Save changes?'])
+    find_btn_qa6(_cfp_pop, 'Save').invoke(); app.update()
+    _cfp_seen['Save refused, said'] = (_cfp_said == ['Checklist full'] * 2
+                                       and app._mini_popup is _cfp_pop)
+finally:
+    app.show_info, app.ask_yes_no_cancel = _cfp_real[0], _cfp_real[1]
+    app._dismiss_mini_popup()
+    app.update()
+app.show_info = lambda *a, **k: _cfp_said.append(a[0] if a else '')
+app.notes = [NO.normalize_note({'id': 953, 'title': 'FullNote', 'body': 'b',
+                                'checklist': _cfp_full})]
+app.save_notes()
+app.refresh_note_list()
+app.open_note_in_tab(app.notes[0])
+_kv_settle(6)
+try:
+    app.checklist_add_var.set('towel')
+    app.save_current_as_template()
+    app.update()
+    _cfp_name = next(_tl_entries(app._mini_popup), None)
+    if _cfp_name is not None:
+        _cfp_name.delete(0, 'end')
+        _cfp_name.insert(0, 'FromFull')
+        find_btn_qa6(app._mini_popup, 'Save').invoke()
+        app.update()
+    _cfp_from = [t for t in app.templates if t.get('name') == 'FromFull']
+    _cfp_seen['Save as template says so'] = (
+        len(_cfp_from) == 1 and len(_cfp_from[0].get('checklist', [])) == 1000
+        and _cfp_said == ['Checklist full'] * 3)
+finally:
+    app.show_info = _cfp_real[0]
+    app.checklist_add_var.set('')
+    app._dismiss_mini_popup()
+    app.templates = _cfp_kept
+    app.update()
+check(f"a template's list at 1,000 items refuses more at its Add and Save, "
+      f"says why, and closing asks ({_cfp_seen}, {_cfp_said})",
+      len(_cfp_seen) == 4 and all(_cfp_seen.values()))
+
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")
 

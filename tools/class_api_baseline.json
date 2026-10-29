@@ -146,6 +146,7 @@
   "_char_offsets": "(text_widget, indices)",
   "_checklist_arrow_press": "(self, event)",
   "_checklist_button_press": "(self, event)",
+  "_checklist_full": "(self, items, text)",
   "_clean_day_markers": "(value)",
   "_cleanup_selected_duplicates": "(self, del_vars, dlg, refresh, announce=False)",
   "_clear_day_color": "(self, date_str)",

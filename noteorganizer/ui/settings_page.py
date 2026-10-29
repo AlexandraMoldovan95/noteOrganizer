@@ -59,8 +59,8 @@ from ..core.recurrence import describe_recurrence, is_recurring, show_date
 # Shortens with an ellipsis rather than by slicing: a title cut at N
 # characters with nothing to show for it is the same defect as a
 # sentence clipped by a layout, only cheaper to make.
-from ..core.model import (MAX_CHECKLIST_ITEM_CHARS, _truncate, checklist_shown,
-                          normalize_note)
+from ..core.model import (MAX_CHECKLIST_ITEM_CHARS, MAX_CHECKLIST_ITEMS, _truncate,
+                          checklist_shown, normalize_note)
 from ..core.storage import (
     TRASH_RETENTION_DAYS,
     trash_retention_days,
@@ -1276,7 +1276,7 @@ class SettingsPageMixin:
 
         def add_tpl_item():
             text = cl_add_var.get().strip()[:MAX_CHECKLIST_ITEM_CHARS]
-            if not text:
+            if not text or self._checklist_full(tpl_checklist, text):
                 return
             tpl_checklist.append({"text": text, "done": False})
             cl_add_var.set("")
@@ -1327,6 +1327,11 @@ class SettingsPageMixin:
             # the templates list were its silent proof.
             if not name_var.get().strip():
                 self.show_warning("Name needed", "Give the template a name.")
+                return
+            # Words in the Add box past a full list would be cut by
+            # normalize_template, unsaid: refused, as the name above is.
+            waiting = cl_add_var.get().strip()
+            if waiting and self._checklist_full(tpl_checklist, waiting):
                 return
             new_tpl = collect()
             # A colliding name never overwrites (or duplicates) silently:
@@ -1389,7 +1394,11 @@ class SettingsPageMixin:
         def confirm_dismiss():
             if confirm_state["asking"]:
                 return False              # the ask itself is on screen
-            if collect() == opened_snapshot:
+            # Words waiting past a full list are cut from collect(): the
+            # editor still asks, and Save says why they cannot go in.
+            over = (cl_add_var.get().strip()
+                    and len(tpl_checklist) >= MAX_CHECKLIST_ITEMS)
+            if collect() == opened_snapshot and not over:
                 return True               # nothing changed: just close
             confirm_state["asking"] = True
             try:

@@ -9915,7 +9915,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        if pending:\n            st[\"checklist\"] = list(st.get(\"checklist\") or []) + [\n",
+        "find": "        if pending and not self._checklist_full(st.get(\"checklist\") or [], pending):\n            st[\"checklist\"] = list(st.get(\"checklist\") or []) + [\n",
         "replace": "        if False:\n            st[\"checklist\"] = list(st.get(\"checklist\") or []) + [\n"
       }
     ],
@@ -9996,6 +9996,132 @@
     ],
     "suites": [
       "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR76",
+    "about": "the checklist's Add takes a 1,001st item",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if self._checklist_full(items, text):\n            return  # the words stay in the box\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a checklist of 1,000 items refuses a 1,001st"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR77",
+    "about": "the Add box taken on leaving puts a 1,001st item in a full checklist",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if not text or self._checklist_full(self._get_checklist(), text):\n            return\n        self._get_checklist().append",
+        "replace": "        if not text:\n            return\n        self._get_checklist().append"
+      }
+    ],
+    "must_fail": [
+      "a checklist of 1,000 items refuses a 1,001st"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR78",
+    "about": "a checklist delete's Undo puts an item back into a list grown full again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if self._checklist_full(items, item.get(\"text\", \"\")):\n            return\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a checklist of 1,000 items refuses a 1,001st"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR79",
+    "about": "the template editor's Add takes a 1,001st item that Save will cut",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "            if not text or self._checklist_full(tpl_checklist, text):\n                return\n            tpl_checklist.append",
+        "replace": "            if not text:\n                return\n            tpl_checklist.append"
+      }
+    ],
+    "must_fail": [
+      "a template's list at 1,000 items"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR80",
+    "about": "the template editor's Save cuts words waiting in a full list's Add box, unsaid",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "            if waiting and self._checklist_full(tpl_checklist, waiting):\n                return\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a template's list at 1,000 items"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR81",
+    "about": "the template editor closes without asking over words a full list cannot take",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "            if collect() == opened_snapshot and not over:",
+        "replace": "            if collect() == opened_snapshot:"
+      }
+    ],
+    "must_fail": [
+      "a template's list at 1,000 items"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR82",
+    "about": "Save as template from a full checklist drops the Add box's words unsaid",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if pending and not self._checklist_full(st.get(\"checklist\") or [], pending):",
+        "replace": "        if pending:"
+      }
+    ],
+    "must_fail": [
+      "a template's list at 1,000 items"
+    ],
+    "suites": [
+      "qa6"
     ],
     "expect": "killed"
   }
