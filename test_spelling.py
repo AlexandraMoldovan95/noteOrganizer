@@ -133,6 +133,30 @@ check("a line's sentences cover the whole of it, in UTF-16 units",
       == [(0, 8), (8, 23), (23, 28)])
 check("...and a line with no sentence end is one sentence",
       spelling.sentence_spans("no full stop here") == [(0, 17)])
+check("...and a run of ends is one end, only with a space or the line's end after it",
+      spelling.sentence_spans("e.g. this... and that?!x end…")
+      == [(0, 4), (4, 12), (12, 29)])
+# A run of ends with no space after it was tried at each of its dots: 24,000
+# took 4.5 s at every look the editor takes (round 9). Timed in this run
+# against the same run with a space after it, the quickest of three each.
+import time as _time
+
+
+def _quickest_spans(text):
+    best = None
+    for _ in range(3):
+        started = _time.perf_counter()
+        spelling.sentence_spans(text)
+        took = _time.perf_counter() - started
+        best = took if best is None else min(best, took)
+    return best
+
+
+_se_run = _quickest_spans("xqzt" + "." * 12000 + "zqtx")
+_se_ended = _quickest_spans("xqzt" + "." * 12000 + " zqtx")
+check("a run of 12,000 dots with no space after it takes what the same run ending "
+      "a sentence takes (%.1f ms against %.1f ms)" % (_se_run * 1000, _se_ended * 1000),
+      _se_run < 4 * _se_ended + 0.25)
 check("a line not checked at all (a table row) counts for nothing",
       spelling.visible_errors(["| a | b |", _en], [None, _en_errors]) == {1: [(2, 7), (10, 3)]})
 check("the judgement is in words, not in characters: three short unknown words "

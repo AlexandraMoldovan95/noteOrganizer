@@ -11180,6 +11180,42 @@
     "expect": "killed"
   },
   {
+    "id": "RX24",
+    "about": "a pasted fragment's block-tag test splits the spaces after a '<' every way it can, and a long run holds the paste for seconds",
+    "edits": [
+      {
+        "file": "noteorganizer/core/richtext.py",
+        "find": "    r\"<\\s*(?:/\\s*)?(?:\" + \"|\".join(sorted(_BLOCK_TAGS | {\"li\", \"ul\", \"ol\", \"table\"}))\n",
+        "replace": "    r\"<\\s*/?\\s*(?:\" + \"|\".join(sorted(_BLOCK_TAGS | {\"li\", \"ul\", \"ol\", \"table\"}))\n"
+      }
+    ],
+    "must_fail": [
+      "before 6,000 spaces is read as quickly as the same run"
+    ],
+    "suites": [
+      "test_richtext"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX25",
+    "about": "the spelling's sentence ends are tried at every dot of a run, and a long run with no space after it takes seconds at every look",
+    "edits": [
+      {
+        "file": "noteorganizer/core/spelling.py",
+        "find": "_SENTENCE_END = re.compile(r\"(?<![.!?\u2026])[.!?\u2026]+(?=\\s|$)\")\n",
+        "replace": "_SENTENCE_END = re.compile(r\"[.!?\u2026]+(?=\\s|$)\")\n"
+      }
+    ],
+    "must_fail": [
+      "a run of 12,000 dots with no space after it takes what the same run"
+    ],
+    "suites": [
+      "test_spelling"
+    ],
+    "expect": "killed"
+  },
+  {
     "id": "DR91",
     "about": "a note read keeps a turned-off series' own-text days only in its rescue copy, as the phone wrote it",
     "edits": [

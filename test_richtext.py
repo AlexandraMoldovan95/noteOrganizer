@@ -1087,6 +1087,32 @@ _mn_text, _mn_spans, _mn_paras = _mn_read(_mn_html)
 _mn_took = _time.perf_counter() - _mn_started
 check(f"misnested markup is read in one pass ({_mn_took:.2f} s), its text whole",
       _mn_text == "Hello world" and _mn_took < 2.0)
+# Whether a fragment holds a block tag decides whether its newlines are text.
+# "<" before a run of spaces was split every way "\s*/?\s*" could split it:
+# 8,000 spaces held a paste 4 s (round 9). Timed in this run against the same
+# run before a tag, the quickest of three each.
+from noteorganizer.core import richtext as _bt_rt
+check("a block tag is found with spaces or a slash after its '<', in any case, "
+      "and a longer name or an inline tag is not one",
+      all(_bt_rt._BLOCK_TAG_RE.search(s) for s in ("< / div>", "<br>", "</ P>", "<\n\tli x"))
+      and not any(_bt_rt._BLOCK_TAG_RE.search(s) for s in ("<prefix>", "<b>", "< x", "/p")))
+
+
+def _quickest_read(fragment):
+    best = None
+    for _ in range(3):
+        started = _time.perf_counter()
+        _mn_read(fragment)
+        took = _time.perf_counter() - started
+        best = took if best is None else min(best, took)
+    return best
+
+
+_bt_run = _quickest_read("<" + " " * 6000 + "x")
+_bt_tag = _quickest_read("<" + " " * 6000 + "p")
+check("a fragment's '<' before 6,000 spaces is read as quickly as the same run "
+      "before a tag (%.1f ms against %.1f ms)" % (_bt_run * 1000, _bt_tag * 1000),
+      _bt_run < 4 * _bt_tag + 0.25)
 
 # ---- A page past the ceiling is read only as far as the ceiling ----
 # Nothing after it is kept, and 10 MB of paragraphs was parsed to its end

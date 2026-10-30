@@ -226,8 +226,9 @@ def visible_errors(lines, results, ignored=()):
 
 
 # A sentence ends at a full stop, a question or exclamation mark or an
-# ellipsis, with a space (or the end of the line) after it.
-_SENTENCE_END = re.compile(r"[.!?…]+(?=\s|$)")
+# ellipsis, with a space (or the end of the line) after it. Asked only where
+# a run starts: tried at each of 24,000 dots, a look took 4.5 s (round 9).
+_SENTENCE_END = re.compile(r"(?<![.!?…])[.!?…]+(?=\s|$)")
 
 
 def sentence_spans(text):
