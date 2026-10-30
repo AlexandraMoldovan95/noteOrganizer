@@ -11376,7 +11376,7 @@
       }
     ],
     "must_fail": [
-      "find: hits 50 characters apart, twice the hits on one line take about twice the time"
+      "find: hits 50 characters apart, the scan measures each line about once, not once per hit"
     ],
     "suites": [
       "qa1"
@@ -11394,7 +11394,7 @@
       }
     ],
     "must_fail": [
-      "find: an emoji 50 characters apart, twice the hits on one line take about twice the time"
+      "find: an emoji 50 characters apart, the scan measures each line about once, not once per hit"
     ],
     "suites": [
       "qa1"

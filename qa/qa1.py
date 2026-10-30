@@ -9478,6 +9478,38 @@ for _fq_name, _fq_make in (
           and _fq_whole[0] < 2.6 * _fq_half[0] + 0.005)
 
 
+# ...and counted as well as timed: measuring a plain line from its start for
+# each hit is cheap enough per step for a ratio of times to miss it, under load.
+def _fq_measured(text, query):
+    set_body(text)
+    app._open_find()
+    app._find_case.set(False)
+    read = app.body_text.get('1.0', 'end-1c')
+    real, seen = app._tk_units, [0]
+
+    def counting(part):
+        seen[0] += len(part)
+        return real(part)
+    app._tk_units = counting
+    try:
+        hits = len(app._find_prose(query, True, read))
+    finally:
+        del app._tk_units
+    app._close_find()
+    app.update()
+    return seen[0], hits, len(read)
+
+
+for _fq_name, _fq_make in (
+        ('hits 50 characters apart', lambda n: (('word' + 'w' * 45 + ' ') * n, 'word')),
+        ('an emoji 50 characters apart', lambda n: (('\U0001F389' + 'w' * 49) * n, '\U0001F389'))):
+    _fq_count = _fq_measured(*_fq_make(2000))
+    check(f'find: {_fq_name}, the scan measures each line about once, not once per hit '
+          f'({_fq_count[0]:,} characters measured for {_fq_count[1]} hits on a line of '
+          f'{_fq_count[2]:,})',
+          _fq_count[1] == 2000 and _fq_count[0] <= 3 * _fq_count[2])
+
+
 # ...and its walk of the tables split the note, and asked every grid where it
 # starts, once for each table: twice the tables, four times the work.
 def _fq_tables(count):

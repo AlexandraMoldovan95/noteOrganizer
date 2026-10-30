@@ -3148,7 +3148,9 @@ ceiling; an emoji query also matches a drawn table's hidden text.
 
 **Takeaway:** a cost is judged by the loop that calls it: "measure the line" is cheap, "measure
 the line for every hit" is the square of the line. Time a check against its own half, in one
-run, and a regression of this kind cannot hide behind a fast machine.
+run, and a regression of this kind cannot hide behind a fast machine -- unless each step is
+cheap enough for the linear work around it to hide the ratio: the find bar's plain-line mutant
+survived the integrated run that way, and its check now counts the characters measured instead.
 
 ## Tk & platform gotchas
 
