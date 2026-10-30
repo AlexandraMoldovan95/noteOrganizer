@@ -13351,5 +13351,23 @@
       "qa1"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "RX87",
+    "about": "a limited box says a paste was shortened when only its own trailing space was left out",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if room > 0 and not raw[room:].strip():\n",
+        "replace": "            if False:\n"
+      }
+    ],
+    "must_fail": [
+      "a limited box says a paste was shortened only when words were left out"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
   }
 ]

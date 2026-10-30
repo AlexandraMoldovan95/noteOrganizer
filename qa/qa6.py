@@ -5646,6 +5646,34 @@ check(f"a limited box's paste over a selection that leaves no room keeps the "
       f"selection, and says why ({_lb_kept}; said {_lb_told})",
       _lb_kept == (15, True) and 'A test value can be up to 10 characters' in _lb_told)
 
+# ...and says "shortened" only when words were left out, as the title does: a
+# paste whose only overflow was its own trailing space was said to be cut.
+_ls_seen = {}
+_ls_real_status = app.set_status
+try:
+    for _ls_paste in ('ab ', 'abc'):
+        _ls_box = tk.Entry(app)
+        _ls_box.insert(0, 'v' * 8)
+        app._limit_entry(_ls_box, 10, 'A test value')
+        _ls_told = []
+        app.set_status = lambda text, *a, **k: _ls_told.append(text)
+        _ls_box.icursor('end')
+        app.clipboard_clear()
+        app.clipboard_append(_ls_paste)
+        _qa_fire(_ls_box, '<<Paste>>')
+        _kv_settle(2)
+        _ls_seen[_ls_paste] = (_ls_box.get(), _ls_told)
+        _ls_box.destroy()
+finally:
+    app.set_status = _ls_real_status
+    app._hide_toast()
+check(f"a limited box says a paste was shortened only when words were left out, not "
+      f"its own trailing space ({_ls_seen})",
+      _ls_seen.get('ab ') == ('v' * 8 + 'ab', [])
+      and _ls_seen.get('abc', ('', []))[0] == 'v' * 8 + 'ab'
+      and 'Pasted text shortened: a test value can be up to 10 characters'
+      in _ls_seen.get('abc', ('', []))[1])
+
 # ...and an edit no key made in the title, the comments or the date -- the menu's
 # Cut -- is saved, and the title's count follows it: only a key's release set
 # either off, and a right-click Cut was saved when the note was left (round 10).

@@ -1368,6 +1368,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     self.tk.call("tk::EntrySeeInsert", entry)
             except tk.TclError:
                 return "break"
+            if room > 0 and not raw[room:].strip():
+                # Only the paste's own spaces were left out: nothing to say, as at the title.
+                return "break"
             self._say_by_the_box(entry, (
                 f"Pasted text shortened: {what[:1].lower()}{what[1:]} can be up "
                 f"to {limit:,} characters" if room > 0
