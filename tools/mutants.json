@@ -11023,8 +11023,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "                    and (not same_words or (\n",
-        "replace": "                    and (True or (\n"
+        "find": "    styles_kept = (styles == (normalize_formatting(prev.get(\"formatting\") or []),\n",
+        "replace": "    styles_kept = (True or styles == (normalize_formatting(prev.get(\"formatting\") or []),\n"
       }
     ],
     "must_fail": [
@@ -11357,6 +11357,78 @@
     ],
     "must_fail": [
       "is on screen leaves no word of an import cut short"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR120",
+    "about": "a restore over words held in the copy's but not the same weighs no styles, a part made bold since in no file",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "                   if same_words else not any(styles))\n",
+        "replace": "                   if same_words else True)\n"
+      }
+    ],
+    "must_fail": [
+      "a restore over part of the copy's words made bold since keeps them"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR121",
+    "about": "a start that cannot read the notes clears an import's word, so no later start takes its copied files out",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                if self._notes_file_unread() and cut.get(\"copied\"):\n                    save_setting(\"backup_cut_short\", dict(cut, temp_dir=\"\", said=True))\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a start that cannot read the notes keeps the word for an import cut short"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR122",
+    "about": "a session that ends while an import's worker is held mid-copy names nothing it copied or unpacked",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                \"kind\": \"import\", \"file\": state.get(\"zip\") or \"\", \"when\": \"session\",\n                \"copied\": list(state.get(\"copied\") or []),\n                \"temp_dir\": state.get(\"temp_dir\") or \"\"})\n",
+        "replace": "                \"kind\": \"import\", \"file\": state.get(\"zip\") or \"\", \"when\": \"session\"})\n"
+      }
+    ],
+    "must_fail": [
+      "a session ending while an import is held mid-copy names what it copied"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR123",
+    "about": "a template saved after a cancelled sign-out refused it leaves the word that it was not kept",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "            if get_setting(\"template_not_kept\", None, expect=str):\n                save_setting(\"template_not_kept\", None)\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a template saved after a cancelled sign-out refused it takes back the word"
     ],
     "suites": [
       "qa3"

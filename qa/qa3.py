@@ -3029,6 +3029,43 @@ try:
           f'import cut short ({_ic_seen})',
           'said' in _ic_seen and _ic_seen['said'] is None
           and any(n.get('title') == 'Done at sign-out' for n in app.notes))
+    # An import's worker held past the session end's join (a file another
+    # program holds): its word named nothing it copied or unpacked (round 8).
+    app._import_state = {'zip': _hb_zip, 'done': False, 'stop': False,
+                         'copied': ['20261030010000000001_held.bin'],
+                         'temp_dir': os.path.join(tempfile.gettempdir(), 'notes_import_qa3_held')}
+    try:
+        app._settle_backups_at_session_end()
+        _hw_said = NO.get_setting('backup_cut_short') or {}
+    finally:
+        app._import_state = None
+    check(f'a session ending while an import is held mid-copy names what it copied '
+          f'and unpacked ({sorted(_hw_said)})',
+          _hw_said.get('copied') == ['20261030010000000001_held.bin']
+          and _hw_said.get('temp_dir', '').endswith('notes_import_qa3_held'))
+    # A start that could not read the notes keeps those files (a file the
+    # notes use would look free) -- and kept no word either, so no later start
+    # took them out (round 8). The word stays, said once.
+    _uw_name = '20261030010000000002_left.bin'
+    with open(os.path.join(NO.ATTACHMENTS_DIR, _uw_name), 'wb') as _fh:
+        _fh.write(b'left')
+    NO.save_setting('backup_cut_short', {'kind': 'import', 'file': _hb_zip,
+                                         'when': 'session', 'copied': [_uw_name]})
+    _uw_real = app._notes_file_unread
+    app._notes_file_unread = lambda: True
+    try:
+        _uw_first = _next_start_says()
+        _uw_kept = NO.get_setting('backup_cut_short') or {}
+        _uw_there = os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _uw_name))
+    finally:
+        app._notes_file_unread = _uw_real
+    _uw_second = _next_start_says()
+    check(f'a start that cannot read the notes keeps the word for an import cut short, '
+          f'said once; the next start takes its files out ({sorted(_uw_kept)})',
+          'was cut short' in _uw_first and _uw_kept.get('copied') == [_uw_name] and _uw_there
+          and not os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _uw_name))
+          and 'was cut short' not in _uw_second
+          and NO.get_setting('backup_cut_short') is None)
 finally:
     _sx['go'] = True
     NO.StoppableFile, _hs.StoppableFile = _kept_stoppable
@@ -4302,6 +4339,45 @@ check(f'a sign-out at 1,000 templates writes no 1,001st, and the next start says
       f'was not kept ({_tf_written}, {_tf_said[:70]!r})',
       _tf_written == 1000 and '“Packing”' in _tf_said and 'was not kept' in _tf_said
       and NO.get_setting('template_not_kept') is None)
+app.templates = []; NO.save_templates(app.templates)
+
+# ...and with the sign-out cancelled, room made and the editor's own Save
+# pressed, that word stayed: the next start said a template on disk was not
+# kept (round 8).
+app.templates = [NO.normalize_template({'name': 'T%d' % i, 'body': 'x'})
+                 for i in range(1000)]
+NO.save_templates(app.templates)
+NO.save_setting('template_not_kept', None)
+app.show_settings_page(); app.update()
+app.toggle_settings_panel('templates'); app.update()
+app.ask_yes_no = app.ask_yes_no_cancel = app.show_warning = lambda *a, **k: None
+try:
+    app._edit_template(None, lambda: None); app.update()
+    _tk_boxes = []
+
+    def _tk_walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Entry):
+                _tk_boxes.append(c)
+            _tk_walk(c)
+    _tk_walk(app._mini_popup)
+    _tk_boxes[0].delete(0, 'end')
+    _tk_boxes[0].insert(0, 'Packing')
+    app.on_session_end(); app.update()
+    _tk_word = NO.get_setting('template_not_kept')
+    app._ending_session = False            # the sign-out was cancelled
+    app.templates.pop()                    # room made
+    app._mini_popup._save_from_keyboard(); app.update()
+    _tk_said = _next_start_says()
+finally:
+    app.ask_yes_no, app.ask_yes_no_cancel, app.show_warning = _tf_real
+    app._ending_session = False
+    app._dismiss_mini_popup()
+    app.hide_settings_page(); app.update()
+check(f"a template saved after a cancelled sign-out refused it takes back the word that it "
+      f"was not kept ({_tk_word!r}, {_tk_said[:60]!r})",
+      _tk_word == 'Packing' and any(t.get('name') == 'Packing' for t in app.templates)
+      and 'was not kept' not in _tk_said)
 app.templates = []; NO.save_templates(app.templates)
 
 # A backup's Trash brings its window when this notebook never chose one:

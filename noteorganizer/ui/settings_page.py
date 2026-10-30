@@ -1380,6 +1380,10 @@ class SettingsPageMixin:
                 else:
                     self.templates.append(new_tpl)
             save_templates(self.templates)
+            # Saved after all: a cancelled sign-out's word that it was not
+            # kept is untrue now, and the next start must not say it (round 8).
+            if get_setting("template_not_kept", None, expect=str):
+                save_setting("template_not_kept", None)
             self._dismiss_mini_popup()
             # The list as the page shows it NOW, looked up at this moment.
             # The section can be rebuilt while this editor is open, and the

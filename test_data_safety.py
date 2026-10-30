@@ -3610,6 +3610,19 @@ check("a backup whose copy still holds a day reset here reads as the same note",
       not _model_mod.shared_update_changes(
           _kd_reset, _kd_old_backup, _model_mod.UPDATABLE_FROM_BACKUP))
 
+# ...and the styles of words held in the copy's but not the same: a part of
+# the copy's text made bold since was written over, no copy kept (round 8).
+_rs_prev = {"title": "Trip", "body": "Packing list: boots, rope, map, torch.",
+            "comments": "", "formatting": [], "paragraphs": []}
+_rs_bold = _model_mod.normalize_note({
+    "id": 10, "title": "Trip", "body": "Packing list:",
+    "formatting": [{"start": 0, "end": 7, "style": "bold"}], "_prev": dict(_rs_prev)})
+_rs_plain = _model_mod.normalize_note({
+    "id": 11, "title": "Trip", "body": "Packing list:", "_prev": dict(_rs_prev)})
+check("a restore over part of the copy's words made bold since keeps them as the copy in turn",
+      _model_mod.copy_replaced_by_restore(_rs_bold, _rs_bold["_prev"]) is not None
+      and _model_mod.copy_replaced_by_restore(_rs_plain, _rs_plain["_prev"]) is None)
+
 # "↩ Restore previous" weighs all it writes over: comments typed since the
 # copy, and the styles of the same words, went to no file (round 7).
 _rp_prev = {"title": "Trip", "body": "Packing list: boots, rope, map, torch.",

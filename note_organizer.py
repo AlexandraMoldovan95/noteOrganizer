@@ -1817,12 +1817,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             when = ("Windows signed out or shut down"
                     if cut.get("when") == "session" else "Note Organizer closed")
             if cut.get("kind") == "import":
-                # Ended while its questions waited: what it copied goes now.
+                # Ended while its questions waited: what it copied goes now --
+                # or, on a run holding none of the notes, at the next start
+                # that does, the word kept for it and said once (round 8).
                 self._drop_left_import(cut)
-                lines.append(
-                    f"The import of {name} was cut short when {when}, so "
-                    "nothing from it was kept: no notes and no files. To bring "
-                    "it in, import it again (Settings → Backup → Import).")
+                if self._notes_file_unread() and cut.get("copied"):
+                    save_setting("backup_cut_short", dict(cut, temp_dir="", said=True))
+                if not cut.get("said"):
+                    lines.append(
+                        f"The import of {name} was cut short when {when}, so "
+                        "nothing from it was kept: no notes and no files. To bring "
+                        "it in, import it again (Settings → Backup → Import).")
             elif cut.get("kind") == "export_partial":
                 # Finished as the window closed, its own message unsaid.
                 count = cut.get("session_only")
@@ -23101,7 +23106,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         for t in [t for t in getattr(self, "_io_workers", []) if t.is_alive()]:
             t.join(timeout=max(0.0, deadline - time.time()))
         if not state.get("done"):
-            # Its poll reports the stop when it comes.
+            # Its poll reports the stop when it comes. Held past the join (a
+            # file another program holds), the word names what it copied and
+            # unpacked, for the next start to take out (round 8 of the audit).
+            save_setting("backup_cut_short", {
+                "kind": "import", "file": state.get("zip") or "", "when": "session",
+                "copied": list(state.get("copied") or []),
+                "temp_dir": state.get("temp_dir") or ""})
             return
         self._import_state = None
         if state.get("temp_dir"):

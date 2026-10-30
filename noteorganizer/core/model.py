@@ -497,14 +497,18 @@ def copy_replaced_by_restore(note, prev):
     # file, the question saying nothing (round 7 of the final audit).
     same_words = body == (prev.get("body") or "")
     lines = len(body.split("\n"))
+    styles = (normalize_formatting(note.get("formatting") or []),
+              normalize_paragraphs(note.get("paragraphs") or [], lines))
+    # Words held in the copy's but not the same: their styles cannot be laid
+    # beside the copy's, so any style is weighed as lost -- a part made bold
+    # since went to no file (round 8 of the final audit).
+    styles_kept = (styles == (normalize_formatting(prev.get("formatting") or []),
+                              normalize_paragraphs(prev.get("paragraphs") or [], lines))
+                   if same_words else not any(styles))
     nothing_lost = (body.strip() in (prev.get("body") or "")
                     and (not title.strip() or title == (prev.get("title") or ""))
                     and (note.get("comments") or "").strip() in (prev.get("comments") or "")
-                    and (not same_words or (
-                        normalize_formatting(note.get("formatting") or [])
-                        == normalize_formatting(prev.get("formatting") or [])
-                        and normalize_paragraphs(note.get("paragraphs") or [], lines)
-                        == normalize_paragraphs(prev.get("paragraphs") or [], lines)))
+                    and styles_kept
                     and all(prev[key] == note.get(key, NOTE_DEFAULTS.get(key))
                             for key in prev if key not in PREV_TEXT_FIELDS)
                     and not taken)
