@@ -208,6 +208,7 @@ is in the table below as well.
 | [Round eight: a day reset that came back, and what one copy keeps](#round-eight-a-day-reset-that-came-back-and-what-one-copy-keeps) | A move into the note happens once: what a copy has given back, it holds no more; and of two texts competing for one slot, the one whose loss is larger stays. | next |
 | [Round eight: words said beneath an Undo, and Enter held on every box](#round-eight-words-said-beneath-an-undo-and-enter-held-on-every-box) | A message that yields to an offer must still be seen somewhere; and a rule for a held key is asked by every binding that acts. | next |
 | [Round nine: days spent before they came back, and a copy kept twice](#round-nine-days-spent-before-they-came-back-and-a-copy-kept-twice) | A rule that empties one place on the premise that another holds the same asks the other place, per item, as it empties. | next |
+| [Round nine: work that grew with the square of what was typed](#round-nine-work-that-grew-with-the-square-of-what-was-typed) | A cost is judged by the loop that calls it; a check timed against its own half, in one run, sees it on any machine. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -3110,6 +3111,44 @@ earlier turn-off's copy of the same series.
 **Takeaway:** a rule that empties one place on the premise that another holds the same must
 ask the other place, per item, at the moment it empties -- the premise held for the road it
 was written on and for no other.
+
+### Round nine: work that grew with the square of what was typed
+
+*(2026-10-30 · found by the final audit's ninth break-it round, and by the sweep its fixes
+asked for)*
+
+**Symptom:**
+- **A paste into the title froze the window.** Round eight's title paste split what came in
+  with a pattern that, inside a run of spaces with no line break, backed off one space at a
+  time from every start: 40,000 spaces held the window five seconds.
+- **The find bar, open while typing, froze it for seconds at every pause.** A paragraph with
+  1,000 hits among bold words: 14 seconds per rescan; 2,000, over half a minute.
+- **The spelling look**, which runs at every pause, grew four times for each doubling of a long
+  line of short sentences; two more patterns (a pasted page's block tags, the spelling's
+  sentence ends) took seconds on a hand-made clipboard or a line of dots.
+- The lows: "shortened" said when only a paste's own trailing space was cut; "Checklist full"
+  remembered as said for words already added, or never said at all.
+
+**Root cause:** one shape, five times: a loop over the matches, the sentences or the pieces of
+a line that measures the line again from its start on every step -- a regex retried at every
+position, Tk's `search` started anew after each hit across every tag on the line, a UTF-16
+re-encoding per sentence. Each is linear in one step and quadratic in the loop.
+
+**Fix:** each reads the text once and counts as it goes: the title paste splits on the break
+characters alone; the find bar finds hits with `str.find` over the line read once, counting Tk
+columns and Tcl's case folding as Tk would (which corrected Tk's own offset after a letter Tcl
+lowers into fewer bytes); the spelling encodes a line once and puts each word in its sentence
+by bisection. Every new form was compared with the old on tens of thousands of random inputs;
+each has a check timed against its own half in one run, and a mutant putting the loop back.
+The paste reads no further than any paste (`_cap_paste`).
+
+**Written down, not fixed:** the autosave still reads a heavily tagged line about 4,000 times
+per save -- quadratic in the bold words on one line, capped near 0.3 s by the per-line span
+ceiling; an emoji query also matches a drawn table's hidden text.
+
+**Takeaway:** a cost is judged by the loop that calls it: "measure the line" is cheap, "measure
+the line for every hit" is the square of the line. Time a check against its own half, in one
+run, and a regression of this kind cannot hide behind a fast machine.
 
 ## Tk & platform gotchas
 
@@ -6567,6 +6606,29 @@ the one thing a guest must never do, done on every run.
 **Takeaway, round eight:** a guest never opens the owner's cupboards, even to look. Where the
 app finds a notebook is decided by the environment, so the runner decides the environment, for
 every process it starts, and a gate proves it with a stand-in.
+
+**Round nine** *(2026-10-30)*: the audit attacked round eight's doors and found two that a
+sentence called shut.
+
+- *The sandbox guard was an OR.* It refused only when the account was not the sandbox's AND the
+  script did not sit at `C:\pkg\` -- so started from a `C:\pkg` on this computer it ran, and
+  round eight's "refuses anywhere but inside Windows Sandbox" was not true as written. It asks
+  for both now: this computer has a disabled `WDAGUtilityAccount` of its own, so neither the
+  name nor the path alone is proof. The gate no longer looks for the account's name in the
+  line: it reads the guard in a shape it can evaluate without running anything, asks it for a
+  user here at `C:\pkg` and for the sandbox's own start, and checks PowerShell agrees.
+- *The Linux door leaned on the ignore list.* Its copy was "what git tracks and would add", and
+  `.gitignore` missed the files the app keeps aside: a Trash or settings saved as unreadable, a
+  save or a copy in progress. The copy is what git tracks, whatever the list says; the
+  container's own filesystem is read-only, `/tmp` aside.
+- *The suites by hand.* The gate let them off because "a runner starts them", and nothing made
+  it so: started by hand or by CI, a suite ran with the person's `APPDATA`. Every suite now
+  settles as its first act, sharing a runner's turn when one started it, and refuses without
+  `tools/guest.py`.
+
+**Takeaway, round nine:** a guard is proved by asking it the question it exists to answer, not by
+finding the right word in it; and an exemption granted because "something else does it" holds
+only where that something else is made to.
 
 ## Smaller lessons, moved out of the code
 
