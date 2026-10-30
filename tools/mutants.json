@@ -10982,6 +10982,114 @@
     "expect": "killed"
   },
   {
+    "id": "RX07",
+    "about": "Enter held on a group header folds and opens it at every repeat",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/note_list.py",
+        "find": "        if self._enter_repeats(event):\n            return \"break\"\n        self._bring_ring_into_view()\n",
+        "replace": "        self._bring_ring_into_view()\n"
+      }
+    ],
+    "must_fail": [
+      "Enter held on the note list, the calendar and every box that acts on it presses once"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX08",
+    "about": "Enter held on a calendar day opens it again at every repeat",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/calendar_view.py",
+        "find": "        if self._enter_repeats(event):\n            return \"break\"\n        day = self._cal_key_date()\n",
+        "replace": "        day = self._cal_key_date()\n"
+      }
+    ],
+    "must_fail": [
+      "Enter held on the note list, the calendar and every box that acts on it presses once"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX09",
+    "about": "Enter held in a full checklist's Add box says Checklist full at every repeat",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            None if self._enter_repeats(e) else self._add_checklist_item()))\n",
+        "replace": "            self._add_checklist_item()))\n"
+      }
+    ],
+    "must_fail": [
+      "Enter held on the note list, the calendar and every box that acts on it presses once"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX10",
+    "about": "Enter held in the date field settles it and redraws at every repeat",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if not self._enter_repeats(event):      # pressed, not held\n",
+        "replace": "            if True:\n"
+      }
+    ],
+    "must_fail": [
+      "Enter held on the note list, the calendar and every box that acts on it presses once"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX11",
+    "about": "Enter held in an inline rename box saves again at every repeat",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            None if self._enter_repeats(e) else save(), \"break\")[1])\n",
+        "replace": "            save(), \"break\")[1])\n"
+      }
+    ],
+    "must_fail": [
+      "Enter held on the note list, the calendar and every box that acts on it presses once"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX12",
+    "about": "Enter held in a full template's Add box says Checklist full at every repeat",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "            None if self._enter_repeats(e) else add_tpl_item()))\n",
+        "replace": "            add_tpl_item()))\n"
+      }
+    ],
+    "must_fail": [
+      "Enter held on the note list, the calendar and every box that acts on it presses once"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
     "id": "DR91",
     "about": "a note read keeps a turned-off series' own-text days only in its rescue copy, as the phone wrote it",
     "edits": [

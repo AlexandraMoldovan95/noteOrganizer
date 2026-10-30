@@ -6248,6 +6248,139 @@ check(f"a template's list at 1,000 items refuses more at its Add and Save, "
       f"says why, and closing asks ({_cfp_seen}, {_cfp_said})",
       len(_cfp_seen) == 4 and all(_cfp_seen.values()))
 
+# Round 8: round 7 taught Enter held down to press once on a drawn control,
+# the preview's buttons and a question's answers -- not the note list, the
+# calendar or the boxes that act on Enter. A group header folded and opened
+# at every repeat, writing settings.json each time; and a press nobody asked
+# about left the next control blind to the key still held. Every Enter that
+# acts asks (_enter_repeats), in both shapes a held key takes.
+_kr8_seen, _kr8_counts = {}, []
+_kr8_keys_kept = _kh_support.REAL_KEYS
+_kr8_names = ('_toggle_group_collapsed', '_toggle_note_selected', 'open_day_popup',
+              'show_info', '_settle_date_fields')
+_kr8_real = {n: getattr(app, n) for n in _kr8_names}
+_kr8_had = {n: app.__dict__[n] for n in _kr8_names if n in app.__dict__}
+_kr8_kept_notes, _kr8_kept_templates = list(app.notes), list(app.templates)
+_kr8_t = [300_000]
+
+
+def _kr8_counting(name, then=None):
+    def counted(*a, **k):
+        _kr8_counts.append(name)
+        return then(*a, **k) if then is not None else None
+    return counted
+
+
+def _kr8_key(kind, when):
+    # To the widget holding the keyboard, in whichever window: an inline
+    # rename is a window of its own, which `focus -lastfor` does not see.
+    try:
+        holder = app.focus_get()
+    except (KeyError, tk.TclError):
+        holder = None
+    (holder or _ka_holder() or app).event_generate(f'<Key{kind}-Return>', time=when)
+    _kv_settle(2)
+
+
+def _kr8_hold(widget, ready=lambda: None):
+    """Enter held on *widget* in both shapes: how often each acted."""
+    seen = []
+    for shape in ('presses alone', 'release and press'):
+        _take_focus(widget)
+        ready()
+        _kv_settle(2)
+        app._cancel_pending_autosave()
+        del _kr8_counts[:]
+        t0 = _kr8_t[0] = _kr8_t[0] + 10_000
+        _kr8_key('Press', t0)
+        for i in range(10):
+            if shape == 'release and press':
+                _kr8_key('Release', t0 + 500 + 33 * i)
+            _kr8_key('Press', t0 + 500 + 33 * i)
+        _kr8_key('Release', t0 + 900)
+        seen.append(len(_kr8_counts))
+    return seen
+
+
+_kh_support.REAL_KEYS = [('the held-Enter check', 'its own keys')]
+try:
+    app.show_info = _kr8_counting('show_info')          # no modal waits here
+    app.open_day_popup = _kr8_counting('open_day_popup')
+    app._toggle_group_collapsed = _kr8_counting(
+        '_toggle_group_collapsed', _kr8_real['_toggle_group_collapsed'])
+    app._toggle_note_selected = _kr8_counting(
+        '_toggle_note_selected', _kr8_real['_toggle_note_selected'])
+    app._settle_date_fields = _kr8_counting(
+        '_settle_date_fields', _kr8_real['_settle_date_fields'])
+    app.new_note(); _kv_settle(2)
+    _kr8_a, _kr8_b = (NO.normalize_note({'id': 4901 + i, 'title': 'Held %d' % i,
+                                         'body': 'b', 'category': 'General'})
+                      for i in range(2))
+    app.notes = [_kr8_a, _kr8_b]; app.save_notes()
+    app.notebook.select(app.TAB_NOTES)
+    app.group_by_category.set(True); app._on_toggle_group_by_category()
+    app.collapsed_groups.clear(); app.refresh_note_list(); _kv_settle(4)
+    _kr8_seen['a group header'] = _kr8_hold(
+        app.canvas, lambda: app._set_ring_row(('header', 'General')))
+    app.collapsed_groups.clear(); app.refresh_note_list(); _kv_settle(4)
+    app._toggle_selection_mode(); _kv_settle(2)
+    _kr8_seen['a note, in selection mode'] = _kr8_hold(
+        app.canvas, lambda: app._set_ring_row(('note', 4901)))
+    app._toggle_selection_mode(); _kv_settle(2)
+    app.group_by_category.set(False); app._on_toggle_group_by_category()
+    app.notebook.select(app.TAB_CALENDAR)
+    app.render_calendar(); _kv_settle(6)
+    _kr8_seen['a calendar day'] = _kr8_hold(app.cal_canvas)
+    app.notebook.select(app.TAB_NOTES); _kv_settle(2)
+    _kr8_full = NO.normalize_note({'id': 4903, 'title': 'Full', 'body': 'b', 'checklist': [
+        {'text': 'item %d' % i, 'done': False} for i in range(1000)]})
+    app.notes = [_kr8_full]; app.save_notes()
+    app.open_note_in_tab(_kr8_full); _kv_settle(4)
+    if not app._checklist_open:
+        app.toggle_checklist_section(); _kv_settle(4)
+    app.checklist_add_var.set('one more')
+    _kr8_seen["a full list's Add box"] = _kr8_hold(app.checklist_add_entry)
+    app.checklist_add_var.set('')
+    _kr8_seen['the date field'] = _kr8_hold(app.date_entry)
+    app.templates = [NO.normalize_template({'name': 'Full', 'body': 'b', 'checklist': [
+        {'text': 'row %d' % i, 'done': False} for i in range(1000)]})]
+    app._edit_template(app.templates[0], lambda: None)
+    _kv_settle(6)
+    _kr8_tpl_box = (list(_tl_entries(app._mini_popup)) or [None])[-1]
+    if _kr8_tpl_box is not None:
+        _kr8_tpl_box.insert(0, 'passport')
+        _kr8_seen["a full template's Add box"] = _kr8_hold(_kr8_tpl_box)
+    app._dismiss_mini_popup()
+    _kv_settle(2)
+    # A name refused keeps the box open, so every repeat would reach it.
+    app._show_inline_rename(app.title_entry, 'Name',
+                            _kr8_counting('an inline rename', lambda text: False))
+    _kv_settle(4)
+    _kr8_box = next(_tl_entries(app._mini_popup), None)
+    _kr8_seen['an inline rename'] = _kr8_hold(_kr8_box) if _kr8_box else None
+finally:
+    for _kr8_n in _kr8_names:
+        app.__dict__.pop(_kr8_n, None)
+    app.__dict__.update(_kr8_had)
+    app._dismiss_mini_popup()
+    app.checklist_add_var.set('')
+    if app.selection_mode:
+        app._toggle_selection_mode()
+    app.group_by_category.set(False); app._on_toggle_group_by_category()
+    app.collapsed_groups.clear()
+    app.new_note(); _kv_settle(2)
+    app.notes = _kr8_kept_notes; app.save_notes()
+    app.templates = _kr8_kept_templates
+    app.notebook.select(app.TAB_NOTES)
+    app.refresh_note_list(); _kv_settle(4)
+    _kh_support.REAL_KEYS = _kr8_keys_kept
+check(f"Enter held on the note list, the calendar and every box that acts on it "
+      f"presses once ((presses alone, release and press): {_kr8_seen})",
+      _kr8_seen == {k: [1, 1] for k in (
+          'a group header', 'a note, in selection mode', 'a calendar day',
+          "a full list's Add box", 'the date field', "a full template's Add box",
+          'an inline rename')})
+
 print()
 print(f"=== QA6 FAILURES: {fails if fails else 'NONE'} ===")
 

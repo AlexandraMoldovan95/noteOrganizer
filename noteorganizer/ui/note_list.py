@@ -1479,11 +1479,15 @@ class NoteListMixin:
             self._toggle_group_collapsed(key[1])
         return "break"
 
-    def _list_activate(self, _event=None):
+    def _list_activate(self, event=None):
         """Enter or Space: what a click does -- open the note, or tick it
         in selection mode, where a keyboard that opened the note instead
         would be the one route that ignores the mode. On a header, what a
-        click on it does: fold or unfold its group."""
+        click on it does: fold or unfold its group. Enter held down presses
+        once (_enter_repeats): a header folded and opened at every repeat,
+        writing settings.json each time (round 8 of the final audit)."""
+        if self._enter_repeats(event):
+            return "break"
         self._bring_ring_into_view()
         key = self._ring_row()
         if key is not None and key[0] == "header":

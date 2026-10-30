@@ -699,7 +699,9 @@ class SettingsPageMixin:
             redraw()
             self.refresh_category_widgets()
 
-        new_entry.bind("<Return>", lambda e: add_new())
+        # Pressed, not held (_enter_repeats), as every Enter that acts.
+        new_entry.bind("<Return>", lambda e: (
+            None if self._enter_repeats(e) else add_new()))
         tk.Button(add_row, text="+ Add", command=add_new, bg=self.colors["accent"],
                   fg=self._on_fill("accent"), relief="flat", font=("Segoe UI", 9, "bold"),
                   cursor="hand2"
@@ -1301,7 +1303,10 @@ class SettingsPageMixin:
             render_tpl_checklist()
             cl_entry.focus_set()
 
-        cl_entry.bind("<Return>", lambda e: add_tpl_item())
+        # Pressed, not held: held over a full list, a repeat answered its
+        # "Checklist full" and the next asked it again (_enter_repeats).
+        cl_entry.bind("<Return>", lambda e: (
+            None if self._enter_repeats(e) else add_tpl_item()))
         tk.Button(cl_add_row, text="+ Add", command=add_tpl_item,
                   bg=self.colors["accent"], fg=self._on_fill("accent"), relief="flat",
                   font=("Segoe UI", 9, "bold"), cursor="hand2"
@@ -3846,7 +3851,10 @@ class SettingsPageMixin:
 
         name_entry.bind("<KeyRelease>", schedule_name_save)
         name_entry.bind("<FocusOut>", lambda e: save_name())
-        name_entry.bind("<Return>", lambda e: save_name())
+        # Pressed, not held: each repeat wrote the settings file again
+        # (_enter_repeats).
+        name_entry.bind("<Return>", lambda e: (
+            None if self._enter_repeats(e) else save_name()))
         # No separate Save button -- the field already autosaves shortly
         # after typing stops, and immediately on Enter or clicking away.
         # No separate Save button — the field already autosaves shortly

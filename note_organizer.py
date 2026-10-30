@@ -12979,7 +12979,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # tall as its text: the same limit every route to an item keeps.
         self._limit_entry(entry, MAX_CHECKLIST_ITEM_CHARS, "A checklist item")
         entry.pack(side="left", fill="x", expand=True, ipady=4)
-        entry.bind("<Return>", lambda e: self._add_checklist_item())
+        # Pressed, not held: held over a full list, a repeat answered its
+        # "Checklist full" and the next asked it again (_enter_repeats).
+        entry.bind("<Return>", lambda e: (
+            None if self._enter_repeats(e) else self._add_checklist_item()))
         self._add_paste_menu(entry)
         self.checklist_add_entry = entry
         # Long-lived: without tracking, the caret (insertbackground) froze
@@ -13686,7 +13689,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # read every script of the key -- the box's own <Escape> among them
         # (_place_dropdown_popup). Escape here called that dead command: a
         # silent "invalid command name" on every Escape in a rename box.
-        entry.bind("<Return>", lambda e: (save(), "break")[1])
+        # Pressed, not held (_enter_repeats): the box gone, a repeat pressed
+        # whatever the keyboard went back to.
+        entry.bind("<Return>", lambda e: (
+            None if self._enter_repeats(e) else save(), "break")[1])
         entry.bind("<Escape>", lambda e: (self._dismiss_mini_popup(), "break")[1])
 
         self._place_mini_popup(pop, anchor_widget)
@@ -16264,7 +16270,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._dismiss_mini_popup()
 
         # "break": a good year destroys this popup (see _show_inline_rename).
-        year_entry.bind("<Return>", lambda e: (_go(), "break")[1])
+        # Pressed, not held: a repeat pressed the month title it went back
+        # to, and the popup opened again (_enter_repeats).
+        year_entry.bind("<Return>", lambda e: (
+            None if self._enter_repeats(e) else _go(), "break")[1])
 
         btn_row = tk.Frame(frame, bg=self.colors["card"])
         btn_row.pack(fill="x", padx=16, pady=(10, 14))
@@ -17007,8 +17016,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._date_field_in_use = None
             self._settle_date_fields(redraw=True)
 
-        def enter(_event):
-            self._settle_date_fields(redraw=True)
+        def enter(event):
+            if not self._enter_repeats(event):      # pressed, not held
+                self._settle_date_fields(redraw=True)
 
         entry.bind("<FocusIn>", arrived, add="+")
         entry.bind("<FocusOut>", left, add="+")

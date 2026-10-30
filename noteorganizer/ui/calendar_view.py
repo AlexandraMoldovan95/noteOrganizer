@@ -783,8 +783,12 @@ class CalendarViewMixin:
             self._bring_into_sight(self.cal_canvas, part=(rec["y0"], rec["y1"]))
         return "break"
 
-    def _cal_key_open(self, _event=None):
-        """Return or Space: the day opens, as a click on it does."""
+    def _cal_key_open(self, event=None):
+        """Return or Space: the day opens, as a click on it does. Enter held
+        down opens it once, and the day's own controls do not take the
+        repeats for presses (_enter_repeats)."""
+        if self._enter_repeats(event):
+            return "break"
         day = self._cal_key_date()
         if day:
             self.open_day_popup(day)
