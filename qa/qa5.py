@@ -1912,6 +1912,49 @@ check(f"a repeat turned off a second time keeps the words a big delete took befo
       'MEETING NOTES' in (_t2_prev.get('body') or '')
       and (_t2_prev.get('recurrence') or {}).get('freq') == 'weekly'
       and not app.find_note(1)['recurrence'].get('freq'))
+# ...and when it came back as another series -- another start, every two
+# weeks, an end date -- the first turn-off's copy, the deleted words' only
+# home, was replaced at the second (round 10, found on the phone first).
+_t3_seen = []
+for _t3_road in ('start', 'interval', 'end'):
+    _ro_fixture()
+    app.notes[0]['body'] = 'MEETING NOTES ' + 'agreed points ' * 25
+    app.save_notes()
+    app.open_note_in_tab(app.find_note(1)); app.update()
+    app._themed_dialog = lambda *a, **k: True
+    app.ask_yes_no = lambda *a, **k: True
+    try:
+        app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'short')
+        app.save_current_note(); app.update()
+        app.rec_freq_var.set(NO.FREQ_LABELS['']); app.on_recurrence_changed(); app.update()
+        app.save_current_note(); app.update()
+        if _t3_road == 'start':
+            app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '2026-09-08')
+        app.rec_freq_var.set(NO.FREQ_LABELS['weekly']); app.on_recurrence_changed(); app.update()
+        if _t3_road == 'interval':
+            app.rec_interval_var.set('2'); app.update()
+        elif _t3_road == 'end':
+            app.rec_end_mode_var.set('on'); app.on_end_mode_changed()
+            app.rec_end_date_var.set('01.03.2027'); app.update()
+        app.save_current_note(); app.update()
+        _t3_series = (app.find_note(1)['date'], dict(app.find_note(1)['recurrence']))
+        app.rec_freq_var.set(NO.FREQ_LABELS['']); app.on_recurrence_changed(); app.update()
+        app.save_current_note(); app.update()
+        _t3_prev = _json5r.loads(_json5r.dumps(app.find_note(1).get('_prev') or {}))
+        app.restore_previous_version(); app.update()
+        _t3_back = app.find_note(1)
+    finally:
+        app._themed_dialog = _ro_real_dlg
+        app.ask_yes_no = _ro_yes
+    _t3_seen.append((_t3_road, 'MEETING NOTES' in (_t3_prev.get('body') or ''),
+                     (_t3_prev.get('date'), _t3_prev.get('recurrence')) == _t3_series,
+                     'MEETING NOTES' in _t3_back['body'],
+                     (_t3_back['date'], _t3_back['recurrence']) == _t3_series))
+check(f"...and so when it came back as another series -- another start, every two weeks, an "
+      f"end date: the copy keeps the deleted words with the series as it was last, and Restore "
+      f"previous brings both back ({_t3_seen})",
+      [s[1:] for s in _t3_seen] == [(True, True, True, True)] * 3
+      and [s[0] for s in _t3_seen] == ['start', 'interval', 'end'])
 # An import's Update, then the repeat off with the comments cleared and the
 # autosave let run: the held save's copy is the update's, and the turn-off
 # kept only its words -- its category and checklist in no file (round 9).

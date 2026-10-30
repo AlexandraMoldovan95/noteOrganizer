@@ -7629,8 +7629,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        elif (isinstance(existing, dict)\n              and (set(existing) <= set(self._RESCUE_TEXT_KEYS)\n",
-        "replace": "        elif (False and isinstance(existing, dict)\n              and (set(existing) <= set(self._RESCUE_TEXT_KEYS)\n"
+        "find": "        elif (isinstance(existing, dict)\n",
+        "replace": "        elif (False and isinstance(existing, dict)\n"
       }
     ],
     "must_fail": [
@@ -12134,8 +12134,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "              and (set(existing) <= set(self._RESCUE_TEXT_KEYS)\n                   or copy_holds_this_series(note))\n",
-        "replace": "              and set(existing) <= set(self._RESCUE_TEXT_KEYS)\n"
+        "find": "        elif (isinstance(existing, dict)\n",
+        "replace": "        elif (isinstance(existing, dict) and set(existing) <= set(self._RESCUE_TEXT_KEYS)\n"
       }
     ],
     "must_fail": [
@@ -12343,6 +12343,24 @@
     ],
     "must_fail": [
       "a turn-off whose copy the same save drops promises no Restore previous"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR139",
+    "about": "a second turn-off gives an earlier copy its words only when it holds words alone or this very series: back on as another series, the big delete's words are replaced",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        elif (isinstance(existing, dict)\n",
+        "replace": "        elif (isinstance(existing, dict) and (set(existing) <= set(self._RESCUE_TEXT_KEYS)\n                                              or copy_holds_this_series(note))\n"
+      }
+    ],
+    "must_fail": [
+      "...and so when it came back as another series -- another start, every two weeks, an end date"
     ],
     "suites": [
       "qa5"

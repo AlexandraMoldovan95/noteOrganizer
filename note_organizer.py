@@ -21911,10 +21911,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         deleted text was in no file.
 
         The other order is the same loss: a big delete saved first, the
-        repeat turned off after. A text copy whose words the note has lost
-        (rescue_copy_due, copy to note) gives its text to the turn-off's copy
-        too, so Restore previous brings back the words and the series
-        together (2026-10-28, the final audit)."""
+        repeat turned off after. Any copy but an Update's whose words the
+        note has lost (rescue_copy_due, copy to note) gives its text to the
+        turn-off's copy too, whatever series it held, so Restore previous
+        brings back the words and the series together (2026-10-28, the
+        final audit; another series' copy, round 10)."""
         prev = self._whole_note_rescue_copy(note)
         held = getattr(self, "_held_text_rescue", None)
         self._held_text_rescue = None
@@ -21934,14 +21935,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             for key in self._RESCUE_TEXT_KEYS:
                 prev[key] = copy.deepcopy(held.get(key))
         elif (isinstance(existing, dict)
-              and (set(existing) <= set(self._RESCUE_TEXT_KEYS)
-                   or copy_holds_this_series(note))
               and rescue_copy_due(existing.get("title") or "", existing.get("body") or "",
                                   note.get("title") or "", note.get("body") or "",
                                   existing.get("comments") or "", note.get("comments") or "")):
-            # A text copy, or an earlier turn-off's copy of this series, whose
-            # words the note has LOST (the big delete's test): given whenever
-            # they differed, a line added since went back (round 10).
+            # Any other earlier copy whose words the note has LOST (the big
+            # delete's test) -- of words, of this series or of one before --
+            # gives them; this copy keeps the series as it is now (round 10).
             for key in self._RESCUE_TEXT_KEYS:
                 prev[key] = copy.deepcopy(existing.get(key, prev[key]))
         return prev

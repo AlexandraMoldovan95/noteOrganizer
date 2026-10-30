@@ -3199,8 +3199,17 @@ words being lost.
   it stands. A text copy is asked the same: words put back and added to are no loss.
 - `_repeat_off_line` promises Restore previous only while a copy the note does not hold again
   remains; otherwise it says every day's own text stays in the note.
-- `test_data_safety`, qa5; mutants DR131–DR138, with DR126 re-aimed. The phone's fixture,
-  `days_cases.json`, gains the same cases.
+- `test_data_safety`, qa5; mutants DR131–DR139, with DR126, DR44, DR32 and DR127 re-aimed. The
+  phone's fixture, `days_cases.json`, gains the same cases.
+
+**Found after, on the phone first: the same copy, another series.** A big delete, the repeat off,
+back on as *another* series -- another start, every two weeks, an end date -- then off again: the
+second turn-off gave an earlier copy its words only if it held words alone or this very series,
+so the first one's copy, the deleted words' only home, was replaced by the short text. Restore
+previous, still offered, brought back the series and the short text. Now any earlier copy but an
+Update's, which is kept whole, gives its words whenever the note has lost words to it, whatever
+series it held; the new copy keeps the series as it is now. Round nine had closed the road "back
+on as it was" and no other: the question was which copy, when it should have been which words.
 
 **Written down, not fixed: a notebook this build has saved must not go back to 0.97.405.** This
 build keeps a turned-off series' days in the note, and a later big delete may leave the copy
