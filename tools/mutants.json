@@ -12002,6 +12002,42 @@
     "expect": "killed"
   },
   {
+    "id": "RX85",
+    "about": "letters typed onto a styled word are searched by Tk for a space, reading their whole line every key",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            typed = b.get(start, end)\n            cut = next((i for i, ch in enumerate(typed) if ch.isspace()), None)\n            stop = end if cut is None else b.index(f\"{start}+{cut}c\")\n",
+        "replace": "            gap = b.search(r\"\\s\", start, stopindex=end, regexp=True)\n            stop = gap or end\n"
+      }
+    ],
+    "must_fail": [
+      "letters typed onto a bold word, the find bar open on row 9, are styled up to the space typed with them"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX86",
+    "about": "letters typed onto a styled word pass its style on past the space typed with them",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            stop = end if cut is None else b.index(f\"{start}+{cut}c\")\n",
+        "replace": "            stop = end\n"
+      }
+    ],
+    "must_fail": [
+      "letters typed onto a bold word, the find bar open on row 9, are styled up to the space typed with them"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
     "id": "SP28",
     "about": "the spelling underlines every typo it finds, however many on a line",
     "edits": [

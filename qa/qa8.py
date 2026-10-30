@@ -563,11 +563,12 @@ app14.save_notes()
 
 
 class _RdCounting:
-    """Stands in for the body's interpreter: every call counted, and every
-    get with the characters it returned."""
+    """Stands in for the body's interpreter: every call counted, every get
+    with the characters it returned, and every search."""
 
     def __init__(self, real):
         self.real, self.calls, self.gets, self.got = real, 0, 0, 0
+        self.searches = 0
 
     def call(self, *args):
         self.calls += 1
@@ -575,6 +576,8 @@ class _RdCounting:
         if len(args) > 1 and args[1] == 'get':
             self.gets += 1
             self.got += len(out) if isinstance(out, str) else 0
+        if len(args) > 1 and args[1] == 'search':
+            self.searches += 1
         return out
 
     def __getattr__(self, name):
@@ -772,6 +775,33 @@ check(f'...and the word count is right after the pause, and the moment the bar c
       f'(pause {_rd_at_pause}, before closing {_rd_before_close}, closed '
       f'{_rd_at_close}, typing with it closed {_rd_closed_live})',
       _rd_at_pause and not _rd_before_close and _rd_at_close and _rd_closed_live)
+
+# Letters typed onto a bold word wear its bold up to a space typed with them,
+# the space found among the letters typed: Tk's search for it read the whole
+# line, 0.29 s a key with the find bar open on row 9 (round 10).
+_rd_open('word ' * 2000, _rd_bold_words([0], 500))
+app14._open_find()
+app14._find_case.set(False)
+app14._find_var.set('word')
+app14._find_rescan(reveal=False)
+app14.update()
+_rd_b = app14.body_text
+_rd_b.mark_set('insert', '1.4')
+_rd_b.mark_set(app14._TYPED_FROM, 'insert')
+_rd_b.mark_gravity(app14._TYPED_FROM, 'left')
+_rd_b.mark_set(app14._TYPED_TO, 'insert')
+_rd_b.mark_gravity(app14._TYPED_TO, 'right')
+app14._typed_run_open = True
+_rd_b.insert('insert', 'er x')
+_rd_spread = _rd_counted(app14._spread_typed_run)
+_rd_spread_bold = ['bold' in _rd_b.tag_names(f'1.{c}') for c in range(4, 8)]
+app14._close_find()
+app14.update()
+check(f'letters typed onto a bold word, the find bar open on row 9, are styled up to '
+      f'the space typed with them, asking Tk nothing over the whole line '
+      f'({_rd_spread.searches} searches, {_rd_spread.got} characters read; bold {_rd_spread_bold})',
+      _rd_spread.searches == 0 and _rd_spread.got <= 8
+      and _rd_spread_bold == [True, True, False, False])
 
 
 def _rd_uniform(words):

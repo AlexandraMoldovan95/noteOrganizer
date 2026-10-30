@@ -5255,8 +5255,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._take_run_between(start, end)
             if not b.get(prev).strip():
                 return
-            gap = b.search(r"\s", start, stopindex=end, regexp=True)
-            stop = gap or end
+            # The first space among the letters typed, found in Python: Tk's
+            # search read the whole line for it, a quarter of a second a key
+            # with the find bar open on a long paragraph (round 10).
+            typed = b.get(start, end)
+            cut = next((i for i, ch in enumerate(typed) if ch.isspace()), None)
+            stop = end if cut is None else b.index(f"{start}+{cut}c")
             if not b.compare(start, "<", stop):
                 return
             for tag in b.tag_names(prev):
