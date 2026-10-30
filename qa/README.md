@@ -166,8 +166,17 @@ jobs at once, with a runaway test among them, took the desktop down
   seconds) it gives up with exit code 75, BUSY: try again later. What a
   run starts shares its turn, and never waits on its parent. The static
   gates alone (`run_tests.py static`, `pre_push_check.py`) take no turn.
-  The Android build and its emulator do not take this lock: for them,
-  one at a time is still a rule to keep by hand.
+  The Android walk takes it as it starts; the Android build and the
+  emulator itself do not, and for them one at a time is still a rule to
+  keep by hand.
+- **Homes of its own.** `APPDATA`, `LOCALAPPDATA` and `XDG_DATA_HOME`
+  name empty folders of the run's own, for it and everything it starts:
+  the app run from source reads `%APPDATA%\NoteOrganizer`, where the
+  built app kept the owner's notebook until 2026-10-27, and an app that
+  starts in an empty folder copies that notebook in. One test did, on
+  every Windows run, until the final audit's eighth round. `USERPROFILE`
+  is left as it is (git and docker read their settings there), so a
+  probe of the built `.exe` still gives it a profile of its own.
 - **A ceiling sized to the need.** On Windows a job object holds each
   process to 1,024 MB of committed memory and a run's processes together
   to 2,048 MB, and ends them with the runner. On Linux, RLIMIT_AS holds

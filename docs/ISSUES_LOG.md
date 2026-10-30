@@ -205,6 +205,8 @@ is in the table below as well.
 | [The test that took the computer down](#the-test-that-took-the-computer-down) | A test is a guest on the computer it runs on: it never sizes itself from a bound a mutant can change, and the runner holds the ceiling the test forgot. A rule only asked lasts until it is forgotten. | next |
 | [Round seven: a copy taken for the series', and what one slot holds](#round-seven-a-copy-taken-for-the-series-and-what-one-slot-holds) | A rule about "the copy" says which copy, by what it holds; a rule inside the shaping of a note runs in every comparison too; each new reason to fill one slot is a new way to empty it. | next |
 | [Round seven: a list's pieces measured once, and Enter held down](#round-seven-a-lists-pieces-measured-once-and-enter-held-down) | A measure taken once is a measure of that moment: what can change after it tells what read it, or is read again; and a key held down is many presses. | next |
+| [Round eight: a day reset that came back, and what one copy keeps](#round-eight-a-day-reset-that-came-back-and-what-one-copy-keeps) | A move into the note happens once: what a copy has given back, it holds no more; and of two texts competing for one slot, the one whose loss is larger stays. | next |
+| [Round eight: words said beneath an Undo, and Enter held on every box](#round-eight-words-said-beneath-an-undo-and-enter-held-on-every-box) | A message that yields to an offer must still be seen somewhere; and a rule for a held key is asked by every binding that acts. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -2992,6 +2994,74 @@ measured here; round six measured 7 ms a step there at 1,000 items.
 **Takeaway:** a measure taken once is a measure of that moment. Whatever can change after it -- a
 width, a wrap -- must tell what read it, or be read again where it is used. And a key held down
 is many presses: a control the first press hands the keyboard to must not take the rest.
+
+### Round eight: a day reset that came back, and what one copy keeps
+
+*(2026-10-30 · found by the final audit's eighth break-it round, which attacked round seven's
+fixes by name; its data half, mirrored on the phone)*
+
+**Symptom:**
+- **A day reset, back at every start.** A weekly series turned off, its text edited, turned on
+  again as it was; then "Reset this day to the series content", answered Yes. At the next start
+  the day's old text was back -- and in a duplicate, after a Trash restore, and in a backup
+  imported a minute later, which read as "edited elsewhere".
+- **Two letters cleared over a long comment.** A long comment deleted, kept in the rescue copy;
+  "zz" typed, saved, cleared. The copy now held "zz", the long comment in no file.
+- **A turn-off after an import's Update.** The note as it was here before the Update lived only
+  in the copy; turning the repeat off replaced it, unsaid.
+- **"Import complete", then a sign-out.** The next start said the finished import had kept
+  nothing and asked for it again.
+
+**Root cause:** round seven let days come back from a series' own copy into a note that repeats
+again as that series, whenever the note holds none -- the state a person makes on purpose by
+resetting the last day -- and the copy kept its days, so the move ran again at every read.
+Round seven's comments rule kept the copy's body and always took the comments being cleared. The
+turn-off kept a waiting copy's words only when it held nothing but words, and an update's copy
+holds more. The flag a session end reads stayed up through the last dialog, after the merge was
+saved.
+
+**Fix:**
+- `spend_series_days`: once a note repeats as its copy's series, the copy's days are spent -- at
+  every read after the move, and in the save that turns the repeat back on. A turned-off note's
+  copy keeps them, as before. An incoming note is compared without its copy too.
+- `comments_kept_by_copy`: the comments whose loss would be larger stay, counted by what is gone.
+- An unspent update's copy is kept whole by a turn-off, given the series where it lacks it.
+- The flag is lowered once the merge is saved, before "Import complete" and "Import failed".
+- The lows: a restore weighs any style on words held in the copy's but not the same; a start
+  that cannot read the notes keeps an import's word for the next start that can; a worker held
+  past the session's join names what it copied; a template saved after a cancelled sign-out takes
+  back the word that it was not kept.
+- Written down, not fixed: notes 0.12.0 turned off and on again on the phone with a rule written
+  another way, or a day skipped since, keep their days in the copy alone. Days carried into later
+  copies of words were never released (that code came after 0.12.0).
+
+**Takeaway:** a move into the note happens once: what a copy has given back, it holds no more.
+And when two texts compete for one slot, the one whose loss would be larger stays -- measured,
+not assumed to be the newest.
+
+### Round eight: words said beneath an Undo, and Enter held on every box
+
+*(2026-10-30 · the eighth round's interface half)*
+
+**Symptom:**
+- A paste into the title lost the spaces at its edges, two words running together.
+- While an action's Undo stood on the banner (about eight seconds), "Pasted text shortened" for
+  the Add box or the title was said nowhere a person looks; and "Pasted title shortened" itself
+  lasted half a second before the autosave wrote over it.
+- Enter held on a group header in the note list folded and unfolded it on every repeat.
+- A full list's waiting words raised "Checklist full" on every way out of the note, and the
+  window's close asked about a note already deleted.
+
+**Fix:** a title paste turns only line breaks and tabs into single spaces, keeping the rest as
+copied. A box's words go on a second banner beneath an Undo, and the autosave writes over neither
+that banner nor the status line's words for their 1.8 seconds. Every Enter binding that acts asks
+round seven's held-key rule first; the body, table cells and the find bar keep their repeats.
+"Checklist full" is said once for the same words in the same note, and the close asks only about
+notes still in the list.
+
+**Takeaway:** a message that yields to an offer must still be seen somewhere. And a rule for a
+held key is a rule for every binding that acts on one, not for the control the last report
+named.
 
 
 ## Tk & platform gotchas
@@ -6423,10 +6493,33 @@ only where someone had remembered it.
   there under fixed names. A scratch folder carries a marker naming its run and a later run
   removes the dead ones; the suites get a temporary folder of the run's own.
 
-**Takeaway:** a test is a guest on the computer it runs on. A mutant can turn any bound into
-"unbounded", so a test never sizes itself from a bound, and the runner holds the ceiling the test
-forgot. And a rule that is only asked lasts until the day it is forgotten: the turn, the bound on
-each child and the edges of a picture are code now, held by a gate that was watched failing.
+**Round eight** *(2026-10-30)*: the audit attacked the turn, the ceiling and the door, and found
+the one thing a guest must never do, done on every run.
+
+- *A test read the owner's notebook.* `test_data_safety.py` started the app in its folder with
+  no notes file and no reclaim marker, under the owner's own environment. The app took it for the
+  first start after the move and copied `%APPDATA%\NoteOrganizer` -- the built app's notebook
+  until 2026-10-27, a copy of hers -- into the suite's folder: notes, settings, Trash, templates,
+  every attached file. On every Windows run of the suite, of mutants and of coverage. Nothing was
+  written back; a killed run left the copy in the temporary folder. The qa scripts were safe by
+  their seed, two tools by an `APPDATA` of their own; nothing made it a rule. `guest.settle()`
+  now gives every run `APPDATA`, `LOCALAPPDATA` and `XDG_DATA_HOME` of its own, empty, and the
+  gate starts a run under a stand-in notebook and fails if the app's first start brings any of
+  it in. The test is seeded too.
+- *A script that trusted where it ran.* The Store package's sandbox test, run on this computer by
+  mistake, would have trusted a test certificate and written over the old notebook. It refuses
+  to run anywhere but inside Windows Sandbox now.
+- *The site's browser walk* started Edge with no turn, no ceiling and no time limit, out of the
+  gate's sight because the gate read only Python. It starts only through a Python door that
+  settles, whose job ends Edge's whole tree, and the gate reads scripts in every language.
+- *The Linux door* mounted the whole working tree, git-ignored files included. The container
+  sees a copy of what git tracks, with no network; a run on Windows keeps 3 GB free under it.
+- *The sweep* deleted a scratch folder's marker before failing on its read-only files, leaving a
+  folder no later sweep would touch. It clears them first now, and marks again what resists.
+
+**Takeaway, round eight:** a guest never opens the owner's cupboards, even to look. Where the
+app finds a notebook is decided by the environment, so the runner decides the environment, for
+every process it starts, and a gate proves it with a stand-in.
 
 ## Smaller lessons, moved out of the code
 

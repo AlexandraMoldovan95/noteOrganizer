@@ -343,12 +343,15 @@ a time — a suite, mutants, the Linux image, the Android build or its
 emulator. For this repository's runners that is enforced, not asked: each
 calls `guest.settle()` first (`tools/guest.py`, gated by
 `tools/check_guest.py`), which takes the machine's turn — a second run
-waits, naming the first — and holds everything it starts to a memory
-ceiling sized to the need. The Linux image runs only through `py
-tools/linux_ci.py`, never a docker command of one's own: a killed docker
-client leaves its container running. The Android build and its emulator
-take no turn yet; keep them to one at a time by hand. A runaway test once
-took 43 GB and the owner's desktop with it
+waits, naming the first — holds everything it starts to a memory
+ceiling sized to the need, and gives it `APPDATA` of its own, empty, so
+the app's code it runs can never copy in the owner's notebook (a test
+did, on every Windows run, until the final audit's eighth round). The
+Linux image runs only through `py tools/linux_ci.py`, never a docker
+command of one's own: a killed docker client leaves its container
+running. The Android walk takes the turn as it starts; the Android build
+and the emulator itself take none yet — keep them to one at a time by
+hand. A runaway test once took 43 GB and the owner's desktop with it
 ([the story](docs/ISSUES_LOG.md#the-test-that-took-the-computer-down)).
 
 Instead (by hand): copy `note_organizer.py`, the `noteorganizer/` package,
