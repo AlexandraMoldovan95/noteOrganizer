@@ -896,8 +896,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._version_backup_path = None  # filled in by load_notes on a version upgrade
         self._corrupt_notes_report = None  # (flag, preserved-copy path) if the notes file was unreadable
         # A note's uid -> the words its full checklist's Add box could not
-        # take on the way out, given back to the box when it opens again.
+        # take on the way out, given back to the box when it opens again --
+        # and the words "Checklist full" was said about, once a session.
         self._add_box_waiting = {}
+        self._waiting_said = {}
         self.notes = self.load_notes()
         self.selected_note_id = None
 
@@ -13256,6 +13258,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # What waits is what the box holds now: emptied, nothing does.
             self._add_box_waiting.pop(uid, None)
         if not text:
+            self._waiting_said.pop(uid, None)
             return
         items = self._get_checklist()
         if len(items) >= MAX_CHECKLIST_ITEMS:
@@ -13264,6 +13267,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # make room" could no longer be done (round 7 of the audit).
             if uid:
                 self._add_box_waiting[uid] = text
+                # Said once for these words in this note: back in its box at
+                # every opening, they raised "Checklist full" on every way
+                # out (round 8 of the audit). The close still asks.
+                if self._waiting_said.get(uid) == text:
+                    return
+                self._waiting_said[uid] = text
             self._checklist_full(items, text, waits=bool(uid))
             return
         self._append_checklist_item(text)
@@ -23017,7 +23026,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._closing_window = False
         # Words a full checklist's Add box could not take wait for their note
         # while the app is open; closing loses them, so it asks, once for all.
-        waiting = list(self._add_box_waiting.values())
+        # Not for a note in the Trash: it asked about words of a note the
+        # person had deleted (round 8). Kept meanwhile, a restore finds them.
+        here = {n.get("uid") for n in self.notes}
+        waiting = [text for uid, text in self._add_box_waiting.items()
+                   if uid in here]
         if waiting and not self.ask_yes_no(
                 "Close without these items?",
                 f"A checklist can have up to {MAX_CHECKLIST_ITEMS:,} items, and "

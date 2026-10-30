@@ -4169,20 +4169,64 @@ try:
     _cw_left = app.checklist_add_var.get()
     app.open_note_in_tab(_cw_full); app.update()
     _cw_back = app.checklist_add_var.get()
-    app.open_note_in_tab(_cw_other); app.update()
+    # ...said once for those words, not at every way out of the note: back
+    # in its box at each opening, they raised "Checklist full" each time
+    # (round 8). Other words are said again.
+    for _cw_i in range(3):
+        app.open_note_in_tab(_cw_other); app.update()
+        app.open_note_in_tab(_cw_full); app.update()
     _cw_said_n = len(_cw_said)
+    app.checklist_add_var.set('buy bigger boxes')
+    app.open_note_in_tab(_cw_other); app.update()
+    _cw_said_new = len(_cw_said)
     app.on_app_close(); app.update()
     _cw_open = not _cw_closed
 finally:
     app.show_info, app.ask_yes_no, app.destroy = _cw_real
     app._add_box_waiting.clear()
     app.checklist_add_var.set('')
-check(f'words a full checklist could not take wait in its Add box for the note, and '
-      f'the close asks before losing them ({_cw_left!r}, {_cw_back!r}, {_cw_asked}, '
-      f'{_cw_said[:1]})',
+check(f'words a full checklist could not take wait in its Add box for the note, said '
+      f'once, and the close asks before losing them ({_cw_left!r}, {_cw_back!r}, '
+      f'{_cw_asked}, said {_cw_said_n} then {_cw_said_new}: {_cw_said[:1]})',
       _cw_left == '' and _cw_back == 'buy more boxes' and _cw_open
-      and _cw_asked == ['Close without these items?'] and _cw_said_n == 2
+      and _cw_asked == ['Close without these items?'] and _cw_said_n == 1
+      and _cw_said_new == 2
       and 'waits in this note\'s Add box' in (_cw_said[0] if _cw_said else ''))
+app.new_note(); app.update()
+app.notes = []; app.save_notes()
+
+# ...but not about words of a note in the Trash: the close asked to lose
+# words of a note the person had deleted (round 8).
+_ct_asked, _ct_closed = [], []
+_ct_real = (app.show_info, app.ask_yes_no, app.destroy)
+app.show_info = lambda *a, **k: None
+# Yes to the delete, No to anything the close asks.
+app.ask_yes_no = lambda t, *a, **k: (_ct_asked.append(t), t == 'Delete note')[1]
+app.destroy = lambda: _ct_closed.append(1)
+try:
+    _ct_full = NO.normalize_note({'id': 4261, 'title': 'Big list', 'body': 'b', 'checklist': [
+        {'text': 'item %d' % i, 'done': False} for i in range(1000)]})
+    _ct_other = NO.normalize_note({'id': 4262, 'title': 'Other', 'body': 'x'})
+    app.notes = [_ct_full, _ct_other]; app.save_notes()
+    app.open_note_in_tab(_ct_full); app.update()
+    app.checklist_add_var.set('buy more boxes')
+    app.open_note_in_tab(_ct_other); app.update()
+    _ct_waits = dict(app._add_box_waiting)
+    # Deleted from its right-click menu, another note open.
+    app._context_delete_note(app.find_note(4261)); app.update()
+    _ct_trashed = (not any(n.get('uid') == _ct_full['uid'] for n in app.notes)
+                   and any(e.get('uid') == _ct_full['uid'] for e in app.trash))
+    del _ct_asked[:]
+    app.on_app_close(); app.update()
+finally:
+    app.show_info, app.ask_yes_no, app.destroy = _ct_real
+    app._add_box_waiting.clear()
+    app.checklist_add_var.set('')
+check(f'...and the close does not ask about the words of a note in the Trash '
+      f'(waiting {list(_ct_waits.values())}, in the Trash {_ct_trashed}, asked {_ct_asked}, '
+      f'closed {bool(_ct_closed)})',
+      list(_ct_waits.values()) == ['buy more boxes'] and _ct_trashed
+      and _ct_asked == [] and _ct_closed == [1])
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
 

@@ -11090,6 +11090,42 @@
     "expect": "killed"
   },
   {
+    "id": "RX13",
+    "about": "words waiting in a full checklist's Add box raise Checklist full at every way out of their note",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                if self._waiting_said.get(uid) == text:\n                    return\n",
+        "replace": "                if False:\n                    return\n"
+      }
+    ],
+    "must_fail": [
+      "wait in its Add box for the note, said once"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX14",
+    "about": "the close asks to lose the waiting words of a note in the Trash",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                   if uid in here]\n",
+        "replace": "                   if True]\n"
+      }
+    ],
+    "must_fail": [
+      "and the close does not ask about the words of a note in the Trash"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
     "id": "DR91",
     "about": "a note read keeps a turned-off series' own-text days only in its rescue copy, as the phone wrote it",
     "edits": [
