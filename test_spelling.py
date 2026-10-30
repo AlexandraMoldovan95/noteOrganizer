@@ -241,6 +241,40 @@ check("the caret anywhere in a range, or at either end, is that range",
 check("...and away from it, none", spelling.range_at([(4, 3)], 8) is None
       and spelling.range_at([(4, 3)], 3) is None)
 
+# --- no more underlines than a box may hold ------------------------------
+# Each is two toggles of a tag, and Tk reads a line in about the square of
+# its toggles: one long line of typos made every save at a pause cost
+# seconds (final audit, round 10). Those nearest the caret stay.
+_nu_line = [(6 * i, 3) for i in range(1200)]
+_nu = spelling.nearest_underlines({0: list(_nu_line)}, 0, 6 * 900, per_line=500)
+check("a line keeps no more underlines than a line may hold",
+      len(_nu[0]) == 500)
+check("...those around the caret's column, where words are being written",
+      _nu[0][0][0] <= 6 * 900 <= _nu[0][-1][0] and _nu[0] == sorted(_nu[0]))
+check("...one beside another, none skipped among them",
+      all(b[0] - a[0] == 6 for a, b in zip(_nu[0], _nu[0][1:])))
+check("...the caret at the line's start keeps its first ones",
+      spelling.nearest_underlines({0: list(_nu_line)}, 0, 0, per_line=500)[0]
+      == _nu_line[:500])
+check("...and at its end, its last ones",
+      spelling.nearest_underlines({0: list(_nu_line)}, 0, 10 ** 6, per_line=500)[0]
+      == _nu_line[-500:])
+_nu_many = {i: [(0, 3), (6, 3), (12, 3)] for i in range(40)}
+_nu_cut = spelling.nearest_underlines(_nu_many, 20, 0, per_line=500, total=30)
+check("a box keeps no more underlines than it may hold, in all",
+      sum(len(v) for v in _nu_cut.values()) == 30)
+check("...those on the lines nearest the caret's",
+      sorted(_nu_cut) == list(range(15, 25)))
+_nu_edge = spelling.nearest_underlines({3: list(_nu_line), 9: list(_nu_line)}, 6, 0,
+                                       per_line=500, total=700)
+check("a line above the caret keeps its last, one below its first",
+      _nu_edge[3] == _nu_line[-500:] and _nu_edge[9] == _nu_line[:200])
+_nu_small = {2: [(0, 3), (8, 4)], 5: [(1, 2)]}
+check("under both bounds nothing is taken away",
+      spelling.nearest_underlines(_nu_small, 0, 0) == _nu_small)
+check("the bounds are the ones the editor uses",
+      spelling.MAX_UNDERLINES_PER_LINE == 500 and spelling.MAX_UNDERLINES == 2000)
+
 # --- one dictionary per language -----------------------------------------
 _en19 = ["en-029", "en-AU", "en-CA", "en-GB", "en-IN", "en-US", "en-ZA"]
 check("nineteen kinds of English give one dictionary, en-US when the person "

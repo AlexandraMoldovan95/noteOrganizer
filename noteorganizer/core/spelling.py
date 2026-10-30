@@ -60,6 +60,11 @@ MIN_WORDS_IN_NOTE = 6
 # How many ignored words are kept: settings.json is read whole at every
 # start, and a list that only ever grows must stop somewhere.
 IGNORE_LIMIT = 5000
+# The underlines a line, and a box, may hold, as the find bar holds its hits.
+# Each is two toggles of a tag, and Tk's cost to read a line grows with their
+# square: the save reads it at every pause (final audit, round 10).
+MAX_UNDERLINES_PER_LINE = 500
+MAX_UNDERLINES = 2000
 
 # A run of letters, with an apostrophe or a hyphen allowed between two of
 # them ("don't", "well-known"). Digits and underscores are not letters.
@@ -272,6 +277,33 @@ def range_at(ranges, column):
         if start <= column <= start + length:
             return (start, length)
     return None
+
+
+def nearest_underlines(shown, line, column, per_line=MAX_UNDERLINES_PER_LINE,
+                       total=MAX_UNDERLINES):
+    """*shown* (visible_errors' answer) cut to what a box may hold: at most
+    *per_line* ranges a line and *total* in all, those nearest the caret at
+    (*line*, *column*) kept -- where words are being written. A line above
+    the caret keeps its last ranges, a line below its first, the caret's own
+    line those around the column."""
+    out, room = {}, total
+    for index in sorted(shown, key=lambda i: (abs(i - line), i)):
+        keep = min(per_line, room)
+        if keep <= 0:
+            break
+        ranges = sorted(shown[index])
+        if len(ranges) > keep:
+            if index < line:
+                ranges = ranges[-keep:]
+            elif index > line:
+                ranges = ranges[:keep]
+            else:
+                at = bisect_right([start for start, _length in ranges], column)
+                first = max(0, min(at - keep // 2, len(ranges) - keep))
+                ranges = ranges[first:first + keep]
+        out[index] = ranges
+        room -= len(ranges)
+    return out
 
 
 def pick_languages(supported, preferred=()):

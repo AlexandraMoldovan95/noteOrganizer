@@ -224,16 +224,22 @@ class SpellingMixin:
             else:
                 results.append(self._spell_cache.get(text, []))
         shown = spelling.visible_errors(lines, results, self._spell_ignored())
+        try:
+            line, col = map(int, widget.index("insert").split("."))
+        except (tk.TclError, ValueError):
+            line, col = 1, 0
         if getattr(widget, "_spell_typing", False):
             try:
                 if self.focus_get() is widget:
-                    line, col = map(int, widget.index("insert").split("."))
                     ranges = shown.get(line - 1)
                     typing = spelling.range_at(ranges or [], col)
                     if typing:
                         ranges.remove(typing)
             except (tk.TclError, KeyError, ValueError):
                 pass
+        # No more than a box may hold, those nearest the caret: a long line
+        # of typos made every read of it, the save's at each pause, dear.
+        shown = spelling.nearest_underlines(shown, line - 1, col)
         marks = []
         for i, ranges in shown.items():
             for start, length in ranges:
