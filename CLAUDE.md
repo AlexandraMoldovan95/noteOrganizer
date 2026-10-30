@@ -327,8 +327,13 @@ root (during a routine full-suite sweep) it destroyed the real notebook —
 recovered only because the app's own `notes_data_backup_*.json` existed,
 minus that day's work. Most unit tests are genuinely pure; that is
 exactly what made the dangerous one easy to misfile. The test now refuses
-to run beside a `notes_data.json` that holds real notes, but the refusal
-is the LAST line of defence, not permission to run tests in place.
+to run beside a `notes_data.json` that holds real notes, and wherever the
+folder the app will open — asked of the app's own resolver — is not the
+folder it runs in: since 2026-10-08 the checkout holds no notebook, its
+`notebook_location.txt` sends the app to the owner's, and a guard that
+looked beside itself found the folder empty and let the test delete hers
+(the final audit's tenth round). The refusal is still the LAST line of
+defence, not permission to run tests in place.
 
 The safest way is to let `tools/run_tests.py` do it for you: it makes a
 fresh temp folder far outside the project, copies in `note_organizer.py`,
@@ -350,7 +355,8 @@ did, on every Windows run, until the final audit's eighth round). Every
 suite settles too, as its first act (`as_a_guest()` in
 `qa/_qa_support.py`): started by a runner it shares that run's turn and
 homes; started by CI or by hand it takes its own, or refuses without
-`tools/guest.py` (since the ninth round). The
+`tools/guest.py` (since the ninth round), and refuses beside an app whose
+`notebook_location.txt` names a folder (since the tenth). The
 Linux image runs only through `py tools/linux_ci.py`, never a docker
 command of one's own: a killed docker client leaves its container
 running. The Android walk takes the turn as it starts; the Android build
@@ -366,7 +372,9 @@ it physically impossible for a wrong-directory mistake to reach real user
 data, rather than relying on correctly remembering the working directory
 every single time. The suite settles itself there as a runner would — the
 machine's turn, the memory ceiling, `APPDATA` of its own — and refuses to
-start without `guest.py` beside it.
+start without `guest.py` beside it. Those files, never a copy of the
+whole project folder: that carries the git-ignored `notebook_location.txt`,
+which names the owner's notebook, and every suite refuses beside it.
 
 The `noteorganizer/` package must travel with `note_organizer.py` — the
 latter imports from it, so a copy on its own now fails with

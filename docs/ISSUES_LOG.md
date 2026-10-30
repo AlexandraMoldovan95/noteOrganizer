@@ -6703,6 +6703,39 @@ sentence called shut.
 finding the right word in it; and an exemption granted because "something else does it" holds
 only where that something else is made to.
 
+**Round ten** *(2026-10-30)*: the audit attacked round nine's doors and found the guard the
+documents call the last line of defence looking in the wrong folder.
+
+- *The guards looked beside themselves.* Since 2026-10-08 the owner's checkout holds no notebook:
+  a git-ignored `notebook_location.txt` beside the entry file names the folder a source run
+  opens, her own. `test_data_safety.py`'s guard looked for a notebook beside the test, found
+  none, seeded an empty one and let the test go on; the app it started opened the folder the
+  file names. Run in the checkout with CI's own marker (`NOTEORG_SCRATCH=1`, as `tests.yml`
+  runs it and as a person reproducing a red would type it), or in a copy of the whole folder,
+  it deleted that notebook, wrote over its Trash and replaced its settings -- shown in the
+  Linux image with a stand-in, the control without the file left as it was. A guest's homes do
+  not reach it: the line is a path, or starts at `%USERPROFILE%`. The qa seed and three tools'
+  copies of it asked the same wrong question, and the copies read an unreadable notebook as
+  empty. Every suite now refuses beside an app whose `notebook_location.txt` names a folder,
+  and every seed -- one definition, `_qa_support.seed_here`, the tools' too -- writes only where
+  the app's own resolver says the app will open, and only when that is the folder it runs in.
+  The gate stands the checkout in, the file naming a stand-in notebook by its path and through
+  `%USERPROFILE%`: each suite's opening must refuse, the notebook byte for byte as it was.
+  `initialise(app_dir=...)` still reads the file there: a test plays the real start in a folder
+  of its own, and a guard asks the resolver the same question.
+- *The gate read PowerShell its own way.* Code after a block comment's `#>` ran before the guard
+  it approved, and a curly quote, at which PowerShell ends a string, was part of its "literal"
+  -- which it then handed to PowerShell to evaluate, so reading a file could run one.
+  PowerShell's own parser, which runs nothing, reads each sandbox script too: nothing before the
+  guard, no `#requires`, `using` or `param` block. Only the literals' values reach PowerShell,
+  every quote it knows doubled.
+- *The Linux door followed links.* A tracked name replaced by a link or a junction carried what
+  it pointed at into `/repo`. Such a name refuses the run.
+
+**Takeaway, round ten:** a guard asks the question the thing it guards will ask, of the same
+code. "Is there a notebook here?" became the wrong question the day the app stopped keeping its
+notebook here.
+
 ## Smaller lessons, moved out of the code
 
 *Each of these was once a long comment beside the code it explains. The code now says why in a

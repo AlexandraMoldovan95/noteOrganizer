@@ -145,8 +145,9 @@ swap, two CPUs, a time limit inside it and docker's init, removes it on
 every way out, and ends by printing its memory peak. The container sees
 a copy of what git tracks, as the working tree has it — never a file
 git does not track, whether or not the ignore list names it (a
-notebook, its backups, settings, a Trash kept aside as unreadable); a
-new file is shown once git knows it (`git add -N`). It has no network,
+notebook, its backups, settings, a Trash kept aside as unreadable), nor
+what a link or a junction at a tracked name points at: such a name
+refuses the run. A new file is shown once git knows it (`git add -N`). It has no network,
 and nothing in it is writable but a `/tmp` of 512 MB held inside its
 memory, so Docker's virtual disk, which never gives space back, does not
 grow.
@@ -169,6 +170,18 @@ runner would, and without `tools/guest.py` beside it (or in the
 repository's `tools/`) it refuses. They were let off once, for "a runner
 starts them", which nothing made true; the gate now runs each suite's
 opening lines as CI starts them.
+
+No suite trusts the folder it stands in, either. The guards looked for a
+notebook beside themselves, while the app opens the folder a
+`notebook_location.txt` beside it names — in the owner's checkout, her
+own notebook, which `test_data_safety.py` would have deleted (final
+audit, round ten). Every suite now refuses beside an app whose
+`notebook_location.txt` names a folder, and a seed — `hermetic_seed()`,
+and `seed_here()` for the tools that photograph or measure the app —
+writes only where the app's own resolver says the app will open, and
+only when that is the folder it runs in. The gate stands the checkout in,
+with the file naming a stand-in notebook by its path and through
+`%USERPROFILE%`, and every opening must refuse with it untouched.
 
 - **One heavy job at a time, enforced.** A runner takes the machine's
   turn: an OS lock on `noteorg-guest.lock` in the temporary folder,
@@ -214,7 +227,10 @@ opening lines as CI starts them.
   Store package's test, unless it is inside Windows Sandbox: run by its
   account, from the path the sandbox starts it from, both. The gate
   evaluates that guard for a user of this computer, at the sandbox's
-  path and elsewhere, rather than look for the account's name in it.
+  path and elsewhere, rather than look for the account's name in it; it
+  reads the script as PowerShell's own parser does (which runs nothing),
+  so nothing runs before the guard, and only the literals' values ever
+  reach PowerShell.
 - **Nothing outlives a run.** A scratch folder carries a marker naming
   the run that made it, and a later run removes the ones whose run is
   gone — never a folder without the marker. The suites' own temporary

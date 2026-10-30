@@ -114,8 +114,14 @@ can keep its notebook elsewhere: a git-ignored `notebook_location.txt` beside th
 folder. It exists because every notebook this project lost was lost in the working tree; a file
 rather than an environment variable, because the tests run copies of the code that must keep
 their data in their own folders, and a copy carries no such file while every child process
-inherits a variable. The folder it names is never migrated into — an empty one would otherwise
-copy in the `.exe`'s notebook from `%APPDATA%`:
+inherits a variable. A suite run in the checkout itself, or in a copy of the whole folder, does
+carry it, so no test trusts the folder it stands in: each asks the app's own resolver which
+folder the app will open, refuses beside a `notebook_location.txt`, and seeds only that folder
+when it is its own (`qa/_qa_support.py`; the final audit's tenth round,
+[the story](ISSUES_LOG.md#the-test-that-took-the-computer-down)). `initialise(app_dir=...)`
+resolves from the folder it is given as from the entry file's, the file included: a test plays
+the real start in a folder of its own. The folder it names is never migrated into — an empty one
+would otherwise copy in the `.exe`'s notebook from `%APPDATA%`:
 
 | File | Contents |
 |---|---|
