@@ -1472,6 +1472,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._setting_title = False
         self._refresh_title_count()
 
+    # What a paste puts on the title's one line: a line break or a tab, with
+    # the spaces around it, is one space between words and nothing at either
+    # end; every other space goes in as it was copied.
+    _TITLE_PASTE_BREAK = re.compile(
+        r"\s*[\t\n\x0b\x0c\r\x1c-\x1e\x85\u2028\u2029]\s*")
+
     def _on_title_paste(self, event=None):
         """Paste into the title, trimmed to fit rather than refused.
 
@@ -1494,8 +1500,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 f"A note title can be up to {self.TITLE_MAX_LEN} characters")
             return "break"
         # Weighed as it goes in, on one line: weighed as copied, a line
-        # copied with its line break, or CR LF, read as shortened.
-        whole = " ".join(pasted.split())
+        # copied with its line break, or CR LF, read as shortened. Only the
+        # breaks are joined: split() took the paste's edge spaces too, and
+        # "fresh " pasted before "milk" made "freshmilk" (round 8).
+        whole = " ".join(
+            part for part in self._TITLE_PASTE_BREAK.split(pasted) if part)
         clipped = whole[:room]
         self.title_entry.insert("insert", clipped)
         self._refresh_title_count()

@@ -5273,24 +5273,35 @@ check(f"the note's page says a paste cut to fit where it is seen: in a banner "
 
 # ...and a title is weighed as it goes in, on one line: a line copied with its
 # line break, or Windows' CR LF, was "shortened" by the space it lost.
-_tw_told = []
+_tw_told, _tw_kept = [], {}
 _tw_real_status = app.set_status
 try:
     app.new_note(); _kv_settle(4)
     app.set_status = lambda text, *a, **k: _tw_told.append(text)
-    for _tw_paste in ('Shopping list\n', 'Shopping list\r\n', 'Shopping  list'):
+    # (what the title held, where the caret was, what was pasted)
+    for _tw_was, _tw_at, _tw_paste in (
+            ('', 0, 'Shopping list\n'), ('', 0, 'Shopping list\r\n'),
+            ('', 0, 'Shopping  list'),
+            # ...and a paste's own spaces at its edges stay: str.split() took
+            # them, and two words ran together (round 8).
+            ('Buy milk', 4, 'fresh '), ('Buy milk', 3, ' fresh'),
+            ('Groceries', 9, ' and more\r\n')):
         app.title_entry.delete(0, 'end')
+        app.title_entry.insert(0, _tw_was)
+        app.title_entry.icursor(_tw_at)
         app.clipboard_clear()
         app.clipboard_append(_tw_paste)
         app.title_entry.event_generate('<<Paste>>')
         _kv_settle(2)
-    _tw_kept = app.title_entry.get()
+        _tw_kept[_tw_paste] = app.title_entry.get()
 finally:
     app.set_status = _tw_real_status
     app.title_entry.delete(0, 'end')
 check(f"a title pasted with its line break, or a double space, is not said to be "
-      f"shortened ({_tw_kept!r}; said {_tw_told})",
-      _tw_kept == 'Shopping list'
+      f"shortened, and a paste keeps the spaces at its edges ({_tw_kept}; said {_tw_told})",
+      _tw_kept == {'Shopping list\n': 'Shopping list', 'Shopping list\r\n': 'Shopping list',
+                   'Shopping  list': 'Shopping  list', 'fresh ': 'Buy fresh milk',
+                   ' fresh': 'Buy fresh milk', ' and more\r\n': 'Groceries and more'}
       and not [t for t in _tw_told if 'shortened' in t])
 
 # ...and the ceiling every paste keeps weighs a line break as one character,
