@@ -70,7 +70,17 @@ from noteorganizer.core import paths as NO_paths
 # damage a notebook by itself. This file works directly with the data layer
 # rather than building a window, so it has to ask for it explicitly. Doing so
 # in THIS directory is exactly why the file must be run from a throwaway copy
-# (see CLAUDE.md's "QA testing safety").
+# (see CLAUDE.md's "QA testing safety"). Seeded first, as the qa suite's
+# hermetic_seed does: an empty notebook and the reclaim marker. Unseeded, the
+# migration copied whatever notebook %APPDATA% held into this folder -- the
+# built app's, the owner's -- on every Windows run of the suite (the final
+# audit's eighth round); the guard above has just made sure no notes are here.
+_seed_dir = os.path.dirname(os.path.abspath(NO.__file__))   # where initialise() looks
+if not os.path.exists(os.path.join(_seed_dir, "notes_data.json")):
+    with open(os.path.join(_seed_dir, "notes_data.json"), "w", encoding="utf-8") as _seed:
+        _seed.write("[]")
+with open(os.path.join(_seed_dir, "settings.json"), "w", encoding="utf-8") as _seed:
+    json.dump({"reclaimed_from_appdata": True}, _seed)
 NO.initialise()
 
 fails = []

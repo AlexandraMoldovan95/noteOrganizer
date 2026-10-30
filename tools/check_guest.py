@@ -27,12 +27,18 @@ what dead runs left. This gate holds it:
 5. The turn holds here, on a private lock: a second run waits, names the
    holder and gives up with BUSY; the holder's own child does not wait; a
    holder killed outright frees the turn at once.
+6. The homes hold here: a run started under an APPDATA that holds a
+   notebook -- a stand-in, never the owner's -- and homes said to be
+   inherited that APPDATA is not in, settles, and the app's own first
+   start in an empty folder brings nothing in; its child keeps the same
+   homes, and they are gone when the run ends.
 
     py tools/check_guest.py
 """
 
 import ast
 import glob
+import json
 import os
 import re
 import shutil
@@ -439,6 +445,58 @@ def turn_holds():
     return ok, seen
 
 
+# -- 6: the homes hold --
+
+HOMED = r"""
+import json, os, subprocess, sys, tempfile
+sys.path.insert(0, sys.argv[1])
+sys.path.insert(0, sys.argv[2])
+import guest
+guest.settle(heavy=False)
+from noteorganizer.core import paths
+empty = tempfile.mkdtemp(prefix="noteorg-gate-empty-", dir=os.environ[guest.HOMES_ENV])
+said = paths.run_migrations(empty)
+kid = subprocess.run([sys.executable, "-c", "import os, sys; sys.path.insert(0, sys.argv[1]); "
+                      "import guest; print(guest.settle(heavy=False)[-1]); print(os.environ['APPDATA'])",
+                      sys.argv[1]], capture_output=True, text=True, timeout=60).stdout.splitlines()
+print(json.dumps({"homes": os.environ[guest.HOMES_ENV], "appdata": paths.get_appdata_dir(),
+                  "said": said, "brought": sorted(os.listdir(empty)), "kid": kid,
+                  "userbase": os.environ.get("PYTHONUSERBASE")}))
+"""
+
+
+def homes_hold():
+    """Under an APPDATA holding a notebook, a settled run brings none of it in."""
+    standin = guest.scratch("noteorg-gate-appdata-")   # marked: swept if this gate is killed
+    try:
+        store = os.path.join(standin, "NoteOrganizer")
+        os.makedirs(store)
+        with open(os.path.join(store, "notes_data.json"), "w", encoding="utf-8") as fh:
+            fh.write('[{"id": 1, "uid": "gate-1", "title": "A stand-in notebook", "body": "x"}]')
+        # And homes said to be inherited, where APPDATA does not point: a
+        # run trusts its parent's homes only when they are the ones in use.
+        elsewhere = os.path.join(standin, "elsewhere")
+        os.makedirs(elsewhere)
+        env = dict(os.environ, APPDATA=standin, LOCALAPPDATA=standin, XDG_DATA_HOME=standin)
+        env[guest.HOMES_ENV] = elsewhere
+        run = subprocess.run([sys.executable, "-c", HOMED, HERE, ROOT], env=env,
+                             capture_output=True, text=True, timeout=120)
+        try:
+            seen = json.loads(run.stdout.strip().splitlines()[-1])
+        except (IndexError, ValueError):
+            return False, (run.stdout + run.stderr)[-400:]
+        homes = seen["homes"]
+        ok = (guest._inside(seen["appdata"], homes) and not seen["said"]
+              and seen["brought"] == [] and len(seen["kid"]) == 2
+              and "the run that started this one's" in seen["kid"][0]
+              and guest._inside(seen["kid"][1], homes)
+              and bool(seen["userbase"]) and not os.path.exists(homes))
+        return ok, "%s, brought %s, child %s, gone after %s" % (
+            seen["appdata"], seen["brought"], seen["kid"][:1], not os.path.exists(homes))
+    finally:
+        shutil.rmtree(standin, ignore_errors=True)
+
+
 def main():
     for line in guest.settle(heavy=False):
         print(line)
@@ -454,7 +512,10 @@ def main():
     print("%s a process past the ceiling fails alone (%s)" % ("PASS" if ok else "FAIL", out))
     turn, seen = turn_holds()
     print("%s one heavy job at a time: %s" % ("PASS" if turn else "FAIL", seen))
-    return 1 if missing or doors or not ok or not turn else 0
+    homes, where = homes_hold()
+    print("%s a run's homes are its own, its app's first start bringing nothing in (%s)"
+          % ("PASS" if homes else "FAIL", where))
+    return 1 if missing or doors or not ok or not turn or not homes else 0
 
 
 if __name__ == "__main__":

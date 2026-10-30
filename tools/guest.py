@@ -26,6 +26,14 @@ three things:
    ``scratch()`` carries a marker naming the process that made it; a later
    run removes the ones whose process is gone. Nothing without the marker
    is ever touched.
+4. Homes of its own. APPDATA, LOCALAPPDATA and XDG_DATA_HOME name empty
+   folders of the run's own, for it and every process it starts: the app
+   run from source reads %APPDATA%\\NoteOrganizer, where the built app kept
+   the owner's notebook until 2026-10-27, and an app started in an empty
+   folder copies that notebook in. One test did, on every Windows run of
+   the suite (final audit, round eight). USERPROFILE is left as it is: git
+   and docker read their settings there, and only the built app keeps a
+   notebook under it.
 
 The figures are sized from measurements (qa/README, "Running anything
 here"), not from the incident. The scratch stays on the system's temporary
@@ -52,6 +60,10 @@ WAIT_ENV = "NOTEORG_GUEST_WAIT"
 WAIT_S = 3600
 # The exit code of a run that did not get its turn (EX_TEMPFAIL: try later).
 BUSY = 75
+# The folder holding this run's own homes, for its children.
+HOMES_ENV = "NOTEORG_GUEST_HOMES"
+# Where programs keep a person's data, by the variable that names the place.
+HOME_VARS = ("APPDATA", "LOCALAPPDATA", "XDG_DATA_HOME")
 
 LOCK_NAME = "noteorg-guest.lock"
 HOLDER_NAME = "noteorg-guest.holder"
@@ -71,19 +83,51 @@ _token = None
 
 def settle(per_process_mb=PER_PROCESS_MB, all_together_mb=ALL_TOGETHER_MB,
            label=None, heavy=True, wait_s=None):
-    """Take this run's turn (when heavy), set the memory ceiling, and remove
-    what dead runs left. Returns the lines a runner prints. A run that does
-    not get its turn within ``wait_s`` exits with BUSY; a ceiling the OS
-    will not set is said, never silent, and never refuses a run."""
+    """Give this run homes of its own, take its turn (when heavy), set the
+    memory ceiling, and remove what dead runs left. Returns the lines a
+    runner prints. A run that does not get its turn within ``wait_s`` exits
+    with BUSY; a ceiling the OS will not set is said, never silent, and
+    never refuses a run."""
+    homes = own_homes()   # first, before anything could start the app's code
     lines = []
     if heavy:
         lines.append(take_turn(label, wait_s))
     lines.append(cap_memory(per_process_mb, all_together_mb))
+    lines.append(homes)
     if heavy and _lock_file is not None:
         swept = sweep()
         if swept:
             lines.append(swept)
     return lines
+
+
+def own_homes():
+    """Point HOME_VARS at empty folders of this run's own, for it and every
+    process it starts; returns the line to print. A child of a run keeps
+    the homes its parent was given."""
+    inherited = os.environ.get(HOMES_ENV, "")
+    if inherited and os.path.isdir(inherited) and all(
+            _inside(os.environ.get(var, ""), inherited) for var in HOME_VARS):
+        return "homes   : the run that started this one's (%s)" % inherited
+    # Python's folder for packages a person installed for themselves is
+    # under APPDATA: named where it is, so the run still finds them.
+    import site
+    os.environ.setdefault("PYTHONUSERBASE", site.getuserbase())
+    homes = scratch("noteorg-homes-")
+    for var in HOME_VARS:
+        path = os.path.join(homes, var.lower())
+        os.makedirs(path, exist_ok=True)
+        os.environ[var] = path
+    os.environ[HOMES_ENV] = homes
+    import atexit
+    atexit.register(remove, homes)
+    return ("homes   : %s are this run's own, empty (%s): the app's code it runs "
+            "finds no notebook of the owner's there" % (", ".join(HOME_VARS), homes))
+
+
+def _inside(path, folder):
+    return bool(path) and os.path.normcase(os.path.abspath(path)).startswith(
+        os.path.normcase(os.path.abspath(folder)) + os.sep)
 
 
 def cap_memory(per_process_mb=PER_PROCESS_MB, all_together_mb=ALL_TOGETHER_MB):
