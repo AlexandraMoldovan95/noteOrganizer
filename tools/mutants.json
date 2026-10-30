@@ -9409,8 +9409,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                room = limit - len(entry.get())\n                if room > 0:\n",
-        "replace": "                room = 0\n                if room > 0:\n"
+        "find": "                if room > 0:\n                    if chosen:\n",
+        "replace": "                room = 0\n                if room > 0:\n                    if chosen:\n"
       }
     ],
     "must_fail": [
@@ -9431,8 +9431,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                if chosen:\n                    entry.delete(\"sel.first\", \"sel.last\")\n                room = limit - len(entry.get())\n",
-        "replace": "                room = limit - len(entry.get())\n"
+        "find": "                    if chosen:\n                        entry.delete(\"sel.first\", \"sel.last\")\n                    entry.insert(\"insert\", raw[:room])\n",
+        "replace": "                    entry.insert(\"insert\", raw[:room])\n"
       }
     ],
     "must_fail": [
@@ -11370,8 +11370,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        if \"\\n\" in query:\n",
-        "replace": "        if True:\n"
+        "find": "        if \"\\n\" in needle:\n            # Tk's -nocase search crashed the process on Linux whenever the\n            # line held an emoji (Tk 8.6.16, round 10): read here too.\n",
+        "replace": "        if not any(ord(ch) > 0xFFFF for ch in query):\n            countv = tk.IntVar()\n            start = \"1.0\"\n            while len(matches) < cap:\n                pos = b.search(query, start, stopindex=\"end\", nocase=nocase,\n                               count=countv)\n                if not pos:\n                    break\n                line, col = _index_key(pos)\n                end = f\"{line}.{col + (countv.get() or self._tk_units(query))}\"\n                start = f\"{pos}+1c\"\n                if not b.tag_nextrange(self.TABLE_HIDE_TAG, pos, end):\n                    matches.append({\"kind\": \"prose\", \"start\": pos, \"end\": end,\n                                    \"line\": line, \"col\": col})\n            return matches\n        if \"\\n\" in needle:\n            # Tk's -nocase search crashed the process on Linux whenever the\n            # line held an emoji (Tk 8.6.16, round 10): read here too.\n"
       }
     ],
     "must_fail": [
@@ -11385,7 +11385,7 @@
   },
   {
     "id": "RX30",
-    "about": "the find bar measures a line from its start for each hit, and a line of many hits grows with its square",
+    "about": "the find bar measures a line from its start for each hit, a query holding an emoji or not, and a line of many hits grows with its square",
     "edits": [
       {
         "file": "note_organizer.py",
@@ -11394,24 +11394,7 @@
       }
     ],
     "must_fail": [
-      "find: hits 50 characters apart, the scan measures each line about once, not once per hit"
-    ],
-    "suites": [
-      "qa1"
-    ],
-    "expect": "killed"
-  },
-  {
-    "id": "RX31",
-    "about": "the find bar measures a line from its start for each hit of a query holding an emoji, and a line of many hits grows with its square",
-    "edits": [
-      {
-        "file": "note_organizer.py",
-        "find": "                    col += self._tk_units(line[seen:at])\n                    seen = at\n                    if hit(li, col, col + self._tk_units(line[at:at + len(query)])):\n",
-        "replace": "                    col = self._tk_units(line[:at])\n                    seen = at\n                    if hit(li, col, col + self._tk_units(line[at:at + len(query)])):\n"
-      }
-    ],
-    "must_fail": [
+      "find: hits 50 characters apart, the scan measures each line about once, not once per hit",
       "find: an emoji 50 characters apart, the scan measures each line about once, not once per hit"
     ],
     "suites": [
@@ -13001,6 +12984,371 @@
     ],
     "suites": [
       "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX60",
+    "about": "the autosave's scheduling no longer tells the find bar of an edit, and a toolbar's list, an emoji, the calculator or a spelling suggestion leave it on stale places",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._find_on_body_edit()\n        if not skip_word_count:\n",
+        "replace": "        if not skip_word_count:\n"
+      }
+    ],
+    "must_fail": [
+      "find: the bullet list button tells the open bar",
+      "find: a spelling suggestion tells the open bar",
+      "find: the calculator's insert tells the open bar",
+      "find: an emoji from the picker tells the open bar"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX61",
+    "about": "the body hears no edit a key did not make: a right-click Cut or Paste, or a middle-click, neither saved nor told to the find bar",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._after_edits_without_a_key(self.body_text, self._schedule_autosave)\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "find: the right-click menu's Cut tells the open bar",
+      "find: the right-click menu's Paste tells the open bar",
+      "find: a middle-click paste tells the open bar"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX62",
+    "about": "a typed table tidied and drawn on a click leaves the find bar on the prose it hid",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self._render_table_grids()\n            # An edit, made on a click as well as on a key's release.\n            self._schedule_autosave()\n",
+        "replace": "            self._render_table_grids()\n"
+      }
+    ],
+    "must_fail": [
+      "find: a typed table left with a click tells the open bar"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX63",
+    "about": "Enter in the find bar trusts a model the note has moved under",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if self._find_var.get() and self._find_stale():\n",
+        "replace": "        if False:\n"
+      }
+    ],
+    "must_fail": [
+      "find: an edit nothing told the bar of still sends Enter to a real hit"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX64",
+    "about": "every key in the title, the bar open, rescans the note though it is unchanged",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if not reveal and not self._find_stale():\n",
+        "replace": "        if False:\n"
+      }
+    ],
+    "must_fail": [
+      "find: a key in the title, the bar open, makes no rescan of an unchanged"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX65",
+    "about": "a find query holding a line break goes back to Tk's -nocase search, which ends the process on Linux over a line holding an emoji",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if \"\\n\" in needle:\n            # Tk's -nocase search crashed the process on Linux whenever the\n            # line held an emoji (Tk 8.6.16, round 10): read here too.\n",
+        "replace": "        if \"\\n\" in needle:\n            countv = tk.IntVar()\n            start = \"1.0\"\n            while len(matches) < cap:\n                pos = b.search(query, start, stopindex=\"end\", nocase=nocase,\n                               count=countv)\n                if not pos:\n                    break\n                line, col = _index_key(pos)\n                end = f\"{line}.{col + (countv.get() or self._tk_units(query))}\"\n                start = f\"{pos}+1c\"\n                if not b.tag_nextrange(self.TABLE_HIDE_TAG, pos, end):\n                    matches.append({\"kind\": \"prose\", \"start\": pos, \"end\": end,\n                                    \"line\": line, \"col\": col})\n            return matches\n        if \"\\n\" in needle:\n            # Tk's -nocase search crashed the process on Linux whenever the\n            # line held an emoji (Tk 8.6.16, round 10): read here too.\n"
+      }
+    ],
+    "must_fail": [
+      "find: a query holding a line break never asks Tk's search"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX66",
+    "about": "a find query holding an emoji is folded with str.lower() again, which makes two letters of a capital dotted I, and its hits after one land a place late",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        fold = _tcl_lower if nocase else str\n",
+        "replace": "        fold = (((lambda s: s.lower()) if any(ord(ch) > 0xFFFF for ch in query) else _tcl_lower) if nocase else str)\n"
+      }
+    ],
+    "must_fail": [
+      "find: an emoji query on a line holding"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX67",
+    "about": "the find bar reads the text a drawn table hides as prose",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            cols = None\n            if li in windows or li in hides:\n                line, cols = self._find_shown(line, windows.get(li, ()), hides.get(li, ()))\n            hay = fold(line)\n",
+        "replace": "            cols = None\n            if False:\n                line, cols = self._find_shown(line, windows.get(li, ()), hides.get(li, ()))\n            hay = fold(line)\n"
+      }
+    ],
+    "must_fail": [
+      "find: an emoji query on a line holding"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX68",
+    "about": "a query holding a line break measures each hit from the note's start, and a note of many lines grows with its square",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            return self._tk_units(line[:off]) if cols is None else cols[off]\n",
+        "replace": "            return (self._tk_units(hay[:starts[i] + off]) - self._tk_units(hay[:starts[i]])\n                    if cols is None else cols[off])\n"
+      }
+    ],
+    "must_fail": [
+      "find: a line break in the query, the scan measures each line about once"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX69",
+    "about": "a title past the cap refuses Backspace and Delete as too long",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if len(proposed) <= self.TITLE_MAX_LEN or len(proposed) < len(current):\n",
+        "replace": "        if len(proposed) <= self.TITLE_MAX_LEN:\n"
+      }
+    ],
+    "must_fail": [
+      "a title past the cap shortens by Backspace and Delete"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX70",
+    "about": "a paste into the title deletes its selection before the room is measured, and loses it when nothing then fits",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        chosen = _entry_selected(self.title_entry) if over_selection else 0\n",
+        "replace": "        if over_selection and self.title_entry.selection_present():\n            self.title_entry.delete(\"sel.first\", \"sel.last\")\n        chosen = 0\n"
+      }
+    ],
+    "must_fail": [
+      "a title past the cap shortens by Backspace and Delete"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX71",
+    "about": "a middle-click into the title is Tk's own paste: line breaks and all",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self.title_entry.bind(\"<<PasteSelection>>\", self._on_title_paste_selection,\n                              add=\"+\")\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a middle-click into the title or the checklist's Add box keeps the rules"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX72",
+    "about": "a middle-click into a limited box is Tk's own paste, refused whole past the limit",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        entry.bind(\"<<PasteSelection>>\", paste_selection, add=\"+\")\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a middle-click into the title or the checklist's Add box keeps the rules"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX73",
+    "about": "a limited box's paste deletes its selection though nothing then fits",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                if room > 0:\n                    if chosen:\n                        entry.delete(\"sel.first\", \"sel.last\")\n                    entry.insert(\"insert\", raw[:room])\n",
+        "replace": "                if chosen:\n                    entry.delete(\"sel.first\", \"sel.last\")\n                if room > 0:\n                    entry.insert(\"insert\", raw[:room])\n"
+      }
+    ],
+    "must_fail": [
+      "a limited box's paste over a selection that leaves no room keeps the"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX74",
+    "about": "a middle-click into a box showing its hint lands after the hint",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        entry.bind(\"<<PasteSelection>>\", on_paste_selection, add=\"+\")\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a middle-click into the title or the checklist's Add box keeps the rules"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX75",
+    "about": "a right-click Cut in the title is not saved, and its count stands still",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._after_edits_without_a_key(\n            self.title_entry,\n            lambda: (self._schedule_autosave(), self._refresh_title_count()))\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a right-click Cut in the title, the comments or the date sets off the autosave"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX76",
+    "about": "a right-click Cut in the comments is not saved",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._after_edits_without_a_key(self.comments_text, self._schedule_autosave)\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a right-click Cut in the title, the comments or the date sets off the autosave"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX77",
+    "about": "a right-click Cut in the date is not saved",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        # ...and the menu's Cut, or a middle-click, the same.\n        self._after_edits_without_a_key(\n            self.date_entry,\n            lambda: (self._schedule_autosave(), self.update_recurrence_summary()))\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a right-click Cut in the title, the comments or the date sets off the autosave"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX78",
+    "about": "a pasted HTML document without markers is cut where its body is found in a lowered copy, which a capital dotted I lengthens",
+    "edits": [
+      {
+        "file": "noteorganizer/core/clipboard.py",
+        "find": "        found = re.search(\"<body\", document, re.IGNORECASE)\n        return (document[document.find(\">\", found.start()) + 1:] if found\n                else document)\n",
+        "replace": "        body = document.lower().find(\"<body\")\n        return document[document.find(\">\", body) + 1:] if body != -1 else document\n"
+      }
+    ],
+    "must_fail": [
+      "a document without markers, a Turkish title in its head, gives its body"
+    ],
+    "suites": [
+      "test_richtext"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX79",
+    "about": "a query holding a line break finds hits across the breaks a drawn table hides",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if hidden_before[j] == hidden_before[i]:\n",
+        "replace": "            if True:\n"
+      }
+    ],
+    "must_fail": [
+      "find: a query holding a line break never asks Tk's search"
+    ],
+    "suites": [
+      "qa1"
     ],
     "expect": "killed"
   }

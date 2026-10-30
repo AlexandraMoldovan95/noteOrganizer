@@ -9369,6 +9369,179 @@ check('find/edit: the debounced rescan clears dirty and re-counts (4)',
 app._close_find()
 app.update()
 
+# ...and an edit no key made. Only the body's key release told the bar, and a
+# right-click Paste, a list button, an emoji, the calculator or a spelling
+# suggestion left the count and Enter on stale places (round 10). What puts
+# text in the body, read from the code: keys, whose release schedules the
+# autosave; Tk's own Cut, Paste, Clear and middle-click, the menu's too; the
+# app's pastes, buttons, menus and table edits, each scheduling the autosave;
+# a typed table tidied as it is left, on a click too; a note loaded (a context
+# switch, above). The autosave's scheduling tells the bar; each route here.
+_fs_seen = {}
+_fs_told_real = app._find_on_body_edit
+
+
+def _fs_route(name, edit):
+    app.new_note()
+    set_body('alpha word beta word gamma word\nword after')
+    app.body_text.mark_set('insert', '1.0')
+    app._open_find()
+    app._find_var.set('word')
+    app._find_rescan(reveal=True)
+    app.update()
+    told = []
+    app._find_on_body_edit = lambda: (told.append(1), _fs_told_real())[1]
+    app._autosave_now = lambda: None        # no note is made of it meanwhile
+    try:
+        was = body()
+        edit()
+        app.update_idletasks()
+        for _ in range(150):
+            app.update()
+            time.sleep(0.01)
+            if not app._find_model_dirty and getattr(app, '_find_debounce', None) is None:
+                break
+        fresh = [(m['start'], m['end']) for m in app._find_scan_model('word')
+                 if m['kind'] == 'prose']
+        held = [(m['start'], m['end']) for m in app._find_matches if m['kind'] == 'prose']
+        count = str(app._find_count_lbl.cget('text'))
+        app._find_nav(1)
+        now = (app._find_matches[app._find_index]
+               if 0 <= app._find_index < len(app._find_matches) else None)
+        _fs_seen[name] = {
+            'edited': body() != was, 'told': bool(told), 'model': held == fresh,
+            'count': count.split('/')[-1] == str(len(app._find_matches)),
+            'landed': (None if now is None else 'a cell' if now['kind'] == 'cell'
+                       else app.body_text.get(now['start'], now['end']).lower())}
+    finally:
+        del app._find_on_body_edit
+        del app._autosave_now
+        app._cancel_pending_autosave()
+        app._close_find()
+        app.update()
+    check(f'find: {name} tells the open bar, and its count and Enter stand on the note '
+          f'as it now is ({_fs_seen[name]})',
+          {k: v for k, v in _fs_seen[name].items() if k != 'landed'}
+          == {'edited': True, 'told': True, 'model': True, 'count': True}
+          and _fs_seen[name]['landed'] in ('word', 'a cell'))
+
+
+def _fs_select_start():
+    app.body_text.tag_add('sel', '1.0', '1.6')
+    app.body_text.mark_set('insert', '1.6')
+
+
+def _fs_cut():
+    _fs_select_start()
+    app.body_text.event_generate('<<Cut>>')
+
+
+def _fs_menu_paste():
+    app.clipboard_clear()
+    app.clipboard_append('INSERTED word ')
+    app.body_text.event_generate('<<Paste>>')
+
+
+def _fs_plain_paste():
+    app.clipboard_clear()
+    app.clipboard_append('PLAIN word ')
+    app._paste_plain()
+
+
+def _fs_middle_click():
+    source = tk.Text(app.body_text.winfo_toplevel())
+    try:
+        source.insert('1.0', 'MIDDLE word ')
+        source.tag_add('sel', '1.0', 'end-1c')
+        app.tk.eval('set ::tk::Priv(mouseMoved) 0')
+        app.body_text.event_generate('<<PasteSelection>>', x=2, y=2)
+        app.update_idletasks()
+    finally:
+        source.destroy()
+
+
+def _fs_emoji():
+    app._show_emoji_picker(app.body_text)
+    app.update()
+    chips = [w for w in _walk_widgets(app._mini_popup, tk.Label)
+             if str(w.cget('cursor')) == 'hand2' and str(w.cget('text')).strip()]
+    _qa_click(chips[0])
+    app._dismiss_mini_popup()
+
+
+def _fs_spelling():
+    app._spell_take(app.body_text, '1.0', '1.5', 'alpha', 'alphas')
+
+
+def _fs_table_left():
+    set_body('alpha word\n| a | word |\n|---|---|\n| b | c |\nword after')
+    app._find_rescan(reveal=False)
+    app.body_text.mark_set('insert', '2.3')
+    app._last_caret_line = 2
+    app.body_text.mark_set('insert', '5.2')
+    _qa_fire(app.body_text, '<ButtonRelease-1>', x=4, y=4)
+
+
+for _fs_name, _fs_edit in (
+        ("the right-click menu's Cut", _fs_cut),
+        ("the right-click menu's Paste", _fs_menu_paste),
+        ('Paste without formatting', _fs_plain_paste),
+        ('a middle-click paste', _fs_middle_click),
+        ('an emoji from the picker', _fs_emoji),
+        ('the bullet list button', lambda: app._toggle_list('bullet')),
+        ('the calculator\'s insert', lambda: app._calc_insert_formula('1+1=2')),
+        ('a spelling suggestion', _fs_spelling),
+        ('a typed table left with a click', _fs_table_left)):
+    _fs_route(_fs_name, _fs_edit)
+
+# ...and one no route tells it of -- none in the app; a test's own insert --
+# still never sends Enter to a stale place: the model knows what it was read
+# from, and reads the note again first.
+app.new_note()
+set_body('alpha word beta word')
+app._open_find()
+app._find_var.set('word')
+app._find_rescan(reveal=True)
+app.update()
+app.body_text.insert('1.0', 'UNTOLD word ')
+app._find_nav(1)
+_fs_cur = app.body_text.tag_ranges('find_current')
+_fs_untold = (app.body_text.get(_fs_cur[0], _fs_cur[1]) if _fs_cur else None,
+              str(app._find_count_lbl.cget('text')))
+app._close_find()
+app.update()
+check(f'find: an edit nothing told the bar of still sends Enter to a real hit, and '
+      f'counts it ({_fs_untold})', _fs_untold == ('word', '2/3'))
+
+# ...while a key elsewhere -- the title, the comments -- tells the bar too, and
+# the note it stands on unchanged, nothing is read again but the text.
+app.new_note()
+set_body('alpha word beta word')
+app._open_find()
+app._find_var.set('word')
+app._find_rescan(reveal=True)
+app.update()
+_fs_scans = []
+app._find_scan_model = lambda q: (_fs_scans.append(q),
+                                  NO.NoteOrganizer._find_scan_model(app, q))[1]
+app._autosave_now = lambda: None
+try:
+    app._schedule_autosave()            # what the title's key release runs
+    for _ in range(60):
+        app.update()
+        time.sleep(0.01)
+        if getattr(app, '_find_debounce', None) is None:
+            break
+    _fs_quiet = (len(_fs_scans), app._find_model_dirty, len(app._find_matches))
+finally:
+    del app._find_scan_model
+    del app._autosave_now
+    app._cancel_pending_autosave()
+    app._close_find()
+    app.update()
+check(f'find: a key in the title, the bar open, makes no rescan of an unchanged '
+      f'note ({_fs_quiet})', _fs_quiet == (0, False, 2))
+
 # Theme switch with the bar open on a CELL match: survives, and the find
 # highlight follows the new palette (the theme x tables seam).
 app.new_note()
@@ -9429,6 +9602,81 @@ app.update()
 check(f'find: a hit after a letter whose lower case is shorter is highlighted on its '
       f'own words ({_fs_word}, {_fs_k})',
       _fs_word == ['word', 'word'] and _fs_k == ['K', 'K'])
+
+# ...and so is a query holding an emoji: str.lower() made two letters of "İ",
+# and each hit after one on its line landed a place late; and the text a drawn
+# table hides was searched as prose besides its cells (round 10).
+set_body('İİİ \U0001F600ok and \U0001F600ok\n'
+         + '\n'.join([_frow('\U0001F600ok', 'b'), _FSEP, _frow('c', 'd')]) + '\nend')
+app._render_table_grids()
+app.update()
+app._open_find()
+app._find_case.set(False)
+_fe_read = [app.body_text.get(m['start'], m['end']) if m['kind'] == 'prose'
+            else ('cell', m['row'], m['col']) for m in app._find_scan_model('\U0001F600OK')]
+app._close_find()
+app.update()
+check(f'find: an emoji query on a line holding "İ" is highlighted on its own words, '
+      f'and a drawn table\'s is its cell\'s hit alone ({_fe_read})',
+      _fe_read == ['\U0001F600ok', '\U0001F600ok', ('cell', 0, 0)])
+
+# A query holding a line break is read in Python as well: Tk's -nocase search,
+# kept for it, ended the process on Linux whenever the searched line held an
+# emoji (Tk 8.6.16, round 10). Never asked; each hit its own letters, across
+# the break, as Tk's search joins the lines -- the text's last break included.
+set_body('İ \U0001F389 word\nWORD and more\nalpha word\nword')
+app._open_find()
+app._find_case.set(False)
+_lb_asked = []
+app.body_text.search = lambda *a, **k: (_lb_asked.append(a),
+                                        tk.Text.search(app.body_text, *a, **k))[1]
+try:
+    _lb_read = [app.body_text.get(m['start'], m['end'])
+                for m in app._find_scan_model('word\nword')]
+    _lb_ends = [app.body_text.get(m['start'], m['end'])
+                for m in app._find_scan_model('word\n')]
+    # The breaks a drawn table hides are in no hit, as Tk's search skips them.
+    set_body('top\n' + '\n'.join([_frow('a', 'b'), _FSEP, _frow('c', 'd')])
+             + '\nbottom')
+    app._render_table_grids()
+    app.update()
+    _lb_hidden = [(m['start'], m['end']) for m in app._find_scan_model('\n\n')]
+finally:
+    del app.body_text.search
+app._close_find()
+app.update()
+check(f'find: a query holding a line break never asks Tk\'s search, and each hit '
+      f'is its own letters across the break ({_lb_read}, {_lb_ends}, {_lb_hidden}; '
+      f'asked {len(_lb_asked)})',
+      _lb_read == ['word\nWORD', 'word\nword']
+      and _lb_ends == ['word\n', 'word\n', 'word\n'] and _lb_hidden == []
+      and not _lb_asked)
+# ...and the shape that crashed, in a process of its own: a crash is its red.
+import subprocess as _lb_sub
+_LB_CHILD = '''
+import json, tkinter as tk
+import note_organizer as NO
+O = NO.NoteOrganizer
+app = O.__new__(O)
+root = tk.Tk()
+root.withdraw()
+app.body_text = tk.Text(root)
+out = []
+for first in ("I \\U0001F389 word", "\\u0130 \\U0001F389 word"):
+    app.body_text.delete("1.0", "end")
+    app.body_text.insert("1.0", first + "\\nword and more")
+    for nocase in (True, False):
+        hits = O._find_prose(app, "word\\nword", nocase, app.body_text.get("1.0", "end-1c"))
+        out.append([app.body_text.get(m["start"], m["end"]) for m in hits])
+print(json.dumps(out))
+'''
+_lb_run = _lb_sub.run([sys.executable, '-c', _LB_CHILD], cwd=os.getcwd(),
+                      capture_output=True, text=True, timeout=120)
+check(f'find: a two-line query over a line holding an emoji, case on and off, ends '
+      f'nothing (exit {_lb_run.returncode}, {_lb_run.stdout.strip()!r} '
+      f'{_lb_run.stderr.strip()[-200:]!r})',
+      _lb_run.returncode == 0
+      and json.loads(_lb_run.stdout or 'null') == [['word\nword']] * 4)
 
 # The bar open, every pause rescans, and Tk's search measured the line from
 # its start for each hit: 1,000 hits among bold words took 15 s (round 9).
@@ -9502,7 +9750,9 @@ def _fq_measured(text, query):
 
 for _fq_name, _fq_make in (
         ('hits 50 characters apart', lambda n: (('word' + 'w' * 45 + ' ') * n, 'word')),
-        ('an emoji 50 characters apart', lambda n: (('\U0001F389' + 'w' * 49) * n, '\U0001F389'))):
+        ('an emoji 50 characters apart', lambda n: (('\U0001F389' + 'w' * 49) * n, '\U0001F389')),
+        # A query holding a line break, on 2,000 lines of 49 (round 10).
+        ('a line break in the query', lambda n: (('w' * 45 + 'ord\n') * n + 'w', 'd\nw'))):
     _fq_count = _fq_measured(*_fq_make(2000))
     check(f'find: {_fq_name}, the scan measures each line about once, not once per hit '
           f'({_fq_count[0]:,} characters measured for {_fq_count[1]} hits on a line of '

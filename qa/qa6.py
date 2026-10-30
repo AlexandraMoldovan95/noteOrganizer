@@ -5507,6 +5507,181 @@ check(f"at the title's cap, a paste that loses only its own trailing space is no
       and _tc_short == {'past the ceiling': True, 'trailing space': False,
                         'words left out': True})
 
+# A title already past the cap -- a share code's, a backup's -- shortens: every
+# Backspace and Delete was refused as too long, and a paste over a selection
+# deleted it and then found no room, so the selected words went (round 10).
+_ol_seen, _ol_told = {}, []
+_ol_real_status = app.set_status
+app._autosave_now = lambda: None            # no note is made of it meanwhile
+try:
+    app.new_note(); _kv_settle(4)
+    app.set_status = lambda text, *a, **k: _ol_told.append(text)
+    app.title_entry.delete(0, 'end')
+    app._insert_title('L' * 250)
+    app.title_entry.delete(249)                       # what Backspace asks
+    _ol_seen['a letter taken off the end'] = len(app.title_entry.get())
+    app.title_entry.selection_range(239, 249)
+    app.title_entry.delete('sel.first', 'sel.last')   # Delete over a selection
+    _ol_seen['ten selected, deleted'] = len(app.title_entry.get())
+    app.title_entry.insert('end', 'z')                # still past the cap: refused
+    _ol_seen['a key, still past the cap'] = len(app.title_entry.get())
+    app.title_entry.selection_range(200, 239)
+    app.title_entry.icursor(239)
+    app.clipboard_clear()
+    app.clipboard_append('abc')
+    _qa_fire(app.title_entry, '<<Paste>>')            # still past the cap without them
+    _kv_settle(2)
+    _ol_seen['a paste over too few'] = (len(app.title_entry.get()),
+                                        app.title_entry.selection_present())
+    app.title_entry.selection_range(190, 239)
+    app.title_entry.icursor(239)
+    _qa_fire(app.title_entry, '<<Paste>>')            # room for ten once they go
+    _kv_settle(2)
+    _ol_seen['a paste over enough'] = app.title_entry.get()[185:]
+finally:
+    app.set_status = _ol_real_status
+    del app._autosave_now
+    app._cancel_pending_autosave()
+    app.title_entry.delete(0, 'end')
+    app._hide_toast()
+check(f"a title past the cap shortens by Backspace and Delete, and a paste over a "
+      f"selection with no room for it keeps the selection ({_ol_seen}; said {_ol_told})",
+      _ol_seen == {'a letter taken off the end': 249, 'ten selected, deleted': 239,
+                   'a key, still past the cap': 239, 'a paste over too few': (239, True),
+                   'a paste over enough': 'LLLLLabc'}
+      and 'A note title can be up to 200 characters' in _ol_told)
+
+# ...and a middle-click is a paste too -- Tk binds it on Windows as well -- and
+# it went past every rule a paste keeps: the selection's line breaks into the
+# title, a checklist item past its limit refused whole, a hint left in front
+# of the words (round 10).
+_mc_seen, _mc_told = {}, []
+_mc_real_status = app.set_status
+_mc_source = tk.Text(app)
+
+
+def _mc_paste(box, primary, x=None):
+    _mc_source.delete('1.0', 'end')
+    _mc_source.insert('1.0', primary)
+    _mc_source.tag_add('sel', '1.0', 'end-1c')
+    app.tk.eval('set ::tk::Priv(mouseMoved) 0')
+    _qa_fire(box, '<<PasteSelection>>', x=box.winfo_width() - 4 if x is None else x, y=4)
+    _kv_settle(2)
+    return box.get()
+
+
+app._autosave_now = lambda: None
+try:
+    app.new_note(); _kv_settle(4)
+    if not app._checklist_open:
+        app.toggle_checklist_section()
+    _kv_settle(4)
+    app.set_status = lambda text, *a, **k: _mc_told.append(text)
+    app.title_entry.delete(0, 'end')
+    app.title_entry.insert(0, 'Shopping ')
+    _mc_seen['title, three lines'] = _mc_paste(app.title_entry, 'milk\neggs\nbread')
+    app.title_entry.delete(0, 'end')
+    app.title_entry.insert(0, 'x' * 195)
+    _mc_got = _mc_paste(app.title_entry, 'fresh milk')     # where the pointer is
+    _mc_seen['title, at its cap'] = (len(_mc_got), _mc_got.replace('x', ''))
+    app.title_entry.delete(0, 'end')
+    app.tk.eval('set ::tk::Priv(mouseMoved) 1')
+    _qa_fire(app.title_entry, '<<PasteSelection>>', x=4, y=4)
+    _kv_settle(2)
+    _mc_seen['title, a drag that scrolled'] = app.title_entry.get()
+    app.tk.eval('set ::tk::Priv(mouseMoved) 0')
+    app.checklist_add_entry.delete(0, 'end')
+    _mc_seen['Add box, past its limit'] = len(_mc_paste(app.checklist_add_entry, 'x' * 2500))
+    app.checklist_add_entry.delete(0, 'end')
+    _mc_seen['Add box, a few words'] = _mc_paste(app.checklist_add_entry, 'eggs')
+    app.checklist_add_entry.delete(0, 'end')
+    for _mc_hint in ('Note title...', 'Search notes...'):
+        _mc_box = next(e for e, h in app._placeholders if h == _mc_hint)
+        app.focus_set()
+        _mc_box.delete(0, 'end')
+        _mc_box.insert(0, _mc_hint)
+        _mc_seen[_mc_hint] = _mc_paste(_mc_box, 'Pasted', x=4)
+        _mc_box.delete(0, 'end')
+finally:
+    app.set_status = _mc_real_status
+    del app._autosave_now
+    app._cancel_pending_autosave()
+    _mc_source.destroy()
+    app.title_entry.delete(0, 'end')
+    app.checklist_add_entry.delete(0, 'end')
+    app._clear_search()
+    app._hide_toast()
+    _kv_settle(2)
+check(f"a middle-click into the title or the checklist's Add box keeps the rules a "
+      f"paste keeps, and lands in a hint's place ({_mc_seen}; said {_mc_told})",
+      _mc_seen == {'title, three lines': 'Shopping milk eggs bread',
+                   'title, at its cap': (200, 'fresh'), 'title, a drag that scrolled': '',
+                   'Add box, past its limit': 2000, 'Add box, a few words': 'eggs',
+                   'Note title...': 'Pasted', 'Search notes...': 'Pasted'}
+      and 'Pasted title shortened to 200 characters' in _mc_told
+      and 'Pasted text shortened: a checklist item can be up to 2,000 characters'
+      in _mc_told)
+
+# ...and a limited box's paste over a selection keeps it when nothing fits: a
+# value past its limit, from a backup's template, lost the selection (round 10).
+_lb_box = tk.Entry(app)
+_lb_box.insert(0, 'v' * 15)
+app._limit_entry(_lb_box, 10, 'A test value')
+_lb_told = []
+_lb_real_status = app.set_status
+try:
+    app.set_status = lambda text, *a, **k: _lb_told.append(text)
+    _lb_box.selection_range(12, 15)
+    _lb_box.icursor(15)
+    app.clipboard_clear()
+    app.clipboard_append('abc')
+    _qa_fire(_lb_box, '<<Paste>>')
+    _kv_settle(2)
+    _lb_kept = (len(_lb_box.get()), _lb_box.selection_present())
+finally:
+    app.set_status = _lb_real_status
+    _lb_box.destroy()
+    app._hide_toast()
+check(f"a limited box's paste over a selection that leaves no room keeps the "
+      f"selection, and says why ({_lb_kept}; said {_lb_told})",
+      _lb_kept == (15, True) and 'A test value can be up to 10 characters' in _lb_told)
+
+# ...and an edit no key made in the title, the comments or the date -- the menu's
+# Cut -- is saved, and the title's count follows it: only a key's release set
+# either off, and a right-click Cut was saved when the note was left (round 10).
+_nk_seen = {}
+app._autosave_now = lambda: None
+try:
+    app.new_note(); _kv_settle(4)
+    app.title_entry.delete(0, 'end')
+    app.title_entry.insert(0, 'x' * 180)
+    app._refresh_title_count()
+    _kv_settle(1)
+    for _nk_name, _nk_box, _nk_select in (
+            ('title', app.title_entry, lambda b: b.selection_range(0, 30)),
+            ('comments', app.comments_text, lambda b: (
+                b.insert('1.0', 'some words'), b.tag_add('sel', '1.0', '1.4'))),
+            ('date', app.date_entry, lambda b: (
+                b.delete(0, 'end'), b.insert(0, '17.10.2026'), b.selection_range(0, 3)))):
+        _nk_select(_nk_box)
+        app._cancel_pending_autosave()
+        _qa_fire(_nk_box, '<<Cut>>')
+        app.update_idletasks()
+        _nk_seen[_nk_name] = getattr(app, '_autosave_job', None) is not None
+    _nk_seen['title count'] = (len(app.title_entry.get()),
+                               bool(app.title_count_lbl.winfo_manager()))
+finally:
+    del app._autosave_now
+    app._cancel_pending_autosave()
+    app.title_entry.delete(0, 'end')
+    app.comments_text.delete('1.0', 'end')
+    app.date_entry.delete(0, 'end')
+    app.new_note(); _kv_settle(2)
+check(f"a right-click Cut in the title, the comments or the date sets off the autosave, "
+      f"and the title's count follows it ({_nk_seen})",
+      _nk_seen == {'title': True, 'comments': True, 'date': True,
+                   'title count': (150, False)})
+
 # ...and the ceiling every paste keeps weighs a line break as one character,
 # as the note keeps it: Windows' clipboard holds CR LF, and 1,500 lines of 65
 # letters -- 98,999 characters in the note -- weighed 100,498, and the body

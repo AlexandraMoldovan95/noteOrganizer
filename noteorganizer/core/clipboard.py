@@ -20,6 +20,7 @@ before any of this existed. Nothing here is allowed to take the editor
 down with it.
 """
 
+import re
 import sys
 from html.parser import HTMLParser
 
@@ -167,8 +168,11 @@ def fragment_of(document):
     start, end = document.find(_START_MARK), document.find(_END_MARK)
     if start == -1 or end == -1 or end <= start:
         # Some applications omit the markers and give the whole document.
-        body = document.lower().find("<body")
-        return document[document.find(">", body) + 1:] if body != -1 else document
+        # Found where it is: lower() makes two characters of "İ", and an
+        # offset in the lowered copy fell past the tag in this one (round 10).
+        found = re.search("<body", document, re.IGNORECASE)
+        return (document[document.find(">", found.start()) + 1:] if found
+                else document)
     fragment = document[start + len(_START_MARK):end]
     reader = _OpenAtMarker()
     try:

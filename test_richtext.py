@@ -1041,6 +1041,13 @@ check("rows and cells left open, as HTML allows, end where the next begins",
       == "<table><tr><td>c</td></tr></table>")
 check("a document without markers still gives its body",
       _clip.fragment_of("<html><body><p>x</p></body></html>") == "<p>x</p></body></html>")
+# ...from where its body starts: lower() made two letters of each "İ" in its
+# head, and the body was looked for that many places too late (round 10).
+_tr_doc = ("<html><head><title>" + "İ" * 30 + "</title></head>"
+           "<BODY lang=tr><p>x</p></body></html>")
+check(f"a document without markers, a Turkish title in its head, gives its body "
+      f"whole ({_clip.fragment_of(_tr_doc)[:12]!r})",
+      _clip.fragment_of(_tr_doc) == "<p>x</p></body></html>")
 
 # ---- A row of one cell is no table here: its words come alone ----
 check("one cell copied as a table pastes as its words",

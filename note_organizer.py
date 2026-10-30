@@ -612,6 +612,25 @@ def _index_key(index):
     return int(line), int(col)
 
 
+def _entry_selected(entry):
+    """How many characters a tk.Entry's selection holds, 0 with none. Its
+    indices count an astral character as two, and a limit counts one."""
+    try:
+        if not entry.selection_present():
+            return 0
+        first, last = entry.index("sel.first"), entry.index("sel.last")
+    except tk.TclError:
+        return 0
+    chars, units = 0, 0
+    for ch in entry.get():
+        if units >= last:
+            break
+        if units >= first:
+            chars += 1
+        units += 2 if ord(ch) > 0xFFFF else 1
+    return chars
+
+
 # One round trip for a whole snapshot: where the embedded windows sit, then
 # one "tag ranges" string per tag, in the order asked. Tag names travel as
 # a real Tcl list, so a font family with a space in it is still one name.
@@ -1297,11 +1316,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     # far short of where the widget struggles.
     TITLE_MAX_LEN = 200
 
-    def _title_within_limit(self, proposed):
-        """Validator for the title field: reject an edit past the cap."""
+    def _title_within_limit(self, proposed, current=""):
+        """Validator for the title field: reject an edit past the cap. A
+        title already longer -- a share code's, a backup's -- still
+        shortens: Backspace was refused on one, as being too long."""
         if getattr(self, "_setting_title", False):
             return True                      # a stored title being loaded
-        if len(proposed) <= self.TITLE_MAX_LEN:
+        if len(proposed) <= self.TITLE_MAX_LEN or len(proposed) < len(current):
             return True
         # Deferred: Tk turns validation off if the validate command touches
         # a widget while it runs, and the status bar is a widget.
@@ -1329,28 +1350,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         entry.configure(validate="key",
                         validatecommand=(entry.register(within), "%P", "%s"))
 
-        def paste(_event=None):
+        def put(raw, over_selection):
             # Shortened to fit, as the title's paste is: refused whole, it
             # looked as if it had failed. In one go -- Tk's own, off X11,
             # deletes the selection and inserts as two edits.
-            # Each line break one character, as Tk's own paste puts it in
-            # (_cap_paste): Windows' clipboard keeps CR LF, so a paste that
-            # fitted was weighed as too long, and the CR went in with it.
-            raw, _cut = self._clipboard_text(entry)
-            if raw is None:
+            chosen = _entry_selected(entry) if over_selection else 0
+            room = limit - (len(entry.get()) - chosen)
+            if len(raw) <= room:
                 return None
             try:
-                chosen = (entry.index("sel.last") - entry.index("sel.first")
-                          if entry.selection_present() else 0)
-            except tk.TclError:
-                chosen = 0
-            if len(entry.get()) - chosen + len(raw) <= limit:
-                return None
-            try:
-                if chosen:
-                    entry.delete("sel.first", "sel.last")
-                room = limit - len(entry.get())
+                # Nothing taken out unless something goes in: a selection
+                # deleted first was lost when nothing then fitted (round 10).
                 if room > 0:
+                    if chosen:
+                        entry.delete("sel.first", "sel.last")
                     entry.insert("insert", raw[:room])
                     self.tk.call("tk::EntrySeeInsert", entry)
             except tk.TclError:
@@ -1360,7 +1373,31 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 f"to {limit:,} characters" if room > 0
                 else f"{what} can be up to {limit:,} characters"))
             return "break"
+
+        def paste(_event=None):
+            # Each line break one character, as Tk's own paste puts it in
+            # (_cap_paste): Windows' clipboard keeps CR LF, so a paste that
+            # fitted was weighed as too long, and the CR went in with it.
+            raw, _cut = self._clipboard_text(entry)
+            return None if raw is None else put(raw, over_selection=True)
+
+        def paste_selection(event):
+            # A middle-click, where the pointer is, as Tk's own puts it --
+            # which put it in past the limit, refused whole (round 10).
+            try:
+                if self.tk.eval("expr {[info exists ::tk::Priv(mouseMoved)]"
+                                " && $::tk::Priv(mouseMoved)}") == "1":
+                    return None
+                raw, _cut = self._cap_paste(entry.selection_get(selection="PRIMARY"))
+                entry.icursor(self.tk.call("tk::EntryClosestGap", entry, event.x))
+            except tk.TclError:
+                return None
+            done = put(raw, over_selection=False)
+            if done:
+                entry.focus_set()
+            return done
         entry.bind("<<Paste>>", paste, add="+")
+        entry.bind("<<PasteSelection>>", paste_selection, add="+")
 
     def _say_by_the_box(self, box, text):
         """*text* on the status line -- and, while that is out of sight, on
@@ -1543,18 +1580,44 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pasted = self.clipboard_get()
         except tk.TclError:
             return "break"
+        return self._title_take_paste(pasted, over_selection=True)
+
+    def _on_title_paste_selection(self, event):
+        """A middle-click into the title: the selection, put where the
+        pointer is as Tk's own binding puts it, on one line and within the
+        cap as any paste into it. Tk's own put its line breaks in (round 10)."""
+        entry = self.title_entry
+        try:
+            # Tk's own pastes nothing after a drag with the middle button,
+            # which scrolled the box instead.
+            if self.tk.eval("expr {[info exists ::tk::Priv(mouseMoved)]"
+                            " && $::tk::Priv(mouseMoved)}") == "1":
+                return "break"
+            entry.icursor(self.tk.call("tk::EntryClosestGap", entry, event.x))
+            pasted = entry.selection_get(selection="PRIMARY")
+        except tk.TclError:
+            pasted = None
+        if pasted is not None:
+            self._title_take_paste(pasted, over_selection=False)
+        entry.focus_set()
+        return "break"
+
+    def _title_take_paste(self, pasted, over_selection):
+        """*pasted* into the title at the caret, over its selection when
+        *over_selection*: cut to the room the cap leaves, the room measured
+        before anything is taken out -- a selection deleted first was lost
+        when nothing then fitted (round 10)."""
         # No more of it is read than any paste reads (_cap_paste).
         pasted, cut = self._cap_paste(pasted)
-        try:
-            self.title_entry.delete("sel.first", "sel.last")
-        except tk.TclError:
-            pass
-        room = self.TITLE_MAX_LEN - len(self.title_entry.get())
+        chosen = _entry_selected(self.title_entry) if over_selection else 0
+        room = self.TITLE_MAX_LEN - (len(self.title_entry.get()) - chosen)
         if room <= 0:
             self._say_by_the_box(
                 self.title_entry,
                 f"A note title can be up to {self.TITLE_MAX_LEN} characters")
             return "break"
+        if chosen:
+            self.title_entry.delete("sel.first", "sel.last")
         # Weighed as it goes in, on one line: weighed as copied, a line
         # copied with its line break, or CR LF, read as shortened. Only the
         # breaks are joined: split() took the paste's edge spaces too, and
@@ -1582,6 +1645,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         noticeable lag. The count still catches up once the debounce timer
         below fires, just not on every single click. So it does while the
         find bar shows hits (_count_waits_for_pause)."""
+        # Every edit passes here, whatever made it, so the find bar hears of
+        # each: a key's release alone left a menu's paste or a toolbar's list
+        # stepping to stale places (round 10).
+        self._find_on_body_edit()
         if not skip_word_count:
             if self._count_waits_for_pause():
                 self._word_count_due = True
@@ -1600,6 +1667,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         key held every key back (final audit, round 10)."""
         return bool(getattr(self, "_find_open", False)
                     and getattr(self, "_find_matches", None))
+
+    # Where the edits no key makes are heard: first in a box's bindtags, so a
+    # handler of the box's own that returns "break" cannot hide one.
+    _NO_KEY_EDIT_TAG = "EditWithoutKey"
+
+    def _after_edits_without_a_key(self, widget, then):
+        """Run *then* once an edit no key made -- the menu's Cut or Paste, a
+        middle-click -- has landed in *widget*. The work a key's release
+        sets off (the autosave, the counts, the find bar) never heard of
+        them: a right-click Paste was saved only when the note was left."""
+        widget._after_edit_without_key = then
+        if self._NO_KEY_EDIT_TAG not in widget.bindtags():
+            widget.bindtags((self._NO_KEY_EDIT_TAG,) + tuple(widget.bindtags()))
+        if not getattr(self, "_no_key_edits_bound", False):
+            self._no_key_edits_bound = True
+            for virtual in ("<<Cut>>", "<<Paste>>", "<<Clear>>", "<<PasteSelection>>"):
+                self.bind_class(self._NO_KEY_EDIT_TAG, virtual, self._edit_without_key)
+
+    def _edit_without_key(self, event):
+        then = getattr(event.widget, "_after_edit_without_key", None)
+        if then is not None:
+            self.after_idle(lambda: self._still_alive() and then())
 
     def _cancel_pending_autosave(self):
         """Drop a scheduled autosave, if one is waiting."""
@@ -2870,6 +2959,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # A table that has just been left is finished with, which is the
             # moment it turns from typed pipes into a drawn grid.
             self._render_table_grids()
+            # An edit, made on a click as well as on a key's release.
+            self._schedule_autosave()
 
     # ---------- Tables drawn as real grids ----------
     #
@@ -15569,7 +15660,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             top_row, insertbackground=self.colors["text"],
             relief="flat", font=("Segoe UI", 20, "bold"), width=1,
             validate="key",
-            validatecommand=(self.register(self._title_within_limit), "%P")
+            validatecommand=(self.register(self._title_within_limit), "%P", "%s")
         )
         self.track_theme(self.title_entry, bg="bg", fg="text", insertbackground="text")
         self.title_entry.pack(side="left", fill="x", expand=True)
@@ -15583,12 +15674,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.track_theme(self.title_count_lbl, bg="bg", fg="subtext")
         self.title_entry.bind("<KeyRelease>", self._schedule_autosave)
         self.title_entry.bind("<KeyRelease>", self._refresh_title_count, add="+")
+        self._after_edits_without_a_key(
+            self.title_entry,
+            lambda: (self._schedule_autosave(), self._refresh_title_count()))
         # add="+": add_placeholder() above already bound <<Paste>> to clear
         # the placeholder first, and a plain bind() here would replace it --
         # which is exactly how the title came to paste "Note title...X".
         # Registration order is the run order, so the clear happens before
         # the length cap below is measured against the field's contents.
         self.title_entry.bind("<<Paste>>", self._on_title_paste, add="+")
+        # A middle-click is a paste too (Tk binds it on Windows as well).
+        self.title_entry.bind("<<PasteSelection>>", self._on_title_paste_selection,
+                              add="+")
         self._guard_entry_astral(self.title_entry)
 
         self.category_var = tk.StringVar(value="General")
@@ -15683,6 +15780,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "<<Paste>>",
             lambda _e: self.after_idle(self.update_recurrence_summary),
             add="+")
+        # ...and the menu's Cut, or a middle-click, the same.
+        self._after_edits_without_a_key(
+            self.date_entry,
+            lambda: (self._schedule_autosave(), self.update_recurrence_summary()))
         # Pasting a date copied out of an email is an ordinary thing to want,
         # and this was the field that most invited it and refused.
         self._add_paste_menu(self.date_entry)
@@ -16053,6 +16154,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                             lambda e, name=name: self._on_styled_virtual(e, name))
         self.body_text.bindtags(
             (self._STYLED_DELETE_TAG,) + tuple(self.body_text.bindtags()))
+        self._after_edits_without_a_key(self.body_text, self._schedule_autosave)
         self.body_text.bind("<<Paste>>", self._on_body_paste, add="+")
         self.body_text.bind("<<Paste>>", self._renumber_after_paste, add="+")
         self.body_text.bind("<<Copy>>", self._copy_formatted, add="+")
@@ -16080,10 +16182,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.body_text.bind("<KeyRelease>", self._apply_pending_style_to_typed_char, add="+")
         self.body_text.bind("<KeyRelease>", self._refresh_format_buttons, add="+")
         self.body_text.bind("<KeyRelease>", self._align_table_on_leaving, add="+")
-        # If the find bar is open, an edit invalidates the match model; a
-        # guarded, debounced rescan refreshes it WITHOUT moving the view.
-        self.body_text.bind("<KeyRelease>",
-                            lambda _e: self._find_on_body_edit(), add="+")
         # A click in the body means the user has LEFT the table: a cell
         # selection lingering from an earlier drag would silently catch
         # the next toolbar colour meant for the body text.
@@ -16258,6 +16356,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.comments_text.bind("<<PasteSelection>>",
                                 self._paste_selection_capped, add="+")
         self.comments_text.bind("<KeyRelease>", self._schedule_autosave)
+        self._after_edits_without_a_key(self.comments_text, self._schedule_autosave)
         # Expand/Collapse toggle for the comments box (compact 4 rows <-> 12).
         # Remembered, like the body's identical toggle above. The helper's own
         # docstring draws the line at "a box whose size is incidental" versus
@@ -18658,6 +18757,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # every placeholder field safe, including the next one added.
             clear_if_placeholder()
 
+        def on_paste_selection(e):
+            # A middle-click pastes as well, unless the button was dragged.
+            if self.tk.eval("expr {[info exists ::tk::Priv(mouseMoved)]"
+                            " && $::tk::Priv(mouseMoved)}") != "1":
+                clear_if_placeholder()
+
         def on_focus_out(e):
             if not entry.get():
                 entry.insert(0, placeholder)
@@ -18669,6 +18774,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # handler, and a field's own handler must not displace this. The
         # title binds one at its call site and is bound the same way.
         entry.bind("<<Paste>>", on_paste, add="+")
+        entry.bind("<<PasteSelection>>", on_paste_selection, add="+")
         entry.bind("<FocusOut>", on_focus_out)
 
     def _series_warning(self, notes):
@@ -19839,6 +19945,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._find_delete_flash()
         self._find_matches = []
         self._find_index = -1
+        self._find_model_on = None
 
     def _find_delete_flash(self):
         """Delete the current cell flash by RE-RESOLVING the live grid --
@@ -19867,9 +19974,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._find_debounce = self.after(180, self._find_debounce_fire, True)
 
     def _find_on_body_edit(self):
-        # The body changed while the bar is open: the match model is now
-        # stale. Gate navigation until a rescan completes, and rescan WITHOUT
-        # revealing (revealing here would twitch the view on every keystroke).
+        # The body may have changed while the bar is open (every edit's
+        # autosave tells it): gate navigation until a rescan completes, and
+        # rescan WITHOUT revealing, which would twitch the view at each key.
         if not getattr(self, "_find_open", False):
             return
         self._find_model_dirty = True
@@ -19920,6 +20027,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         needle = query.lower() if nocase else query
         b = self.body_text
         text = b.get("1.0", "end-1c")
+        self._find_model_text = text
         matches = self._find_prose(query, nocase, text)
         # Table cells: read the plain text, walk each block's DATA rows. The
         # note split, and each grid's line asked, once: per block, both grew
@@ -19961,61 +20069,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         to bottom, no more than FIND_MATCH_CAP: Tk ranges, as Tk's own search
         gives them -- the shown text of each line, case folded as Tk folds
         it, overlapping hits each one -- found in Python, each line read
-        once. Tk's search, asked once a hit, measured its line again from the
-        start each time: 15 s a rescan, the bar open, on a paragraph of 1,000
-        hits with bold words in it, at every pause in typing (round 9)."""
+        once. Tk's search measured a line from its start for each hit (15 s
+        a rescan, round 9), and its -nocase search ends the app on Linux."""
         b = self.body_text
         cap = self.FIND_MATCH_CAP
         matches = []
         hidden = b.tag_ranges(self.TABLE_HIDE_TAG)
         starts = sorted(_index_key(at) for at in hidden[::2])
 
-        def crosses(line, col, end):
+        def hit(line, col, end, end_line=None):
             # A hidden table begins inside the hit: tag_nextrange's answer.
+            end_line = line if end_line is None else end_line
             at = bisect.bisect_left(starts, (line, col))
-            return at < len(starts) and starts[at] < (line, end)
-
-        def hit(line, col, end):
-            if not crosses(line, col, end):
+            if not (at < len(starts) and starts[at] < (end_line, end)):
                 matches.append({"kind": "prose", "start": f"{line}.{col}",
-                                "end": f"{line}.{end}", "line": line, "col": col})
+                                "end": f"{end_line}.{end}", "line": line, "col": col})
             return len(matches) >= cap
 
         if not query:
             return matches
-        if any(ord(ch) > 0xFFFF for ch in query):
-            # An astral char in the pattern SEGFAULTS Tcl's -nocase search
-            # (Linux Tk 8.6, "😀ok"): the prose read as Python reads it.
-            needle = query.lower() if nocase else query
-            for li, line in enumerate(text.split("\n"), start=1):
-                hay = line.lower() if nocase else line
-                at, seen, col = hay.find(needle), 0, 0
-                while at != -1:
-                    col += self._tk_units(line[seen:at])
-                    seen = at
-                    if hit(li, col, col + self._tk_units(line[at:at + len(query)])):
-                        return matches
-                    at = hay.find(needle, at + 1)
-            return matches
-        if "\n" in query:
-            # Across lines: Tk's own search, which joins them. Only a paste
-            # puts a line break in the box, and a hit then takes a line.
-            countv = tk.IntVar()
-            start = "1.0"
-            while len(matches) < cap:
-                pos = b.search(query, start, stopindex="end", nocase=nocase,
-                               count=countv)
-                if not pos:
-                    break
-                line, col = _index_key(pos)
-                # Units, as -count and index columns count: "+Nc" counts
-                # characters, and an emoji widened the range by one.
-                end = f"{line}.{col + (countv.get() or self._tk_units(query))}"
-                start = f"{pos}+1c"
-                if not b.tag_nextrange(self.TABLE_HIDE_TAG, pos, end):
-                    matches.append({"kind": "prose", "start": pos, "end": end,
-                                    "line": line, "col": col})
-            return matches
+        # One fold for every query, an emoji in it or not: str.lower() made
+        # two characters of "İ", and the hits after one on its line landed
+        # one place late (round 10).
         fold = _tcl_lower if nocase else str
         needle = fold(query)
         windows = {}
@@ -20028,6 +20103,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             for line in range(l1, l2 + 1):
                 hides.setdefault(line, []).append(
                     (c1 if line == l1 else 0, c2 if line == l2 else None))
+        if "\n" in needle:
+            # Tk's -nocase search crashed the process on Linux whenever the
+            # line held an emoji (Tk 8.6.16, round 10): read here too.
+            for found in self._find_across_lines(text.split("\n"), needle, fold,
+                                                 windows, hides):
+                if hit(*found):
+                    return matches
+            return matches
         for li, line in enumerate(text.split("\n"), start=1):
             cols = None
             if li in windows or li in hides:
@@ -20061,6 +20144,51 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             col += 2 if ord(ch) > 0xFFFF else 1
         return "".join(shown), cols
 
+    def _find_across_lines(self, lines, needle, fold, windows, hides):
+        """Where *needle*, which holds a line break, is in *lines*, as Tk's
+        search joins them: the shown text of each line and its break, one a
+        drawn table hides never inside a hit. Yields (line, col, end, end
+        line) in Tk columns. A hit's first break is a line's own, so a line
+        is measured at most once where a hit starts and once where one ends."""
+        shown, at = [], 0
+        starts, hidden_before = [], [0]
+        for li, raw in enumerate(lines, start=1):
+            line, cols = raw, None
+            if li in windows or li in hides:
+                line, cols = self._find_shown(raw, windows.get(li, ()), hides.get(li, ()))
+            shown.append((line, cols, raw))
+            starts.append(at)
+            at += len(line) + 1
+            broken = any(hi is None for _lo, hi in hides.get(li, ()))
+            hidden_before.append(hidden_before[-1] + broken)
+        # Tk's text ends in a break of its own, and its search reads it.
+        starts.append(at)
+        hay = "".join(fold(line) + "\n" for line, _cols, _raw in shown)
+        breaks = needle.count("\n")
+
+        def column(i, off):
+            line, cols, raw = shown[i]
+            if off == len(line):            # at the line's own break
+                return self._tk_units(raw) + len(windows.get(i + 1, ()))
+            return self._tk_units(line[:off]) if cols is None else cols[off]
+
+        def column_after(i, off):
+            if not off:
+                return 0
+            line, cols, _raw = shown[i]
+            if cols is None:
+                return self._tk_units(line[:off])
+            return cols[off - 1] + self._tk_units(line[off - 1])
+
+        found = hay.find(needle)
+        while found != -1:
+            i = bisect.bisect_right(starts, found) - 1
+            j = i + breaks
+            if hidden_before[j] == hidden_before[i]:
+                yield (i + 1, column(i, found - starts[i]),
+                       column_after(j, found + len(needle) - starts[j]), j + 1)
+            found = hay.find(needle, found + 1)
+
     def _find_debounce_fire(self, reveal):
         """The debounced rescan, run by its own timer -- the only place
         its job is cleared. A rescan run directly (the Aa box, opening the
@@ -20068,7 +20196,30 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         direct one does not; clearing the job there left that timer
         scheduled with nothing tracking it -- see _autosave_now."""
         self._find_debounce = None
+        if not reveal and not self._find_stale():
+            # Told of an edit elsewhere -- the title, an arrow key: the
+            # model still stands on the body as it is.
+            self._find_model_dirty = False
+            return
         self._find_rescan(reveal=reveal)
+
+    def _find_standing(self, text=None):
+        """What the find model stands on: the query, the case, the body's
+        text (*text*, when just read), the drawn tables' hidden ranges and
+        the hits as painted. All the same, a rescan makes the same model."""
+        b = self.body_text
+        return (self._find_var.get(), bool(self._find_case.get()),
+                b.get("1.0", "end-1c") if text is None else text,
+                tuple(map(str, b.tag_ranges(self.TABLE_HIDE_TAG))),
+                tuple(map(str, b.tag_ranges("find_all"))))
+
+    def _find_stale(self):
+        """Whether the body, or the search, has changed since the model was
+        read -- by any route, told to the bar or not."""
+        try:
+            return getattr(self, "_find_model_on", None) != self._find_standing()
+        except (tk.TclError, AttributeError):
+            return True
 
     def _find_paint_entry(self):
         """The find box's ground: the theme's warning tint while its words
@@ -20103,6 +20254,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._find_matches = []
             self._find_index = -1
             self._find_model_dirty = False
+            self._find_model_on = None
             self._find_count_lbl.config(text="")
             self._find_missed = False
             self._find_paint_entry()
@@ -20117,6 +20269,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 except tk.TclError:
                     pass
         self._find_raise_tags()
+        self._find_model_on = self._find_standing(self._find_model_text)
         n = len(self._find_matches)
         if not n:
             self._find_index = -1
@@ -20148,8 +20301,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 pass
 
     def _find_nav(self, delta):
+        if getattr(self, "_find_model_dirty", False):
+            return
+        if self._find_var.get() and self._find_stale():
+            # An edit no route told the bar of: never a stale place.
+            self._find_rescan(reveal=False)
         matches = getattr(self, "_find_matches", [])
-        if not matches or getattr(self, "_find_model_dirty", False):
+        if not matches:
             return
         self._find_index = (self._find_index + delta) % len(matches)
         self._find_reveal(matches[self._find_index])
