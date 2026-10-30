@@ -4053,8 +4053,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        # picked for one day seemed to do nothing (field report, 2026-10-12).\n        try:\n            st = self.capture_editor_state()",
-        "replace": "        # picked for one day seemed to do nothing (field report, 2026-10-12).\n        if self.current_occurrence_date:\n            return\n        try:\n            st = self.capture_editor_state()"
+        "find": "        # picked for one day seemed to do nothing (field report, 2026-10-12).\n        try:\n            st, body_read = self._capture_and_read()",
+        "replace": "        # picked for one day seemed to do nothing (field report, 2026-10-12).\n        if self.current_occurrence_date:\n            return\n        try:\n            st, body_read = self._capture_and_read()"
       }
     ],
     "must_fail": ["a category picked for one day is saved to that day, asking nothing"],
@@ -11470,6 +11470,589 @@
     ],
     "suites": [
       "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX36",
+    "about": "a save asks Tk for each line's text again to read its list marker",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            kind = parse_list_marker(line)[0]\n            align = (\"center\" if line_no in centred",
+        "replace": "            kind = self._list_kind_of(text_widget, line_no)\n            align = (\"center\" if line_no in centred"
+      }
+    ],
+    "must_fail": [
+      "a pause's save, the find bar open on a long paragraph, reads the note twice whatever its hits",
+      "opening a note reads it the same few times however many styled lines it holds"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX37",
+    "about": "the offsets of a note's styles are read from the note one index after another, a get each",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        offsets = {}\n        for line_no, asked in by_line.items():\n",
+        "replace": "        offsets, previous, running = {}, \"1.0\", 0\n        for index in sorted(wanted, key=_index_key):\n            running += len(text_widget.get(previous, index))\n            offsets[index] = running\n            previous = index\n        return offsets\n        for line_no, asked in by_line.items():\n"
+      }
+    ],
+    "must_fail": [
+      "opening a note reads it the same few times however many styled lines it holds",
+      "...and saving it twice, at a pause and on the way out, whatever its lines"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX38",
+    "about": "a capture reads the body again for its styles",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            \"formatting\": self._extract_formatting(self.body_text, text),\n",
+        "replace": "            \"formatting\": self._extract_formatting(self.body_text),\n"
+      }
+    ],
+    "must_fail": [
+      "a pause's save, the find bar open on a long paragraph, reads the note twice whatever its hits",
+      "...and saving it twice, at a pause and on the way out, whatever its lines"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX39",
+    "about": "a save reads the body again though the capture before it just did",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if body_read is None:\n            body_read = self.body_text.get(\"1.0\", \"end-1c\")\n        body = with_caret_line(body_read)\n",
+        "replace": "        body_read = self.body_text.get(\"1.0\", \"end-1c\")\n        body = with_caret_line(body_read)\n"
+      }
+    ],
+    "must_fail": [
+      "a pause's save, the find bar open on a long paragraph, reads the note twice whatever its hits",
+      "...and saving it twice, at a pause and on the way out, whatever its lines"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX40",
+    "about": "the autosave's word count reads the body again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self.update_word_count(body_read)\n",
+        "replace": "            self.update_word_count()\n"
+      }
+    ],
+    "must_fail": [
+      "a pause's save, the find bar open on a long paragraph, reads the note twice whatever its hits",
+      "...and saving it twice, at a pause and on the way out, whatever its lines"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX41",
+    "about": "a save takes the editor's snapshot twice in a row",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        # dirty dot clears. Once: it was taken twice in a row.\n        self._sync_editor_snapshot()\n",
+        "replace": "        # dirty dot clears. Once: it was taken twice in a row.\n        self._sync_active_tab()\n        self._sync_editor_snapshot()\n"
+      }
+    ],
+    "must_fail": [
+      "a pause's save, the find bar open on a long paragraph, reads the note twice whatever its hits",
+      "...and saving it twice, at a pause and on the way out, whatever its lines"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX42",
+    "about": "a key or a click reads the caret's whole line, where its start tells its list marker",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        line = self._line_head(line_no)\n        self._resync_list_tags(line_no, line)\n",
+        "replace": "        line = self.body_text.get(f\"{line_no}.0\", f\"{line_no}.end\")\n        self._resync_list_tags(line_no, line)\n"
+      }
+    ],
+    "must_fail": [
+      "a key or a click reads the caret's line once"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX43",
+    "about": "a key or a click reads the caret's line again for the list buttons",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._resync_list_tags(line_no, line)\n        self._refresh_list_buttons(line)\n",
+        "replace": "        self._resync_list_tags(line_no, line)\n        self._refresh_list_buttons()\n"
+      }
+    ],
+    "must_fail": [
+      "a key or a click reads the caret's line once"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX44",
+    "about": "the format buttons ask of a selection's styles one character at a time",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        for _first, _last, wearing in self._stretches_over(\n                text_widget, sorted(style_set), start, end):\n            if wearing is None:\n                return False\n        return True\n",
+        "replace": "        idx = start\n        while text_widget.compare(idx, \"<\", end):\n            if not (set(text_widget.tag_names(idx)) & style_set):\n                return False\n            idx = text_widget.index(f\"{idx}+1c\")\n        return True\n"
+      }
+    ],
+    "must_fail": [
+      "the format buttons read a selection by its styles' ranges, not its characters"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX45",
+    "about": "the size and font boxes ask of a selection one character at a time",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        fonts = [n for n in self.body_text.tag_names() if parse_font_tag(n)]\n        wanted = None\n",
+        "replace": "        wanted, idx = None, start\n        while self.body_text.compare(idx, \"<\", end):\n            found = None\n            for name in self.body_text.tag_names(idx):\n                parsed = parse_font_tag(name)\n                if parsed:\n                    found = parsed[2] if style == \"font_size\" else parsed[3]\n                    break\n            if found is None:\n                return None\n            if wanted is None:\n                wanted = found\n            elif wanted != found:\n                return None\n            idx = self.body_text.index(f\"{idx}+1c\")\n        return wanted\n        fonts = [n for n in self.body_text.tag_names() if parse_font_tag(n)]\n        wanted = None\n"
+      }
+    ],
+    "must_fail": [
+      "the format buttons read a selection by its styles' ranges, not its characters"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX46",
+    "about": "the colour buttons ask of a selection one character at a time",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        tags = [n for n in self.body_text.tag_names() if n.startswith(prefix)]\n        color = None\n",
+        "replace": "        color, idx = None, start\n        while self.body_text.compare(idx, \"<\", end):\n            if self.body_text.get(idx) == \"\\n\":\n                idx = self.body_text.index(f\"{idx}+1c\")\n                continue\n            names = [n for n in self.body_text.tag_names(idx) if n.startswith(prefix)]\n            if not names:\n                return None\n            this_hex = \"#\" + names[0][len(prefix):]\n            if color is None:\n                color = this_hex\n            elif color != this_hex:\n                return None\n            idx = self.body_text.index(f\"{idx}+1c\")\n        return color\n        tags = [n for n in self.body_text.tag_names() if n.startswith(prefix)]\n        color = None\n"
+      }
+    ],
+    "must_fail": [
+      "the format buttons read a selection by its styles' ranges, not its characters"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX47",
+    "about": "a line-wide tag ending at the next line's start is read as covering that line too",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            found.update(range(l1 if c1 == 0 else l1 + 1, l2 + 1 if c2 > 0 else l2))\n",
+        "replace": "            found.update(range(l1 if c1 == 0 else l1 + 1, l2 + 1))\n"
+      }
+    ],
+    "must_fail": [
+      "a note's lists and alignments read from each tag once are the line by line answers"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX48",
+    "about": "a style's offset counts a drawn table's window as a character",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            held = sorted(windows.get(line_no, ()))\n",
+        "replace": "            held = []\n"
+      }
+    ],
+    "must_fail": [
+      "offsets counted on one read are the ones each index read gives, at every column"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX49",
+    "about": "a style's offset counts an emoji as one column, as Python does, not two as Tk does",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                    unit += 2 if ord(line[at]) > 0xFFFF else 1\n",
+        "replace": "                    unit += 1\n"
+      }
+    ],
+    "must_fail": [
+      "offsets counted on one read are the ones each index read gives, at every column"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX50",
+    "about": "a colour across lines reads as a mix, its bare line breaks judged uncoloured",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if last[0] == first[0] or last[1] != 0:\n            return False\n",
+        "replace": "        return False\n"
+      }
+    ],
+    "must_fail": [
+      "...among them a highlight across lines and two sizes over one stretch"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX51",
+    "about": "the highest-priority style a stretch wears speaks for it, not the lowest as Tk lists them",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                    wearing = tags[i] if wearing is None else wearing\n",
+        "replace": "                    wearing = tags[i]\n"
+      }
+    ],
+    "must_fail": [
+      "...among them a highlight across lines and two sizes over one stretch"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX52",
+    "about": "opening a note takes the editor's snapshot twice",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self.open_tabs = [{\"key\": self._tab_counter, \"state\": self.capture_editor_state()}]\n        self.active_tab_index = 0\n        # Moves the highlighted-card border",
+        "replace": "        self.open_tabs = [{\"key\": self._tab_counter, \"state\": self.capture_editor_state()}]\n        self.active_tab_index = 0\n        self._sync_editor_snapshot()\n        # Moves the highlighted-card border"
+      }
+    ],
+    "must_fail": [
+      "opening a note reads it the same few times however many styled lines it holds"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX53",
+    "about": "opening a note reads each paragraph's line through Tk",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            line_text = lines[line_no - 1]\n",
+        "replace": "            line_text = text_widget.get(f\"{line_no}.0\", f\"{line_no}.end\")\n"
+      }
+    ],
+    "must_fail": [
+      "opening a note reads it the same few times however many styled lines it holds"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX54",
+    "about": "a paste, an Enter or a Ctrl+Z re-tags the list margins reading each line through Tk",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if line_no is None:\n            lines = self.body_text.get(\"1.0\", \"end-1c\").split(\"\\n\")\n",
+        "replace": "        if line_no is None:\n            lines = [self.body_text.get(f\"{n}.0\", f\"{n}.end\") for n in range(\n                1, int(self.body_text.index(\"end-1c\").split(\".\")[0]) + 1)]\n"
+      }
+    ],
+    "must_fail": [
+      "every line's list margin, the numbers, and a copy's styles each come from one read of the note"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX55",
+    "about": "renumbering the lists reads the note again for its paragraphs",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        new_body, _shifts = renumber(body, self._extract_paragraphs(b, body))\n",
+        "replace": "        new_body, _shifts = renumber(body, self._extract_paragraphs(b))\n"
+      }
+    ],
+    "must_fail": [
+      "every line's list margin, the numbers, and a copy's styles each come from one read of the note"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX56",
+    "about": "a copy reads the note from its start for each end of the selection",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        whole = self.body_text.get(\"1.0\", \"end-1c\")\n        where = self._char_offsets(self.body_text, [start, end], whole)\n        first, last = where[str(start)], where[str(end)]\n        first_line = int(start.split(\".\")[0]) - 1\n",
+        "replace": "        whole = self.body_text.get(\"1.0\", \"end-1c\")\n        first = self._char_offset(self.body_text, start)\n        last = self._char_offset(self.body_text, end)\n        first_line = int(start.split(\".\")[0]) - 1\n"
+      }
+    ],
+    "must_fail": [
+      "every line's list margin, the numbers, and a copy's styles each come from one read of the note"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX57",
+    "about": "the bullet button reads each selected line through Tk to see whether it is blank",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            line = texts[line_no - first]\n            return (core_tables.is_table_row(line)",
+        "replace": "            line = self.body_text.get(f\"{line_no}.0\", f\"{line_no}.end\")\n            return (core_tables.is_table_row(line)"
+      }
+    ],
+    "must_fail": [
+      "the bullet button and Tab over every line read them in one piece"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX58",
+    "about": "Tab over a selection reads each line through Tk to set its depth",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            current = self._paragraph_indent_of(self.body_text, line_no, line)\n            self._set_paragraph_indent(\n                line_no, max(0, min(MAX_INDENT, current + delta)), line)\n",
+        "replace": "            current = self._paragraph_indent_of(self.body_text, line_no)\n            self._set_paragraph_indent(\n                line_no, max(0, min(MAX_INDENT, current + delta)))\n"
+      }
+    ],
+    "must_fail": [
+      "the bullet button and Tab over every line read them in one piece"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX59",
+    "about": "opening a styled note reads its whole text for the length of font runs it has none of",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if not any(span[\"style\"] in FONT_VALUE_STYLES\n                   for span in normalize_formatting(spans)):\n            return\n        length = len(text_widget.get(\"1.0\", \"end-1c\"))\n",
+        "replace": "        length = len(text_widget.get(\"1.0\", \"end-1c\"))\n"
+      }
+    ],
+    "must_fail": [
+      "opening a note reads it the same few times however many styled lines it holds"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX80",
+    "about": "a key counts the note's words at once though the find bar shows hits, reading the whole note every key",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if self._count_waits_for_pause():\n                self._word_count_due = True\n",
+        "replace": "            if False:\n                self._word_count_due = True\n"
+      }
+    ],
+    "must_fail": [
+      "a key with the find bar open on a long paragraph reads no more of the note than its caret line's start"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX81",
+    "about": "closing the find bar leaves the word count the keys put off until the next pause",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        # A count the keys left for the pause, now the hits are gone.\n        if getattr(self, \"_word_count_due\", False):\n",
+        "replace": "        # A count the keys left for the pause, now the hits are gone.\n        if False:\n"
+      }
+    ],
+    "must_fail": [
+      "...and the word count is right after the pause, and the moment the bar closes"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX82",
+    "about": "a line starting with more digits than its head holds is told no number from the head alone",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                     or lead.rstrip(\".\").isdecimal())):\n",
+        "replace": "                     or False)):\n"
+      }
+    ],
+    "must_fail": [
+      "a line's start tells its list marker, depth and table row as the whole line does"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX83",
+    "about": "a line starting with more spaces than its head holds is told no table row from the head alone",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                and (not lead or lead.startswith(core_tables.CELL)\n",
+        "replace": "                and (lead.startswith(core_tables.CELL)\n"
+      }
+    ],
+    "must_fail": [
+      "a line's start tells its list marker, depth and table row as the whole line does"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX84",
+    "about": "a long table row is told no table row from its head, which cannot see its closing pipe",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "(not lead or lead.startswith(core_tables.CELL)\n                     or lead",
+        "replace": "(not lead or False\n                     or lead"
+      }
+    ],
+    "must_fail": [
+      "a line's start tells its list marker, depth and table row as the whole line does"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "SP28",
+    "about": "the spelling underlines every typo it finds, however many on a line",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/spelling.py",
+        "find": "        shown = spelling.nearest_underlines(shown, line - 1, col)\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a long line of typos is underlined no more than a line may hold, those nearest the caret",
+      "...and a note of such lines no more than a box may hold in all"
+    ],
+    "suites": [
+      "qa8"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "SP29",
+    "about": "a line keeps every underline the box has room for",
+    "edits": [
+      {
+        "file": "noteorganizer/core/spelling.py",
+        "find": "        keep = min(per_line, room)\n",
+        "replace": "        keep = room\n"
+      }
+    ],
+    "must_fail": [
+      "a line keeps no more underlines than a line may hold"
+    ],
+    "suites": [
+      "test_spelling"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "SP30",
+    "about": "a box keeps every underline its lines have room for",
+    "edits": [
+      {
+        "file": "noteorganizer/core/spelling.py",
+        "find": "        keep = min(per_line, room)\n        if keep <= 0:\n            break\n",
+        "replace": "        keep = per_line\n"
+      }
+    ],
+    "must_fail": [
+      "a box keeps no more underlines than it may hold, in all"
+    ],
+    "suites": [
+      "test_spelling"
     ],
     "expect": "killed"
   },

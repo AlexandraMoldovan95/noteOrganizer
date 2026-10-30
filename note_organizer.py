@@ -1578,14 +1578,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         body text on every call — cheap for a single keystroke, but calling it
         on every click while rapid-inserting many emojis in a row adds up to
         noticeable lag. The count still catches up once the debounce timer
-        below fires, just not on every single click."""
+        below fires, just not on every single click. So it does while the
+        find bar shows hits (_count_waits_for_pause)."""
         if not skip_word_count:
-            try:
-                self.update_word_count()
-            except Exception:
-                self._log_swallowed("autosave: schedule-time word count")
+            if self._count_waits_for_pause():
+                self._word_count_due = True
+            else:
+                try:
+                    self.update_word_count()
+                except Exception:
+                    self._log_swallowed("autosave: schedule-time word count")
         self._cancel_pending_autosave()
         self._autosave_job = self.after(500, self._autosave_now)
+
+    def _count_waits_for_pause(self):
+        """Whether a key's word count waits for the pause's (the autosave's
+        catch-up, or the find bar closing): while the bar shows hits, each
+        read of their lines costs the square of their toggles, and a read a
+        key held every key back (final audit, round 10)."""
+        return bool(getattr(self, "_find_open", False)
+                    and getattr(self, "_find_matches", None))
 
     def _cancel_pending_autosave(self):
         """Drop a scheduled autosave, if one is waiting."""
@@ -1643,12 +1655,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Before any early return below: an editor that matches the note has
         # nothing to save.
         self._say_nothing_is_left_out()
-        # Catch the word count up now, in case rapid edits (e.g. inserting
-        # several emojis in a row) skipped recomputing it on every click.
-        try:
-            self.update_word_count()
-        except Exception:
-            self._log_swallowed("autosave: catch-up word count")
         # A day of a series saves here like any note: to that day, asking
         # nothing (save_current_note). It used to wait, because its save
         # asked "this occurrence or the whole series?" and a silent timer
@@ -1657,9 +1663,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # "ghost" save (see ISSUES_LOG). The wait was invisible: a category
         # picked for one day seemed to do nothing (field report, 2026-10-12).
         try:
-            st = self.capture_editor_state()
+            st, body_read = self._capture_and_read()
         except Exception:
             self._log_swallowed("autosave: capture_editor_state")
+            body_read = None
+        # Catch the word count up now, in case rapid edits (e.g. inserting
+        # several emojis in a row) skipped recomputing it on every click --
+        # from the capture's read: each read of a long styled line is dear.
+        try:
+            self.update_word_count(body_read)
+        except Exception:
+            self._log_swallowed("autosave: catch-up word count")
+        if body_read is None:
             return
         # Never auto-save a completely empty NEVER-SAVED note — that would
         # spawn junk notes every time the user clicks "New Note". A note
@@ -1678,7 +1693,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._log_swallowed("autosave: editor_state_matches_saved")
         # Reuse the normal save path, but mark it as automatic so the status
         # message is gentle rather than a loud "Saved!".
-        self.save_current_note(auto=True)
+        self.save_current_note(auto=True, body_read=body_read)
 
     def _repeat_off_waits(self):
         """Whether the editor turns off the repeat of a series whose days
@@ -7609,19 +7624,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if name.startswith("para_"):
                 text_widget.tag_remove(name, f"{line_no}.0", f"{line_no}.end+1c")
 
-    def _paragraph_indent_of(self, text_widget, line_no):
+    def _paragraph_indent_of(self, text_widget, line_no, line=None):
         """How deep this line is pushed.
 
         Read from the margin tag, with one fallback: a bullet's glyph also
         says which level it is at, so a bullet whose tag was lost -- pasted
         in from elsewhere, say -- still comes back at the right depth.
+        *line* is the line's text when its caller has read it already.
         """
         for name in text_widget.tag_names(f"{line_no}.0"):
             if name.startswith("para_"):
                 # Looked up rather than parsed out of the name, which is
                 # a format this does not need to know.
                 return self._paragraph_tags.get(name, (None, 0))[1]
-        line = text_widget.get(f"{line_no}.0", f"{line_no}.end")
+        if line is None:
+            line = text_widget.get(f"{line_no}.0", f"{line_no}.end")
+        return self._bullet_depth(line)
+
+    @staticmethod
+    def _bullet_depth(line):
+        """The level a bullet's glyph says *line* is at, or 0."""
         kind, marker, _ = parse_list_marker(line)
         return bullet_level_of(marker) if kind == "bullet" else 0
 
@@ -7721,32 +7743,81 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.body_text.tag_add(f"align_{align}",
                                        f"{line_no}.0", f"{line_no}.end+1c")
 
-    def _list_kind_of(self, text_widget, line_no):
+    def _list_kind_of(self, text_widget, line_no, line=None):
         """Which kind of list line this is, or None if it is not one.
 
         Decided by the marker in the text, not by the tag. The marker is the
         thing that is actually saved, and the tag is only the hanging indent
         drawn over it -- and Tk hands a tag on to text inserted beside it, so
         reading the tag once let a pasted line come back as a bullet that had
-        no bullet in it.
+        no bullet in it. *line* is the line's text when its caller has it.
         """
-        line = text_widget.get(f"{line_no}.0", f"{line_no}.end")
+        if line is None:
+            line = text_widget.get(f"{line_no}.0", f"{line_no}.end")
         return parse_list_marker(line)[0]
 
-    def _extract_paragraphs(self, text_widget):
+    # How much of a line its list marker and its being a table row are read
+    # from, unless its start leaves either open (_line_head).
+    _LINE_HEAD = 64
+
+    def _line_head(self, line_no):
+        """The body's line *line_no* as far as a list marker or a table row
+        is told from it: the whole line when short, or when its start is
+        blank, a pipe or a run of digits; else its first characters. Tk's
+        get of a whole long line costs the square of the tags on it, and
+        every key and click read one (final audit, round 10)."""
+        b = self.body_text
+        head = b.get(f"{line_no}.0", f"{line_no}.0+{self._LINE_HEAD}c")
+        if "\n" in head:
+            return head.split("\n", 1)[0]
+        lead = head.lstrip()
+        if (len(head) >= self._LINE_HEAD
+                and (not lead or lead.startswith(core_tables.CELL)
+                     or lead.rstrip(".").isdecimal())):
+            return b.get(f"{line_no}.0", f"{line_no}.end")
+        return head
+
+    @staticmethod
+    def _lines_starting_in(text_widget, tag):
+        """The lines whose first character wears *tag* -- what
+        ``tag_names(f"{line}.0")`` answers line by line, from one question."""
+        found = set()
+        ranges = text_widget.tag_ranges(tag)
+        for first, last in zip(ranges[::2], ranges[1::2]):
+            (l1, c1), (l2, c2) = _index_key(first), _index_key(last)
+            found.update(range(l1 if c1 == 0 else l1 + 1, l2 + 1 if c2 > 0 else l2))
+        return found
+
+    def _extract_paragraphs(self, text_widget, text=None):
         """Read the list tags back out as plain data, for saving.
 
         Line numbers rather than character offsets: a list applies to a whole
         line, and a line index survives being reloaded into a window of a
         different width, which is the same reason formatting uses offsets
-        rather than Tk's own line.column indices.
+        rather than Tk's own line.column indices. *text* is the widget's
+        text as its caller read it; each line's tags are asked once a tag.
         """
         paragraphs = []
-        total = int(text_widget.index("end-1c").split(".")[0])
-        for line_no in range(1, total + 1):
-            kind = self._list_kind_of(text_widget, line_no)
-            align = self._paragraph_align_of(text_widget, line_no)
-            indent = self._paragraph_indent_of(text_widget, line_no)
+        if text is None:
+            text = text_widget.get("1.0", "end-1c")
+        lines = text.split("\n")
+        # The lowest-priority margin tag on a line is the one its depth is
+        # read from, as tag_names lists them (_paragraph_indent_of).
+        depth = {}
+        for name in text_widget.tag_names():
+            if name.startswith("para_"):
+                level = self._paragraph_tags.get(name, (None, 0))[1]
+                for line_no in self._lines_starting_in(text_widget, name):
+                    depth.setdefault(line_no, level)
+        centred = self._lines_starting_in(text_widget, "align_center")
+        right = self._lines_starting_in(text_widget, "align_right")
+        for line_no, line in enumerate(lines, start=1):
+            kind = parse_list_marker(line)[0]
+            align = ("center" if line_no in centred
+                     else "right" if line_no in right else "left")
+            indent = depth.get(line_no)
+            if indent is None:
+                indent = self._bullet_depth(line)
             if not kind and align == "left" and not indent:
                 continue            # an ordinary paragraph records nothing
             entry = {"line": line_no - 1}
@@ -7759,7 +7830,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             paragraphs.append(entry)
         return paragraphs
 
-    def _resync_list_tags(self, line_no=None):
+    def _resync_list_tags(self, line_no=None, line=None):
         """Redraw the indent tags from the markers actually in the text.
 
         Tk only passes a tag on to text inserted between two characters that
@@ -7772,14 +7843,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         time, and rebuilding every line on every keystroke is exactly the
         kind of refresh work that has cost this app real responsiveness
         before (see docs/ISSUES_LOG.md). The whole-body pass is for paste,
-        which is rare and can change many lines at once.
+        which is rare and can change many lines at once. *line* is line
+        *line_no*'s text when its caller has read it already.
         """
+        # Each line read once, the note in one get: three readers asked Tk
+        # for the same line, and Tk's cost for each is about the square of
+        # the toggles on it (final audit, round 10).
         if line_no is None:
+            lines = self.body_text.get("1.0", "end-1c").split("\n")
             first = 1
-            last = int(self.body_text.index("end-1c").split(".")[0])
         else:
-            first = last = line_no
-        for n in range(first, last + 1):
+            if line is None:
+                line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
+            lines, first = [line], line_no
+        for n, line in enumerate(lines, start=first):
             # A table row is drawn in a monospace face for the same reason
             # its pipes live in the text: the columns cannot line up
             # otherwise. Done here because it is the same question as the
@@ -7787,7 +7864,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # same moments. Removing it covers the newline as well, so a
             # row that stops being one does not pass the face on to what is
             # typed after it.
-            line = self.body_text.get(f"{n}.0", f"{n}.end")
             if is_table_row(line):
                 self.body_text.tag_add(self.TABLE_TAG, f"{n}.0", f"{n}.end")
                 # An alignment tag on a table's line positions the embedded
@@ -7800,8 +7876,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     self.body_text.tag_remove(tag, f"{n}.end", f"{n}.end+1c")
             else:
                 self.body_text.tag_remove(self.TABLE_TAG, f"{n}.0", f"{n}.end+1c")
-            kind = self._list_kind_of(self.body_text, n)
-            indent = self._paragraph_indent_of(self.body_text, n)
+            kind = self._list_kind_of(self.body_text, n, line)
+            indent = self._paragraph_indent_of(self.body_text, n, line)
             wanted = (self._paragraph_tag(self.body_text, kind, indent)
                       if (kind or indent) else None)
             for name in self.body_text.tag_names(f"{n}.0"):
@@ -8604,19 +8680,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         text = self.body_text.get(start, end)
         if not text:
             return None
-        first = self._char_offset(self.body_text, start)
-        last = self._char_offset(self.body_text, end)
+        # The note read once, for the selection's place, its styles and its
+        # lines (_char_offsets): each read of a long styled line is dear.
+        whole = self.body_text.get("1.0", "end-1c")
+        where = self._char_offsets(self.body_text, [start, end], whole)
+        first, last = where[str(start)], where[str(end)]
         first_line = int(start.split(".")[0]) - 1
 
         clipped = []
-        for span in self._extract_formatting(self.body_text):
+        for span in self._extract_formatting(self.body_text, whole):
             lo, hi = max(span["start"], first), min(span["end"], last)
             if hi > lo:
                 clipped.append(dict(span, start=lo - first, end=hi - first))
         line_count = text.count("\n") + 1      # once, not once per paragraph
         paragraphs = [
             dict(p, line=p["line"] - first_line)
-            for p in self._extract_paragraphs(self.body_text)
+            for p in self._extract_paragraphs(self.body_text, whole)
             if 0 <= p["line"] - first_line < line_count]
 
         # inline_tables: a clipboard fragment travels without the file
@@ -8631,18 +8710,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._formatted_clip = (text, clipped, paragraphs, html)
         return "break"
 
-    def _refresh_list_buttons(self):
+    def _refresh_list_buttons(self, line=None):
         """Show the bullet/number button as pressed when the cursor sits in
         a list of that kind, matching how the four style buttons behave.
 
         Deliberately reads the line the cursor is on rather than the whole
         selection: dragging across a plain line and a bullet line should not
-        make the button claim the selection is a list.
+        make the button claim the selection is a list. *line* is that line's
+        text when its caller has just read it.
         """
         if not getattr(self, "_list_buttons", None):
             return
         line_no = int(self.body_text.index("insert").split(".")[0])
-        current = self._list_kind_of(self.body_text, line_no)
+        current = self._list_kind_of(self.body_text, line_no, line)
         for kind, btn in self._list_buttons.items():
             self._set_button_pressed(btn, kind == current)
         current_align = self._grid_align_context()
@@ -8874,13 +8954,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         honouring it re-centred pasted tables "for no reason". A saved note
         loads with False, so a deliberately placed table keeps its place.
         """
-        total = int(text_widget.index("end-1c").split(".")[0])
+        if not paragraphs:
+            return
+        # The text read once: only tags change below.
+        lines = text_widget.get("1.0", "end-1c").split("\n")
+        total = len(lines)
         for paragraph in normalize_paragraphs(paragraphs, total):
             line_no = paragraph["line"] + 1
             if line_no > total:
                 continue
             align = paragraph.get("align", "left")
-            line_text = text_widget.get(f"{line_no}.0", f"{line_no}.end")
+            line_text = lines[line_no - 1]
             if (align != "left" and scrub_table_align
                     and is_table_row(line_text)):
                 align = "left"
@@ -8895,8 +8979,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                     f"{line_no}.0", end_index)
             kind = paragraph.get("kind")
             indent = paragraph.get("indent", 0)
-            line = text_widget.get(f"{line_no}.0", f"{line_no}.end")
-            if kind and parse_list_marker(line)[0] != kind:
+            if kind and parse_list_marker(line_text)[0] != kind:
                 continue
             if not kind and not indent:
                 continue
@@ -8904,17 +8987,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._paragraph_tag(text_widget, kind, indent),
                 f"{line_no}.0", f"{line_no}.end")
 
-    def _set_paragraph_indent(self, line_no, indent):
+    def _set_paragraph_indent(self, line_no, indent, line=None):
         """Put one line at a given depth, rewriting its marker if it has one.
 
         A bullet's glyph changes with depth, so the marker in the text has to
         be replaced, not just the tag -- otherwise a demoted item keeps the
-        parent's bullet and the two levels look identical.
+        parent's bullet and the two levels look identical. *line* is the
+        line's text when its caller has read it already.
         """
-        kind = self._list_kind_of(self.body_text, line_no)
+        if line is None:
+            line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
+        kind = self._list_kind_of(self.body_text, line_no, line)
         self._clear_paragraph_tags(self.body_text, line_no)
         if kind == "bullet":
-            line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
             _, marker, _rest = parse_list_marker(line)
             new_marker = marker_for("bullet", 1, indent)
             if marker != new_marker:
@@ -8937,10 +9022,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         instead of refusing.
         """
         first, last = self._selected_line_range()
-        for line_no in range(first, last + 1):
-            current = self._paragraph_indent_of(self.body_text, line_no)
+        # The lines read once: each pass changes its own line alone.
+        lines = self.body_text.get(f"{first}.0", f"{last}.end").split("\n")
+        for line_no, line in enumerate(lines, start=first):
+            current = self._paragraph_indent_of(self.body_text, line_no, line)
             self._set_paragraph_indent(
-                line_no, max(0, min(MAX_INDENT, current + delta)))
+                line_no, max(0, min(MAX_INDENT, current + delta)), line)
         self._renumber_lists()
         self._refresh_list_buttons()
         self._schedule_autosave()
@@ -9164,8 +9251,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if self._tab_in_table(delta):
             return "break"
         first, last = self._selected_line_range()
-        in_list = any(self._list_kind_of(self.body_text, n)
-                      for n in range(first, last + 1))
+        # The selected lines in one read, not one a line (final audit, round 10).
+        lines = self.body_text.get(f"{first}.0", f"{last}.end").split("\n")
+        in_list = any(parse_list_marker(line)[0] for line in lines)
         if not in_list:
             return "break" if delta < 0 else None
         self._change_paragraph_indent(delta)
@@ -9195,9 +9283,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.set_status("A table cannot be a list")
             return
         first, last = self._selected_line_range()
+        # The lines read once, not four times a line: each pass below
+        # changes its own line alone (final audit, round 10).
+        texts = self.body_text.get(f"{first}.0", f"{last}.end").split("\n")
 
         def blank(line_no):
-            line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
+            line = texts[line_no - first]
             return (core_tables.is_table_row(line)
                     or not parse_list_marker(line)[2].strip())
 
@@ -9208,23 +9299,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # of them may be carrying a marker put there before this.
         items = [n for n in range(first, last + 1) if not blank(n)]
         if not items:
-            if first != last or core_tables.is_table_row(
-                    self.body_text.get(f"{first}.0", f"{first}.end")):
+            if first != last or core_tables.is_table_row(texts[0]):
                 return
             # A single empty line is not a gap between items -- it is the
             # user asking to START a list here, marker first, text after.
             items = [first]
-        turning_off = all(self._list_kind_of(self.body_text, n) == kind
+        turning_off = all(self._list_kind_of(self.body_text, n, texts[n - first]) == kind
                           for n in items)
         for line_no in range(first, last + 1):
             if not turning_off and line_no not in items:
                 continue
-            line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
+            line = texts[line_no - first]
             existing, marker, rest = parse_list_marker(line)
             # Depth is read before the tags go, and put back after: turning a
             # nested item into a bullet should leave it where it sits rather
             # than snapping it back to the left margin.
-            indent = self._paragraph_indent_of(self.body_text, line_no)
+            indent = self._paragraph_indent_of(self.body_text, line_no, line)
             if marker:
                 self.body_text.delete(f"{line_no}.0", f"{line_no}.0+{len(marker)}c")
             self._clear_paragraph_tags(self.body_text, line_no)
@@ -9258,7 +9348,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """
         b = self.body_text
         body = b.get("1.0", "end-1c")
-        new_body, _shifts = renumber(body, self._extract_paragraphs(b))
+        new_body, _shifts = renumber(body, self._extract_paragraphs(b, body))
         if new_body == body:
             return
         # Several edits, one Ctrl+Z; after the no-change return, so a
@@ -9824,6 +9914,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         what the toolbar reads, while the composite on top decides what the
         text actually looks like.
         """
+        # No size and no font, no run (resolve_font_runs): nor a read of the
+        # whole text for its length, at every opening of a styled note.
+        if not any(span["style"] in FONT_VALUE_STYLES
+                   for span in normalize_formatting(spans)):
+            return
         length = len(text_widget.get("1.0", "end-1c"))
         runs = resolve_font_runs(spans, length)
         where = self._offset_indices(
@@ -9944,40 +10039,58 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 b.tag_add(tag, lo, hi)
 
     @staticmethod
-    def _char_offsets(text_widget, indices):
-        """The same answer :meth:`_char_offset` gives, for many indices at
-        once, paid ONCE for the whole widget instead of once per index.
-
-        _char_offset is ``len(get("1.0", index))`` -- it re-reads the note
-        from its start every time it is asked. That is fine for the four
-        callers that ask once, and it was the whole cost of opening a
-        heavily styled note: every styled piece has two ends, the reader
-        below runs three times per open, and 500 pieces on one line
-        measured 14.18 s of a 15.5 s startup.
-
-        The trick is that the offsets are wanted for a SET of indices.
-        Sorted, each one only needs the gap from the one before it, and
-        the gaps add up to the note read exactly once. The character space
-        is identical because it is the same ``len(get(...))`` -- Python
-        characters, embedded window characters skipped, astral characters
-        counted as one. That last part is not incidental: Tk's own
-        ``count("chars")`` counts UTF-16 units, and using it here once
-        shifted every span one place right per preceding emoji, re-saving
-        the note on every launch.
-        """
+    def _char_offsets(text_widget, indices, text=None):
+        """What :meth:`_char_offset` answers -- ``len(get("1.0", index))`` --
+        for many indices, counted in Python on *text*, the widget's
+        ``get("1.0", "end-1c")`` (read here when not given). A get per index
+        paid Tk's cost for every toggle on its line each time (final audit,
+        round 10). A column counts UTF-16 units and a window as one, so a
+        line holding either is walked once, for all its indices."""
         wanted = {str(index) for index in indices}
         if not wanted:
             return {}
-
-        def position(index):
-            line, _, column = index.partition(".")
-            return int(line), int(column)
-
-        offsets, previous, running = {}, "1.0", 0
-        for index in sorted(wanted, key=position):
-            running += len(text_widget.get(previous, index))
-            offsets[index] = running
-            previous = index
+        if text is None:
+            text = text_widget.get("1.0", "end-1c")
+        lines = text.split("\n")
+        starts = [0]
+        for line in lines:
+            starts.append(starts[-1] + len(line) + 1)
+        by_line = {}
+        for index in wanted:
+            line_no, column = _index_key(index)
+            by_line.setdefault(line_no, []).append((column, index))
+        windows = {}
+        if any(line_no <= len(lines) for line_no in by_line):
+            for _kind, _name, at in text_widget.dump("1.0", "end", window=True,
+                                                     image=True):
+                line_no, column = _index_key(at)
+                windows.setdefault(line_no, []).append(column)
+        offsets = {}
+        for line_no, asked in by_line.items():
+            if line_no > len(lines):
+                # Past the last line is "end": the note and Tk's own newline.
+                for _column, index in asked:
+                    offsets[index] = starts[-1]
+                continue
+            line, base = lines[line_no - 1], starts[line_no - 1]
+            held = sorted(windows.get(line_no, ()))
+            if not held and len(line.encode("utf-16-le", "surrogatepass")) == 2 * len(line):
+                for column, index in asked:
+                    offsets[index] = base + min(column, len(line))
+                continue
+            unit = at = window = 0
+            for column, index in sorted(asked):
+                while True:
+                    if window < len(held) and held[window] == unit:
+                        if unit >= column:
+                            break
+                        unit, window = unit + 1, window + 1
+                        continue
+                    if unit >= column or at >= len(line):
+                        break
+                    unit += 2 if ord(line[at]) > 0xFFFF else 1
+                    at += 1
+                offsets[index] = base + at
         return offsets
 
     @staticmethod
@@ -10025,14 +10138,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             out[offset] = here
         return out
 
-    def _extract_formatting(self, text_widget):
+    def _extract_formatting(self, text_widget, text=None):
         """Read the widget's current tags back out as a plain span list,
         for saving. Character offsets (not Tkinter's own line.col indices)
         so they're stable plain data, independent of line wrapping.
 
         Every tag range is collected first and the offsets worked out in
-        one pass (see :meth:`_char_offsets`), because asking per range end
-        is what made opening a heavily styled note feel like a freeze.
+        one pass, on *text* -- the widget's text as its caller read it, or
+        read once here (see :meth:`_char_offsets`).
         """
         plain, fonts, colors = [], [], []
         for style in KNOWN_FORMAT_STYLES:
@@ -10069,7 +10182,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             for group in (plain, fonts, colors)
             for entry in group
             for index in entry[-2:]
-        ])
+        ], text)
 
         # Built in the same order the three loops used to append in, so the
         # list handed to merge_spans is byte-for-byte what it always was.
@@ -10135,13 +10248,72 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         least one tag from style_set — used to decide whether a toolbar
         toggle should turn a style off (already uniformly applied) or on,
         the same convention most rich text editors use for a mixed
-        selection (treated as 'off' until the whole thing is one style)."""
-        idx = start
-        while text_widget.compare(idx, "<", end):
-            if not (set(text_widget.tag_names(idx)) & style_set):
+        selection (treated as 'off' until the whole thing is one style).
+        Asked of the tags' ranges (_stretches_over): a character at a time
+        cost every key and click with a long selection seconds."""
+        for _first, _last, wearing in self._stretches_over(
+                text_widget, sorted(style_set), start, end):
+            if wearing is None:
                 return False
-            idx = text_widget.index(f"{idx}+1c")
         return True
+
+    @staticmethod
+    def _tag_ranges_over(text_widget, tag, start, end):
+        """*tag*'s ranges over [*start*, *end*) -- normalized indices --
+        clipped to it, in order, as ((line, col), (line, col)): asked of Tk
+        a range at a time, as far as the caller reads."""
+        s, e = _index_key(start), _index_key(end)
+        at = start
+        before = text_widget.tag_prevrange(tag, start)
+        if before and _index_key(before[1]) > s:
+            yield s, min(_index_key(before[1]), e)
+            at = str(before[1])
+        while _index_key(at) < e:
+            found = text_widget.tag_nextrange(tag, at, end)
+            if not found:
+                return
+            yield _index_key(found[0]), min(_index_key(found[1]), e)
+            at = str(found[1])
+
+    def _stretches_over(self, text_widget, tags, start, end,
+                        skip_line_breaks=False):
+        """Walk [*start*, *end*) in stretches where none of *tags* starts or
+        stops, yielding (first, last, wearing): the first of *tags* -- in the
+        order given, lowest priority first -- covering the stretch, or None.
+        A stretch of line breaks alone is passed over when asked to."""
+        start, end = text_widget.index(start), text_widget.index(end)
+        pos, e = _index_key(start), _index_key(end)
+        walks = [self._tag_ranges_over(text_widget, tag, start, end) for tag in tags]
+        heads = [next(walk, None) for walk in walks]
+        while pos < e:
+            reach, wearing = e, None
+            for i, walk in enumerate(walks):
+                while heads[i] is not None and heads[i][1] <= pos:
+                    heads[i] = next(walk, None)
+                head = heads[i]
+                if head is None:
+                    continue
+                if head[0] <= pos:
+                    wearing = tags[i] if wearing is None else wearing
+                    reach = min(reach, head[1])
+                else:
+                    reach = min(reach, head[0])
+            if not (skip_line_breaks
+                    and self._only_line_breaks(text_widget, pos, reach)):
+                yield pos, reach, wearing
+            pos = reach
+
+    @staticmethod
+    def _only_line_breaks(text_widget, first, last):
+        """Whether every character from *first* to *last* ((line, col), last
+        excluded) is a line break: *first* at its line's end, *last* at a
+        line's start, and only empty lines between."""
+        if last[0] == first[0] or last[1] != 0:
+            return False
+        if text_widget.index(f"{first[0]}.end") != "%d.%d" % first:
+            return False
+        return all(text_widget.index(f"{line}.end") == f"{line}.0"
+                   for line in range(first[0] + 1, last[0]))
 
     @staticmethod
     def _font_tag_for(is_bold, is_italic):
@@ -10324,10 +10496,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # it too. So the spans are edited as data and the whole resolution
         # is redone -- clip this style out of the selection, put the new
         # value back over it, and let _apply_font_runs work out the tags.
-        first = self._char_offset(self.body_text, start)
-        last = self._char_offset(self.body_text, end)
+        # One read for the selection's place and the note's spans.
+        whole = self.body_text.get("1.0", "end-1c")
+        where = self._char_offsets(self.body_text, [start, end], whole)
+        first, last = where[str(start)], where[str(end)]
         spans = []
-        for span in self._extract_formatting(self.body_text):
+        for span in self._extract_formatting(self.body_text, whole):
             if span["style"] != style or span["end"] <= first or span["start"] >= last:
                 spans.append(span)
                 continue
@@ -10624,24 +10798,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         None also means "a mix", which is the honest answer for a dropdown:
         showing the first run's size for a selection spanning two of them
         would claim the whole selection is that size, and the next click
-        would then be understood as "leave it as it is".
+        would then be understood as "leave it as it is". A character takes
+        the lowest-priority font tag it wears, as tag_names lists them.
         """
+        fonts = [n for n in self.body_text.tag_names() if parse_font_tag(n)]
         wanted = None
-        idx = start
-        while self.body_text.compare(idx, "<", end):
-            found = None
-            for name in self.body_text.tag_names(idx):
-                parsed = parse_font_tag(name)
-                if parsed:
-                    found = parsed[2] if style == "font_size" else parsed[3]
-                    break
+        for _first, _last, name in self._stretches_over(self.body_text, fonts,
+                                                         start, end):
+            parsed = parse_font_tag(name) if name else None
+            found = (parsed[2] if style == "font_size" else parsed[3]) if parsed else None
             if found is None:
                 return None
             if wanted is None:
                 wanted = found
             elif wanted != found:
                 return None
-            idx = self.body_text.index(f"{idx}+1c")
         return wanted
 
     def _uniform_color_in_selection(self, kind, start, end):
@@ -10650,25 +10821,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         the range is empty, uncolored, or a mix of more than one color —
         the color-preview equivalent of _selection_has_style."""
         prefix = kind + "_"
+        tags = [n for n in self.body_text.tag_names() if n.startswith(prefix)]
         color = None
-        idx = start
-        while self.body_text.compare(idx, "<", end):
-            # Newlines deliberately never carry a highlight tag (see
-            # _tag_add_no_newline), so judging them as "uncolored" here
-            # would report any multi-line selection as a mix and stop the
-            # toolbar button from previewing the color that's really there.
-            if self.body_text.get(idx) == "\n":
-                idx = self.body_text.index(f"{idx}+1c")
-                continue
-            names = [n for n in self.body_text.tag_names(idx) if n.startswith(prefix)]
-            if not names:
+        # Newlines deliberately never carry a highlight tag (see
+        # _tag_add_no_newline), so line breaks are passed over: judged
+        # "uncolored", every multi-line selection would read as a mix.
+        for _first, _last, name in self._stretches_over(
+                self.body_text, tags, start, end, skip_line_breaks=True):
+            if name is None:
                 return None
-            this_hex = "#" + names[0][len(prefix):]
+            this_hex = "#" + name[len(prefix):]
             if color is None:
                 color = this_hex
             elif color != this_hex:
                 return None
-            idx = self.body_text.index(f"{idx}+1c")
         return color
 
     def _refresh_format_buttons(self, event=None):
@@ -10678,8 +10844,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         changes and whenever a pending style is toggled."""
         if not hasattr(self, "_fmt_buttons"):
             return
-        self._resync_list_tags(int(self.body_text.index("insert").split(".")[0]))
-        self._refresh_list_buttons()
+        # The caret's line read once, for both, and only as far as they read
+        # it (_line_head): every key and click runs this.
+        line_no = int(self.body_text.index("insert").split(".")[0])
+        line = self._line_head(line_no)
+        self._resync_list_tags(line_no, line)
+        self._refresh_list_buttons(line)
         try:
             start = self.body_text.index("sel.first")
             end = self.body_text.index("sel.last")
@@ -13553,16 +13723,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     # ---------- In-note calculator ----------
 
-    def update_word_count(self):
+    def update_word_count(self, text=None):
         """Refresh the words · characters readout for the note body.
 
         Tables are counted by what the user wrote in them, not by their
         plumbing: every pipe used to count as a "word", so an empty 3x3
-        table claimed twelve words and inflated the reading time.
+        table claimed twelve words and inflated the reading time. *text*
+        is the body as its caller has just read it.
         """
         if not hasattr(self, "word_count_lbl"):
             return
-        text = self.body_text.get("1.0", "end-1c")
+        if text is None:
+            text = self.body_text.get("1.0", "end-1c")
+        self._word_count_due = False
         if core_tables.CELL in text:
             text = core_tables.content_text(text)
         chars = len(text)
@@ -18848,6 +19021,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Snapshot everything the editor currently holds, so a note tab can be
         set aside and restored later exactly as the user left it — including
         unsaved edits. This is the backbone of having several notes open."""
+        return self._capture_and_read()[0]
+
+    def _capture_and_read(self):
+        """capture_editor_state's snapshot, and the body's text it was read
+        from: a save made right after it, with nothing run in between, works
+        from that one read (save_current_note's *body_read*)."""
         # Grid cells buffer their edits in Entry widgets; anything captured
         # here -- autosave, tab switching, the dirty poll -- must see them
         # in the text, or a keystroke still sitting in a cell would be lost.
@@ -18856,6 +19035,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if title == "Note title...":
             title = ""
         date_raw = self._typed_date()
+        # The body read once, after the flush; its formatting and lines are
+        # worked out from that read rather than asked of Tk line by line.
+        text = self.body_text.get("1.0", "end-1c")
         return {
             "selected_note_id": self.selected_note_id,
             "occurrence_date": self.current_occurrence_date,
@@ -18863,9 +19045,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # Canonical, matching what the save stores -- see
             # with_caret_line. Without it, the dirty comparison reads a
             # table-ending note as changed forever.
-            "body": with_caret_line(self.body_text.get("1.0", "end-1c")),
-            "formatting": self._extract_formatting(self.body_text),
-            "paragraphs": self._extract_paragraphs(self.body_text),
+            "body": with_caret_line(text),
+            "formatting": self._extract_formatting(self.body_text, text),
+            "paragraphs": self._extract_paragraphs(self.body_text, text),
             "pending_styles": sorted(self._pending_styles),
             "pending_text_color": self._pending_text_color,
             "pending_font_size": self._pending_font_size,
@@ -18878,7 +19060,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "attachments": list(self.current_attachments),
             "recurrence": self.read_recurrence_from_ui(),
             "checklist": [dict(it) for it in self._get_checklist()],
-        }
+        }, text
 
     def restore_editor_state(self, st):
         """Load a previously captured editor state back into the live editor."""
@@ -19164,10 +19346,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.load_note(note, occurrence_date)
         self._remember_last_open_note(note["id"])
         # Keep a single-entry tab list so the save/flush machinery still works.
+        # Its snapshot is taken here, once (it was taken again at once).
         self._tab_counter += 1
         self.open_tabs = [{"key": self._tab_counter, "state": self.capture_editor_state()}]
         self.active_tab_index = 0
-        self._sync_editor_snapshot()
         # Moves the highlighted-card border to this note, without rebuilding
         # the whole list — switching notes happens constantly during normal
         # use, and a full refresh_note_list() here just to move a border was
@@ -19199,9 +19381,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return False
         self.new_note()
         self._tab_counter += 1
+        # The snapshot, taken once (see open_note_in_tab).
         self.open_tabs = [{"key": self._tab_counter, "state": self.capture_editor_state()}]
         self.active_tab_index = 0
-        self._sync_editor_snapshot()
         # Clears any previously-highlighted card's border — a blank new note
         # isn't "the" open note in the list. Same surgical update as
         # open_note_in_tab, not a full rebuild.
@@ -19277,7 +19459,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if leaving:
             self._settle_date_fields()
         try:
-            st = self.capture_editor_state()
+            st, body_read = self._capture_and_read()
         except Exception:
             self._log_swallowed("flush: capture_editor_state")
             return True
@@ -19297,7 +19479,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._holding_repeat_off = held or (
                     not leaving if hold_repeat_off is None else hold_repeat_off)
                 try:
-                    self.save_current_note(auto=True)
+                    self.save_current_note(auto=True, body_read=body_read)
                 finally:
                     self._holding_repeat_off = held
         except Exception:
@@ -19633,6 +19815,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._find_open = False
         self._find_missed = False
         self._find_clear()
+        # A count the keys left for the pause, now the hits are gone.
+        if getattr(self, "_word_count_due", False):
+            try:
+                self.update_word_count()
+            except Exception:
+                self._log_swallowed("find: word count on closing")
 
     def _find_clear(self):
         """Remove ONLY the find tags and the throwaway flash. No existing
@@ -21979,7 +22167,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         note["checklist"] = [dict(it) for it in self._get_checklist()]
         return rescued
 
-    def save_current_note(self, auto=False):
+    def save_current_note(self, auto=False, body_read=None):
+        """Store the editor in its note. *body_read* is the body's text as a
+        capture read it just before, nothing run since (_capture_and_read):
+        the autosave and the flush save from that read, not a second one."""
         title = self.title_entry.get().strip()
         if title == "Note title...":
             title = ""
@@ -21994,13 +22185,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # that draw is one newline short of the same body read after.
         # Storing the short form made every table-ending note look
         # permanently unsaved — canonical on both sides, always.
-        body = with_caret_line(self.body_text.get("1.0", "end-1c"))
+        if body_read is None:
+            body_read = self.body_text.get("1.0", "end-1c")
+        body = with_caret_line(body_read)
         # No remapping any more: `body` IS the widget's content, so span
         # offsets and paragraph line numbers already line up. The two
         # _for_stripped_body adapters existed only to undo the .strip()
         # above, and went with it.
-        formatting = self._extract_formatting(self.body_text)
-        paragraphs = self._extract_paragraphs(self.body_text)
+        formatting = self._extract_formatting(self.body_text, body_read)
+        paragraphs = self._extract_paragraphs(self.body_text, body_read)
         # As typed, less the one newline Tk keeps at the end -- the body's
         # rule (see above). A .strip() here ate a pasted code block's first
         # indent and every trailing blank line on each save, long after the
@@ -22391,8 +22584,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._put_back_stored_date_and_repeat()
             self._cancel_pending_autosave()
         # The saved note now matches disk; update this tab's snapshot so its
-        # dirty dot clears, and refresh the strip labels/markers.
-        self._sync_active_tab()
+        # dirty dot clears. Once: it was taken twice in a row.
         self._sync_editor_snapshot()
         self._update_restore_button()
         if reload_from_note:
