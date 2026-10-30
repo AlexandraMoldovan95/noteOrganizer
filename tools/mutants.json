@@ -11113,8 +11113,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                   if uid in here]\n",
-        "replace": "                   if True]\n"
+        "find": "                 if uid in here}\n",
+        "replace": "                 if True}\n"
       }
     ],
     "must_fail": [
@@ -11176,6 +11176,78 @@
     ],
     "suites": [
       "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX20",
+    "about": "words a full checklist kept waiting, then added by Add, stay said: typed again into the list full again, they wait in silence",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._waiting_said.pop(uid, None)       # ...and none was said\n",
+        "replace": "        pass\n"
+      }
+    ],
+    "must_fail": [
+      "words once added are no longer the words said"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX21",
+    "about": "words a full checklist kept waiting, then added by a way out with room, stay said: typed again into the list full again, they wait in silence",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        # into a full list, they kept waiting in silence (round 9).\n        self._waiting_said.pop(uid, None)\n",
+        "replace": "        # into a full list, they kept waiting in silence (round 9).\n        pass\n"
+      }
+    ],
+    "must_fail": [
+      "words once added are no longer the words said"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX22",
+    "about": "words a full checklist kept waiting are marked said before anything says them, and a cancelled sign-out's are never said",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                    return\n            self._checklist_full(items, text, waits=uid)\n",
+        "replace": "                    return\n                self._waiting_said[uid] = text\n            self._checklist_full(items, text, waits=uid)\n"
+      }
+    ],
+    "must_fail": [
+      "is remembered as said only when it is"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX23",
+    "about": "a close answered No, its question having named the waiting words, leaves them to be said again at the next way out",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._waiting_said.update(asked)\n",
+        "replace": "        pass\n"
+      }
+    ],
+    "must_fail": [
+      "is remembered as said only when it is"
+    ],
+    "suites": [
+      "qa3"
     ],
     "expect": "killed"
   },

@@ -898,7 +898,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._corrupt_notes_report = None  # (flag, preserved-copy path) if the notes file was unreadable
         # A note's uid -> the words its full checklist's Add box could not
         # take on the way out, given back to the box when it opens again --
-        # and the words "Checklist full" was said about, once a session.
+        # and the words already said to wait, by "Checklist full" or by the
+        # close's question, so they are said once (until they are added).
         self._add_box_waiting = {}
         self._waiting_said = {}
         self.notes = self.load_notes()
@@ -13286,11 +13287,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # out (round 8 of the audit). The close still asks.
                 if self._waiting_said.get(uid) == text:
                     return
-                self._waiting_said[uid] = text
-            self._checklist_full(items, text, waits=bool(uid))
+            self._checklist_full(items, text, waits=uid)
             return
         self._append_checklist_item(text)
         var.set("")
+        # Added, they are no longer the words that were said: typed again
+        # into a full list, they kept waiting in silence (round 9).
+        self._waiting_said.pop(uid, None)
 
     def _open_note_uid(self):
         """The identity of the note the editor holds, or None (a new note)."""
@@ -13328,7 +13331,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return  # the words stay in the box
         self._append_checklist_item(text)
         self.checklist_add_var.set("")
-        self._add_box_waiting.pop(self._open_note_uid(), None)    # added: none waits
+        uid = self._open_note_uid()
+        self._add_box_waiting.pop(uid, None)    # added: none waits
+        self._waiting_said.pop(uid, None)       # ...and none was said
         self._schedule_autosave()
         try:
             self.checklist_add_entry.focus_set()
@@ -20922,8 +20927,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         *text* was not added is said. The doors refuse what a start would
         cut (normalize_note): the 1,001st item was drawn and saved, then gone
         without a word at the next start (round 6 of the final audit).
-        *waits*: the words were taken from the Add box on the way out of the
-        note, and wait for it (_take_pending_checklist_item)."""
+        *waits*: the uid of the note whose Add box the words were taken from
+        on the way out, and wait for (_take_pending_checklist_item)."""
         if len(items) < MAX_CHECKLIST_ITEMS:
             return False
         # The window's close asks once about every item left waiting instead.
@@ -20936,6 +20941,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 + ("added. It waits in this note's Add box until you delete an "
                    "item to make room, while Note Organizer stays open."
                    if waits else "added. Delete an item to make room."))
+            # Remembered as said only once it is: marked before, words a
+            # cancelled sign-out took were never said at all (round 9).
+            if waits:
+                self._waiting_said[waits] = text
         return True
 
     def save_current_as_template(self):
@@ -23056,8 +23065,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Not for a note in the Trash: it asked about words of a note the
         # person had deleted (round 8). Kept meanwhile, a restore finds them.
         here = {n.get("uid") for n in self.notes}
-        waiting = [text for uid, text in self._add_box_waiting.items()
-                   if uid in here]
+        asked = {uid: text for uid, text in self._add_box_waiting.items()
+                 if uid in here}
+        waiting = list(asked.values())
+        # The question says them: answered No, the next way out of their
+        # note does not say them again (_waiting_said).
+        self._waiting_said.update(asked)
         if waiting and not self.ask_yes_no(
                 "Close without these items?",
                 f"A checklist can have up to {MAX_CHECKLIST_ITEMS:,} items, and "

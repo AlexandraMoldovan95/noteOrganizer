@@ -4244,6 +4244,88 @@ check(f'...and the close does not ask about the words of a note in the Trash '
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
 
+
+def _cs_lists(full_id):
+    """A note of 1,000 items and another to leave it for, both saved."""
+    full = NO.normalize_note({'id': full_id, 'title': 'Big list', 'body': 'b', 'checklist': [
+        {'text': 'item %d' % i, 'done': False} for i in range(1000)]})
+    other = NO.normalize_note({'id': full_id + 1, 'title': 'Other', 'body': 'x'})
+    app.notes = [full, other]; app.save_notes()
+    return full, other
+
+
+# ...and "once" is once for those words: added -- by Add, or by a way out of
+# the note once there was room -- they are no longer the words that were
+# said, and the same words typed into the list full again waited in silence
+# (round 9).
+_ca_said, _ca_seen = [], {}
+_ca_real = app.show_info
+app.show_info = lambda *a, **k: _ca_said.append(a[1] if len(a) > 1 else '')
+try:
+    for _ca_id, _ca_route in ((4263, 'Add'), (4265, 'a way out')):
+        _ca_full, _ca_other = _cs_lists(_ca_id)
+        app.open_note_in_tab(_ca_full); app.update()
+        app.checklist_add_var.set('buy more boxes')
+        app.open_note_in_tab(_ca_other); app.update()      # said: they wait
+        app.open_note_in_tab(_ca_full); app.update()       # back in the box
+        app._get_checklist().pop(0); app._render_checklist_items(); app.update()
+        if _ca_route == 'Add':
+            app._add_checklist_item(); app.update()
+        else:
+            app.open_note_in_tab(_ca_other); app.update()
+            app.open_note_in_tab(_ca_full); app.update()
+        _ca_items = len(app._get_checklist())
+        _ca_before = len(_ca_said)
+        app.checklist_add_var.set('buy more boxes')        # typed again, full again
+        app.open_note_in_tab(_ca_other); app.update()
+        _ca_seen[_ca_route] = (_ca_items, len(_ca_said) - _ca_before)
+finally:
+    app.show_info = _ca_real
+    app._add_box_waiting.clear()
+    app._waiting_said.clear()
+    app.checklist_add_var.set('')
+check(f'words once added are no longer the words said: typed again into the list full '
+      f'again, "Checklist full" says them again (items, then said: {_ca_seen})',
+      _ca_seen == {'Add': (1000, 1), 'a way out': (1000, 1)})
+app.new_note(); app.update()
+app.notes = []; app.save_notes()
+
+# ...and they are remembered as said only once they are: words a Windows
+# sign-out took, the sign-out then cancelled, were never said at all. A close
+# answered No has named them in its question, and the next way out keeps
+# silent (round 9).
+_cs_said, _cs_asked, _cs_seen = [], [], {}
+_cs_real = (app.show_info, app.ask_yes_no, app.destroy)
+app.show_info = lambda *a, **k: _cs_said.append(a[1] if len(a) > 1 else '')
+app.ask_yes_no = lambda t, *a, **k: (_cs_asked.append(t), False)[1]     # "No"
+app.destroy = lambda: None
+try:
+    _cs_full, _cs_other = _cs_lists(4267)
+    app.open_note_in_tab(_cs_full); app.update()
+    app.checklist_add_var.set('passport photos')
+    app.on_session_end(); app.update()
+    _cs_seen['at the sign-out'] = len(_cs_said)
+    app.open_note_in_tab(_cs_other); app.update()          # the sign-out was cancelled
+    _cs_seen['the next way out'] = len(_cs_said)
+    app.open_note_in_tab(_cs_full); app.update()
+    app.checklist_add_var.set('visa forms')
+    app.on_app_close(); app.update()
+    _cs_seen['at the close'] = (len(_cs_said), list(_cs_asked))
+    app.open_note_in_tab(_cs_other); app.update()
+    _cs_seen['after the close'] = len(_cs_said)
+finally:
+    app.show_info, app.ask_yes_no, app.destroy = _cs_real
+    app._add_box_waiting.clear()
+    app._waiting_said.clear()
+    app.checklist_add_var.set('')
+check(f'"Checklist full" is remembered as said only when it is, or the close has asked '
+      f'about the words ({_cs_seen})',
+      _cs_seen == {'at the sign-out': 0, 'the next way out': 1,
+                   'at the close': (1, ['Close without these items?']),
+                   'after the close': 1})
+app.new_note(); app.update()
+app.notes = []; app.save_notes()
+
 # A repeat turned off on the phone kept a day's own text only in the rescue
 # copy; here the next big delete made a copy of words alone, and the day's
 # text was in no file (round 6). A note read keeps those days in itself.
