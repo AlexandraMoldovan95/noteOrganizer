@@ -1335,8 +1335,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         behind it: a paste into its name was cut without a word. On the note's
         page it stands at the foot of the scrolled editor, mapped and out of
         sight at ordinary sizes, and a paste into the checklist's Add box was
-        cut without a word there too (_in_sight)."""
+        cut without a word there too (_in_sight).
+
+        The words stand as long as a banner does: the autosave a paste sets
+        off half a second later wrote "Auto-saved" over them on the line,
+        and "Note updated" over their banner (round 8 of the final audit)."""
         self.set_status(text)
+        self._box_words_until = time.monotonic() + self.TOAST_MS / 1000
         try:
             if self._in_sight(self.status_lbl):
                 return
@@ -1345,9 +1350,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         if say_here is not None:
             say_here(text)
+        elif self._offer_on_banner():
+            # Beneath an Undo still on offer, not over it, nor quiet under
+            # it: the line it would have stayed on is the one out of sight.
+            self._show_words_beneath(text)
         else:
-            # Not over an Undo still on offer: the words stay on the line.
-            self._show_toast(text, kind="info", yield_to_action=True)
+            # The newest words on the banner, and no older ones under it.
+            self._hide_words_beneath()
+            self._show_toast(text, kind="info")
 
     # How close to the cap the counter starts showing. Far enough out to be
     # a warning rather than a surprise, close enough that an ordinary title
@@ -21945,7 +21955,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             }))
             self.selected_note_id = new_id
             self._remember_last_open_note(new_id)
-            self.set_status(("Auto-saved " if auto else "Saved at ") + show_stamp(now))
+            self.set_status(("Auto-saved " if auto else "Saved at ") + show_stamp(now),
+                            reassurance=auto)
             if auto:
                 self._show_toast("Note created", yield_to_action=True)
         else:
@@ -22084,7 +22095,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._write_series_owned(note, date_value, recurrence,
                                          schedule=False)
                 note["updated"] = now
-                self.set_status(("Auto-saved " if auto else "Saved at ") + show_stamp(now))
+                self.set_status(("Auto-saved " if auto else "Saved at ") + show_stamp(now),
+                                reassurance=auto)
                 announce = auto
             else:
                 # Before overwriting, keep a one-step backup of the OLD version
@@ -22166,7 +22178,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     note["overrides"] = {}
                     note["moved"] = {}
                 self.set_status(("Auto-saved " if auto else "Saved at ") + show_stamp(now)
-                                + (self._REPEAT_OFF_KEPT if days_lost else ""))
+                                + (self._REPEAT_OFF_KEPT if days_lost else ""),
+                                reassurance=auto and not days_lost)
                 announce = auto
             # A series save can have just removed the recurrence — an
             # occurrence view of a note that no longer repeats is a lie
@@ -23137,7 +23150,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         "The import was stopped as Windows began to sign out or shut down, so "
         "nothing from the backup was kept. Import it again to bring it in.")
 
-    def set_status(self, text):
+    def set_status(self, text, reassurance=False):
+        # *reassurance* -- the autosave's own "Auto-saved" -- does not write
+        # over the words a limited box said a moment ago (_say_by_the_box):
+        # the paste they are about set off that very autosave.
+        if reassurance and time.monotonic() < getattr(self, "_box_words_until", 0):
+            return
         # A line naming what a save left out is put right by
         # _say_nothing_is_left_out only while it is still the line on
         # screen: any other words over it end that. Kept past them, the
@@ -23262,17 +23280,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """
         if not hasattr(self, "toast_frame"):
             return
-        if (yield_to_action and getattr(self, "_toast_hide_job", None) is not None
-                and (getattr(self, "_toast_action", None) is not None
-                     or getattr(self, "_toast_kind", None) == "error")):
-            # An offer is on screen right now and has been neither taken
-            # nor expired — both of those clear _toast_action, so this
-            # cannot mistake a stale one for a live offer. Nothing is
-            # lost by staying quiet: every caller that yields also writes
-            # the same news to the status line. An error on screen is
-            # yielded to as well: the autosave that follows a failed
-            # action within its delay covered "something went wrong" with
-            # "Note updated", and the one message that mattered was gone.
+        if yield_to_action and (self._offer_on_banner() or (
+                getattr(self, "_toast_hide_job", None) is not None
+                and getattr(self, "_toast_kind", None) == "info")
+                or getattr(self, "_words_hide_job", None) is not None):
+            # Nothing is lost by staying quiet: every caller that yields
+            # also writes the same news to the status line. Words on a
+            # banner are yielded to as well: the autosave a title's paste
+            # sets off covered "Pasted title shortened" with "Note updated"
+            # half a second after it came up (round 8 of the final audit).
             return
         color = {"success": self.colors["success"],
                  "info": self.colors["accent"],
@@ -23323,7 +23339,66 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 return
             self._hide_toast()
 
-        self._toast_hide_job = self.after(8000 if action else 1800, hide)
+        self._toast_hide_job = self.after(8000 if action else self.TOAST_MS, hide)
+
+    # How long a banner with nothing to offer stays up.
+    TOAST_MS = 1800
+
+    def _offer_on_banner(self):
+        """Whether the banner holds what must not be covered: an Undo neither
+        taken nor expired -- both clear _toast_action, so a stale one is never
+        taken for a live offer -- or an error. The autosave that follows a
+        failed action within its delay covered "something went wrong" with
+        "Note updated", and the one message that mattered was gone."""
+        return (getattr(self, "_toast_hide_job", None) is not None
+                and (getattr(self, "_toast_action", None) is not None
+                     or getattr(self, "_toast_kind", None) == "error"))
+
+    def _show_words_beneath(self, text):
+        """*text* on an info banner of its own, just beneath the banner, while
+        that holds an offer (_offer_on_banner): the Undo keeps its place and
+        its word, and the words are seen. Made at the first need, coloured
+        at each showing as the banner is."""
+        frame = getattr(self, "_words_frame", None)
+        try:
+            if frame is None:
+                frame = self._words_frame = tk.Frame(self)
+                self._words_lbl = tk.Label(frame, font=("Segoe UI", 9, "bold"),
+                                           padx=14, pady=6)
+                self._words_lbl.pack(side="left")
+            colour = self.colors["accent"]
+            frame.configure(bg=colour)
+            self._words_lbl.configure(text=f"i  {text}", bg=colour,
+                                      fg=letters_on(colour))
+            below = max(self.toast_frame.winfo_height(),
+                        self.toast_frame.winfo_reqheight())
+            frame.place(relx=0.5, rely=0.0, anchor="n", y=4 + below + 4)
+            frame.lift()
+        except tk.TclError:
+            return
+        job = getattr(self, "_words_hide_job", None)
+        if job is not None:
+            try:
+                self.after_cancel(job)
+            except (tk.TclError, ValueError):
+                pass
+        self._words_hide_job = self.after(self.TOAST_MS, self._hide_words_beneath)
+
+    def _hide_words_beneath(self):
+        """The banner of _show_words_beneath goes, if it stands."""
+        job = getattr(self, "_words_hide_job", None)
+        self._words_hide_job = None
+        if job is not None:
+            try:
+                self.after_cancel(job)
+            except (tk.TclError, ValueError):
+                pass
+        frame = getattr(self, "_words_frame", None)
+        if frame is not None:
+            try:
+                frame.place_forget()
+            except tk.TclError:
+                pass
 
 
 def _draw_sharp_on_scaled_screens():

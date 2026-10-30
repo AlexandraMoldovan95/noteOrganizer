@@ -10856,6 +10856,132 @@
     "expect": "killed"
   },
   {
+    "id": "RX02",
+    "about": "a paste cut to fit while an Undo is on offer is said only on the status line, out of sight",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self._show_words_beneath(text)\n",
+        "replace": "            pass\n"
+      }
+    ],
+    "must_fail": [
+      "a paste cut to fit while an Undo is on offer is said on a banner beneath it"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX03",
+    "about": "a paste cut to fit while an Undo is on offer takes the banner, and the Undo goes with it",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        elif self._offer_on_banner():\n",
+        "replace": "        elif False:\n"
+      }
+    ],
+    "must_fail": [
+      "a paste cut to fit while an Undo is on offer is said on a banner beneath it"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX04",
+    "about": "the words said beneath an Undo stand over it instead",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            frame.place(relx=0.5, rely=0.0, anchor=\"n\", y=4 + below + 4)\n",
+        "replace": "            frame.place(relx=0.5, rely=0.0, anchor=\"n\", y=4)\n"
+      }
+    ],
+    "must_fail": [
+      "a paste cut to fit while an Undo is on offer is said on a banner beneath it"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX05",
+    "about": "the autosave's Note updated covers the banner that says a title's paste was shortened",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                and getattr(self, \"_toast_kind\", None) == \"info\")\n",
+        "replace": "                and False)\n"
+      }
+    ],
+    "must_fail": [
+      "the autosave a title's paste sets off writes over neither the banner nor the line"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX15",
+    "about": "words said on the banner leave older words standing beneath it, the same sentence twice",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self._hide_words_beneath()\n            self._show_toast(text, kind=\"info\")\n",
+        "replace": "            self._show_toast(text, kind=\"info\")\n"
+      }
+    ],
+    "must_fail": [
+      "a paste cut to fit while an Undo is on offer is said on a banner beneath it"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX16",
+    "about": "the autosave's Note updated comes up over words still standing beneath a banner whose Undo was taken",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                or getattr(self, \"_words_hide_job\", None) is not None):\n",
+        "replace": "                ):\n"
+      }
+    ],
+    "must_fail": [
+      "a paste cut to fit while an Undo is on offer is said on a banner beneath it"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX06",
+    "about": "the autosave's Auto-saved writes over the line that says a title's paste was shortened",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if reassurance and time.monotonic() < getattr(self, \"_box_words_until\", 0):\n",
+        "replace": "        if False:\n"
+      }
+    ],
+    "must_fail": [
+      "the autosave a title's paste sets off writes over neither the banner nor the line"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
     "id": "DR91",
     "about": "a note read keeps a turned-off series' own-text days only in its rescue copy, as the phone wrote it",
     "edits": [

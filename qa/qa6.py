@@ -5271,6 +5271,138 @@ check(f"the note's page says a paste cut to fit where it is seen: in a banner "
       and _ns_seen.get('status line in sight, scrolled down') is True
       and _ns_seen.get('Add box, the line in sight') == (2000, []))
 
+# Round 8: while an Undo was on offer the banner stayed quiet "because the
+# words stay on the line" -- the line out of sight -- so a paste cut to fit
+# was said nowhere seen for the offer's eight seconds. The words stand on a
+# banner of their own beneath it, the offer untouched.
+_wb_seen = {}
+_wb_geo = app.geometry()
+_wb_real_read = NO.clipboard.read_text
+_wb_undone = []
+
+
+def _wb_state():
+    words = getattr(app, '_words_frame', None)
+    shown = words is not None and words.winfo_manager() == 'place'
+    app.update_idletasks()
+    return {'offer': (str(app.toast_lbl.cget('text')), app._toast_action is not None,
+                      app.toast_action_lbl.winfo_manager() == 'pack'),
+            'words': str(app._words_lbl.cget('text')) if shown else None,
+            'beneath': (shown and words.winfo_y()
+                        >= app.toast_frame.winfo_y() + app.toast_frame.winfo_height())}
+
+
+try:
+    app.geometry('900x600'); _kv_settle(6)
+    app.notebook.select(app.TAB_NOTES)
+    app.new_note(); _kv_settle(4)
+    if not app._checklist_open:
+        app.toggle_checklist_section()
+    _kv_settle(6)
+    app.editor_canvas.yview_moveto(0); _kv_settle(4)
+    _wb_seen['status line in sight'] = app._in_sight(app.status_lbl)
+    app._show_toast('Removed “milk”', action=lambda: _wb_undone.append(1))
+    _wb_seen['an Undo on offer'] = app._offer_on_banner()
+    NO.clipboard.read_text = lambda: 'x' * 2500
+    app.checklist_add_entry.delete(0, 'end')
+    app.checklist_add_entry.event_generate('<<Paste>>')
+    _kv_settle(3)
+    _wb_seen['Add box'] = (len(app.checklist_add_entry.get()), _wb_state())
+    app.clipboard_clear()
+    app.clipboard_append('T' * 300)
+    app.title_entry.delete(0, 'end')
+    app.title_entry.event_generate('<<Paste>>')
+    _kv_settle(3)
+    _wb_seen['title'] = (len(app.title_entry.get()), _wb_state())
+    app.title_entry.delete(0, 'end')     # no note is made of it meanwhile
+    app._run_toast_action()
+    _wb_seen['the Undo still taken'] = _wb_undone == [1]
+    # The offer gone, its words still beneath: the autosave's reassurance
+    # waits for them as it waits for words on the banner.
+    app._show_toast('Note updated', yield_to_action=True)
+    _wb_seen['Note updated after the Undo'] = app.toast_frame.winfo_manager() == 'place'
+    # ...and the next words go on the banner, the older ones beneath gone.
+    app.checklist_add_entry.delete(0, 'end')
+    app.checklist_add_entry.event_generate('<<Paste>>')
+    _kv_settle(3)
+    _wb_seen['no offer'] = _wb_state()
+finally:
+    NO.clipboard.read_text = _wb_real_read
+    app.checklist_add_entry.delete(0, 'end')
+    app._hide_toast()
+    app._hide_words_beneath()
+    app.geometry(_wb_geo); _kv_settle(6)
+_wb_offer = ('✓  Removed “milk”', True, True)
+check(f"a paste cut to fit while an Undo is on offer is said on a banner beneath it, "
+      f"the offer untouched ({_wb_seen})",
+      _wb_seen.get('status line in sight') is False
+      and _wb_seen.get('an Undo on offer') is True
+      and _wb_seen.get('Add box') == (2000, {
+          'offer': _wb_offer, 'beneath': True,
+          'words': 'i  Pasted text shortened: a checklist item can be up to 2,000 characters'})
+      and _wb_seen.get('title') == (200, {
+          'offer': _wb_offer, 'beneath': True,
+          'words': 'i  Pasted title shortened to 200 characters'})
+      and _wb_seen.get('the Undo still taken') is True
+      and _wb_seen.get('Note updated after the Undo') is False
+      and _wb_seen.get('no offer') == {
+          'offer': ('i  Pasted text shortened: a checklist item can be up to 2,000 '
+                    'characters', False, False),
+          'beneath': False, 'words': None})
+
+# ...and the autosave the title's paste sets off, half a second later, wrote
+# "Note updated" over that banner and "Auto-saved" over the line (round 8):
+# reassurance yields to the words, on the banner and on the line in sight.
+_wa_seen = {}
+_wa_geo = app.geometry()
+_wa_kept_notes = list(app.notes)
+_wa_paste = ' and ' + 'more words ' * 30
+
+
+def _wa_run(in_sight):
+    app.new_note(); _kv_settle(2)        # the last run's note left, as it stands
+    note = NO.normalize_note({'id': 4801, 'title': 'Groceries', 'body': 'b'})
+    app.notes = [note]; app.save_notes()
+    app.open_note_in_tab(note); _kv_settle(4)
+    app.editor_canvas.yview_moveto(1.0 if in_sight else 0); _kv_settle(4)
+    app._hide_toast()
+    app._hide_words_beneath()
+    app._box_words_until = 0
+    seen = {'status line in sight': app._in_sight(app.status_lbl)}
+    app.title_entry.icursor('end')
+    app.clipboard_clear()
+    app.clipboard_append(_wa_paste)
+    app.title_entry.event_generate('<<Paste>>')
+    app._autosave_now()                 # what Ctrl+V's release sets off
+    with open(NO.DATA_FILE, encoding='utf-8') as fh:
+        stored = next((n for n in _json6a.load(fh) if n.get('id') == 4801), {})
+    seen['saved'] = len(stored.get('title') or '')
+    seen['banner'] = (str(app.toast_lbl.cget('text'))
+                      if app.toast_frame.winfo_manager() == 'place' else None)
+    seen['line'] = str(app.status_lbl.cget('text'))
+    return seen
+
+
+try:
+    app.geometry('900x600'); _kv_settle(6)
+    app.notebook.select(app.TAB_NOTES)
+    _wa_seen['out of sight'] = _wa_run(False)
+    _wa_seen['in sight'] = _wa_run(True)
+finally:
+    app._hide_toast()
+    app.new_note(); _kv_settle(2)
+    app.notes = _wa_kept_notes; app.save_notes()
+    app.refresh_note_list()
+    app.geometry(_wa_geo); _kv_settle(6)
+_wa_words = 'Pasted title shortened to 200 characters'
+check(f"the autosave a title's paste sets off writes over neither the banner nor the "
+      f"line that say it was shortened ({_wa_seen})",
+      _wa_seen.get('out of sight') == {'status line in sight': False, 'saved': 200,
+                                       'banner': 'i  ' + _wa_words, 'line': _wa_words}
+      and _wa_seen.get('in sight', {}).get('status line in sight') is True
+      and _wa_seen['in sight'].get('saved') == 200
+      and _wa_seen['in sight'].get('line') == _wa_words)
+
 # ...and a title is weighed as it goes in, on one line: a line copied with its
 # line break, or Windows' CR LF, was "shortened" by the space it lost.
 _tw_told, _tw_kept = [], {}
