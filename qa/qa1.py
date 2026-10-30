@@ -9416,6 +9416,93 @@ check('find/theme: the bar border follows the accent',
 app._close_find()
 app.update()
 
+# A letter Tcl lowers into fewer bytes ("İ", the Kelvin sign) moved every hit
+# after it on its line one place, and Tk's search lost some (round 9). Read
+# in Python, each hit is where its words are.
+set_body('İstanbul word K word K')
+app._open_find()
+app._find_case.set(False)
+_fs_word = [app.body_text.get(m['start'], m['end']) for m in app._find_scan_model('word')]
+_fs_k = [app.body_text.get(m['start'], m['end']) for m in app._find_scan_model('k')]
+app._close_find()
+app.update()
+check(f'find: a hit after a letter whose lower case is shorter is highlighted on its '
+      f'own words ({_fs_word}, {_fs_k})',
+      _fs_word == ['word', 'word'] and _fs_k == ['K', 'K'])
+
+# The bar open, every pause rescans, and Tk's search measured the line from
+# its start for each hit: 1,000 hits among bold words took 15 s (round 9).
+# Each shape against its half, in this run, the quickest of three.
+import gc as _fq_gc
+
+
+def _fq_quickest(fn):
+    best = None
+    for _ in range(3):
+        _fq_gc.collect()
+        started = time.perf_counter()
+        fn()
+        took = time.perf_counter() - started
+        best = took if best is None else min(best, took)
+    return best
+
+
+def _fq_timed(text, query, bold=0):
+    set_body(text)
+    for i in range(bold):
+        app.body_text.tag_add('bold', f'1.{i * 10}', f'1.{i * 10 + 4}')
+    app._open_find()
+    app._find_case.set(False)
+    read = app.body_text.get('1.0', 'end-1c')
+    took = _fq_quickest(lambda: app._find_prose(query, True, read))
+    hits = len(app._find_prose(query, True, read))
+    app._close_find()
+    app.update()
+    return took, hits
+
+
+_fq_seen = {}
+for _fq_name, _fq_make in (
+        ('every other word bold', lambda n: (('word ' * n), 'word', n // 2)),
+        ('hits 50 characters apart', lambda n: (('word' + 'w' * 45 + ' ') * n, 'word', 0)),
+        ('an emoji 50 characters apart', lambda n: (('\U0001F389' + 'w' * 49) * n,
+                                                   '\U0001F389', 0))):
+    _fq_n = 250 if _fq_name == 'every other word bold' else 1000
+    _fq_half = _fq_timed(*_fq_make(_fq_n))
+    _fq_whole = _fq_timed(*_fq_make(2 * _fq_n))
+    _fq_seen[_fq_name] = (_fq_half, _fq_whole)
+    check(f'find: {_fq_name}, twice the hits on one line take about twice the time '
+          f'({_fq_half[1]} hits {_fq_half[0] * 1000:.1f} ms, {_fq_whole[1]} hits '
+          f'{_fq_whole[0] * 1000:.1f} ms)',
+          _fq_half[1] == _fq_n and _fq_whole[1] == 2 * _fq_n
+          and _fq_whole[0] < 2.6 * _fq_half[0] + 0.005)
+
+
+# ...and its walk of the tables split the note, and asked every grid where it
+# starts, once for each table: twice the tables, four times the work.
+def _fq_tables(count):
+    set_body('\n'.join('| zq%d | b |\n|---|---|\n| c | d |\n%s' % (i, 'prose ' * 330)
+                       for i in range(count)))
+    app._render_table_grids()
+    app.update()
+    app._open_find()
+    app._find_case.set(False)
+    took = _fq_quickest(lambda: app._find_scan_model('zq'))
+    cells = len([m for m in app._find_scan_model('zq') if m['kind'] == 'cell'])
+    app._close_find()
+    app.update()
+    return took, cells
+
+
+_fq_t50 = _fq_tables(50)
+_fq_t200 = _fq_tables(200)
+set_body('')
+check(f'find: four times the tables take about four times the time '
+      f'(50: {_fq_t50[1]} cells {_fq_t50[0] * 1000:.1f} ms, 200: {_fq_t200[1]} cells '
+      f'{_fq_t200[0] * 1000:.1f} ms)',
+      _fq_t50[1] == 50 and _fq_t200[1] == 200
+      and _fq_t200[0] < 6 * _fq_t50[0] + 0.005)
+
 # ============================================================
 # THE PALETTE: FILLS, THE WORDS ON THEM, AND THE TEXT SHADES
 # ============================================================

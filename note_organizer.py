@@ -581,6 +581,35 @@ def _whole_number(text):
         return False
 
 
+@functools.lru_cache(maxsize=1)
+def _tcl_lower_table():
+    """Each character of the basic plane as Tcl lowers it on its own, as
+    Tk's -nocase search compares: one for one (its simple case mapping),
+    and left as it is when its lower case takes more UTF-8 bytes, as
+    Tcl_UtfToLower leaves it. str.lower() makes two characters of "İ"."""
+    table = {}
+    for code in range(0x10000):
+        if 0xD800 <= code <= 0xDFFF:
+            continue
+        upper = chr(code)
+        low = "i" if code == 0x130 else upper.lower()
+        if (len(low) == 1 and low != upper
+                and len(low.encode("utf-8")) <= len(upper.encode("utf-8"))):
+            table[code] = low
+    return table
+
+
+def _tcl_lower(text):
+    """*text* lowered as Tk's -nocase search lowers it (_tcl_lower_table)."""
+    return text.translate(_tcl_lower_table())
+
+
+def _index_key(index):
+    """A Tk text index, "line.col", as (line, col), to compare in Python."""
+    line, col = str(index).split(".")
+    return int(line), int(col)
+
+
 # One round trip for a whole snapshot: where the embedded windows sit, then
 # one "tag ranges" string per tag, in the order asked. Tag names travel as
 # a real Tcl list, so a font family with a space in it is still one name.
@@ -19695,65 +19724,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         the way info['cells'] is (separator excluded)."""
         nocase = not self._find_case.get()
         needle = query.lower() if nocase else query
-        matches = []
         b = self.body_text
-        # Prose. An astral char in the pattern SEGFAULTS Tcl's -nocase
-        # text search outright (Linux Tk 8.6; reproduced in a bare Text,
-        # needle "😀ok"), so a query holding one never reaches Tcl at
-        # all: scan the same prose in Python and convert offsets with
-        # _tk_col — the same units boundary as everywhere else. The
-        # hide-tag skip below drops the elided table text Python can see
-        # but Tk's own search would have skipped.
-        astral_query = any(ord(ch) > 0xFFFF for ch in query)
-        if astral_query:
-            for li, line in enumerate(
-                    b.get("1.0", "end-1c").split("\n"), start=1):
-                hay = line.lower() if nocase else line
-                at = hay.find(needle)
-                while at != -1 and len(matches) < self.FIND_MATCH_CAP:
-                    pos = f"{li}.{self._tk_col(line, at)}"
-                    end = f"{li}.{self._tk_col(line, at + len(query))}"
-                    if not b.tag_nextrange(self.TABLE_HIDE_TAG, pos, end):
-                        matches.append({"kind": "prose", "start": pos,
-                                        "end": end, "line": li,
-                                        "col": int(pos.split(".")[1])})
-                    at = hay.find(needle, at + 1)
-                if len(matches) >= self.FIND_MATCH_CAP:
-                    break
-        countv = tk.IntVar()
-        start = "1.0"
-        while not astral_query and len(matches) < self.FIND_MATCH_CAP:
-            pos = b.search(query, start, stopindex="end", nocase=nocase,
-                           count=countv)
-            if not pos:
-                break
-            n = countv.get() or self._tk_units(query)
-            line = int(pos.split(".")[0])
-            col = int(pos.split(".")[1])
-            # `n` is UTF-16 units (what search -count returns, and what
-            # index COLUMNS count) while "+Nc" arithmetic counts
-            # CHARACTERS — so a matched astral emoji widened the range by
-            # one character apiece and the highlight swallowed whatever
-            # followed the match. Stay in units on both sides.
-            end = f"{line}.{col + n}"
-            start = f"{pos}+1c"
-            # Drop a hit that spans an elided table (search concatenates the
-            # prose on either side): it would tag hidden cells and double a
-            # cell hit.
-            if b.tag_nextrange(self.TABLE_HIDE_TAG, pos, end):
-                continue
-            matches.append({"kind": "prose", "start": pos, "end": end,
-                            "line": line, "col": col})
-        # Table cells: read the plain text, walk each block's DATA rows.
         text = b.get("1.0", "end-1c")
+        matches = self._find_prose(query, nocase, text)
+        # Table cells: read the plain text, walk each block's DATA rows. The
+        # note split, and each grid's line asked, once: per block, both grew
+        # with the tables times the note (round 9).
+        lines = text.split("\n")
+        grids = {}
+        for info in getattr(self, "_table_grids", []):
+            grids.setdefault(self._grid_first_line(info), info)
         for first0, last0 in core_tables.find_blocks(text):
-            info = self._grid_at_line(first0 + 1)
+            info = grids.get(first0 + 1)
             if info is None:
                 continue  # typed pipes not yet a grid -> already prose above
-            live_first = self._grid_first_line(info)
-            if live_first is None:
-                continue
-            block = text.split("\n")[first0:last0 + 1]
+            live_first = first0 + 1
+            block = lines[first0:last0 + 1]
             sep_at = core_tables.separator_index(block)
             data_r = 0
             for i, line_text in enumerate(block):
@@ -19775,6 +19761,111 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # (table window) line via the large sortcol.
         matches.sort(key=lambda m: (m["line"], m.get("sortcol", m.get("col", 0))))
         return matches
+
+    def _find_prose(self, query, nocase, text):
+        """The prose matches of *query* in the body (*text*, as read), top
+        to bottom, no more than FIND_MATCH_CAP: Tk ranges, as Tk's own search
+        gives them -- the shown text of each line, case folded as Tk folds
+        it, overlapping hits each one -- found in Python, each line read
+        once. Tk's search, asked once a hit, measured its line again from the
+        start each time: 15 s a rescan, the bar open, on a paragraph of 1,000
+        hits with bold words in it, at every pause in typing (round 9)."""
+        b = self.body_text
+        cap = self.FIND_MATCH_CAP
+        matches = []
+        hidden = b.tag_ranges(self.TABLE_HIDE_TAG)
+        starts = sorted(_index_key(at) for at in hidden[::2])
+
+        def crosses(line, col, end):
+            # A hidden table begins inside the hit: tag_nextrange's answer.
+            at = bisect.bisect_left(starts, (line, col))
+            return at < len(starts) and starts[at] < (line, end)
+
+        def hit(line, col, end):
+            if not crosses(line, col, end):
+                matches.append({"kind": "prose", "start": f"{line}.{col}",
+                                "end": f"{line}.{end}", "line": line, "col": col})
+            return len(matches) >= cap
+
+        if not query:
+            return matches
+        if any(ord(ch) > 0xFFFF for ch in query):
+            # An astral char in the pattern SEGFAULTS Tcl's -nocase search
+            # (Linux Tk 8.6, "😀ok"): the prose read as Python reads it.
+            needle = query.lower() if nocase else query
+            for li, line in enumerate(text.split("\n"), start=1):
+                hay = line.lower() if nocase else line
+                at, seen, col = hay.find(needle), 0, 0
+                while at != -1:
+                    col += self._tk_units(line[seen:at])
+                    seen = at
+                    if hit(li, col, col + self._tk_units(line[at:at + len(query)])):
+                        return matches
+                    at = hay.find(needle, at + 1)
+            return matches
+        if "\n" in query:
+            # Across lines: Tk's own search, which joins them. Only a paste
+            # puts a line break in the box, and a hit then takes a line.
+            countv = tk.IntVar()
+            start = "1.0"
+            while len(matches) < cap:
+                pos = b.search(query, start, stopindex="end", nocase=nocase,
+                               count=countv)
+                if not pos:
+                    break
+                line, col = _index_key(pos)
+                # Units, as -count and index columns count: "+Nc" counts
+                # characters, and an emoji widened the range by one.
+                end = f"{line}.{col + (countv.get() or self._tk_units(query))}"
+                start = f"{pos}+1c"
+                if not b.tag_nextrange(self.TABLE_HIDE_TAG, pos, end):
+                    matches.append({"kind": "prose", "start": pos, "end": end,
+                                    "line": line, "col": col})
+            return matches
+        fold = _tcl_lower if nocase else str
+        needle = fold(query)
+        windows = {}
+        for _kind, _name, index in b.dump("1.0", "end", window=True):
+            line, col = _index_key(index)
+            windows.setdefault(line, set()).add(col)
+        hides = {}
+        for first, last in zip(hidden[::2], hidden[1::2]):
+            (l1, c1), (l2, c2) = _index_key(first), _index_key(last)
+            for line in range(l1, l2 + 1):
+                hides.setdefault(line, []).append(
+                    (c1 if line == l1 else 0, c2 if line == l2 else None))
+        for li, line in enumerate(text.split("\n"), start=1):
+            cols = None
+            if li in windows or li in hides:
+                line, cols = self._find_shown(line, windows.get(li, ()), hides.get(li, ()))
+            hay = fold(line)
+            at, seen, col = hay.find(needle), 0, 0
+            while at != -1:
+                last = at + len(needle) - 1
+                if cols is None:
+                    col += self._tk_units(line[seen:at])
+                    seen = at
+                    end = col + self._tk_units(line[at:last + 1])
+                else:
+                    col, end = cols[at], cols[last] + self._tk_units(line[last])
+                if hit(li, col, end):
+                    return matches
+                at = hay.find(needle, at + 1)
+        return matches
+
+    @staticmethod
+    def _find_shown(line, windows, hides):
+        """What Tk's search reads of a line holding a drawn table's window
+        or hidden text: the characters shown, and each one's Tk column."""
+        shown, cols, col = [], [], 0
+        for ch in line:
+            while col in windows:
+                col += 1
+            if not any(lo <= col and (hi is None or col < hi) for lo, hi in hides):
+                shown.append(ch)
+                cols.append(col)
+            col += 2 if ord(ch) > 0xFFFF else 1
+        return "".join(shown), cols
 
     def _find_debounce_fire(self, reveal):
         """The debounced rescan, run by its own timer -- the only place

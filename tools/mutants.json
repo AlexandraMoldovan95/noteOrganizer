@@ -11347,6 +11347,97 @@
     "expect": "killed"
   },
   {
+    "id": "RX29",
+    "about": "the find bar asks Tk's search once for each hit, which measures the line from its start each time: a paragraph of hits among bold words takes seconds at every pause",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if \"\\n\" in query:\n",
+        "replace": "        if True:\n"
+      }
+    ],
+    "must_fail": [
+      "find: every other word bold, twice the hits on one line take about twice the time",
+      "find: a hit after a letter whose lower case is shorter is highlighted on its"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX30",
+    "about": "the find bar measures a line from its start for each hit, and a line of many hits grows with its square",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                    col += self._tk_units(line[seen:at])\n                    seen = at\n                    end = col + self._tk_units(line[at:last + 1])\n",
+        "replace": "                    col = self._tk_units(line[:at])\n                    seen = at\n                    end = col + self._tk_units(line[at:last + 1])\n"
+      }
+    ],
+    "must_fail": [
+      "find: hits 50 characters apart, twice the hits on one line take about twice the time"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX31",
+    "about": "the find bar measures a line from its start for each hit of a query holding an emoji, and a line of many hits grows with its square",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                    col += self._tk_units(line[seen:at])\n                    seen = at\n                    if hit(li, col, col + self._tk_units(line[at:at + len(query)])):\n",
+        "replace": "                    col = self._tk_units(line[:at])\n                    seen = at\n                    if hit(li, col, col + self._tk_units(line[at:at + len(query)])):\n"
+      }
+    ],
+    "must_fail": [
+      "find: an emoji 50 characters apart, twice the hits on one line take about twice the time"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX32",
+    "about": "the find bar's walk of the tables splits the whole note again for each table",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            block = lines[first0:last0 + 1]\n            sep_at = core_tables.separator_index(block)\n            data_r = 0\n",
+        "replace": "            block = text.split(\"\\n\")[first0:last0 + 1]\n            sep_at = core_tables.separator_index(block)\n            data_r = 0\n"
+      }
+    ],
+    "must_fail": [
+      "find: four times the tables take about four times the time"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX33",
+    "about": "the find bar's walk of the tables asks every grid where it starts, once for each table",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            info = grids.get(first0 + 1)\n",
+        "replace": "            info = self._grid_at_line(first0 + 1)\n"
+      }
+    ],
+    "must_fail": [
+      "find: four times the tables take about four times the time"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
     "id": "DR91",
     "about": "a note read keeps a turned-off series' own-text days only in its rescue copy, as the phone wrote it",
     "edits": [
