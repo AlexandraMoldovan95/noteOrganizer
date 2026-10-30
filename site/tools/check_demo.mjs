@@ -1,6 +1,11 @@
 // Walks the built site in a real browser and photographs it.
 //
-//   node tools/check_demo.mjs <folder for the photographs>
+//   py tools/check_demo.py <folder for the photographs>
+//
+// Only through that door, which takes the computer's turn, holds Edge's
+// whole tree of processes in its job object and gives the walk a time
+// limit. Started bare, a walk stopped midway left headless Edge running
+// (final audit, round eight); started bare, it refuses.
 //
 // Serves public/ on 127.0.0.1 with the headers Netlify will send
 // (public/_headers, the Content-Security-Policy included), drives Microsoft
@@ -15,6 +20,14 @@ import path from "node:path";
 import os from "node:os";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+
+// The door's mark: a scratch folder of its run's own, marked as tools/guest.py
+// marks one. Edge's profile goes in it, so a killed run's is swept later.
+const DOOR = process.env.NOTEORG_GUEST_DOOR;
+if (!DOOR || !fs.existsSync(path.join(DOOR, ".noteorg-scratch"))) {
+  console.log("Run the walk through its door: py site/tools/check_demo.py <folder for the photographs>");
+  process.exit(2);
+}
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.resolve(HERE, "..", "public");
@@ -69,7 +82,8 @@ const BASE = `http://127.0.0.1:${server.address().port}`;
 
 // ---- Edge over the DevTools protocol ----
 
-const profile = fs.mkdtempSync(path.join(os.tmpdir(), "no-site-edge-"));
+const profile = path.join(DOOR, "edge-profile");
+fs.mkdirSync(profile);
 const port = 9300 + Math.floor(Math.random() * 500);
 const edge = spawn(EDGE, ["--headless=new", `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`,
   "--no-first-run", "--no-default-browser-check", "--disable-extensions", "--hide-scrollbars",
@@ -98,10 +112,21 @@ ws.addEventListener("message", (ev) => {
     msg.error ? fail(new Error(JSON.stringify(msg.error))) : ok(msg.result);
   } else if (msg.method) listeners.forEach((l) => l(msg));
 });
+// Every question to Edge has a time limit: an Edge that stops answering
+// fails the walk, and the clean-up below still runs.
+const ANSWER_MS = 120000;
 function send(method, params = {}, sessionId) {
   const id = nextId++;
   ws.send(JSON.stringify({ id, method, params, sessionId }));
-  return new Promise((ok, fail) => pending.set(id, { ok, fail }));
+  const answer = new Promise((ok, fail) => {
+    const timer = setTimeout(() => {
+      pending.delete(id);
+      fail(new Error(`Edge did not answer ${method} within ${ANSWER_MS / 1000} s`));
+    }, ANSWER_MS);
+    pending.set(id, { ok: (v) => { clearTimeout(timer); ok(v); }, fail: (e) => { clearTimeout(timer); fail(e); } });
+  });
+  answer.catch(() => {});   // its caller sees the failure; node must not end on it unawaited
+  return answer;
 }
 
 const { targetId } = await send("Target.createTarget", { url: "about:blank" });
@@ -141,11 +166,18 @@ async function viewport(width, height, mobile, scheme, motion = "no-preference")
   await page("Emulation.setTouchEmulationEnabled", { enabled: mobile });
 }
 
-function nextLoad() {
-  return new Promise((ok) => {
-    const l = (msg) => { if (msg.sessionId === sessionId && msg.method === "Page.loadEventFired") { listeners.splice(listeners.indexOf(l), 1); ok(); } };
+function nextLoad(ms = 60000) {
+  const loaded = new Promise((ok, fail) => {
+    const timer = setTimeout(() => {
+      const at = listeners.indexOf(l);
+      if (at >= 0) listeners.splice(at, 1);
+      fail(new Error(`a page did not finish loading within ${ms / 1000} s`));
+    }, ms);
+    const l = (msg) => { if (msg.sessionId === sessionId && msg.method === "Page.loadEventFired") { listeners.splice(listeners.indexOf(l), 1); clearTimeout(timer); ok(); } };
     listeners.push(l);
   });
+  loaded.catch(() => {});   // a walk that stopped before awaiting it must not end node on it
+  return loaded;
 }
 
 async function go(url) {

@@ -9,6 +9,13 @@
 #   -> a note written -> update -> start -> uninstall -> reinstall -> start.
 #   After each step: what the profile notebook holds, what the package's
 #   private copy holds, and whether AppData's is intact.
+#
+# The first line refuses anywhere but the sandbox: on this computer it would
+# trust a test certificate and write over AppData's NoteOrganizer notebook,
+# where the built app kept the owner's until 2026-10-27 (tools/check_guest.py
+# holds every script here to such a first line).
+
+if ($env:USERNAME -ne 'WDAGUtilityAccount' -and $PSCommandPath -ne 'C:\pkg\sandbox_test.ps1') { Write-Output 'sandbox_test.ps1 runs only inside Windows Sandbox: double-click the .wsb that tools/msix/make_sandbox_test.py writes.'; exit 2 }
 
 $ErrorActionPreference = 'Continue'
 $log = 'C:\out\result.txt'

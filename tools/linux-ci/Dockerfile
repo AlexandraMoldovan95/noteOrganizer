@@ -12,9 +12,10 @@
 #   py tools/linux_ci.py --build
 #   py tools/linux_ci.py              # the whole suite
 #   py tools/linux_ci.py qa5          # one script
-# The repo is mounted read-only and run_tests.py does its own scratch-copy
-# ritual inside the container's /tmp. The runner gives the container a
-# name, a memory limit, a time limit and docker's init, and ends it when
+# A copy of what git tracks is mounted read-only, and run_tests.py does its
+# own scratch-copy ritual inside the container's /tmp (a sized tmpfs). The
+# runner gives the container a name, a memory limit, a time limit, no
+# network and docker's init, and ends it when
 # the runner goes: a killed docker client leaves a container running on
 # (final audit, round seven). The ENTRYPOINT below is what CI's leg does;
 # the runner replaces it with its bounded one, so changing it means a

@@ -6,7 +6,7 @@ of memory, its desktop window manager crashed, and the shadow copies of C:
 were deleted under the load (ISSUES_LOG: "The test that took the computer
 down"). Three heavy jobs were running at once. Every runner calls
 ``settle()`` first, before it builds the app or starts anything, and it does
-three things:
+these things:
 
 1. One heavy job at a time, on the whole machine. A run takes an OS lock on
    ``noteorg-guest.lock`` in the temporary folder, which the OS frees when
@@ -34,6 +34,14 @@ three things:
    the suite (final audit, round eight). USERPROFILE is left as it is: git
    and docker read their settings there, and only the built app keeps a
    notebook under it.
+5. A floor under the disk. On Windows a heavy run does not start, and
+   ends itself and everything it started, when the drive its scratch is on
+   has less than DISK_FLOOR_MB free: nothing else bounds what a runaway
+   test writes, and a full C: is where Windows deletes its restore points.
+
+A runner in another language (a browser walk in JavaScript) is started
+through a Python door that settles first and hands it DOOR_ENV, a marked
+scratch folder of the run's own; the script refuses to start without it.
 
 The figures are sized from measurements (qa/README, "Running anything
 here"), not from the incident. The scratch stays on the system's temporary
@@ -44,12 +52,25 @@ failed, and the notebooks the tests stand in for live on NTFS.
 import json
 import os
 import shutil
+import stat
 import sys
 import tempfile
+import threading
 import time
 
 PER_PROCESS_MB = 1024
 ALL_TOGETHER_MB = 2048
+# What a heavy run leaves free on its scratch's drive: room for Windows to
+# page out a whole run at its ceiling (ALL_TOGETHER_MB), and 1 GB for
+# itself. Overridden by DISK_ENV (in MB; 0 turns it off).
+DISK_FLOOR_MB = ALL_TOGETHER_MB + 1024
+DISK_ENV = "NOTEORG_GUEST_DISK_FLOOR_MB"
+# How often a run looks, in seconds, and its exit code when it is short.
+DISK_POLL_S = 2
+DISK_LOW = 74
+# Set by a Python door for the script in another language it starts: a
+# marked scratch folder of the run's own, which the script checks for.
+DOOR_ENV = "NOTEORG_GUEST_DOOR"
 
 # Where the lock lives: the temporary folder, or this (the gate's own tests).
 LOCK_DIR_ENV = "NOTEORG_GUEST_LOCK_DIR"
@@ -84,9 +105,10 @@ _token = None
 def settle(per_process_mb=PER_PROCESS_MB, all_together_mb=ALL_TOGETHER_MB,
            label=None, heavy=True, wait_s=None):
     """Give this run homes of its own, take its turn (when heavy), set the
-    memory ceiling, and remove what dead runs left. Returns the lines a
-    runner prints. A run that does not get its turn within ``wait_s`` exits
-    with BUSY; a ceiling the OS will not set is said, never silent, and
+    memory ceiling, remove what dead runs left, and keep a floor under the
+    disk. Returns the lines a runner prints. A run that does not get its
+    turn within ``wait_s`` exits with BUSY, one short of disk with
+    DISK_LOW; a ceiling the OS will not set is said, never silent, and
     never refuses a run."""
     homes = own_homes()   # first, before anything could start the app's code
     lines = []
@@ -98,7 +120,97 @@ def settle(per_process_mb=PER_PROCESS_MB, all_together_mb=ALL_TOGETHER_MB,
         swept = sweep()
         if swept:
             lines.append(swept)
+        # After the sweep, which may give back what dead runs left.
+        floor = guard_disk()
+        if floor:
+            lines.append(floor)
     return lines
+
+
+def guard_disk(floor_mb=None):
+    """Refuse a heavy run below the floor, and watch the drive while it
+    runs; returns the line to print, or '' where there is no floor. Only
+    where this run holds a job to end everything with (Windows): the Linux
+    image's /tmp is a tmpfs sized inside its memory limit (linux_ci.py)."""
+    if _job is None or _watching:
+        return ""
+    if floor_mb is None:
+        try:
+            floor_mb = int(os.environ.get(DISK_ENV, DISK_FLOOR_MB))
+        except ValueError:
+            floor_mb = DISK_FLOOR_MB
+    if floor_mb <= 0:
+        return ""
+    folder = tempfile.gettempdir()
+    free = _free_mb(folder)
+    if free is not None and free < floor_mb:
+        print("disk    : REFUSED -- %s has %s MB free, under the floor of %s MB a run "
+              "leaves; free some space and try again" % (folder, format(free, ","),
+                                                          format(floor_mb, ",")), flush=True)
+        raise SystemExit(DISK_LOW)
+    _watching.append(floor_mb)
+    threading.Thread(target=_watch_disk, args=(folder, floor_mb), daemon=True).start()
+    return ("disk    : %s MB free where runs write; this run ends itself below %s MB"
+            % ("?" if free is None else format(free, ","), format(floor_mb, ",")))
+
+
+_watching = []   # the floor, once a run watches its drive
+
+
+def _free_mb(folder):
+    try:
+        return shutil.disk_usage(folder).free // (1024 * 1024)
+    except OSError:
+        return None
+
+
+def _watch_disk(folder, floor_mb):
+    while True:
+        time.sleep(DISK_POLL_S)
+        free = _free_mb(folder)
+        if free is not None and free < floor_mb:
+            print("disk    : STOPPED -- %s has %s MB free, under the floor of %s MB: this "
+                  "run and everything it started end here" % (folder, format(free, ","),
+                                                              format(floor_mb, ",")), flush=True)
+            # Its job closes with it, and ends every process in it.
+            os._exit(DISK_LOW)
+
+
+def end_others():
+    """End every process this run started, and every one they started: on
+    Windows, every process in this run's job but this one. A tree whose
+    root has died is still in the job, where its parentage no longer leads
+    (Edge, after node is gone). Returns how many were ended; None where
+    there is no job to ask."""
+    if sys.platform != "win32" or _job is None:
+        return None
+    ctypes, k32, _ = _structures()
+    import ctypes.wintypes as wt
+
+    class Listed(ctypes.Structure):
+        _fields_ = [("Assigned", wt.DWORD), ("InList", wt.DWORD),
+                    ("Ids", ctypes.c_size_t * 4096)]
+
+    k32.OpenProcess.restype = wt.HANDLE
+    k32.OpenProcess.argtypes = [wt.DWORD, wt.BOOL, wt.DWORD]
+    k32.TerminateProcess.argtypes = [wt.HANDLE, ctypes.c_uint]
+    k32.CloseHandle.argtypes = [wt.HANDLE]
+    ended = set()
+    for _ in range(10):   # one being ended may start another on its way out
+        listed = Listed()
+        k32.QueryInformationJobObject(_job, 3, ctypes.byref(listed),   # BasicProcessIdList
+                                      ctypes.sizeof(listed), None)
+        others = [pid for pid in listed.Ids[:listed.InList] if pid != os.getpid()]
+        if not others:
+            break
+        for pid in others:
+            handle = k32.OpenProcess(0x0001, False, pid)               # PROCESS_TERMINATE
+            if handle:
+                if k32.TerminateProcess(handle, 1):
+                    ended.add(pid)
+                k32.CloseHandle(handle)
+        time.sleep(0.2)
+    return len(ended)
 
 
 def own_homes():
@@ -478,8 +590,31 @@ def keep(path, why):
 
 def remove(path):
     """Remove a scratch folder this module made; anything else is left."""
-    if path and read_marker(path) is not None and _in_temp(path):
-        shutil.rmtree(path, ignore_errors=True)
+    marker = read_marker(path) if path else None
+    if marker is not None and _in_temp(path):
+        _remove_marked(path, marker)
+
+
+def _remove_marked(path, marker):
+    """Remove a marked folder, read-only files too (git keeps its objects
+    so). A file something still holds keeps the folder, and the marker is
+    put back beside it, so a later sweep finishes the job: unmarked, it
+    would stay for good."""
+    def again(func, failed, _exc):
+        try:
+            os.chmod(failed, stat.S_IWRITE | stat.S_IREAD)
+            func(failed)
+        except OSError:
+            pass
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(path, onexc=again)
+    else:
+        shutil.rmtree(path, onerror=again)
+    if os.path.isdir(path) and read_marker(path) is None:
+        try:
+            _write_marker(path, marker)
+        except OSError:
+            pass
 
 
 def read_marker(path):
@@ -515,7 +650,7 @@ def sweep(folder=None):
         elif alive(marker.get("pid"), marker.get("born")):
             continue
         size += _size_of(entry.path)
-        shutil.rmtree(entry.path, ignore_errors=True)
+        _remove_marked(entry.path, marker)
         if not os.path.exists(entry.path):
             gone += 1
     if not gone:

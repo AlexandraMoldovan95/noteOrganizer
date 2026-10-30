@@ -142,7 +142,11 @@ push. Never a bare docker command of your own: a docker client that is
 killed leaves its container running in Docker's VM, out of sight, beside
 the next run. The runner names the container, gives it 1,536 MB with no
 swap, two CPUs, a time limit inside it and docker's init, removes it on
-every way out, and ends by printing its memory peak.
+every way out, and ends by printing its memory peak. The container sees
+a copy of what git tracks, never the ignored files at the root (a
+notebook, its backups, settings), has no network, and writes to a
+`/tmp` of 512 MB held inside its memory, so Docker's virtual disk, which
+never gives space back, does not grow.
 
 ### A test run is a guest on the computer it runs on
 
@@ -177,6 +181,16 @@ jobs at once, with a runaway test among them, took the desktop down
   notes, scrolled to the list's end, took 265 MB.
 - **Every child has a bound.** Each child process has a timeout, and a
   hang is a named failure — HANG — after which the run goes on.
+- **A floor under the disk.** On Windows a run that takes the turn does
+  not start with less than 3,072 MB free where it writes (a whole run's
+  2,048 MB ceiling paged out, and 1 GB for Windows), and ends itself and
+  everything it started if the drive falls below that while it runs
+  (exit code 74). A full C: is where Windows deletes its restore points.
+- **Other languages go through a door.** A JavaScript file that starts a
+  process, and any shell script, under `tools/`, `qa/` or `site/tools/`,
+  refuses to start unless a Python runner that settled started it — the
+  site's browser walk through `site/tools/check_demo.py` — or, for the
+  Store package's test, unless it is inside Windows Sandbox.
 - **Nothing outlives a run.** A scratch folder carries a marker naming
   the run that made it, and a later run removes the ones whose run is
   gone — never a folder without the marker. The suites' own temporary

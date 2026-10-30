@@ -10,15 +10,21 @@ what dead runs left. This gate holds it:
 
 1. Every runner settles first. A runner is found by what it does, not by a
    list or a word: any .py under tools/, qa/ and site/tools/ that imports
-   the app's code, builds the app, or starts a process -- except the suites
-   a runner starts (qa1-qa9, test_*.py), which inherit the ceiling. Its
-   syntax tree is walked along the paths it runs, from the top of the
-   module through every function it calls by name: guest.settle() must
-   come before the first import of the app and the first child, on every
-   path. A runner that builds the app may not pass heavy=False.
+   the app's code (an import, importlib, runpy), builds the app, or starts
+   a process (subprocess, os, multiprocessing, a process pool, asyncio,
+   pty, webbrowser) -- except the suites a runner starts (qa1-qa9,
+   test_*.py), which inherit the ceiling. Its syntax tree is walked along
+   the paths it runs, from the top of the module through every function,
+   nested function, lambda, class body and method it calls by name:
+   guest.settle() must come before the first import of the app and the
+   first child, on every path. A runner that builds the app, or starts a
+   suite, the app or a runner that takes the turn, may not pass
+   heavy=False.
 2. Every child has a bound: subprocess.run/call/check_call/check_output
-   pass timeout=, a Popen is waited on with one, and os.system, os.popen
-   and os.startfile (which cannot be bounded) are not used.
+   pass timeout=, a Popen is waited on with one and is not left to a with
+   block (whose exit waits with none), and the starts no timeout reaches
+   -- os.system, os.popen, os.startfile, multiprocessing, process pools,
+   asyncio's and pty's children, runpy, webbrowser -- are not used.
 3. No document or tool writes a docker run of its own: tools/linux_ci.py
    is the one door to the Linux image, bounded, named, and removed on
    every way out. A killed docker client leaves its container running.
@@ -32,6 +38,26 @@ what dead runs left. This gate holds it:
    inherited that APPDATA is not in, settles, and the app's own first
    start in an empty folder brings nothing in; its child keeps the same
    homes, and they are gone when the run ends.
+7. Runners in other languages go through a door. A JavaScript file under
+   the same folders that starts a process, and every shell script there
+   (.ps1, .sh, .bat, .cmd: running commands is what they are for), checks
+   before it starts anything that a Python runner which settled started
+   it (guest.DOOR_ENV), and such a door names it -- or, for a script that
+   runs inside Windows Sandbox, a throwaway machine, that it is there. The
+   site's browser walk ran outside every guard (final audit, round eight).
+8. The walk sees what it is shown: each shape in CASES, written to a
+   scratch folder laid out as the repository is and found and walked as
+   its files are, is caught or passes as it should.
+9. What a run started ends with it: a process whose parent has gone, as
+   Edge's have once node is gone, is ended by guest.end_others(); and a
+   scratch folder something still holds stays marked for a later sweep.
+10. The floor under the disk holds: a run with less free than its floor
+    does not start, and one whose drive falls below it ends, and what it
+    started ends with it.
+11. The door to the Linux image shows the container only what git
+    tracks: a copy without the ignored files (a notebook, settings,
+    notebook_location.txt), read-only, with no network and a /tmp sized
+    inside its memory limit.
 
     py tools/check_guest.py
 """
@@ -60,28 +86,74 @@ UNBOUNDED = {"system", "popen", "startfile"}
 OS_STARTS = UNBOUNDED | {"spawnl", "spawnle", "spawnlp", "spawnlpe", "spawnv", "spawnve",
                          "spawnvp", "spawnvpe", "execl", "execle", "execlp", "execlpe",
                          "execv", "execve", "execvp", "execvpe", "posix_spawn",
-                         "posix_spawnp"}
+                         "posix_spawnp", "fork", "forkpty"}
+# Other modules' ways to start a process, by function; None is every call
+# into the module. No timeout this gate can see reaches any of them.
+UNSEEN = {
+    "multiprocessing": None,
+    "concurrent.futures": {"ProcessPoolExecutor"},
+    "asyncio": {"create_subprocess_exec", "create_subprocess_shell"},
+    "pty": {"spawn", "fork"},
+    "runpy": {"run_path", "run_module"},
+    "webbrowser": None,
+}
+# An event loop's own ways, reached through the loop rather than a module.
+LOOP_STARTS = {"subprocess_exec", "subprocess_shell"}
+# Calls that import a module by its name or its file.
+IMPORTERS = {("importlib", "import_module"), ("importlib.util", "spec_from_file_location"),
+             ("importlib.machinery", "SourceFileLoader")}
+APP_NAME = re.compile(r"^(note_organizer|noteorganizer)([./\\]|$)")
 
 
-def candidates():
+def candidates(root=ROOT):
     paths = []
     for pattern in ("tools/**/*.py", "qa/**/*.py", "site/tools/**/*.py"):
-        paths += glob.glob(os.path.join(ROOT, *pattern.split("/")), recursive=True)
+        paths += glob.glob(os.path.join(root, *pattern.split("/")), recursive=True)
     for path in sorted(set(paths)):
         name = os.path.basename(path)
-        if SUITE.match(name) or os.path.abspath(path) == os.path.join(HERE, "guest.py"):
+        if SUITE.match(name) or os.path.abspath(path) == os.path.join(root, "tools", "guest.py"):
             continue
         yield path
+
+
+def _rel(path, root=ROOT):
+    try:
+        return os.path.relpath(path, root)
+    except ValueError:   # on another drive
+        return path
 
 
 class Runner:
     """One script's syntax tree, and what the paths through it do."""
 
-    def __init__(self, path):
+    def __init__(self, path, source=None, root=ROOT):
         self.path = path
-        self.tree = ast.parse(open(path, encoding="utf-8").read(), path)
-        self.funcs = {n.name: n for n in self.tree.body
-                      if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+        self.root = root
+        if source is None:
+            with open(path, encoding="utf-8") as fh:
+                source = fh.read()
+        self.tree = ast.parse(source, path)
+        # What a call can reach, by the name it is called with: the
+        # functions of this file at any depth and the lambdas bound to a
+        # name (go()), a class's __init__ (Story()), and the methods of
+        # every class here (anything.run() may be any class's run).
+        self.funcs, self.methods, self.inits = {}, {}, {}
+        in_class = set()
+        for node in ast.walk(self.tree):
+            if isinstance(node, ast.ClassDef):
+                for item in node.body:
+                    if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        in_class.add(id(item))
+                        self.methods.setdefault(item.name, []).append(item)
+                        if item.name == "__init__":
+                            self.inits.setdefault(node.name, []).append(item)
+        for node in ast.walk(self.tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and id(node) not in in_class:
+                self.funcs.setdefault(node.name, []).append(node)
+            elif isinstance(node, ast.Assign) and isinstance(node.value, ast.Lambda):
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        self.funcs.setdefault(target.id, []).append(node.value)
         # A module-level dict of this file's functions, called by key
         # (CHAPTERS[number]()): each of them is reached by that call.
         self.tables = {}
@@ -95,41 +167,60 @@ class Runner:
                             self.tables[target.id] = names
         self.aliases = self._aliases()
         self.problems = []
-        self.entered = {}
-        self.reached = set()
+        self.entered = {}     # id of a function walked before the ceiling: settles on every path
+        self.reached = set()  # ids of functions walked, or seen to run only once settled
 
     # -- what a node does --
 
     def _aliases(self):
-        """Local names for subprocess/os/guest and for their functions."""
+        """Local names for modules and for what is imported from them."""
         found = {}
         for node in ast.walk(self.tree):
             if isinstance(node, ast.Import):
                 for a in node.names:
-                    if a.name in ("subprocess", "os", "guest"):
-                        found[a.asname or a.name] = (a.name, None)
-            elif isinstance(node, ast.ImportFrom) and node.module in ("subprocess", "os", "guest"):
+                    if a.asname:
+                        found[a.asname] = a.name
+                    else:
+                        root = a.name.split(".")[0]
+                        found[root] = root
+            elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
                 for a in node.names:
-                    found[a.asname or a.name] = (node.module, a.name)
+                    found[a.asname or a.name] = node.module + "." + a.name
         return found
 
     def callee(self, call):
         """(module, function) a call names, through this file's aliases."""
-        f = call.func
-        if isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name):
-            mod = self.aliases.get(f.value.id)
-            if mod and mod[1] is None:
-                return mod[0], f.attr
-        if isinstance(f, ast.Name) and f.id in self.aliases and self.aliases[f.id][1]:
-            return self.aliases[f.id]
-        return None, None
+        parts, node = [], call.func
+        while isinstance(node, ast.Attribute):
+            parts.append(node.attr)
+            node = node.value
+        if not isinstance(node, ast.Name) or node.id not in self.aliases:
+            return None, None
+        full = self.aliases[node.id].split(".") + parts[::-1]
+        if len(full) < 2:
+            return None, None
+        return ".".join(full[:-1]), full[-1]
 
     def is_settle(self, call):
         return self.callee(call) == ("guest", "settle")
 
+    def unseen(self, call):
+        """A start no timeout reaches: (what it is, True), else ('', False)."""
+        mod, name = self.callee(call)
+        if mod is not None:
+            for module, names in UNSEEN.items():
+                if (mod == module or mod.startswith(module + ".")) and (
+                        names is None or name in names):
+                    return "%s.%s" % (mod, name), True
+        f = call.func
+        if isinstance(f, ast.Attribute) and f.attr in LOOP_STARTS:
+            return "an event loop's " + f.attr, True
+        return "", False
+
     def is_start(self, call):
         mod, name = self.callee(call)
-        return (mod == "subprocess" and name in STARTS) or (mod == "os" and name in OS_STARTS)
+        return ((mod == "subprocess" and name in STARTS) or (mod == "os" and name in OS_STARTS)
+                or self.unseen(call)[1])
 
     @staticmethod
     def builds_app(call):
@@ -143,13 +234,24 @@ class Runner:
                  else [node.module or ""] if isinstance(node, ast.ImportFrom) else [])
         return any(n.split(".")[0] in ("note_organizer", "noteorganizer") for n in names)
 
+    def imports_app_call(self, call):
+        """importlib or __import__ with the app's name or file -- or with a
+        name this gate cannot read, which could be the app's."""
+        f = call.func
+        if not (self.callee(call) in IMPORTERS
+                or (isinstance(f, ast.Name) and f.id == "__import__")):
+            return False
+        texts = [n.value for arg in list(call.args) + [k.value for k in call.keywords]
+                 for n in ast.walk(arg) if isinstance(n, ast.Constant) and isinstance(n.value, str)]
+        return not texts or any(APP_NAME.match(t) for t in texts)
+
+    def does_something(self, node):
+        return ((isinstance(node, ast.Call) and (self.is_start(node) or self.builds_app(node)
+                                                 or self.imports_app_call(node)))
+                or self.imports_app(node))
+
     def is_runner(self):
-        for node in ast.walk(self.tree):
-            if self.imports_app(node):
-                return True
-            if isinstance(node, ast.Call) and (self.is_start(node) or self.builds_app(node)):
-                return True
-        return False
+        return any(self.does_something(node) for node in ast.walk(self.tree))
 
     def builds_the_app(self):
         """In this process, or in a script it writes for a child to run."""
@@ -161,11 +263,44 @@ class Runner:
                 return True
         return False
 
+    def every_def(self):
+        return [n for n in ast.walk(self.tree)
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda))]
+
+    def starting(self):
+        """Ids of this file's functions that start a process, themselves or
+        through another of them."""
+        found, grew, defs = set(), True, self.every_def()
+        while grew:
+            grew = False
+            for d in defs:
+                if id(d) not in found and any(
+                        isinstance(n, ast.Call) and (self.is_start(n) or any(
+                            id(t) in found for t in self.targets(n))) for n in ast.walk(d)):
+                    found.add(id(d))
+                    grew = True
+        return found
+
+    def scripts_started(self):
+        """(call, script) for each start, or call of a function that starts,
+        that names a .py: the first one it names, in the order written."""
+        starting = self.starting()
+        for n in ast.walk(self.tree):
+            if isinstance(n, ast.Call) and (self.is_start(n) or any(
+                    id(t) in starting for t in self.targets(n))):
+                named = sorted((c.lineno, c.col_offset, c.value)
+                               for arg in list(n.args) + [k.value for k in n.keywords]
+                               for c in ast.walk(arg)
+                               if isinstance(c, ast.Constant) and isinstance(c.value, str)
+                               and c.value.endswith(".py"))
+                if named:
+                    yield n, named[0][2]
+
     # -- the walk: is the ceiling set before anything starts? --
 
     def problem(self, node, what):
-        self.problems.append("%s:%d %s" % (os.path.relpath(self.path, ROOT),
-                                           getattr(node, "lineno", 0), what))
+        self.problems.append("%s:%d %s" % (_rel(self.path, self.root), getattr(node, "lineno", 0),
+                                           what))
 
     def block(self, stmts, settled):
         for s in stmts:
@@ -173,8 +308,17 @@ class Runner:
         return settled
 
     def stmt(self, s, settled):
-        if isinstance(s, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        if isinstance(s, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            # Its decorators and defaults run here; its body when it is called.
+            for e in s.decorator_list + s.args.defaults + [d for d in s.args.kw_defaults if d]:
+                settled = self.expr(e, settled)
+            if settled:
+                self.reach(s)       # made once settled: whatever calls it, calls it after
             return settled
+        if isinstance(s, ast.ClassDef):
+            for e in s.decorator_list + s.bases + [k.value for k in s.keywords]:
+                settled = self.expr(e, settled)
+            return self.block(s.body, settled)   # a class's body runs where it stands
         if isinstance(s, (ast.Import, ast.ImportFrom)):
             if self.imports_app(s) and not settled:
                 self.problem(s, "imports the app before guest.settle()")
@@ -204,6 +348,10 @@ class Runner:
         return self.expr(s, settled)
 
     def expr(self, node, settled):
+        if settled:   # a lambda made once settled runs, whenever it runs, after
+            for n in ast.walk(node):
+                if isinstance(n, ast.Lambda):
+                    self.reach(n)
         for call in self.calls_in_order(node):
             settled = self.call(call, settled)
         return settled
@@ -224,50 +372,70 @@ class Runner:
         return out
 
     def targets(self, call):
+        """The functions of this file a call may run."""
         f = call.func
-        if isinstance(f, ast.Name) and f.id in self.funcs:
-            return [f.id]
+        if isinstance(f, ast.Name):
+            return self.funcs.get(f.id) or self.inits.get(f.id, [])
+        if isinstance(f, ast.Attribute):
+            return self.methods.get(f.attr, [])
         if (isinstance(f, ast.Subscript) and isinstance(f.value, ast.Name)
                 and f.value.id in self.tables):
-            return self.tables[f.value.id]
+            return [n for name in self.tables[f.value.id] for n in self.funcs.get(name, [])]
         return []
 
     def call(self, c, settled):
         if self.is_settle(c):
             light = any(k.arg == "heavy" and isinstance(k.value, ast.Constant)
                         and k.value.value is False for k in c.keywords)
-            if light and self.builds_the_app():
-                self.problem(c, "builds the app, so it may not settle with heavy=False")
+            if light:
+                if self.builds_the_app():
+                    self.problem(c, "builds the app, so it may not settle with heavy=False")
+                for where, script in self.scripts_started():
+                    what = weigh(script)
+                    if what:
+                        self.problem(where, "settles with heavy=False but starts %s, %s: a "
+                                            "light run starts only light things" % (script, what))
             return True
-        if (self.is_start(c) or self.builds_app(c)) and not settled:
-            self.problem(c, "starts a process or builds the app before guest.settle()")
-            return settled
-        names = self.targets(c)
-        if not names:
+        if not settled:
+            if self.is_start(c) or self.builds_app(c):
+                self.problem(c, "starts a process or builds the app before guest.settle()")
+                return settled
+            if self.imports_app_call(c):
+                self.problem(c, "imports the app before guest.settle()")
+                return settled
+        nodes = self.targets(c)
+        if not nodes:
             return settled
         if settled:
-            for name in names:
-                self.reach(name)
+            for node in nodes:
+                self.reach(node)
             return True
-        return all([self.enter(name) for name in names])
+        return all([self.enter(node) for node in nodes])
 
-    def enter(self, name):
+    def enter(self, node):
         """Walk a function entered before the ceiling; True if it sets it on
         every path through it."""
-        if name not in self.entered:
-            self.entered[name] = False          # a cycle settles nothing
-            self.reached.add(name)
-            self.entered[name] = self.block(self.funcs[name].body, False)
-        return self.entered[name]
+        key = id(node)
+        if key not in self.entered:
+            self.entered[key] = False           # a cycle settles nothing
+            self.reached.add(key)
+            if isinstance(node, ast.Lambda):
+                self.entered[key] = self.expr(node.body, False)
+            else:
+                self.entered[key] = self.block(node.body, False)
+        return self.entered[key]
 
-    def reach(self, name):
-        """A function called once the ceiling is set, and all it calls."""
-        if name in self.reached:
+    def reach(self, node):
+        """A function that runs once the ceiling is set, what is defined in
+        it, and all it calls."""
+        if id(node) in self.reached:
             return
-        self.reached.add(name)
-        for node in ast.walk(self.funcs[name]):
-            if isinstance(node, ast.Call):
-                for target in self.targets(node):
+        self.reached.add(id(node))
+        for n in ast.walk(node):
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                self.reached.add(id(n))
+            elif isinstance(n, ast.Call):
+                for target in self.targets(n):
                     self.reach(target)
 
     def check(self):
@@ -275,30 +443,34 @@ class Runner:
         # A function the walk never reached (a decorator's list, a callback)
         # may still start something: fine only once the module itself has
         # settled, at import, before anything could call it.
-        for name, fn in self.funcs.items():
-            if name in self.reached or settled_at_top:
-                continue
-            for node in ast.walk(fn):
-                if ((isinstance(node, ast.Call) and (self.is_start(node) or self.builds_app(node)))
-                        or self.imports_app(node)):
-                    self.problem(node, "in %s(), which no path that has settled is seen to "
-                                       "call: settle first in it, or call it by name" % name)
-                    break
+        if not settled_at_top:
+            for fn in self.every_def():
+                if id(fn) in self.reached:
+                    continue
+                for node in self._own_nodes(fn):
+                    if self.does_something(node):
+                        what = ("%s()" % fn.name if hasattr(fn, "name")
+                                else "a lambda (line %d)" % fn.lineno)
+                        self.problem(node, "in %s, which no path that has settled is seen to "
+                                           "call: settle first in it, or call it by name" % what)
+                        break
         self.bounds()
         return self.problems
 
     # -- every child has a bound --
 
     def bounds(self):
-        scopes = [self.tree] + [n for n in ast.walk(self.tree)
-                                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+        scopes = [self.tree] + [n for n in ast.walk(self.tree) if isinstance(
+            n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda))]
         for scope in scopes:
-            own = [n for n in self._own_nodes(scope) if isinstance(n, ast.Call)]
+            own_nodes = self._own_nodes(scope)
+            own = [n for n in own_nodes if isinstance(n, ast.Call)]
             waits = [n for n in own if isinstance(n.func, ast.Attribute)
                      and n.func.attr in ("wait", "communicate")]
             bounded = [n for n in waits if any(k.arg == "timeout" for k in n.keywords)]
             for call in own:
                 mod, name = self.callee(call)
+                what, unseen = self.unseen(call)
                 if mod == "subprocess" and name in WAITING:
                     if not any(k.arg == "timeout" for k in call.keywords):
                         self.problem(call, "subprocess.%s without timeout=: a hang has no bound"
@@ -313,6 +485,19 @@ class Runner:
                 elif mod == "os" and name in UNBOUNDED:
                     self.problem(call, "os.%s cannot be given a bound; use subprocess.run(..., "
                                        "timeout=)" % name)
+                elif unseen:
+                    self.problem(call, "%s starts a process no timeout here can reach; use "
+                                       "subprocess.run(..., timeout=)" % what)
+            # A Popen's __exit__ waits for the child with no limit, and a
+            # bounded wait inside that raises TimeoutExpired goes straight to it.
+            for node in own_nodes:
+                if isinstance(node, (ast.With, ast.AsyncWith)):
+                    for item in node.items:
+                        e = item.context_expr
+                        if isinstance(e, ast.Call) and self.callee(e) == ("subprocess", "Popen"):
+                            self.problem(e, "a Popen in a with block: leaving it waits with no "
+                                            "bound when the block raises; wait with timeout= "
+                                            "and kill it yourself")
 
     @staticmethod
     def _own_nodes(scope):
@@ -327,13 +512,122 @@ class Runner:
         return out
 
 
-def runners_without_settle():
+_WEIGHED = {}
+
+
+def weigh(script):
+    """What a light run would start in ``script``, when that is not a light
+    thing: a suite, the app, or a runner that takes the turn; '' if light."""
+    name = os.path.basename(script.replace("\\", "/"))
+    if SUITE.match(name):
+        return "a suite"
+    if name == "note_organizer.py":
+        return "the app"
+    if name not in _WEIGHED:
+        _WEIGHED[name] = ""
+        for path in candidates():
+            if os.path.basename(path) != name:
+                continue
+            runner = Runner(path)
+            settles = [n for n in ast.walk(runner.tree)
+                       if isinstance(n, ast.Call) and runner.is_settle(n)]
+            light = settles and all(any(
+                k.arg == "heavy" and isinstance(k.value, ast.Constant) and k.value.value is False
+                for k in n.keywords) for n in settles)
+            if runner.is_runner() and not light:
+                _WEIGHED[name] = "a runner that takes the machine's turn"
+    return _WEIGHED[name]
+
+
+def runners_without_settle(root=ROOT):
     """Every problem in every runner, as 'path:line what'."""
     found = []
-    for path in candidates():
-        runner = Runner(path)
+    for path in candidates(root):
+        runner = Runner(path, root=root)
         if runner.is_runner():
             found += runner.check()
+    return found
+
+
+# -- 7: runners in other languages go through a door --
+
+OTHER_LANGUAGES = (".mjs", ".js", ".cjs", ".ps1", ".psm1", ".sh", ".bash", ".bat", ".cmd")
+SHELLS = (".ps1", ".psm1", ".sh", ".bash", ".bat", ".cmd")
+# A JavaScript file starts a process through child_process (or a runtime's own).
+NODE_STARTS = re.compile(r"child_process|\bDeno\.(?:Command|run)\b|\bBun\.spawn")
+NODE_START_CALL = re.compile(r"\b(?:spawn|spawnSync|exec|execSync|execFile|execFileSync|fork)"
+                             r"\s*\(|\bDeno\.(?:Command|run)\b|\bBun\.spawn")
+# Windows Sandbox's one account: a script that checks for it runs on a
+# throwaway machine, never on this one.
+SANDBOX_ACCOUNT = "WDAGUtilityAccount"
+
+
+def other_candidates(root=ROOT):
+    for pattern in ("tools/**/*", "qa/**/*", "site/tools/**/*"):
+        for path in sorted(glob.glob(os.path.join(root, *pattern.split("/")), recursive=True)):
+            if os.path.isfile(path) and path.lower().endswith(OTHER_LANGUAGES):
+                yield path
+
+
+def first_statement(text, ext):
+    """The first line of a shell script that does something."""
+    in_block = False
+    for line in text.splitlines():
+        s = line.strip()
+        if in_block:
+            in_block = "#>" not in s
+            continue
+        if not s or s.startswith("#"):
+            continue
+        if s.startswith("<#"):           # PowerShell's block comment
+            in_block = "#>" not in s[2:]
+            continue
+        low = s.lower()
+        if ext in (".bat", ".cmd") and (low.startswith(("rem ", "::")) or low in ("rem", "@echo off")):
+            continue
+        return s
+    return ""
+
+
+def script_problems(path, doors, root=ROOT):
+    """What is wrong with one script in another language; ``doors`` is the
+    text of every Python runner, to find its door in."""
+    rel = _rel(path, root)
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        text = fh.read()
+    ext = os.path.splitext(path)[1].lower()
+    if ext in SHELLS:
+        first = first_statement(text, ext)
+        if guest.DOOR_ENV not in first and SANDBOX_ACCOUNT not in first:
+            return ["%s: a shell script runs commands, so its first statement refuses to run "
+                    "but through its door (%s) or inside Windows Sandbox (%s)"
+                    % (rel, guest.DOOR_ENV, SANDBOX_ACCOUNT)]
+        needs_door = guest.DOOR_ENV in first
+    else:
+        if not NODE_STARTS.search(text):
+            return []
+        start = NODE_START_CALL.search(text)
+        guard = text.find(guest.DOOR_ENV)
+        if guard < 0 or (start is not None and start.start() < guard):
+            at = start.start() if start is not None else 0
+            return ["%s:%d starts a process before it checks %s, the mark of its door"
+                    % (rel, text.count("\n", 0, at) + 1, guest.DOOR_ENV)]
+        needs_door = True
+    name = os.path.basename(path)
+    if needs_door and not any(name in door and "DOOR_ENV" in door for door in doors):
+        return ["%s: no Python runner is its door (one that names it and, once settled, "
+                "hands it guest.DOOR_ENV)" % rel]
+    return []
+
+
+def scripts_without_a_door(root=ROOT):
+    doors = []
+    for path in candidates(root):
+        with open(path, encoding="utf-8") as fh:
+            doors.append(fh.read())
+    found = []
+    for path in other_candidates(root):
+        found += script_problems(path, doors, root)
     return found
 
 
@@ -363,6 +657,242 @@ def docker_runs_outside_the_door():
                 if re.search(r"docker\s+(container\s+)?run\b", line):
                     hits.append("%s:%d" % (rel, number))
     return hits
+
+
+# -- 8: the walk sees what it is shown --
+
+# Each case: a file name, what one of its problems must say ('' for none),
+# and its text. The first fourteen are round eight's shapes the walk once
+# passed; the rest pass, so a walk that flags everything fails too.
+CASES = [
+    ("class_method.py", "before guest.settle()", """
+import subprocess, sys
+class Story:
+    def run(self):
+        subprocess.run([sys.executable, "-c", "pass"], timeout=5)
+Story().run()
+import guest
+guest.settle()
+"""),
+    ("nested_function.py", "before guest.settle()", """
+import subprocess, sys
+def main():
+    def go():
+        subprocess.run([sys.executable, "-c", "pass"], timeout=5)
+    go()
+    import guest
+    guest.settle()
+main()
+"""),
+    ("lambda_by_name.py", "before guest.settle()", """
+import subprocess, sys
+go = lambda: subprocess.run([sys.executable, "-c", "pass"], timeout=5)
+go()
+import guest
+guest.settle()
+"""),
+    ("multiprocessing_child.py", "no timeout here can reach", """
+import multiprocessing
+def work():
+    pass
+if __name__ == "__main__":
+    import guest
+    guest.settle()
+    p = multiprocessing.Process(target=work)
+    p.start()
+    p.join()
+"""),
+    ("process_pool.py", "no timeout here can reach", """
+from concurrent.futures import ProcessPoolExecutor
+import guest
+guest.settle()
+with ProcessPoolExecutor() as pool:
+    list(pool.map(abs, range(3)))
+"""),
+    ("asyncio_child.py", "before guest.settle()", """
+import asyncio, sys
+async def main():
+    p = await asyncio.create_subprocess_exec(sys.executable, "-c", "pass")
+    await p.wait()
+asyncio.run(main())
+"""),
+    ("runpy_app.py", "no timeout here can reach", """
+import runpy
+import guest
+guest.settle()
+runpy.run_path("note_organizer.py", run_name="__main__")
+"""),
+    ("with_popen.py", "in a with block", """
+import guest
+guest.settle()
+import subprocess, sys
+with subprocess.Popen([sys.executable, "-c", "pass"]) as p:
+    p.wait(timeout=1)
+"""),
+    ("importlib_app.py", "imports the app before guest.settle()", """
+import importlib
+NO = importlib.import_module("note_organizer")
+"""),
+    ("settle_in_if.py", "before guest.settle()", """
+import guest, subprocess, sys
+if len(sys.argv) > 1:
+    guest.settle()
+subprocess.run([sys.executable, "-c", "pass"], timeout=5)
+"""),
+    ("alias.py", "before guest.settle()", """
+import guest as g
+import subprocess as sp, sys
+sp.run([sys.executable, "-c", "pass"], timeout=5)
+g.settle()
+"""),
+    ("webbrowser_open.py", "no timeout here can reach", """
+import webbrowser
+import guest
+guest.settle()
+webbrowser.open("about:blank")
+"""),
+    ("method_before_settle_in_main.py", "before guest.settle()", """
+import subprocess, sys
+class R:
+    def go(self):
+        subprocess.run([sys.executable, "-c", "pass"], timeout=5)
+def main():
+    R().go()
+    import guest
+    guest.settle()
+if __name__ == "__main__":
+    main()
+"""),
+    ("light_runs_a_suite.py", "a light run starts only light things", """
+import guest, subprocess, sys
+guest.settle(heavy=False)
+subprocess.run([sys.executable, "qa1.py"], timeout=600)
+"""),
+    ("class_body.py", "before guest.settle()", """
+import subprocess, sys
+class Probe:
+    answer = subprocess.run([sys.executable, "-c", "pass"], timeout=5)
+import guest
+guest.settle()
+"""),
+    ("method_after_settle.py", "", """
+import subprocess, sys
+class R:
+    def go(self):
+        subprocess.run([sys.executable, "-c", "pass"], timeout=5)
+def main():
+    import guest
+    guest.settle()
+    R().go()
+if __name__ == "__main__":
+    main()
+"""),
+    ("nested_after_settle.py", "", """
+import subprocess, sys
+def main():
+    import guest
+    guest.settle()
+    def go():
+        subprocess.run([sys.executable, "-c", "pass"], timeout=5)
+    go()
+main()
+"""),
+    ("light_runs_a_gate.py", "", """
+import os, subprocess, sys
+import guest
+guest.settle(heavy=False)
+subprocess.run([sys.executable, os.path.join("tools", "check_english.py")], timeout=600)
+"""),
+    ("bounded_popen.py", "", """
+import subprocess, sys
+import guest
+guest.settle()
+p = subprocess.Popen([sys.executable, "-c", "pass"])
+try:
+    p.wait(timeout=5)
+finally:
+    if p.poll() is None:
+        p.kill()
+        p.wait(timeout=5)
+"""),
+    ("walk_bare.mjs", "before it checks", """
+import { spawn } from "node:child_process";
+spawn("msedge.exe", ["--headless"]);
+"""),
+    ("walk_late_guard.mjs", "before it checks", """
+import { spawn } from "node:child_process";
+spawn("msedge.exe", ["--headless"]);
+if (!process.env.NOTEORG_GUEST_DOOR) process.exit(2);
+"""),
+    ("walk_no_door.mjs", "no Python runner is its door", """
+import { spawn } from "node:child_process";
+if (!process.env.NOTEORG_GUEST_DOOR) process.exit(2);
+spawn("msedge.exe", ["--headless"]);
+"""),
+    ("walk_through_door.mjs", "", """
+import { spawn } from "node:child_process";
+if (!process.env.NOTEORG_GUEST_DOOR) process.exit(2);
+spawn("msedge.exe", ["--headless"]);
+"""),
+    ("starts_nothing.js", "", """
+const x = /a/.exec("abc");
+console.log(x);
+"""),
+    ("host_script.ps1", "a shell script runs commands", """
+# Signs a package.
+$ErrorActionPreference = 'Continue'
+& signtool.exe sign package.msix
+"""),
+    ("sandbox_script.ps1", "", """
+<# Runs inside Windows Sandbox. #>
+if ($env:USERNAME -ne 'WDAGUtilityAccount') { exit 2 }
+& signtool.exe sign package.msix
+"""),
+    ("late_guard.sh", "a shell script runs commands", """
+#!/bin/sh
+echo starting
+[ -n "$NOTEORG_GUEST_DOOR" ] || exit 2
+"""),
+    ("walk_door.py", "", """
+import subprocess
+import guest
+guest.settle()
+folder = guest.scratch("noteorg-site-walk-")
+subprocess.run(["node", "walk_through_door.mjs"], env={guest.DOOR_ENV: folder}, timeout=60)
+"""),
+]
+# Where a case is written, below the folder walked as the repository is:
+# by its kind, so every folder the gate looks in is looked in.
+PLACES = {".py": "tools", ".mjs": "site/tools", ".js": "tools", ".ps1": "tools/msix",
+          ".sh": "qa", "light_runs_a_suite.py": "qa", "class_body.py": "site/tools",
+          "walk_door.py": "site/tools"}
+
+
+def walk_sees_its_cases():
+    """The cases written to a scratch folder laid out as the repository is,
+    found and walked as the repository's files are, and weighed against
+    what each should give; returns (all as they should be, what was wrong)."""
+    folder = guest.scratch("noteorg-gate-cases-")   # marked: swept if this gate is killed
+    wrong = []
+    try:
+        where = {}
+        for name, _expect, text in CASES:
+            place = PLACES.get(name) or PLACES[os.path.splitext(name)[1]]
+            where[name] = place + "/" + name
+            os.makedirs(os.path.join(folder, *place.split("/")), exist_ok=True)
+            with open(os.path.join(folder, *where[name].split("/")), "w", encoding="utf-8") as fh:
+                fh.write(text.lstrip("\n"))
+        found = runners_without_settle(folder) + scripts_without_a_door(folder)
+        for name, expect, _text in CASES:
+            said = [line for line in found
+                    if line.split(":")[0].replace("\\", "/") == where[name]]
+            if expect and not any(expect in line for line in said):
+                wrong.append("%s passed, though it should give '%s'" % (name, expect))
+            elif not expect and said:
+                wrong.append("%s gave %s, though it should pass" % (name, said))
+    finally:
+        guest.remove(folder)
+    return not wrong, wrong
 
 
 # -- 4: the ceiling holds --
@@ -410,12 +940,19 @@ print(guest.settle(256, 512, wait_s=int(sys.argv[2]))[0], flush=True)
 """
 
 
+def private_turn_env(locks):
+    """This environment with a lock of the gate's own: its runs never wait
+    on, or hold up, the machine's real turn."""
+    env = dict(os.environ, NOTEORG_GUEST_LOCK_DIR=locks)
+    env.pop(guest.HOLDER_ENV, None)
+    return env
+
+
 def turn_holds():
     """The holder's child shares its turn; another run waits, names it and
     exits BUSY; a holder killed outright frees the turn."""
     locks = guest.scratch("noteorg-gate-lock-")    # marked: swept if this gate is killed
-    env = dict(os.environ, NOTEORG_GUEST_LOCK_DIR=locks)
-    env.pop(guest.HOLDER_ENV, None)
+    env = private_turn_env(locks)
     seen, kid, other, after, took = [], "", None, None, 99.0
     holder = subprocess.Popen([sys.executable, "-c", HOLDER, HERE], env=env, text=True,
                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -497,6 +1034,183 @@ def homes_hold():
         shutil.rmtree(standin, ignore_errors=True)
 
 
+# -- 9: what a run started ends with it --
+
+ORPHANED = r"""
+import json, subprocess, sys, time
+sys.path.insert(0, sys.argv[1])
+import guest
+guest.settle(256, 512, heavy=False)
+# A child that starts a grandchild and leaves it: its parent gone, as
+# Edge's is once node has gone.
+leaver = ("import subprocess, sys; n = subprocess.DEVNULL; p = subprocess.Popen("
+          "[sys.executable, '-c', 'import time; time.sleep(60)'], stdin=n, stdout=n, "
+          "stderr=n); print(p.pid)")
+kid = subprocess.run([sys.executable, "-c", leaver], capture_output=True, text=True, timeout=60)
+pid = int(kid.stdout.strip())
+born = guest.born_at(pid)
+before = guest.alive(pid, born)
+ended = guest.end_others()
+for _ in range(50):
+    if not guest.alive(pid, born):
+        break
+    time.sleep(0.1)
+print(json.dumps({"before": before, "ended": ended, "after": guest.alive(pid, born)}))
+"""
+
+
+def leftovers_end():
+    """A grandchild whose parent has gone is ended by end_others(); a
+    scratch folder something still holds when it is removed stays marked,
+    for a later sweep, and goes once it is let go."""
+    if sys.platform != "win32":
+        return None, "no job object on this OS (the browser walk runs on Windows only)"
+    run = subprocess.run([sys.executable, "-c", ORPHANED, HERE], capture_output=True,
+                         text=True, timeout=120)
+    try:
+        seen = json.loads(run.stdout.strip().splitlines()[-1])
+    except (IndexError, ValueError):
+        return False, (run.stdout + run.stderr)[-400:]
+    folder = guest.scratch("noteorg-gate-held-")
+    held = open(os.path.join(folder, "held.txt"), "w")   # Windows will not delete it while open
+    try:
+        guest.remove(folder)
+        seen["held stays marked"] = os.path.isdir(folder) and guest.read_marker(folder) is not None
+    finally:
+        held.close()
+        guest.remove(folder)
+    seen["then gone"] = not os.path.exists(folder)
+    shutil.rmtree(folder, ignore_errors=True)   # the gate's own, should remove() have failed
+    return bool(seen["before"] and seen["ended"] and not seen["after"]
+                and seen["held stays marked"] and seen["then gone"]), seen
+
+
+# -- 10: the floor under the disk holds --
+
+FLOORED = r"""
+import os, subprocess, sys, time
+sys.path.insert(0, sys.argv[1])
+import guest
+guest.settle(256, 512, label="the-gate-disk", wait_s=0)
+n = subprocess.DEVNULL
+kid = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"], stdin=n,
+                       stdout=n, stderr=n)
+print("KID", kid.pid, guest.born_at(kid.pid), flush=True)
+guest._free_mb = lambda folder: 0     # the drive, as a runaway writer would leave it
+time.sleep(20)
+print("STILL RUNNING", flush=True)
+kid.kill()
+kid.wait(timeout=30)
+"""
+
+
+def floor_holds():
+    """Below its floor a run does not start; a run whose drive falls below
+    it ends, and its child with it."""
+    if sys.platform != "win32":
+        return None, "no job object on this OS (the Linux image's /tmp is a sized tmpfs)"
+    locks = guest.scratch("noteorg-gate-disk-")    # marked: swept if this gate is killed
+    try:
+        env = private_turn_env(locks)
+        env[guest.DISK_ENV] = str(10 ** 9)
+        refused = subprocess.run([sys.executable, "-c", OTHER, HERE, "0"], env=env,
+                                 capture_output=True, text=True, timeout=60)
+        env[guest.DISK_ENV] = "1"
+        ended = subprocess.run([sys.executable, "-c", FLOORED, HERE], env=env,
+                               capture_output=True, text=True, timeout=60)
+    finally:
+        shutil.rmtree(locks, ignore_errors=True)
+    kid = [l.split() for l in ended.stdout.splitlines() if l.startswith("KID ")]
+    kid_alive = True
+    if kid and len(kid[0]) == 3:
+        pid, born = int(kid[0][1]), (None if kid[0][2] == "None" else float(kid[0][2]))
+        for _ in range(50):
+            kid_alive = guest.alive(pid, born)
+            if not kid_alive:
+                break
+            time.sleep(0.1)
+    ok = bool(refused.returncode == guest.DISK_LOW and "disk    : REFUSED" in refused.stdout
+              and ended.returncode == guest.DISK_LOW and "disk    : STOPPED" in ended.stdout
+              and "STILL RUNNING" not in ended.stdout and kid and not kid_alive)
+    return ok, "refused %d, ended %d, its child alive after: %s" % (
+        refused.returncode, ended.returncode, kid_alive)
+
+
+# -- 11: the Linux image sees only what git tracks --
+
+def door_shows_only_tracked():
+    """linux_ci's copy of a stand-in repository holds what git tracks and
+    would add, as the working tree has them, and nothing it ignores; and the
+    container's /repo is that copy, with no network and a sized /tmp."""
+    import linux_ci
+    work = guest.scratch("noteorg-gate-git-")       # marked: swept if this gate is killed
+    try:
+        repo = os.path.join(work, "repo")
+        os.makedirs(repo)
+
+        def write(name, text):
+            with open(os.path.join(repo, name), "w", encoding="utf-8") as fh:
+                fh.write(text)
+
+        def git(*args):
+            # Inside the Linux image GIT_DIR names the real repository's.
+            return subprocess.run(["git", "-c", "init.defaultBranch=main", "-c",
+                                   "core.autocrlf=false"] + list(args), cwd=repo,
+                                  env=linux_ci.git_env(), capture_output=True, text=True,
+                                  timeout=60)
+
+        if git("init", "-q").returncode != 0:
+            return False, "git init failed here"
+        write(".gitignore", "notes_data*.json\nnotebook_location.txt\n")
+        write("tracked.txt", "as added")
+        git("add", ".gitignore", "tracked.txt")
+        write("tracked.txt", "as the working tree has it")
+        write("new.txt", "not yet added")
+        write("notes_data.json", '[{"title": "A stand-in notebook"}]')
+        write("notebook_location.txt", "a stand-in folder")
+        copy = linux_ci.tracked_copy(repo)
+        try:
+            shown = os.path.join(copy, "repo")
+            seen = sorted(os.path.relpath(os.path.join(top, f), shown).replace(os.sep, "/")
+                          for top, _dirs, files in os.walk(shown) for f in files)
+            with open(os.path.join(shown, "tracked.txt"), encoding="utf-8") as fh:
+                body = fh.read()
+            cmd = linux_ci.command("noteorg-ci-gate", None, 60, [], shown)
+        finally:
+            guest.remove(copy)
+        # And git's own folder beside the copy, for a checkout and a worktree.
+        git("-c", "user.name=gate", "-c", "user.email=gate@invalid", "commit", "-q", "-m", "x")
+        git("worktree", "add", "-q", os.path.join(work, "wt"))
+        dot_git = os.path.join(repo, ".git")
+        mounts = {}
+        for kind, where in (("checkout", repo), ("worktree", os.path.join(work, "wt"))):
+            args = linux_ci.git_mounts(where)
+            source = [a for a in args if "target=/gitcommon" in a]
+            source = source[0].split("source=")[1].split(",")[0] if source else ""
+            mounts[kind] = (bool(source) and os.path.exists(source)
+                            and os.path.samefile(source, dot_git),
+                            [a for a in args if a.startswith("GIT_DIR=")])
+    except RuntimeError as exc:
+        return False, str(exc)
+    finally:
+        guest.remove(work)
+    # A folder holding a git repository goes too: git's objects are read-only.
+    gone = not os.path.exists(work)
+    sources = [part.split("source=")[1].split(",")[0] for part in cmd if "source=" in part]
+    at_repo = [part for part in cmd if "target=/repo," in part or part.endswith("target=/repo")]
+    ok = (gone and seen == [".gitignore", "new.txt", "tracked.txt"]
+          and body == "as the working tree has it"
+          and at_repo == ["type=bind,source=%s,target=/repo,readonly" % shown]
+          and ROOT not in sources
+          and "none" == cmd[cmd.index("--network") + 1]
+          and any(part.startswith("/tmp:") and "size=" in part for part in cmd)
+          and mounts["checkout"] == (True, ["GIT_DIR=/gitcommon"])
+          and mounts["worktree"] == (True, ["GIT_DIR=/gitcommon/worktrees/wt"]))
+    return ok, "shown %s; /repo %s; network %s; git %s; stand-in gone after: %s" % (
+        seen, at_repo, cmd[cmd.index("--network") + 1] if "--network" in cmd else "default",
+        mounts, gone)
+
+
 def main():
     for line in guest.settle(heavy=False):
         print(line)
@@ -505,9 +1219,22 @@ def main():
           % ("PASS" if not missing else "FAIL", "" if not missing else ":"))
     for line in missing:
         print("       " + line)
+    doorless = scripts_without_a_door()
+    print("%s runners in other languages go through a door%s"
+          % ("PASS" if not doorless else "FAIL", "" if not doorless else ":"))
+    for line in doorless:
+        print("       " + line)
+    cases, wrong = walk_sees_its_cases()
+    print("%s the walk sees each of its %d cases as it should%s"
+          % ("PASS" if cases else "FAIL", len(CASES), "" if cases else ":"))
+    for line in wrong:
+        print("       " + line)
     doors = docker_runs_outside_the_door()
     print("%s the Linux image is run only through %s%s"
           % ("PASS" if not doors else "FAIL", DOOR, "" if not doors else ": " + ", ".join(doors)))
+    shown, where = door_shows_only_tracked()
+    print("%s the Linux image sees only what git tracks (%s)"
+          % ("PASS" if shown else "FAIL", where))
     ok, out = ceiling_holds()
     print("%s a process past the ceiling fails alone (%s)" % ("PASS" if ok else "FAIL", out))
     turn, seen = turn_holds()
@@ -515,7 +1242,14 @@ def main():
     homes, where = homes_hold()
     print("%s a run's homes are its own, its app's first start bringing nothing in (%s)"
           % ("PASS" if homes else "FAIL", where))
-    return 1 if missing or doors or not ok or not turn or not homes else 0
+    ended, how = leftovers_end()
+    print("%s what a run started ends with it, its parent gone or not (%s)"
+          % ({True: "PASS", False: "FAIL", None: "SKIP"}[ended], how))
+    floor, said = floor_holds()
+    print("%s a run keeps a floor under the disk (%s)"
+          % ({True: "PASS", False: "FAIL", None: "SKIP"}[floor], said))
+    return 1 if (missing or doorless or not cases or doors or not shown or not ok or not turn
+                 or not homes or ended is False or floor is False) else 0
 
 
 if __name__ == "__main__":

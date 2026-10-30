@@ -34,6 +34,9 @@ import importlib.util
 import os
 import sys
 
+import guest  # the ceiling and empty homes, before the app's code (tools/guest.py)
+
+guest.settle(heavy=False)
 sys.stdout.reconfigure(encoding="utf-8")
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

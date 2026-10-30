@@ -31,6 +31,7 @@ The test suite does not run for a change that only touches `site/`.
 | `build.py` | Turns `src/` plus the two apps' repositories into `public/`. The Android page is made here, from the Android repository's README and screenshots. |
 | `site.json` | The site's address; where the Android repository is (`android_repo`, beside this one by default); and, later, each repository's public address (`repo_url`, `android_repo_url`). |
 | `tools/check_demo.mjs` | Walks the built site in a real browser (Edge), both demos included, on a computer and on a phone, and photographs it. |
+| `tools/check_demo.py` | The walk's door: it starts `check_demo.mjs`, which will not start any other way, with the computer's turn, a memory ceiling and a time limit, and ends every Edge process with it. |
 | `tools/verify_share_codes.py` | Holds both demos' share codes to the app's own code, both ways. |
 | `netlify.toml` | Only for a deploy connected to Git, later (with `site` as the base directory). A drag-and-drop deploy ignores it. |
 
@@ -80,9 +81,16 @@ gather changes and upload them together rather than one at a time.
 
 ```
 py site/tools/verify_share_codes.py <photos folder>
-node site/tools/check_demo.mjs <photos folder>
+py site/tools/check_demo.py <photos folder>
 py site/tools/verify_share_codes.py <photos folder>
 ```
+
+The walk starts only through its door, `check_demo.py`. Headless Edge is a
+tree of processes, and a walk stopped midway once left about ten of them
+running; the door takes the computer's turn (one heavy job at a time, see
+[qa/README](../qa/README.md#a-test-run-is-a-guest-on-the-computer-it-runs-on)),
+holds Edge's whole tree in its job object, gives the walk 15 minutes, and
+ends whatever is left when the walk ends, however it ends.
 
 The browser walk serves `public/` with the same security headers Netlify will
 send, presses what a visitor presses (opening notes, ticking a checklist,

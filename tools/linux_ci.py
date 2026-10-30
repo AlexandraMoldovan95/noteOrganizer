@@ -17,6 +17,14 @@ uses it:
 * the container has a name of its own (noteorg-ci-<pid>), a memory limit
   with no swap, two CPUs and a cap on its processes, and docker's init as
   its first process;
+* it sees, at /repo and read-only, a copy of what git tracks and would add
+  -- never what git ignores, such as a notebook, settings or
+  notebook_location.txt at the root, which the rules forbid reading on
+  this side and a probe could print (final audit, round eight) -- and it
+  has no network;
+* its /tmp, where every run inside it writes, is a tmpfs of TMP_SIZE,
+  counted in its memory limit: a runaway writer fails there, and Docker's
+  virtual disk, which never gives space back to Windows, does not grow;
 * inside, the run has a time limit of its own (``timeout -k``), and a
   watcher on the container's input, which this runner holds open and never
   writes: when the runner goes, however it goes, the input closes and the
@@ -47,6 +55,7 @@ anything here").
 """
 
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -64,6 +73,13 @@ LABEL = "noteorg.ci"
 MEMORY = "1536m"
 CPUS = "2"
 PIDS = "512"
+# The container's /tmp. Inside MEMORY: with the largest measured run's
+# 227 MB beside it, a full /tmp still leaves the limit unreached. The
+# suite's own copy there is about 5 MB.
+TMP_SIZE = "512m"
+# What points git at a repository other than the one in its folder.
+GIT_LOCATION = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR",
+                "GIT_OBJECT_DIRECTORY")
 # The run's own time limit inside the container, and how much longer the
 # runner waits for it before removing the container itself.
 LIMIT_SUITE = 3600
@@ -151,29 +167,67 @@ def build():
         return 124
 
 
-def worktree_git():
-    """The docker arguments that let git read a worktree inside the image.
+def git_mounts(root=ROOT):
+    """The docker arguments that let git read this checkout inside the image.
 
-    A git worktree's .git is a file naming its git folder by a Windows path,
-    which git in the container cannot follow: the two gates that ask git
-    what is tracked then refuse to run. The repository's common git folder
-    is mounted read-only beside /repo, and git is pointed at this worktree's
-    folder inside it. A plain checkout needs nothing."""
-    dot_git = os.path.join(ROOT, ".git")
-    if not os.path.isfile(dot_git):
+    /repo is a copy without .git, so git's own folder is mounted read-only
+    beside it and git is pointed at it: the two gates that ask git what is
+    tracked refuse to run without one. A worktree's .git is a file naming
+    its git folder by a Windows path, which git in the container cannot
+    follow: the repository's common git folder is mounted, and git is
+    pointed at this worktree's folder inside it."""
+    dot_git = os.path.join(root, ".git")
+    if os.path.isdir(dot_git):
+        common, inside = dot_git, ""
+    elif os.path.isfile(dot_git):
+        with open(dot_git, encoding="utf-8") as fh:
+            gitdir = fh.read().strip().partition("gitdir:")[2].strip()
+        try:
+            with open(os.path.join(gitdir, "commondir"), encoding="utf-8") as fh:
+                common = os.path.normpath(os.path.join(gitdir, fh.read().strip()))
+        except OSError:
+            return []
+        inside = "/" + os.path.relpath(os.path.normpath(gitdir), common).replace(os.sep, "/")
+    else:
         return []
-    with open(dot_git, encoding="utf-8") as fh:
-        gitdir = fh.read().strip().partition("gitdir:")[2].strip()
-    try:
-        with open(os.path.join(gitdir, "commondir"), encoding="utf-8") as fh:
-            common = os.path.normpath(os.path.join(gitdir, fh.read().strip()))
-    except OSError:
-        return []
-    inside = os.path.relpath(os.path.normpath(gitdir), common).replace(os.sep, "/")
     return ["--mount", "type=bind,source=%s,target=/gitcommon,readonly" % common,
-            "-e", "GIT_DIR=/gitcommon/%s" % inside, "-e", "GIT_WORK_TREE=/repo",
+            "-e", "GIT_DIR=/gitcommon%s" % inside, "-e", "GIT_WORK_TREE=/repo",
             "-e", "GIT_CONFIG_COUNT=1", "-e", "GIT_CONFIG_KEY_0=safe.directory",
             "-e", "GIT_CONFIG_VALUE_0=*"]
+
+
+def git_env():
+    """This environment without what would point git at another repository
+    than the one in its folder (inside the image, GIT_DIR names /repo's)."""
+    return {k: v for k, v in os.environ.items() if k.upper() not in GIT_LOCATION}
+
+
+def tracked_copy(root=ROOT):
+    """A copy of what git tracks and would add (``ls-files --cached
+    --others --exclude-standard``), as the working tree holds them, in the
+    "repo" folder of a marked scratch folder: what the container is shown at
+    /repo. What git ignores is never in it. Returns the scratch folder,
+    removed at the end of the run, or by a later run's sweep."""
+    try:
+        listed = subprocess.run(["git", "ls-files", "-z", "--cached", "--others",
+                                 "--exclude-standard"], cwd=root, env=git_env(),
+                                capture_output=True, timeout=120)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise RuntimeError("git could not list what %s tracks (%s)" % (root, exc))
+    if listed.returncode != 0:
+        raise RuntimeError("git could not list what %s tracks: %s" % (
+            root, listed.stderr.decode("utf-8", "replace").strip()[:300]))
+    folder = guest.scratch("noteorg-ci-repo-")
+    copy = os.path.join(folder, "repo")
+    os.makedirs(copy)
+    for name in sorted(set(listed.stdout.decode("utf-8", "surrogateescape").split("\0"))):
+        source = os.path.join(root, *name.split("/")) if name else ""
+        if not os.path.isfile(source):    # deleted from the working tree, or a submodule
+            continue
+        target = os.path.join(copy, *name.split("/"))
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        shutil.copy2(source, target)
+    return folder
 
 
 def probe_folder(path):
@@ -195,36 +249,47 @@ def probe_folder(path):
     return None
 
 
-def run(args, limit, mounts=()):
-    name = "noteorg-ci-%d" % os.getpid()
-    born = guest.born_at(os.getpid())
+def command(name, born, limit, args, repo, mounts=()):
+    """The docker run, showing the container ``repo`` (a tracked_copy) at /repo."""
     cmd = ["docker", "run", "--rm", "--init", "-i", "--name", name,
            "--label", "%s=1" % LABEL, "--label", "%s.pid=%d" % (LABEL, os.getpid()),
            "--label", "%s.born=%s" % (LABEL, "" if born is None else "%.3f" % born),
            "--memory", MEMORY, "--memory-swap", MEMORY, "--cpus", CPUS,
-           "--pids-limit", PIDS, "-e", "PYTHONUNBUFFERED=1",
-           "--mount", "type=bind,source=%s,target=/repo,readonly" % ROOT] + worktree_git()
+           "--pids-limit", PIDS, "--network", "none",
+           "--tmpfs", "/tmp:rw,exec,nosuid,size=%s" % TMP_SIZE, "-e", "PYTHONUNBUFFERED=1",
+           "--mount", "type=bind,source=%s,target=/repo,readonly" % repo] + git_mounts()
     cmd += list(mounts)
     cmd += ["--entrypoint", "/bin/sh", IMAGE, "-c", INSIDE, "linux_ci", str(limit)] + args
-    print("linux_ci: %s, at most %s of memory, %s CPUs, %d s" % (name, MEMORY, CPUS, limit),
-          flush=True)
-    # The input is held open and never written: its closing is what tells
-    # the container that this runner is gone.
-    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT)
-    reader = threading.Thread(target=_echo, args=(proc.stdout,), daemon=True)
-    reader.start()
+    return cmd
+
+
+def run(args, limit, mounts=()):
+    name = "noteorg-ci-%d" % os.getpid()
+    folder = tracked_copy()
     try:
-        code = proc.wait(timeout=limit + GRACE)
-    except subprocess.TimeoutExpired:
-        print("HANG: the container outlived its own limit by %d s; removing it" % GRACE)
-        code = 124
+        cmd = command(name, guest.born_at(os.getpid()), limit, args,
+                      os.path.join(folder, "repo"), mounts)
+        print("linux_ci: %s, at most %s of memory, %s CPUs, %d s; /repo is what git tracks, "
+              "no network" % (name, MEMORY, CPUS, limit), flush=True)
+        # The input is held open and never written: its closing is what tells
+        # the container that this runner is gone.
+        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT)
+        reader = threading.Thread(target=_echo, args=(proc.stdout,), daemon=True)
+        reader.start()
+        try:
+            code = proc.wait(timeout=limit + GRACE)
+        except subprocess.TimeoutExpired:
+            print("HANG: the container outlived its own limit by %d s; removing it" % GRACE)
+            code = 124
+        finally:
+            remove(name)
+            if proc.poll() is None:
+                proc.kill()
+                proc.wait(timeout=30)
+            reader.join(timeout=10)
     finally:
-        remove(name)
-        if proc.poll() is None:
-            proc.kill()
-            proc.wait(timeout=30)
-        reader.join(timeout=10)
+        guest.remove(folder)
     return code
 
 
@@ -274,6 +339,9 @@ def main(argv):
     try:
         return run(args, limit or (LIMIT_SCRIPT if args[:1] in (["--script"], ["--probe"])
                                    else LIMIT_SUITE), mounts)
+    except RuntimeError as exc:     # nothing to show the container but what git tracks
+        print("linux_ci: %s" % exc)
+        return 2
     except KeyboardInterrupt:
         print("linux_ci: stopped; the container is removed")
         return 130
