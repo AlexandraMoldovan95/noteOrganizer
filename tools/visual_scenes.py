@@ -33,37 +33,15 @@ turn and its memory ceiling before the app is built; every frame goes
 through _qa_support's shutter (a picture holds only the app's pixels).
 """
 
-# THE TURN AND THE CEILING FIRST -- this builds the whole app, on the screen.
+# THE TURN, THE CEILING AND THE SEED before the app -- this builds the whole
+# app, on the screen. _qa_support.seed_here does all three, after the DPI call
+# below (it loads tkinter): see its use there.
 import os as _guest_os, sys as _guest_sys
 _guest_sys.path.insert(0, _guest_os.path.dirname(_guest_os.path.abspath(__file__)))
 if not _guest_os.path.exists(_guest_os.path.join(_guest_sys.path[0], '_qa_support.py')):
     _guest_sys.exit('REFUSING to run: no _qa_support.py here, the shutter. Copy '
                     'tools/guest.py and qa/_qa_support.py beside this script (see '
                     'its docstring).')
-try:
-    import guest
-except ImportError as _missing:
-    _guest_sys.exit('REFUSING to run: %s. Copy tools/guest.py and qa/_qa_support.py '
-                    'beside this script (see its docstring).' % _missing)
-for _line in guest.settle(label='visual_scenes'):
-    print(_line)
-
-# HERMETIC SEED -- same guard as the qa scripts, for the same reason.
-import io as _seed_io, json as _seed_json, os as _seed_os, sys as _seed_sys
-if _seed_os.path.exists('notes_data.json'):
-    try:
-        _seed_prev = _seed_json.load(
-            _seed_io.open('notes_data.json', encoding='utf-8'))
-    except Exception:
-        _seed_prev = []
-    if isinstance(_seed_prev, list) and _seed_prev:
-        _seed_sys.exit(
-            'REFUSING to run: notes_data.json here holds %d real note(s). '
-            'Copy this script to a scratch directory instead.'
-            % len(_seed_prev))
-_seed_io.open('notes_data.json', 'w', encoding='utf-8').write('[]')
-_seed_io.open('settings.json', 'w', encoding='utf-8').write(
-    _seed_json.dumps({'reclaimed_from_appdata': True}))
 
 import ctypes
 import json
@@ -84,8 +62,11 @@ except Exception:
 
 from PIL import ImageChops, ImageStat
 
-# After the DPI call: _qa_support loads tkinter.
-from _qa_support import grab as _shutter
+# After the DPI call: _qa_support loads tkinter. seed_here settles as a guest
+# (tools/guest.py, beside it), then seeds an empty notebook here: only where
+# the app will open it, asked of its own resolver, and never beside notes.
+from _qa_support import grab as _shutter, seed_here
+seed_here()
 import note_organizer as NO
 import tkinter as tk
 from noteorganizer.core import tables as core_tables

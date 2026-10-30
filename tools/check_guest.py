@@ -16,7 +16,9 @@ what dead runs left. This gate holds it:
    the paths it runs, from the top of the module through every function,
    nested function, lambda, class body and method it calls by name:
    guest.settle() must come before the first import of the app and the
-   first child, on every path. A suite (qa1-qa9, test_*.py) settles through
+   first child, on every path. A function the file never calls is called
+   from another, and is walked as if before the ceiling: it settles first.
+   A suite (qa1-qa9, test_*.py) settles through
    its guest step, qa/_qa_support.as_a_guest (which hermetic_seed calls):
    the suites were let off for "a runner starts them, and they inherit the
    ceiling", which nothing made true (final audit, round nine). A runner
@@ -52,10 +54,17 @@ what dead runs left. This gate holds it:
    refuse a user of this computer at the sandbox's folder and elsewhere,
    and the sandbox's account elsewhere, and let the sandbox's own start
    through; PowerShell, where there is one, is asked too. One that took
-   the path alone as proof passed the name test (round nine).
+   the path alone as proof passed the name test (round nine). PowerShell's
+   own parser, which runs nothing, reads the script as this gate does --
+   nothing before the guard, no #requires, using or param block -- and
+   only the literals' values are handed to PowerShell: this gate's reader
+   once passed code after a block comment's '#>', and took a curly quote,
+   at which PowerShell ends a string, for part of one (round ten).
 8. The walk sees what it is shown: each shape in CASES, written to a
    scratch folder laid out as the repository is and found and walked as
-   its files are, is caught or passes as it should.
+   its files are, is caught or passes as it should; PowerShell's parser,
+   where there is one, reads each PowerShell case as this gate does, and
+   a literal handed to it stays one string.
 9. What a run started ends with it: a process whose parent has gone, as
    Edge's have once node is gone, is ended by guest.end_others(); and a
    scratch folder something still holds stays marked for a later sweep.
@@ -66,18 +75,26 @@ what dead runs left. This gate holds it:
     tracks, as the working tree has it: neither the ignored files (a
     notebook, settings, notebook_location.txt) nor what the ignore list
     misses (a Trash kept aside, round nine), read-only, with no network,
-    and nothing writable but a /tmp sized inside its memory limit.
+    and nothing writable but a /tmp sized inside its memory limit; and a
+    link at a tracked name, which the copy followed (round ten), refuses
+    the run.
 12. A suite started outside a runner settles itself: each suite's opening
     lines, up to its guest step, run as CI runs them -- in the repository's
     layout, outside any run, under an APPDATA holding a stand-in notebook
     -- take the turn and homes of their own; in run_tests' scratch, beside
     a run that settled, they share its homes; and copied by hand without
-    guest.py, they refuse before they write anything.
+    guest.py or the app, they refuse before they write anything. In a
+    checkout whose notebook_location.txt names a stand-in notebook, by its
+    path or through %USERPROFILE%, each refuses and the notebook stays as
+    it was; so does a qa opening whose app would open another folder than
+    its own. The guards looked beside themselves while the app opened the
+    folder the file names: the owner's notebook (round ten).
 
     py tools/check_guest.py
 """
 
 import ast
+import base64
 import getpass
 import glob
 import json
@@ -121,7 +138,7 @@ IMPORTERS = {("importlib", "import_module"), ("importlib.util", "spec_from_file_
 APP_NAME = re.compile(r"^(note_organizer|noteorganizer)([./\\]|$)")
 # A suite's guest step: it settles as guest.settle() does (item 12 runs it).
 GUEST_STEPS = {("guest", "settle"), ("_qa_support", "as_a_guest"),
-               ("_qa_support", "hermetic_seed")}
+               ("_qa_support", "hermetic_seed"), ("_qa_support", "seed_here")}
 
 
 def candidates(root=ROOT):
@@ -463,8 +480,15 @@ class Runner:
         settled_at_top = self.block(self.tree.body, False)
         # A function the walk never reached (a decorator's list, a callback)
         # may still start something: fine only once the module itself has
-        # settled, at import, before anything could call it.
+        # settled, at import, before anything could call it -- or when it
+        # settles first itself. One this file never calls is called from
+        # elsewhere, settled or not: walked as if before the ceiling.
         if not settled_at_top:
+            called = {id(t) for n in ast.walk(self.tree) if isinstance(n, ast.Call)
+                      for t in self.targets(n)}
+            for fn in self.every_def():
+                if id(fn) not in self.reached and id(fn) not in called:
+                    self.enter(fn)
             for fn in self.every_def():
                 if id(fn) in self.reached:
                     continue
@@ -584,10 +608,13 @@ SANDBOX_ACCOUNT = "WDAGUtilityAccount"
 SANDBOX_FOLDER = "C:\\pkg"
 # A sandbox guard is evaluated, not read for the account's name (round nine:
 # one that took the path alone as proof passed that), so it has one shape,
-# GUARD_SHAPE, in which no evaluation can run anything.
-PS_TOKEN = re.compile(r"\s*(?:(?P<text>'(?:[^']|'')*')|(?P<var>\$[A-Za-z_][\w:]*)"
+# GUARD_SHAPE, in which no evaluation can run anything. PowerShell's own parser
+# reads it too, where there is one: this reader once missed code after a
+# block comment's '#>', and quotes PowerShell ends a string at (round ten).
+PS_QUOTES = "'‘’‚‛"
+PS_TOKEN = re.compile(r"\s*(?:(?P<text>'(?:[^%s]|'')*')|(?P<var>\$[A-Za-z_][\w:]*)"
                       r"|(?P<op>-[A-Za-z]+)|(?P<word>[A-Za-z][\w-]*)|(?P<num>\d+)"
-                      r"|(?P<mark>[(){};]))")
+                      r"|(?P<mark>[(){};]))" % PS_QUOTES)
 GUARD_VARS = {"$env:username": "$u", "$pscommandpath": "$p"}
 GUARD_SHAPE = ("if (<$env:USERNAME and $PSCommandPath against literals, joined by -and or "
                "-or>) { [Write-Output '...';] exit <n> }")
@@ -606,8 +633,8 @@ def ps_tokens(text):
 
 def sandbox_guard(first):
     """A sandbox script's first statement read as its guard: (terms, the
-    operator joining them, the condition for PowerShell), each term a
-    (variable, equal?, literal); None when it is not of the one shape."""
+    operator joining them), each term a (variable, equal?, literal's value);
+    None when it is not of the one shape."""
     tokens = ps_tokens(first)
     low = [(kind, value.lower()) for kind, value in tokens or []]
     if low[:2] != [("word", "if"), ("mark", "(")] or ("mark", ")") not in low:
@@ -645,16 +672,13 @@ def sandbox_guard(first):
         at += 1
     if len(joins) > 1:
         return None
-    # For PowerShell itself: the condition as written, the stand-ins in $u and $p.
-    said = " ".join(GUARD_VARS.get(value.lower(), value) if kind == "var" else value
-                    for kind, value in cond)
-    return terms, (joins.pop() if joins else "-or"), said
+    return terms, (joins.pop() if joins else "-or")
 
 
 def guard_refuses(guard, user, path):
     """Whether the guard refuses ``user`` running the script from ``path``:
     PowerShell compares strings without regard to case."""
-    terms, join, _said = guard
+    terms, join = guard
     held = [((user if var == "$env:username" else path).casefold() == literal.casefold()) == equal
             for var, equal, literal in terms]
     return all(held) if join == "-and" else any(held)
@@ -673,23 +697,143 @@ def sandbox_starts(path):
             (SANDBOX_ACCOUNT, lies, True), (SANDBOX_ACCOUNT, at_pkg, False)]
 
 
-def powershell_reads(said, starts):
-    """PowerShell's own verdict on the condition for each start, or None
-    where there is no PowerShell to ask. Only a condition sandbox_guard
-    read is passed: comparisons of $u and $p with literals, nothing to run."""
-    exe = shutil.which("powershell") or shutil.which("pwsh")
-    if not exe:
-        return None
-    quoted = lambda s: "'%s'" % s.replace("'", "''")   # noqa: E731
-    rows = ",".join("@(%s,%s)" % (quoted(user), quoted(where)) for user, where, _ in starts)
-    script = "foreach ($c in @(%s)) { $u = $c[0]; $p = $c[1]; [bool](%s) }" % (rows, said)
+def powershell():
+    return shutil.which("powershell") or shutil.which("pwsh")
+
+
+def ps_literal(value):
+    """``value`` as a PowerShell single-quoted literal: every quote PowerShell
+    ends such a string at is doubled, so the value stays one string."""
+    return "'%s'" % "".join(c * 2 if c in PS_QUOTES else c for c in value)
+
+
+def run_powershell(script, env=None, timeout=60):
+    """PowerShell's output for ``script``, passed encoded (no quoting of it
+    by a command line), or the reason it could not be asked."""
+    encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
     try:
-        run = subprocess.run([exe, "-NoProfile", "-NonInteractive", "-Command", script],
-                             capture_output=True, text=True, timeout=60)
+        run = subprocess.run([powershell(), "-NoProfile", "-NonInteractive", "-EncodedCommand",
+                              encoded], capture_output=True, text=True, timeout=timeout,
+                             env=env, encoding="utf-8", errors="replace")
     except (OSError, subprocess.TimeoutExpired) as exc:
-        return [str(exc)]
-    return [line.strip() == "True" for line in run.stdout.splitlines()
-            if line.strip() in ("True", "False")] or [(run.stdout + run.stderr).strip()[-200:]]
+        return None, str(exc)
+    return run.stdout, (run.stdout + run.stderr).strip()[-200:]
+
+
+def powershell_reads(guard, starts):
+    """PowerShell's own verdict on the guard's condition for each start, or
+    None where there is no PowerShell to ask. The condition is built from
+    the literals' values, never from the script's text: nothing to run."""
+    if not powershell():
+        return None
+    terms, join = guard
+    cond = (" %s " % join).join("(%s %s %s)" % (GUARD_VARS[var], "-eq" if equal else "-ne",
+                                                  ps_literal(literal))
+                                for var, equal, literal in terms)
+    rows = ",".join("@(%s,%s)" % (ps_literal(user), ps_literal(where)) for user, where, _ in starts)
+    out, said = run_powershell("foreach ($c in @(%s)) { $u = $c[0]; $p = $c[1]; [bool](%s) }"
+                               % (rows, cond))
+    verdicts = [line.strip() == "True" for line in (out or "").splitlines()
+                if line.strip() in ("True", "False")]
+    return verdicts or [said]
+
+
+# PowerShell's parser reads each script, and runs nothing: its first statement
+# must be the guard, before which nothing may run -- no #requires or using
+# (they load modules), no param, begin, process or dynamicparam block.
+PS_READER = r"""
+function B64($s) { [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([string]$s)) }
+function Term($e) {
+  if ($e -isnot [System.Management.Automation.Language.BinaryExpressionAst]) { return $false }
+  $op = $e.ErrorPosition.Text.ToLowerInvariant()
+  if ($op -eq '-and' -or $op -eq '-or') {
+    $script:joins[$op] = 1
+    return ((Term $e.Left) -and (Term $e.Right))
+  }
+  if ($op -ne '-eq' -and $op -ne '-ne') { return $false }
+  $v, $s = $e.Left, $e.Right
+  if ($v -is [System.Management.Automation.Language.StringConstantExpressionAst]) { $v, $s = $s, $v }
+  if ($v -isnot [System.Management.Automation.Language.VariableExpressionAst] -or $v.Splatted) { return $false }
+  if ($s -isnot [System.Management.Automation.Language.StringConstantExpressionAst]) { return $false }
+  if ([string]$s.StringConstantType -ne 'SingleQuoted') { return $false }
+  $name = '$' + $v.VariablePath.UserPath.ToLowerInvariant()
+  if ($name -ne '$env:username' -and $name -ne '$pscommandpath') { return $false }
+  $script:terms += ,@($name, $op, $s.Value)
+  return $true
+}
+function Guard($path) {
+  $tokens = $null; $errors = $null
+  $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
+  if ($errors.Count) { return 'NOT it does not parse' }
+  if ($ast.ScriptRequirements -or $ast.UsingStatements.Count) { return 'NOT #requires or using loads code before its first statement' }
+  if ($ast.ParamBlock -or $ast.DynamicParamBlock -or $ast.BeginBlock -or $ast.ProcessBlock) { return 'NOT a param, begin, process or dynamicparam block runs before its first statement' }
+  if (-not $ast.EndBlock -or $ast.EndBlock.Traps.Count -or $ast.EndBlock.Statements.Count -eq 0) { return 'NOT no first statement, or a trap' }
+  $first = $ast.EndBlock.Statements[0]
+  if ($first -isnot [System.Management.Automation.Language.IfStatementAst] -or $first.Clauses.Count -ne 1 -or $first.ElseClause) { return 'NOT its first statement is not an if of one clause' }
+  $cond = $first.Clauses[0].Item1.GetPureExpression()
+  $script:terms = @(); $script:joins = @{}
+  if (-not (Term $cond) -or $script:joins.Count -gt 1) { return 'NOT its condition is not comparisons of $env:USERNAME and $PSCommandPath with single-quoted literals' }
+  $body = @($first.Clauses[0].Item2.Statements)
+  if ($body.Count -eq 2) {
+    $w = $body[0]
+    $c = if ($w -is [System.Management.Automation.Language.PipelineAst] -and $w.PipelineElements.Count -eq 1) { $w.PipelineElements[0] }
+    if ($c -isnot [System.Management.Automation.Language.CommandAst] -or $c.CommandElements.Count -ne 2 -or $c.Redirections.Count -or [string]$c.InvocationOperator -ne 'Unknown' -or $c.GetCommandName() -ne 'Write-Output' -or $c.CommandElements[1] -isnot [System.Management.Automation.Language.StringConstantExpressionAst] -or [string]$c.CommandElements[1].StringConstantType -ne 'SingleQuoted') { return 'NOT its first step is not Write-Output of a literal' }
+  } elseif ($body.Count -ne 1) { return 'NOT its body is not [Write-Output; ] exit' }
+  $x = $body[$body.Count - 1]
+  $n = if ($x -is [System.Management.Automation.Language.ExitStatementAst] -and $x.Pipeline) { $x.Pipeline.GetPureExpression() }
+  if ($n -isnot [System.Management.Automation.Language.ConstantExpressionAst] -or $n.Value -isnot [int] -or $n.Value -eq 0) { return 'NOT it does not end in exit with a code other than 0' }
+  $out = @()
+  foreach ($t in $script:terms) { $out += ('TERM ' + $t[0] + ' ' + $t[1] + ' ' + (B64 $t[2])) }
+  $join = '-or'
+  foreach ($k in $script:joins.Keys) { $join = $k }
+  return ($out + @('JOIN ' + $join))
+}
+foreach ($path in ($env:NOTEORG_GATE_PS_FILES -split "`n")) {
+  if (-not $path) { continue }
+  'FILE ' + (B64 $path)
+  try { Guard $path } catch { 'NOT PowerShell could not read it: ' + $_.Exception.Message }
+}
+"""
+PS_FILES_ENV = "NOTEORG_GATE_PS_FILES"
+_PS_READ = {}
+
+
+def powershell_guards(paths):
+    """PowerShell's parser's reading of each script's guard: (terms, join) as
+    sandbox_guard gives them, or the reason it is not one; {} where there is
+    no PowerShell. Read in one PowerShell for all, once each."""
+    if not powershell():
+        return {}
+    keys = {os.path.normcase(os.path.abspath(p)): p for p in paths}
+    wanted = [p for k, p in keys.items() if k not in _PS_READ]
+    if wanted:
+        env = dict(os.environ)
+        env[PS_FILES_ENV] = "\n".join(os.path.abspath(p) for p in wanted)
+        out, said = run_powershell(PS_READER, env=env, timeout=120)
+        read, at = {}, None
+        try:
+            for line in (out or "").splitlines():
+                kind, _, rest = line.strip().partition(" ")
+                if kind == "FILE":
+                    at = os.path.normcase(base64.b64decode(rest, validate=True).decode("utf-8"))
+                    read[at] = "PowerShell said nothing of it"
+                elif at is None or kind not in ("NOT", "TERM", "JOIN"):
+                    continue
+                elif kind == "NOT":
+                    read[at] = rest
+                else:
+                    terms, join = read[at] if isinstance(read[at], tuple) else ([], None)
+                    if kind == "TERM":
+                        var, op, value = rest.split(" ")
+                        terms.append((var, op == "-eq",
+                                      base64.b64decode(value, validate=True).decode("utf-8")))
+                    read[at] = (terms, rest if kind == "JOIN" else join)
+        except ValueError as exc:
+            read = {}
+            said = "its answer could not be read (%s)" % exc
+        for k in (os.path.normcase(os.path.abspath(p)) for p in wanted):
+            _PS_READ[k] = read.get(k, "PowerShell could not be asked: %s" % said)
+    return {p: _PS_READ[k] for k, p in keys.items()}
 
 
 def sandbox_guard_problems(path, first, ext, rel):
@@ -697,6 +841,10 @@ def sandbox_guard_problems(path, first, ext, rel):
     if guard is None:
         return ["%s: a script for Windows Sandbox starts with its guard, in the one shape this "
                 "gate can evaluate: %s" % (rel, GUARD_SHAPE)]
+    read = powershell_guards([path]).get(path)
+    if read is not None and read != guard:
+        return ["%s: PowerShell's parser reads its first statement otherwise than this gate "
+                "(%s)" % (rel, read if isinstance(read, str) else "terms %s" % (read,))]
     starts, found = sandbox_starts(path), []
     verdicts = [guard_refuses(guard, user, where) for user, where, _ in starts]
     for (user, where, refuse), refused in zip(starts, verdicts):
@@ -706,7 +854,7 @@ def sandbox_guard_problems(path, first, ext, rel):
         elif refused and not refuse:
             found.append("%s: its guard refuses the sandbox's own start, %s at %s"
                          % (rel, user, where))
-    read = powershell_reads(guard[2], starts)
+    read = powershell_reads(guard, starts)
     if read is not None and read != verdicts:
         found.append("%s: PowerShell reads its guard otherwise than this gate (%s, against %s)"
                      % (rel, read, verdicts))
@@ -721,19 +869,22 @@ def other_candidates(root=ROOT):
 
 
 def first_statement(text, ext):
-    """The first line of a shell script that does something."""
+    """The first line of a shell script that does something: in PowerShell,
+    what follows a block comment's '#>' on its line, and #requires, which
+    loads modules before the first statement runs."""
     in_block = False
     for line in text.splitlines():
         s = line.strip()
-        if in_block:
-            in_block = "#>" not in s
-            continue
+        while s and (in_block or s.startswith("<#")):     # PowerShell's block comment
+            if not in_block:
+                in_block, s = True, s[2:]
+            end = s.find("#>")
+            in_block, s = (True, "") if end < 0 else (False, s[end + 2:].strip())
+        low = s.lower()
+        if ext in (".ps1", ".psm1") and low.startswith("#requires"):
+            return s
         if not s or s.startswith("#"):
             continue
-        if s.startswith("<#"):           # PowerShell's block comment
-            in_block = "#>" not in s[2:]
-            continue
-        low = s.lower()
         if ext in (".bat", ".cmd") and (low.startswith(("rem ", "::")) or low in ("rem", "@echo off")):
             continue
         return s
@@ -744,7 +895,7 @@ def script_problems(path, doors, root=ROOT):
     """What is wrong with one script in another language; ``doors`` is the
     text of every Python runner, to find its door in."""
     rel = _rel(path, root)
-    with open(path, encoding="utf-8", errors="replace") as fh:
+    with open(path, encoding="utf-8-sig", errors="replace") as fh:   # a BOM is not a statement
         text = fh.read()
     ext = os.path.splitext(path)[1].lower()
     if ext in SHELLS:
@@ -1051,6 +1202,53 @@ from _qa_support import hermetic_seed as _qa_seed
 _qa_seed()
 import note_organizer as NO
 """),
+    ("tool_seeds_here.py", "", """
+from _qa_support import seed_here
+seed_here()
+import note_organizer as NO
+"""),
+    # A function another file calls: it settles first, or says what it does before.
+    ("entry_settles_first.py", "", """
+def the_app():
+    import guest
+    guest.settle()
+    import note_organizer
+    return note_organizer
+"""),
+    ("entry_imports_first.py", "imports the app before guest.settle()", """
+def the_app():
+    import note_organizer
+    import guest
+    guest.settle()
+    return note_organizer
+"""),
+    # Round ten: what PowerShell runs before the guard this gate read, and
+    # quotes it ends a string at. Each is read by PowerShell's parser too.
+    ("inline_block_comment.ps1", "a shell script runs commands", """
+<# header #> Write-Output 'ran before the guard'
+if ($env:USERNAME -ne 'WDAGUtilityAccount' -or $PSCommandPath -ne 'C:\\pkg\\inline_block_comment.ps1') { exit 2 }
+"""),
+    ("block_close_line.ps1", "a shell script runs commands", """
+<#
+ header
+#> Write-Output 'ran before the guard'
+if ($env:USERNAME -ne 'WDAGUtilityAccount' -or $PSCommandPath -ne 'C:\\pkg\\block_close_line.ps1') { exit 2 }
+"""),
+    ("typographic_quote.ps1", "the one shape this gate can evaluate", """
+if ($env:USERNAME -ne 'WDAGUtilityAccount\u2019+([IO.File]::WriteAllText($env:NOTEORG_GATE_RAN, "x"))+\u2018' -or $PSCommandPath -ne 'C:\\pkg\\typographic_quote.ps1') { exit 2 }
+"""),
+    ("requires_module.ps1", "a shell script runs commands", """
+#Requires -Modules SomeModule
+if ($env:USERNAME -ne 'WDAGUtilityAccount' -or $PSCommandPath -ne 'C:\\pkg\\requires_module.ps1') { exit 2 }
+"""),
+    ("param_block.ps1", "a shell script runs commands", """
+param($Where = 'C:\\pkg')
+if ($env:USERNAME -ne 'WDAGUtilityAccount' -or $PSCommandPath -ne 'C:\\pkg\\param_block.ps1') { exit 2 }
+"""),
+    ("begin_block.ps1", "a shell script runs commands", """
+begin { Write-Output 'ran before the guard' }
+end { if ($env:USERNAME -ne 'WDAGUtilityAccount' -or $PSCommandPath -ne 'C:\\pkg\\begin_block.ps1') { exit 2 } }
+"""),
 ]
 # Where a case is written, below the folder walked as the repository is:
 # by its kind, so every folder the gate looks in is looked in ('' is the root).
@@ -1058,6 +1256,8 @@ PLACES = {".py": "tools", ".mjs": "site/tools", ".js": "tools", ".ps1": "tools/m
           ".sh": "qa", "light_runs_a_suite.py": "qa", "class_body.py": "site/tools",
           "walk_door.py": "site/tools", "test_app_first.py": "", "test_guest_first.py": "",
           "qa0.py": "qa"}
+# What the typographic quote's case would write, were reading it to run it.
+RAN_ENV = "NOTEORG_GATE_RAN"
 
 
 def walk_sees_its_cases():
@@ -1065,15 +1265,23 @@ def walk_sees_its_cases():
     found and walked as the repository's files are, and weighed against
     what each should give; returns (all as they should be, what was wrong)."""
     folder = guest.scratch("noteorg-gate-cases-")   # marked: swept if this gate is killed
-    wrong = []
+    wrong, ran = [], os.path.join(folder, "ran-inside-the-gate")
+    held = os.environ.get(RAN_ENV)
+    os.environ[RAN_ENV] = ran
     try:
-        where = {}
+        where, scripts = {}, {}
         for name, _expect, text in CASES:
             place = PLACES[name] if name in PLACES else PLACES[os.path.splitext(name)[1]]
             where[name] = (place + "/" if place else "") + name
             os.makedirs(os.path.join(folder, *place.split("/")), exist_ok=True)
-            with open(os.path.join(folder, *where[name].split("/")), "w", encoding="utf-8") as fh:
+            path = os.path.join(folder, *where[name].split("/"))
+            # PowerShell's scripts with a BOM: Windows PowerShell reads one
+            # without as the machine's code page, which has no curly quotes.
+            with open(path, "w", encoding="utf-8-sig" if name.endswith(".ps1") else "utf-8") as fh:
                 fh.write(text.lstrip("\n"))
+            if name.endswith(".ps1"):
+                scripts[name] = (path, text.lstrip("\n"))
+        powershell_guards([path for path, _text in scripts.values()])   # one PowerShell for all
         found = runners_without_settle(folder) + scripts_without_a_door(folder)
         for name, expect, _text in CASES:
             said = [line for line in found
@@ -1082,9 +1290,43 @@ def walk_sees_its_cases():
                 wrong.append("%s passed, though it should give '%s'" % (name, expect))
             elif not expect and said:
                 wrong.append("%s gave %s, though it should pass" % (name, said))
+        wrong += readers_agree(scripts)
+        if os.path.exists(ran):
+            wrong.append("reading the cases ran one: %s was written" % ran)
     finally:
         guest.remove(folder)
+        if held is None:
+            os.environ.pop(RAN_ENV, None)
+        else:
+            os.environ[RAN_ENV] = held
     return not wrong, wrong
+
+
+def readers_agree(scripts):
+    """Where there is PowerShell, its parser reads each PowerShell case as
+    this gate reads it -- the same guard, or none -- and a literal this gate
+    hands it stays one string, whatever quotes it holds."""
+    if not powershell():
+        return []
+    wrong = []
+    read = powershell_guards([path for path, _text in scripts.values()])
+    for name, (path, text) in sorted(scripts.items()):
+        mine, theirs = sandbox_guard(first_statement(text, ".ps1")), read.get(path)
+        if mine is None and not isinstance(theirs, str) or mine is not None and theirs != mine:
+            wrong.append("%s: PowerShell's parser reads %s, this gate %s" % (name, theirs, mine))
+    values = ["a\u2019+(7*6)+\u2018b", "O'Brien", "\u201bx\u201a", "C:\\pkg\\x.ps1"]
+    out, said = run_powershell("foreach ($s in @(%s)) { [Convert]::ToBase64String("
+                               "[Text.Encoding]::UTF8.GetBytes($s)) }"
+                               % ",".join(ps_literal(v) for v in values))
+    try:
+        back = [base64.b64decode(line.strip(), validate=True).decode("utf-8", "replace")
+                for line in (out or "").splitlines() if line.strip()]
+    except ValueError:
+        back = None
+    if back != values:
+        wrong.append("a literal handed to PowerShell did not stay one string: %s, from %s (%s)"
+                     % (back, values, said))
+    return wrong
 
 
 # -- 4: the ceiling holds --
@@ -1395,6 +1637,7 @@ def door_shows_only_tracked():
             mounts[kind] = (bool(source) and os.path.exists(source)
                             and os.path.samefile(source, dot_git),
                             [a for a in args if a.startswith("GIT_DIR=")])
+        linked = links_refused(work, repo, git)
     except RuntimeError as exc:
         return False, str(exc)
     finally:
@@ -1411,10 +1654,79 @@ def door_shows_only_tracked():
           and "--read-only" in cmd
           and any(part.startswith("/tmp:") and "size=" in part for part in cmd)
           and mounts["checkout"] == (True, ["GIT_DIR=/gitcommon"])
-          and mounts["worktree"] == (True, ["GIT_DIR=/gitcommon/worktrees/wt"]))
-    return ok, "shown %s; /repo %s; network %s; read-only %s; git %s; stand-in gone after: %s" % (
-        seen, at_repo, cmd[cmd.index("--network") + 1] if "--network" in cmd else "default",
-        "--read-only" in cmd, mounts, gone)
+          and mounts["worktree"] == (True, ["GIT_DIR=/gitcommon/worktrees/wt"])
+          and linked["folder"] == "refused"
+          and (linked["file"] == "refused" or linked["file"].startswith("not tried")))
+    return ok, ("shown %s; /repo %s; network %s; read-only %s; git %s; a link at a tracked "
+                "name %s; stand-in gone after: %s" % (
+                    seen, at_repo, cmd[cmd.index("--network") + 1] if "--network" in cmd
+                    else "default", "--read-only" in cmd, mounts, linked, gone))
+
+
+def links_refused(work, repo, git):
+    """A tracked folder, then a tracked file, replaced by a link to a
+    stand-in notebook: the copy refuses each, naming it, and shows nothing
+    of it (final audit, round ten: the copy followed links). A file link
+    needs a privilege Windows may not give; a junction does not."""
+    import linux_ci
+    her = os.path.join(work, "her")
+    os.makedirs(her)
+    for name in ("guide.md", "notes_data.json"):
+        with open(os.path.join(her, name), "w", encoding="utf-8") as fh:
+            fh.write('[{"title": "A stand-in notebook, through a link"}]')
+    os.makedirs(os.path.join(repo, "docs"))
+    for name in ("docs/guide.md", "linked.txt"):
+        with open(os.path.join(repo, *name.split("/")), "w", encoding="utf-8") as fh:
+            fh.write("tracked")
+    git("add", "docs/guide.md", "linked.txt")
+
+    def copied(link):
+        try:
+            copy = linux_ci.tracked_copy(repo)
+        except RuntimeError as exc:
+            return "refused" if link in str(exc) else "refused, not naming it: %s" % exc
+        try:
+            shown = [os.path.join(top, f) for top, _dirs, files in os.walk(copy) for f in files]
+            leaked = any("through a link" in open(p, encoding="utf-8", errors="replace").read()
+                         for p in shown)
+        finally:
+            guest.remove(copy)
+        return "copied" + (", the stand-in notebook in it" if leaked else "")
+
+    said = {}
+    folder = os.path.join(repo, "docs")
+    shutil.rmtree(folder)
+    try:
+        if os.name == "nt":
+            import _winapi
+            _winapi.CreateJunction(her, folder)
+        else:
+            os.symlink(her, folder, target_is_directory=True)
+    except OSError as exc:
+        said["folder"] = "no link could be made: %s" % exc
+    else:
+        try:
+            said["folder"] = copied(folder)
+        finally:
+            if os.name == "nt":
+                os.rmdir(folder)        # the junction, not what it points at
+            else:
+                os.remove(folder)
+    os.makedirs(folder)
+    with open(os.path.join(folder, "guide.md"), "w", encoding="utf-8") as fh:
+        fh.write("tracked")
+    linked = os.path.join(repo, "linked.txt")
+    os.remove(linked)
+    try:
+        os.symlink(os.path.join(her, "notes_data.json"), linked)
+    except OSError as exc:
+        said["file"] = "not tried: %s" % (exc.strerror or exc)
+    else:
+        try:
+            said["file"] = copied(linked)
+        finally:
+            os.remove(linked)
+    return said
 
 
 # -- 12: a suite started outside a runner settles itself --
@@ -1456,8 +1768,10 @@ def outside_a_run(work, standin):
     return env
 
 
-def start(path, env):
-    run = subprocess.run([sys.executable, os.path.basename(path)], cwd=os.path.dirname(path),
+def start(path, env, cwd=None):
+    """Run a stand-in: from its own folder, as CI does, or from ``cwd``."""
+    run = subprocess.run([sys.executable, path if cwd else os.path.basename(path)],
+                         cwd=cwd or os.path.dirname(path),
                          env=env, capture_output=True, text=True, timeout=120,
                          encoding="utf-8", errors="replace")
     said = [json.loads(line[6:]) for line in run.stdout.splitlines() if line.startswith("GUEST ")]
@@ -1471,14 +1785,76 @@ def settled_alone(run, seen, standin):
                 and "this run's turn" in run.stdout and not os.path.exists(seen["homes"]))
 
 
+def lay_app(folder):
+    """The app as a checkout or a scratch copy has it: the entry file and its package."""
+    os.makedirs(folder, exist_ok=True)
+    shutil.copy2(os.path.join(ROOT, "note_organizer.py"), folder)
+    shutil.copytree(os.path.join(ROOT, "noteorganizer"), os.path.join(folder, "noteorganizer"),
+                    ignore=shutil.ignore_patterns("__pycache__"))
+
+
+def lay_repo(repo, openings, ci_copy):
+    """The repository's layout with the suites' openings where the suites
+    are, and the app in qa/ too when ``ci_copy`` (CI copies it there)."""
+    lay_app(repo)
+    for folder in ("qa", "tools"):
+        os.makedirs(os.path.join(repo, folder), exist_ok=True)
+    shutil.copy2(os.path.join(ROOT, "qa", "_qa_support.py"), os.path.join(repo, "qa"))
+    shutil.copy2(os.path.join(HERE, "guest.py"), os.path.join(repo, "tools"))
+    if ci_copy:
+        lay_app(os.path.join(repo, "qa"))
+    stands = []
+    for name, in_qa, text in openings:
+        stand = os.path.join(repo, "qa" if in_qa else "", name)
+        with open(stand, "w", encoding="utf-8") as fh:
+            fh.write(text + REPORT)
+        stands.append((name, in_qa, stand))
+    return stands
+
+
+def files_of(folder):
+    """A folder's files and what they hold, to see whether a run touched it."""
+    if not os.path.isdir(folder):
+        return None
+    found = {}
+    for name in sorted(os.listdir(folder)):
+        if os.path.isfile(os.path.join(folder, name)):
+            with open(os.path.join(folder, name), "rb") as fh:
+                found[name] = fh.read()
+    return found
+
+
+def refused_untouched(run, seen, watched, before, seeded):
+    """A run that refused, said so, and changed nothing: ``watched`` as it
+    was (``before``), and no seed written in any folder of ``seeded``."""
+    return (run.returncode != 0 and "REFUSING" in run.stdout + run.stderr and seen is None
+            and files_of(watched) == before
+            and not any(os.path.exists(os.path.join(f, n)) for f in seeded
+                        for n in ("notes_data.json", "settings.json")))
+
+
+def her_notebook(folder):
+    """A stand-in for the notebook a checkout's notebook_location.txt names --
+    never the owner's: three files, as bytes."""
+    os.makedirs(folder, exist_ok=True)
+    for name, text in (("notes_data.json", '[{"id": 1, "uid": "her-1", "title": "Her note"}]'),
+                       ("trash.json", '[{"id": 2, "uid": "her-2", "title": "Her deleted note"}]'),
+                       ("settings.json", '{"theme": "dark"}')):
+        with open(os.path.join(folder, name), "w", encoding="utf-8") as fh:
+            fh.write(text)
+    return files_of(folder)
+
+
 def suites_settle_themselves():
     """Each suite's opening, up to its guest step, run as CI runs it and as
     a person would by hand, takes homes and a turn of its own; beside a run
     that settled, in run_tests' scratch, it shares that run's homes; copied
-    without guest.py, it refuses before it writes anything."""
+    without guest.py or without the app, it refuses before it writes
+    anything; and beside a notebook the app would open, each refuses
+    (beside_a_named_notebook)."""
     import run_tests
     work = guest.scratch("noteorg-gate-suites-")    # marked: swept if this gate is killed
-    wrong, seen_kinds = [], {}
+    wrong, seen_kinds, openings = [], {}, []
     try:
         standin = os.path.join(work, "appdata")
         os.makedirs(os.path.join(standin, "NoteOrganizer"))
@@ -1486,12 +1862,6 @@ def suites_settle_themselves():
                   encoding="utf-8") as fh:
             fh.write('[{"id": 1, "uid": "gate-1", "title": "A stand-in notebook"}]')
         env = outside_a_run(work, standin)
-        # The repository's layout, which CI runs the suites in.
-        repo = os.path.join(work, "repo")
-        for folder in ("qa", "tools"):
-            os.makedirs(os.path.join(repo, folder))
-        shutil.copy2(os.path.join(ROOT, "qa", "_qa_support.py"), os.path.join(repo, "qa"))
-        shutil.copy2(os.path.join(HERE, "guest.py"), os.path.join(repo, "tools"))
         qa_opening = None
         for path in suites():
             text = opening(path)
@@ -1505,33 +1875,37 @@ def suites_settle_themselves():
             if kind in seen_kinds:
                 continue
             seen_kinds[kind] = name
+            openings.append((name, in_qa, text))
             qa_opening = text if in_qa else qa_opening
-            stand = os.path.join(repo, "qa" if in_qa else "", name)
-            with open(stand, "w", encoding="utf-8") as fh:
-                fh.write(text + REPORT)
+        if qa_opening is None:
+            return False, wrong + ["no qa script's opening was found to run"]
+        # The repository's layout, which CI runs the suites in.
+        for name, _in_qa, stand in lay_repo(os.path.join(work, "repo"), openings, True):
             run, seen = start(stand, env)
             if not settled_alone(run, seen, standin):
                 wrong.append("%s, as CI starts it, did not settle alone: exit %d, %s, %s" % (
                     name, run.returncode, seen, (run.stdout + run.stderr).strip()[-300:]))
-        if qa_opening is None:
-            return False, wrong + ["no qa script's opening was found to run"]
-        # Copied by hand: without guest.py it refuses, with it beside, it settles.
+        # Copied by hand: without guest.py it refuses, and without the app,
+        # whose notebook it cannot ask after; with both beside, it settles.
         by_hand = os.path.join(work, "by_hand", "copy")
         os.makedirs(by_hand)
         shutil.copy2(os.path.join(ROOT, "qa", "_qa_support.py"), by_hand)
         stand = os.path.join(by_hand, "standin_qa.py")
         with open(stand, "w", encoding="utf-8") as fh:
             fh.write(qa_opening + REPORT)
-        run, seen = start(stand, env)
-        wrote = os.path.exists(os.path.join(by_hand, "notes_data.json"))
-        if run.returncode == 0 or "guest.py" not in run.stdout + run.stderr or wrote or seen:
-            wrong.append("copied by hand without guest.py, it did not refuse: exit %d, "
-                         "notes_data.json written %s" % (run.returncode, wrote))
-        shutil.copy2(os.path.join(HERE, "guest.py"), by_hand)
+        for missing, then in (("guest.py", lambda: shutil.copy2(os.path.join(HERE, "guest.py"),
+                                                               by_hand)),
+                              ("note_organizer.py", lambda: lay_app(by_hand))):
+            run, seen = start(stand, env)
+            wrote = os.path.exists(os.path.join(by_hand, "notes_data.json"))
+            if run.returncode == 0 or missing not in run.stdout + run.stderr or wrote or seen:
+                wrong.append("copied by hand without %s, it did not refuse: exit %d, "
+                             "notes_data.json written %s" % (missing, run.returncode, wrote))
+            then()
         run, seen = start(stand, env)
         if not settled_alone(run, seen, standin):
-            wrong.append("copied by hand with guest.py beside it, it did not settle alone: "
-                         "exit %d, %s" % (run.returncode, seen))
+            wrong.append("copied by hand with guest.py and the app beside it, it did not "
+                         "settle alone: exit %d, %s" % (run.returncode, seen))
         # In run_tests' scratch, started by a run that settled (this gate).
         scratch = run_tests.build_scratch()
         try:
@@ -1551,10 +1925,60 @@ def suites_settle_themselves():
             wrong.append("in run_tests' scratch, beside a run that settled, it did not share "
                          "its homes: exit %d, %s, %s" % (run.returncode, seen,
                                                          (run.stdout + run.stderr).strip()[-300:]))
+        wrong += beside_a_named_notebook(work, env, openings)
     finally:
         guest.remove(work)
-    return not wrong, wrong or ["%d opening(s) as CI starts them (%s), by hand, in run_tests' "
-                                "scratch" % (len(seen_kinds), ", ".join(seen_kinds.values()))]
+    return not wrong, wrong or [
+        "%d opening(s) as CI starts them (%s), by hand, in run_tests' scratch; each refusing "
+        "where a notebook_location.txt names a notebook, by its path and through "
+        "%%USERPROFILE%%, and a qa opening where the app opens another folder"
+        % (len(seen_kinds), ", ".join(seen_kinds.values()))]
+
+
+def beside_a_named_notebook(work, env, openings):
+    """The owner's checkout, stood in: its notebook_location.txt names a
+    notebook outside it, by its path or through %USERPROFILE%, which a
+    guest's homes leave as they are. Each opening, started as a person
+    would there -- a unit suite from the root, CI's own recipe; a qa script
+    from qa/ with the root on PYTHONPATH -- refuses, the notebook as it was.
+    And the checkout as it was before the file, its notebook beside the
+    app: a qa opening from qa/ refuses, for the app would open the root.
+    The guards looked beside themselves while the app opened the folder the
+    file names (final audit, round ten)."""
+    wrong = []
+    profile = os.path.join(work, "profile")
+    her = os.path.join(profile, "Note Organizer")
+    before = her_notebook(her)
+    var = "%USERPROFILE%\\" if os.name == "nt" else "$USERPROFILE/"
+    for how, line, folder in (("by its path", her, "checkout_path"),
+                              ("through %USERPROFILE%", var + "Note Organizer",
+                               "checkout_profile")):
+        checkout = os.path.join(work, folder)
+        stands = lay_repo(checkout, openings, False)
+        with open(os.path.join(checkout, "notebook_location.txt"), "w", encoding="utf-8") as fh:
+            fh.write("# my own notebook, out of the repo\n%s\n" % line)
+        named = dict(env, USERPROFILE=profile)
+        for name, in_qa, stand in stands:
+            if in_qa:
+                run, seen = start(stand, dict(named, PYTHONPATH=checkout), os.path.dirname(stand))
+            else:
+                run, seen = start(stand, named, checkout)
+            if not refused_untouched(run, seen, her, before,
+                                     (checkout, os.path.join(checkout, "qa"))):
+                wrong.append("%s, in a checkout whose notebook_location.txt names a notebook "
+                             "%s, did not refuse with the notebook as it was: exit %d, %s" % (
+                                 name, how, run.returncode,
+                                 (run.stdout + run.stderr).strip()[-300:]))
+    beside = os.path.join(work, "checkout_beside")
+    stands = lay_repo(beside, [o for o in openings if o[1]], False)
+    held = her_notebook(beside)
+    for name, _in_qa, stand in stands:
+        run, seen = start(stand, dict(env, PYTHONPATH=beside), os.path.dirname(stand))
+        if not refused_untouched(run, seen, beside, held, (os.path.dirname(stand),)):
+            wrong.append("%s, started from qa/ with the app at the root beside its notebook, "
+                         "did not refuse with the notebook as it was: exit %d, %s" % (
+                             name, run.returncode, (run.stdout + run.stderr).strip()[-300:]))
+    return wrong
 
 
 def main():

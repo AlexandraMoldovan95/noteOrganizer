@@ -125,13 +125,22 @@ different questions, and a check that wants the second asserts it itself
     The first line of every qa script, before ``import note_organizer``:
     gives the script a data folder of its own, or refuses to run. It lives
     here, once, because it was nine identical copies -- the one state a
-    copied safety rule does not stay in.
+    copied safety rule does not stay in. ``seed_here()`` is its seed, for
+    the tools that photograph or measure the app (no scratch marker).
 
 ``as_a_guest()``
     The first act of every suite, qa and unit alike (``hermetic_seed``
     calls it): settles the script as tools/guest.py's runners settle. One
     a runner started shares its turn, homes and ceiling; one started by
-    hand or by CI takes its own, and refuses without guest.py.
+    hand or by CI takes its own, and refuses without guest.py -- and
+    beside an app whose notebook_location.txt names a folder.
+
+``where_the_app_opens(app_dir)``
+    The folder the app found at *app_dir* would open its notebook in,
+    asked of the app's own resolver (core.paths) as ``initialise()`` asks
+    it. The guards looked for a notebook in their own folder while the
+    app opened the one notebook_location.txt names: in a checkout, the
+    owner's (final audit, round ten).
 
 ``waiting_timers(app, name)``
     The Tcl timers waiting to run a callback called *name*, asked of Tcl
@@ -192,7 +201,11 @@ def as_a_guest():
     by hand, or by CI -- takes its own. The suites were let off that rule
     because "a runner starts them", and nothing made it so (final audit,
     round nine). guest.py is found beside this file, as every scratch copy
-    has it, or in the repository's tools/; without it, the script refuses."""
+    has it, or in the repository's tools/; without it, the script refuses.
+
+    Settled, it refuses beside an app whose notebook_location.txt names a
+    folder: that app opens someone's own notebook, and a copy made to test
+    in never carries the file (round ten)."""
     if _SETTLED:
         return _SETTLED[0]
     here = os.path.dirname(os.path.abspath(__file__))
@@ -214,10 +227,109 @@ def as_a_guest():
     for line in guest.settle():
         print(line, flush=True)
     _SETTLED.append(guest)
+    app_dir = _app_dir()
+    if app_dir is not None:
+        paths = _resolver(app_dir)
+        named = paths.chosen_notebook_dir(app_dir)
+        if named is not None:
+            sys.exit(
+                "REFUSING to run: the app this script would start, at %s, keeps "
+                "its notebook in the folder its %s names:\n%s\nThat is someone's "
+                "own notebook: a copy made to test in never carries the file. Run "
+                "it through tools/run_tests.py (CLAUDE.md, 'QA testing safety')."
+                % (app_dir, paths.LOCATION_FILE, named))
     return guest
 
 
-def hermetic_seed():
+def _app_dir():
+    """The folder ``import note_organizer`` would load the app from, found
+    without importing it; None when there is none to find."""
+    import importlib.util
+    try:
+        spec = importlib.util.find_spec("note_organizer")
+    except (ImportError, ValueError):
+        return None
+    origin = getattr(spec, "origin", None)
+    if not origin or not os.path.isfile(origin):
+        return None
+    return os.path.dirname(os.path.abspath(origin))
+
+
+def _resolver(app_dir):
+    """The app's own core.paths, as ``import note_organizer`` would find it."""
+    try:
+        from noteorganizer.core import paths
+    except ImportError as exc:
+        sys.exit("REFUSING to run: the app's own resolver (noteorganizer.core."
+                 "paths) cannot be asked where the app at %s opens its notebook "
+                 "(%s)." % (app_dir, exc))
+    return paths
+
+
+def where_the_app_opens(app_dir):
+    """(folder, named): the folder the app at *app_dir* opens its notebook
+    in, and whether its notebook_location.txt named it -- asked of the app's
+    own resolver, as initialise() asks it. A named folder is not probed:
+    resolve_data_dir proves a folder writable by writing in it."""
+    as_a_guest()
+    paths = _resolver(app_dir)
+    named = paths.chosen_notebook_dir(app_dir)
+    if named is not None:
+        return named, True
+    return paths.resolve_data_dir(app_dir)[0], False
+
+
+def _same_folder(a, b):
+    try:
+        return os.path.samefile(a, b)
+    except OSError:      # one of them is not there: not the same folder
+        return False
+
+
+def seed_here(app_dir=None):
+    """Seed an empty notebook in the working folder, where the app will open
+    it -- or refuse. hermetic_seed's guard without its scratch marker, for
+    the tools that photograph or measure the app. *app_dir* is where the
+    app is, for a check that stands one somewhere; by default, where
+    ``import note_organizer`` finds it. The rules: hermetic_seed."""
+    as_a_guest()
+    here = os.getcwd()
+    app_dir = app_dir or _app_dir()
+    if app_dir is None:
+        sys.exit(
+            "REFUSING to run: no note_organizer.py can be found from here, so "
+            "where the app would open its notebook cannot be asked. Copy it, "
+            "with the noteorganizer/ package, in beside this script.")
+    opens, named = where_the_app_opens(app_dir)
+    if not _same_folder(opens, here):
+        sys.exit(
+            "REFUSING to run: this script seeds and rewrites the notebook in "
+            "this folder,\n%s\nbut the app it starts, at %s, would open\n%s%s\n"
+            "Run it in a scratch copy, from the copy's own folder (CLAUDE.md, "
+            "'QA testing safety')." % (here, app_dir, opens,
+                                       " (the folder its %s names)"
+                                       % _resolver(app_dir).LOCATION_FILE
+                                       if named else ""))
+    if os.path.exists("notes_data.json"):
+        try:
+            with io.open("notes_data.json", encoding="utf-8") as fh:
+                held = json.load(fh)
+        except (OSError, ValueError) as exc:
+            sys.exit(
+                "REFUSING to run: notes_data.json here cannot be read (%s). "
+                "It may be a real notebook the app could still rescue; this "
+                "script would overwrite it." % exc)
+        if not isinstance(held, list) or held:
+            sys.exit(
+                "REFUSING to run: notes_data.json here holds real notes. "
+                "Copy this script to a scratch folder instead.")
+    with io.open("notes_data.json", "w", encoding="utf-8") as fh:
+        fh.write("[]")
+    with io.open("settings.json", "w", encoding="utf-8") as fh:
+        fh.write(json.dumps({"reclaimed_from_appdata": True}))
+
+
+def hermetic_seed(app_dir=None):
     """Give this script a data folder of its own -- or refuse to run.
 
     Called first, BEFORE ``import note_organizer`` and so before the app
@@ -241,9 +353,13 @@ def hermetic_seed():
       exactly the one the app itself could still have rescued. They also
       overwrote settings.json unconditionally; now nothing is written
       until every check has passed.
+    * unless the folder the app will open is this one, asked of the app's
+      own resolver (``where_the_app_opens``). The guard looked for a
+      notebook here while the app opened the folder notebook_location.txt
+      names -- in the owner's checkout, her own (final audit, round ten).
 
     Declared a scratch run, it settles as a guest (``as_a_guest``) before
-    it writes anything.
+    it writes anything. *app_dir*: see ``seed_here``.
     """
     if os.environ.get(SCRATCH_MARKER) != "1":
         sys.exit(
@@ -252,24 +368,7 @@ def hermetic_seed():
             "copy. Run it through tools/run_tests.py, or set %s=1 yourself "
             "in a scratch folder outside the project, with tools/guest.py "
             "beside it (see CLAUDE.md, 'QA testing safety')." % SCRATCH_MARKER)
-    as_a_guest()
-    if os.path.exists("notes_data.json"):
-        try:
-            with io.open("notes_data.json", encoding="utf-8") as fh:
-                held = json.load(fh)
-        except (OSError, ValueError) as exc:
-            sys.exit(
-                "REFUSING to run: notes_data.json here cannot be read (%s). "
-                "It may be a real notebook the app could still rescue; this "
-                "script would overwrite it." % exc)
-        if not isinstance(held, list) or held:
-            sys.exit(
-                "REFUSING to run: notes_data.json here holds real notes. "
-                "Copy this script to a scratch folder instead.")
-    with io.open("notes_data.json", "w", encoding="utf-8") as fh:
-        fh.write("[]")
-    with io.open("settings.json", "w", encoding="utf-8") as fh:
-        fh.write(json.dumps({"reclaimed_from_appdata": True}))
+    seed_here(app_dir)
 
 
 class EventNotDelivered(AssertionError):

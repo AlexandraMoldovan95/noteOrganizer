@@ -7,37 +7,27 @@ not the other is not a layout, it is a coincidence, so the numbers get
 printed on both rather than assumed from one.
 
 It writes notes_data.json where it runs, so never in place: copy
-note_organizer.py, the noteorganizer/ package, tools/guest.py and this file
-into a scratch folder and run ``py probe_bar_width.py`` there. In the Linux
-image, the runner does that inside the container:
+note_organizer.py, the noteorganizer/ package, tools/guest.py,
+qa/_qa_support.py and this file into a scratch folder and run
+``py probe_bar_width.py`` there. In the Linux image, the runner does that
+inside the container:
 
     py tools/linux_ci.py --script qa/probe_bar_width.py
 """
-import io
-import json
 import os
 import sys
 
-# The turn and the memory ceiling before the app is built (tools/guest.py,
-# copied beside this file).
+# The turn, the memory ceiling and the seed before the app is built:
+# seed_here settles as a guest (tools/guest.py, beside it), then seeds an
+# empty notebook here -- only where the app will open it, asked of its own
+# resolver, and never beside notes (the qa scripts' guard).
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import guest  # noqa: E402
+from _qa_support import seed_here  # noqa: E402
 
-for _line in guest.settle(label="probe_bar_width"):
-    print(_line)
+seed_here()
 
 import tkinter as tk  # noqa: E402
-
-if os.path.exists("notes_data.json"):
-    prev = json.load(io.open("notes_data.json", encoding="utf-8"))
-    if isinstance(prev, list) and prev:
-        sys.exit("REFUSING: notes_data.json here holds %d real note(s)."
-                 % len(prev))
-io.open("notes_data.json", "w", encoding="utf-8").write("[]")
-io.open("settings.json", "w", encoding="utf-8").write(
-    json.dumps({"reclaimed_from_appdata": True}))
-
-import note_organizer as NO
+import note_organizer as NO  # noqa: E402
 
 # The window's resize freeze asks Windows whether the mouse button is down,
 # anywhere on the desktop, and lays nothing out while it is: a click held in

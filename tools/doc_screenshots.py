@@ -31,34 +31,18 @@ its turn and its memory ceiling before the app is built; _qa_support's
 shutter takes every picture (a picture holds only the app's pixels).
 """
 
-# THE TURN AND THE CEILING FIRST -- this builds the whole app, on the screen.
+# THE TURN, THE CEILING AND THE SEED FIRST -- this builds the whole app, on the
+# screen. seed_here settles as a guest (tools/guest.py, beside _qa_support),
+# then seeds an empty notebook here: only where the app will open it, asked of
+# its own resolver, and never beside notes (the qa scripts' guard).
 import os as _guest_os, sys as _guest_sys
 _guest_sys.path.insert(0, _guest_os.path.dirname(_guest_os.path.abspath(__file__)))
 try:
-    import guest
-    from _qa_support import grab, photograph
+    from _qa_support import grab, photograph, seed_here
 except ImportError as _missing:
     _guest_sys.exit('REFUSING to run: %s. Copy tools/guest.py and qa/_qa_support.py '
                     'beside this script (see its docstring).' % _missing)
-for _line in guest.settle(label='doc_screenshots'):
-    print(_line)
-
-# HERMETIC SEED -- same guard as the qa scripts, for the same reason.
-import io as _seed_io, json as _seed_json, os as _seed_os, sys as _seed_sys
-if _seed_os.path.exists('notes_data.json'):
-    try:
-        _seed_prev = _seed_json.load(
-            _seed_io.open('notes_data.json', encoding='utf-8'))
-    except Exception:
-        _seed_prev = []
-    if isinstance(_seed_prev, list) and _seed_prev:
-        _seed_sys.exit(
-            'REFUSING to run: notes_data.json here holds %d real note(s). '
-            'Copy this script to a scratch directory instead.'
-            % len(_seed_prev))
-_seed_io.open('notes_data.json', 'w', encoding='utf-8').write('[]')
-_seed_io.open('settings.json', 'w', encoding='utf-8').write(
-    _seed_json.dumps({'reclaimed_from_appdata': True}))
+seed_here()
 
 import datetime
 import os

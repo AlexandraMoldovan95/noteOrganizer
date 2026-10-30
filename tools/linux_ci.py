@@ -211,7 +211,8 @@ def tracked_copy(root=ROOT):
     """A copy of what git tracks (``ls-files --cached``), as the working
     tree holds it, in the "repo" folder of a marked scratch folder: what the
     container is shown at /repo. A file git does not track is never in it,
-    whatever .gitignore says of it. Returns the scratch folder, removed at
+    whatever .gitignore says of it, nor what a link at a tracked name points
+    at: such a name refuses the run. Returns the scratch folder, removed at
     the end of the run, or by a later run's sweep."""
     try:
         listed = subprocess.run(["git", "ls-files", "-z", "--cached"], cwd=root,
@@ -224,14 +225,39 @@ def tracked_copy(root=ROOT):
     folder = guest.scratch("noteorg-ci-repo-")
     copy = os.path.join(folder, "repo")
     os.makedirs(copy)
+    seen = {}
     for name in sorted(set(listed.stdout.decode("utf-8", "surrogateescape").split("\0"))):
         source = os.path.join(root, *name.split("/")) if name else ""
+        link = linked_on_the_way(root, name, seen) if name else None
+        if link is not None:
+            guest.remove(folder)
+            raise RuntimeError(
+                "%s is a link or a junction, at a name git tracks: the container is shown "
+                "what git tracks, never what a link points at. Put the file itself there."
+                % link)
         if not os.path.isfile(source):    # deleted from the working tree, or a submodule
             continue
         target = os.path.join(copy, *name.split("/"))
         os.makedirs(os.path.dirname(target), exist_ok=True)
         shutil.copy2(source, target)
     return folder
+
+
+_isjunction = getattr(os.path, "isjunction", lambda path: False)   # Python 3.12 on
+
+
+def linked_on_the_way(root, name, seen):
+    """The first link or junction on the way to the tracked ``name`` below
+    ``root`` -- the name itself or a folder it is in -- or None. ``seen``
+    keeps what was asked, for the next name in the same folders."""
+    path = root
+    for part in name.split("/"):
+        path = os.path.join(path, part)
+        if path not in seen:
+            seen[path] = os.path.islink(path) or _isjunction(path)
+        if seen[path]:
+            return path
+    return None
 
 
 def not_shown(root=ROOT):

@@ -138,8 +138,10 @@ def initialise(app_dir=None, resolved=None):
     the app or the entry point gets there first.
 
     Args:
-        app_dir: Override the data folder. Only for tests; normally the
-            folder is derived from this file's location.
+        app_dir: For tests: the folder to start from in place of this
+            file's own. The data folder is resolved from it as from this
+            file's, a notebook_location.txt there included -- so it is not
+            always that folder; a guard asks resolve_data_dir, as this does.
         resolved: A ``(folder, warning)`` pair resolve_data_dir already
             answered. _main passes the one it took the notebook lock in,
             so the folder locked and the folder opened are the same by

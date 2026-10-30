@@ -2800,6 +2800,24 @@
     "expect": "killed"
   },
   {
+    "id": "GT58",
+    "about": "the suites' seed writes where the script runs while the app opens another folder: the one notebook_location.txt names, or its own",
+    "edits": [
+      {
+        "file": "qa/_qa_support.py",
+        "find": "    if not _same_folder(opens, here):\n",
+        "replace": "    if False:\n"
+      }
+    ],
+    "must_fail": [
+      "...refuses where the app's notebook_location.txt names a notebook by its path",
+      "...and where it names one through %USERPROFILE%",
+      "...and where the app it starts opens another folder than this one"
+    ],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
     "id": "PC01",
     "about": "the words on every fill are white again, whatever the fill",
     "edits": [

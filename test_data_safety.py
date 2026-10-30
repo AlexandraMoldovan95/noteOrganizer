@@ -17,47 +17,23 @@ import tempfile
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "qa"))
 import _qa_support  # noqa: E402
 # ---- REFUSE TO RUN BESIDE REAL NOTES ----
-# This file deletes and rewrites notes_data.json in its own directory.
-# Run from the project root it destroys the real notebook -- which
-# happened once, despite the warning above being here the whole time. A
-# warning depends on being read; this check does not. CI and a proper
-# scratch copy have no notes_data.json here, so they pass through.
+# This file deletes and rewrites the notebook the app opens, and files in
+# its working folder. Run from the project root it destroyed the real
+# notebook once, despite the warning above being here the whole time. A
+# warning depends on being read; this check does not.
 #
-# It fails CLOSED. It used to let an unreadable notes_data.json through
-# as if it were no notebook at all -- and an unreadable notebook is the
-# one the app itself could still have rescued. And it runs only where a
-# throwaway folder has been declared (NOTEORG_SCRATCH=1, set by
-# tools/run_tests.py and by CI), the rule the qa scripts follow too
-# (qa/_qa_support.hermetic_seed).
+# It is the qa scripts' own guard (qa/_qa_support.hermetic_seed), not a
+# copy: only where a throwaway folder has been declared (NOTEORG_SCRATCH=1,
+# set by tools/run_tests.py and by CI), failing CLOSED beside a notebook it
+# cannot prove empty, and only where the folder the app will open, asked of
+# its own resolver, is the working folder. The copy that was here looked
+# beside the test while the app opened the folder notebook_location.txt
+# names -- in the owner's checkout, her notebook (final audit, round ten).
+# It seeds that folder: an empty notebook and the reclaim marker. Unseeded,
+# the migration copied whatever notebook %APPDATA% held into this folder --
+# the built app's, the owner's -- on every Windows run (round eight).
 def _guard_real_notes():
-    if os.environ.get("NOTEORG_SCRATCH") != "1":
-        sys.exit(
-            "REFUSING to run: this test deletes and rewrites notes_data.json "
-            "beside it, and nothing says this folder is a throwaway copy. "
-            "Run it through tools/run_tests.py, or set NOTEORG_SCRATCH=1 "
-            "yourself in a scratch folder outside the project, with "
-            "tools/guest.py beside it -- see CLAUDE.md, 'QA testing safety'.")
-    _qa_support.as_a_guest()   # a guest of this computer before anything else
-    here = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                        "notes_data.json")
-    if not os.path.exists(here):
-        return
-    try:
-        with open(here, encoding="utf-8") as f:
-            notes = json.load(f)
-    except (IOError, OSError, ValueError) as exc:
-        sys.exit(
-            "REFUSING to run: the notes_data.json beside this test cannot "
-            "be read (%s). It may be a real notebook the app could still "
-            "rescue; this test would delete it." % exc)
-    if not isinstance(notes, list) or notes:
-        held = ("%d notes" % len(notes) if isinstance(notes, list)
-                else "something other than an empty notebook")
-        sys.exit(
-            "REFUSING to run: the notes_data.json beside this test holds "
-            "%s.\nThis test deletes and rewrites that file. Run it "
-            "only from a throwaway copy\noutside the project tree -- see "
-            "CLAUDE.md, 'QA testing safety'." % held)
+    _qa_support.hermetic_seed()
 
 
 _guard_real_notes()
@@ -75,17 +51,8 @@ from noteorganizer.core import paths as NO_paths
 # damage a notebook by itself. This file works directly with the data layer
 # rather than building a window, so it has to ask for it explicitly. Doing so
 # in THIS directory is exactly why the file must be run from a throwaway copy
-# (see CLAUDE.md's "QA testing safety"). Seeded first, as the qa suite's
-# hermetic_seed does: an empty notebook and the reclaim marker. Unseeded, the
-# migration copied whatever notebook %APPDATA% held into this folder -- the
-# built app's, the owner's -- on every Windows run of the suite (the final
-# audit's eighth round); the guard above has just made sure no notes are here.
-_seed_dir = os.path.dirname(os.path.abspath(NO.__file__))   # where initialise() looks
-if not os.path.exists(os.path.join(_seed_dir, "notes_data.json")):
-    with open(os.path.join(_seed_dir, "notes_data.json"), "w", encoding="utf-8") as _seed:
-        _seed.write("[]")
-with open(os.path.join(_seed_dir, "settings.json"), "w", encoding="utf-8") as _seed:
-    json.dump({"reclaimed_from_appdata": True}, _seed)
+# (see CLAUDE.md's "QA testing safety"); the guard above has seeded the very
+# folder initialise() opens, and made sure no notes were there.
 NO.initialise()
 
 fails = []
@@ -4093,15 +4060,22 @@ finally:
 # overwrote it with [], and ran from any folder at all. One definition now
 # (qa/_qa_support.hermetic_seed) refuses outside a declared scratch run,
 # and beside any notebook it cannot prove is empty -- leaving it untouched.
+# And it asks the app's own resolver which folder the app will open: the
+# copy this file had looked beside itself while the app opened the folder
+# notebook_location.txt names, the owner's notebook (final audit, round ten).
+# Each fresh folder stands as a scratch copy's, the app's folder too; the
+# repository's layout is walked by tools/check_guest.py (item 12).
 # (_qa_support is imported at the top, for its guest step.)
 _hs_root = tempfile.mkdtemp(prefix="nd_seed_")
 _hs_cwd = os.getcwd()
 _hs_marker = os.environ.get(_qa_support.SCRATCH_MARKER)
+_hs_profile = os.environ.get("USERPROFILE")
 
 
-def _hs_try(contents, marker):
+def _hs_try(contents, marker, app_dir=None):
     """Run the guard in a fresh folder holding `contents` as its
-    notes_data.json (None: no file). Returns (refused, file afterwards)."""
+    notes_data.json (None: no file), the app in `app_dir` (default: that
+    folder). Returns (refused, the folder's notes file afterwards)."""
     folder = tempfile.mkdtemp(dir=_hs_root)
     path = os.path.join(folder, "notes_data.json")
     if contents is not None:
@@ -4113,7 +4087,7 @@ def _hs_try(contents, marker):
         os.environ.pop(_qa_support.SCRATCH_MARKER, None)
     os.chdir(folder)
     try:
-        _qa_support.hermetic_seed()
+        _qa_support.hermetic_seed(app_dir or folder)
         refused = False
     except SystemExit:
         refused = True
@@ -4124,6 +4098,30 @@ def _hs_try(contents, marker):
         with open(path, encoding="utf-8") as fh:
             after = fh.read()
     return refused, after
+
+
+def _hs_notebook(where):
+    """A stand-in for someone's notebook, never the owner's: its files, as bytes."""
+    os.makedirs(where, exist_ok=True)
+    for name, text in (("notes_data.json", '[{"id": 1, "title": "Her note"}]'),
+                       ("trash.json", '[{"id": 2, "title": "Her deleted note"}]'),
+                       ("settings.json", '{"theme": "dark"}')):
+        with open(os.path.join(where, name), "w", encoding="utf-8") as fh:
+            fh.write(text)
+    return _hs_bytes(where)
+
+
+def _hs_bytes(where):
+    return {name: open(os.path.join(where, name), "rb").read()
+            for name in sorted(os.listdir(where))}
+
+
+def _hs_located(line):
+    """An app folder whose notebook_location.txt says `line`."""
+    app = tempfile.mkdtemp(dir=_hs_root)
+    with open(os.path.join(app, "notebook_location.txt"), "w", encoding="utf-8") as fh:
+        fh.write("# my own notebook, out of the repo" + chr(10) + line + chr(10))
+    return app
 
 
 try:
@@ -4141,11 +4139,37 @@ try:
     _real_refused, _real_after = _hs_try(_real, marker=True)
     check("...and refuses beside a notebook holding notes, leaving it as it was",
           _real_refused and _real_after == _real)
+    # The app's notebook_location.txt names her notebook: by its path, and
+    # through %USERPROFILE%, which a guest's homes leave as they are.
+    _hs_her = os.path.join(_hs_root, "her", "Note Organizer")
+    _hs_before = _hs_notebook(_hs_her)
+    _abs_refused, _abs_after = _hs_try(None, marker=True, app_dir=_hs_located(_hs_her))
+    check("...refuses where the app's notebook_location.txt names a notebook by "
+          "its path, writing nothing here or there",
+          _abs_refused and _abs_after is None and _hs_bytes(_hs_her) == _hs_before)
+    os.environ["USERPROFILE"] = os.path.join(_hs_root, "her")
+    _hs_var = ("%USERPROFILE%" + os.sep if os.name == "nt" else "$USERPROFILE/")
+    _var_refused, _var_after = _hs_try(
+        None, marker=True, app_dir=_hs_located(_hs_var + "Note Organizer"))
+    check("...and where it names one through %USERPROFILE%",
+          _var_refused and _var_after is None and _hs_bytes(_hs_her) == _hs_before)
+    # The app elsewhere, beside a notebook of its own, with no location file:
+    # the guard saw an empty folder here, and the app opened that one.
+    _hs_away = os.path.join(_hs_root, "checkout")
+    _hs_away_before = _hs_notebook(_hs_away)
+    _away_refused, _away_after = _hs_try(None, marker=True, app_dir=_hs_away)
+    check("...and where the app it starts opens another folder than this one",
+          _away_refused and _away_after is None
+          and _hs_bytes(_hs_away) == _hs_away_before)
 finally:
     if _hs_marker is None:
         os.environ.pop(_qa_support.SCRATCH_MARKER, None)
     else:
         os.environ[_qa_support.SCRATCH_MARKER] = _hs_marker
+    if _hs_profile is None:
+        os.environ.pop("USERPROFILE", None)
+    else:
+        os.environ["USERPROFILE"] = _hs_profile
     shutil.rmtree(_hs_root, ignore_errors=True)
 
 # ======================================================================
