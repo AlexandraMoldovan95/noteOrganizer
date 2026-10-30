@@ -573,10 +573,13 @@ class _RdCounting:
     def call(self, *args):
         self.calls += 1
         out = self.real.call(*args)
-        if len(args) > 1 and args[1] == 'get':
+        # Text.search hands its words over as one tuple, Text.get as
+        # arguments: asked as either, a call is the same question.
+        words = args[0] if len(args) == 1 and isinstance(args[0], tuple) else args
+        if len(words) > 1 and words[1] == 'get':
             self.gets += 1
             self.got += len(out) if isinstance(out, str) else 0
-        if len(args) > 1 and args[1] == 'search':
+        if len(words) > 1 and words[1] == 'search':
             self.searches += 1
         return out
 
