@@ -209,6 +209,7 @@ is in the table below as well.
 | [Round eight: words said beneath an Undo, and Enter held on every box](#round-eight-words-said-beneath-an-undo-and-enter-held-on-every-box) | A message that yields to an offer must still be seen somewhere; and a rule for a held key is asked by every binding that acts. | next |
 | [Round nine: days spent before they came back, and a copy kept twice](#round-nine-days-spent-before-they-came-back-and-a-copy-kept-twice) | A rule that empties one place on the premise that another holds the same asks the other place, per item, as it empties. | next |
 | [Round nine: work that grew with the square of what was typed](#round-nine-work-that-grew-with-the-square-of-what-was-typed) | A cost is judged by the loop that calls it; a check timed against its own half, in one run, sees it on any machine. | next |
+| [Round ten: the days a date held without a word, and older words given back](#round-ten-the-days-a-date-held-without-a-word-and-older-words-given-back) | A date is not a day: ask what a day holds, not whether something names its date; and a copy gets its words back when the note has lost them, not when the two differ. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -3151,6 +3152,67 @@ the line for every hit" is the square of the line. Time a check against its own 
 run, and a regression of this kind cannot hide behind a fast machine -- unless each step is
 cheap enough for the linear work around it to hide the ratio: the find bar's plain-line mutant
 survived the integrated run that way, and its check now counts the characters measured instead.
+
+### Round ten: the days a date held without a word, and older words given back
+
+*(2026-10-30 · found by the final audit's tenth break-it round, which attacked round nine's fixes
+by name; its data half, for the phone to mirror)*
+
+**Symptom:**
+- **A day's own text, gone at the upgrade, by the same day.** A weekly series in 0.97.405 (or the
+  phone's 0.12.0) turned off and back on as it was kept a day's own text in the copy alone. Then
+  that very day was moved, or only given a colour: the first start of this build erased the
+  text, on disk too, and Restore previous, still offered, brought none of it back. A day moved
+  onto the date where the copy had moved one did the same. Measured over 20,000 shapes either
+  app's editor makes, the take-back lost a copy's day with words of its own in 1,876.
+- **A line added between two turn-offs, taken back.** Off, a line added, on again as it was, off
+  again: the second copy held the first one's words. The status line named Restore previous,
+  which swapped the older text in, and the next turn-off put the added line in no file.
+- **A promise with no button.** An Update that only turned the repeat on, a day given text, then
+  the repeat off: the status line promised Restore previous, and the same save dropped the copy
+  as spent.
+
+**Root cause:** round nine's take-back asked whether the note's days *named* a date, not what
+they held there. A move holds no words -- `move_day` keys a day's edit under the date it is drawn
+on -- and a day's edit that only changed its colour holds the series' words; both won the date,
+and the copy's words for that day were spent. And round nine's second turn-off gave an earlier
+copy its words whenever they differed from the note's: the test for a copy being spent, not for
+words being lost.
+
+**Fix:**
+- `spend_series_days` works by the day, not by the date. The rule: a copy's day is dropped only
+  where the note deleted that day or wrote words of its own for it. Elsewhere its words go to the
+  date the note draws the day on -- where the note moved it, or where it stood -- and an edit
+  there with no words of its own takes the copy's words and keeps its colour and category.
+- A copy's move the note leaves no room for leaves its words with the day. A copy's move onto a
+  day whose own move stays behind stays behind too (`_copy_moves_taken`): taken alone, two days
+  stood on one date and one was drawn nowhere. An edit the copy draws on no day stays on its date.
+- Proved over shapes, checked against the calendar itself (`expand_occurrences`), not against the
+  fix: every word the note wrote stays, and every day of the copy with words of its own is shown
+  on the day the result draws it, unless the note deleted or rewrote that day. On 20,000 shapes
+  either app's editor makes: 1,879 broken before, none now. On the auditor's 20,000: 2,539
+  before, 35 now, each a copy holding two edits for one date, one of them drawn on no day -- a
+  shape neither app writes, since `move_day` carries a day's edit along. `test_data_safety`
+  keeps 300 shapes of the first kind.
+- `_turn_off_rescue_copy` gives an earlier copy its words only when the note has lost words to it
+  -- the big delete's own test, `rescue_copy_due` from copy to note -- else it copies the note as
+  it stands. A text copy is asked the same: words put back and added to are no loss.
+- `_repeat_off_line` promises Restore previous only while a copy the note does not hold again
+  remains; otherwise it says every day's own text stays in the note.
+- `test_data_safety`, qa5; mutants DR131–DR138, with DR126 re-aimed. The phone's fixture,
+  `days_cases.json`, gains the same cases.
+
+**Written down, not fixed: a notebook this build has saved must not go back to 0.97.405.** This
+build keeps a turned-off series' days in the note, and a later big delete may leave the copy
+holding words alone. 0.97.405's save clears the days of a note that does not repeat on every
+save, so one letter typed there erases them, and its Restore previous does not bring them back.
+Only a downgrade reaches it -- the built apps keep their notebooks in different folders -- but a
+source run of `main` against the same notebook does, until this branch is merged. The release
+notes say it.
+
+**Takeaway:** a date is not a day. Ask what a day holds -- its words -- not whether something
+names its date. And a copy gets its words back when the note has lost them, not when the two
+merely differ.
 
 ## Tk & platform gotchas
 
