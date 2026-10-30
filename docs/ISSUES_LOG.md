@@ -207,6 +207,7 @@ is in the table below as well.
 | [Round seven: a list's pieces measured once, and Enter held down](#round-seven-a-lists-pieces-measured-once-and-enter-held-down) | A measure taken once is a measure of that moment: what can change after it tells what read it, or is read again; and a key held down is many presses. | next |
 | [Round eight: a day reset that came back, and what one copy keeps](#round-eight-a-day-reset-that-came-back-and-what-one-copy-keeps) | A move into the note happens once: what a copy has given back, it holds no more; and of two texts competing for one slot, the one whose loss is larger stays. | next |
 | [Round eight: words said beneath an Undo, and Enter held on every box](#round-eight-words-said-beneath-an-undo-and-enter-held-on-every-box) | A message that yields to an offer must still be seen somewhere; and a rule for a held key is asked by every binding that acts. | next |
+| [Round nine: days spent before they came back, and a copy kept twice](#round-nine-days-spent-before-they-came-back-and-a-copy-kept-twice) | A rule that empties one place on the premise that another holds the same asks the other place, per item, as it empties. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -3063,6 +3064,52 @@ notes still in the list.
 held key is a rule for every binding that acts on one, not for the control the last report
 named.
 
+
+### Round nine: days spent before they came back, and a copy kept twice
+
+*(2026-10-30 · found by the final audit's ninth break-it round, which attacked round eight's
+fixes by name; its data half, mirrored on the phone)*
+
+**Symptom:**
+- **A day's own text, gone at the upgrade.** A weekly series in 0.97.405 (or the phone's
+  0.12.0) turned off, back on as it was, and then any other day given text of its own: the
+  first day's own text lived only in the copy. The first start of this build erased it, and
+  Restore previous, still offered, brought back the series text alone.
+- **A deleted day, back on the calendar.** Turned off, on again from another start, then the
+  start put back: the deleted Monday showed again, with nothing to undo it.
+- **A copy replaced at the second turn-off.** A big delete, the repeat off, back on, off again:
+  the deleted words were in no file, Restore previous still on screen.
+- **A held turn-off after an Update.** The comments cleared and the autosave let run before
+  Save: the version from before the Update kept only its words, its checklist and days lost.
+- The lows: an older backup of a turned-off series read as "edited elsewhere" against the same
+  notebook; the status line after a turn-off over an Update promised the series; a session
+  ended with "Import failed" on screen left the unpacked folder in the temp folder for good.
+
+**Root cause:** round eight spent a series' copy's days whenever the note repeated as that
+series again, on the premise that the note had just taken them back -- true only after the
+all-or-nothing move into a note holding no day at all. A note holding any day of its own took
+none, and a save that put the start back took none either. The turn-off asked its copy's kind
+in an order where the held save came before the Update's copy, and knew no third kind: an
+earlier turn-off's copy of the same series.
+
+**Fix:**
+- `spend_series_days` takes the copy's days back first, per date: each day of the copy goes to
+  the note on every date the note's own days leave free -- the owner's rule from round five,
+  kept days come back onto the same date and rule -- then the copy's are spent. The note's own
+  day wins its date, and a copy's move never goes onto a date the note holds. It also settles
+  what round eight wrote down as not fixed: a day skipped since keeps its days no longer in the
+  copy alone.
+- `_turn_off_rescue_copy` asks for an Update's copy before the held save, and gives an earlier
+  turn-off's copy of the same series (`copy_holds_this_series`) its words, as a text copy's.
+- The status line names what Restore previous brings back after an Update.
+- An arriving note is read as a load reads it, its copy's days taken back, then compared bare.
+  This turns round eight's bare reading of the arriving side around: an older backup whose copy
+  holds a day reset here since holds that day, and reads, truly, as changed.
+- "Import failed" is said after its unpacked folder is gone.
+
+**Takeaway:** a rule that empties one place on the premise that another holds the same must
+ask the other place, per item, at the moment it empties -- the premise held for the road it
+was written on and for no other.
 
 ## Tk & platform gotchas
 
