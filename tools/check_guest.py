@@ -1325,7 +1325,7 @@ def readers_agree(scripts):
         back = None
     if back != values:
         wrong.append("a literal handed to PowerShell did not stay one string: %s, from %s (%s)"
-                     % (back, values, said))
+                     % (ascii(back), ascii(values), ascii(said)))
     return wrong
 
 
@@ -1982,6 +1982,11 @@ def beside_a_named_notebook(work, env, openings):
 
 
 def main():
+    for stream in (sys.stdout, sys.stderr):
+        try:   # a curly quote in a finding must not end the gate on a cp1252 console
+            stream.reconfigure(errors="backslashreplace")
+        except (AttributeError, ValueError):
+            pass
     for line in guest.settle(heavy=False):
         print(line)
     missing = runners_without_settle()
