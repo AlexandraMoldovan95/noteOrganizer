@@ -3220,6 +3220,11 @@ Only a downgrade reaches it -- the built apps keep their notebooks in different 
 source run of `main` against the same notebook does, until this branch is merged. The release
 notes say it.
 
+**Written down, not fixed: a day reset in a series run from another start.** The repeat off, on
+again from another start, a day reset there, then the start put back: the reset day comes back
+from the first turn-off's copy. Both apps do it, and both rounds that found it judged the road
+contrived; the phone's "What the audit's tenth round left" names it too.
+
 **Takeaway:** a date is not a day. Ask what a day holds -- its words -- not whether something
 names its date. And a copy gets its words back when the note has lost them, not when the two
 merely differ.
