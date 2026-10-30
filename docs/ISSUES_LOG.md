@@ -210,6 +210,7 @@ is in the table below as well.
 | [Round nine: days spent before they came back, and a copy kept twice](#round-nine-days-spent-before-they-came-back-and-a-copy-kept-twice) | A rule that empties one place on the premise that another holds the same asks the other place, per item, as it empties. | next |
 | [Round nine: work that grew with the square of what was typed](#round-nine-work-that-grew-with-the-square-of-what-was-typed) | A cost is judged by the loop that calls it; a check timed against its own half, in one run, sees it on any machine. | next |
 | [Round ten: the days a date held without a word, and older words given back](#round-ten-the-days-a-date-held-without-a-word-and-older-words-given-back) | A date is not a day: ask what a day holds, not whether something names its date; and a copy gets its words back when the note has lost them, not when the two differ. | next |
+| [Round ten: the note read again by every reader, and an edit the find bar never heard](#round-ten-the-note-read-again-by-every-reader-and-an-edit-the-find-bar-never-heard) | A cost is judged by everything that runs at the same moment, not by the part a fix touched; and an edit is heard where every edit passes, not on one event. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -3222,6 +3223,67 @@ notes say it.
 **Takeaway:** a date is not a day. Ask what a day holds -- its words -- not whether something
 names its date. And a copy gets its words back when the note has lost them, not when the two
 merely differ.
+
+### Round ten: the note read again by every reader, and an edit the find bar never heard
+
+*(2026-10-30 · found by the final audit's tenth break-it round, which attacked round nine's fixes
+by name; its speed and find halves)*
+
+**Symptom:**
+- **Round nine's own find case still froze every pause.** Its scan was linear now, but the
+  autosave that runs at each pause paid for the hits the bar showed: a paragraph of 2,000 hits,
+  3.07 s a pause, against 0.26 s with the bar closed.
+- **A paragraph full of typos froze every pause for eight seconds;** twenty lines at the span
+  ceiling took five seconds to open and five at every pause -- the ceiling bounded a line, not a
+  note. Select All over a long paragraph in one size or colour asked Tk about every character, three
+  or four questions each, at every key and click.
+- **The find bar went stale.** It heard a key's release and nothing else: after a right-click
+  Paste or Cut, an emoji, the list buttons, the calculator or a spelling suggestion, its counter
+  and Enter stood on old places. Tk's own Cut, Paste and middle-click were not even saved until the
+  note was left.
+- **A find query of two lines crashed the app on Linux** (Tk 8.6.16's case-insensitive search over
+  a line holding an emoji).
+- The lows: an emoji query one place late after "İ", and matching a drawn table's hidden text; a
+  middle-click putting line breaks into the title; a title over the 200 cap that Backspace could
+  not shorten.
+
+**Root cause:** Tk's cost to read a line grows with the square of the tag toggles on it, and every
+display tag -- a find hit, an underline, a stored style -- adds two. Round nine removed the loops
+that measured a line once per hit; the readers that run at every save still asked Tk for each
+line, once per reader, about seventeen times a save, plus once per styled piece's end. A typed key
+ran Tk's regular-expression search over its whole line to find where the letters it typed ended.
+The stale find bar was the same mistake in another place: it asked one event, not every edit.
+
+**Fix:**
+- A save, an opening and a key read the note once and work out its lines, list markers, depths,
+  alignments and styles' places in Python, counting Tk's columns as Tk does. A save reads the note
+  twice whatever is shown on it; an opening six times; a key, the first 64 characters of its line.
+  Copy, the size and font boxes, Tab and the bullet button over a selection, the renumbering: one
+  read each. The format buttons answer from tag ranges; a typed run finds its space in Python; the
+  word count waits for the pause while the find bar shows hits.
+- The spelling underlines at most 500 a line and 2,000 a box, those nearest the caret.
+- Round nine's 2,000 hits: 0.50 s a pause (3.07). Typos at 40,000 characters: 0.03 s (1.64). A
+  uniform selection of 8,000 characters: about none (0.22). The stored note was compared byte for
+  byte with round nine's readers on 80 random notes with tables, checklists, attachments, lists and
+  every style: none differs.
+- Every edit, whatever made it, passes `_schedule_autosave`, which now tells the find bar; Tk's own
+  Cut, Paste, Clear and middle-click are heard by a bindtag first in each box's list
+  (`EditWithoutKey`), and saved. The find model remembers what it was read from, so a key in the
+  title no longer rescans the note.
+- A query with a line break is found in Python, never by Tk's search, which the find code no longer
+  calls; an emoji query goes through the same loop as every other, folded one letter for one.
+- The title's middle-click goes through its paste's cap and one-line rule; every length-limited box
+  lets a too-long value shrink, and measures its room before deleting a selection.
+- Checks count the work -- Tk calls, characters read, searches asked -- each shape against its half;
+  mutants RX36–RX86 and SP28–SP30.
+
+**Written down, not fixed:** a key with the bar open on such a paragraph was not timed again after
+the typed run's search went (0.29 s of its 0.39); the find highlights have no bound per line; the
+undo journal reads the note once per undo step (0.24 s on that paragraph).
+
+**Takeaway:** a cost is judged by everything that runs at the same moment, not by the part a fix
+touched -- round nine timed the find bar's scan and never the save beside it. And an event is not
+an edit: hear edits where every one of them passes.
 
 ## Tk & platform gotchas
 
