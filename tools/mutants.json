@@ -10789,8 +10789,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        if len(whole) > len(clipped):\n",
-        "replace": "        if len(pasted) > len(clipped):\n"
+        "find": "        if cut or whole[room:].strip():\n",
+        "replace": "        if cut or len(pasted) > len(clipped):\n"
       }
     ],
     "must_fail": [
@@ -10843,7 +10843,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        whole = \" \".join(\n            part for part in self._TITLE_PASTE_BREAK.split(pasted) if part)\n",
+        "find": "        whole = self._title_paste_line(pasted)\n",
         "replace": "        whole = \" \".join(pasted.split())\n"
       }
     ],
@@ -11122,6 +11122,60 @@
     ],
     "suites": [
       "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX17",
+    "about": "a paste into the title joins its breaks with \\s* around them, and a run of spaces with no break freezes the window",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "    _TITLE_PASTE_BREAK = re.compile(r\"[\\t\\n\\x0b\\x0c\\r\\x1c-\\x1e\\x85\\u2028\\u2029]\")\n",
+        "replace": "    _TITLE_PASTE_BREAK = re.compile(r\"\\s*[\\t\\n\\x0b\\x0c\\r\\x1c-\\x1e\\x85\\u2028\\u2029]\\s*\")\n"
+      }
+    ],
+    "must_fail": [
+      "a title paste of 30,000 spaces with no break in them takes what the same run"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX18",
+    "about": "a paste into the title reads the whole clipboard, past the ceiling every other paste keeps",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        pasted, cut = self._cap_paste(pasted)\n",
+        "replace": "        cut = False\n"
+      }
+    ],
+    "must_fail": [
+      "a title paste reads no further than the ceiling every paste keeps"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX19",
+    "about": "at the title's cap, a paste that loses only its own trailing space is said to be shortened",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if cut or whole[room:].strip():\n",
+        "replace": "        if cut or len(whole) > len(clipped):\n"
+      }
+    ],
+    "must_fail": [
+      "a paste that loses only its own trailing space is not"
+    ],
+    "suites": [
+      "qa6"
     ],
     "expect": "killed"
   },

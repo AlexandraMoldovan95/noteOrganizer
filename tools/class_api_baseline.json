@@ -819,6 +819,7 @@
   "_themed_dialog": "(self, title, message, kind='info', buttons=None, default=None)",
   "_tidy_table_paste_left": "(self)",
   "_title_is_placeholder": "(self)",
+  "_title_paste_line": "(cls, pasted)",
   "_title_within_limit": "(self, proposed)",
   "_tk_col": "(cls, line, char_col)",
   "_tk_control_delete_range": "(self, keysym)",

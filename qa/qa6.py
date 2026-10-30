@@ -5436,6 +5436,75 @@ check(f"a title pasted with its line break, or a double space, is not said to be
                    ' fresh': 'Buy fresh milk', ' and more\r\n': 'Groceries and more'}
       and not [t for t in _tw_told if 'shortened' in t])
 
+# ...and the join takes time in proportion to the paste: "\s*" around a break
+# tried every place in a run of spaces, and 40,000 with no break in them froze
+# the window 5 s (round 9). Timed in this run against the same run ending in
+# a break, the quickest of three each; the sizes are fixed, never read from
+# the app.
+_tl_took = {'run': [], 'run ending in a break': []}
+_tl_kept, _tl_told = {}, []
+_tl_real_status = app.set_status
+try:
+    app.new_note(); _kv_settle(4)
+    app.set_status = lambda text, *a, **k: _tl_told.append(text)
+    for _tl_i in range(3):
+        for _tl_name, _tl_paste in (('run', 'Plan' + ' ' * 30000 + 'end'),
+                                    ('run ending in a break', 'Plan' + ' ' * 30000 + '\nend')):
+            app.title_entry.delete(0, 'end')
+            app.clipboard_clear()
+            app.clipboard_append(_tl_paste)
+            _tl_t0 = time.perf_counter()
+            app.title_entry.event_generate('<<Paste>>')
+            _tl_took[_tl_name].append(time.perf_counter() - _tl_t0)
+            _tl_kept[_tl_name] = app.title_entry.get()
+            _kv_settle(1)
+finally:
+    app.set_status = _tl_real_status
+    app.title_entry.delete(0, 'end')
+    app._hide_toast()
+_tl_run, _tl_break = min(_tl_took['run']), min(_tl_took['run ending in a break'])
+check(f"a title paste of 30,000 spaces with no break in them takes what the same run "
+      f"ending in a break takes ({_tl_run * 1000:.1f} ms against {_tl_break * 1000:.1f} ms)",
+      _tl_kept == {'run': 'Plan' + ' ' * 196, 'run ending in a break': 'Plan end'}
+      and _tl_run < 4 * _tl_break + 0.3)
+
+# ...reads no more of the clipboard than any paste reads (_cap_paste); and at
+# the cap, a paste whose only overflow is its own trailing space is not
+# called shortened (round 9). Words left out still are.
+_tc_kept, _tc_told = {}, {}
+_tc_real_status = app.set_status
+try:
+    app.new_note(); _kv_settle(4)
+    for _tc_name, _tc_was, _tc_paste in (
+            ('past the ceiling', '', 'Plan' + '\n' * 100_000 + 'tail'),
+            ('trailing space', 'x' * 195, 'fresh '),
+            ('words left out', 'x' * 195, 'fresh milk')):
+        _tc_told[_tc_name] = []
+        app.set_status = lambda text, *a, _n=_tc_name, **k: _tc_told[_n].append(text)
+        app.title_entry.delete(0, 'end')
+        app.title_entry.insert(0, _tc_was)
+        app.title_entry.icursor('end')
+        app.clipboard_clear()
+        app.clipboard_append(_tc_paste)
+        app.title_entry.event_generate('<<Paste>>')
+        _kv_settle(1)
+        _tc_kept[_tc_name] = app.title_entry.get()
+finally:
+    app.set_status = _tc_real_status
+    app.title_entry.delete(0, 'end')
+    app._hide_toast()
+_tc_short = {name: any('shortened' in t for t in told) for name, told in _tc_told.items()}
+check(f"a title paste reads no further than the ceiling every paste keeps, and says "
+      f"it was cut ({_tc_kept.get('past the ceiling')!r}, "
+      f"said {_tc_told.get('past the ceiling')})",
+      _tc_kept.get('past the ceiling') == 'Plan' and _tc_short.get('past the ceiling'))
+check(f"at the title's cap, a paste that loses only its own trailing space is not "
+      f"called shortened, and one that loses words is ({_tc_short})",
+      _tc_kept.get('trailing space') == 'x' * 195 + 'fresh'
+      and _tc_kept.get('words left out') == 'x' * 195 + 'fresh'
+      and _tc_short == {'past the ceiling': True, 'trailing space': False,
+                        'words left out': True})
+
 # ...and the ceiling every paste keeps weighs a line break as one character,
 # as the note keeps it: Windows' clipboard holds CR LF, and 1,500 lines of 65
 # letters -- 98,999 characters in the note -- weighed 100,498, and the body

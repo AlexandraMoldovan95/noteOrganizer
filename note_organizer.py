@@ -1485,11 +1485,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._setting_title = False
         self._refresh_title_count()
 
-    # What a paste puts on the title's one line: a line break or a tab, with
-    # the spaces around it, is one space between words and nothing at either
-    # end; every other space goes in as it was copied.
-    _TITLE_PASTE_BREAK = re.compile(
-        r"\s*[\t\n\x0b\x0c\r\x1c-\x1e\x85\u2028\u2029]\s*")
+    # The breaks a paste into the title's one line joins: a line break or a
+    # tab. One character, never "\s*" around it: that tried every place in a
+    # run of spaces, and 40,000 of them froze the window 5 s (round 9).
+    _TITLE_PASTE_BREAK = re.compile(r"[\t\n\x0b\x0c\r\x1c-\x1e\x85\u2028\u2029]")
+
+    @classmethod
+    def _title_paste_line(cls, pasted):
+        """*pasted* on one line: a break, with the spaces around it, is one
+        space between words and nothing at either end; every other space
+        goes in as it was copied. Linear in the paste's length."""
+        parts = cls._TITLE_PASTE_BREAK.split(pasted)
+        parts[1:] = [part.lstrip() for part in parts[1:]]
+        parts[:-1] = [part.rstrip() for part in parts[:-1]]
+        return " ".join(part for part in parts if part)
 
     def _on_title_paste(self, event=None):
         """Paste into the title, trimmed to fit rather than refused.
@@ -1502,6 +1511,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pasted = self.clipboard_get()
         except tk.TclError:
             return "break"
+        # No more of it is read than any paste reads (_cap_paste).
+        pasted, cut = self._cap_paste(pasted)
         try:
             self.title_entry.delete("sel.first", "sel.last")
         except tk.TclError:
@@ -1516,12 +1527,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # copied with its line break, or CR LF, read as shortened. Only the
         # breaks are joined: split() took the paste's edge spaces too, and
         # "fresh " pasted before "milk" made "freshmilk" (round 8).
-        whole = " ".join(
-            part for part in self._TITLE_PASTE_BREAK.split(pasted) if part)
+        whole = self._title_paste_line(pasted)
         clipped = whole[:room]
         self.title_entry.insert("insert", clipped)
         self._refresh_title_count()
-        if len(whole) > len(clipped):
+        # Shortened only if words were left out: a paste's own trailing
+        # space, all the cap took, was said to be (round 9).
+        if cut or whole[room:].strip():
             self._say_by_the_box(
                 self.title_entry,
                 f"Pasted title shortened to {self.TITLE_MAX_LEN} characters")
