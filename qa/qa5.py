@@ -1889,6 +1889,90 @@ check(f"a turn-off that clears two letters of comments keeps a long comment dele
       f"({(_tc_prev.get('comments') or '')[:12]!r}, {(_tc_prev.get('recurrence') or {}).get('freq')})",
       _tc_prev.get('comments') == _tc_long
       and (_tc_prev.get('recurrence') or {}).get('freq') == 'weekly')
+# A big delete, the repeat off, back on as it was, off again: the second
+# turn-off replaced the first one's copy, and the deleted words were in no
+# file, Restore previous still offered (round 9 of the final audit).
+_ro_fixture()
+app.notes[0]['body'] = 'MEETING NOTES ' + 'agreed points ' * 25
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app._themed_dialog = lambda *a, **k: True
+try:
+    app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'short')
+    app.save_current_note(); app.update()
+    for _t2_freq in ('', 'weekly', ''):
+        app.rec_freq_var.set(NO.FREQ_LABELS[_t2_freq])
+        app.on_recurrence_changed(); app.update()
+        app.save_current_note(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+_t2_prev = app.find_note(1).get('_prev') or {}
+check(f"a repeat turned off a second time keeps the words a big delete took before "
+      f"({(_t2_prev.get('body') or '')[:16]!r}, {(_t2_prev.get('recurrence') or {}).get('freq')})",
+      'MEETING NOTES' in (_t2_prev.get('body') or '')
+      and (_t2_prev.get('recurrence') or {}).get('freq') == 'weekly'
+      and not app.find_note(1)['recurrence'].get('freq'))
+# An import's Update, then the repeat off with the comments cleared and the
+# autosave let run: the held save's copy is the update's, and the turn-off
+# kept only its words -- its category and checklist in no file (round 9).
+_ro_fixture()
+app.notes[0]['comments'] = 'ok'
+app.notes[0]['checklist'] = [{'text': 'LOCAL ITEM', 'done': False}]
+_uh_note = app.find_note(1)
+NO.apply_shared_update(_uh_note, dict(
+    {key: _uh_note[key] for key in ('uid', 'created', 'date', 'recurrence', 'overrides')},
+    title='Standup', body='FROM THE PHONE', comments='ok',
+    checklist=[{'text': 'PHONE ITEM', 'done': False}]), NO.UPDATABLE_FROM_BACKUP)
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app._themed_dialog = lambda *a, **k: True
+try:
+    app.rec_freq_var.set(NO.FREQ_LABELS[''])
+    app.on_recurrence_changed(); app.update()
+    app.comments_text.delete('1.0', 'end')
+    app._autosave_now(); app.update()
+    app.save_current_note(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+_uh_prev = app.find_note(1).get('_prev') or {}
+_uh_line = app.status_lbl.cget('text')
+check(f"a held turn-off after an import's Update keeps the update's copy whole "
+      f"({[i.get('text') for i in _uh_prev.get('checklist') or []]}, "
+      f"{(_uh_prev.get('recurrence') or {}).get('freq')})",
+      [i.get('text') for i in _uh_prev.get('checklist') or []] == ['LOCAL ITEM']
+      and _uh_prev.get('body') == 'SERIES TEXT'
+      and (_uh_prev.get('recurrence') or {}).get('freq') == 'weekly'
+      and not app.find_note(1)['recurrence'].get('freq'))
+check(f"...and the status line says Restore previous brings back the note from before "
+      f"the update, not the series ({_uh_line[-70:]!r})",
+      'before it was updated' in _uh_line and "every day's own text" not in _uh_line)
+# Turned off, on again from another start, then the start put back: the
+# second save spent the copy's deleted day, which came back on the calendar
+# with no way to undo it (round 9). The owner's rule: kept days come back
+# onto the same date and rule -- deleted ones included.
+_ro_fixture()
+app.notes[0]['exceptions'] = ['2026-09-28']
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app._themed_dialog = lambda *a, **k: True
+try:
+    app.rec_freq_var.set(NO.FREQ_LABELS[''])
+    app.on_recurrence_changed(); app.update()
+    app.save_current_note(); app.update()
+    for _sb_date in ('2026-09-08', '2026-09-07'):
+        app.date_entry.delete(0, 'end'); app.date_entry.insert(0, _sb_date)
+        app.rec_freq_var.set(NO.FREQ_LABELS['weekly'])
+        app.on_recurrence_changed(); app.update()
+        app.save_current_note(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+_sb_note = app.find_note(1)
+check(f"a deleted day stays deleted when the series is put back on its own start after "
+      f"another ({_sb_note.get('exceptions')}, "
+      f"{'Standup' in [n.get('title') for n in app.notes_on_date('2026-09-28')]})",
+      _sb_note.get('exceptions') == ['2026-09-28']
+      and 'Standup' not in [n.get('title') for n in app.notes_on_date('2026-09-28')]
+      and '2026-09-21' in (_sb_note.get('overrides') or {}))
 # Turned back on from another date, an old deleted day hid the new series' own
 # first day (round 5). Her answer: kept days come back only onto the same date
 # and rule; a deleted day holds nothing, and the rescue copy keeps them all.

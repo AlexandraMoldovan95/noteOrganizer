@@ -379,6 +379,7 @@ from noteorganizer.core.model import (
     kept_days_fit,
     days_hold_own_text,
     spend_series_days,
+    copy_holds_this_series,
     update_copy,
     comments_kept_by_copy,
     copy_replaced_by_restore,
@@ -12463,16 +12464,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # A worker that failed partway may have copied files already.
             self._drop_unclaimed_import_files(state)
             # Settled before it is said: a session that ends with the
-            # failure on screen leaves no word of an import cut short.
+            # failure on screen leaves no word of an import cut short -- nor
+            # its unpacked folder, which no later start would know of (round 9).
             self._import_asking = None
+            if temp_dir:
+                shutil.rmtree(temp_dir, ignore_errors=True)
             if state.get("stop"):
                 # Stopped by the end of a Windows session that went on after
                 # all (_settle_backups_at_session_end): not a failure.
                 self.set_status(self._IMPORT_STOPPED_AT_SESSION_END)
             else:
                 self.show_error("Import failed", state["error"])
-            if temp_dir:
-                shutil.rmtree(temp_dir, ignore_errors=True)
             return
 
         imported_notes = state["imported_notes"]
@@ -21717,6 +21719,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     _REPEAT_OFF_KEPT = (" — the repeat is off; ↩ Restore previous brings it "
                         "back with every day's own text")
+    _REPEAT_OFF_UPDATE_KEPT = (" — the repeat is off; ↩ Restore previous brings "
+                               "back the note as it was before it was updated")
+
+    def _repeat_off_line(self, note):
+        """What the status line says of a turn-off: the copy it kept is the
+        series, or -- after an import's Update -- the note as it was before
+        that, which Restore previous then brings back instead (round 9)."""
+        return (self._REPEAT_OFF_UPDATE_KEPT if update_copy(note.get("_prev"))
+                else self._REPEAT_OFF_KEPT)
 
     def _repeat_off_loses_days(self, note, recurrence):
         """Whether a save writing *recurrence* turns *note*'s repeat off
@@ -21793,23 +21804,27 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         existing = note.get("_prev")
         if takes_text:
             pass                # the newest text, whatever an older copy holds
-        elif held is not None and existing is held:
-            for key in self._RESCUE_TEXT_KEYS:
-                prev[key] = copy.deepcopy(held.get(key))
-        elif (isinstance(existing, dict)
-              and set(existing) <= set(self._RESCUE_TEXT_KEYS)
-              and not rescue_copy_spent(note)):
-            for key in self._RESCUE_TEXT_KEYS:
-                prev[key] = copy.deepcopy(existing.get(key, prev[key]))
         elif update_copy(existing) and not rescue_copy_spent(note):
             # An import's Update left the note as it was here before, in no
-            # other file: kept whole, given the series where it lacks it.
-            # Replaced, that version was gone unsaid (round 8 of the audit).
+            # other file: kept whole, given the series where it lacks it --
+            # before the held branch, which kept only its words (round 9).
             kept = copy.deepcopy(existing)
             for key in ("date", "recurrence") + DAY_FIELDS:
                 if key not in kept:
                     kept[key] = copy.deepcopy(prev.get(key))
             return kept
+        elif held is not None and existing is held:
+            for key in self._RESCUE_TEXT_KEYS:
+                prev[key] = copy.deepcopy(held.get(key))
+        elif (isinstance(existing, dict)
+              and (set(existing) <= set(self._RESCUE_TEXT_KEYS)
+                   or copy_holds_this_series(note))
+              and not rescue_copy_spent(note)):
+            # A text copy, or an earlier turn-off's copy of this same series
+            # whose words the note no longer holds: replaced, a big delete's
+            # words were lost at the second turn-off (round 9 of the audit).
+            for key in self._RESCUE_TEXT_KEYS:
+                prev[key] = copy.deepcopy(existing.get(key, prev[key]))
         return prev
 
     def _write_series_owned(self, note, date_value, recurrence, schedule=True):
@@ -22197,7 +22212,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     note["overrides"] = {}
                     note["moved"] = {}
                 self.set_status(("Auto-saved " if auto else "Saved at ") + show_stamp(now)
-                                + (self._REPEAT_OFF_KEPT if days_lost else ""),
+                                + (self._repeat_off_line(note) if days_lost else ""),
                                 reassurance=auto and not days_lost)
                 announce = auto
             # A series save can have just removed the recurrence — an
@@ -22301,10 +22316,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if left_out:
             self.set_status(("Auto-saved " if auto else "Saved at ") + show_stamp(now)
                             + " — except " + "; ".join(left_out)
-                            + (self._REPEAT_OFF_KEPT if repeat_off_kept else ""))
+                            + (self._repeat_off_line(note) if repeat_off_kept else ""))
         self._status_names_left_out = (
             ("Auto-saved " if auto else "Saved at ") + show_stamp(now)
-            + (self._REPEAT_OFF_KEPT if repeat_off_kept else "")
+            + (self._repeat_off_line(note) if repeat_off_kept else "")
             if left_out else None)
         if left_out:
             if not auto:

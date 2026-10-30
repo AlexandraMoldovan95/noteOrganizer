@@ -291,17 +291,47 @@ def _repeats_as(note, prev):
             == normalize_recurrence(note.get("recurrence")))
 
 
+def copy_holds_this_series(note):
+    """Whether *note*'s rescue copy is the copy a turn-off made of the very
+    series the note repeats as again: same date, same rule."""
+    prev = note.get("_prev")
+    return _series_own_copy(prev) and _repeats_as(note, prev)
+
+
+def _dates_held(note):
+    """The dates *note*'s own days speak for: a day edited, deleted or
+    moved, and the dates days are moved to."""
+    moved = note.get("moved") or {}
+    return (set(note.get("overrides") or {}) | set(note.get("exceptions") or [])
+            | set(moved) | set(moved.values()))
+
+
 def spend_series_days(note):
     """A series' own copy holds the series' days only while the note does
-    not repeat as that series. Once it does again -- turned back on as it
-    was, or its days taken back in -- the note holds them, and the copy's
-    are spent: kept there, a day the person then reset came back from the
-    copy at every start, in every duplicate and every Trash restore, and
-    the same backup read as changed (round 8 of the final audit)."""
-    prev = note.get("_prev")
-    if _series_own_copy(prev) and _repeats_as(note, prev):
-        for key in DAY_FIELDS:
-            prev.pop(key, None)
+    not repeat as that series. Once it does again, the copy's days come
+    back on every date the note's own days leave free -- kept days come
+    back onto the same date and rule -- and the copy's are spent: kept, a
+    reset day came back at every start; spent alone, days only the copy
+    held were in no file (ISSUES_LOG, rounds 8 and 9 of the final audit)."""
+    if not copy_holds_this_series(note):
+        return
+    prev = note["_prev"]
+    held = _dates_held(note)
+    overrides = dict(note.get("overrides") or {})
+    for day, patch in (prev.get("overrides") or {}).items():
+        if day not in held:
+            overrides[day] = copy.deepcopy(patch)
+    exceptions = set(note.get("exceptions") or [])
+    exceptions.update(day for day in prev.get("exceptions") or [] if day not in held)
+    moved = dict(note.get("moved") or {})
+    for day, to in sorted((prev.get("moved") or {}).items()):
+        # Never onto a date the note holds: normalize_note keeps one day a
+        # date, and the first in order -- the copy's -- would push the note's out.
+        if day not in held and to not in held and len(moved) < MAX_OCCURRENCES:
+            moved[day] = to
+    note["overrides"], note["exceptions"], note["moved"] = overrides, sorted(exceptions), moved
+    for key in DAY_FIELDS:
+        prev.pop(key, None)
 
 
 def _days_back_from_copy(note):
@@ -527,10 +557,10 @@ def shared_update_changes(note, incoming, fields=UPDATABLE_FROM_SHARED):
     A no-change update would replace the rescue copy with a duplicate and
     lose the one earlier version. ISSUES_LOG: "Importing the same backup
     twice, the second time"; smaller lessons: shared_update_changes."""
-    # Both without their rescue copies: an older notebook's read takes days
-    # from a copy (_days_back_from_copy), and an unchanged note read as
-    # changed -- this side's in round 7 of the final audit, the backup's in 8.
-    fresh = normalize_note({key: value for key, value in incoming.items() if key != "_prev"})
+    # The arriving note read as a load reads it, its copy's days taken back,
+    # then both compared bare; this side, held in memory, is not read again
+    # (ISSUES_LOG: the final audit's rounds 7 and 9).
+    fresh = {key: value for key, value in normalize_note(dict(incoming)).items() if key != "_prev"}
     mine = normalize_note({key: value for key, value in note.items() if key != "_prev"})
     return any(mine[field] != fresh[field] for field in fields)
 

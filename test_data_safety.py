@@ -3602,13 +3602,62 @@ check("once a note repeats as its copy's series, the copy's days are spent, and 
       and _kd_beside["overrides"] == _kd_days["overrides"]
       and not any(key in _kd_beside["_prev"] for key in _model_mod.DAY_FIELDS)
       and _kd_turned_off["_prev"].get("overrides") == _kd_days["overrides"])
-# ...and a backup made before, whose copy still holds the days, is the same
-# note: compared without either side's copy (round 8).
-_kd_old_backup = dict(_kd_reset, _prev=dict(
+# ...and an arriving note is read as a load reads it, its copy's days taken
+# back: an older backup of a turned-off series, compared bare, lacked the days
+# the same notebook here holds and read as edited elsewhere (round 9). One
+# whose copy holds a day reset here since holds that day: a real difference.
+_kd_old_off = {"id": 1, "title": "Gym", "body": "Warm up.",
+               "_prev": dict({"title": "Gym", "body": "Warm up."}, **_kd_series, **_kd_days)}
+_kd_old_on = dict(_kd_reset, _prev=dict(
     {"title": "Gym", "body": "Warm up."}, **_kd_series, **_kd_days))
-check("a backup whose copy still holds a day reset here reads as the same note",
+check("an older backup of a series, turned off or back on, reads as the notebook it came "
+      "from read here; one whose copy holds a day reset here since reads as changed",
       not _model_mod.shared_update_changes(
-          _kd_reset, _kd_old_backup, _model_mod.UPDATABLE_FROM_BACKUP))
+          _kd_turned_off, _kd_old_off, _model_mod.UPDATABLE_FROM_BACKUP)
+      and not _model_mod.shared_update_changes(
+          _kd_back_on, dict(_kd_back_on, overrides={}, exceptions=[], _prev=dict(
+              {"title": "Gym", "body": "Warm up."}, **_kd_series, **_kd_days)),
+          _model_mod.UPDATABLE_FROM_BACKUP)
+      and _model_mod.shared_update_changes(
+          _kd_reset, _kd_old_on, _model_mod.UPDATABLE_FROM_BACKUP))
+
+# The copy's days come back per date: a note that repeats as the copy's
+# series again and holds a day of its own -- edited after 0.97.405 or the
+# phone's 0.12.0 turned it back on with none -- took none back, and the spend
+# erased the copy's own-text day for good (round 9 of the final audit).
+_kd_own = {"2026-11-23": {"body": "Rest week"}}
+_kd_some = _model_mod.normalize_note(dict(
+    {"id": 12, "title": "Gym", "body": "Warm up.", "overrides": _kd_own, "_prev": dict(
+        {"title": "Gym", "body": "Warm up."}, **_kd_series, **_kd_days)}, **_kd_series))
+check("a note repeating as its copy's series again takes back each of the copy's days on a "
+      "date it leaves free, then the copy's are spent (%s)" % sorted(_kd_some["overrides"]),
+      _kd_some["overrides"] == dict(_kd_own, **_kd_days["overrides"])
+      and _kd_some["exceptions"] == ["2026-11-16"]
+      and not any(key in _kd_some["_prev"] for key in _model_mod.DAY_FIELDS)
+      and _model_mod.normalize_note(_kd_some) == _kd_some)
+# The note's own day wins its date; a move never goes onto a date it holds.
+_kd_mine = _model_mod.normalize_note(dict(
+    {"id": 13, "title": "Gym", "body": "Warm up.",
+     "overrides": {"2026-11-09": {"body": "Swim instead"}},
+     "moved": {"2026-11-30": "2026-12-01"}, "_prev": dict(
+         {"title": "Gym", "body": "Warm up."}, overrides={}, exceptions=["2026-11-09"],
+         moved={"2026-11-23": "2026-12-01", "2026-12-07": "2026-12-08"}, **_kd_series)},
+    **_kd_series))
+check("the note's own day keeps its date over the copy's, and the copy's move onto a date "
+      "the note holds is dropped, the note's own move kept (%s, %s)" % (
+          _kd_mine["moved"], _kd_mine["exceptions"]),
+      _kd_mine["overrides"] == {"2026-11-09": {"body": "Swim instead"}}
+      and _kd_mine["exceptions"] == []
+      and _kd_mine["moved"] == {"2026-11-30": "2026-12-01", "2026-12-07": "2026-12-08"})
+# A copy holding only deleted days: they come back too, so the days the person
+# deleted before trying another start stay deleted when it is put back.
+_kd_gone = _model_mod.normalize_note(dict(
+    {"id": 14, "title": "Gym", "body": "Warm up.", "_prev": dict(
+        {"title": "Gym", "body": "Warm up."}, exceptions=["2026-11-16"], **_kd_series)},
+    **_kd_series))
+check("a series' deleted days kept only in its copy stay deleted once it repeats as that "
+      "series again", _kd_gone["exceptions"] == ["2026-11-16"]
+      and "exceptions" not in _kd_gone["_prev"])
 
 # ...and the styles of words held in the copy's but not the same: a part of
 # the copy's text made bold since was written over, no copy kept (round 8).

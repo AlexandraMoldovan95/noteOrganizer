@@ -3066,6 +3066,20 @@ try:
           and not os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _uw_name))
           and 'was cut short' not in _uw_second
           and NO.get_setting('backup_cut_short') is None)
+    # "Import failed" on screen when a session ends: Windows ends the app with
+    # the dialog up, and the unpacked folder, removed only after it, stayed in
+    # the temp folder for good, the word lowered before it (round 9).
+    _if_dir = tempfile.mkdtemp(prefix='notes_import_qa3_failed_')
+    _if_seen = {}
+    _if_real_err = app.show_error
+    app.show_error = lambda *a, **k: _if_seen.setdefault('there', os.path.exists(_if_dir))
+    try:
+        app._merge_finished_import({'error': 'qa3: the zip could not be read', 'stop': False,
+                                    'temp_dir': _if_dir, 'copied': []})
+    finally:
+        app.show_error = _if_real_err
+    check(f'"Import failed" is said with its unpacked folder already gone ({_if_seen})',
+          _if_seen.get('there') is False and not os.path.exists(_if_dir))
 finally:
     _sx['go'] = True
     NO.StoppableFile, _hs.StoppableFile = _kept_stoppable

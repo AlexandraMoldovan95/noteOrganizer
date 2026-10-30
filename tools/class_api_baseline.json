@@ -655,6 +655,7 @@
   "_renumber_if_lines_fell": "(self, _event=None)",
   "_renumber_lists": "(self)",
   "_reopen_dup_panel": "(self)",
+  "_repeat_off_line": "(self, note)",
   "_repeat_off_loses_days": "(self, note, recurrence)",
   "_repeat_off_waits": "(self)",
   "_replace_selection_with": "(self, text)",

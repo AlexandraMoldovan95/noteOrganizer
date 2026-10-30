@@ -7629,8 +7629,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        elif (isinstance(existing, dict)\n              and set(existing) <= set(self._RESCUE_TEXT_KEYS)\n",
-        "replace": "        elif (False and isinstance(existing, dict)\n              and set(existing) <= set(self._RESCUE_TEXT_KEYS)\n"
+        "find": "        elif (isinstance(existing, dict)\n              and (set(existing) <= set(self._RESCUE_TEXT_KEYS)\n",
+        "replace": "        elif (False and isinstance(existing, dict)\n              and (set(existing) <= set(self._RESCUE_TEXT_KEYS)\n"
       }
     ],
     "must_fail": [
@@ -11509,8 +11509,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "        for key in DAY_FIELDS:\n            prev.pop(key, None)\n",
-        "replace": "        pass\n"
+        "find": "    for key in DAY_FIELDS:\n        prev.pop(key, None)\n",
+        "replace": "    pass\n"
       }
     ],
     "must_fail": [
@@ -11543,16 +11543,16 @@
   },
   {
     "id": "DR114",
-    "about": "an incoming note is compared with its rescue copy, which gives it back a day reset here, so the same backup reads as changed",
+    "about": "an incoming note is read without its rescue copy, so an older backup of a turned-off series lacks the days the same notebook holds here and reads as edited elsewhere",
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "    fresh = normalize_note({key: value for key, value in incoming.items() if key != \"_prev\"})\n",
-        "replace": "    fresh = normalize_note(dict(incoming))\n"
+        "find": "    fresh = {key: value for key, value in normalize_note(dict(incoming)).items() if key != \"_prev\"}\n",
+        "replace": "    fresh = normalize_note({key: value for key, value in incoming.items() if key != \"_prev\"})\n"
       }
     ],
     "must_fail": [
-      "a backup whose copy still holds a day reset here reads as the same note"
+      "an older backup of a series, turned off or back on, reads as the notebook it came from read here; one whose copy holds a day reset here since reads as changed"
     ],
     "suites": [
       "test_data_safety"
@@ -11717,6 +11717,135 @@
     ],
     "must_fail": [
       "a template saved after a cancelled sign-out refused it takes back the word"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR124",
+    "about": "a note repeating as its copy's series again takes none of the copy's days back before they are spent: a day's own text and a deleted day kept only in the copy are erased",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    note[\"overrides\"], note[\"exceptions\"], note[\"moved\"] = overrides, sorted(exceptions), moved\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a note repeating as its copy's series again takes back each of the copy's days on a date it leaves free, then the copy's are spent",
+      "a series' deleted days kept only in its copy stay deleted once it repeats as that series again",
+      "a deleted day stays deleted when the series is put back on its own start after another"
+    ],
+    "suites": [
+      "test_data_safety",
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR125",
+    "about": "the copy's days come back over the note's own: a date the note edited, deleted or moved takes the copy's day instead",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    held = _dates_held(note)\n",
+        "replace": "    held = set()\n"
+      }
+    ],
+    "must_fail": [
+      "the note's own day keeps its date over the copy's, and the copy's move onto a date the note holds is dropped, the note's own move kept"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR126",
+    "about": "a copy's move goes onto a date the note's own move holds, and the note's move is dropped when the note is read",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "        if day not in held and to not in held and len(moved) < MAX_OCCURRENCES:\n",
+        "replace": "        if day not in held and len(moved) < MAX_OCCURRENCES:\n"
+      }
+    ],
+    "must_fail": [
+      "the note's own day keeps its date over the copy's, and the copy's move onto a date the note holds is dropped, the note's own move kept"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR127",
+    "about": "a second turn-off replaces the first one's copy of the same series, and a big delete's words it held are in no file",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "              and (set(existing) <= set(self._RESCUE_TEXT_KEYS)\n                   or copy_holds_this_series(note))\n",
+        "replace": "              and set(existing) <= set(self._RESCUE_TEXT_KEYS)\n"
+      }
+    ],
+    "must_fail": [
+      "a repeat turned off a second time keeps the words a big delete took before"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR128",
+    "about": "a held turn-off whose held save kept an import's update copy keeps only its words, the version from before the Update lost",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        elif update_copy(existing) and not rescue_copy_spent(note):\n            # An import's Update left the note as it was here before, in no\n",
+        "replace": "        elif held is not None and existing is held:\n            for key in self._RESCUE_TEXT_KEYS:\n                prev[key] = copy.deepcopy(held.get(key))\n        elif update_copy(existing) and not rescue_copy_spent(note):\n            # An import's Update left the note as it was here before, in no\n"
+      }
+    ],
+    "must_fail": [
+      "a held turn-off after an import's Update keeps the update's copy whole"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR129",
+    "about": "a turn-off that kept an import's update copy says Restore previous brings the series back, which brings the note from before the update",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        return (self._REPEAT_OFF_UPDATE_KEPT if update_copy(note.get(\"_prev\"))\n",
+        "replace": "        return (self._REPEAT_OFF_KEPT if update_copy(note.get(\"_prev\"))\n"
+      }
+    ],
+    "must_fail": [
+      "...and the status line says Restore previous brings back the note from before the update, not the series"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR130",
+    "about": "an import that failed removes its unpacked folder only after Import failed is answered, and a session ending with it on screen leaves the folder for good",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self._import_asking = None\n            if temp_dir:\n                shutil.rmtree(temp_dir, ignore_errors=True)\n            if state.get(\"stop\"):\n",
+        "replace": "            self._import_asking = None\n            if state.get(\"stop\"):\n"
+      }
+    ],
+    "must_fail": [
+      "\"Import failed\" is said with its unpacked folder already gone"
     ],
     "suites": [
       "qa3"
