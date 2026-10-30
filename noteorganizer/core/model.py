@@ -32,6 +32,7 @@ from .recurrence import (
     MAX_OCCURRENCES,
     day_as_kept,
     is_recurring,
+    off_schedule_days,
 )
 
 # ---- Note schema + one-time cleanup ----
@@ -242,16 +243,24 @@ def days_to_rescue(before, recurrence):
     return {key: copy.deepcopy(before[key]) for key in DAY_FIELDS if before.get(key)}
 
 
+# A day's words, which go with a repeat turned off; the rest of a day's edit,
+# its look, says nothing the person typed (spend_series_days keeps both).
+DAY_WORDS = ("title", "body", "comments")
+_DAY_LOOK = tuple(key for key in OVERRIDABLE_FIELDS if key not in DAY_WORDS)
+
+
+def day_has_words(note, day):
+    """Whether *note*'s edit of *day* holds a title, text or comments of its
+    own -- what the day holds (day_as_kept), not what it shows."""
+    shown = day_as_kept(note, day)
+    return any((shown.get(key) or "") != (note.get(key) or "") for key in DAY_WORDS)
+
+
 def days_hold_own_text(note):
     """Whether a day of *note* shows a title, text or comments of its own --
     asked of a note that may no longer repeat, so of what each day holds
     (day_as_kept), not of what it shows."""
-    for day in (note.get("overrides") or {}):
-        shown = day_as_kept(note, day)
-        if any((shown.get(key) or "") != (note.get(key) or "")
-               for key in ("title", "body", "comments")):
-            return True
-    return False
+    return any(day_has_words(note, day) for day in (note.get("overrides") or {}))
 
 
 # What only an update's copy holds (apply_shared_update, the phone's too): a
@@ -308,30 +317,85 @@ def _dates_held(note):
 
 def spend_series_days(note):
     """A series' own copy holds the series' days only while the note does
-    not repeat as that series. Once it does again, the copy's days come
-    back on every date the note's own days leave free -- kept days come
-    back onto the same date and rule -- and the copy's are spent: kept, a
-    reset day came back at every start; spent alone, days only the copy
-    held were in no file (ISSUES_LOG, rounds 8 and 9 of the final audit)."""
+    not repeat as that series. Once it does again, its days come back --
+    kept days come back onto the same date and rule -- and the copy's are
+    spent. The rule: a copy's day is dropped only where the note deleted
+    that day or wrote words of its own for it. ISSUES_LOG: "Round ten: the
+    days a date held without a word"."""
     if not copy_holds_this_series(note):
         return
     prev = note["_prev"]
     held = _dates_held(note)
-    overrides = dict(note.get("overrides") or {})
-    for day, patch in (prev.get("overrides") or {}).items():
-        if day not in held:
-            overrides[day] = copy.deepcopy(patch)
+    moved = dict(note.get("moved") or {})
+    moved.update(_copy_moves_taken(prev.get("moved") or {}, held, len(moved)))
+    overrides = _copy_days_placed(note, prev, moved)
     exceptions = set(note.get("exceptions") or [])
     exceptions.update(day for day in prev.get("exceptions") or [] if day not in held)
-    moved = dict(note.get("moved") or {})
-    for day, to in sorted((prev.get("moved") or {}).items()):
-        # Never onto a date the note holds: normalize_note keeps one day a
-        # date, and the first in order -- the copy's -- would push the note's out.
-        if day not in held and to not in held and len(moved) < MAX_OCCURRENCES:
-            moved[day] = to
     note["overrides"], note["exceptions"], note["moved"] = overrides, sorted(exceptions), moved
     for key in DAY_FIELDS:
         prev.pop(key, None)
+
+
+def _copy_moves_taken(theirs, held, room):
+    """The copy's moves *theirs* the note takes: of a day its own days
+    leave alone, onto a date they leave free, while it holds fewer than a
+    series' most (*room* its own) -- and none onto a day whose own move
+    stays behind: that day stays on its date, and two days on one date were
+    drawn as one."""
+    taken = {}
+    for day, to in sorted(theirs.items()):
+        # Never onto a date the note holds: normalize_note keeps one day a
+        # date, and the first in order -- the copy's -- would push the note's out.
+        if day not in held and to not in held and room + len(taken) < MAX_OCCURRENCES:
+            taken[day] = to
+    onto = {to: day for day, to in taken.items()}
+    home = [day for day in theirs if day not in taken]
+    while home:
+        day = onto.pop(home.pop(), None)
+        if day is not None:
+            del taken[day]
+            home.append(day)
+    return taken
+
+
+def _copy_days_placed(note, prev, moved):
+    """*note*'s days' edits with *prev*'s put in, *moved* the note's moves
+    once the copy's are taken: each of the copy's on the date the note draws
+    its day, as move_day keys an edit -- not where the note deleted the day
+    or wrote words of its own for it. An edit there with no words of its own
+    takes the copy's, its colour and category kept."""
+    mine = note.get("overrides") or {}
+    overrides = dict(mine)
+    deleted = set(note.get("exceptions") or [])
+    came = {}
+    for day, to in (prev.get("moved") or {}).items():
+        came.setdefault(to, day)
+    # An edit the copy draws on no day -- off its schedule, or under a date
+    # its day left or it deleted -- stays on its date, as the app keys one.
+    undrawn = set(off_schedule_days(prev)) | {
+        day for day in prev.get("exceptions") or [] if day not in came}
+    wanted = []
+    for key, patch in (prev.get("overrides") or {}).items():
+        day = key if key in undrawn else came.get(key, key)
+        if day not in deleted:
+            at = key if key in undrawn else moved.get(day, day)
+            rank = 2 if key in undrawn else 0 if at == day else 1
+            wanted.append((not day_has_words(prev, key), rank, at, patch))
+    # Two of the copy's edits for one date, a shape neither app writes: the
+    # one with words is kept, then the one its day is drawn on there.
+    taken = set()
+    for no_words, _rank, at, patch in sorted(wanted, key=lambda want: want[:3]):
+        if at in taken:
+            continue
+        taken.add(at)
+        look = mine.get(at)
+        if look is None:
+            overrides[at] = copy.deepcopy(patch)
+        elif not no_words and not day_has_words(note, at):
+            look = look if isinstance(look, dict) else {}
+            overrides[at] = dict(copy.deepcopy(patch),
+                                 **{key: look[key] for key in _DAY_LOOK if key in look})
+    return overrides
 
 
 def _days_back_from_copy(note):

@@ -2001,6 +2001,90 @@ check(f"a series turned back on keeps its old days on the same date, and from "
       f"another its old deleted day no longer hides its first ({_rr_seen})",
       _rr_seen[0][0] == ['2026-09-14'] and _rr_seen[1][0] == []
       and all(s[1] == ['2026-09-21'] for s in _rr_seen) and _rr_seen[1][2])
+# Off, a line added, on again as it was, off again: the second turn-off's copy
+# took the first one's words because they differed, and Restore previous then
+# took back the added line, which the next turn-off put in no file (round 10).
+# An earlier copy's words are given only when the note has LOST words to it.
+_ro_fixture()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app._themed_dialog = lambda *a, **k: True
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.rec_freq_var.set(NO.FREQ_LABELS['']); app.on_recurrence_changed(); app.update()
+    app.save_current_note(); app.update()
+    app.body_text.insert('end-1c', '\nAdded later: bring water')
+    app.save_current_note(); app.update()
+    for _al_freq in ('weekly', ''):
+        app.rec_freq_var.set(NO.FREQ_LABELS[_al_freq]); app.on_recurrence_changed(); app.update()
+        app.save_current_note(); app.update()
+    _al_copy = (app.find_note(1).get('_prev') or {}).get('body') or ''
+    _al_line = str(app.status_lbl.cget('text'))
+    app.restore_previous_version(); app.update()
+    _al_back = app.find_note(1)
+    _al_shown = (_al_back['recurrence'].get('freq'), 'Added later' in _al_back['body'],
+                 NO.effective_note(_al_back, '2026-09-14').get('body'))
+    app.rec_freq_var.set(NO.FREQ_LABELS['']); app.on_recurrence_changed(); app.update()
+    app.save_current_note(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+    app.ask_yes_no = _ro_yes
+with open(NO.DATA_FILE, encoding='utf-8') as _f:
+    _al_disk = _f.read()
+check(f"a repeat turned off a second time, a line added between, keeps the newest words in its "
+      f"copy, and Restore previous brings the series back with them ({_al_copy[-26:]!r}, "
+      f"{_al_shown}; on disk after one more turn-off: {'Added later' in _al_disk})",
+      'Added later' in _al_copy and _al_shown == ('weekly', True, 'DAY TEXT: room 9')
+      and 'Added later' in _al_disk and "every day's own text" in _al_line
+      and '↩ Restore previous' in _al_line)
+# An Update that only turned the repeat on keeps a copy that, given the series'
+# days at the turn-off, equals the note and is dropped by the same save: the
+# status line promised a Restore previous that was gone (round 10).
+_ro_fixture()
+_np_note = app.find_note(1)
+_np_note.update({'recurrence': NO.normalize_recurrence({}), 'overrides': {}})
+NO.apply_shared_update(_np_note, dict(
+    {key: _np_note[key] for key in ('uid', 'created', 'title', 'body', 'formatting', 'date')},
+    recurrence={'freq': 'weekly'}), NO.UPDATABLE_FROM_SHARED)
+_np_note['overrides'] = {'2026-09-14': {'body': 'DAY TEXT: room 9'}}
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app._themed_dialog = lambda *a, **k: True
+try:
+    app.rec_freq_var.set(NO.FREQ_LABELS['']); app.on_recurrence_changed(); app.update()
+    app.save_current_note(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+_np_line = str(app.status_lbl.cget('text'))
+check(f"a turn-off whose copy the same save drops promises no Restore previous "
+      f"({_np_line[-62:]!r}; copy kept: {'_prev' in app.find_note(1)})",
+      '_prev' not in app.find_note(1) and 'Restore previous' not in _np_line
+      and 'the repeat is off' in _np_line
+      and not app._is_placed(app.restore_prev_btn))
+# 0.97.405 (or the phone's 0.12.0) turned the repeat off and on as it was, the
+# day's own text in the copy alone; then that day moved, or only coloured. The
+# first start of this build spent the text (round 10): read, the day shows it.
+_tb_copy = {'title': 'Standup', 'body': 'SERIES TEXT', 'date': '2026-09-07',
+            'recurrence': {'freq': 'weekly'},
+            'overrides': {'2026-09-14': {'body': 'DAY 14 OWN TEXT, room 4B'}}}
+_tb_seen = []
+for _tb_days, _tb_day in (({'moved': {'2026-09-14': '2026-09-15'}}, '2026-09-15'),
+                          ({'overrides': {'2026-09-14': {'title': 'Standup', 'body': 'SERIES TEXT',
+                                                         'color': '#ff6b6b'}}}, '2026-09-14')):
+    app.new_note(); app.update()
+    app.notes = [NO.normalize_note(dict({'id': 1, 'title': 'Standup', 'body': 'SERIES TEXT',
+                                         'date': '2026-09-07', 'recurrence': {'freq': 'weekly'},
+                                         '_prev': dict(_tb_copy)}, **_tb_days)),
+                 NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+    app.save_notes()
+    app.open_note_in_tab(app.find_note(1), occurrence_date=_tb_day); app.update()
+    _tb_seen.append((app.body_text.get('1.0', 'end-1c'), app.current_note_color))
+    app.open_note_in_tab(app.find_note(2)); app.update()
+with open(NO.DATA_FILE, encoding='utf-8') as _f:
+    _tb_disk = _f.read()
+check(f"a day the old version moved or only coloured, its own text in the copy alone, shows "
+      f"that text where it is drawn, its colour kept ({_tb_seen})",
+      _tb_seen == [('DAY 14 OWN TEXT, room 4B', ''), ('DAY 14 OWN TEXT, room 4B', '#ff6b6b')]
+      and 'DAY 14 OWN TEXT' in _tb_disk)
 
 # ---- "THIS OCCURRENCE ONLY" KEEPS WHAT A DAY CANNOT HOLD ----
 # The day's text goes to the day; a file attached and a tick made in the

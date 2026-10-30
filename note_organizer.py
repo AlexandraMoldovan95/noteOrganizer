@@ -21833,11 +21833,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         "back with every day's own text")
     _REPEAT_OFF_UPDATE_KEPT = (" — the repeat is off; ↩ Restore previous brings "
                                "back the note as it was before it was updated")
+    _REPEAT_OFF_NO_COPY = " — the repeat is off; every day's own text stays in the note"
 
     def _repeat_off_line(self, note):
         """What the status line says of a turn-off: the copy it kept is the
         series, or -- after an import's Update -- the note as it was before
-        that, which Restore previous then brings back instead (round 9)."""
+        that, which Restore previous then brings back instead (round 9). A
+        copy the note holds again in full is dropped by the same save, so no
+        Restore previous is promised for it (round 10)."""
+        if not self._holds_unspent_rescue(note):
+            return self._REPEAT_OFF_NO_COPY
         return (self._REPEAT_OFF_UPDATE_KEPT if update_copy(note.get("_prev"))
                 else self._REPEAT_OFF_KEPT)
 
@@ -21906,10 +21911,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         deleted text was in no file.
 
         The other order is the same loss: a big delete saved first, the
-        repeat turned off after. A text copy the note does not hold again
-        (rescue_copy_spent) gives its text to the turn-off's copy too, so
-        Restore previous brings back the words and the series together
-        (2026-10-28, the final audit)."""
+        repeat turned off after. A text copy whose words the note has lost
+        (rescue_copy_due, copy to note) gives its text to the turn-off's copy
+        too, so Restore previous brings back the words and the series
+        together (2026-10-28, the final audit)."""
         prev = self._whole_note_rescue_copy(note)
         held = getattr(self, "_held_text_rescue", None)
         self._held_text_rescue = None
@@ -21931,10 +21936,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         elif (isinstance(existing, dict)
               and (set(existing) <= set(self._RESCUE_TEXT_KEYS)
                    or copy_holds_this_series(note))
-              and not rescue_copy_spent(note)):
-            # A text copy, or an earlier turn-off's copy of this same series
-            # whose words the note no longer holds: replaced, a big delete's
-            # words were lost at the second turn-off (round 9 of the audit).
+              and rescue_copy_due(existing.get("title") or "", existing.get("body") or "",
+                                  note.get("title") or "", note.get("body") or "",
+                                  existing.get("comments") or "", note.get("comments") or "")):
+            # A text copy, or an earlier turn-off's copy of this series, whose
+            # words the note has LOST (the big delete's test): given whenever
+            # they differed, a line added since went back (round 10).
             for key in self._RESCUE_TEXT_KEYS:
                 prev[key] = copy.deepcopy(existing.get(key, prev[key]))
         return prev

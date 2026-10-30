@@ -8309,8 +8309,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "        shown = day_as_kept(note, day)\n",
-        "replace": "        shown = day_as_kept(note, day) if is_recurring(note) else note\n"
+        "find": "    shown = day_as_kept(note, day)\n",
+        "replace": "    shown = day_as_kept(note, day) if is_recurring(note) else note\n"
       }
     ],
     "must_fail": [
@@ -12116,8 +12116,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "        if day not in held and to not in held and len(moved) < MAX_OCCURRENCES:\n",
-        "replace": "        if day not in held and len(moved) < MAX_OCCURRENCES:\n"
+        "find": "        if day not in held and to not in held and room + len(taken) < MAX_OCCURRENCES:\n",
+        "replace": "        if day not in held and room + len(taken) < MAX_OCCURRENCES:\n"
       }
     ],
     "must_fail": [
@@ -12197,6 +12197,155 @@
     ],
     "suites": [
       "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR131",
+    "about": "the copy's edit of a day stays under the date the copy keyed it by, not where the note draws the day: a day the note moved loses its own text off the calendar",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "            at = key if key in undrawn else moved.get(day, day)\n",
+        "replace": "            at = key\n"
+      }
+    ],
+    "must_fail": [
+      "the copy's own text for a day the note moved goes with the day",
+      "on 300 shapes either app's editor makes, the take-back keeps every word"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR132",
+    "about": "a day the note only coloured holds its date against the copy, whose own text for that day is spent",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "        elif not no_words and not day_has_words(note, at):\n",
+        "replace": "        elif False:\n"
+      }
+    ],
+    "must_fail": [
+      "the copy's own text for a day the note moved goes with the day",
+      "a copy's move the note's days leave no room for keeps its words on the day",
+      "a day the old version moved or only coloured, its own text in the copy alone"
+    ],
+    "suites": [
+      "test_data_safety",
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR133",
+    "about": "a copy's move onto a day whose own move stays behind is taken: two days on one date, one drawn nowhere and its words under the other",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    home = [day for day in theirs if day not in taken]\n",
+        "replace": "    home = []\n"
+      }
+    ],
+    "must_fail": [
+      "a copy's move onto a day whose own move stays behind stays behind too"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR134",
+    "about": "the copy's own text for a day the note deleted comes back under the deleted day",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "        if day not in deleted:\n            at = key if key in undrawn else moved.get(day, day)\n",
+        "replace": "        if True:\n            at = key if key in undrawn else moved.get(day, day)\n"
+      }
+    ],
+    "must_fail": [
+      "a day the note deleted, or wrote words of its own for, keeps the note's"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR135",
+    "about": "the copy's words for a day go over the words the note wrote for it since",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "        elif not no_words and not day_has_words(note, at):\n",
+        "replace": "        elif not no_words:\n"
+      }
+    ],
+    "must_fail": [
+      "a day the note deleted, or wrote words of its own for, keeps the note's",
+      "on 300 shapes either app's editor makes, the take-back keeps every word"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR136",
+    "about": "an edit the copy draws on no day is taken for its day's own, and one of the two edits is lost",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    undrawn = set(off_schedule_days(prev)) | {\n",
+        "replace": "    undrawn = set() and {\n"
+      }
+    ],
+    "must_fail": [
+      "an edit the copy draws on no day stays on its own date"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR137",
+    "about": "a second turn-off gives the first one's copy its words whenever they differ from the note's, and a line added between goes back at Restore previous",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "              and rescue_copy_due(existing.get(\"title\") or \"\", existing.get(\"body\") or \"\",\n                                  note.get(\"title\") or \"\", note.get(\"body\") or \"\",\n                                  existing.get(\"comments\") or \"\", note.get(\"comments\") or \"\")):\n",
+        "replace": "              and not rescue_copy_spent(note)):\n"
+      }
+    ],
+    "must_fail": [
+      "a repeat turned off a second time, a line added between, keeps the newest words"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR138",
+    "about": "a turn-off whose copy the same save drops as spent promises a Restore previous that is gone",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if not self._holds_unspent_rescue(note):\n            return self._REPEAT_OFF_NO_COPY\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a turn-off whose copy the same save drops promises no Restore previous"
+    ],
+    "suites": [
+      "qa5"
     ],
     "expect": "killed"
   }
