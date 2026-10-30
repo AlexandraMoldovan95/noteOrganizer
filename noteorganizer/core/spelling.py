@@ -94,25 +94,29 @@ def _units_of(raw, start, length):
 def pieces(text, size=PIECE_UNITS):
     """*text* as (offset, piece) pairs no longer than *size* UTF-16 units,
     cut after a space where there is one, so no word is split in two.
-    *offset* is where the piece starts in *text*, in UTF-16 units."""
-    out, offset = [], 0
-    while text:
-        if utf16_units(text) <= size:
-            out.append((offset, text))
+    *offset* is where the piece starts in *text*, in UTF-16 units. Walked
+    by index, the line measured once: the rest of it, copied and measured
+    again for every piece, grew with its square (round 9)."""
+    out, offset, at = [], 0, 0
+    left = utf16_units(text)
+    while at < len(text):
+        if left <= size:
+            out.append((offset, text[at:]))
             break
-        cut, units = 0, 0
-        for i, ch in enumerate(text):
-            units += 2 if ord(ch) > 0xFFFF else 1
+        cut, units = at, 0
+        for i in range(at, len(text)):
+            units += 2 if ord(text[i]) > 0xFFFF else 1
             if units > size:
                 break
             cut = i + 1
-        space = text.rfind(" ", 0, cut)
-        if space > 0:
+        space = text.rfind(" ", at, cut)
+        if space > at:
             cut = space + 1
-        cut = max(cut, 1)                  # always move on, even past one wide character
-        piece, text = text[:cut], text[cut:]
+        cut = max(cut, at + 1)             # always move on, even past one wide character
+        piece = text[at:cut]
         out.append((offset, piece))
-        offset += utf16_units(piece)
+        width = utf16_units(piece)
+        offset, left, at = offset + width, left - width, cut
     return out
 
 

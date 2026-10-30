@@ -3996,11 +3996,13 @@ _sp_b.delete('1.0', 'end')
 _sp_b.insert('1.0', _sp_long)
 app._spell_run(_sp_b)
 _sp_first = len(_sp_dict.asked)
-_sp_settle(cap=10)
+# ...and once the last slice has run, no look is still due: its timer's id
+# stayed behind, and every wait for the look ran to its cap (round 9).
+_sp_done = _sp_settle(cap=10)
 check(f'a long note is read a slice at a time ({_sp_first} lines in the first, '
       f'{app.SPELL_SLICE} allowed), and all of it in the end '
-      f'({len(_sp_lines(_sp_b))} of 300 underlined)',
-      _sp_first <= app.SPELL_SLICE and len(_sp_lines(_sp_b)) == 300)
+      f'({len(_sp_lines(_sp_b))} of 300 underlined), the look then said done ({_sp_done})',
+      _sp_first <= app.SPELL_SLICE and len(_sp_lines(_sp_b)) == 300 and _sp_done)
 _sp_dict.asked.clear()
 _sp_b.delete('1.0', 'end')
 _sp_b.insert('1.0', ('word ' * 2500) + 'recieve')

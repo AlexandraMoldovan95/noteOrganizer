@@ -212,6 +212,27 @@ check("...and each piece's offset is where it starts, in units",
       all(spelling.utf16_slice(_long, o, spelling.utf16_units(p)) == p for o, p in _parts))
 check("a short line is one piece at 0", spelling.pieces("short line") == [(0, "short line")])
 check("an empty line is no piece", spelling.pieces("") == [])
+# The rest of the line was measured again for every piece: 200,000 characters
+# in 50 pieces measured five million (round 9). Counted, never timed.
+_measured = [0]
+_real_units = spelling.utf16_units
+
+
+def _counting_units(text):
+    _measured[0] += len(text)
+    return _real_units(text)
+
+
+spelling.utf16_units = _counting_units
+try:
+    _pc_line = "word " * 40_000
+    _pc_parts = spelling.pieces(_pc_line)
+finally:
+    spelling.utf16_units = _real_units
+check("a line of 200,000 characters is cut into pieces measuring it about twice, "
+      "not once for every piece (%d characters measured, %d pieces)"
+      % (_measured[0], len(_pc_parts)),
+      _measured[0] <= 3 * len(_pc_line) and "".join(p for _o, p in _pc_parts) == _pc_line)
 
 # --- the word being typed -------------------------------------------------
 check("the caret anywhere in a range, or at either end, is that range",

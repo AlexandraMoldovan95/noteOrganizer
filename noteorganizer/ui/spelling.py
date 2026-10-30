@@ -194,6 +194,9 @@ class SpellingMixin:
         underlining waits for the last. A newer look started meanwhile wins."""
         if getattr(widget, "_spell_generation", 0) != generation:
             return
+        # The slice that was due is this one: kept, its id said a look was
+        # still due after the last slice, and a wait for it never ended.
+        widget._spell_job = None
         cache = self._spell_cache
         spellers = self._spellers()
         for i in todo[:self.SPELL_SLICE]:

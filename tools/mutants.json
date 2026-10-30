@@ -4786,7 +4786,7 @@
     "id": "SP07",
     "about": "a long line is cut in the middle of a word",
     "edits": [{"file": "noteorganizer/core/spelling.py",
-               "find": "        if space > 0:\n            cut = space + 1\n",
+               "find": "        if space > at:\n            cut = space + 1\n",
                "replace": ""}],
     "must_fail": ["...each cut after a space, so no word is split"],
     "suites": ["test_spelling"],
@@ -11434,6 +11434,42 @@
     ],
     "suites": [
       "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX34",
+    "about": "a long line is measured again from each piece to its end, and cutting it grows with its square",
+    "edits": [
+      {
+        "file": "noteorganizer/core/spelling.py",
+        "find": "        if left <= size:\n",
+        "replace": "        if utf16_units(text[at:]) <= size:\n"
+      }
+    ],
+    "must_fail": [
+      "a line of 200,000 characters is cut into pieces measuring it about twice"
+    ],
+    "suites": [
+      "test_spelling"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX35",
+    "about": "a spelling look over more than one slice keeps its last timer's id, and every wait for it runs to its cap",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/spelling.py",
+        "find": "        widget._spell_job = None\n        cache = self._spell_cache\n",
+        "replace": "        cache = self._spell_cache\n"
+      }
+    ],
+    "must_fail": [
+      "a long note is read a slice at a time"
+    ],
+    "suites": [
+      "qa6"
     ],
     "expect": "killed"
   },
