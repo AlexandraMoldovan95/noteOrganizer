@@ -36,6 +36,7 @@ by one for every emoji before the word.
 """
 
 import re
+from bisect import bisect_right
 
 # settings.json keys: Settings -> Appearance -> Spelling, on unless turned
 # off, and the words the person chose to ignore on this computer.
@@ -81,7 +82,12 @@ def utf16_units(text):
 
 def utf16_slice(text, start, length):
     """The part of *text* from UTF-16 unit *start*, *length* units long."""
-    raw = text.encode("utf-16-le", "surrogatepass")
+    return _units_of(text.encode("utf-16-le", "surrogatepass"), start, length)
+
+
+def _units_of(raw, start, length):
+    """utf16_slice of a text already encoded: *raw* is its UTF-16 bytes, so
+    a caller slicing one line many times encodes it once."""
     return raw[2 * start:2 * (start + length)].decode("utf-16-le", "replace")
 
 
@@ -207,19 +213,28 @@ def visible_errors(lines, results, ignored=()):
             paragraph_foreign = is_foreign(n, len(ranges))
         else:
             paragraph_foreign = note_foreign
+        # The line measured once, each range put in its sentence once: each
+        # sentence encoded the whole line and walked every range, and a long
+        # line of short sentences took seconds at every pause (round 9).
+        raw = text.encode("utf-16-le", "surrogatepass")
+        spans = sentence_spans(text)
+        starts = [start for start, _end in spans]
+        inside = [[] for _span in spans]
+        for r in ranges:
+            if 0 <= r[0] < spans[-1][1]:
+                inside[bisect_right(starts, r[0]) - 1].append(r)
         keep = []
-        for start, end in sentence_spans(text):
-            inside = [r for r in ranges if start <= r[0] < end]
-            if not inside:
+        for (start, end), found in zip(spans, inside):
+            if not found:
                 continue
-            sentence_words = word_count(utf16_slice(text, start, end - start))
+            sentence_words = word_count(_units_of(raw, start, end - start))
             if sentence_words >= MIN_WORDS_TO_JUDGE:
-                foreign = is_foreign(sentence_words, len(inside))
+                foreign = is_foreign(sentence_words, len(found))
             else:
                 foreign = paragraph_foreign
             if not foreign:
-                keep += [(s, length) for s, length in inside
-                         if worth_flagging(utf16_slice(text, s, length), ignored)]
+                keep += [(s, length) for s, length in found
+                         if worth_flagging(_units_of(raw, s, length), ignored)]
         if keep:
             shown[index] = keep
     return shown
@@ -233,14 +248,16 @@ _SENTENCE_END = re.compile(r"(?<![.!?…])[.!?…]+(?=\s|$)")
 
 def sentence_spans(text):
     """The sentences of a line, as (start, end) in UTF-16 units, covering
-    the whole of it: every position belongs to exactly one."""
-    spans, start = [], 0
+    the whole of it: every position belongs to exactly one. Each sentence is
+    measured on its own and added on, never the line again from its start."""
+    spans, start, at = [], 0, 0
     for m in _SENTENCE_END.finditer(text):
         end = m.end()
-        spans.append((utf16_units(text[:start]), utf16_units(text[:end])))
-        start = end
+        width = utf16_units(text[start:end])
+        spans.append((at, at + width))
+        start, at = end, at + width
     if start < len(text) or not spans:
-        spans.append((utf16_units(text[:start]), utf16_units(text)))
+        spans.append((at, at + utf16_units(text[start:])))
     return spans
 
 

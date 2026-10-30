@@ -146,24 +146,49 @@ check("...and a run of ends is one end, only with a space or the line's end afte
 # A run of ends with no space after it was tried at each of its dots: 24,000
 # took 4.5 s at every look the editor takes (round 9). Timed in this run
 # against the same run with a space after it, the quickest of three each.
+import gc as _gc
 import time as _time
 
 
-def _quickest_spans(text):
+def _quickest(fn, *args):
+    """The quickest of three calls, in seconds."""
     best = None
     for _ in range(3):
+        _gc.collect()
         started = _time.perf_counter()
-        spelling.sentence_spans(text)
+        fn(*args)
         took = _time.perf_counter() - started
         best = took if best is None else min(best, took)
     return best
 
 
-_se_run = _quickest_spans("xqzt" + "." * 12000 + "zqtx")
-_se_ended = _quickest_spans("xqzt" + "." * 12000 + " zqtx")
+_se_run = _quickest(spelling.sentence_spans, "xqzt" + "." * 12000 + "zqtx")
+_se_ended = _quickest(spelling.sentence_spans, "xqzt" + "." * 12000 + " zqtx")
 check("a run of 12,000 dots with no space after it takes what the same run ending "
       "a sentence takes (%.1f ms against %.1f ms)" % (_se_run * 1000, _se_ended * 1000),
       _se_run < 4 * _se_ended + 0.25)
+
+# Each range goes to its sentence, in the order it came, with an emoji before
+# it counted two units; a range outside the line is no one's.
+_vo_line = "Teh \U0001F389 cat sat on the mat. Xqzt the brede and the milk was fresh today! Zorp"
+check("a line's ranges are shown sentence by sentence, each sentence's in the order "
+      "they came, a repeated one twice, one outside the line not at all",
+      spelling.visible_errors([_vo_line], [[(36, 5), (27, 4), (36, 5), (-1, 2), (79, 2),
+                                            (72, 4), (0, 3)]])
+      == {0: [(0, 3), (36, 5), (27, 4), (36, 5), (72, 4)]})
+# A look measured the line again for each sentence and walked every range for
+# each: 358 ms at 24,000 characters, four times that for twice the line, at
+# every pause in typing (round 9). Timed against the line's half, in one run.
+_vo_long = "xqzt. " * (80_000 // 6)
+_vo_half = "xqzt. " * (40_000 // 6)
+_vo_long_s = _quickest(spelling.visible_errors, [_vo_long],
+                       [[(i * 6, 4) for i in range(len(_vo_long) // 6)]])
+_vo_half_s = _quickest(spelling.visible_errors, [_vo_half],
+                       [[(i * 6, 4) for i in range(len(_vo_half) // 6)]])
+check("a line of 80,000 characters of short misspelled sentences takes twice what "
+      "its half takes, not four times (%.1f ms against %.1f ms)"
+      % (_vo_long_s * 1000, _vo_half_s * 1000),
+      _vo_long_s < 2.6 * _vo_half_s + 0.005)
 check("a line not checked at all (a table row) counts for nothing",
       spelling.visible_errors(["| a | b |", _en], [None, _en_errors]) == {1: [(2, 7), (10, 3)]})
 check("the judgement is in words, not in characters: three short unknown words "

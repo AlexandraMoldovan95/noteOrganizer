@@ -4777,7 +4777,7 @@
     "about": "a range is cut out of the text in Python characters, one place off after every emoji",
     "edits": [{"file": "noteorganizer/core/spelling.py",
                "find": "    return raw[2 * start:2 * (start + length)].decode(\"utf-16-le\", \"replace\")\n",
-               "replace": "    return text[start:start + length]\n"}],
+               "replace": "    return raw.decode(\"utf-16-le\", \"surrogatepass\")[start:start + length]\n"}],
     "must_fail": ["...and slicing in those units returns the word itself"],
     "suites": ["test_spelling"],
     "expect": "killed"
@@ -4963,8 +4963,8 @@
     "id": "SP24",
     "about": "a paragraph is judged whole, so an English sentence beside a foreign one loses its underlines",
     "edits": [{"file": "noteorganizer/core/spelling.py",
-               "find": "        for start, end in sentence_spans(text):\n",
-               "replace": "        for start, end in [(0, utf16_units(text))]:\n"}],
+               "find": "        spans = sentence_spans(text)\n",
+               "replace": "        spans = [(0, utf16_units(text))]\n"}],
     "must_fail": ["a paragraph of mostly unknown words still shows the typo in its English sentence"],
     "suites": ["test_spelling"],
     "expect": "killed"
@@ -11281,6 +11281,65 @@
     ],
     "must_fail": [
       "a run of 12,000 dots with no space after it takes what the same run"
+    ],
+    "suites": [
+      "test_spelling"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX26",
+    "about": "the spelling's look encodes the whole line again for each sentence and each misspelled word, and a long line of short sentences grows with the square of its length",
+    "edits": [
+      {
+        "file": "noteorganizer/core/spelling.py",
+        "find": "            sentence_words = word_count(_units_of(raw, start, end - start))\n",
+        "replace": "            sentence_words = word_count(utf16_slice(text, start, end - start))\n"
+      },
+      {
+        "file": "noteorganizer/core/spelling.py",
+        "find": "                         if worth_flagging(_units_of(raw, s, length), ignored)]\n",
+        "replace": "                         if worth_flagging(utf16_slice(text, s, length), ignored)]\n"
+      }
+    ],
+    "must_fail": [
+      "a line of 80,000 characters of short misspelled sentences takes twice what"
+    ],
+    "suites": [
+      "test_spelling"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX27",
+    "about": "a line's sentences are each measured from the line's start, and a long line of short sentences grows with the square of its length",
+    "edits": [
+      {
+        "file": "noteorganizer/core/spelling.py",
+        "find": "        width = utf16_units(text[start:end])\n",
+        "replace": "        width = utf16_units(text[:end]) - utf16_units(text[:start])\n"
+      }
+    ],
+    "must_fail": [
+      "a line of 80,000 characters of short misspelled sentences takes twice what"
+    ],
+    "suites": [
+      "test_spelling"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX28",
+    "about": "the spelling's look walks every misspelled range for each sentence, and a long line of short sentences grows with the square of its length",
+    "edits": [
+      {
+        "file": "noteorganizer/core/spelling.py",
+        "find": "        for (start, end), found in zip(spans, inside):\n",
+        "replace": "        for (start, end), found in zip(spans, inside):\n            found = [r for r in ranges if start <= r[0] < end]\n"
+      }
+    ],
+    "must_fail": [
+      "a line of 80,000 characters of short misspelled sentences takes twice what"
     ],
     "suites": [
       "test_spelling"
