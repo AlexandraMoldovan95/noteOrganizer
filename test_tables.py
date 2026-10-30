@@ -6,7 +6,14 @@ so it needs no clipboard, no window and no Windows.
 Check descriptions stay ASCII-only, for the same reason test_calculator.py
 does: printing a bullet crashes a plain Windows console on cp1252.
 """
-from noteorganizer.core import tables
+import os
+import sys
+# Settled as a guest of this computer before the app's code (qa/_qa_support,
+# beside this file in a scratch copy, in qa/ where CI runs it).
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "qa"))
+from _qa_support import as_a_guest  # noqa: E402
+as_a_guest()
+from noteorganizer.core import tables  # noqa: E402
 from noteorganizer.core.formatting import shift_spans
 from noteorganizer.core.richtext import html_to_note, note_to_html, reflow_wrapped
 

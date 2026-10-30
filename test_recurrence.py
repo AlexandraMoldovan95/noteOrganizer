@@ -1,7 +1,14 @@
 """Dedicated recurrence-engine test suite, separate from the GUI-based QA
 scripts — runs headlessly with no tkinter needed, fast enough to run after
 every change to expand_occurrences/normalize_recurrence."""
-import note_organizer as NO
+import os
+import sys
+# Settled as a guest of this computer before the app's code (qa/_qa_support,
+# beside this file in a scratch copy, in qa/ where CI runs it).
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "qa"))
+from _qa_support import as_a_guest  # noqa: E402
+as_a_guest()
+import note_organizer as NO  # noqa: E402
 from datetime import date
 import time
 import sys

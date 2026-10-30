@@ -10,7 +10,14 @@ function with no distinction made between them.
 Check descriptions are kept ASCII-only on purpose — printing the real
 '−'/'×' characters crashes on a plain Windows console using the cp1252
 codepage, unrelated to whether the evaluator itself works correctly."""
-import note_organizer as NO
+import os
+import sys
+# Settled as a guest of this computer before the app's code (qa/_qa_support,
+# beside this file in a scratch copy, in qa/ where CI runs it).
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "qa"))
+from _qa_support import as_a_guest  # noqa: E402
+as_a_guest()
+import note_organizer as NO  # noqa: E402
 
 fails = []
 def check(name, cond):

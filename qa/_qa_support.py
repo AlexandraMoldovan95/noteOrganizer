@@ -127,6 +127,12 @@ different questions, and a check that wants the second asserts it itself
     here, once, because it was nine identical copies -- the one state a
     copied safety rule does not stay in.
 
+``as_a_guest()``
+    The first act of every suite, qa and unit alike (``hermetic_seed``
+    calls it): settles the script as tools/guest.py's runners settle. One
+    a runner started shares its turn, homes and ceiling; one started by
+    hand or by CI takes its own, and refuses without guest.py.
+
 ``waiting_timers(app, name)``
     The Tcl timers waiting to run a callback called *name*, asked of Tcl
     rather than of the job attribute the app keeps. The attribute answers
@@ -176,6 +182,40 @@ import tkinter as tk
 # start, each in a throwaway folder. Nothing else sets it.
 SCRATCH_MARKER = "NOTEORG_SCRATCH"
 
+_SETTLED = []   # tools/guest.py, once this process has settled
+
+
+def as_a_guest():
+    """Settle this script before it imports or builds the app, as every
+    runner does (tools/guest.py): a suite that a settled run started shares
+    its turn, homes and memory ceiling, and one started any other way --
+    by hand, or by CI -- takes its own. The suites were let off that rule
+    because "a runner starts them", and nothing made it so (final audit,
+    round nine). guest.py is found beside this file, as every scratch copy
+    has it, or in the repository's tools/; without it, the script refuses."""
+    if _SETTLED:
+        return _SETTLED[0]
+    here = os.path.dirname(os.path.abspath(__file__))
+    for folder in (here, os.path.join(os.path.dirname(here), "tools")):
+        if os.path.isfile(os.path.join(folder, "guest.py")):
+            sys.path.insert(0, folder)
+            try:
+                import guest
+            finally:
+                sys.path.remove(folder)
+            break
+    else:
+        sys.exit(
+            "REFUSING to run: tools/guest.py is not beside this script. A "
+            "suite settles as a guest of this computer before it starts -- "
+            "the machine's turn, a memory ceiling, APPDATA of its own -- "
+            "and needs it for that. Run it through tools/run_tests.py, or "
+            "copy guest.py in beside it (CLAUDE.md, 'QA testing safety').")
+    for line in guest.settle():
+        print(line, flush=True)
+    _SETTLED.append(guest)
+    return guest
+
 
 def hermetic_seed():
     """Give this script a data folder of its own -- or refuse to run.
@@ -201,14 +241,18 @@ def hermetic_seed():
       exactly the one the app itself could still have rescued. They also
       overwrote settings.json unconditionally; now nothing is written
       until every check has passed.
+
+    Declared a scratch run, it settles as a guest (``as_a_guest``) before
+    it writes anything.
     """
     if os.environ.get(SCRATCH_MARKER) != "1":
         sys.exit(
             "REFUSING to run: this script wipes the data files in its "
             "working folder, and nothing says this folder is a throwaway "
             "copy. Run it through tools/run_tests.py, or set %s=1 yourself "
-            "in a scratch folder outside the project (see CLAUDE.md, "
-            "'QA testing safety')." % SCRATCH_MARKER)
+            "in a scratch folder outside the project, with tools/guest.py "
+            "beside it (see CLAUDE.md, 'QA testing safety')." % SCRATCH_MARKER)
+    as_a_guest()
     if os.path.exists("notes_data.json"):
         try:
             with io.open("notes_data.json", encoding="utf-8") as fh:

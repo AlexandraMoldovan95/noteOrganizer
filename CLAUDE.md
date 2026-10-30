@@ -346,7 +346,11 @@ calls `guest.settle()` first (`tools/guest.py`, gated by
 waits, naming the first — holds everything it starts to a memory
 ceiling sized to the need, and gives it `APPDATA` of its own, empty, so
 the app's code it runs can never copy in the owner's notebook (a test
-did, on every Windows run, until the final audit's eighth round). The
+did, on every Windows run, until the final audit's eighth round). Every
+suite settles too, as its first act (`as_a_guest()` in
+`qa/_qa_support.py`): started by a runner it shares that run's turn and
+homes; started by CI or by hand it takes its own, or refuses without
+`tools/guest.py` (since the ninth round). The
 Linux image runs only through `py tools/linux_ci.py`, never a docker
 command of one's own: a killed docker client leaves its container
 running. The Android walk takes the turn as it starts; the Android build
@@ -355,11 +359,14 @@ hand. A runaway test once took 43 GB and the owner's desktop with it
 ([the story](docs/ISSUES_LOG.md#the-test-that-took-the-computer-down)).
 
 Instead (by hand): copy `note_organizer.py`, the `noteorganizer/` package,
-and the target test script into a scratch directory **outside the project
-tree entirely** (e.g. the session's own scratchpad folder), and run and
-clean up there. This makes it physically impossible for a wrong-directory
-mistake to reach real user data, rather than relying on correctly
-remembering the working directory every single time.
+`qa/_qa_support.py`, `tools/guest.py` and the target test script into a
+scratch directory **outside the project tree entirely** (e.g. the
+session's own scratchpad folder), and run and clean up there. This makes
+it physically impossible for a wrong-directory mistake to reach real user
+data, rather than relying on correctly remembering the working directory
+every single time. The suite settles itself there as a runner would — the
+machine's turn, the memory ceiling, `APPDATA` of its own — and refuses to
+start without `guest.py` beside it.
 
 The `noteorganizer/` package must travel with `note_organizer.py` — the
 latter imports from it, so a copy on its own now fails with

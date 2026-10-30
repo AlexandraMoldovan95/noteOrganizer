@@ -144,10 +144,11 @@ def _measure(cov_dir, wanted, fail_under):
         if not os.path.exists(src):
             src = os.path.join(ROOT, "qa", name + ".py")
         shutil.copy2(src, d)
-        # Every qa script imports its seeding and its event helpers from
-        # here, and so does a later block of test_data_safety; without it
-        # the script dies at that import. run_tests.py copies it for all.
+        # Every suite imports its guest step from here, and the qa scripts
+        # their seeding and event helpers: without it a suite dies at that
+        # import, and without guest.py beside it, it refuses to start.
         shutil.copy2(os.path.join(ROOT, "qa", "_qa_support.py"), d)
+        shutil.copy2(os.path.join(ROOT, "tools", "guest.py"), d)
     rc = _write_rc(cov_dir, run_dirs)
 
     unfinished = []

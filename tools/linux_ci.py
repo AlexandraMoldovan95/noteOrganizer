@@ -17,14 +17,19 @@ uses it:
 * the container has a name of its own (noteorg-ci-<pid>), a memory limit
   with no swap, two CPUs and a cap on its processes, and docker's init as
   its first process;
-* it sees, at /repo and read-only, a copy of what git tracks and would add
-  -- never what git ignores, such as a notebook, settings or
-  notebook_location.txt at the root, which the rules forbid reading on
-  this side and a probe could print (final audit, round eight) -- and it
-  has no network;
-* its /tmp, where every run inside it writes, is a tmpfs of TMP_SIZE,
-  counted in its memory limit: a runaway writer fails there, and Docker's
-  virtual disk, which never gives space back to Windows, does not grow;
+* it sees, at /repo and read-only, a copy of what git tracks, as the
+  working tree has it -- never a file git does not track, such as a
+  notebook, settings or notebook_location.txt at the root, which the rules
+  forbid reading on this side and a probe could print (final audit, round
+  eight). Not "what git would add" either: that leans on .gitignore, which
+  missed the app's own copies of a Trash or settings kept aside (round
+  nine). A new file is shown once git knows it (git add -N). It has no
+  network;
+* its filesystem is read-only but for its /tmp, where every run inside it
+  writes (and a probe's /work): a tmpfs of TMP_SIZE, counted in its memory
+  limit. A runaway writer fails there, or anywhere else at once, and
+  Docker's virtual disk, which never gives space back to Windows, does not
+  grow (round nine: /, /root and /var/tmp were writable on it);
 * inside, the run has a time limit of its own (``timeout -k``), and a
   watcher on the container's input, which this runner holds open and never
   writes: when the runner goes, however it goes, the input closes and the
@@ -203,15 +208,14 @@ def git_env():
 
 
 def tracked_copy(root=ROOT):
-    """A copy of what git tracks and would add (``ls-files --cached
-    --others --exclude-standard``), as the working tree holds them, in the
-    "repo" folder of a marked scratch folder: what the container is shown at
-    /repo. What git ignores is never in it. Returns the scratch folder,
-    removed at the end of the run, or by a later run's sweep."""
+    """A copy of what git tracks (``ls-files --cached``), as the working
+    tree holds it, in the "repo" folder of a marked scratch folder: what the
+    container is shown at /repo. A file git does not track is never in it,
+    whatever .gitignore says of it. Returns the scratch folder, removed at
+    the end of the run, or by a later run's sweep."""
     try:
-        listed = subprocess.run(["git", "ls-files", "-z", "--cached", "--others",
-                                 "--exclude-standard"], cwd=root, env=git_env(),
-                                capture_output=True, timeout=120)
+        listed = subprocess.run(["git", "ls-files", "-z", "--cached"], cwd=root,
+                                env=git_env(), capture_output=True, timeout=120)
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise RuntimeError("git could not list what %s tracks (%s)" % (root, exc))
     if listed.returncode != 0:
@@ -228,6 +232,18 @@ def tracked_copy(root=ROOT):
         os.makedirs(os.path.dirname(target), exist_ok=True)
         shutil.copy2(source, target)
     return folder
+
+
+def not_shown(root=ROOT):
+    """How many files git neither tracks nor ignores here: work not yet
+    added, which the container is not shown. Counted, never named; None if
+    git cannot say."""
+    try:
+        listed = subprocess.run(["git", "ls-files", "-z", "--others", "--exclude-standard"],
+                                cwd=root, env=git_env(), capture_output=True, timeout=120)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return listed.stdout.count(b"\0") if listed.returncode == 0 else None
 
 
 def probe_folder(path):
@@ -255,7 +271,7 @@ def command(name, born, limit, args, repo, mounts=()):
            "--label", "%s=1" % LABEL, "--label", "%s.pid=%d" % (LABEL, os.getpid()),
            "--label", "%s.born=%s" % (LABEL, "" if born is None else "%.3f" % born),
            "--memory", MEMORY, "--memory-swap", MEMORY, "--cpus", CPUS,
-           "--pids-limit", PIDS, "--network", "none",
+           "--pids-limit", PIDS, "--network", "none", "--read-only",
            "--tmpfs", "/tmp:rw,exec,nosuid,size=%s" % TMP_SIZE, "-e", "PYTHONUNBUFFERED=1",
            "--mount", "type=bind,source=%s,target=/repo,readonly" % repo] + git_mounts()
     cmd += list(mounts)
@@ -270,7 +286,12 @@ def run(args, limit, mounts=()):
         cmd = command(name, guest.born_at(os.getpid()), limit, args,
                       os.path.join(folder, "repo"), mounts)
         print("linux_ci: %s, at most %s of memory, %s CPUs, %d s; /repo is what git tracks, "
-              "no network" % (name, MEMORY, CPUS, limit), flush=True)
+              "no network, nothing writable but /tmp%s" % (
+                  name, MEMORY, CPUS, limit, " and /work" if mounts else ""), flush=True)
+        new = not_shown()
+        if new:
+            print("linux_ci: %d file(s) git does not track yet are not in /repo; "
+                  "git add -N <file> shows one" % new, flush=True)
         # The input is held open and never written: its closing is what tells
         # the container that this runner is gone.
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,

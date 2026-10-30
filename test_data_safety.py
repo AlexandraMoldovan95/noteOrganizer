@@ -12,6 +12,10 @@ import os
 import json
 import shutil
 import tempfile
+# The suites' shared support (its guest step and its seed): beside this file
+# in a scratch copy, in qa/ in the repository, where CI runs it.
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "qa"))
+import _qa_support  # noqa: E402
 # ---- REFUSE TO RUN BESIDE REAL NOTES ----
 # This file deletes and rewrites notes_data.json in its own directory.
 # Run from the project root it destroys the real notebook -- which
@@ -31,8 +35,9 @@ def _guard_real_notes():
             "REFUSING to run: this test deletes and rewrites notes_data.json "
             "beside it, and nothing says this folder is a throwaway copy. "
             "Run it through tools/run_tests.py, or set NOTEORG_SCRATCH=1 "
-            "yourself in a scratch folder outside the project -- see "
-            "CLAUDE.md, 'QA testing safety'.")
+            "yourself in a scratch folder outside the project, with "
+            "tools/guest.py beside it -- see CLAUDE.md, 'QA testing safety'.")
+    _qa_support.as_a_guest()   # a guest of this computer before anything else
     here = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                         "notes_data.json")
     if not os.path.exists(here):
@@ -2506,7 +2511,7 @@ _PROBE = (
 
 def _other_process_can_take_it():
     out = _sp.run([sys.executable, "-c", _PROBE], capture_output=True,
-                  text=True, cwd=_lock_dir)
+                  text=True, cwd=_lock_dir, timeout=120)
     return "GOT" in out.stdout
 
 
@@ -3925,12 +3930,7 @@ finally:
 # overwrote it with [], and ran from any folder at all. One definition now
 # (qa/_qa_support.hermetic_seed) refuses outside a declared scratch run,
 # and beside any notebook it cannot prove is empty -- leaving it untouched.
-_here = os.path.dirname(os.path.abspath(__file__))
-for _support_dir in (_here, os.path.join(_here, "qa")):
-    if os.path.isfile(os.path.join(_support_dir, "_qa_support.py")):
-        sys.path.insert(0, _support_dir)
-        break
-import _qa_support  # noqa: E402
+# (_qa_support is imported at the top, for its guest step.)
 _hs_root = tempfile.mkdtemp(prefix="nd_seed_")
 _hs_cwd = os.getcwd()
 _hs_marker = os.environ.get(_qa_support.SCRATCH_MARKER)

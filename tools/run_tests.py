@@ -59,6 +59,9 @@ QA = [f"qa{i}.py" for i in range(1, 10)]
 # Every qa script imports this one; it must travel with them or the whole
 # suite dies at import. Kept out of QA itself so it is never *run* as a test.
 QA_SUPPORT = ["_qa_support.py"]
+# And every suite settles through it (_qa_support.as_a_guest), finding
+# tools/guest.py beside it: without it, each refuses to start.
+GUEST = os.path.join("tools", "guest.py")
 
 # The static checks CI runs before any of the above. They were missing here, so a
 # green run of this script did not mean a green run on GitHub -- a signature
@@ -190,6 +193,7 @@ def build_scratch():
     qa_dir = os.path.join(ROOT, "qa")
     for name in _present(QA + QA_SUPPORT, qa_dir):
         shutil.copy2(os.path.join(qa_dir, name), scratch)
+    shutil.copy2(os.path.join(ROOT, GUEST), scratch)
     return scratch
 
 

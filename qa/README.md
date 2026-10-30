@@ -143,10 +143,13 @@ killed leaves its container running in Docker's VM, out of sight, beside
 the next run. The runner names the container, gives it 1,536 MB with no
 swap, two CPUs, a time limit inside it and docker's init, removes it on
 every way out, and ends by printing its memory peak. The container sees
-a copy of what git tracks, never the ignored files at the root (a
-notebook, its backups, settings), has no network, and writes to a
-`/tmp` of 512 MB held inside its memory, so Docker's virtual disk, which
-never gives space back, does not grow.
+a copy of what git tracks, as the working tree has it — never a file
+git does not track, whether or not the ignore list names it (a
+notebook, its backups, settings, a Trash kept aside as unreadable); a
+new file is shown once git knows it (`git add -N`). It has no network,
+and nothing in it is writable but a `/tmp` of 512 MB held inside its
+memory, so Docker's virtual disk, which never gives space back, does not
+grow.
 
 ### A test run is a guest on the computer it runs on
 
@@ -157,6 +160,15 @@ the app, the app built, a process started — reads each one's paths with
 the syntax tree, and fails one that starts anything first. Three heavy
 jobs at once, with a runaway test among them, took the desktop down
 ([the story](../docs/ISSUES_LOG.md#the-test-that-took-the-computer-down)).
+
+The suites are no exception. Each one's first act is its guest step,
+`as_a_guest()` in `_qa_support.py` (which `hermetic_seed()` calls):
+started by a runner, a suite shares its turn, homes and ceiling; started
+any other way — by CI, or by hand in a scratch copy — it settles as a
+runner would, and without `tools/guest.py` beside it (or in the
+repository's `tools/`) it refuses. They were let off once, for "a runner
+starts them", which nothing made true; the gate now runs each suite's
+opening lines as CI starts them.
 
 - **One heavy job at a time, enforced.** A runner takes the machine's
   turn: an OS lock on `noteorg-guest.lock` in the temporary folder,
@@ -199,7 +211,10 @@ jobs at once, with a runaway test among them, took the desktop down
   process, and any shell script, under `tools/`, `qa/` or `site/tools/`,
   refuses to start unless a Python runner that settled started it — the
   site's browser walk through `site/tools/check_demo.py` — or, for the
-  Store package's test, unless it is inside Windows Sandbox.
+  Store package's test, unless it is inside Windows Sandbox: run by its
+  account, from the path the sandbox starts it from, both. The gate
+  evaluates that guard for a user of this computer, at the sandbox's
+  path and elsewhere, rather than look for the account's name in it.
 - **Nothing outlives a run.** A scratch folder carries a marker naming
   the run that made it, and a later run removes the ones whose run is
   gone — never a folder without the marker. The suites' own temporary

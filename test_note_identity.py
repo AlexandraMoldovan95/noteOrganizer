@@ -15,9 +15,15 @@ it configures the app's paths at and restores afterwards. Run it from a
 scratch copy, never the project root — see CLAUDE.md, "QA testing
 safety".
 """
+import os
 import sys
+# Settled as a guest of this computer before the app's code (qa/_qa_support,
+# beside this file in a scratch copy, in qa/ where CI runs it).
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "qa"))
+from _qa_support import as_a_guest  # noqa: E402
+as_a_guest()
 
-from noteorganizer.core.duplicates import _dup_key
+from noteorganizer.core.duplicates import _dup_key  # noqa: E402
 from noteorganizer.core.model import (
     NOTE_DEFAULTS,
     apply_shared_update,

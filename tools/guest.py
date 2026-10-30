@@ -312,7 +312,12 @@ def memory_peak():
 # ---- One heavy job at a time ----
 
 def lock_dir():
-    return os.environ.get(LOCK_DIR_ENV) or tempfile.gettempdir()
+    """Where the turn is: the gate's own folder (LOCK_DIR_ENV), else where
+    the run that started this one took it -- run_tests gives each suite a
+    temporary folder of its own, and a suite settles too -- else here."""
+    held_in = os.environ.get(HOLDER_ENV, "").partition(" ")[2]
+    return (os.environ.get(LOCK_DIR_ENV)
+            or (held_in if held_in and os.path.isdir(held_in) else tempfile.gettempdir()))
 
 
 def take_turn(label=None, wait_s=None):
