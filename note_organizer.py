@@ -378,6 +378,9 @@ from noteorganizer.core.model import (
     rescue_copy_due,
     kept_days_fit,
     days_hold_own_text,
+    spend_series_days,
+    update_copy,
+    comments_kept_by_copy,
     copy_replaced_by_restore,
     find_by_uid,
     split_by_identity,
@@ -12433,6 +12436,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if state["error"]:
             # A worker that failed partway may have copied files already.
             self._drop_unclaimed_import_files(state)
+            # Settled before it is said: a session that ends with the
+            # failure on screen leaves no word of an import cut short.
+            self._import_asking = None
             if state.get("stop"):
                 # Stopped by the end of a Windows session that went on after
                 # all (_settle_backups_at_session_end): not a failure.
@@ -12718,9 +12724,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if unchanged:
             known_note += (f" {unchanged} note(s) were already here, "
                            "unchanged, and were skipped.")
-        # An import a cancelled sign-out stopped left word for the next
-        # start; this one finished, so that word is no longer true.
+        # A sign-out's word for the next start is no longer true: this import
+        # finished, its merge saved -- and a session that ends with "Import
+        # complete" on screen leaves none (round 8 of the final audit).
         self._take_back_cut_short("import")
+        self._import_asking = None
         self.show_info("Import complete",
                        f"Added {len(to_import) + len(copies)} note(s) from the backup."
                        f"{known_note}{skipped_note}{extras_note}")
@@ -21750,6 +21758,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
               and not rescue_copy_spent(note)):
             for key in self._RESCUE_TEXT_KEYS:
                 prev[key] = copy.deepcopy(existing.get(key, prev[key]))
+        elif update_copy(existing) and not rescue_copy_spent(note):
+            # An import's Update left the note as it was here before, in no
+            # other file: kept whole, given the series where it lacks it.
+            # Replaced, that version was gone unsaid (round 8 of the audit).
+            kept = copy.deepcopy(existing)
+            for key in ("date", "recurrence") + DAY_FIELDS:
+                if key not in kept:
+                    kept[key] = copy.deepcopy(prev.get(key))
+            return kept
         return prev
 
     def _write_series_owned(self, note, date_value, recurrence, schedule=True):
@@ -22090,10 +22107,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     note["_prev"] = self._turn_off_rescue_copy(
                         note, takes_text=rescue_due and not comments_alone)
                     if comments_alone:
-                        note["_prev"]["comments"] = note.get("comments", "")
+                        note["_prev"]["comments"] = comments_kept_by_copy(
+                            note["_prev"].get("comments", ""), note.get("comments", ""))
                 elif rescue_due:
-                    note["_prev"] = dict(copy.deepcopy(note["_prev"]),
-                                         comments=note.get("comments", "")) if comments_alone else {
+                    # The copy's own comments too, when theirs is the larger
+                    # loss: two letters cleared after a long comment was
+                    # deleted wrote over it (round 8 of the final audit).
+                    note["_prev"] = dict(copy.deepcopy(note["_prev"]), comments=comments_kept_by_copy(
+                        note["_prev"].get("comments", ""),
+                        note.get("comments", ""))) if comments_alone else {
                         "title": note.get("title", ""),
                         "body": note.get("body", ""),
                         "formatting": note.get("formatting", []),
@@ -22117,6 +22139,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # _write_series_owned.
                 note["attachments"] = [dict(a) for a in self.current_attachments]
                 note["recurrence"] = recurrence
+                # Turned back on as the series its copy holds: the note
+                # holds the days again, and the copy's are spent.
+                spend_series_days(note)
                 note["checklist"] = [dict(it) for it in self._get_checklist()]
                 note["updated"] = now
                 if not recurrence["freq"] and not days_kept:

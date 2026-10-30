@@ -3003,6 +3003,32 @@ try:
     _ri_shutil.rmtree(_sq_temp, ignore_errors=True)
     if os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _sq_name)):
         os.remove(os.path.join(NO.ATTACHMENTS_DIR, _sq_name))
+    # A session that ends while "Import complete" is on screen: the merge is
+    # saved, yet the next start said the import kept nothing and asked for it
+    # again (round 8). No word is left once the merge is saved.
+    with zipfile.ZipFile(_hb_zip, 'w') as _zf:
+        _zf.writestr('notes_data.json', json.dumps([{
+            'uid': 'qa3-done-at-session-end', 'title': 'Done at sign-out', 'body': 'kept'}]))
+    _ic_seen = {}
+
+    def _ic_info(title, *a, **k):
+        if title == 'Import complete':
+            app.on_session_end()
+            _ic_seen['said'] = NO.get_setting('backup_cut_short')
+    app.show_info = _ic_info
+    app._themed_dialog = lambda *a, **k: True
+    app._ending_session = False
+    try:
+        app.import_data()
+        _sx_wait(lambda: app._import_state is None, 15)
+        app.update()
+    finally:
+        app._themed_dialog = _sx_real_dlg
+        app._ending_session = False
+    check(f'a session ending while "Import complete" is on screen leaves no word of an '
+          f'import cut short ({_ic_seen})',
+          'said' in _ic_seen and _ic_seen['said'] is None
+          and any(n.get('title') == 'Done at sign-out' for n in app.notes))
 finally:
     _sx['go'] = True
     NO.StoppableFile, _hs.StoppableFile = _kept_stoppable
@@ -4054,6 +4080,38 @@ check(f'comments cleared after a big delete keep that delete\'s copy, with the c
       _cb_prev.get('body') == _cb_body and _cb_prev.get('comments') == 'ok')
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
+
+# ...and the comments half of the same loss: a long comment deleted, kept in
+# the copy, then two letters typed, saved and cleared wrote over it -- the
+# long comment in no file (round 8). The copy keeps whichever comments lose
+# more; a long comment cleared over a short one takes its place.
+_cc_long = ' '.join('Ask the vet about %d grams of the new food' % i for i in range(9))
+
+
+def _cc_run(first, then):
+    note = NO.normalize_note({'id': 4260, 'title': 'Dog', 'body': 'Walk twice a day.',
+                              'comments': first})
+    app.notes = [note]; app.save_notes()
+    app.open_note_in_tab(note); app.update()
+    app.comments_text.delete('1.0', 'end')
+    app._flush_autosave(leaving=False); app.update()
+    app.comments_text.insert('1.0', then)
+    app._flush_autosave(leaving=False); app.update()
+    app.comments_text.delete('1.0', 'end')
+    app._flush_autosave(leaving=True); app.update()
+    kept = (next((n for n in json.load(open(NO.DATA_FILE, encoding='utf-8'))
+                  if n.get('id') == 4260), {}).get('_prev') or {}).get('comments')
+    app.new_note(); app.update()
+    app.notes = []; app.save_notes()
+    return kept
+
+
+_cc_short_after_long = _cc_run(_cc_long, 'zz')
+_cc_long_after_short = _cc_run('ok', _cc_long)
+check(f'two letters of comments cleared after a long comment was deleted leave the long one '
+      f'in the copy ({(_cc_short_after_long or "")[:12]!r})', _cc_short_after_long == _cc_long)
+check(f'...and a long comment cleared over a short one takes its place '
+      f'({(_cc_long_after_short or "")[:12]!r})', _cc_long_after_short == _cc_long)
 
 # A full checklist's Add box taken on leaving said "Delete an item to make
 # room", and the words went with the box (round 7): they wait for the note,

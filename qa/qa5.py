@@ -1815,6 +1815,80 @@ check(f"...and when it clears only the comments, the copy keeps the body a big "
       'BODY GONE' in (_rc_prev.get('body') or '') and _rc_prev.get('comments') == 'ok'
       and (_rc_prev.get('recurrence') or {}).get('freq') == 'weekly'
       and not app.find_note(1)['recurrence'].get('freq'))
+# A turn-off after an import's Update replaced the update's copy: the note as
+# it was here before the Update was in no file, and nothing said (round 8).
+_ro_fixture()
+_uc_note = app.find_note(1)
+NO.apply_shared_update(_uc_note, dict(
+    {key: _uc_note[key] for key in ('uid', 'created', 'date', 'recurrence', 'overrides')},
+    title='Standup', body='FROM THE PHONE'), NO.UPDATABLE_FROM_BACKUP)
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app._themed_dialog = lambda *a, **k: True
+try:
+    app.rec_freq_var.set(NO.FREQ_LABELS[''])
+    app.on_recurrence_changed(); app.update()
+    app.save_current_note(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+_uc_prev = app.find_note(1).get('_prev') or {}
+check(f"a turn-off after an import's Update keeps the update's copy, the series in it "
+      f"({(_uc_prev.get('body') or '')[:12]!r}, {(_uc_prev.get('recurrence') or {}).get('freq')})",
+      _uc_prev.get('body') == 'SERIES TEXT' and 'category' in _uc_prev
+      and (_uc_prev.get('recurrence') or {}).get('freq') == 'weekly'
+      and not app.find_note(1)['recurrence'].get('freq'))
+# A day reset to the series came back from the turn-off's copy at every
+# start, in a duplicate and after a Trash restore (round 8): once the note
+# repeats as its copy's series again, the copy's days are spent.
+_ro_fixture()
+app.open_note_in_tab(app.find_note(1)); app.update()
+_rz_real_yes = app.ask_yes_no
+app._themed_dialog = lambda *a, **k: True
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.rec_freq_var.set(NO.FREQ_LABELS[''])
+    app.on_recurrence_changed(); app.update()
+    app.save_current_note(); app.update()
+    app.body_text.insert('end-1c', ' and more')
+    app.rec_freq_var.set(NO.FREQ_LABELS['weekly'])
+    app.on_recurrence_changed(); app.update()
+    app.save_current_note(); app.update()
+    _rz_spent = not (app.find_note(1).get('_prev') or {}).get('overrides')
+    for _rz_day in ('2026-09-14', '2026-09-21'):
+        app._reset_occurrence_override(app.find_note(1), _rz_day); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+    app.ask_yes_no = _rz_real_yes
+_rz_disk = next(n for n in _json5e.load(open(NO.DATA_FILE, encoding='utf-8')) if n.get('id') == 1)
+_rz_read = NO.normalize_note(_rz_disk)
+check(f"a day reset after the series came back on stays reset at the next start "
+      f"(copy's days spent: {_rz_spent}; days read back: {sorted(_rz_read['overrides'])})",
+      _rz_spent and _rz_disk.get('overrides') == {} and _rz_read['overrides'] == {}
+      and app.find_note(1)['recurrence'].get('freq') == 'weekly')
+# ...and the turn-off's save that clears two letters of comments keeps a long
+# comment deleted before, in the copy beside the series (round 8).
+_ro_fixture()
+_tc_long = ' '.join('Book room %d for the planning day' % i for i in range(10))
+app.notes[0]['comments'] = _tc_long
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.comments_text.delete('1.0', 'end')
+app.save_current_note(); app.update()
+app.comments_text.insert('1.0', 'zz')
+app.save_current_note(); app.update()
+app._themed_dialog = lambda *a, **k: True
+try:
+    app.comments_text.delete('1.0', 'end')
+    app.rec_freq_var.set(NO.FREQ_LABELS[''])
+    app.on_recurrence_changed(); app.update()
+    app.save_current_note(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+_tc_prev = app.find_note(1).get('_prev') or {}
+check(f"a turn-off that clears two letters of comments keeps a long comment deleted before "
+      f"({(_tc_prev.get('comments') or '')[:12]!r}, {(_tc_prev.get('recurrence') or {}).get('freq')})",
+      _tc_prev.get('comments') == _tc_long
+      and (_tc_prev.get('recurrence') or {}).get('freq') == 'weekly')
 # Turned back on from another date, an old deleted day hid the new series' own
 # first day (round 5). Her answer: kept days come back only onto the same date
 # and rule; a deleted day holds nothing, and the rescue copy keeps them all.

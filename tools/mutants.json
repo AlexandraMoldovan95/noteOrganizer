@@ -7775,8 +7775,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        # start; this one finished, so that word is no longer true.\n        self._take_back_cut_short(\"import\")\n",
-        "replace": "        # start; this one finished, so that word is no longer true.\n"
+        "find": "        self._take_back_cut_short(\"import\")\n        self._import_asking = None\n        self.show_info(\"Import complete\",",
+        "replace": "        self._import_asking = None\n        self.show_info(\"Import complete\","
       }
     ],
     "must_fail": [
@@ -10879,8 +10879,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "    if days_hold_own_text(prev):\n        for key in DAY_FIELDS:",
-        "replace": "    if True:\n        for key in DAY_FIELDS:"
+        "find": "    if not any(note.get(key) for key in DAY_FIELDS) and days_hold_own_text(prev):\n        for key in DAY_FIELDS:",
+        "replace": "    if not any(note.get(key) for key in DAY_FIELDS) and True:\n        for key in DAY_FIELDS:"
       }
     ],
     "must_fail": [
@@ -10951,8 +10951,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "    if is_recurring(note) and (\n",
-        "replace": "    if is_recurring(note) and True or False and (\n"
+        "find": "    if is_recurring(note) and not _repeats_as(note, prev):\n",
+        "replace": "    if is_recurring(note):\n"
       }
     ],
     "must_fail": [
@@ -10969,8 +10969,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "    if is_recurring(note) and (\n",
-        "replace": "    if False and (\n"
+        "find": "    if is_recurring(note) and not _repeats_as(note, prev):\n",
+        "replace": "    if False:\n"
       }
     ],
     "must_fail": [
@@ -11194,6 +11194,172 @@
     ],
     "suites": [
       "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR111",
+    "about": "days taken back into a note repeating as its copy's series stay in the copy too, and a day reset comes back at every read",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "            note[key] = copy.deepcopy(prev.get(key) or NOTE_DEFAULTS[key])\n    spend_series_days(note)\n",
+        "replace": "            note[key] = copy.deepcopy(prev.get(key) or NOTE_DEFAULTS[key])\n"
+      }
+    ],
+    "must_fail": [
+      "once a note repeats as its copy's series, the copy's days are spent"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR112",
+    "about": "a series' own copy never gives up its days, so a day reset after the series came back on returns at the next start",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "        for key in DAY_FIELDS:\n            prev.pop(key, None)\n",
+        "replace": "        pass\n"
+      }
+    ],
+    "must_fail": [
+      "once a note repeats as its copy's series, the copy's days are spent",
+      "a day reset after the series came back on stays reset"
+    ],
+    "suites": [
+      "test_data_safety",
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR113",
+    "about": "the save that turns a repeat back on as its copy's series leaves the copy's days, and a reset day comes back at the next start",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                spend_series_days(note)\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a day reset after the series came back on stays reset"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR114",
+    "about": "an incoming note is compared with its rescue copy, which gives it back a day reset here, so the same backup reads as changed",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    fresh = normalize_note({key: value for key, value in incoming.items() if key != \"_prev\"})\n",
+        "replace": "    fresh = normalize_note(dict(incoming))\n"
+      }
+    ],
+    "must_fail": [
+      "a backup whose copy still holds a day reset here reads as the same note"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR115",
+    "about": "the comments a save clears always take the copy's place, two letters over a long comment deleted before",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    if _lost(comments, copy_comments) < _lost(copy_comments, comments):\n        return copy_comments\n",
+        "replace": "    if False:\n        return copy_comments\n"
+      }
+    ],
+    "must_fail": [
+      "two letters of comments cleared after a long comment was deleted leave the long one",
+      "a turn-off that clears two letters of comments keeps a long comment"
+    ],
+    "suites": [
+      "qa3",
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR116",
+    "about": "a turn-off's save that clears comments writes them over the copy's, a long comment deleted before in no file",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                        note[\"_prev\"][\"comments\"] = comments_kept_by_copy(\n                            note[\"_prev\"].get(\"comments\", \"\"), note.get(\"comments\", \"\"))\n",
+        "replace": "                        note[\"_prev\"][\"comments\"] = note.get(\"comments\", \"\")\n"
+      }
+    ],
+    "must_fail": [
+      "a turn-off that clears two letters of comments keeps a long comment"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR117",
+    "about": "an ordinary save that clears comments writes them over the waiting copy's, a long comment deleted before in no file",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "comments=comments_kept_by_copy(\n                        note[\"_prev\"].get(\"comments\", \"\"),\n                        note.get(\"comments\", \"\"))) if comments_alone else {",
+        "replace": "comments=note.get(\"comments\", \"\")) if comments_alone else {"
+      }
+    ],
+    "must_fail": [
+      "two letters of comments cleared after a long comment was deleted leave the long one"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR118",
+    "about": "a repeat turned off after an import's Update replaces the update's copy, the version from before the Update in no file",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        elif update_copy(existing) and not rescue_copy_spent(note):\n",
+        "replace": "        elif False:\n"
+      }
+    ],
+    "must_fail": [
+      "a turn-off after an import's Update keeps the update's copy"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR119",
+    "about": "a session that ends while Import complete is on screen leaves word that the import kept nothing",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._take_back_cut_short(\"import\")\n        self._import_asking = None\n        self.show_info(\"Import complete\",",
+        "replace": "        self._take_back_cut_short(\"import\")\n        self.show_info(\"Import complete\","
+      }
+    ],
+    "must_fail": [
+      "is on screen leaves no word of an import cut short"
+    ],
+    "suites": [
+      "qa3"
     ],
     "expect": "killed"
   }

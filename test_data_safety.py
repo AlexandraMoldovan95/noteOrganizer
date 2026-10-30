@@ -3587,6 +3587,28 @@ check("a note's rescue copy never makes the same note arriving again read as cha
       not _model_mod.shared_update_changes(
           _kd_mem, {k: v for k, v in _kd_mem.items() if k != "_prev"},
           _model_mod.UPDATABLE_FROM_BACKUP))
+# Taken back into a note that repeats as the copy's series, the copy's days
+# were kept as well: a day the person then reset came back at every read
+# (round 8). Once the note repeats as that series, the copy's are spent --
+# here, and in a copy a turn-off left that holds them beside the note's.
+_kd_reset = _model_mod.normalize_note(dict(_kd_back_on, overrides={}, exceptions=[]))
+_kd_beside = _model_mod.normalize_note(dict(
+    {"id": 9, "title": "Gym", "body": "Warm up. And stretch.", "_prev": dict(
+        {"title": "Gym", "body": "Warm up."}, **_kd_series, **_kd_days)}, **_kd_series, **_kd_days))
+check("once a note repeats as its copy's series, the copy's days are spent, and a day reset "
+      "stays reset (%s, %s)" % (sorted(_kd_back_on["_prev"]), sorted(_kd_reset["overrides"])),
+      not any(key in _kd_back_on["_prev"] for key in _model_mod.DAY_FIELDS)
+      and _kd_reset["overrides"] == {} and _kd_reset["exceptions"] == []
+      and _kd_beside["overrides"] == _kd_days["overrides"]
+      and not any(key in _kd_beside["_prev"] for key in _model_mod.DAY_FIELDS)
+      and _kd_turned_off["_prev"].get("overrides") == _kd_days["overrides"])
+# ...and a backup made before, whose copy still holds the days, is the same
+# note: compared without either side's copy (round 8).
+_kd_old_backup = dict(_kd_reset, _prev=dict(
+    {"title": "Gym", "body": "Warm up."}, **_kd_series, **_kd_days))
+check("a backup whose copy still holds a day reset here reads as the same note",
+      not _model_mod.shared_update_changes(
+          _kd_reset, _kd_old_backup, _model_mod.UPDATABLE_FROM_BACKUP))
 
 # "↩ Restore previous" weighs all it writes over: comments typed since the
 # copy, and the styles of the same words, went to no file (round 7).

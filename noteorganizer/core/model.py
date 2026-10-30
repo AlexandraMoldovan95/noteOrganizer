@@ -266,26 +266,62 @@ def _series_own_copy(prev):
             and not any(key in prev for key in _UPDATE_COPY_ONLY))
 
 
+def update_copy(prev):
+    """Whether *prev* is the copy an import's Update made: the note as it
+    was here before the backup's version replaced it."""
+    return isinstance(prev, dict) and any(key in prev for key in _UPDATE_COPY_ONLY)
+
+
+def comments_kept_by_copy(copy_comments, comments):
+    """Which comments a waiting copy keeps when a save clears *comments*
+    over a copy that holds *copy_comments*: the ones whose loss would be
+    the larger, counted by what is gone (_lost). Two letters cleared after
+    a long comment was deleted lose to it, as the body's words do; a long
+    comment cleared over a short one takes its place (round 8 of the
+    final audit)."""
+    if _lost(comments, copy_comments) < _lost(copy_comments, comments):
+        return copy_comments
+    return comments
+
+
+def _repeats_as(note, prev):
+    """Whether *note* repeats as the series *prev* holds: its date and rule."""
+    return (is_recurring(note) and prev.get("date") == note.get("date")
+            and normalize_recurrence(prev.get("recurrence"))
+            == normalize_recurrence(note.get("recurrence")))
+
+
+def spend_series_days(note):
+    """A series' own copy holds the series' days only while the note does
+    not repeat as that series. Once it does again -- turned back on as it
+    was, or its days taken back in -- the note holds them, and the copy's
+    are spent: kept there, a day the person then reset came back from the
+    copy at every start, in every duplicate and every Trash restore, and
+    the same backup read as changed (round 8 of the final audit)."""
+    prev = note.get("_prev")
+    if _series_own_copy(prev) and _repeats_as(note, prev):
+        for key in DAY_FIELDS:
+            prev.pop(key, None)
+
+
 def _days_back_from_copy(note):
     """A note that no longer repeats keeps its days' own text in itself, as
     a turn-off here does; a turn-off by the phone, or by this app before the
     final audit, kept them only in the series' copy, which the next copy
     erased. Brought back into the note once, as it is read (round 6) -- and
     into a note the phone turned back on as it was, which got none of them
-    back (round 7)."""
+    back (round 7), the copy's days then spent (spend_series_days)."""
     prev = note.get("_prev")
     # Only the series' own copy: an update's holds days it replaced on
     # purpose, and taken in they made the same backup read as changed (round 7).
-    if not _series_own_copy(prev) or any(note.get(key) for key in DAY_FIELDS):
+    if not _series_own_copy(prev):
         return
-    if is_recurring(note) and (
-            prev.get("date") != note.get("date")
-            or normalize_recurrence(prev.get("recurrence"))
-            != normalize_recurrence(note.get("recurrence"))):
+    if is_recurring(note) and not _repeats_as(note, prev):
         return              # another series now: its days are not these
-    if days_hold_own_text(prev):
+    if not any(note.get(key) for key in DAY_FIELDS) and days_hold_own_text(prev):
         for key in DAY_FIELDS:
             note[key] = copy.deepcopy(prev.get(key) or NOTE_DEFAULTS[key])
+    spend_series_days(note)
 
 
 def kept_days_fit(note, date_value, recurrence):
@@ -487,10 +523,10 @@ def shared_update_changes(note, incoming, fields=UPDATABLE_FROM_SHARED):
     A no-change update would replace the rescue copy with a duplicate and
     lose the one earlier version. ISSUES_LOG: "Importing the same backup
     twice, the second time"; smaller lessons: shared_update_changes."""
-    fresh = normalize_note(dict(incoming))
-    # Without its rescue copy: the copy is not compared, and the read of an
-    # older notebook takes days from it (_days_back_from_copy), which made an
-    # unchanged note read as changed (round 7 of the final audit).
+    # Both without their rescue copies: an older notebook's read takes days
+    # from a copy (_days_back_from_copy), and an unchanged note read as
+    # changed -- this side's in round 7 of the final audit, the backup's in 8.
+    fresh = normalize_note({key: value for key, value in incoming.items() if key != "_prev"})
     mine = normalize_note({key: value for key, value in note.items() if key != "_prev"})
     return any(mine[field] != fresh[field] for field in fields)
 
