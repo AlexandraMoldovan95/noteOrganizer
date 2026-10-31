@@ -21,7 +21,8 @@ from datetime import datetime
 from .categories import CATEGORY_COLORS
 from .formatting import (normalize_formatting, normalize_paragraphs,
                          clamp_spans_per_line, strip_list_markers)
-from .tables import with_caret_line
+from .tables import (checkbox_state, find_blocks, is_separator_row, is_table_row, split_row,
+                     with_caret_line)
 from .recurrence import (
     normalize_recurrence,
     parse_date,
@@ -357,22 +358,52 @@ def _copy_moves_taken(theirs, held, room):
     return taken
 
 
+def _line_key(line):
+    """A line as the take-back compares it: a table's row by its cells'
+    words -- its padding and a box's tick left out, so a re-padded column
+    or a ticked box is the same row -- a separator as any, else as it is."""
+    if not is_table_row(line):
+        return line
+    if is_separator_row(line):
+        return ("separator",)
+    return ("row",) + tuple("[ ]" if checkbox_state(cell) is not None else cell.strip()
+                            for cell in split_row(line))
+
+
 def _lines_lacked(own, have):
-    """The lines of *own* to add after *have*: none when *have* holds them
-    all as one run of lines, else all but those *have* begins with -- whole,
-    so a table among them keeps its rows (round 13)."""
+    """The lines of *own* that *have* lacks, in order: those outside the
+    longest run the two share in order (_line_key), a table among them with
+    its header and separator; blank lines alone add nothing. Added whole
+    after the first difference, a day corrected in its middle showed its
+    old text again under it (round 14)."""
     lines, held = own.split("\n"), have.split("\n")
-    if any(held[at:at + len(lines)] == lines for at in range(len(held) - len(lines) + 1)):
-        return []
-    first = 0
-    while first < min(len(lines), len(held)) and lines[first] == held[first]:
-        first += 1
-    rest = lines[first:]
-    while rest and not rest[0].strip():
-        rest.pop(0)
-    while rest and not rest[-1].strip():
-        rest.pop()
-    return rest
+    a, b = [_line_key(line) for line in lines], [_line_key(line) for line in held]
+    if len(a) * len(b) > 250000:
+        kept = set(b)
+        lacked = [i for i, key in enumerate(a) if key not in kept]
+    else:
+        # The longest common subsequence, from a table of lengths built from the end.
+        n, m = len(a), len(b)
+        size = [[0] * (m + 1) for _ in range(n + 1)]
+        for i in range(n - 1, -1, -1):
+            for j in range(m - 1, -1, -1):
+                size[i][j] = size[i + 1][j + 1] + 1 if a[i] == b[j] else max(size[i + 1][j], size[i][j + 1])
+        lacked, i, j = [], 0, 0
+        while i < n:
+            if j < m and a[i] == b[j]:
+                i, j = i + 1, j + 1
+            elif j < m and size[i][j + 1] >= size[i + 1][j]:
+                j += 1
+            else:
+                lacked.append(i)
+                i += 1
+    wanted = {i for i in lacked if lines[i].strip()}
+    for first, last in find_blocks(own):
+        if any(first <= i <= last for i in wanted):
+            wanted.add(first)
+            if first < last and is_separator_row(lines[first + 1]):
+                wanted.add(first + 1)
+    return [lines[i] for i in sorted(wanted)]
 
 
 def _words_added(note, overrides, at, prev, key):

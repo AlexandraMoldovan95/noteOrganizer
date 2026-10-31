@@ -13570,12 +13570,12 @@
   },
   {
     "id": "DR146",
-    "about": "the copy's text a day holds as a run of lines in its middle is added again under it",
+    "about": "the copy's lines the day holds are not matched: the copy's whole text is added again under it",
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "    if any(held[at:at + len(lines)] == lines for at in range(len(held) - len(lines) + 1)):\n",
-        "replace": "    if False:\n"
+        "find": "            if j < m and a[i] == b[j]:\n",
+        "replace": "            if False:\n"
       }
     ],
     "must_fail": [
@@ -13588,16 +13588,52 @@
   },
   {
     "id": "DR147",
-    "about": "the copy's text is added whole, the lines the day begins with too: an old series line shown twice",
+    "about": "a table's rows compared as text: one cell edited re-pads its column, and the whole old table is added again",
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "        first += 1\n",
-        "replace": "        break\n"
+        "find": "    return (\"row\",) + tuple(\"[ ]\" if checkbox_state(cell) is not None else cell.strip()\n",
+        "replace": "    return line\n    return (\"row\",) + tuple(\"[ ]\" if checkbox_state(cell) is not None else cell.strip()\n"
       }
     ],
     "must_fail": [
-      "the copy's lines a day already holds are not added again"
+      "a day corrected in its first line, or in one table cell, gets only the copy's lines it lacks"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR149",
+    "about": "a ticked box makes another row: the copy's unticked one is added again under the table",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    return (\"row\",) + tuple(\"[ ]\" if checkbox_state(cell) is not None else cell.strip()\n",
+        "replace": "    return (\"row\",) + tuple(cell.strip() if True else checkbox_state(cell)\n"
+      }
+    ],
+    "must_fail": [
+      "a day corrected in its first line, or in one table cell, gets only the copy's lines it lacks"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR150",
+    "about": "a table's rows the day lacks are added without its header and separator: a headless table, its first row drawn as the header",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "            wanted.add(first)\n",
+        "replace": "            pass\n"
+      }
+    ],
+    "must_fail": [
+      "a day corrected in its first line, or in one table cell, gets only the copy's lines it lacks"
     ],
     "suites": [
       "test_data_safety"

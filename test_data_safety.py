@@ -3769,6 +3769,25 @@ check("the copy's lines a day already holds are not added again, an emptied word
       and _t13_start["overrides"]["2026-11-09"]["body"] == "Agenda.\nBook room"
       and [b - a for a, b in _t13_blocks] == [2, 2]
       and _model_mod.normalize_note(json.loads(json.dumps(_t13_table))) == _t13_table)
+# ...the lines it lacks, not all after the first difference: a corrected first
+# line brought the whole old text again, and a cell edited the whole old table;
+# a ticked box is the same row (round 14).
+_t14_first = _t10({"overrides": {"2026-11-09": {"body": "Agenda (Monday).\nBook room\nCall Ann"}}},
+                  {"overrides": {"2026-11-09": {"body": "Agenda.\nBook room\nCall Ann"}}})
+_t14_cell = _t10({"overrides": {"2026-11-09": {"body": "Plan\n| Task | Who        |\n| ---- | ---------- |\n"
+                                                       "| Room | Ann (done) |\n| Food | Bob        |"}}},
+                 {"overrides": {"2026-11-09": {"body": "Plan\n| Task | Who |\n| ---- | --- |\n"
+                                                       "| Room | Ann |\n| Food | Bob |"}}})
+_t14_box = _t10({"overrides": {"2026-11-09": {"body": "| Done | Task |\n| --- | --- |\n| [x] | Lunch |"}}},
+                {"overrides": {"2026-11-09": {"body": "| Done | Task |\n| --- | --- |\n| [ ] | Lunch |"}}})
+_t14_cell_body = _t14_cell["overrides"]["2026-11-09"]["body"]
+check("a day corrected in its first line, or in one table cell, gets only the copy's lines it lacks, a "
+      "table's with its header; a ticked box is the same row (%s, %s, %s)" % (
+          _t14_first["overrides"], _t14_cell["overrides"], _t14_box["overrides"]),
+      _t14_first["overrides"]["2026-11-09"]["body"] == "Agenda (Monday).\nBook room\nCall Ann\nAgenda."
+      and _t14_cell_body.endswith("\n\n| Task | Who |\n| ---- | --- |\n| Room | Ann |\n")
+      and "Food | Bob |\n" not in _t14_cell_body.split("\n\n", 1)[1]
+      and _t14_box["overrides"]["2026-11-09"]["body"] == "| Done | Task |\n| --- | --- |\n| [x] | Lunch |\n")
 check("a copy's day the note holds again is left as it is; of two for one date, one is on the "
       "day and the other's words after them (%s, %s)" % (_t11_held["overrides"], _t11_tie["overrides"]),
       _t11_held["overrides"] == {"2026-11-09": _t10_word} and "overrides" not in _t11_held["_prev"]

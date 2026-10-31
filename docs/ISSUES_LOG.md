@@ -214,6 +214,7 @@ is in the table below as well.
 | [Round eleven: a day moved onto words no calendar showed, and a copy's words no day could take](#round-eleven-a-day-moved-onto-words-no-calendar-showed-and-a-copys-words-no-day-could-take) | Ask a date what it holds, not only what it draws; a day's words are its own only where they are not its series'. | next |
 | [Round twelve: words kept where nothing looked, a day's Undo over another, and the find bar's every hit](#round-twelve-words-kept-where-nothing-looked-a-days-undo-over-another-and-the-find-bars-every-hit) | A place the next read looks at again is not a place to keep things; bound the work by what each step walks, not by the total. | next |
 | [Round thirteen: words added twice, and a paint window left behind](#round-thirteen-words-added-twice-and-a-paint-window-left-behind) | A rule that adds asks what is already there, as lines; a window over a list follows the item it is for. | next |
+| [Round fourteen: the old text again after an edit in the middle](#round-fourteen-the-old-text-again-after-an-edit-in-the-middle) | To keep what is lacking, compare what both hold, in order; a table by what its cells say. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -3422,6 +3423,33 @@ nothing to take back -- the cell reopens, its Undo empty (the safe side of round
 
 **Takeaway:** a rule that adds must ask what is already there, as lines, not as a whole -- and a
 window over a list follows the item it is for.
+
+### Round fourteen: the old text again after an edit in the middle
+
+*(2026-10-31 · found by the final audit's fourteenth break-it round, small, on round thirteen's
+fixes; the phone's round found a day cut off from its series by round thirteen's own fix)*
+
+**Symptom:** round thirteen's rule spared only a day grown at its end or its start. A day whose
+first line was corrected, a line changed or deleted in its middle, or one table cell edited (its
+column re-padded, every row's text changed) got the copy's old text -- or the whole old table --
+again under it. A ticked box brought the task back unticked.
+
+**Root cause:** "all but the lines the day begins with" is a prefix, not a comparison: the first
+difference cut off everything after it.
+
+**Fix:** `_lines_lacked` adds the copy's lines outside the longest run of lines the two share in
+order, comparing a table's rows by their cells' words (`_line_key`: padding and a box's tick left
+out, every separator alike), a table among them with its header and separator. A corrected line
+adds its old form once; an edited cell adds its old row under the table's header; a ticked box
+adds nothing. `test_data_safety`; mutants DR149, DR150 new, DR146, DR147 re-aimed. The phone's
+`linesLacked` is the same, and its fixture gains four cases.
+
+**Written down, not fixed:** a waiting heavy run can take the current holder for its own parent
+when that parent died (the guest turn's pid check); 62 run folders in `%TEMP%` from before the
+scratch marker are swept by nothing.
+
+**Takeaway:** to keep what is lacking, compare what both hold, in order -- and compare a table
+by what its cells say, not by how its columns are padded.
 
 ## Tk & platform gotchas
 
