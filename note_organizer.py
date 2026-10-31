@@ -20278,22 +20278,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         self._find_matches = self._find_scan_model(query)
         self._find_model_dirty = False
+        n = len(self._find_matches)
         # Tag the prose matches with the field tag -- at most FIND_LINE_PAINT
-        # a line, those around the current one (_find_painted).
-        try:
-            # A cell's match has no place in the text: the cursor stands in.
-            anchor = (prev["start"] if prev and prev.get("kind") == "prose"
-                      else self.body_text.index("insert"))
-        except tk.TclError:
-            anchor = "1.0"
-        for m in self._find_painted(self._find_matches, anchor):
-            try:
-                self.body_text.tag_add("find_all", m["start"], m["end"])
-            except tk.TclError:
-                pass
+        # a line, around the hit that is current once this rescan is done.
+        if n:
+            self._find_paint_around(self._find_matches[
+                0 if reveal else min(max(self._find_index, 0), n - 1)])
         self._find_raise_tags()
         self._find_model_on = self._find_standing(self._find_model_text)
-        n = len(self._find_matches)
         if not n:
             self._find_index = -1
             self._find_count_lbl.config(text="0/0")
@@ -20339,6 +20331,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             painted.extend(hits)
         return painted
 
+    def _find_paint_around(self, current):
+        """Paint the hits around *current* (_find_painted) -- the cursor
+        standing in for a cell's match, which has no place in the text.
+        Laid around the hit current before a reveal, or not moved by Enter,
+        the paint left the current hit's neighbours bare (round 13)."""
+        try:
+            anchor = (current["start"] if current.get("kind") == "prose"
+                      else self.body_text.index("insert"))
+            self.body_text.tag_remove("find_all", "1.0", "end")
+        except tk.TclError:
+            anchor = "1.0"
+        for m in self._find_painted(self._find_matches, anchor):
+            try:
+                self.body_text.tag_add("find_all", m["start"], m["end"])
+            except tk.TclError:
+                pass
+
     def _find_raise_tags(self):
         # find tags win over highlight_* backgrounds; sel stays on top.
         for tag in ("find_all", "find_current", "sel"):
@@ -20357,7 +20366,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not matches:
             return
         self._find_index = (self._find_index + delta) % len(matches)
-        self._find_reveal(matches[self._find_index])
+        here = matches[self._find_index]
+        try:
+            unpainted = (here["kind"] == "prose"
+                         and "find_all" not in self.body_text.tag_names(here["start"]))
+        except tk.TclError:
+            unpainted = False
+        if unpainted:
+            # Walked past the painted ones: the paint follows (_find_painted).
+            self._find_paint_around(here)
+            self._find_raise_tags()
+            self._find_model_on = self._find_standing(self._find_model_text)
+        self._find_reveal(here)
         self._find_count_lbl.config(
             text=f"{self._find_index + 1}/{len(matches)}"
                  f"{'+' if len(matches) >= self.FIND_MATCH_CAP else ''}")

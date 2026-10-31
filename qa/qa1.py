@@ -9262,6 +9262,17 @@ check(f'find/prose: 2,000 hits on one line paint {_fp_painted}, around the curre
       and 0 < _fp_painted <= app.FIND_LINE_PAINT
       and app._find_count_lbl.cget('text') == f'1501/{app.FIND_MATCH_CAP}+'
       and 'find_all' in app.body_text.tag_names(_fp_here))
+# ...and the paint follows the current hit: laid around the hit current before a
+# reveal, and left behind by Enter, it left the current one's neighbours bare (round 13).
+app.body_text.mark_set('insert', 'end-1c')
+app._find_rescan(reveal=True)
+_fp_first = 'find_all' in app.body_text.tag_names(app._find_matches[1]['start'])
+app._find_nav(250)
+_fp_walked = 'find_all' in app.body_text.tag_names(
+    app._find_matches[app._find_index + 1]['start'])
+check(f'find/prose: the paint is around the current hit after a reveal from the note\'s end '
+      f'({_fp_first}) and after 250 Enters ({_fp_walked})',
+      _fp_first and _fp_walked and not app._find_stale())
 app._find_var.set('')
 app._find_rescan()
 app._close_find()

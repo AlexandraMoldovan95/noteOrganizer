@@ -357,21 +357,45 @@ def _copy_moves_taken(theirs, held, room):
     return taken
 
 
+def _lines_lacked(own, have):
+    """The lines of *own* to add after *have*: none when *have* holds them
+    all as one run of lines, else all but those *have* begins with -- whole,
+    so a table among them keeps its rows (round 13)."""
+    lines, held = own.split("\n"), have.split("\n")
+    if any(held[at:at + len(lines)] == lines for at in range(len(held) - len(lines) + 1)):
+        return []
+    first = 0
+    while first < min(len(lines), len(held)) and lines[first] == held[first]:
+        first += 1
+    rest = lines[first:]
+    while rest and not rest[0].strip():
+        rest.pop(0)
+    while rest and not rest[-1].strip():
+        rest.pop()
+    return rest
+
+
 def _words_added(note, overrides, at, prev, key):
-    """*overrides*' edit of *at* with the words *prev*'s day *key* has of its
-    own -- not its series' (day_as_kept) -- and the day lacks, added after
-    its own: a title and text to its text, comments to its comments. Kept in
-    the copy, they were lost by its one slot and read again by date (round 12)."""
+    """*overrides*' edit of *at* with the lines *prev*'s day *key* holds of
+    its own -- not its series' (day_as_kept) -- and the day lacks, added
+    after its own: a title's and text's to its text, comments' to its
+    comments. Kept in the copy, they were lost by its one slot (round 12);
+    added whole, a day grown from the copy's text showed it twice (round 13)."""
     mine, theirs = day_as_kept(dict(note, overrides=overrides), at), day_as_kept(prev, key)
-    lacked = {word: str(theirs.get(word) or "") for word in DAY_WORDS
-              if (theirs.get(word) or "") not in ((prev.get(word) or ""), (mine.get(word) or ""))}
     edit = dict(overrides.get(at) or {})
-    added = [lacked[word] for word in ("title", "body") if word in lacked]
-    if added:
-        edit["body"] = "\n".join([str(mine.get("body") or "")] * bool(mine.get("body")) + added)
-    if "comments" in lacked:
-        edit["comments"] = "\n".join(
-            [str(mine.get("comments") or "")] * bool(mine.get("comments")) + [lacked["comments"]])
+    for field, words in (("body", ("title", "body")), ("comments", ("comments",))):
+        added = []
+        for word in words:
+            own = str(theirs.get(word) or "")
+            if own not in (str(prev.get(word) or ""), str(mine.get(word) or "")):
+                added += _lines_lacked(own, "\n".join(
+                    [str(mine.get(field) or ""), str(mine.get("title") or "")] + added))
+        if added:
+            # Under a table the editor's line first, as a stored body has it:
+            # glued on, a table added under one read as one table (round 13).
+            shaped = with_caret_line if field == "body" else str
+            base = shaped(str(mine.get(field) or ""))
+            edit[field] = shaped("\n".join([base] * bool(base) + added))
     return edit
 
 

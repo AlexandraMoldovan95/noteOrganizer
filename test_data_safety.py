@@ -3748,6 +3748,27 @@ _t11_held = _model_mod.normalize_note(dict(
 _t11_tie = _t10({"moved": {"2026-11-16": "2026-11-10"}},
                 {"overrides": {"2026-11-10": {"body": "Off-schedule words"},
                                "2026-11-16": {"body": "Monday 16th's own"}}})
+from noteorganizer.core import tables as _tables_mod
+# ...and only the lines the day lacks: a day grown from the copy's text was
+# given it all again under its own, an emptied title a blank line, and a table
+# added under the day's own table read as one table (round 13).
+_t13_grown = _t10({"overrides": {"2026-11-09": {"body": "Agenda.\nBook room\nCancelled"}}},
+                  {"overrides": {"2026-11-09": {"title": "", "body": "Agenda.\nBook room"}}})
+_t13_table = _t10({"overrides": {"2026-11-09": {"body": "Room\n| a | b |\n| --- | --- |\n| 1 | 2 |"}}},
+                  {"overrides": {"2026-11-09": {"body": "| x | y |\n| --- | --- |\n| 3 | 4 |"}}})
+_t13_blocks = _tables_mod.find_blocks(_t13_table["overrides"]["2026-11-09"]["body"])
+_t13_mid = _t10({"overrides": {"2026-11-09": {"body": "Room 4\nBook room\nAt 10"}}},
+                {"overrides": {"2026-11-09": {"body": "Book room"}}})
+_t13_start = _t10({"overrides": {"2026-11-09": {"body": "Agenda."}}},
+                  {"overrides": {"2026-11-09": {"body": "Agenda.\nBook room"}}})
+check("the copy's lines a day already holds are not added again, an emptied word adds no blank line, "
+      "and a table added under the day's table stays a table of its own, whole (%s, %s, %s, %s)" % (
+          _t13_grown["overrides"], _t13_mid["overrides"], _t13_start["overrides"], _t13_blocks),
+      _t13_grown["overrides"]["2026-11-09"]["body"] == "Agenda.\nBook room\nCancelled"
+      and _t13_mid["overrides"]["2026-11-09"]["body"] == "Room 4\nBook room\nAt 10"
+      and _t13_start["overrides"]["2026-11-09"]["body"] == "Agenda.\nBook room"
+      and [b - a for a, b in _t13_blocks] == [2, 2]
+      and _model_mod.normalize_note(json.loads(json.dumps(_t13_table))) == _t13_table)
 check("a copy's day the note holds again is left as it is; of two for one date, one is on the "
       "day and the other's words after them (%s, %s)" % (_t11_held["overrides"], _t11_tie["overrides"]),
       _t11_held["overrides"] == {"2026-11-09": _t10_word} and "overrides" not in _t11_held["_prev"]

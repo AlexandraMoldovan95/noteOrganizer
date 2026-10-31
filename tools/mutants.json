@@ -13448,8 +13448,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "              if (theirs.get(word) or \"\") not in ((prev.get(word) or \"\"), (mine.get(word) or \"\"))}\n",
-        "replace": "              if (theirs.get(word) or \"\") != (mine.get(word) or \"\")}\n"
+        "find": "            if own not in (str(prev.get(word) or \"\"), str(mine.get(word) or \"\")):\n",
+        "replace": "            if own != str(mine.get(word) or \"\"):\n"
       }
     ],
     "must_fail": [
@@ -13529,6 +13529,96 @@
     ],
     "suites": [
       "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX91",
+    "about": "Enter walks past the painted hits and the paint stays behind: the current hit's neighbours are bare",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if unpainted:\n",
+        "replace": "        if False:\n"
+      }
+    ],
+    "must_fail": [
+      "find/prose: the paint is around the current hit"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX92",
+    "about": "a reveal paints around the hit current before it, not the first one it goes to",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                0 if reveal else min(max(self._find_index, 0), n - 1)])\n",
+        "replace": "                min(max(self._find_index, 0), n - 1)])\n"
+      }
+    ],
+    "must_fail": [
+      "find/prose: the paint is around the current hit"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR146",
+    "about": "the copy's text a day holds as a run of lines in its middle is added again under it",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    if any(held[at:at + len(lines)] == lines for at in range(len(held) - len(lines) + 1)):\n",
+        "replace": "    if False:\n"
+      }
+    ],
+    "must_fail": [
+      "the copy's lines a day already holds are not added again"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR147",
+    "about": "the copy's text is added whole, the lines the day begins with too: an old series line shown twice",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "        first += 1\n",
+        "replace": "        break\n"
+      }
+    ],
+    "must_fail": [
+      "the copy's lines a day already holds are not added again"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR148",
+    "about": "a body ending in an added table is stored without the line the editor draws under it, and the next read changes it",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "            edit[field] = shaped(\"\\n\".join([base] * bool(base) + added))\n",
+        "replace": "            edit[field] = \"\\n\".join([base] * bool(base) + added)\n"
+      }
+    ],
+    "must_fail": [
+      "the copy's lines a day already holds are not added again"
+    ],
+    "suites": [
+      "test_data_safety"
     ],
     "expect": "killed"
   }

@@ -213,6 +213,7 @@ is in the table below as well.
 | [Round ten: the note read again by every reader, and an edit the find bar never heard](#round-ten-the-note-read-again-by-every-reader-and-an-edit-the-find-bar-never-heard) | A cost is judged by everything that runs at the same moment, not by the part a fix touched; and an edit is heard where every edit passes, not on one event. | next |
 | [Round eleven: a day moved onto words no calendar showed, and a copy's words no day could take](#round-eleven-a-day-moved-onto-words-no-calendar-showed-and-a-copys-words-no-day-could-take) | Ask a date what it holds, not only what it draws; a day's words are its own only where they are not its series'. | next |
 | [Round twelve: words kept where nothing looked, a day's Undo over another, and the find bar's every hit](#round-twelve-words-kept-where-nothing-looked-a-days-undo-over-another-and-the-find-bars-every-hit) | A place the next read looks at again is not a place to keep things; bound the work by what each step walks, not by the total. | next |
+| [Round thirteen: words added twice, and a paint window left behind](#round-thirteen-words-added-twice-and-a-paint-window-left-behind) | A rule that adds asks what is already there, as lines; a window over a list follows the item it is for. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -3388,6 +3389,39 @@ notebook blocks its date, and no screen lists it.
 
 **Takeaway:** a place the next read looks at again is not a place to keep things -- keep them
 where they are seen. And bound the work by what each step walks, not by the total count.
+
+### Round thirteen: words added twice, and a paint window left behind
+
+*(2026-10-31 · found by the final audit's thirteenth break-it round, small, on round twelve's
+fixes; the phone's round found the same rule's cost and a table's line besides)*
+
+**Symptom:**
+- **A day's text shown twice.** Round twelve added a copy's day's words whole whenever they
+  differed from the day's. A day grown from the copy's text -- the same day, written on since --
+  got the copy's version again under it: "Agenda. / Book room / Cancelled / Agenda. / Book room".
+  Of 1,500 editor-made shapes, 235 doubled a line. An emptied word added a blank line, and a
+  table added under the day's own table read as one table on the phone.
+- **The paint left behind.** The find bar's 200 painted hits were laid around the hit current
+  before a reveal, and Enter never moved them: past a hundred hits, the current one's neighbours
+  were bare, and a paragraph full of the letter showed none marked.
+
+**Root cause:** "differs" was taken for "lacks". And the paint window was placed before the new
+current hit was known, and never asked again.
+
+**Fix:**
+- `_lines_lacked`: a copy's word adds nothing when the day holds it as one run of lines; else it
+  adds all but the lines the day begins with -- whole, so a table among them keeps its rows. Empty
+  pieces add nothing; a body ending in a table keeps the line under it (`with_caret_line`).
+- `_find_paint_around` lays the paint around the hit current once the rescan is done, and Enter
+  repaints when it walks past the painted ones.
+- `test_data_safety`, qa1; mutants DR146–DR148, RX91, RX92 new, DR144 re-aimed. The phone's
+  fixture gains five cases.
+
+**Written down, not fixed:** in a table cell, Ctrl+Z right after Enter or an alignment change has
+nothing to take back -- the cell reopens, its Undo empty (the safe side of round twelve's fix).
+
+**Takeaway:** a rule that adds must ask what is already there, as lines, not as a whole -- and a
+window over a list follows the item it is for.
 
 ## Tk & platform gotchas
 
