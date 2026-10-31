@@ -4332,7 +4332,7 @@
     "id": "MV06",
     "about": "a day can be moved onto another day of its series, and the two become one",
     "edits": [{"file": "note_organizer.py",
-               "find": "        return target is not None and (\n            to == (moved_from(note, day) or day)\n            or expand_occurrences(note, target, target) != [to])\n",
+               "find": "        return target is not None and (to == day or (\n            expand_occurrences(note, target, target) != [to]\n            and to not in (note.get(\"overrides\") or {})))\n",
                "replace": "        return target is not None\n"}],
     "must_fail": ["a date the series already has is refused, saying why, and nothing moves"],
     "suites": ["qa5"],
@@ -12845,7 +12845,7 @@
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "        elif not no_words and not day_has_words(note, at):\n",
+        "find": "        elif not no_words:\n",
         "replace": "        elif False:\n"
       }
     ],
@@ -12902,8 +12902,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "        elif not no_words and not day_has_words(note, at):\n",
-        "replace": "        elif not no_words:\n"
+        "find": "        if at in taken or (look is not None and not no_words and day_has_words(note, at)):\n",
+        "replace": "        if at in taken:\n"
       }
     ],
     "must_fail": [
@@ -13364,6 +13364,114 @@
     ],
     "must_fail": [
       "a limited box says a paste was shortened only when words were left out"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR140",
+    "about": "a day moves onto a date that keeps a day's words the calendar no longer shows, writing over them",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            and to not in (note.get(\"overrides\") or {})))\n",
+        "replace": "            ))\n"
+      }
+    ],
+    "must_fail": [
+      "a date that keeps a day's words the calendar no longer shows is refused"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR141",
+    "about": "a day's own date is free whatever stands on it: its Undo brings it home over another day moved there",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        return target is not None and (to == day or (\n",
+        "replace": "        return target is not None and (to == (moved_from(note, day) or day) or (\n"
+      }
+    ],
+    "must_fail": [
+      "a day's Reset and its move's Undo leave it away while another day stands on its date"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR142",
+    "about": "Reset this day sends a moved day home without asking whether another day stands on its date",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if origin is not None and not self._day_is_free(note, occurrence_date, origin):\n",
+        "replace": "        if False:\n"
+      }
+    ],
+    "must_fail": [
+      "a day's Reset and its move's Undo leave it away while another day stands on its date"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR143",
+    "about": "the take-back drops the copy's days whose words no day took, as round ten did",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    if kept:\n        prev[\"overrides\"] = kept\n",
+        "replace": "    if False:\n        prev[\"overrides\"] = kept\n"
+      }
+    ],
+    "must_fail": [
+      "a day coloured before the series' words changed: the copy keeps its words for that day"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR144",
+    "about": "the take-back weighs a copy's day by all its words, the series' own among them: a day the note holds again is kept, and comes back after a reset",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    return all((theirs.get(word) or \"\") in ((prev.get(word) or \"\"), (mine.get(word) or \"\"))\n",
+        "replace": "    return all((theirs.get(word) or \"\") == (mine.get(word) or \"\")\n"
+      }
+    ],
+    "must_fail": [
+      "a copy's day the note holds again is spent"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX88",
+    "about": "Your name keeps its own check: a paste past its 30 characters is refused whole, without a word",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "        self._limit_entry(name_entry, USERNAME_MAX_LEN, \"Your name\")\n",
+        "replace": "        name_entry.configure(validate=\"key\", validatecommand=(self.register(lambda p: len(p) <= USERNAME_MAX_LEN), \"%P\"))\n"
+      }
+    ],
+    "must_fail": [
+      "a paste into Your name past its 30 characters is shortened to fit"
     ],
     "suites": [
       "qa6"

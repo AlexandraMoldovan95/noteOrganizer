@@ -211,6 +211,7 @@ is in the table below as well.
 | [Round nine: work that grew with the square of what was typed](#round-nine-work-that-grew-with-the-square-of-what-was-typed) | A cost is judged by the loop that calls it; a check timed against its own half, in one run, sees it on any machine. | next |
 | [Round ten: the days a date held without a word, and older words given back](#round-ten-the-days-a-date-held-without-a-word-and-older-words-given-back) | A date is not a day: ask what a day holds, not whether something names its date; and a copy gets its words back when the note has lost them, not when the two differ. | next |
 | [Round ten: the note read again by every reader, and an edit the find bar never heard](#round-ten-the-note-read-again-by-every-reader-and-an-edit-the-find-bar-never-heard) | A cost is judged by everything that runs at the same moment, not by the part a fix touched; and an edit is heard where every edit passes, not on one event. | next |
+| [Round eleven: a day moved onto words no calendar showed, and a copy's words no day could take](#round-eleven-a-day-moved-onto-words-no-calendar-showed-and-a-copys-words-no-day-could-take) | Ask a date what it holds, not only what it draws; a day's words are its own only where they are not its series'. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -3289,6 +3290,57 @@ undo journal reads the note once per undo step (0.24 s on that paragraph).
 **Takeaway:** a cost is judged by everything that runs at the same moment, not by the part a fix
 touched -- round nine timed the find bar's scan and never the save beside it. And an event is not
 an edit: hear edits where every one of them passes.
+
+### Round eleven: a day moved onto words no calendar showed, and a copy's words no day could take
+
+*(2026-10-31 · found by the final audit's eleventh break-it round, on both apps at once: the
+desktop's data auditor and the phone's, each reproducing it in its own app)*
+
+**Symptom:**
+- **A move over words nobody could see.** A weekly meeting with notes kept for some future
+  Mondays changes to Tuesdays: those Mondays' words stay in the note, off the schedule, as the
+  owner decided on 2026-10-12. Then one week is held on Monday again -- "📅 Move this day…" onto
+  that Monday. The move was accepted, the old Monday's words were written over, and the move's
+  Undo took the day back without them. With no words of its own, the moved day took the old
+  Monday's words as if they were its own, and the Undo filed them under the wrong day.
+- **A day's return over another day.** While a day was away, another could be moved onto its
+  date; its Reset or its move's Undo brought it home over that one, hidden, and "Only the date"
+  wrote over its words. The phone had refused that return since porting Phase 3, and listed the
+  desktop's behaviour as a finding still open.
+- **A copy's words read as the note's.** A day coloured while the series still said one thing
+  keeps the series' words as they were then. Change the series' text afterwards and the day holds
+  words no other day does -- read, by round ten's take-back, as words of its own, so the copy's
+  own text for that day was dropped at the first start of this build over 0.97.405's notebook (or
+  the phone's 0.12.0), in no file after the next save. Restore previous stayed offered and brought
+  none of it back. Of the auditor's 6,000 shapes with the series' text edited, 84 lost words
+  this way.
+
+**Root cause:** both asked the wrong question about a date. The move asked only whether the
+calendar draws a day there, not whether the note keeps an edit there; the take-back asked whether
+the note's day held words unlike its series, not whether it held the copy's.
+
+**Fix:**
+- `_day_is_free` (`Days.dayIsFree` on the phone) also refuses a date the series keeps an edit
+  for, and a day's own date is no longer free whatever stands on it. The move says why in words of
+  its own ("This series still keeps the words of a day on …"); "Reset this day" asks the same
+  question before it asks anything, and says "Another day of this series is on … now".
+- `spend_series_days` drops a copy's day only where the note deleted that day. One whose own
+  words the note's day does not hold -- the series' words are not the day's (`_own_words_held`) --
+  or that lost its date to another of the copy's, stays in the copy under the date it wanted, and
+  Restore previous brings it. Read again, nothing changes; the day reset, it takes the words. The
+  owner chose this over a finer test of the words, which would still lose a day coloured between
+  two edits of the series.
+- Settings → Your name kept its own check, and a paste past its 30 characters was refused whole,
+  without a word: it is a limited box now, as every other (`_limit_entry`).
+- `test_data_safety`, qa5, qa6; mutants DR140–DR144 and RX88. The phone's fixture, rebuilt from
+  this core, gains six cases; of its 62 before, one changed, as intended.
+
+**Written down, not fixed:** a copy is one slot. The words kept there are as safe as the copy:
+another turn-off or big delete on that note makes a new one. Restore previous stays offered while
+they are there, which is the way to them.
+
+**Takeaway:** ask a date what it holds, not only what it draws. And a day's words are its own
+only where they are not its series' -- old series words are still the series'.
 
 ## Tk & platform gotchas
 

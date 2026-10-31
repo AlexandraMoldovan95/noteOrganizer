@@ -3756,15 +3756,17 @@ class SettingsPageMixin:
         # sidebar greeting. Only limits new typing; an existing longer name
         # (saved before this cap existed) still loads and displays in full.
         USERNAME_MAX_LEN = 30
-        name_len_vcmd = (self.register(lambda p: len(p) <= USERNAME_MAX_LEN), "%P")
         name_entry = tk.Entry(
             inner, textvariable=self.username_var, relief="flat", bd=0,
             highlightthickness=0, font=("Segoe UI", 11),
             bg=self._surface("inset"), fg=self.colors["text"],
             insertbackground=self.colors["text"],
-            validate="key", validatecommand=name_len_vcmd
         )
         name_entry.pack(side="left", fill="x", expand=True, padx=(12, 6), pady=9)
+        # Kept as every limited box is (_limit_entry): a paste past the cap
+        # shortened and said so. Its own check refused one whole, without a
+        # word (the final audit's eleventh round).
+        self._limit_entry(name_entry, USERNAME_MAX_LEN, "Your name")
         self._add_paste_menu(name_entry)
         self._guard_entry_astral(name_entry)
 

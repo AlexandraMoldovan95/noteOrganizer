@@ -16998,13 +16998,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                               marked=self.current_occurrence_date)
 
     def _day_is_free(self, note, day, to):
-        """Whether *note*'s day now on *day* may be held on *to*: its own
-        date, or one no other day of the series is on -- two days on one
-        date would be one."""
+        """Whether *note*'s day now on *day* may be held on *to*: a date no
+        other day of the series is on -- two days on one date would be one
+        -- and none it keeps an edit for that it draws no day on, a day off
+        its schedule or deleted with its edit kept: the move wrote over its
+        words, and an Undo took the day back without them (the final
+        audit's eleventh round). Its own date is no exception: while a day
+        is away another can be moved there, and its return hid that one and
+        wrote over its edit -- the phone refused it, as this now does."""
         target = parse_date(to)
-        return target is not None and (
-            to == (moved_from(note, day) or day)
-            or expand_occurrences(note, target, target) != [to])
+        return target is not None and (to == day or (
+            expand_occurrences(note, target, target) != [to]
+            and to not in (note.get("overrides") or {})))
 
     def _move_this_day(self, to):
         """Hold the day on screen on *to*, still one day of its series
@@ -17017,10 +17022,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if note is None or not day or parse_date(to) is None or to == day:
             return
         if not self._day_is_free(note, day, to):
+            when = parse_date(to)
             self.show_info(
                 "That day is taken",
-                f"This series already has a day on {show_day(parse_date(to))}. "
-                "A day can move only to a date the series does not have.")
+                f"This series already has a day on {show_day(when)}. "
+                "A day can move only to a date the series does not have."
+                if expand_occurrences(note, when, when) == [to] else
+                f"This series still keeps the words of a day on {show_day(when)}, "
+                "which its calendar no longer shows. A day can move only to a "
+                "date the series holds nothing for.")
             return
         # Saved to the day first, as leaving it saves it: the typing goes
         # with the day.
@@ -21083,6 +21093,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         origin = moved_from(note, occurrence_date)
         own_text = occurrence_date in (note.get("overrides") or {})
         if origin is None and not own_text:
+            return
+        if origin is not None and not self._day_is_free(note, occurrence_date, origin):
+            # Home only when nothing else is there now (_day_is_free), as on
+            # the phone.
+            self.show_info(
+                "Reset this day",
+                f"Another day of this series is on {show_day(parse_date(origin))} "
+                "now, so this day stays where it is.")
             return
         if origin is None:
             if not self.ask_yes_no(

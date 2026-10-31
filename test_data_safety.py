@@ -3715,6 +3715,47 @@ check("a day the note deleted, or wrote words of its own for, keeps the note's",
       "Dentist" not in json.dumps(_t10_gone) and _t10_gone["exceptions"] == ["2026-11-09"]
       and _t10_own["overrides"] == {"2026-11-10": {"body": "Swim instead"}})
 
+# A copy's day whose words the note's day cannot take stays in the copy, and
+# Restore previous brings it: a day coloured before the series' words changed
+# holds the old words, read as its own, and the copy's for that day were in no
+# file after the first start of this build over 0.97.405's notebook, or the
+# phone's 0.12.0 (round 11). Read again nothing changes; reset, the day takes them.
+_t11 = _model_mod.normalize_note(dict(
+    {"id": 21, "title": "Gym", "body": "Warm up.\nBring water.", "_prev": dict(
+        {"title": "Gym", "body": "Warm up."}, **_kd_series,
+        overrides={"2026-11-09": dict(_t10_word)})},
+    **_kd_series, overrides={"2026-11-09": {"title": "Gym", "body": "Warm up.", "comments": "",
+                                            "color": "#ff6b6b", "category": "Work"}}))
+_t11_reset = json.loads(json.dumps(_t11))
+_t11_reset["overrides"].pop("2026-11-09")
+_t11_reset = _model_mod.normalize_note(_t11_reset)
+check("a day coloured before the series' words changed: the copy keeps its words for that day, "
+      "a second read changes nothing, and the day reset takes them (%s, %s)" % (
+          _t11["_prev"].get("overrides"), _t11_reset["overrides"]),
+      _t11["_prev"].get("overrides") == {"2026-11-09": _t10_word}
+      and _t11["overrides"]["2026-11-09"]["body"] == "Warm up."
+      and _model_mod.normalize_note(json.loads(json.dumps(_t11))) == _t11
+      and _t11_reset["overrides"].get("2026-11-09") == _t10_word
+      and "overrides" not in _t11_reset["_prev"])
+# ...a day whose words the note holds too is spent, its series renamed since:
+# kept, a day reset came back from the copy at the next start (round 8).
+_t11_held = _model_mod.normalize_note(dict(
+    {"id": 22, "title": "Gym!", "body": "Warm up.", "_prev": dict(
+        {"title": "Gym", "body": "Warm up."}, **_kd_series,
+        overrides={"2026-11-09": dict(_t10_word)})},
+    **_kd_series, overrides={"2026-11-09": dict(_t10_word)}))
+# ...and two of the copy's days for one date -- the note moved its day onto a
+# day off the copy's schedule holding words of its own: one goes on the day,
+# the other's words stay in the copy.
+_t11_tie = _t10({"moved": {"2026-11-16": "2026-11-10"}},
+                {"overrides": {"2026-11-10": {"body": "Off-schedule words"},
+                               "2026-11-16": {"body": "Monday 16th's own"}}})
+check("a copy's day the note holds again is spent; of two for one date, one is on the day and "
+      "the other's words stay in the copy (%s, %s)" % (_t11_held["_prev"], _t11_tie["_prev"].get("overrides")),
+      "overrides" not in _t11_held["_prev"]
+      and _t10_shows(_t11_tie, "2026-11-10") == "Monday 16th's own"
+      and _t11_tie["_prev"].get("overrides") == {"2026-11-10": {"body": "Off-schedule words"}})
+
 
 def _t10_side(rnd, tag, ops):
     """A series' days as either app's editor makes them, from none: a day

@@ -137,6 +137,26 @@ app.update()
 check('a single KeyRelease immediately corrects an over-length value, '
       'without waiting for a save', len(app.username_var.get()) == 30)
 
+# A paste past the 30 is shortened to fit and said, as in every limited box:
+# its own check refused it whole, without a word (the final audit's eleventh round).
+app.username_var.set('Ana ')
+name_entry.icursor('end')
+_yn_told = []
+_yn_real_status = app.set_status
+app.set_status = lambda text, *a, **k: _yn_told.append(text)
+try:
+    app.clipboard_clear()
+    app.clipboard_append('Maria-Magdalena Popescu-Ionescu de la Vale')
+    _qa_fire(name_entry, '<<Paste>>')
+    app.update()
+finally:
+    app.set_status = _yn_real_status
+    app._hide_toast()
+check(f"a paste into Your name past its 30 characters is shortened to fit, and said "
+      f"({app.username_var.get()!r}; {_yn_told})",
+      app.username_var.get() == ('Ana Maria-Magdalena Popescu-Ionescu de la Vale')[:30]
+      and 'Pasted text shortened: your name can be up to 30 characters' in _yn_told)
+
 app.username_var.set('2' * 70)
 name_entry.event_generate('<Return>')
 app.update()

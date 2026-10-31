@@ -4455,6 +4455,59 @@ check('Undo puts the day back where it was, its own edit with it, the editor fol
       _mv_s['moved'] == {} and '2026-10-12' in (_mv_s.get('overrides') or {})
       and app.current_occurrence_date == '2026-10-12' and _dm_asked == [])
 
+# A date the series keeps words for though no day of it is drawn there -- a
+# day off its schedule -- is taken too: the move wrote over those words, and
+# its Undo took the day back without them (the final audit's eleventh round).
+_mv_s['overrides']['2026-10-20'] = {'body': 'off-schedule words'}
+app.save_notes()
+_mv_info = []
+app.show_info = lambda title, message, **k: (_mv_info.append((title, message)), True)[1]
+try:
+    app._move_this_day('2026-10-20'); app.update()
+finally:
+    app.show_info = _mv_real_info
+_mv_s = app.find_note(1)
+check(f"a date that keeps a day's words the calendar no longer shows is refused, saying "
+      f"so, and its words stay ({_mv_info})",
+      [t for t, _m in _mv_info] == ['That day is taken']
+      and 'still keeps the words of a day' in _mv_info[0][1]
+      and _mv_s['moved'] == {} and app.current_occurrence_date == '2026-10-12'
+      and _mv_s['overrides'].get('2026-10-20') == {'body': 'off-schedule words'})
+# ...and a day goes home, by its Reset or the move's Undo, only while no other
+# day stands on its date: its return hid that one, and "Only the date" wrote
+# over its words (the phone refused it; now both do).
+app._move_this_day('2026-10-14'); app.update()
+_mv_s = app.find_note(1)
+NO.move_day(_mv_s, '2026-10-19', '2026-10-12')
+_mv_s['overrides']['2026-10-12'] = {'body': "the 19th's words"}
+app.save_notes()
+_mv_info = []
+app.show_info = lambda title, message, **k: (_mv_info.append((title, message)), True)[1]
+_mv_real_dialog = app._themed_dialog
+app._themed_dialog = lambda *a, **k: None     # a Reset that asked is cancelled
+try:
+    app._reset_occurrence_override(app.find_note(1), '2026-10-14'); app.update()
+    app._run_toast_action(); app.update()
+finally:
+    app.show_info = _mv_real_info
+    app._themed_dialog = _mv_real_dialog
+_mv_s = app.find_note(1)
+check(f"a day's Reset and its move's Undo leave it away while another day stands on its "
+      f"date, each day keeping its words ({_mv_info}; {_mv_s['moved']})",
+      [t for t, _m in _mv_info] == ['Reset this day']
+      and _mv_s['moved'] == {'2026-10-12': '2026-10-14', '2026-10-19': '2026-10-12'}
+      and _mv_s['overrides'].get('2026-10-12') == {'body': "the 19th's words"}
+      and (_mv_s['overrides'].get('2026-10-14') or {}).get('body') == 'series text (room 2)')
+_mv_s['moved'].pop('2026-10-19')
+for _mv_day in ('2026-10-12', '2026-10-20'):
+    _mv_s['overrides'].pop(_mv_day)
+app.save_notes()
+app._undo_day_move(1, _mv_s.get('uid'), '2026-10-12', '2026-10-14', '2026-10-12'); app.update()
+_mv_s = app.find_note(1)
+check('...and once its date is free again, the Undo brings it home',
+      _mv_s['moved'] == {} and app.current_occurrence_date == '2026-10-12'
+      and (_mv_s['overrides'].get('2026-10-12') or {}).get('body') == 'series text (room 2)')
+
 # Reset on a moved day with text of its own: the date always goes back; the
 # text is asked about.
 app._move_this_day('2026-10-14'); app.update()
