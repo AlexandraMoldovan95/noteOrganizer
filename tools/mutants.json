@@ -12889,7 +12889,7 @@
       }
     ],
     "must_fail": [
-      "a day the note deleted, or wrote words of its own for, keeps the note's"
+      "a day the note deleted keeps the note's; one it wrote words for keeps them first"
     ],
     "suites": [
       "test_data_safety"
@@ -12907,7 +12907,7 @@
       }
     ],
     "must_fail": [
-      "a day the note deleted, or wrote words of its own for, keeps the note's",
+      "a day the note deleted keeps the note's; one it wrote words for keeps them first",
       "on 300 shapes either app's editor makes, the take-back keeps every word"
     ],
     "suites": [
@@ -13426,16 +13426,16 @@
   },
   {
     "id": "DR143",
-    "about": "the take-back drops the copy's days whose words no day took, as round ten did",
+    "about": "the take-back drops the copy's words for a day that holds words already, as round ten did",
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "    if kept:\n        prev[\"overrides\"] = kept\n",
-        "replace": "    if False:\n        prev[\"overrides\"] = kept\n"
+        "find": "                overrides[at] = _words_added(note, overrides, at, prev, key)\n",
+        "replace": "                pass\n"
       }
     ],
     "must_fail": [
-      "a day coloured before the series' words changed: the copy keeps its words for that day"
+      "a day coloured before the series' words changed takes the copy's words for it after its own"
     ],
     "suites": [
       "test_data_safety"
@@ -13444,16 +13444,16 @@
   },
   {
     "id": "DR144",
-    "about": "the take-back weighs a copy's day by all its words, the series' own among them: a day the note holds again is kept, and comes back after a reset",
+    "about": "the take-back weighs a copy's day by all its words, the series' own among them: a day the note holds again gets its series' title added to its text",
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "    return all((theirs.get(word) or \"\") in ((prev.get(word) or \"\"), (mine.get(word) or \"\"))\n",
-        "replace": "    return all((theirs.get(word) or \"\") == (mine.get(word) or \"\")\n"
+        "find": "              if (theirs.get(word) or \"\") not in ((prev.get(word) or \"\"), (mine.get(word) or \"\"))}\n",
+        "replace": "              if (theirs.get(word) or \"\") != (mine.get(word) or \"\")}\n"
       }
     ],
     "must_fail": [
-      "a copy's day the note holds again is spent"
+      "a copy's day the note holds again is left as it is"
     ],
     "suites": [
       "test_data_safety"
@@ -13475,6 +13475,60 @@
     ],
     "suites": [
       "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR145",
+    "about": "a deleted day's Undo puts it back over another day moved onto its date since, which is drawn nowhere",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if skipped in exceptions and (\n                expand_occurrences(note, day, day) == [date_str]\n",
+        "replace": "        if False and (\n                expand_occurrences(note, day, day) == [date_str]\n"
+      }
+    ],
+    "must_fail": [
+      "a deleted day's Undo leaves it out while another day stands on its date"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX89",
+    "about": "a cell editor keeps the loading of its words on its Undo: Ctrl+Z there empties the cell",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        entry.edit_reset()\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "Ctrl+Z in a cell just opened leaves its words"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RX90",
+    "about": "the find bar paints every hit on a line: 2,000 hits in one paragraph hold each key over a second",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        for m in self._find_painted(self._find_matches, anchor):\n",
+        "replace": "        for m in [m for m in self._find_matches if m[\"kind\"] == \"prose\"]:\n"
+      }
+    ],
+    "must_fail": [
+      "find/prose: 2,000 hits on one line paint"
+    ],
+    "suites": [
+      "qa1"
     ],
     "expect": "killed"
   }

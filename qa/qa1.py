@@ -3170,6 +3170,20 @@ check(f'typing through the editor lands in the text ({lines_now()[0]!r})',
       [core_tables.split_row(r) for r in lines_now()[:3]]
       == [['Name', 'Qty'], ['Milk', '2'], ['Eggs', '12']])
 
+# A cell's words are where its editor starts, not an edit: Ctrl+Z there took
+# them out, and leaving the cell saved it empty (the final audit's twelfth round).
+app._open_cell_editor(app._grid_at_line(1), 1, 0)
+app.update()
+take_focus(app._cell_editor['entry'])
+app._cell_editor['entry'].event_generate('<<Undo>>')
+app.update()
+_cz_left = app._cell_editor['entry'].get('1.0', 'end-1c')
+app._commit_cell_editor()
+app.update()
+check(f"Ctrl+Z in a cell just opened leaves its words, and leaving it keeps them "
+      f"({_cz_left!r}; {lines_now()[1]!r})",
+      _cz_left == 'Milk' and core_tables.split_row(lines_now()[1]) == ['Milk', '2'])
+
 # Tab walks the cells; at the very last one it makes a new row, which is
 # what lets a whole table be typed without reaching for the mouse.
 _made = app._grid_at_line(1)
@@ -9230,6 +9244,26 @@ app.update()
 check('find/prose: a miss shows 0/0 and clears the highlight',
       app._find_count_lbl.cget('text') == '0/0'
       and not app.body_text.tag_ranges('find_all'))
+# A paragraph of 2,000 hits paints at most FIND_LINE_PAINT of them, around the
+# current one, and still counts and walks them all: every hit painted, each key
+# with the bar open held the app 0.7 to 1.4 s (the final audit's twelfth round).
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'see ' * 2500)
+app._find_var.set('e')
+app._find_rescan(reveal=True)
+app._find_nav(1500)
+app._find_rescan(reveal=False)
+app.update()
+_fp_painted = len(app.body_text.tag_ranges('find_all')) // 2
+_fp_here = app._find_matches[app._find_index]['start']
+check(f'find/prose: 2,000 hits on one line paint {_fp_painted}, around the current one, '
+      f'and are all counted ({app._find_count_lbl.cget("text")})',
+      len(app._find_matches) == app.FIND_MATCH_CAP
+      and 0 < _fp_painted <= app.FIND_LINE_PAINT
+      and app._find_count_lbl.cget('text') == f'1501/{app.FIND_MATCH_CAP}+'
+      and 'find_all' in app.body_text.tag_names(_fp_here))
+app._find_var.set('')
+app._find_rescan()
 app._close_find()
 app.update()
 # The Aa box (and opening the bar) rescans directly while a typed query's

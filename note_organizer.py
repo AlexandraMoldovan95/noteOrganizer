@@ -4033,6 +4033,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 }.get(row_aligns[c], "left"))
                 entry.tag_add("cellalign", "1.0", "end")
         self._editor_retag_emoji(entry)
+        # The cell's words are where it starts, not an edit: left on its
+        # Undo, Ctrl+Z took them out and leaving the cell saved it empty
+        # (the final audit's twelfth round), as _reset_text_undo keeps the body.
+        entry.edit_reset()
         if select:
             entry.tag_add("sel", "1.0", "end-1c")
         entry.mark_set("insert", "end-1c")
@@ -17028,9 +17032,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 f"This series already has a day on {show_day(when)}. "
                 "A day can move only to a date the series does not have."
                 if expand_occurrences(note, when, when) == [to] else
-                f"This series still keeps the words of a day on {show_day(when)}, "
-                "which its calendar no longer shows. A day can move only to a "
-                "date the series holds nothing for.")
+                f"This series still keeps text or a colour of its own for a day on "
+                f"{show_day(when)}, which its calendar no longer shows. A day can move "
+                "only to a date the series holds nothing for.")
             return
         # Saved to the day first, as leaving it saves it: the typing goes
         # with the day.
@@ -20274,13 +20278,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         self._find_matches = self._find_scan_model(query)
         self._find_model_dirty = False
-        # Tag every prose match with the field tag.
-        for m in self._find_matches:
-            if m["kind"] == "prose":
-                try:
-                    self.body_text.tag_add("find_all", m["start"], m["end"])
-                except tk.TclError:
-                    pass
+        # Tag the prose matches with the field tag -- at most FIND_LINE_PAINT
+        # a line, those around the current one (_find_painted).
+        try:
+            # A cell's match has no place in the text: the cursor stands in.
+            anchor = (prev["start"] if prev and prev.get("kind") == "prose"
+                      else self.body_text.index("insert"))
+        except tk.TclError:
+            anchor = "1.0"
+        for m in self._find_painted(self._find_matches, anchor):
+            try:
+                self.body_text.tag_add("find_all", m["start"], m["end"])
+            except tk.TclError:
+                pass
         self._find_raise_tags()
         self._find_model_on = self._find_standing(self._find_model_text)
         n = len(self._find_matches)
@@ -20304,6 +20314,30 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._find_mark_current(scroll=False)
         self._find_count_lbl.config(
             text=f"{self._find_index + 1}/{n}{'+' if capped else ''}")
+
+    # Painted hits a line can hold. Every tag_add, and every read of the
+    # line, walks its tag toggles: 2,000 hits in one paragraph held each key
+    # 0.7 to 1.4 s with the bar open (the final audit's twelfth round). The
+    # model keeps every hit, for the count and Enter; spelling is bounded so.
+    FIND_LINE_PAINT = 200
+
+    def _find_painted(self, matches, anchor):
+        """The prose hits of *matches* to paint: on a line holding more than
+        FIND_LINE_PAINT, those around *anchor* ("line.col")."""
+        at = tuple(int(part) for part in str(anchor).split("."))
+        lines = {}
+        for m in matches:
+            if m["kind"] == "prose":
+                lines.setdefault(m["line"], []).append(m)
+        painted = []
+        for hits in lines.values():
+            if len(hits) > self.FIND_LINE_PAINT:
+                mid = bisect.bisect_left([(h["line"], h["col"]) for h in hits], at)
+                first = max(0, min(mid - self.FIND_LINE_PAINT // 2,
+                                   len(hits) - self.FIND_LINE_PAINT))
+                hits = hits[first:first + self.FIND_LINE_PAINT]
+            painted.extend(hits)
+        return painted
 
     def _find_raise_tags(self):
         # find tags win over highlight_* backgrounds; sel stays on top.
@@ -21096,11 +21130,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         if origin is not None and not self._day_is_free(note, occurrence_date, origin):
             # Home only when nothing else is there now (_day_is_free), as on
-            # the phone.
+            # the phone -- and said as it is: a day there, or an edit alone.
+            home = parse_date(origin)
             self.show_info(
                 "Reset this day",
-                f"Another day of this series is on {show_day(parse_date(origin))} "
-                "now, so this day stays where it is.")
+                f"Another day of this series is on {show_day(home)} now, so this day "
+                "stays where it is." if expand_occurrences(note, home, home) == [origin]
+                else f"This series keeps text or a colour of its own on {show_day(home)}, "
+                "so this day stays where it is.")
             return
         if origin is None:
             if not self.ask_yes_no(
@@ -23187,6 +23224,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 day, day) != [date_str]:
             self._show_toast("This note's repeat no longer has that day, "
                              "so it can't come back", kind="info")
+            return
+        # Back only onto a date the series holds nothing on now, as a move
+        # comes home (_day_is_free): another day moved there since was hidden
+        # under it, its words read as this day's and this day's own lost (the
+        # final audit's twelfth round). The delete took this day's own edit.
+        if skipped in exceptions and (
+                expand_occurrences(note, day, day) == [date_str]
+                or date_str in (note.get("overrides") or {})):
+            self._show_toast(
+                f"Another day of this series is on {show_day(day)} now, so that day "
+                "can't come back" if expand_occurrences(note, day, day) == [date_str]
+                else f"This series keeps text or a colour of its own on {show_day(day)} "
+                "now, so that day can't come back", kind="info")
             return
         if skipped not in exceptions and (
                 not came_from

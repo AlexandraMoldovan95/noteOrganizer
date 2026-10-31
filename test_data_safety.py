@@ -3707,38 +3707,36 @@ check("an edit the copy draws on no day stays on its own date, beside its day's 
       "(%s)" % _t10_stray["overrides"],
       _t10_shows(_t10_stray, "2026-11-10") == "Dentist 3pm"
       and (_t10_stray["overrides"].get("2026-11-09") or {}).get("body") == "Stray words")
-# What the note wrote still wins: its deletion, and its own words.
+# What the note wrote still wins: its deletion, and its own words -- the copy's
+# for that day go after them (round 12; dropped, a day coloured before the
+# series' words changed lost the copy's own text, round 11).
 _t10_gone = _t10({"exceptions": ["2026-11-09"]}, _t10_copy_moved)
 _t10_own = _t10({"moved": {"2026-11-09": "2026-11-10"},
                  "overrides": {"2026-11-10": {"body": "Swim instead"}}})
-check("a day the note deleted, or wrote words of its own for, keeps the note's",
+check("a day the note deleted keeps the note's; one it wrote words for keeps them first, the "
+      "copy's after (%s)" % _t10_own["overrides"],
       "Dentist" not in json.dumps(_t10_gone) and _t10_gone["exceptions"] == ["2026-11-09"]
-      and _t10_own["overrides"] == {"2026-11-10": {"body": "Swim instead"}})
+      and _t10_own["overrides"] == {"2026-11-10": {"body": "Swim instead\nDentist 3pm"}})
 
-# A copy's day whose words the note's day cannot take stays in the copy, and
-# Restore previous brings it: a day coloured before the series' words changed
-# holds the old words, read as its own, and the copy's for that day were in no
-# file after the first start of this build over 0.97.405's notebook, or the
-# phone's 0.12.0 (round 11). Read again nothing changes; reset, the day takes them.
+# A day coloured before the series' words changed holds the old words, read
+# as its own: the copy's for that day were in no file after the first start of
+# this build over 0.97.405's notebook, or the phone's 0.12.0 (round 11). Kept
+# in the copy, they were lost by its one slot and read again by date (round
+# 12); now they go on the day, after its own. Read again, nothing changes.
 _t11 = _model_mod.normalize_note(dict(
     {"id": 21, "title": "Gym", "body": "Warm up.\nBring water.", "_prev": dict(
         {"title": "Gym", "body": "Warm up."}, **_kd_series,
         overrides={"2026-11-09": dict(_t10_word)})},
     **_kd_series, overrides={"2026-11-09": {"title": "Gym", "body": "Warm up.", "comments": "",
                                             "color": "#ff6b6b", "category": "Work"}}))
-_t11_reset = json.loads(json.dumps(_t11))
-_t11_reset["overrides"].pop("2026-11-09")
-_t11_reset = _model_mod.normalize_note(_t11_reset)
-check("a day coloured before the series' words changed: the copy keeps its words for that day, "
-      "a second read changes nothing, and the day reset takes them (%s, %s)" % (
-          _t11["_prev"].get("overrides"), _t11_reset["overrides"]),
-      _t11["_prev"].get("overrides") == {"2026-11-09": _t10_word}
-      and _t11["overrides"]["2026-11-09"]["body"] == "Warm up."
-      and _model_mod.normalize_note(json.loads(json.dumps(_t11))) == _t11
-      and _t11_reset["overrides"].get("2026-11-09") == _t10_word
-      and "overrides" not in _t11_reset["_prev"])
-# ...a day whose words the note holds too is spent, its series renamed since:
-# kept, a day reset came back from the copy at the next start (round 8).
+check("a day coloured before the series' words changed takes the copy's words for it after its "
+      "own, its look kept, the copy spent, and a second read changes nothing (%s)" % _t11["overrides"],
+      _t11["overrides"]["2026-11-09"]["body"] == "Warm up.\nDentist 3pm"
+      and _t11["overrides"]["2026-11-09"]["color"] == "#ff6b6b"
+      and "overrides" not in _t11["_prev"]
+      and _model_mod.normalize_note(json.loads(json.dumps(_t11))) == _t11)
+# ...a day whose words the note holds too is left as it is, its series renamed
+# since: the series' words are not the day's (round 11).
 _t11_held = _model_mod.normalize_note(dict(
     {"id": 22, "title": "Gym!", "body": "Warm up.", "_prev": dict(
         {"title": "Gym", "body": "Warm up."}, **_kd_series,
@@ -3746,15 +3744,15 @@ _t11_held = _model_mod.normalize_note(dict(
     **_kd_series, overrides={"2026-11-09": dict(_t10_word)}))
 # ...and two of the copy's days for one date -- the note moved its day onto a
 # day off the copy's schedule holding words of its own: one goes on the day,
-# the other's words stay in the copy.
+# the other's words after them.
 _t11_tie = _t10({"moved": {"2026-11-16": "2026-11-10"}},
                 {"overrides": {"2026-11-10": {"body": "Off-schedule words"},
                                "2026-11-16": {"body": "Monday 16th's own"}}})
-check("a copy's day the note holds again is spent; of two for one date, one is on the day and "
-      "the other's words stay in the copy (%s, %s)" % (_t11_held["_prev"], _t11_tie["_prev"].get("overrides")),
-      "overrides" not in _t11_held["_prev"]
-      and _t10_shows(_t11_tie, "2026-11-10") == "Monday 16th's own"
-      and _t11_tie["_prev"].get("overrides") == {"2026-11-10": {"body": "Off-schedule words"}})
+check("a copy's day the note holds again is left as it is; of two for one date, one is on the "
+      "day and the other's words after them (%s, %s)" % (_t11_held["overrides"], _t11_tie["overrides"]),
+      _t11_held["overrides"] == {"2026-11-09": _t10_word} and "overrides" not in _t11_held["_prev"]
+      and _t10_shows(_t11_tie, "2026-11-10") == "Monday 16th's own\nOff-schedule words"
+      and "overrides" not in _t11_tie["_prev"])
 
 
 def _t10_side(rnd, tag, ops):
@@ -3797,9 +3795,10 @@ def _t10_words(note, day):
 
 
 def _t10_broken(mine, theirs):
-    """Where the take-back breaks its rule for one shape: the note's words or
-    look changed, or a copy's day with words of its own not shown on the day
-    the result draws it, though the note neither deleted nor rewrote it."""
+    """Where the take-back breaks its rule for one shape: the note's words
+    not first on their day or its look changed, or a copy's day with words
+    of its own not shown on the day the result draws it, though the note did
+    not delete that day (round 12: the copy's go after the note's)."""
     out = _t10(copy_mod.deepcopy(mine), copy_mod.deepcopy(theirs))
     note = _model_mod.normalize_note(dict({"title": "Gym", "body": "Warm up."}, **_kd_series, **mine))
     kept = _model_mod.normalize_note(dict({"title": "Gym", "body": "Warm up."}, **_kd_series, **theirs))
@@ -3807,7 +3806,8 @@ def _t10_broken(mine, theirs):
     bad = [] if _model_mod.normalize_note(json.loads(json.dumps(out))) == out else ["not idempotent"]
     for day, patch in note["overrides"].items():
         got = out["overrides"].get(day) or {}
-        if _t10_words(note, day) and got != patch:
+        if _t10_words(note, day) and not (got.get("title") == patch.get("title")
+                                          and (got.get("body") or "").startswith(patch.get("body") or "")):
             bad.append("the note's words on %s" % day)
         if any(got.get(key) != value for key, value in patch.items() if key in ("color", "category")):
             bad.append("the note's look on %s" % day)
@@ -3816,11 +3816,10 @@ def _t10_broken(mine, theirs):
         if not _t10_words(kept, key) or key not in _rec_t10.expand_occurrences(kept, when, when):
             continue
         day = came.get(key, key)
-        drawn = note["moved"].get(day, day)
-        if day in note["exceptions"] or (drawn in note["overrides"] and _t10_words(note, drawn)):
+        if day in note["exceptions"]:
             continue
         at = out["moved"].get(day, day)
-        if _t10_shows(out, at) != patch["body"]:
+        if patch["body"] not in (_t10_shows(out, at) or "").split("\n"):
             bad.append("the copy's words for %s" % day)
     return bad
 
@@ -3831,8 +3830,8 @@ _t10_bad = []
 for _t10_i in range(300):
     _t10_shape = (_t10_side(_t10_rnd, "note", 6), _t10_side(_t10_rnd, "copy", 8))
     _t10_bad.extend((_t10_i, why) for why in _t10_broken(*_t10_shape))
-check("on 300 shapes either app's editor makes, the take-back keeps every word the note wrote "
-      "and every day's own text the copy held, on the day it is drawn (%s)" % (_t10_bad[:3] or "all"),
+check("on 300 shapes either app's editor makes, the take-back keeps every word the note wrote, "
+      "first, and every day's own text the copy held, on the day it is drawn (%s)" % (_t10_bad[:3] or "all"),
       not _t10_bad)
 
 # ...and the styles of words held in the copy's but not the same: a part of

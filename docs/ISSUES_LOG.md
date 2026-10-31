@@ -212,6 +212,7 @@ is in the table below as well.
 | [Round ten: the days a date held without a word, and older words given back](#round-ten-the-days-a-date-held-without-a-word-and-older-words-given-back) | A date is not a day: ask what a day holds, not whether something names its date; and a copy gets its words back when the note has lost them, not when the two differ. | next |
 | [Round ten: the note read again by every reader, and an edit the find bar never heard](#round-ten-the-note-read-again-by-every-reader-and-an-edit-the-find-bar-never-heard) | A cost is judged by everything that runs at the same moment, not by the part a fix touched; and an edit is heard where every edit passes, not on one event. | next |
 | [Round eleven: a day moved onto words no calendar showed, and a copy's words no day could take](#round-eleven-a-day-moved-onto-words-no-calendar-showed-and-a-copys-words-no-day-could-take) | Ask a date what it holds, not only what it draws; a day's words are its own only where they are not its series'. | next |
+| [Round twelve: words kept where nothing looked, a day's Undo over another, and the find bar's every hit](#round-twelve-words-kept-where-nothing-looked-a-days-undo-over-another-and-the-find-bars-every-hit) | A place the next read looks at again is not a place to keep things; bound the work by what each step walks, not by the total. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -3335,12 +3336,58 @@ the note's day held words unlike its series, not whether it held the copy's.
 - `test_data_safety`, qa5, qa6; mutants DR140–DR144 and RX88. The phone's fixture, rebuilt from
   this core, gains six cases; of its 62 before, one changed, as intended.
 
-**Written down, not fixed:** a copy is one slot. The words kept there are as safe as the copy:
-another turn-off or big delete on that note makes a new one. Restore previous stays offered while
-they are there, which is the way to them.
+**Written down, then undone by round twelve:** a copy is one slot. The words kept there were as
+safe as the copy -- and, as the next round showed, not that safe.
 
 **Takeaway:** ask a date what it holds, not only what it draws. And a day's words are its own
 only where they are not its series' -- old series words are still the series'.
+
+### Round twelve: words kept where nothing looked, a day's Undo over another, and the find bar's every hit
+
+*(2026-10-31 · found by the final audit's twelfth break-it round -- small, its areas turned to
+round eleven's fixes and what rounds ten and eleven had not covered)*
+
+**Symptom:**
+- **Round eleven's keep, broken three ways.** The copy holding the words no day could take is
+  still the series' own copy, so every start read it again -- by date, without the copy's moves
+  and deleted days: words filed under another day's own date were dropped at the second start,
+  or put on the wrong day; a day reset took the old words back. And Restore previous of such a
+  copy put its few days in place of all the note's own, parking those in the one slot, where the
+  next turn-off or big delete erased them while the status line promised them back.
+- **A deleted day's Undo over another day.** Delete a day, move another onto its date, then
+  Undo the delete: the day came back over the moved one, which no calendar drew any more; its
+  words read as the deleted day's, and the deleted day's own were lost. Both apps.
+- **Ctrl+Z in a table cell emptied it.** The cell editor kept the loading of its words on its
+  own Undo; Ctrl+Z took them out, and leaving the cell saved it empty.
+- **The find bar held every key.** With a common letter searched in one long paragraph, each
+  key anywhere in the note held the app 0.7 s at 12,000 characters and 1.4 s at 17,000 on a fast
+  machine: every hit was painted, and every tag_add and read of that line walked all its toggles.
+
+**Root cause:** a copy is a copy of the series, read again at every start; anything put there
+is re-judged in the copy's frame. The delete's Undo asked whether the rule still gives the day,
+not whether the date is free. Two Undo stacks met in one cell. A bound on the hits per note
+was taken for a bound on the work per line.
+
+**Fix:**
+- The owner chose the other way to keep the words: a copy's day's own words that a day already
+  holding words lacks go on that day, after its own (`_words_added`: a title and text to its
+  text, comments to its comments; the series' words are not the day's), and the copy's days are
+  spent as before. Nothing is kept in the copy; Restore previous is as it was.
+- `_undo_occurrence_delete` asks the move's question: with another day on the date, or an edit
+  kept there, the day stays deleted and the toast says why. The refusal sentences say "text or a
+  colour of its own", and Reset says which holds the date.
+- `_open_cell_editor` resets the cell's Undo once its words are in (`edit_reset`), as the body's.
+- `_find_painted` paints at most `FIND_LINE_PAINT` (200) hits a line, those around the current
+  one; the model keeps them all, for the count and Enter.
+- `test_data_safety`, qa1, qa5; mutants DR145, RX89, RX90 new, DR143, DR144 and DR135 re-aimed.
+  The phone's fixture, rebuilt from this core: of round ten's 62 cases one changed, as intended.
+
+**Written down, not fixed:** linux_ci's tracked copy trusts a tracked name that an 8.3 short name
+or a case-only twin could alias (no such name is tracked); a deleted day's edit kept from an old
+notebook blocks its date, and no screen lists it.
+
+**Takeaway:** a place the next read looks at again is not a place to keep things -- keep them
+where they are seen. And bound the work by what each step walks, not by the total count.
 
 ## Tk & platform gotchas
 

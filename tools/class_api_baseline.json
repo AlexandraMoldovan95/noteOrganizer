@@ -272,6 +272,7 @@
   "_find_on_context_switch": "(self, leaving=True)",
   "_find_on_query_change": "(self)",
   "_find_paint_entry": "(self)",
+  "_find_painted": "(self, matches, anchor)",
   "_find_prose": "(self, query, nocase, text)",
   "_find_raise_tags": "(self)",
   "_find_reassert_reveal": "(self)",

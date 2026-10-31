@@ -4470,7 +4470,7 @@ _mv_s = app.find_note(1)
 check(f"a date that keeps a day's words the calendar no longer shows is refused, saying "
       f"so, and its words stay ({_mv_info})",
       [t for t, _m in _mv_info] == ['That day is taken']
-      and 'still keeps the words of a day' in _mv_info[0][1]
+      and 'still keeps text or a colour of its own for a day' in _mv_info[0][1]
       and _mv_s['moved'] == {} and app.current_occurrence_date == '2026-10-12'
       and _mv_s['overrides'].get('2026-10-20') == {'body': 'off-schedule words'})
 # ...and a day goes home, by its Reset or the move's Undo, only while no other
@@ -4618,6 +4618,35 @@ check('...and its Undo brings it back moved, with its own text',
       and ((_mv_s.get('overrides') or {}).get('2026-10-17', {}).get('title') or '')
       .endswith('(Sat)')
       and _mv_on('2026-10-17') == [1])
+
+# A deleted day comes back only onto a date nothing else of the series holds:
+# another day moved there since was hidden under it, its words read as the
+# deleted day's, and the deleted day's own were lost (the final audit's
+# twelfth round). Its own series, so the editor's above stays as it is.
+app.notes.append(NO.normalize_note({
+    'id': 78, 'title': 'Two days', 'body': 'x', 'date': '2026-10-05',
+    'recurrence': {'freq': 'weekly'},
+    'overrides': {'2026-10-12': {'body': 'Mon 12 own'}, '2026-10-19': {'body': 'Mon 19 own'}}}))
+_ud = app.find_note(78)
+_ud_edit = _ud['overrides'].pop('2026-10-12')       # deleted, as its Undo remembers it
+_ud['exceptions'] = ['2026-10-12']
+NO.move_day(_ud, '2026-10-19', '2026-10-12')
+app.save_notes()
+_ud_said = []
+_ud_real_toast = app._show_toast
+app._show_toast = lambda text, *a, **k: _ud_said.append(text)
+try:
+    app._undo_occurrence_delete(78, '2026-10-12', _ud_edit, _ud.get('uid')); app.update()
+finally:
+    app._show_toast = _ud_real_toast
+_ud = app.find_note(78)
+check(f"a deleted day's Undo leaves it out while another day stands on its date, each "
+      f"day keeping its words ({_ud_said})",
+      any('Another day of this series is on' in t for t in _ud_said)
+      and _ud['exceptions'] == ['2026-10-12'] and _ud['moved'] == {'2026-10-19': '2026-10-12'}
+      and _ud['overrides'].get('2026-10-12') == {'body': 'Mon 19 own'})
+app.notes = [n for n in app.notes if n.get('id') != 78]
+app.save_notes()
 
 # The series counts its moved days; a repeat turned off copies them with the
 # days into the rescue copy, keeps them, and Restore previous brings them back.

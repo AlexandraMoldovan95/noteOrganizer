@@ -761,8 +761,9 @@ and a banner offers **Undo**. The strip then says
 where it came from ("moved from Monday, 12 October"); the calendar draws it on its new date only,
 History lists it with "moved from …", and the series counts it above the note ("1 day moved
 (↷)"). A date that already has a day of the series is refused - two days on one date would be one -
-and so is a date that still keeps the words of a day the calendar no longer shows, such as a Monday
-left with its own text when the series moved to Tuesdays: the move would write over them.
+and so is a date that still keeps text or a colour of its own for a day the calendar no longer
+shows, such as a Monday left with its own text when the series moved to Tuesdays: the move would
+write over it. Undoing a day's delete is refused the same way while another day stands on its date.
 
 To put it back, move it to its own date, press **↺ Reset this day…** beside **Move this day…**, or
 right-click it in the calendar and choose **↺ Reset this day to the series…**. The date goes back

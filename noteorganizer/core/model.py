@@ -317,25 +317,22 @@ def _dates_held(note):
 
 def spend_series_days(note):
     """Once the note repeats as its series' copy again, the copy's days come
-    back and are spent. A copy's day is dropped only where the note deleted
-    that day; one whose words no day of the note takes stays in the copy,
-    and Restore previous brings it. ISSUES_LOG: "Round ten: the days a date
-    held without a word" and "Round eleven: a day moved onto words no
-    calendar showed"."""
+    back into the note and are spent from the copy. A copy's day is dropped
+    only where the note deleted that day; words of its own the day already
+    holding words lacks are added after them. ISSUES_LOG: "Round ten: the
+    days a date held without a word", and rounds eleven and twelve."""
     if not copy_holds_this_series(note):
         return
     prev = note["_prev"]
     held = _dates_held(note)
     moved = dict(note.get("moved") or {})
     moved.update(_copy_moves_taken(prev.get("moved") or {}, held, len(moved)))
-    overrides, kept = _copy_days_placed(note, prev, moved)
+    overrides = _copy_days_placed(note, prev, moved)
     exceptions = set(note.get("exceptions") or [])
     exceptions.update(day for day in prev.get("exceptions") or [] if day not in held)
     note["overrides"], note["exceptions"], note["moved"] = overrides, sorted(exceptions), moved
     for key in DAY_FIELDS:
         prev.pop(key, None)
-    if kept:
-        prev["overrides"] = kept
 
 
 def _copy_moves_taken(theirs, held, room):
@@ -360,22 +357,29 @@ def _copy_moves_taken(theirs, held, room):
     return taken
 
 
-def _own_words_held(prev, key, note, at):
-    """Whether *note*'s day *at* holds every word *prev*'s day *key* has of
-    its own: each title, text or comments it holds that is not its series'
-    (day_as_kept). The series' own words are not the day's -- the note's
-    renamed series held a day's text, and it was kept as if lost."""
-    theirs, mine = day_as_kept(prev, key), day_as_kept(note, at)
-    return all((theirs.get(word) or "") in ((prev.get(word) or ""), (mine.get(word) or ""))
-               for word in DAY_WORDS)
+def _words_added(note, overrides, at, prev, key):
+    """*overrides*' edit of *at* with the words *prev*'s day *key* has of its
+    own -- not its series' (day_as_kept) -- and the day lacks, added after
+    its own: a title and text to its text, comments to its comments. Kept in
+    the copy, they were lost by its one slot and read again by date (round 12)."""
+    mine, theirs = day_as_kept(dict(note, overrides=overrides), at), day_as_kept(prev, key)
+    lacked = {word: str(theirs.get(word) or "") for word in DAY_WORDS
+              if (theirs.get(word) or "") not in ((prev.get(word) or ""), (mine.get(word) or ""))}
+    edit = dict(overrides.get(at) or {})
+    added = [lacked[word] for word in ("title", "body") if word in lacked]
+    if added:
+        edit["body"] = "\n".join([str(mine.get("body") or "")] * bool(mine.get("body")) + added)
+    if "comments" in lacked:
+        edit["comments"] = "\n".join(
+            [str(mine.get("comments") or "")] * bool(mine.get("comments")) + [lacked["comments"]])
+    return edit
 
 
 def _copy_days_placed(note, prev, moved):
     """*note*'s days' edits with *prev*'s put in on the dates the note draws
-    their days (*moved*, the copy's moves taken) -- not where it deleted the
-    day or wrote words of its own; an edit with none takes the copy's, its
-    look kept. Returns those edits, and the copy's whose words no day took,
-    by the date each wanted (its own, when another wants that date too)."""
+    their days (*moved*, the copy's moves taken), not where it deleted the
+    day. An edit with no words of its own takes the copy's, its look kept;
+    one with words gets the copy's it lacks added after them."""
     mine = note.get("overrides") or {}
     overrides = dict(mine)
     deleted = set(note.get("exceptions") or [])
@@ -394,14 +398,14 @@ def _copy_days_placed(note, prev, moved):
             rank = 2 if key in undrawn else 0 if at == day else 1
             wanted.append((not day_has_words(prev, key), rank, at, key, patch))
     # Two of the copy's edits for one date: the one with words goes in, then
-    # the one its day is drawn on there; the other's words stay in the copy.
+    # the one its day is drawn on there; the other's words go after them.
     # A day moved onto a day off the schedule wrote one (round eleven).
-    taken, kept = set(), {}
+    taken = set()
     for no_words, _rank, at, key, patch in sorted(wanted, key=lambda want: want[:3]):
         look = mine.get(at)
         if at in taken or (look is not None and not no_words and day_has_words(note, at)):
-            if not no_words and (at in taken or not _own_words_held(prev, key, note, at)):
-                kept.setdefault(at if at not in kept else key, copy.deepcopy(patch))
+            if not no_words:
+                overrides[at] = _words_added(note, overrides, at, prev, key)
             taken.add(at)
             continue
         taken.add(at)
@@ -411,7 +415,7 @@ def _copy_days_placed(note, prev, moved):
             look = look if isinstance(look, dict) else {}
             overrides[at] = dict(copy.deepcopy(patch),
                                  **{key: look[key] for key in _DAY_LOOK if key in look})
-    return overrides, kept
+    return overrides
 
 
 def _days_back_from_copy(note):
