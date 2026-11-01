@@ -3740,13 +3740,15 @@ def _t10_aside(note):
 # What the note wrote still wins: its deletion, and its own words as they are
 # -- the copy's for that day are set aside, to be a note of their own on that
 # date (round 15, the owner's choice: added to the day's, rounds 11 to 14 read
-# them four ways, each leaving a case).
+# them four ways, each leaving a case; round 21, the owner's choice: for a day
+# deleted too, the phone's older build having shown it blank).
 _t10_gone = _t10({"exceptions": ["2026-11-09"]}, _t10_copy_moved)
 _t10_own = _t10({"moved": {"2026-11-09": "2026-11-10"},
                  "overrides": {"2026-11-10": {"body": "Swim instead"}}})
 check("a day the note deleted keeps the note's; one it wrote words for keeps them as they are, the "
       "copy's set aside for that date (%s, %s)" % (_t10_own["overrides"], _t10_aside(_t10_own)),
-      "Dentist" not in json.dumps(_t10_gone) and _t10_gone["exceptions"] == ["2026-11-09"]
+      "Dentist" not in json.dumps(_t10_gone.get("overrides")) and _t10_gone["exceptions"] == ["2026-11-09"]
+      and _t10_aside(_t10_gone) == [("2026-11-10", "Dentist 3pm")]
       and _t10_own["overrides"] == {"2026-11-10": {"body": "Swim instead"}}
       and _t10_aside(_t10_own) == [("2026-11-10", "Dentist 3pm")])
 
@@ -4083,6 +4085,18 @@ check("two moves onto one date are listed once, by the banner's count and in His
 check("of two moves onto one date, a read keeps the one the calendar draws (%s)"
       % _model_mod.normalize_note(copy_mod.deepcopy(_t19_two))["moved"],
       _model_mod.normalize_note(copy_mod.deepcopy(_t19_two))["moved"] == {"2026-12-14": "2026-12-10"})
+# Round 21 (the owner's choice). A day the note deleted stays deleted, but the
+# copy's words for it are set aside, not dropped: the phone's 0.13.0 showed
+# such a day blank, its words in the copy alone, and the install erased them.
+_t21_hidden = _model_mod.normalize_note({
+    "id": 47, "title": "Gym", "body": "x", "date": "2026-11-02", "recurrence": {"freq": "weekly"},
+    "exceptions": ["2026-11-09"],
+    "_prev": {"title": "Gym", "body": "x", "comments": "", "formatting": [], "paragraphs": [],
+              "date": "2026-11-02", "recurrence": {"freq": "weekly"}, "exceptions": [], "moved": {},
+              "overrides": {"2026-11-09": {"body": "Hidden words"}}}})
+check("a day the note deleted stays deleted, and the copy's words for it are set aside, not dropped (%s)"
+      % _t10_aside(_t21_hidden),
+      "2026-11-09" in _t21_hidden["exceptions"] and _t10_aside(_t21_hidden) == [("2026-11-09", "Hidden words")])
 # ...and a copy holding the series as the note does, its weekday lit and the
 # note's not, is spent: compared as stored, Restore previous stayed offered
 # for nothing, and the next turn-off brought back an old agenda.

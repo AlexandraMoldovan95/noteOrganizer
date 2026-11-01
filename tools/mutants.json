@@ -14204,5 +14204,23 @@
       "test_data_safety"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "DR185",
+    "about": "a copy's words for a day the note deleted are dropped: the phone's older build showed that day blank, and the words are in no file",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "        if not _own_words_held(prev, key, note, key):\n            aside.append(_aside_entry(prev, key, key))\n",
+        "replace": "        pass\n"
+      }
+    ],
+    "must_fail": [
+      "a day the note deleted stays deleted, and the copy's words for it are set aside"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
   }
 ]

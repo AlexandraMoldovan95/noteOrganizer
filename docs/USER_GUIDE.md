@@ -799,8 +799,10 @@ turn-off waits, and picking the repeat again puts the series back as it was.
 
 A note named after a series with "(earlier text)" can appear on one of its days. It holds words
 an older copy of the series kept for that day, when the day has words of its own by now — after
-the repeat came back, or a backup's version replaced the note. The day keeps its own words, and
-the older ones become this separate note on that date, so neither is lost. The app says so when
+the repeat came back, or a backup's version replaced the note — or when you deleted that day
+while those words were kept only in the copy (the phone's older version showed such a day
+blank). The day keeps its own words, or stays deleted, and the older ones become this separate
+note on that date, so nothing is lost. The app says so when
 it makes one; delete it once you no longer need it.
 
 ### Repeating notes in the list

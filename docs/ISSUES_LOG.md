@@ -3656,6 +3656,12 @@ the schedule. `normalize_note` now keeps the move whose own date the rule gives
 (`_rule_days_among`, asked only of dates two moves land on), as the phone's `cleanMoves` does;
 mutant DR184.
 
+**Round twenty-one (the phone's), the owner's call:** a day the note deleted won over the
+copy's words for it, which were dropped (round ten's rule). But the phone's 0.13.0, turned off
+and on as it was, showed such a day blank, its words in the copy alone: deleting a day that
+looked empty erased words the person never saw. Now the day stays deleted and the copy's words
+for it are set aside, a note "(earlier text)" (`_copy_days_placed`); mutant DR185.
+
 **Takeaway:** a grade is about the road a person takes: a crash an upgrade can reach is not low
 because this build alone makes it rarely.
 

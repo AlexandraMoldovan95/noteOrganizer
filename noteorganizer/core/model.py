@@ -505,7 +505,7 @@ def _copy_days_placed(note, prev, moved):
     their days (*moved*, the copy's moves taken), not where it deleted the
     day; an edit with no words of its own takes the copy's, its look kept.
     Returns those edits, and the copy's days whose words a day holding words
-    lacks, set aside (_aside_entry)."""
+    lacks, or the note deleted, set aside (_aside_entry)."""
     mine = note.get("overrides") or {}
     overrides = dict(mine)
     deleted = set(note.get("exceptions") or [])
@@ -516,17 +516,25 @@ def _copy_days_placed(note, prev, moved):
     # its day left or it deleted -- stays on its date, as the app keys one.
     undrawn = set(off_schedule_days(prev)) | {
         day for day in prev.get("exceptions") or [] if day not in came}
-    wanted = []
+    wanted, gone = [], []
     for key, patch in (prev.get("overrides") or {}).items():
         day = key if key in undrawn else came.get(key, key)
         if day not in deleted:
             at = key if key in undrawn else moved.get(day, day)
             rank = 2 if key in undrawn else 0 if at == day else 1
             wanted.append((not day_has_words(prev, key), rank, at, key, patch))
+        elif day_has_words(prev, key):
+            gone.append(key)
     # Two of the copy's edits for one date: the one with words goes in, then
     # the one its day is drawn on there; the other is set aside. A day moved
     # onto a day off the schedule wrote one (round eleven).
     taken, aside = set(), []
+    # A day the note deleted stays deleted, but the copy's words for it are
+    # set aside, not dropped: the phone's older build showed such a day blank,
+    # its words in the copy alone (the owner's choice, round 21).
+    for key in sorted(gone):
+        if not _own_words_held(prev, key, note, key):
+            aside.append(_aside_entry(prev, key, key))
     for no_words, _rank, at, key, patch in sorted(wanted, key=lambda want: want[:3]):
         look = mine.get(at)
         if at in taken or (look is not None and not no_words and day_has_words(note, at)):
