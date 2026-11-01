@@ -8555,6 +8555,38 @@ _pw_none = body()
 check(f'Ctrl+V over list items puts in what its route reads, and a paste of nothing '
       f'changes nothing ({_pw_word!r}; {_pw_none!r})',
       _pw_word == '1. one\n2. Hello world\n3. three\n4. four' and _pw_none == _LD_START)
+# ...and a copy beginning with an item, a tab or rows further on, is no table
+# route's: its own marker takes the covered one's place, "2. 3. three"
+# (round 8).
+set_body('3. three' + chr(10) + 'Price:' + chr(9) + '5 EUR')
+app.body_text.tag_add('sel', '1.0', 'end-1c')
+_stub_clipboard(loopback=True)
+app._copy_formatted()
+_ld_list('2.3', '3.3')
+_ld_virtual('<<Paste>>')
+_pw_tab = body()
+check(f'an item with a tab further on, pasted over an item, takes its marker\'s place ({_pw_tab!r})',
+      _pw_tab.startswith('1. one\n2. three\nPrice:\t5 EUR\n'))
+# With nothing selected, at an item's marker end -- where Enter in a list
+# leaves the caret -- a paste bringing its own marker takes that one's place,
+# the item's depth kept ("3. 1. Kiwi"), or, with words after the caret and a
+# break of its own, goes in before the item (round 8).
+_ld_list('3.3')
+_stub_clipboard()
+_ld_clip('9. new\n')
+_ld_virtual('<<Paste>>')
+_pm_before = body()
+_ld_list('4.3')
+app.body_text.delete('4.3', '4.end')
+app._set_paragraph_indent(4, 1)
+app.body_text.mark_set('insert', '4.end')
+_ld_clip('1. Kiwi')
+_ld_virtual('<<Paste>>')
+_pm_empty = (body(), app._paragraph_indent_of(app.body_text, 4))
+check(f'a paste bringing its own marker at an item\'s marker end takes its place, or goes in '
+      f'before the item ({_pm_before!r}; {_pm_empty})',
+      _pm_before == '1. one\n2. two\n3. new\n4. three\n5. four'
+      and _pm_empty == ('1. one\n2. two\n3. three\n1. Kiwi', 1))
 _stub_clipboard()
 set_body('')
 

@@ -9889,23 +9889,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _paste_brings(self):
         """The text Ctrl+V is about to put in, read as its routes read the
         clipboard -- our own copy's, another program's HTML as the rich route
-        reads it, else the clipboard's text -- or None when it holds no text.
-        Read off the plain text alone, a Word paragraph's line break, which
-        the rich route drops, took the next item's ("2. Hello world3. three",
-        the lows wave's verification, round 7)."""
+        reads it, else the clipboard's text -- and whether the rich route
+        takes it; (None, False) when it holds no text. Read off the plain
+        text alone, a Word paragraph's line break, which the rich route
+        drops, took the next item's ("2. Hello world3. three", the lows
+        wave's verification, round 7)."""
         markup = clipboard.read_html()
         if markup:
             cut = {}
             text, spans, paragraphs = html_to_note(markup, report=cut)
             mine = getattr(self, "_formatted_clip", None)
             if mine and not any(cut.values()) and markup == mine[3]:
-                return mine[0]
+                return mine[0], True
             if text:
-                return text if spans or paragraphs else reflow_wrapped(text)
+                return (text if spans or paragraphs else reflow_wrapped(text)), True
         try:
-            return self.body_text.clipboard_get()
+            return self.body_text.clipboard_get(), False
         except tk.TclError:
-            return None
+            return None, False
 
     def _paste_reaching_list(self):
         """Ctrl+V over a selection that reaches a list, as one unit: the
@@ -9913,10 +9914,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         paste -- the app's own (_on_body_paste) or, where that leaves it to
         Tk, the clipboard's text as Tk's own paste puts it in -- and the
         lists renumbered. Left to Tk, "zz" over items 2 and 3 gave
-        "zz4. four"."""
+        "zz4. four". With nothing selected, _paste_at_marker."""
         b = self.body_text
-        if getattr(self, "_grid_sel", None) is not None or not b.tag_ranges("sel"):
+        if getattr(self, "_grid_sel", None) is not None:
             return None
+        if not b.tag_ranges("sel"):
+            return self._paste_at_marker()
         sel = (b.index("sel.first"), b.index("sel.last"))
         # Begun at an item's marker, the selection is the list's even within
         # its line: a paste bringing its own marker takes that one's place.
@@ -9924,31 +9927,80 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         at_marker = bool(kind) and len(b.get(f"{sel[0]} linestart", sel[0])) <= len(marker)
         if self._list_range_for(sel, True) is None and not at_marker:
             return None
-        brings = self._paste_brings()
+        brings, rich = self._paste_brings()
         if not brings:
             # Nothing to paste -- a picture, a file: the selection stays, as
             # under Tk's own paste (the lows wave's verification, round 7).
             return "break"
-        # Rows go to the table routes, which place them themselves.
-        pasted = None if "\t" in brings or any(
-            is_table_row(line) for line in brings.split("\n")) else brings
+        # What a table route places itself -- a spreadsheet's cells, rows at
+        # the paste's start -- keeps the typing rule; any other paste's first
+        # line goes in first, marker and all. Rows anywhere kept the covered
+        # marker: "2. 3. three" (round 8).
+        pasted = None if (("\t" in brings and not rich)
+                          or is_table_row(brings.split("\n", 1)[0])) else brings
         if self._list_range_for(sel, True, pasted) is None:
             return None
         self._undo_atom_begin()
         try:
             self._delete_selection_reaching_list(pasted)
-            if self._on_body_paste() != "break":
-                try:
-                    text, cut = self._cap_paste(b.clipboard_get())
-                    b.insert("insert", text)
-                    if cut:
-                        self._say_if_paste_was_cut({"text_cut": True},
-                                                   in_body=True)
-                except tk.TclError:
-                    pass
-            self._resync_list_tags()
-            self._renumber_lists()
-            b.see("insert")
+            self._paste_renumbered()
+        finally:
+            self._undo_atom_end()
+        self._schedule_autosave()
+        self.update_word_count()
+        return "break"
+
+    def _paste_renumbered(self, then=None):
+        """The paste made at the caret -- the app's own (_on_body_paste) or,
+        where that leaves it to Tk, the clipboard's text as Tk's own paste
+        puts it in -- *then* run, and the lists renumbered: inside the
+        caller's unit."""
+        b = self.body_text
+        if self._on_body_paste() != "break":
+            try:
+                text, cut = self._cap_paste(b.clipboard_get())
+                b.insert("insert", text)
+                if cut:
+                    self._say_if_paste_was_cut({"text_cut": True}, in_body=True)
+            except tk.TclError:
+                pass
+        if then is not None:
+            then()
+        self._resync_list_tags()
+        self._renumber_lists()
+        b.see("insert")
+
+    def _paste_at_marker(self):
+        """Ctrl+V with nothing selected at an item's marker end -- where Enter
+        in a list leaves the caret -- of a paste bringing its own marker: the
+        item's marker stays and the paste's goes, so the line keeps its tags
+        and its depth; with words after the caret and a line break of its own,
+        the paste goes in before the item. Kept, a copied item pasted into a
+        new one read "3. 1. Kiwi" (the lows wave's verification, round 8)."""
+        b = self.body_text
+        kind, marker, rest = parse_list_marker(b.get("insert linestart", "insert lineend"))
+        if not kind or len(b.get("insert linestart", "insert")) != len(marker):
+            return None
+        brings, rich = self._paste_brings()
+        head = (brings or "").split("\n", 1)[0]
+        own = parse_list_marker(head)[1]
+        if not own or ("\t" in brings and not rich) or is_table_row(head):
+            return None
+        at = b.index("insert")
+
+        def drop_own():
+            # Of one kind, the paste's marker goes; of another, the item's.
+            if parse_list_marker(own)[0] != kind:
+                b.delete(f"{at} linestart", at)
+            elif b.get(at, f"{at}+{len(own)}c") == own:
+                b.delete(at, f"{at}+{len(own)}c")
+
+        before = bool(rest.strip()) and brings.endswith("\n")
+        self._undo_atom_begin()
+        try:
+            if before:
+                b.mark_set("insert", f"{at} linestart")
+            self._paste_renumbered(None if before else drop_own)
         finally:
             self._undo_atom_end()
         self._schedule_autosave()

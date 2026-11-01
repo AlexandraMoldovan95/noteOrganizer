@@ -14739,7 +14739,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        pasted = None if \"\\t\" in brings or any(\n            is_table_row(line) for line in brings.split(\"\\n\")) else brings\n",
+        "find": "        pasted = None if ((\"\\t\" in brings and not rich)\n                          or is_table_row(brings.split(\"\\n\", 1)[0])) else brings\n",
         "replace": "        pasted = None\n"
       }
     ],
@@ -14818,6 +14818,78 @@
     ],
     "must_fail": [
       "a whole item pasted over item 2's words: renumbered"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR219",
+    "about": "any tab or row in a paste over list items keeps the typing rule: an item copied with a tab further on reads '2. 3. three'",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        pasted = None if ((\"\\t\" in brings and not rich)\n                          or is_table_row(brings.split(\"\\n\", 1)[0])) else brings\n",
+        "replace": "        pasted = None if \"\\t\" in brings else brings\n"
+      }
+    ],
+    "must_fail": [
+      "an item with a tab further on, pasted over an item, takes its marker's place"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR220",
+    "about": "Ctrl+V with nothing selected at an item's marker end is Tk's own again: '3. 1. Kiwi'",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if not b.tag_ranges(\"sel\"):\n            return self._paste_at_marker()\n",
+        "replace": "        if not b.tag_ranges(\"sel\"):\n            return None\n"
+      }
+    ],
+    "must_fail": [
+      "a paste bringing its own marker at an item's marker end takes its place"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR221",
+    "about": "a paste bringing its own marker into an empty item keeps both markers",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            elif b.get(at, f\"{at}+{len(own)}c\") == own:\n",
+        "replace": "            elif False:\n"
+      }
+    ],
+    "must_fail": [
+      "a paste bringing its own marker at an item's marker end takes its place"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR222",
+    "about": "a whole item with its break pasted at an item's marker end, words after it, takes its marker: the item's words lose theirs",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        before = bool(rest.strip()) and brings.endswith(\"\\n\")\n",
+        "replace": "        before = False\n"
+      }
+    ],
+    "must_fail": [
+      "a paste bringing its own marker at an item's marker end takes its place"
     ],
     "suites": [
       "qa1"
