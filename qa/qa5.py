@@ -2128,6 +2128,75 @@ check(f"a day the old version moved or only coloured, its own text in the copy a
       f"that text where it is drawn, its colour kept ({_tb_seen})",
       _tb_seen == [('DAY 14 OWN TEXT, room 4B', ''), ('DAY 14 OWN TEXT, room 4B', '#ff6b6b')]
       and 'DAY 14 OWN TEXT' in _tb_disk)
+# ...and a day holding words of its own keeps them as they are: the copy's
+# for it become a note of their own on that date, said on the status line,
+# made once (round 15; added to the day, four rounds read them four ways).
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Standup', 'body': 'SERIES TEXT',
+                                'date': '2026-09-07', 'recurrence': {'freq': 'weekly'},
+                                'overrides': {'2026-09-14': {'body': 'Moved to room 2'}},
+                                '_prev': dict(_tb_copy)}),
+             NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+app.save_notes()
+_sa_line = str(app.status_lbl.cget('text'))
+app.save_notes()
+_sa_made = [(n.get('title'), n.get('body'), n.get('date')) for n in app.notes if n['id'] > 2]
+with open(NO.DATA_FILE, encoding='utf-8') as _f:
+    _sa_disk = _json5g.load(_f)
+check(f"a day with words of its own keeps them, and the copy's words for it become one note of "
+      f"their own on that date ({_sa_made}; {_sa_line!r})",
+      _sa_made == [('Standup (earlier text)', 'DAY 14 OWN TEXT, room 4B', '2026-09-14')]
+      and all(n.get('created') and n.get('updated') for n in app.notes if n['id'] > 2)
+      and NO.effective_note(app.find_note(1), '2026-09-14').get('body') == 'Moved to room 2'
+      and 'Standup (earlier text)' in [n.get('title') for n in app.notes_on_date('2026-09-14')]
+      and 'kept as notes of their own' in _sa_line
+      and not any('_set_aside' in n for n in _sa_disk)
+      and len(_sa_disk) == 3)
+# ...and a copy of another series than the note repeats as now, replaced by
+# the next turn-off: its days with words were in it alone, and the new copy
+# put them in no file (round 15). Made notes of their own first.
+_ob_seen = []
+for _ob_view in (None,):    # the series' view: on a day, a turn-off is put back
+    _ro_fixture()
+    app.notes = [NO.normalize_note(dict(app.find_note(1), _prev={
+                     'title': 'Standup', 'body': 'SERIES TEXT', 'date': '2026-09-08',
+                     'recurrence': {'freq': 'weekly'},
+                     'overrides': {'2026-09-15': {'body': 'TUESDAY 15 OWN TEXT'}}})),
+                 app.find_note(2)]
+    app.save_notes()
+    _ob_waits = (app.find_note(1).get('_prev') or {}).get('overrides')
+    _ro_off(_ob_view)
+    with open(NO.DATA_FILE, encoding='utf-8') as _f:
+        _ob_disk = _f.read()
+    _ob_seen.append((_ob_view, _ob_waits == {'2026-09-15': {'body': 'TUESDAY 15 OWN TEXT'}},
+                     [(n.get('title'), n.get('body'), n.get('date')) for n in app.notes if n['id'] > 2],
+                     'TUESDAY' in _json5g.dumps(app.find_note(1).get('_prev')),
+                     _ob_disk.count('TUESDAY 15 OWN TEXT')))
+check(f"a turn-off over another series' copy makes that copy's days with words notes of their "
+      f"own first ({_ob_seen})",
+      [seen[1:] for seen in _ob_seen] == [
+          (True, [('Standup (earlier text)', 'TUESDAY 15 OWN TEXT', '2026-09-15')], False, 1)])
+# A day moved onto a Tuesday, the repeat then made daily: the Tuesday is the
+# rule's own day, and the moved day was drawn nowhere until the next start
+# (round 15). The save sends it home with its words.
+_ro_fixture()
+_mh = app.find_note(1)
+_mh['moved'] = {'2026-09-14': '2026-09-15'}
+_mh['overrides']['2026-09-15'] = _mh['overrides'].pop('2026-09-14')
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.rec_freq_var.set(NO.FREQ_LABELS['daily']); app.on_recurrence_changed(); app.update()
+app._themed_dialog = lambda *a, **k: True
+try:
+    app.save_current_note(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+_mh = app.find_note(1)
+_mh_seen = (_mh.get('moved'), NO.effective_note(_mh, '2026-09-14').get('body'),
+            NO.effective_note(_mh, '2026-09-15').get('body').rstrip('\n'))
+check(f"a day moved onto a date the new rule gives goes home with its words at the save ({_mh_seen})",
+      _mh['recurrence']['freq'] == 'daily'
+      and _mh_seen == ({}, 'DAY TEXT: room 9', 'SERIES TEXT'))
 
 # ---- "THIS OCCURRENCE ONLY" KEEPS WHAT A DAY CANNOT HOLD ----
 # The day's text goes to the day; a file attached and a tick made in the

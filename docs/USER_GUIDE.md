@@ -785,6 +785,7 @@ its own date, with that day's title, text, comments, category and colour (the ch
 attached files stay with the series, which they belong to); **Move to the Trash** does the same
 but straight into Recently deleted, from where it can be restored; and **Leave it** changes
 nothing. Put the rule back the way it was and those days are simply part of the series again.
+A day you moved onto a date the new rule lands on anyway goes back to its own date, with its text.
 
 Turning the repeat off ("Does not repeat", in the whole series) ends every day's own edits along
 with the series — but none of their text is lost. When any day had text of its own, the note as
@@ -792,6 +793,12 @@ it was, repeat and days included, becomes its rescue copy, and **↩ Restore pre
 repeating note back whole. On such a series the turn-off itself is saved when you leave the note
 or press Save: until then everything else you change goes on saving, the status line says the
 turn-off waits, and picking the repeat again puts the series back as it was.
+
+A note named after a series with "(earlier text)" can appear on one of its days. It holds words
+an older copy of the series kept for that day, when the day has words of its own by now — after
+the repeat came back, or a backup's version replaced the note. The day keeps its own words, and
+the older ones become this separate note on that date, so neither is lost. The app says so when
+it makes one; delete it once you no longer need it.
 
 ### Repeating notes in the list
 

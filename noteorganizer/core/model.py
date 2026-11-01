@@ -21,8 +21,7 @@ from datetime import datetime
 from .categories import CATEGORY_COLORS
 from .formatting import (normalize_formatting, normalize_paragraphs,
                          clamp_spans_per_line, strip_list_markers)
-from .tables import (checkbox_state, find_blocks, is_separator_row, is_table_row, split_row,
-                     with_caret_line)
+from .tables import with_caret_line
 from .recurrence import (
     normalize_recurrence,
     parse_date,
@@ -34,6 +33,7 @@ from .recurrence import (
     day_as_kept,
     is_recurring,
     off_schedule_days,
+    _rule_days_among,
 )
 
 # ---- Note schema + one-time cleanup ----
@@ -250,11 +250,25 @@ DAY_WORDS = ("title", "body", "comments")
 _DAY_LOOK = tuple(key for key in OVERRIDABLE_FIELDS if key not in DAY_WORDS)
 
 
+def _same_word(word, a, b):
+    """Whether two of a day's words say the same: a title without the spaces
+    around it, as day_matches_series reads one; a text with the line under a
+    closing table on both sides or neither (with_caret_line) -- a copy the
+    phone made keeps its series' text as typed and its days with the line,
+    and a colour-only day read as words (round 15)."""
+    a, b = str(a or ""), str(b or "")
+    if word == "title":
+        return a.strip() == b.strip()
+    if word == "body":
+        return with_caret_line(a) == with_caret_line(b)
+    return a == b
+
+
 def day_has_words(note, day):
     """Whether *note*'s edit of *day* holds a title, text or comments of its
     own -- what the day holds (day_as_kept), not what it shows."""
     shown = day_as_kept(note, day)
-    return any((shown.get(key) or "") != (note.get(key) or "") for key in DAY_WORDS)
+    return any(not _same_word(key, shown.get(key), note.get(key)) for key in DAY_WORDS)
 
 
 def days_hold_own_text(note):
@@ -319,21 +333,24 @@ def _dates_held(note):
 def spend_series_days(note):
     """Once the note repeats as its series' copy again, the copy's days come
     back into the note and are spent from the copy. A copy's day is dropped
-    only where the note deleted that day; words of its own the day already
-    holding words lacks are added after them. ISSUES_LOG: "Round ten: the
-    days a date held without a word", and rounds eleven and twelve."""
+    only where the note deleted that day; one whose words a day already
+    holding words lacks is set aside, to be a note of its own (_set_aside).
+    ISSUES_LOG: "Round ten: the days a date held without a word", and round
+    fifteen: four ways of adding its words to the day each left a case."""
     if not copy_holds_this_series(note):
         return
     prev = note["_prev"]
     held = _dates_held(note)
     moved = dict(note.get("moved") or {})
     moved.update(_copy_moves_taken(prev.get("moved") or {}, held, len(moved)))
-    overrides = _copy_days_placed(note, prev, moved)
+    overrides, aside = _copy_days_placed(note, prev, moved)
     exceptions = set(note.get("exceptions") or [])
     exceptions.update(day for day in prev.get("exceptions") or [] if day not in held)
     note["overrides"], note["exceptions"], note["moved"] = overrides, sorted(exceptions), moved
     for key in DAY_FIELDS:
         prev.pop(key, None)
+    if aside:
+        note["_set_aside"] = (note.get("_set_aside") or []) + aside
 
 
 def _copy_moves_taken(theirs, held, room):
@@ -358,83 +375,79 @@ def _copy_moves_taken(theirs, held, room):
     return taken
 
 
-def _line_key(line):
-    """A line as the take-back compares it: a table's row by its cells'
-    words -- its padding and a box's tick left out, so a re-padded column
-    or a ticked box is the same row -- a separator as any, else as it is."""
-    if not is_table_row(line):
-        return line
-    if is_separator_row(line):
-        return ("separator",)
-    return ("row",) + tuple("[ ]" if checkbox_state(cell) is not None else cell.strip()
-                            for cell in split_row(line))
+def _own_words_held(prev, key, note, at):
+    """Whether *note*'s day *at* holds every word *prev*'s day *key* has of
+    its own: each title, text or comments it holds unlike its series'
+    (day_as_kept, _same_word) -- the series' words are not the day's."""
+    theirs, mine = day_as_kept(prev, key), day_as_kept(note, at)
+    return all(_same_word(word, theirs.get(word), prev.get(word))
+               or _same_word(word, theirs.get(word), mine.get(word)) for word in DAY_WORDS)
 
 
-def _lines_lacked(own, have):
-    """The lines of *own* that *have* lacks, in order: those outside the
-    longest run the two share in order (_line_key), a table among them with
-    its header and separator; blank lines alone add nothing. Added whole
-    after the first difference, a day corrected in its middle showed its
-    old text again under it (round 14)."""
-    lines, held = own.split("\n"), have.split("\n")
-    a, b = [_line_key(line) for line in lines], [_line_key(line) for line in held]
-    if len(a) * len(b) > 250000:
-        kept = set(b)
-        lacked = [i for i, key in enumerate(a) if key not in kept]
-    else:
-        # The longest common subsequence, from a table of lengths built from the end.
-        n, m = len(a), len(b)
-        size = [[0] * (m + 1) for _ in range(n + 1)]
-        for i in range(n - 1, -1, -1):
-            for j in range(m - 1, -1, -1):
-                size[i][j] = size[i + 1][j + 1] + 1 if a[i] == b[j] else max(size[i + 1][j], size[i][j + 1])
-        lacked, i, j = [], 0, 0
-        while i < n:
-            if j < m and a[i] == b[j]:
-                i, j = i + 1, j + 1
-            elif j < m and size[i][j + 1] >= size[i + 1][j]:
-                j += 1
-            else:
-                lacked.append(i)
-                i += 1
-    wanted = {i for i in lacked if lines[i].strip()}
-    for first, last in find_blocks(own):
-        if any(first <= i <= last for i in wanted):
-            wanted.add(first)
-            if first < last and is_separator_row(lines[first + 1]):
-                wanted.add(first + 1)
-    return [lines[i] for i in sorted(wanted)]
+def _aside_entry(prev, key, at):
+    """*prev*'s day *key*, drawn on *at*, as the copy kept it: what a note of
+    its own is made of (notes_set_aside)."""
+    kept = day_as_kept(prev, key)
+    entry = {word: str(kept.get(word) or "") for word in OVERRIDABLE_FIELDS}
+    entry["day"] = at
+    return entry
 
 
-def _words_added(note, overrides, at, prev, key):
-    """*overrides*' edit of *at* with the lines *prev*'s day *key* holds of
-    its own -- not its series' (day_as_kept) -- and the day lacks, added
-    after its own: a title's and text's to its text, comments' to its
-    comments. Kept in the copy, they were lost by its one slot (round 12);
-    added whole, a day grown from the copy's text showed it twice (round 13)."""
-    mine, theirs = day_as_kept(dict(note, overrides=overrides), at), day_as_kept(prev, key)
-    edit = dict(overrides.get(at) or {})
-    for field, words in (("body", ("title", "body")), ("comments", ("comments",))):
-        added = []
-        for word in words:
-            own = str(theirs.get(word) or "")
-            if own not in (str(prev.get(word) or ""), str(mine.get(word) or "")):
-                added += _lines_lacked(own, "\n".join(
-                    [str(mine.get(field) or ""), str(mine.get("title") or "")] + added))
-        if added:
-            # Under a table the editor's line first, as a stored body has it:
-            # glued on, a table added under one read as one table (round 13).
-            shaped = with_caret_line if field == "body" else str
-            base = shaped(str(mine.get(field) or ""))
-            edit[field] = shaped("\n".join([base] * bool(base) + added))
-    return edit
+def copy_days_set_aside(note):
+    """Before *note*'s rescue copy is replaced: the days with words of their
+    own of a series' copy the note no longer repeats as, set aside to be
+    notes of their own. The copy was the only place they were kept, and the
+    next turn-off or big delete erased them (round 15)."""
+    prev = note.get("_prev")
+    if not _series_own_copy(prev) or _repeats_as(note, prev):
+        return
+    aside = [_aside_entry(prev, key, key) for key in sorted(prev.get("overrides") or {})
+             if day_has_words(prev, key) and not (
+                 key in (note.get("overrides") or {}) and _own_words_held(prev, key, note, key))]
+    if aside:
+        note["_set_aside"] = (note.get("_set_aside") or []) + aside
+    for key in DAY_FIELDS:
+        prev.pop(key, None)
+
+
+def notes_set_aside(note):
+    """The notes made of *note*'s days set aside (_set_aside), each on its
+    date with its words, look and the series' title marked "(earlier text)",
+    taken off the note. Shown on its day, they were read four ways in four
+    rounds, each leaving a case; a note of its own is seen and kept as it is
+    (round 15, the owner's choice)."""
+    made = []
+    for entry in note.pop("_set_aside", None) or []:
+        title = entry.get("title") or note.get("title") or ""
+        made.append({"title": (title + " (earlier text)").strip(), "body": entry.get("body", ""),
+                     "comments": entry.get("comments", ""),
+                     "category": entry.get("category") or note.get("category") or "",
+                     "color": entry.get("color", ""), "date": entry.get("day", "")})
+    return made
+
+
+def _shaped_aside(entries):
+    """A note's days set aside, as a load reads them: each with a real date,
+    written as the calendar keys one, and a word, every field text."""
+    kept = []
+    for entry in entries if isinstance(entries, list) else []:
+        when = parse_date(entry.get("day")) if isinstance(entry, dict) else None
+        if when is None:
+            continue
+        shaped = {key: entry.get(key) if isinstance(entry.get(key), str) else ""
+                  for key in OVERRIDABLE_FIELDS}
+        shaped["day"] = format_date(when)
+        if any(shaped[word].strip() for word in DAY_WORDS):
+            kept.append(shaped)
+    return kept
 
 
 def _copy_days_placed(note, prev, moved):
     """*note*'s days' edits with *prev*'s put in on the dates the note draws
     their days (*moved*, the copy's moves taken), not where it deleted the
-    day. An edit with no words of its own takes the copy's, its look kept;
-    one with words gets the copy's it lacks added after them."""
+    day; an edit with no words of its own takes the copy's, its look kept.
+    Returns those edits, and the copy's days whose words a day holding words
+    lacks, set aside (_aside_entry)."""
     mine = note.get("overrides") or {}
     overrides = dict(mine)
     deleted = set(note.get("exceptions") or [])
@@ -453,14 +466,14 @@ def _copy_days_placed(note, prev, moved):
             rank = 2 if key in undrawn else 0 if at == day else 1
             wanted.append((not day_has_words(prev, key), rank, at, key, patch))
     # Two of the copy's edits for one date: the one with words goes in, then
-    # the one its day is drawn on there; the other's words go after them.
-    # A day moved onto a day off the schedule wrote one (round eleven).
-    taken = set()
+    # the one its day is drawn on there; the other is set aside. A day moved
+    # onto a day off the schedule wrote one (round eleven).
+    taken, aside = set(), []
     for no_words, _rank, at, key, patch in sorted(wanted, key=lambda want: want[:3]):
         look = mine.get(at)
         if at in taken or (look is not None and not no_words and day_has_words(note, at)):
-            if not no_words:
-                overrides[at] = _words_added(note, overrides, at, prev, key)
+            if not no_words and not _own_words_held(prev, key, dict(note, overrides=overrides), at):
+                aside.append(_aside_entry(prev, key, at))
             taken.add(at)
             continue
         taken.add(at)
@@ -470,7 +483,34 @@ def _copy_days_placed(note, prev, moved):
             look = look if isinstance(look, dict) else {}
             overrides[at] = dict(copy.deepcopy(patch),
                                  **{key: look[key] for key in _DAY_LOOK if key in look})
-    return overrides
+    return overrides, aside
+
+
+def moves_home(note):
+    """Each day of *note* moved onto a date its rule gives by itself -- the
+    rule or its start changed since -- sent home with its words, until none
+    is left: drawn where the rule had a day already, it was drawn nowhere,
+    and a delete there took it. Not off a date whose own day was deleted or
+    moved away. At every read and at every save of the series (round 15)."""
+    moved = note.get("moved")
+    if not moved or not isinstance(moved, dict) or not is_recurring(note):
+        return
+    deleted = set(note.get("exceptions") or [])
+    gives, home = _rule_days_among(note, list(moved.values())), {}
+    while True:
+        more = {orig: new for orig, new in moved.items()
+                if new in gives and new not in deleted and new not in moved}
+        if not more:
+            break
+        for orig in more:
+            del moved[orig]
+        home.update(more)
+    days = note.setdefault("overrides", {})
+    words = {new: days.pop(new) for new in home.values() if new in days}
+    for orig, new in home.items():
+        if new in words and orig not in days:
+            days[orig] = words.pop(new)
+    days.update(words)
 
 
 def _days_back_from_copy(note):
@@ -542,11 +582,15 @@ def apply_shared_update(note, incoming, fields=UPDATABLE_FROM_SHARED):
     # nothing, go with this copy instead of hiding the new series' own.
     if restarted and note.get("exceptions"):
         prev["exceptions"] = copy.deepcopy(note["exceptions"])
+    # The copy this one replaces may hold another series' days alone: set
+    # aside once kept_days_fit has read them (round 15).
+    copy_days_set_aside(note)
     note["_prev"] = prev
     for field in fields:
         note[field] = copy.deepcopy(fresh[field])
     if restarted:
         note["exceptions"] = []
+    moves_home(note)
     note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     return note
 
@@ -1025,7 +1069,7 @@ def normalize_note(note):
         for d, patch in clean["overrides"].items()
         if isinstance(d, str) and parse_date(d) and isinstance(patch, dict)
     }
-
+    moves_home(clean)
 
     # Tags were removed as a feature — drop any leftover "tags" key from
     # notes saved before this cleanup, so old data doesn't keep carrying it
@@ -1101,6 +1145,11 @@ def normalize_note(note):
     # a crash on every subsequent launch.
     clean["color"] = sanitize_color(clean.get("color"))
 
+    # A copy's days set aside, kept until the notebook makes them notes of
+    # their own (notes_set_aside): written to the file meanwhile, not lost.
+    aside = _shaped_aside(note.get("_set_aside"))
+    if aside:
+        clean["_set_aside"] = aside
     _days_back_from_copy(clean)
     return clean
 

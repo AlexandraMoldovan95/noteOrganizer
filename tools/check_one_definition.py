@@ -152,6 +152,9 @@ RULES = [
                 "builds the note a day off its series' schedule becomes; its "
                 "one comparison asks whether the day shows the series' own "
                 "text, the rule load_note applies the formatting by",
+            "notes_set_aside":
+                "builds the notes a series' copy's days set aside become "
+                "(round 15 of the final audit); it compares nothing",
             "editor_state_matches_saved":
                 "the OCCURRENCE branch compares only OVERRIDABLE_FIELDS, "
                 "because an override carries exactly those -- comparing "

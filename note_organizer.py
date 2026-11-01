@@ -381,6 +381,9 @@ from noteorganizer.core.model import (
     kept_days_fit,
     days_hold_own_text,
     spend_series_days,
+    copy_days_set_aside,
+    moves_home,
+    notes_set_aside,
     copy_holds_this_series,
     update_copy,
     comments_kept_by_copy,
@@ -953,6 +956,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._add_box_waiting = {}
         self._waiting_said = {}
         self.notes = self.load_notes()
+        # Said with the start's other news; saved with the first save -- left
+        # unsaved, the next start makes the same notes from the same file.
+        self._set_aside_at_start = self._set_aside_days(say=False)
         self.selected_note_id = None
 
         # User-defined note templates.
@@ -2059,6 +2065,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     "anything looks off, use the newer build."
                 )
 
+        made = getattr(self, "_set_aside_at_start", 0)
+        if made:
+            lines.append(
+                f"Some days of a repeating note had earlier text kept aside, where "
+                f"those days now hold text of their own. It is kept as {made} "
+                f"note{'s' if made != 1 else ''} of {'their' if made != 1 else 'its'} own, "
+                "each on its day, titled with the series' name and \"(earlier text)\".")
+
         if STORAGE_WARNING:
             lines.append("⚠ " + STORAGE_WARNING)
 
@@ -2210,6 +2224,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pass
         self.open_note_in_tab(note)
 
+    def _set_aside_days(self, say=True):
+        """Make notes of their own of the days a series' copy held that a day
+        already holding words could not take (core notes_set_aside), each on
+        its date, and say so (*say*). Returns how many were made."""
+        made = 0
+        stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        for note in list(self.notes):
+            if not note.get("_set_aside"):
+                continue
+            for fresh in notes_set_aside(note):
+                self.notes.append(normalize_note(dict(
+                    fresh, id=max([n["id"] for n in self.notes], default=0) + 1,
+                    created=stamp, updated=stamp)))
+                made += 1
+        if made and say:
+            self.set_status(f"Earlier text of {made} day{'s' if made != 1 else ''} of a "
+                            "repeating note kept as notes of their own")
+        return made
+
     def save_notes(self):
         """Write notes to disk, and say so plainly if it fails.
 
@@ -2218,6 +2251,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         other PCs. core/storage.py does the writing and reports the reason;
         turning that into a dialog is this layer's job.
         """
+        self._set_aside_days()
         ok, exc = core_save_notes(self.notes)
         # Remembered for the close, which must not throw away what only the
         # screen still holds (ISSUES_LOG: "The close that outran a failed save").
@@ -22346,6 +22380,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         turn-off's copy too, whatever series it held, so Restore previous
         brings back the words and the series together (2026-10-28, the
         final audit; another series' copy, round 10)."""
+        # Another series' copy, replaced here, held its days alone: they are
+        # set aside, to be notes of their own (round 15).
+        copy_days_set_aside(note)
         prev = self._whole_note_rescue_copy(note)
         held = getattr(self, "_held_text_rescue", None)
         self._held_text_rescue = None
@@ -22726,6 +22763,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     # The copy's own comments too, when theirs is the larger
                     # loss: two letters cleared after a long comment was
                     # deleted wrote over it (round 8 of the final audit).
+                    if not comments_alone:
+                        copy_days_set_aside(note)
                     note["_prev"] = dict(copy.deepcopy(note["_prev"]), comments=comments_kept_by_copy(
                         note["_prev"].get("comments", ""),
                         note.get("comments", ""))) if comments_alone else {
@@ -22752,8 +22791,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # _write_series_owned.
                 note["attachments"] = [dict(a) for a in self.current_attachments]
                 note["recurrence"] = recurrence
-                # Turned back on as the series its copy holds: the note
-                # holds the days again, and the copy's are spent.
+                # A day moved onto a date the new rule gives goes home now,
+                # not at the next start (moves_home). Turned back on as the
+                # series its copy holds: the note holds the days again.
+                moves_home(note)
                 spend_series_days(note)
                 note["checklist"] = [dict(it) for it in self._get_checklist()]
                 note["updated"] = now

@@ -12477,8 +12477,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "    for key in DAY_FIELDS:\n        prev.pop(key, None)\n",
-        "replace": "    pass\n"
+        "find": "    note[\"overrides\"], note[\"exceptions\"], note[\"moved\"] = overrides, sorted(exceptions), moved\n    for key in DAY_FIELDS:\n        prev.pop(key, None)\n",
+        "replace": "    note[\"overrides\"], note[\"exceptions\"], note[\"moved\"] = overrides, sorted(exceptions), moved\n    pass\n"
       }
     ],
     "must_fail": [
@@ -12889,7 +12889,7 @@
       }
     ],
     "must_fail": [
-      "a day the note deleted keeps the note's; one it wrote words for keeps them first"
+      "a day the note deleted keeps the note's; one it wrote words for keeps them as they are"
     ],
     "suites": [
       "test_data_safety"
@@ -12907,7 +12907,7 @@
       }
     ],
     "must_fail": [
-      "a day the note deleted keeps the note's; one it wrote words for keeps them first",
+      "a day the note deleted keeps the note's; one it wrote words for keeps them as they are",
       "on 300 shapes either app's editor makes, the take-back keeps every word"
     ],
     "suites": [
@@ -13426,34 +13426,38 @@
   },
   {
     "id": "DR143",
-    "about": "the take-back drops the copy's words for a day that holds words already, as round ten did",
+    "about": "the take-back drops the copy's words for a day that holds words already, as round ten did, instead of setting them aside",
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "                overrides[at] = _words_added(note, overrides, at, prev, key)\n",
+        "find": "                aside.append(_aside_entry(prev, key, at))\n",
         "replace": "                pass\n"
       }
     ],
     "must_fail": [
-      "a day coloured before the series' words changed takes the copy's words for it after its own"
+      "a day the note deleted keeps the note's; one it wrote words for keeps them as they are",
+      "a day coloured before the series' words changed keeps its words and look",
+      "on 300 shapes either app's editor makes, the take-back keeps every word",
+      "a day with words of its own keeps them, and the copy's words for it become one note"
     ],
     "suites": [
-      "test_data_safety"
+      "test_data_safety",
+      "qa5"
     ],
     "expect": "killed"
   },
   {
     "id": "DR144",
-    "about": "the take-back weighs a copy's day by all its words, the series' own among them: a day the note holds again gets its series' title added to its text",
+    "about": "the take-back weighs a copy's day by all its words, the series' own among them: a day the note holds again gets a note of earlier text it already holds",
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "            if own not in (str(prev.get(word) or \"\"), str(mine.get(word) or \"\")):\n",
-        "replace": "            if own != str(mine.get(word) or \"\"):\n"
+        "find": "    return all(_same_word(word, theirs.get(word), prev.get(word))\n               or _same_word",
+        "replace": "    return all(False\n               or _same_word"
       }
     ],
     "must_fail": [
-      "a copy's day the note holds again is left as it is"
+      "a copy's day the note holds again is left as it is, nothing set aside"
     ],
     "suites": [
       "test_data_safety"
@@ -13570,70 +13574,36 @@
   },
   {
     "id": "DR146",
-    "about": "the copy's lines the day holds are not matched: the copy's whole text is added again under it",
+    "about": "another series' copy keeps its days with words to the end: the next turn-off or Update replaces it, and they are in no file",
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "            if j < m and a[i] == b[j]:\n",
-        "replace": "            if False:\n"
+        "find": "    if not _series_own_copy(prev) or _repeats_as(note, prev):\n        return\n    aside = [_aside_entry(prev, key, key)",
+        "replace": "    if True:\n        return\n    aside = [_aside_entry(prev, key, key)"
       }
     ],
     "must_fail": [
-      "the copy's lines a day already holds are not added again"
+      "another series' copy keeps its days while it waits, and sets aside those with words",
+      "a turn-off over another series' copy makes that copy's days with words notes"
     ],
     "suites": [
-      "test_data_safety"
+      "test_data_safety",
+      "qa5"
     ],
     "expect": "killed"
   },
   {
     "id": "DR147",
-    "about": "a table's rows compared as text: one cell edited re-pads its column, and the whole old table is added again",
+    "about": "an import's Update replaces another series' copy without setting its days with words aside",
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "    return (\"row\",) + tuple(\"[ ]\" if checkbox_state(cell) is not None else cell.strip()\n",
-        "replace": "    return line\n    return (\"row\",) + tuple(\"[ ]\" if checkbox_state(cell) is not None else cell.strip()\n"
+        "find": "    copy_days_set_aside(note)\n    note[\"_prev\"] = prev\n",
+        "replace": "    note[\"_prev\"] = prev\n"
       }
     ],
     "must_fail": [
-      "a day corrected in its first line, or in one table cell, gets only the copy's lines it lacks"
-    ],
-    "suites": [
-      "test_data_safety"
-    ],
-    "expect": "killed"
-  },
-  {
-    "id": "DR149",
-    "about": "a ticked box makes another row: the copy's unticked one is added again under the table",
-    "edits": [
-      {
-        "file": "noteorganizer/core/model.py",
-        "find": "    return (\"row\",) + tuple(\"[ ]\" if checkbox_state(cell) is not None else cell.strip()\n",
-        "replace": "    return (\"row\",) + tuple(cell.strip() if True else checkbox_state(cell)\n"
-      }
-    ],
-    "must_fail": [
-      "a day corrected in its first line, or in one table cell, gets only the copy's lines it lacks"
-    ],
-    "suites": [
-      "test_data_safety"
-    ],
-    "expect": "killed"
-  },
-  {
-    "id": "DR150",
-    "about": "a table's rows the day lacks are added without its header and separator: a headless table, its first row drawn as the header",
-    "edits": [
-      {
-        "file": "noteorganizer/core/model.py",
-        "find": "            wanted.add(first)\n",
-        "replace": "            pass\n"
-      }
-    ],
-    "must_fail": [
-      "a day corrected in its first line, or in one table cell, gets only the copy's lines it lacks"
+      "another series' copy keeps its days while it waits, and sets aside those with words"
     ],
     "suites": [
       "test_data_safety"
@@ -13642,16 +13612,178 @@
   },
   {
     "id": "DR148",
-    "about": "a body ending in an added table is stored without the line the editor draws under it, and the next read changes it",
+    "about": "a turn-off in the series' view replaces another series' copy without setting its days with words aside",
     "edits": [
       {
-        "file": "noteorganizer/core/model.py",
-        "find": "            edit[field] = shaped(\"\\n\".join([base] * bool(base) + added))\n",
-        "replace": "            edit[field] = \"\\n\".join([base] * bool(base) + added)\n"
+        "file": "note_organizer.py",
+        "find": "        copy_days_set_aside(note)\n        prev = self._whole_note_rescue_copy(note)\n",
+        "replace": "        prev = self._whole_note_rescue_copy(note)\n"
       }
     ],
     "must_fail": [
-      "the copy's lines a day already holds are not added again"
+      "a turn-off over another series' copy makes that copy's days with words notes"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR150",
+    "about": "a save writes the days set aside into the note and never makes them notes: nobody sees them",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._set_aside_days()\n        ok, exc = core_save_notes(self.notes)\n",
+        "replace": "        ok, exc = core_save_notes(self.notes)\n"
+      }
+    ],
+    "must_fail": [
+      "a day with words of its own keeps them, and the copy's words for it become one note"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR151",
+    "about": "a read drops the days set aside: the copy's words, already spent from it, are in no file",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    aside = _shaped_aside(note.get(\"_set_aside\"))\n",
+        "replace": "    aside = []\n"
+      }
+    ],
+    "must_fail": [
+      "a day coloured before the series' words changed keeps its words and look"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR152",
+    "about": "a day moved onto a date its own day left is sent home: a chain of moves loses its second, two days on one date",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "                if new in gives and new not in deleted and new not in moved}\n",
+        "replace": "                if new in gives and new not in deleted}\n"
+      }
+    ],
+    "must_fail": [
+      "a day moved onto a date its rule now gives goes home with its words"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR153",
+    "about": "days going home are sent once: a day moved onto one going home stays there, drawn nowhere",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "        home.update(more)\n",
+        "replace": "        home.update(more)\n        break\n"
+      }
+    ],
+    "must_fail": [
+      "a day moved onto a date its rule now gives goes home with its words"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR154",
+    "about": "a day going home leaves its words on the date it was moved to, under the rule's own day there",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "            days[orig] = words.pop(new)\n",
+        "replace": "            pass\n"
+      }
+    ],
+    "must_fail": [
+      "a day moved onto a date its rule now gives goes home with its words"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR157",
+    "about": "a save making a series' rule give a moved day's new date leaves the move: the day is drawn nowhere until the next start",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                moves_home(note)\n                spend_series_days(note)\n",
+        "replace": "                spend_series_days(note)\n"
+      }
+    ],
+    "must_fail": [
+      "a day moved onto a date the new rule gives goes home with its words at the save"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR158",
+    "about": "a share code making a series' rule give a moved day's new date leaves the move: the day is drawn nowhere until the next start",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "        note[\"exceptions\"] = []\n    moves_home(note)\n",
+        "replace": "        note[\"exceptions\"] = []\n"
+      }
+    ],
+    "must_fail": [
+      "a share code making the series daily sends a day moved onto its new days home at once"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR155",
+    "about": "a day's title read with the space after it: a day only coloured reads as words, and the copy's are set aside or not given",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "        return a.strip() == b.strip()\n",
+        "replace": "        return a == b\n"
+      }
+    ],
+    "must_fail": [
+      "a copy's day only coloured, its title with a space after it or its table with the line under"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR156",
+    "about": "a day's text read with or without the line under a closing table as it came: the phone's copy's day only coloured is set aside as earlier text",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "        return with_caret_line(a) == with_caret_line(b)\n",
+        "replace": "        return a == b\n"
+      }
+    ],
+    "must_fail": [
+      "a copy's day only coloured, its title with a space after it or its table with the line under"
     ],
     "suites": [
       "test_data_safety"

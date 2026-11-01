@@ -656,9 +656,11 @@ def _whole_reads(fn):
 
 
 _CAP_N = 2000
+# Ending before the dates its days are moved to: a day moved onto a date the
+# rule gives by itself goes home at a read (round 15).
 _cap_note = NO.normalize_note({
     'id': 1, 'title': 's', 'date': '2020-01-01',
-    'recurrence': {'freq': 'daily'},
+    'recurrence': {'freq': 'daily', 'end': '2035-12-31'},
     'moved': {(date(2020, 1, 1) + _td(days=i)).isoformat():
               (date(2040, 1, 1) + _td(days=i)).isoformat() for i in range(_CAP_N)},
     'overrides': {(date(2030, 1, 1) + _td(days=i)).isoformat(): {'title': 'o'}

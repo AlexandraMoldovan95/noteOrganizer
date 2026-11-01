@@ -3707,32 +3707,42 @@ check("an edit the copy draws on no day stays on its own date, beside its day's 
       "(%s)" % _t10_stray["overrides"],
       _t10_shows(_t10_stray, "2026-11-10") == "Dentist 3pm"
       and (_t10_stray["overrides"].get("2026-11-09") or {}).get("body") == "Stray words")
-# What the note wrote still wins: its deletion, and its own words -- the copy's
-# for that day go after them (round 12; dropped, a day coloured before the
-# series' words changed lost the copy's own text, round 11).
+
+def _t10_aside(note):
+    """The copy's days *note* set aside, as (date, text) pairs."""
+    return [(entry["day"], entry["body"]) for entry in note.get("_set_aside") or []]
+
+
+# What the note wrote still wins: its deletion, and its own words as they are
+# -- the copy's for that day are set aside, to be a note of their own on that
+# date (round 15, the owner's choice: added to the day's, rounds 11 to 14 read
+# them four ways, each leaving a case).
 _t10_gone = _t10({"exceptions": ["2026-11-09"]}, _t10_copy_moved)
 _t10_own = _t10({"moved": {"2026-11-09": "2026-11-10"},
                  "overrides": {"2026-11-10": {"body": "Swim instead"}}})
-check("a day the note deleted keeps the note's; one it wrote words for keeps them first, the "
-      "copy's after (%s)" % _t10_own["overrides"],
+check("a day the note deleted keeps the note's; one it wrote words for keeps them as they are, the "
+      "copy's set aside for that date (%s, %s)" % (_t10_own["overrides"], _t10_aside(_t10_own)),
       "Dentist" not in json.dumps(_t10_gone) and _t10_gone["exceptions"] == ["2026-11-09"]
-      and _t10_own["overrides"] == {"2026-11-10": {"body": "Swim instead\nDentist 3pm"}})
+      and _t10_own["overrides"] == {"2026-11-10": {"body": "Swim instead"}}
+      and _t10_aside(_t10_own) == [("2026-11-10", "Dentist 3pm")])
 
 # A day coloured before the series' words changed holds the old words, read
 # as its own: the copy's for that day were in no file after the first start of
-# this build over 0.97.405's notebook, or the phone's 0.12.0 (round 11). Kept
-# in the copy, they were lost by its one slot and read again by date (round
-# 12); now they go on the day, after its own. Read again, nothing changes.
+# this build over 0.97.405's notebook, or the phone's 0.12.0 (round 11). Now
+# the day stays as it is and the copy's words are set aside. Read again,
+# nothing changes and nothing is set aside twice.
 _t11 = _model_mod.normalize_note(dict(
     {"id": 21, "title": "Gym", "body": "Warm up.\nBring water.", "_prev": dict(
         {"title": "Gym", "body": "Warm up."}, **_kd_series,
         overrides={"2026-11-09": dict(_t10_word)})},
     **_kd_series, overrides={"2026-11-09": {"title": "Gym", "body": "Warm up.", "comments": "",
                                             "color": "#ff6b6b", "category": "Work"}}))
-check("a day coloured before the series' words changed takes the copy's words for it after its "
-      "own, its look kept, the copy spent, and a second read changes nothing (%s)" % _t11["overrides"],
-      _t11["overrides"]["2026-11-09"]["body"] == "Warm up.\nDentist 3pm"
+check("a day coloured before the series' words changed keeps its words and look, the copy's words "
+      "for it set aside, the copy spent, and a second read changes nothing (%s, %s)" % (
+          _t11["overrides"], _t10_aside(_t11)),
+      _t11["overrides"]["2026-11-09"]["body"] == "Warm up."
       and _t11["overrides"]["2026-11-09"]["color"] == "#ff6b6b"
+      and _t10_aside(_t11) == [("2026-11-09", "Dentist 3pm")]
       and "overrides" not in _t11["_prev"]
       and _model_mod.normalize_note(json.loads(json.dumps(_t11))) == _t11)
 # ...a day whose words the note holds too is left as it is, its series renamed
@@ -3744,55 +3754,132 @@ _t11_held = _model_mod.normalize_note(dict(
     **_kd_series, overrides={"2026-11-09": dict(_t10_word)}))
 # ...and two of the copy's days for one date -- the note moved its day onto a
 # day off the copy's schedule holding words of its own: one goes on the day,
-# the other's words after them.
+# the other is set aside.
 _t11_tie = _t10({"moved": {"2026-11-16": "2026-11-10"}},
                 {"overrides": {"2026-11-10": {"body": "Off-schedule words"},
                                "2026-11-16": {"body": "Monday 16th's own"}}})
-from noteorganizer.core import tables as _tables_mod
-# ...and only the lines the day lacks: a day grown from the copy's text was
-# given it all again under its own, an emptied title a blank line, and a table
-# added under the day's own table read as one table (round 13).
+check("a copy's day the note holds again is left as it is, nothing set aside; of two for one date, "
+      "one is on the day and the other set aside (%s, %s)" % (_t11_held["overrides"], _t11_tie["overrides"]),
+      _t11_held["overrides"] == {"2026-11-09": _t10_word} and "overrides" not in _t11_held["_prev"]
+      and not _t10_aside(_t11_held)
+      and _t10_shows(_t11_tie, "2026-11-10") == "Monday 16th's own"
+      and _t10_aside(_t11_tie) == [("2026-11-10", "Off-schedule words")]
+      and "overrides" not in _t11_tie["_prev"])
+# A day whose words differ from the copy's in any way -- grown from them,
+# corrected in a line, a table cell edited, a box ticked -- keeps its text to
+# the letter, and the copy's whole text is set aside once. Rounds 13 and 14
+# added only the lines the day lacked, and each way of telling them apart
+# left a case: a moved line added again, a long day frozen.
 _t13_grown = _t10({"overrides": {"2026-11-09": {"body": "Agenda.\nBook room\nCancelled"}}},
                   {"overrides": {"2026-11-09": {"title": "", "body": "Agenda.\nBook room"}}})
-_t13_table = _t10({"overrides": {"2026-11-09": {"body": "Room\n| a | b |\n| --- | --- |\n| 1 | 2 |"}}},
-                  {"overrides": {"2026-11-09": {"body": "| x | y |\n| --- | --- |\n| 3 | 4 |"}}})
-_t13_blocks = _tables_mod.find_blocks(_t13_table["overrides"]["2026-11-09"]["body"])
-_t13_mid = _t10({"overrides": {"2026-11-09": {"body": "Room 4\nBook room\nAt 10"}}},
-                {"overrides": {"2026-11-09": {"body": "Book room"}}})
-_t13_start = _t10({"overrides": {"2026-11-09": {"body": "Agenda."}}},
-                  {"overrides": {"2026-11-09": {"body": "Agenda.\nBook room"}}})
-check("the copy's lines a day already holds are not added again, an emptied word adds no blank line, "
-      "and a table added under the day's table stays a table of its own, whole (%s, %s, %s, %s)" % (
-          _t13_grown["overrides"], _t13_mid["overrides"], _t13_start["overrides"], _t13_blocks),
-      _t13_grown["overrides"]["2026-11-09"]["body"] == "Agenda.\nBook room\nCancelled"
-      and _t13_mid["overrides"]["2026-11-09"]["body"] == "Room 4\nBook room\nAt 10"
-      and _t13_start["overrides"]["2026-11-09"]["body"] == "Agenda.\nBook room"
-      and [b - a for a, b in _t13_blocks] == [2, 2]
-      and _model_mod.normalize_note(json.loads(json.dumps(_t13_table))) == _t13_table)
-# ...the lines it lacks, not all after the first difference: a corrected first
-# line brought the whole old text again, and a cell edited the whole old table;
-# a ticked box is the same row (round 14).
-_t14_first = _t10({"overrides": {"2026-11-09": {"body": "Agenda (Monday).\nBook room\nCall Ann"}}},
-                  {"overrides": {"2026-11-09": {"body": "Agenda.\nBook room\nCall Ann"}}})
 _t14_cell = _t10({"overrides": {"2026-11-09": {"body": "Plan\n| Task | Who        |\n| ---- | ---------- |\n"
                                                        "| Room | Ann (done) |\n| Food | Bob        |"}}},
                  {"overrides": {"2026-11-09": {"body": "Plan\n| Task | Who |\n| ---- | --- |\n"
                                                        "| Room | Ann |\n| Food | Bob |"}}})
 _t14_box = _t10({"overrides": {"2026-11-09": {"body": "| Done | Task |\n| --- | --- |\n| [x] | Lunch |"}}},
                 {"overrides": {"2026-11-09": {"body": "| Done | Task |\n| --- | --- |\n| [ ] | Lunch |"}}})
-_t14_cell_body = _t14_cell["overrides"]["2026-11-09"]["body"]
-check("a day corrected in its first line, or in one table cell, gets only the copy's lines it lacks, a "
-      "table's with its header; a ticked box is the same row (%s, %s, %s)" % (
-          _t14_first["overrides"], _t14_cell["overrides"], _t14_box["overrides"]),
-      _t14_first["overrides"]["2026-11-09"]["body"] == "Agenda (Monday).\nBook room\nCall Ann\nAgenda."
-      and _t14_cell_body.endswith("\n\n| Task | Who |\n| ---- | --- |\n| Room | Ann |\n")
-      and "Food | Bob |\n" not in _t14_cell_body.split("\n\n", 1)[1]
-      and _t14_box["overrides"]["2026-11-09"]["body"] == "| Done | Task |\n| --- | --- |\n| [x] | Lunch |\n")
-check("a copy's day the note holds again is left as it is; of two for one date, one is on the "
-      "day and the other's words after them (%s, %s)" % (_t11_held["overrides"], _t11_tie["overrides"]),
-      _t11_held["overrides"] == {"2026-11-09": _t10_word} and "overrides" not in _t11_held["_prev"]
-      and _t10_shows(_t11_tie, "2026-11-10") == "Monday 16th's own\nOff-schedule words"
-      and "overrides" not in _t11_tie["_prev"])
+_t13_again = _model_mod.normalize_note(json.loads(json.dumps(_t14_cell)))
+check("a day grown from the copy's text, a cell edited or a box ticked keeps its text to the letter; "
+      "the copy's is set aside once, whole, and a second read sets nothing aside again (%s, %s, %s)" % (
+          _t10_aside(_t13_grown), _t10_aside(_t14_cell), _t10_aside(_t14_box)),
+      _t13_grown["overrides"]["2026-11-09"]["body"] == "Agenda.\nBook room\nCancelled"
+      and _t14_cell["overrides"]["2026-11-09"]["body"].startswith("Plan\n| Task | Who        |\n")
+      and _t14_box["overrides"]["2026-11-09"]["body"] == "| Done | Task |\n| --- | --- |\n| [x] | Lunch |\n"
+      and _t10_aside(_t13_grown) == [("2026-11-09", "Agenda.\nBook room")]
+      and [day for day, _text in _t10_aside(_t14_cell)] == ["2026-11-09"]
+      and "| Room | Ann |" in _t10_aside(_t14_cell)[0][1]
+      and len(_t10_aside(_t14_box)) == 1
+      and _t13_again == _t14_cell)
+# Read alike as a day's words: a title with a space after it, and a text
+# ending in a table with the line under it or without -- the phone keeps its
+# series' text as typed, its days with the line. Read apart, a day only
+# coloured was set aside as earlier text, or took none (round 15).
+_t15_tbl = "Plan\n| a | b |\n| --- | --- |\n| 1 | 2 |"
+_t15_alike = _model_mod.normalize_note(dict(
+    {"id": 27, "title": "Gym", "body": "Warm up.", "_prev": dict(
+        {"title": "Gym", "body": _t15_tbl}, **_kd_series,
+        overrides={"2026-11-16": {"title": "Gym ", "body": _t15_tbl + "\n", "color": "#ff6b6b"}})},
+    **_kd_series, overrides={"2026-11-16": {"body": "Own words"}}))
+_t15_spaced = _t10({"overrides": {"2026-11-09": {"title": "Gym ", "body": "Warm up.", "color": "#ff6b6b"}}})
+check("a copy's day only coloured, its title with a space after it or its table with the line under "
+      "it, is no earlier text; a note's day the same takes the copy's words (%s, %s)" % (
+          _t10_aside(_t15_alike), _t15_spaced["overrides"]),
+      not _t10_aside(_t15_alike) and _t15_alike["overrides"]["2026-11-16"] == {"body": "Own words"}
+      and _t10_shows(_t15_spaced, "2026-11-09") == "Dentist 3pm")
+# A note of its own is made of each day set aside: on its date, its words and
+# look, the series' title marked as the earlier text -- and taken off the note.
+_t15_made = _model_mod.notes_set_aside(_t13_grown)
+check("a day set aside becomes a note on its date, titled with the series' name and \"(earlier "
+      "text)\", and leaves the note (%s)" % _t15_made,
+      _t15_made == [{"title": "Gym (earlier text)", "body": "Agenda.\nBook room", "comments": "",
+                     "category": "General", "color": "", "date": "2026-11-09"}]
+      and "_set_aside" not in _t13_grown
+      and _model_mod.normalize_note(dict(_t15_made[0], id=99))["date"] == "2026-11-09")
+# Read from a file, the days set aside keep a real date in the calendar's
+# form and a word; anything else in the list is not a day.
+_t15_read = _model_mod.normalize_note({"id": 28, "title": "Gym", "_set_aside": [
+    {"day": " 2026-11-9 ", "body": "Kept", "color": 5}, {"day": 5, "body": "No date"},
+    "not a day", {"day": "2026-11-10", "body": "   "}, {"day": "2026-11-11", "title": "Only a title"}]})
+check("days set aside read from a file keep a real date in the calendar's form and a word (%s)"
+      % _t10_aside(_t15_read),
+      _t10_aside(_t15_read) == [("2026-11-09", "Kept"), ("2026-11-11", "")]
+      and _t15_read["_set_aside"][0]["color"] == "")
+# A copy of another series than the note's repeats as now is replaced by the
+# next turn-off, delete or import Update: its days with words were in it
+# alone, and the new copy erased them (round 15). Set aside first.
+_t15_other = _model_mod.normalize_note(dict(
+    {"id": 23, "title": "Gym", "body": "Warm up.", "_prev": {
+        "title": "Gym", "body": "Warm up.", "date": "2026-11-03",
+        "recurrence": {"freq": "weekly", "interval": 1, "weekdays": [1]},
+        "overrides": {"2026-11-10": {"body": "Tuesday words"},
+                      "2026-11-17": {"color": "#ff6b6b"}}}}, **_kd_series))
+_t15_waits = "overrides" in _t15_other["_prev"] and not _t10_aside(_t15_other)
+_t15_update = copy_mod.deepcopy(_t15_other)
+_model_mod.apply_shared_update(_t15_update, dict(_t15_other, body="Warm up. Stretch.", _prev=None),
+                               _model_mod.UPDATABLE_FROM_BACKUP)
+_model_mod.copy_days_set_aside(_t15_other)
+check("another series' copy keeps its days while it waits, and sets aside those with words before "
+      "a turn-off or an import's Update replaces it (%s, %s)" % (
+          _t10_aside(_t15_other), _t10_aside(_t15_update)),
+      _t15_waits and _t10_aside(_t15_other) == [("2026-11-10", "Tuesday words")]
+      and not any(key in _t15_other["_prev"] for key in _model_mod.DAY_FIELDS)
+      and _t10_aside(_t15_update) == [("2026-11-10", "Tuesday words")]
+      and _t15_update["_prev"]["body"] == "Warm up.")
+# A day moved onto a date its rule now gives by itself -- made daily since, or
+# started elsewhere -- was drawn nowhere, and a delete there took it: it goes
+# home with its words. A chain (the 9th to the 10th, the 16th onto the 9th it
+# left) holds while the rule leaves the dates free; and a day deleted there
+# leaves its date free too (round 15).
+_t15_chain = {"moved": {"2026-11-09": "2026-11-10", "2026-11-16": "2026-11-09"},
+              "overrides": {"2026-11-10": {"body": "Ninth's words"}, "2026-11-09": {"body": "16th's words"}}}
+_t15_weekly = _model_mod.normalize_note(dict({"id": 24, "title": "Gym", "body": "x"}, **_kd_series,
+                                             **copy_mod.deepcopy(_t15_chain)))
+_t15_daily = _model_mod.normalize_note(dict(
+    {"id": 25, "title": "Gym", "body": "x", "date": "2026-11-02",
+     "recurrence": {"freq": "daily", "interval": 1}}, **copy_mod.deepcopy(_t15_chain)))
+_t15_freed = _model_mod.normalize_note(dict(
+    {"id": 26, "title": "Gym", "body": "x", "date": "2026-11-02", "exceptions": ["2026-11-10"],
+     "recurrence": {"freq": "daily", "interval": 1}}, moved={"2026-11-09": "2026-11-10"},
+    overrides={"2026-11-10": {"body": "N"}}))
+check("a day moved onto a date its rule now gives goes home with its words, a chain of moves too, "
+      "while a chain on dates the rule leaves free, or a deleted day's date, holds (%s, %s)" % (
+          _t15_daily["moved"], _t15_daily["overrides"]),
+      _t15_weekly["moved"] == _t15_chain["moved"]
+      and _t15_daily["moved"] == {}
+      and _t10_shows(_t15_daily, "2026-11-09") == "Ninth's words"
+      and _t10_shows(_t15_daily, "2026-11-16") == "16th's words"
+      and _t10_shows(_t15_daily, "2026-11-10") == "x"
+      and _model_mod.normalize_note(json.loads(json.dumps(_t15_daily))) == _t15_daily
+      and _t15_freed["moved"] == {"2026-11-09": "2026-11-10"})
+# ...and at once when a share code makes the series daily, not at the next start.
+_t15_coded = _model_mod.normalize_note(dict({"id": 29, "uid": "coded", "title": "Gym", "body": "x"},
+                                            **_kd_series, moved={"2026-11-09": "2026-11-10"},
+                                            overrides={"2026-11-10": {"body": "Held on Tuesday"}}))
+_model_mod.apply_shared_update(_t15_coded, {"uid": "coded", "title": "Gym", "body": "x", "date": "2026-11-02",
+                                            "recurrence": {"freq": "daily"}})
+check("a share code making the series daily sends a day moved onto its new days home at once (%s, %s)"
+      % (_t15_coded["moved"], _t15_coded["overrides"]),
+      _t15_coded["moved"] == {} and _t10_shows(_t15_coded, "2026-11-09") == "Held on Tuesday")
 
 
 def _t10_side(rnd, tag, ops):
@@ -3836,18 +3923,18 @@ def _t10_words(note, day):
 
 def _t10_broken(mine, theirs):
     """Where the take-back breaks its rule for one shape: the note's words
-    not first on their day or its look changed, or a copy's day with words
-    of its own not shown on the day the result draws it, though the note did
-    not delete that day (round 12: the copy's go after the note's)."""
+    or look on a day changed, or a copy's day with words of its own neither
+    shown on the day the result draws it nor set aside for that date, though
+    the note did not delete that day (round 15)."""
     out = _t10(copy_mod.deepcopy(mine), copy_mod.deepcopy(theirs))
     note = _model_mod.normalize_note(dict({"title": "Gym", "body": "Warm up."}, **_kd_series, **mine))
     kept = _model_mod.normalize_note(dict({"title": "Gym", "body": "Warm up."}, **_kd_series, **theirs))
     came = {to: day for day, to in kept["moved"].items()}
     bad = [] if _model_mod.normalize_note(json.loads(json.dumps(out))) == out else ["not idempotent"]
+    aside = set(_t10_aside(out))
     for day, patch in note["overrides"].items():
         got = out["overrides"].get(day) or {}
-        if _t10_words(note, day) and not (got.get("title") == patch.get("title")
-                                          and (got.get("body") or "").startswith(patch.get("body") or "")):
+        if _t10_words(note, day) and any(got.get(key) != patch.get(key) for key in ("title", "body")):
             bad.append("the note's words on %s" % day)
         if any(got.get(key) != value for key, value in patch.items() if key in ("color", "category")):
             bad.append("the note's look on %s" % day)
@@ -3859,7 +3946,7 @@ def _t10_broken(mine, theirs):
         if day in note["exceptions"]:
             continue
         at = out["moved"].get(day, day)
-        if patch["body"] not in (_t10_shows(out, at) or "").split("\n"):
+        if _t10_shows(out, at) != patch["body"] and (at, patch["body"]) not in aside:
             bad.append("the copy's words for %s" % day)
     return bad
 
@@ -3870,8 +3957,9 @@ _t10_bad = []
 for _t10_i in range(300):
     _t10_shape = (_t10_side(_t10_rnd, "note", 6), _t10_side(_t10_rnd, "copy", 8))
     _t10_bad.extend((_t10_i, why) for why in _t10_broken(*_t10_shape))
-check("on 300 shapes either app's editor makes, the take-back keeps every word the note wrote, "
-      "first, and every day's own text the copy held, on the day it is drawn (%s)" % (_t10_bad[:3] or "all"),
+check("on 300 shapes either app's editor makes, the take-back keeps every word the note wrote as it "
+      "is, and every day's own text the copy held, on the day it is drawn or set aside for its date "
+      "(%s)" % (_t10_bad[:3] or "all"),
       not _t10_bad)
 
 # ...and the styles of words held in the copy's but not the same: a part of

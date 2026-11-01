@@ -734,6 +734,7 @@
   "_selection_has_style": "(self, text_widget, style_set, start, end)",
   "_series_owned_mark": "(self)",
   "_series_warning": "(self, notes)",
+  "_set_aside_days": "(self, say=True)",
   "_set_button_pressed": "(self, btn, active)",
   "_set_editor_font": "(self, family=None, size=None)",
   "_set_paragraph_align": "(self, align)",

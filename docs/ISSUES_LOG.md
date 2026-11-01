@@ -215,6 +215,7 @@ is in the table below as well.
 | [Round twelve: words kept where nothing looked, a day's Undo over another, and the find bar's every hit](#round-twelve-words-kept-where-nothing-looked-a-days-undo-over-another-and-the-find-bars-every-hit) | A place the next read looks at again is not a place to keep things; bound the work by what each step walks, not by the total. | next |
 | [Round thirteen: words added twice, and a paint window left behind](#round-thirteen-words-added-twice-and-a-paint-window-left-behind) | A rule that adds asks what is already there, as lines; a window over a list follows the item it is for. | next |
 | [Round fourteen: the old text again after an edit in the middle](#round-fourteen-the-old-text-again-after-an-edit-in-the-middle) | To keep what is lacking, compare what both hold, in order; a table by what its cells say. | next |
+| [Round fifteen: four ways of adding, and a note of its own](#round-fifteen-four-ways-of-adding-and-a-note-of-its-own) | When each fix of a merging rule leaves a new case, stop merging: keep both where the person sees them. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -3450,6 +3451,48 @@ scratch marker are swept by nothing.
 
 **Takeaway:** to keep what is lacking, compare what both hold, in order -- and compare a table
 by what its cells say, not by how its columns are padded.
+
+### Round fifteen: four ways of adding, and a note of its own
+
+*(2026-11-01 · found by the final audit's fifteenth break-it round, small, on round fourteen's
+fix; the owner chose the simpler rule)*
+
+**Symptom:**
+- **Another series' days in no file.** A note repeating as another series than its copy's
+  (restarted from another date or rule) kept the old series' days with words in the copy alone.
+  The next turn-off, big delete or import Update replaced the copy, and they were gone.
+- **The line comparison's own cases.** A line moved within a day came back as added text, and a
+  long day made the take-back freeze.
+- **A day gone under a new rule.** A day moved onto a Tuesday, then the rule made daily: the
+  Tuesday was the rule's own day, the moved day was drawn nowhere, and a delete there took it.
+- **A day only coloured read as words** when its title had a space after it, or its text ended
+  in a table with the line under it on one side only (the phone's copy keeps text as typed).
+
+**Root cause:** four rounds tried to add a copy's words to a day that already held words, and
+each way of telling the lines apart left a case. A move was checked against the rule it was
+made under, never against the rule after it.
+
+**Fix (the owner's choice, the simpler rule):**
+- A day holding words of its own keeps them exactly. The copy's different words for it are set
+  aside (`_set_aside`) and become a note of their own on that date, titled with the series' name
+  and "(earlier text)" (`notes_set_aside`), at the start and at every save, said on the status
+  line. `_words_added`, `_lines_lacked` and `_line_key` are gone.
+- `copy_days_set_aside` runs before a turn-off, a big delete or an Update replaces another
+  series' copy -- after `kept_days_fit` has read it.
+- `moves_home` sends a day moved onto a date its rule gives by itself home with its words, until
+  none is left, at every read and every save or update of the series. A chain on dates the rule
+  leaves free holds, and so does a deleted day's date.
+- `_same_word`: a title without its spaces, a text with the table's line on both sides or neither.
+- `test_data_safety`, `test_recurrence` (its 2,000 moved days now under a rule that ends before
+  the dates moved to), qa5; mutants DR143, DR144 re-aimed, DR146–DR148 and DR150–DR158 new. The
+  phone's fixture gains eleven cases and compares the notes made.
+
+**Written down, not fixed:** `_write_series_owned`'s whole-note copy for a turn-off has no
+caller (every day's save passes `schedule=False`). A note set aside may repeat lines the day
+also holds: only the same words count as held.
+
+**Takeaway:** when each fix of a merging rule leaves a new case, stop merging -- keep both,
+side by side, where the person sees them.
 
 ## Tk & platform gotchas
 
