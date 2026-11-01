@@ -1114,8 +1114,16 @@ def normalize_note(note):
     # A set: the sorted list, walked whole for every moved day, took the
     # square of their number to load.
     deleted = set(clean["exceptions"])
-    for orig, new in sorted((k, v) for k, v in clean["moved"].items()
-                            if isinstance(k, str) and isinstance(v, str)):
+    pairs = sorted((k, v) for k, v in clean["moved"].items()
+                   if isinstance(k, str) and isinstance(v, str))
+    # Of two moves onto one date, the one the calendar draws -- its own date
+    # the rule's -- is kept: by date alone the read kept a dead one, and a
+    # meeting moved under the phone's older build jumped back (round 20).
+    twins = {new for new, count in Counter(v for _k, v in pairs).items() if count > 1}
+    if twins and is_recurring(clean):
+        live = _rule_days_among(clean, [k for k, v in pairs if v in twins])
+        pairs.sort(key=lambda kv: (kv[1] not in twins or kv[0] not in live, kv[0], kv[1]))
+    for orig, new in pairs:
         if (parse_date(orig) and parse_date(new) and orig != new
                 and new not in held_on and orig not in deleted):
             moved[orig] = new

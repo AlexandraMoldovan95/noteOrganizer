@@ -3649,6 +3649,13 @@ road through 0.13.0, the version on the owner's phone, then the install, is ordi
 on, as `move_day` does. The phone also keeps one move a date in the raw notes at its read.
 `test_data_safety`, qa5; mutants DR182, DR183.
 
+**Round twenty (the phone's) on this fix:** of two moves onto one date, the read kept the one
+whose own date sorts first -- often the dead one, which the calendar did not draw -- so a meeting
+moved under the phone's 0.13.0 jumped back to its own date at the install, its words listed off
+the schedule. `normalize_note` now keeps the move whose own date the rule gives
+(`_rule_days_among`, asked only of dates two moves land on), as the phone's `cleanMoves` does;
+mutant DR184.
+
 **Takeaway:** a grade is about the road a person takes: a crash an upgrade can reach is not low
 because this build alone makes it rarely.
 

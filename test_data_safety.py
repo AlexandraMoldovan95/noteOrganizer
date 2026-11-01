@@ -4077,6 +4077,12 @@ check("two moves onto one date are listed once, by the banner's count and in His
       _rec_t10.drawn_moves(_t19_two) == [("2026-12-14", "2026-12-10")]
       and [c["date"] for row in _rec_t10.history_entries([_t19_two]) for c in row.get("children", [])]
       == ["2026-12-10"])
+# Round 20. ...and a read keeps the one the calendar draws, whichever comes
+# first by date: by date alone it kept the dead 7 December, and a meeting
+# moved under the phone's 0.13.0 jumped back at the upgrade.
+check("of two moves onto one date, a read keeps the one the calendar draws (%s)"
+      % _model_mod.normalize_note(copy_mod.deepcopy(_t19_two))["moved"],
+      _model_mod.normalize_note(copy_mod.deepcopy(_t19_two))["moved"] == {"2026-12-14": "2026-12-10"})
 # ...and a copy holding the series as the note does, its weekday lit and the
 # note's not, is spent: compared as stored, Restore previous stayed offered
 # for nothing, and the next turn-off brought back an old agenda.

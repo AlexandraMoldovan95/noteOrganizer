@@ -14186,5 +14186,23 @@
       "qa5"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "DR184",
+    "about": "of two moves onto one date, a read keeps the earlier by date, dead or not: a meeting moved under the phone's 0.13.0 jumps back",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "        pairs.sort(key=lambda kv: (kv[1] not in twins or kv[0] not in live, kv[0], kv[1]))\n",
+        "replace": "        pass\n"
+      }
+    ],
+    "must_fail": [
+      "of two moves onto one date, a read keeps the one the calendar draws"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
   }
 ]
