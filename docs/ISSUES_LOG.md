@@ -222,6 +222,7 @@ is in the table below as well.
 | [Round nineteen: two moves onto one date, and a list that threw](#round-nineteen-two-moves-onto-one-date-and-a-list-that-threw) | A grade is about the road a person takes: a crash an upgrade can reach is not low because this build alone makes it rarely. | next |
 | [Round twenty-three: the day the editor stayed on](#round-twenty-three-the-day-the-editor-stayed-on) | A guard written for one way a day stops being drawn is a question about every way: ask whether the day is drawn, not why it might not be. | next |
 | [The lows wave: a fuzz that never took the road it guarded](#the-lows-wave-a-fuzz-that-never-took-the-road-it-guarded) | A random test proves only the roads it takes: count that it reaches the branch it guards, and take that branch's fix out to watch it fail alone. | next |
+| [The lows wave's own rounds: a day's lists, read by line](#the-lows-waves-own-rounds-a-days-lists-read-by-line) | What a copy can change, the copy keeps; structure borrowed by line number holds only until the first line moves. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -3719,6 +3720,39 @@ it (the commit lists them); the hand-made and legacy shapes are written down as 
 
 **Takeaway:** a random test proves only the roads it takes: count that it reaches the branch it
 guards, and take that branch's fix out to watch it fail alone.
+
+### The lows wave's own rounds: a day's lists, read by line
+
+*(2026-11-01 · the verification rounds of the owner's lows wave)*
+
+**Symptom:** the wave stopped a day of its own text from wearing the series' looks, and its first
+verification round found what that took away: a nested numbered list on such a day showed flat,
+and the next Enter renumbered it as one run and saved it. Given its depth back from the series,
+the second round found the older form of the same thing, as old as 0.97.405: add an item on the
+day, or a line above its list, and the items below took the depth of whatever stood on their line
+in the series -- shown on the wrong level, then renumbered and saved by the next Enter.
+
+**Mechanism:** a day's override kept its own words and nothing of its lists. A list's depth lives
+in the paragraph entries, which only the series had, numbered by line, so every read of a day's
+lists asked the series what stood on the same line. That is right while the day's lines line up
+with the series', and wrong from the first line added or taken away.
+
+**Fix:** the owner's call, "a day keeps its own lists". A day's override stores `paragraphs`, its
+own list lines (kind and depth; never alignment, which a day does not own), written at every save
+of the day, an empty list included. A day saved before falls back to the series by line, as
+before. A day follows its series again only when its lists match the series' as well as its
+words, and the unsaved-changes check compares them. The same rounds made the "(earlier text)" note
+count as already there only when its comments match too. DR201 and DR204-DR207; rounds 3 and 4
+were clean, which closed the wave on the desktop. The phone, where the same lines also passed
+through its own list rules and its own way of following an edit, met two more cases on the same
+road, told in its log.
+
+**Known, recorded:** a day coloured under 0.97.405 holds a copy of the series' text and no list
+lines; it reads the series by line until the series' text changes above its list. Storing those
+lines once, at this build's first read, would close it.
+
+**Takeaway:** what a copy can change, the copy keeps; structure borrowed by line number holds only
+until the first line moves.
 
 ## Tk & platform gotchas
 
