@@ -221,6 +221,7 @@ is in the table below as well.
 | [Round eighteen: History, the one search of a day's words, and the days it never asked about](#round-eighteen-history-the-one-search-of-a-days-words-and-the-days-it-never-asked-about) | A fix to one reader of a shape is a question to every reader of it. | next |
 | [Round nineteen: two moves onto one date, and a list that threw](#round-nineteen-two-moves-onto-one-date-and-a-list-that-threw) | A grade is about the road a person takes: a crash an upgrade can reach is not low because this build alone makes it rarely. | next |
 | [Round twenty-three: the day the editor stayed on](#round-twenty-three-the-day-the-editor-stayed-on) | A guard written for one way a day stops being drawn is a question about every way: ask whether the day is drawn, not why it might not be. | next |
+| [The lows wave: a fuzz that never took the road it guarded](#the-lows-wave-a-fuzz-that-never-took-the-road-it-guarded) | A random test proves only the roads it takes: count that it reaches the branch it guards, and take that branch's fix out to watch it fail alone. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -3689,6 +3690,35 @@ mutant DR186.
 
 **Takeaway:** a guard written for one way a day stops being drawn is a question about every way:
 ask whether the day is drawn, not why it might not be.
+
+### The lows wave: a fuzz that never took the road it guarded
+
+*(2026-11-01 · the owner's lows wave, after wave 1 closed on both apps)*
+
+**Symptom:** the fuzz of a series' days, written in round 17 so the rounds would stop finding
+lost words one road at a time, passed on its 300 seeds. Round 22 measured it: in 3,000 roads it
+never once reached round 21's fix (a copy's words for a day the note deleted, set aside). Round 20
+found three of the next seeds doubling a word. Taken out, round 21's fix was caught by its own
+hand-written check, never by the fuzz.
+
+**Mechanism:** the fuzz could not take the road. Round 21's shape comes from the phone's 0.13.0 or
+the desktop's 0.97.405 -- a series turned off and on as it was, its days in the copy alone -- and
+no step built it. With the step added, the fuzz still let the fix go: it excused any word whose
+copy "changed" as the one-slot rule allows for a copy replaced, and a copy spent back into the
+note changes too. Its doubled words were the duplicates the owner later chose to leave.
+
+**Fix:** the fuzz turns a series off, puts its copy's repeat back (as it was, or from another
+start), and takes the older versions' turn-off and turn-on followed by the install's read. It
+counts that it reaches the placement and its deleted-day branch, and excuses only a copy replaced
+by another, never one spent. Words shown twice are counted, not failed. History must find every
+day the calendar draws or lists off the schedule. 1,500 roads, held at 4,500; DR187 (the roads
+taken away) and DR188 (round 21's fix taken out, watched by the fuzz alone). The phone's fuzz
+was rewritten the same way, with the roads it never took: Reset, the Undos, Make it a note, the
+Trash and back. The same wave fixed what the rounds had recorded as low where a person can meet
+it (the commit lists them); the hand-made and legacy shapes are written down as known.
+
+**Takeaway:** a random test proves only the roads it takes: count that it reaches the branch it
+guards, and take that branch's fix out to watch it fail alone.
 
 ## Tk & platform gotchas
 
