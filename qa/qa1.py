@@ -8412,6 +8412,27 @@ check(f'a word from an indented paragraph pastes without its indent '
       app._paragraph_indent_of(app.body_text, 1) == 1
       and app._paragraph_indent_of(app.body_text, 2) == 0
       and 'indented' in app.body_text.get('2.0', '2.end'))
+# A whole line copied with its line break holds nothing of the line after
+# it: counted in, that line's centring went onto the line a paste landed
+# before (the lows wave's verification, round 5).
+set_body('Call the bank' + chr(10) + 'Tuesday' + chr(10) + 'Dentist at 10')
+app._apply_paragraphs(app.body_text, [{'line': 1, 'align': 'center'}])
+app.body_text.tag_remove('sel', '1.0', 'end')
+app.body_text.tag_add('sel', '1.0', '2.0')
+app.update()
+_stub_clipboard(loopback=True)
+app._copy_formatted()
+_cl_lines = app._formatted_clip[2]
+app.body_text.tag_remove('sel', '1.0', 'end')
+app.body_text.mark_set('insert', '3.0')
+app._on_body_paste()
+app.update()
+_cl_after = [(p['line'], p.get('align')) for p in app._extract_paragraphs(app.body_text)
+             if p.get('align')]
+check(f'a whole line copied with its break carries none of the next line\'s looks '
+      f'({_cl_lines}; {_cl_after}; {body()!r})',
+      _cl_lines == [] and _cl_after == [(1, 'center')]
+      and body() == 'Call the bank\nTuesday\nCall the bank\nDentist at 10')
 _stub_clipboard()
 set_body('')
 

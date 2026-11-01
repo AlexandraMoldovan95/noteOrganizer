@@ -14623,5 +14623,23 @@
       "qa6"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "DR208",
+    "about": "a whole line copied with its break carries the next line's looks onto the line a paste lands before",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        line_count = text.count(\"\\n\") + (0 if text.endswith(\"\\n\") else 1)\n",
+        "replace": "        line_count = text.count(\"\\n\") + 1\n"
+      }
+    ],
+    "must_fail": [
+      "a whole line copied with its break carries none of the next line's looks"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
   }
 ]

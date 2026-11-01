@@ -8852,7 +8852,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             lo, hi = max(span["start"], first), min(span["end"], last)
             if hi > lo:
                 clipped.append(dict(span, start=lo - first, end=hi - first))
-        line_count = text.count("\n") + 1      # once, not once per paragraph
+        # Once, not once per paragraph. A copy ending in a line break holds
+        # nothing of the next line: counted in, that line's looks went onto
+        # the line a paste landed before (the lows wave's verification).
+        line_count = text.count("\n") + (0 if text.endswith("\n") else 1)
         paragraphs = [
             dict(p, line=p["line"] - first_line)
             for p in self._extract_paragraphs(self.body_text, whole)
