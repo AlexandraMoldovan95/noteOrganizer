@@ -216,6 +216,7 @@ is in the table below as well.
 | [Round thirteen: words added twice, and a paint window left behind](#round-thirteen-words-added-twice-and-a-paint-window-left-behind) | A rule that adds asks what is already there, as lines; a window over a list follows the item it is for. | next |
 | [Round fourteen: the old text again after an edit in the middle](#round-fourteen-the-old-text-again-after-an-edit-in-the-middle) | To keep what is lacking, compare what both hold, in order; a table by what its cells say. | next |
 | [Round fifteen: four ways of adding, and a note of its own](#round-fifteen-four-ways-of-adding-and-a-note-of-its-own) | When each fix of a merging rule leaves a new case, stop merging: keep both where the person sees them. | next |
+| [Round sixteen: a home the rule no longer gives, and a chain walked once a link](#round-sixteen-a-home-the-rule-no-longer-gives-and-a-chain-walked-once-a-link) | A rule that moves something "back" must ask whether "back" still exists; a fixpoint loop over links is a quadratic waiting for a long chain. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -3496,6 +3497,52 @@ also holds: only the same words count as held.
 
 **Takeaway:** when each fix of a merging rule leaves a new case, stop merging -- keep both,
 side by side, where the person sees them.
+
+### Round sixteen: a home the rule no longer gives, and a chain walked once a link
+
+*(2026-11-01 · found by the final audit's sixteenth break-it round, small, on round fifteen's
+rule; the phone's round found the same two)*
+
+**Symptom:**
+- **Words sent off the calendar.** A weekly series' Monday moved to Thursday, then the series
+  moved to Thursdays: `moves_home` sent the day "home" to the Monday, a date the rule no longer
+  gives. Its words left the Thursday they showed on for a day off the schedule, and a 0.97.405
+  notebook in that shape changed so at its first start here.
+- **A crafted backup froze the window**, 8.5 s for 2.25 MB: `moves_home` sent one link of a
+  chain home per pass, the square of the chain's length, at every read.
+- **Restore previous missed the rule.** An older rule brought back could give a date a day had
+  been moved onto since; the day was drawn nowhere until the next start, and a delete on that
+  date took it, its Undo refused.
+- **Smaller ones.** A copy of another series asked for each day by its date alone, so a day the
+  note had moved since was set aside as "earlier text" it still held. The start's notes were not
+  written until a save, so each launch made them again under new identities. The made notes were
+  said over a turn-off's own line, its Restore previous promise lost. A save made an empty note
+  of a day with no words, which the start never did.
+
+**Root cause:** round fifteen's `moves_home` asked only where a day had been moved TO, never
+whether the date it came FROM was still the rule's. And its fixpoint loop was a pass per link.
+
+**Fix:**
+- `moves_home` walks each chain once, a memo per day. A day goes home only where the rule still
+  gives its own date and it was not deleted; where not, the move goes and its words stay where
+  they showed. Called by `restore_previous_version` too.
+- `copy_days_set_aside` looks for a day where the note holds it: its date, the date the copy
+  moved it from, and where the note has moved that day since.
+- The core's `settle_set_aside` makes the notes, at the start in `load_notes` (written there, as
+  minted identities are) and at every save; `notes_set_aside` reads entries as the load does.
+  The save says them after its own line. The start's news says "the day's or the series' name".
+- `test_data_safety` (the Thursday, a 2,000-link chain counted, a swap, a moved copy day, the
+  start written once, a wordless entry), qa5 (Restore previous, a big delete, the status line);
+  mutants DR152, DR153, DR146, DR159 re-aimed, DR161-DR169 new. The phone's fixture fingerprints
+  four more regions of this file.
+
+**Written down, not fixed:** a rule changed and changed back does not bring back a move it
+dropped: the day's words are then on a date off the schedule, said by the banner. A share code's
+Update keeps no move in its copy, so Restore previous after it brings the rule back, not the move.
+The import's own status line still follows the made notes' one.
+
+**Takeaway:** a rule that moves something "back" must ask whether "back" still exists; a
+fixpoint loop over links is a quadratic waiting for a long chain.
 
 ## Tk & platform gotchas
 

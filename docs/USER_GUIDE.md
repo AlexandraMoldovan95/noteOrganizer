@@ -785,7 +785,9 @@ its own date, with that day's title, text, comments, category and colour (the ch
 attached files stay with the series, which they belong to); **Move to the Trash** does the same
 but straight into Recently deleted, from where it can be restored; and **Leave it** changes
 nothing. Put the rule back the way it was and those days are simply part of the series again.
-A day you moved onto a date the new rule lands on anyway goes back to its own date, with its text.
+A day you moved onto a date the new rule lands on anyway goes back to its own date, with its
+text; if the new rule no longer lands on its own date, its text stays where it showed, on the
+rule's own day there.
 
 Turning the repeat off ("Does not repeat", in the whole series) ends every day's own edits along
 with the series — but none of their text is lost. When any day had text of its own, the note as

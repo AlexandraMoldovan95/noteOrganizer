@@ -13578,8 +13578,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "    if not _series_own_copy(prev) or _repeats_as(note, prev):\n        return\n    aside = [_aside_entry(prev, key, key)",
-        "replace": "    if True:\n        return\n    aside = [_aside_entry(prev, key, key)"
+        "find": "    if not _series_own_copy(prev) or _repeats_as(note, prev):\n        return\n    mine, moved = ",
+        "replace": "    if True:\n        return\n    mine, moved = "
       }
     ],
     "must_fail": [
@@ -13666,12 +13666,12 @@
   },
   {
     "id": "DR152",
-    "about": "a day moved onto a date its own day left is sent home: a chain of moves loses its second, two days on one date",
+    "about": "a day moved onto a date whose own day stays moved away is sent home: a chain on dates the rule leaves free loses a link",
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "                if new in gives and new not in deleted and new not in moved}\n",
-        "replace": "                if new in gives and new not in deleted}\n"
+        "find": "        after = False if at in on_path else goes.get(at, True)\n",
+        "replace": "        after = False if at in on_path else True\n"
       }
     ],
     "must_fail": [
@@ -13684,16 +13684,16 @@
   },
   {
     "id": "DR153",
-    "about": "days going home are sent once: a day moved onto one going home stays there, drawn nowhere",
+    "about": "two days moved onto each other's dates are both sent home, though neither date was free",
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "        home.update(more)\n",
-        "replace": "        home.update(more)\n        break\n"
+        "find": "        after = False if at in on_path else goes.get(at, True)\n",
+        "replace": "        after = True if at in on_path else goes.get(at, True)\n"
       }
     ],
     "must_fail": [
-      "a day moved onto a date its rule now gives goes home with its words"
+      "a chain of 2,000 moved days, every date the rule's, goes home walking the moves once"
     ],
     "suites": [
       "test_data_safety"
@@ -13795,9 +13795,9 @@
     "about": "the notes made of days set aside all take the one number worked out before them: two notes edited as one",
     "edits": [
       {
-        "file": "note_organizer.py",
-        "find": "                next_id += 1\n                made += 1\n",
-        "replace": "                made += 1\n"
+        "file": "noteorganizer/core/model.py",
+        "find": "            next_id += 1\n            made += 1\n",
+        "replace": "            made += 1\n"
       }
     ],
     "must_fail": [
@@ -13823,6 +13823,168 @@
     ],
     "suites": [
       "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR161",
+    "about": "Restore previous bringing an older rule back leaves a day moved since on a date the rule gives: drawn nowhere, a delete there takes it",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        # since: it goes home now, not at the next start (round 16).\n        moves_home(note)\n",
+        "replace": "        # since: it goes home now, not at the next start (round 16).\n"
+      }
+    ],
+    "must_fail": [
+      "Restore previous bringing an older rule back sends a day moved since home at once"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR162",
+    "about": "a day whose own date the rule no longer gives is sent there all the same: its words leave the day they showed on for a date nothing draws",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "             if orig in gives and orig not in deleted and new in days}\n",
+        "replace": "             if new in days}\n"
+      }
+    ],
+    "must_fail": [
+      "a day moved onto a date the rule now gives, its own date no longer the rule's, keeps its words"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR163",
+    "about": "each moved day walks its chain to the end again: the square of a chain's length, a crafted backup freezing the window",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "        while at in moved and at not in goes and at not in on_path:\n",
+        "replace": "        while at in moved and at not in on_path:\n"
+      }
+    ],
+    "must_fail": [
+      "a chain of 2,000 moved days, every date the rule's, goes home walking the moves once"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR164",
+    "about": "another series' copy asks for each day by its date alone: a day the note moved since is set aside as earlier text it still holds",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "                   for at in {key, day, moved.get(day, day)})\n",
+        "replace": "                   for at in {key})\n"
+      }
+    ],
+    "must_fail": [
+      "a copy's day the note moved since, or sent home, is held, not set aside as earlier text"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR165",
+    "about": "the start makes notes of days set aside and does not write them: each start makes them again under new identities",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "    if (minted_any or ids_repaired or aside_made) and not report[\"notes_file_corrupt\"]:\n",
+        "replace": "    if (minted_any or ids_repaired) and not report[\"notes_file_corrupt\"]:\n"
+      }
+    ],
+    "must_fail": [
+      "a start makes the days set aside notes of their own and writes them at once"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR166",
+    "about": "the start makes no notes of days set aside: they wait in the file, said by nothing, until a save",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "    report[\"set_aside_made\"] = aside_made = settle_set_aside(notes)\n",
+        "replace": "    report[\"set_aside_made\"] = aside_made = 0\n"
+      }
+    ],
+    "must_fail": [
+      "a start makes the days set aside notes of their own and writes them at once"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR167",
+    "about": "a day set aside with no words makes an empty note at a save, and none at the start",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    for entry in _shaped_aside(note.pop(\"_set_aside\", None)):\n",
+        "replace": "    for entry in note.pop(\"_set_aside\", None) or []:\n"
+      }
+    ],
+    "must_fail": [
+      "days set aside with no words make no note, at a save as at the start"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR168",
+    "about": "a big delete replaces another series' copy without setting its days with words aside: they are in no file",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                    if not comments_alone:\n                        copy_days_set_aside(note)\n",
+        "replace": "                    pass\n"
+      }
+    ],
+    "must_fail": [
+      "a big delete over another series' copy makes that copy's days with words notes of their own"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR169",
+    "about": "the notes made of days set aside are said over the save's own line: a turn-off's Restore previous promise is lost",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self.set_status(f\"{said} — {news}\" if said.strip() else news)\n",
+        "replace": "            self.set_status(news)\n"
+      }
+    ],
+    "must_fail": [
+      "the notes made are said after the turn-off's own line, not over it"
+    ],
+    "suites": [
+      "qa5"
     ],
     "expect": "killed"
   }

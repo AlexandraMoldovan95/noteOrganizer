@@ -583,13 +583,13 @@ def load_notes(version_change=None):
     """
     # Imported here: storage -> model -> categories -> storage is a real
     # cycle, and at module level the import fails half-initialised.
-    from .model import normalize_note, clean_notes, repair_note_ids
+    from .model import normalize_note, clean_notes, repair_note_ids, settle_set_aside
     from .categories import adopt_categories_of, persist_categories
 
     report = {"version_backup_path": None, "version_backup_failed": False,
               "cleanup_report": None,
               "notes_file_corrupt": False, "corrupt_backup_path": None,
-              "categories_adopted": [],
+              "categories_adopted": [], "set_aside_made": 0,
               "fresh_notebook": not os.path.exists(paths.DATA_FILE)}
     raw = []
     if os.path.exists(paths.DATA_FILE):
@@ -630,6 +630,10 @@ def load_notes(version_change=None):
     # guess whether an old note has 'comments' or 'attachments'.
     notes = [normalize_note(n) for n in raw if isinstance(n, dict)]
     ids_repaired = repair_note_ids(notes)
+    # Days a series' copy set aside, notes of their own now, written below
+    # with the identities: unwritten, each start made them again under new
+    # ones, and said so again (round 16 of the final audit).
+    report["set_aside_made"] = aside_made = settle_set_aside(notes)
     # Identities minted in memory differ every launch unless written down
     # (ISSUES_LOG: "The identity that only lasted until you closed the
     # app"), so a read that minted any writes them, once, after the cleanup.
@@ -678,8 +682,9 @@ def load_notes(version_change=None):
         # every note afresh besides.
         minted_any = False
         ids_repaired = False
+        aside_made = 0
 
-    if (minted_any or ids_repaired) and not report["notes_file_corrupt"]:
+    if (minted_any or ids_repaired or aside_made) and not report["notes_file_corrupt"]:
         # Guarded like the cleanup: never over a file just declared
         # unreadable. A failure needs no dialog, as the next save writes them
         # anyway; repaired ids ride along, or a read-only session repeats it.

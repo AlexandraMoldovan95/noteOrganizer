@@ -2192,6 +2192,35 @@ check(f"a turn-off over another series' copy makes that copy's days with words n
       f"own first ({_ob_seen})",
       [seen[1:] for seen in _ob_seen] == [
           (True, [('Standup (earlier text)', 'TUESDAY 15 OWN TEXT', '2026-09-15')], False, 1)])
+# ...said after the turn-off's own line, not over it: its Restore previous
+# promise was lost (round 16). The line read as the Save left it.
+_ro_fixture()
+app.notes = [NO.normalize_note(dict(app.find_note(1), _prev={
+                 'title': 'Standup', 'body': 'SERIES TEXT', 'date': '2026-09-08',
+                 'recurrence': {'freq': 'weekly'},
+                 'overrides': {'2026-09-15': {'body': 'TUESDAY 15 OWN TEXT'}}})),
+             app.find_note(2)]
+app.save_notes()
+_ob_line = _ro_off(None, save_first=True)[1][3]
+check(f"the notes made are said after the turn-off's own line, not over it ({_ob_line!r})",
+      'the repeat is off' in _ob_line and 'kept as notes of their own' in _ob_line)
+# ...and a big delete over such a copy sets its days aside first too: no
+# check reached that road (round 16).
+_ro_fixture()
+app.notes = [NO.normalize_note(dict(app.find_note(1), body='SERIES TEXT, the long agenda. ' * 6, _prev={
+                 'title': 'Standup', 'body': 'SERIES TEXT', 'date': '2026-09-08',
+                 'recurrence': {'freq': 'weekly'},
+                 'overrides': {'2026-09-15': {'body': 'TUESDAY 15 OWN TEXT'}}})),
+             app.find_note(2)]
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'x')
+app.save_current_note(); app.update()
+_bd_made = [(n.get('title'), n.get('body'), n.get('date')) for n in app.notes if n['id'] > 2]
+check(f"a big delete over another series' copy makes that copy's days with words notes of their own "
+      f"first ({_bd_made})",
+      _bd_made == [('Standup (earlier text)', 'TUESDAY 15 OWN TEXT', '2026-09-15')]
+      and 'TUESDAY' not in _json5g.dumps(app.find_note(1).get('_prev')))
 # A day moved onto a Tuesday, the repeat then made daily: the Tuesday is the
 # rule's own day, and the moved day was drawn nowhere until the next start
 # (round 15). The save sends it home with its words.
@@ -2213,6 +2242,24 @@ _mh_seen = (_mh.get('moved'), NO.effective_note(_mh, '2026-09-14').get('body'),
 check(f"a day moved onto a date the new rule gives goes home with its words at the save ({_mh_seen})",
       _mh['recurrence']['freq'] == 'daily'
       and _mh_seen == ({}, 'DAY TEXT: room 9', 'SERIES TEXT'))
+# ...and an older rule Restore previous brings back sends a day moved since
+# home at once: a share code made the daily series weekly, a day was moved;
+# left till the next start, a delete on the shared date took the hidden day
+# and its Undo was refused (round 16).
+app.new_note(); app.update()
+_rp = NO.normalize_note({'id': 1, 'uid': 'rp', 'title': 'Standup', 'body': 'SERIES TEXT',
+                         'date': '2026-11-02', 'recurrence': {'freq': 'daily'}})
+NO.apply_shared_update(_rp, {'uid': 'rp', 'title': 'Standup', 'body': 'SERIES TEXT',
+                             'date': '2026-11-02', 'recurrence': {'freq': 'weekly'}})
+_rp['moved'] = {'2026-11-09': '2026-11-11'}
+_rp['overrides'] = {'2026-11-11': {'body': 'MOVED DAY WORDS'}}
+app.notes = [_rp, NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+app.save_notes()
+_ro_restored()
+_rp = app.find_note(1)
+_rp_seen = (_rp['recurrence']['freq'], _rp.get('moved'), NO.effective_note(_rp, '2026-11-09').get('body'))
+check(f"Restore previous bringing an older rule back sends a day moved since home at once ({_rp_seen})",
+      _rp_seen == ('daily', {}, 'MOVED DAY WORDS'))
 
 # ---- "THIS OCCURRENCE ONLY" KEEPS WHAT A DAY CANNOT HOLD ----
 # The day's text goes to the day; a file attached and a tick made in the

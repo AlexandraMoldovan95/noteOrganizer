@@ -383,7 +383,7 @@ from noteorganizer.core.model import (
     spend_series_days,
     copy_days_set_aside,
     moves_home,
-    notes_set_aside,
+    settle_set_aside,
     copy_holds_this_series,
     update_copy,
     comments_kept_by_copy,
@@ -956,9 +956,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._add_box_waiting = {}
         self._waiting_said = {}
         self.notes = self.load_notes()
-        # Said with the start's other news; saved with the first save -- left
-        # unsaved, the next start makes the same notes from the same file.
-        self._set_aside_at_start = self._set_aside_days(say=False)
         self.selected_note_id = None
 
         # User-defined note templates.
@@ -2071,7 +2068,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 f"Some days of a repeating note had earlier text kept aside, where "
                 f"those days now hold text of their own. It is kept as {made} "
                 f"note{'s' if made != 1 else ''} of {'their' if made != 1 else 'its'} own, "
-                "each on its day, titled with the series' name and \"(earlier text)\".")
+                "each on its day, titled with the day's or the series' name and "
+                "\"(earlier text)\".")
 
         if STORAGE_WARNING:
             lines.append("⚠ " + STORAGE_WARNING)
@@ -2164,6 +2162,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if report["cleanup_report"]:
             self._cleanup_report = report["cleanup_report"]
         self._categories_adopted = report.get("categories_adopted") or []
+        # Notes made of days a series' copy set aside, said with the start's
+        # other news (written by the load itself, round 16).
+        self._set_aside_at_start = report.get("set_aside_made", 0)
         if report.get("notes_file_corrupt"):
             self._corrupt_notes_report = report.get("corrupt_backup_path")
             # Sentinel distinct from "nothing happened": the file WAS
@@ -2226,26 +2227,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _set_aside_days(self, say=True):
         """Make notes of their own of the days a series' copy held that a day
-        already holding words could not take (core notes_set_aside), each on
-        its date, and say so (*say*). Returns how many were made."""
-        made = 0
-        stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # Worked out once: asked again for each note made, the whole notebook
-        # was walked for every one of them.
-        next_id = None
-        for note in list(self.notes):
-            if not note.get("_set_aside"):
-                continue
-            if next_id is None:
-                next_id = max([n["id"] for n in self.notes], default=0) + 1
-            for fresh in notes_set_aside(note):
-                self.notes.append(normalize_note(dict(
-                    fresh, id=next_id, created=stamp, updated=stamp)))
-                next_id += 1
-                made += 1
+        already holding words could not take (core settle_set_aside), each on
+        its date, and say so (*say*). Returns how many were made. The start's
+        are made by the load (core load_notes)."""
+        made = settle_set_aside(self.notes)
         if made and say:
-            self.set_status(f"Earlier text of {made} day{'s' if made != 1 else ''} of a "
-                            "repeating note kept as notes of their own")
+            news = (f"Earlier text of {made} day{'s' if made != 1 else ''} of a "
+                    "repeating note kept as notes of their own")
+            # After the line the save's caller set before it -- a turn-off's,
+            # with its Restore previous -- not over it (round 16).
+            said = str(self.status_lbl.cget("text")) if hasattr(self, "status_lbl") else ""
+            self.set_status(f"{said} — {news}" if said.strip() else news)
         return made
 
     def save_notes(self):
@@ -21971,6 +21963,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if (isinstance(patch, dict) and "category" in patch
                     and patch["category"] not in CATEGORY_COLORS):
                 patch["category"] = "General"
+        # An older rule brought back can give a date a day was moved onto
+        # since: it goes home now, not at the next start (round 16).
+        moves_home(note)
         if replaced is None:
             note.pop("_prev", None)
         else:

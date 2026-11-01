@@ -747,6 +747,30 @@ try:
     check('what save_notes wrote is what load_notes reads back',
           [n['title'] for n in _again] == ['Kept', 'Added'])
 
+    # Days a series' copy set aside become notes at the start, written at
+    # once: unwritten, each start made them again under new identities and
+    # said so again (round 16 of the final audit).
+    with open(NO_paths.DATA_FILE, 'r', encoding='utf-8') as f:
+        _sa_was = f.read()
+    with open(NO_paths.DATA_FILE, 'w', encoding='utf-8') as f:
+        json.dump([{'id': 1, 'uid': 'gym', 'title': 'Gym', 'body': 'x', 'date': '2026-11-02',
+                    'recurrence': {'freq': 'weekly'},
+                    '_set_aside': [{'day': '2026-11-09', 'body': 'Earlier words'},
+                                   {'day': '2026-11-16', 'title': 'Own title', 'body': 'B'}]}], f)
+    _sa_first, _sa_report = _storage.load_notes()
+    _sa_again, _sa_report2 = _storage.load_notes()
+    _sa_made = [(n['title'], n['date'], n['uid']) for n in _sa_first if n['id'] != 1]
+    check('a start makes the days set aside notes of their own and writes them at once: the same '
+          'notes at the next start, nothing made again (%s; %s, then %s)'
+          % ([m[:2] for m in _sa_made], _sa_report['set_aside_made'], _sa_report2['set_aside_made']),
+          [m[:2] for m in _sa_made] == [('Gym (earlier text)', '2026-11-09'),
+                                        ('Own title (earlier text)', '2026-11-16')]
+          and _sa_report['set_aside_made'] == 2 and _sa_report2['set_aside_made'] == 0
+          and [(n['title'], n['date'], n['uid']) for n in _sa_again if n['id'] != 1] == _sa_made
+          and not any('_set_aside' in n for n in _sa_again))
+    with open(NO_paths.DATA_FILE, 'w', encoding='utf-8') as f:
+        f.write(_sa_was)
+
     # A start that set the notes file aside unreadable holds none of its
     # notes: a file the Trash's entry shares with one of them is no one's to
     # delete. Only a held run spared them (round 7 of the final audit).
@@ -3823,7 +3847,7 @@ _t15_read = _model_mod.normalize_note({"id": 28, "title": "Gym", "_set_aside": [
 check("days set aside read from a file keep a real date in the calendar's form and a word (%s)"
       % _t10_aside(_t15_read),
       _t10_aside(_t15_read) == [("2026-11-09", "Kept"), ("2026-11-11", "")]
-      and _t15_read["_set_aside"][0]["color"] == "")
+      and (_t15_read.get("_set_aside") or [{}])[0].get("color") == "")
 # A copy of another series than the note's repeats as now is replaced by the
 # next turn-off, delete or import Update: its days with words were in it
 # alone, and the new copy erased them (round 15). Set aside first.
@@ -3885,9 +3909,85 @@ check("a share code making the series daily sends a day moved onto its new days 
 _t15_flood = _model_mod.normalize_note({"id": 30, "title": "Gym", "body": "x", "_set_aside": [
     {"day": "2026-11-09", "body": "words %d" % i} for i in range(_model_mod.MAX_OCCURRENCES + 1)]})
 check("a file's days set aside are read at most as many as a series' moved days (%d)"
-      % len(_t15_flood["_set_aside"]),
-      len(_t15_flood["_set_aside"]) == _model_mod.MAX_OCCURRENCES
+      % len(_t15_flood.get("_set_aside") or []),
+      len(_t15_flood.get("_set_aside") or []) == _model_mod.MAX_OCCURRENCES
       and _t15_flood["_set_aside"][0]["body"] == "words 0")
+# Round 16. A day goes home only where the rule still gives its own date:
+# moved onto a Thursday, the series then on Thursdays, its words stay on the
+# Thursday they showed on, and the move goes -- sent "home" to a Monday the
+# rule no longer gives, they left the calendar.
+_t16_thu = _model_mod.normalize_note({"id": 31, "title": "Gym", "body": "plan", "date": "2026-11-05",
+                                      "recurrence": {"freq": "weekly"}, "moved": {"2026-11-09": "2026-11-12"},
+                                      "overrides": {"2026-11-12": {"body": "dentist at 4"}}})
+check("a day moved onto a date the rule now gives, its own date no longer the rule's, keeps its words "
+      "where they showed (%s, %s)" % (_t16_thu["moved"], sorted(_t16_thu["overrides"])),
+      _t16_thu["moved"] == {} and _t10_shows(_t16_thu, "2026-11-12") == "dentist at 4"
+      and "2026-11-09" not in _t16_thu["overrides"])
+
+
+class _T16Walked(dict):
+    """A note's moves that count each walk over them, and each move read."""
+    walks = reads = 0
+
+    def __iter__(self):
+        _T16Walked.walks += 1
+        return super().__iter__()
+
+    def items(self):
+        _T16Walked.walks += 1
+        return super().items()
+
+    def __getitem__(self, day):
+        _T16Walked.reads += 1
+        return super().__getitem__(day)
+
+
+# ...and a chain is walked once, not a pass a link: 2,000 links under a daily
+# rule took the square of that, and a crafted backup froze the window. Two
+# days moved onto each other's dates stay: neither date is free.
+_t16_days = [(_dtT.date(2026, 11, 2) + _dtT.timedelta(days=i)).isoformat() for i in range(2001)]
+_t16_chain = {"id": 32, "title": "Gym", "body": "x", "date": "2026-11-02",
+              "recurrence": {"freq": "daily", "interval": 1}, "exceptions": [],
+              "moved": _T16Walked({_t16_days[i]: _t16_days[i + 1] for i in range(2000)}),
+              "overrides": {_t16_days[2000]: {"body": "the last"}}}
+_model_mod.moves_home(_t16_chain)
+_t16_swap = _model_mod.normalize_note({"id": 35, "title": "Gym", "body": "x", "date": "2026-11-02",
+                                       "recurrence": {"freq": "daily"},
+                                       "moved": {"2026-11-09": "2026-11-10", "2026-11-10": "2026-11-09"}})
+check("a chain of 2,000 moved days, every date the rule's, goes home walking the moves once, "
+      "not once a link; two days swapped stay (%d walks, %d reads; %s)"
+      % (_T16Walked.walks, _T16Walked.reads, _t16_swap["moved"]),
+      _T16Walked.walks <= 3 and _T16Walked.reads <= 2 * 2000 + 10 and _t16_chain["moved"] == {}
+      and _t16_chain["overrides"] == {_t16_days[1999]: {"body": "the last"}}
+      and _t16_swap["moved"] == {"2026-11-09": "2026-11-10", "2026-11-10": "2026-11-09"})
+# ...and a note made of a day set aside has words: one with none -- an
+# untitled series whose day's text was emptied -- made an empty note at a
+# save, and none at the start (round 16).
+check("days set aside with no words make no note, at a save as at the start",
+      _model_mod.notes_set_aside({"title": "", "_set_aside": [
+          {"day": "2026-11-09", "title": "", "body": "", "comments": "", "category": "", "color": "#ff0000"}]})
+      == [])
+# ...and a copy of another series asks for each day where the note holds it
+# now: moved since by the note, or sent home -- by date alone, its words were
+# set aside as earlier text the note still held.
+_t16_copy_day = {"title": "Gym", "body": "x", "comments": "", "formatting": [], "paragraphs": [],
+                 "recurrence": {"freq": "weekly"}, "exceptions": []}
+_t16_moved_since = _model_mod.normalize_note({
+    "id": 33, "title": "Gym", "body": "x", "date": "2026-10-26", "recurrence": {"freq": "weekly"},
+    "moved": {"2026-11-09": "2026-11-11"}, "overrides": {"2026-11-11": {"body": "legs + towel"}},
+    "_prev": dict(_t16_copy_day, date="2026-11-02", moved={},
+                  overrides={"2026-11-09": {"body": "legs + towel"}})})
+_t16_sent_home = _model_mod.normalize_note({
+    "id": 34, "title": "Gym", "body": "x", "date": "2026-11-02", "recurrence": {"freq": "daily"},
+    "overrides": {"2026-11-09": {"body": "legs + towel"}},
+    "_prev": dict(_t16_copy_day, date="2026-11-02", moved={"2026-11-09": "2026-11-12"},
+                  overrides={"2026-11-12": {"body": "legs + towel"}})})
+for _t16_note in (_t16_moved_since, _t16_sent_home):
+    _model_mod.copy_days_set_aside(_t16_note)
+check("a copy's day the note moved since, or sent home, is held, not set aside as earlier text (%s, %s)"
+      % (_t16_moved_since.get("_set_aside"), _t16_sent_home.get("_set_aside")),
+      not _t16_moved_since.get("_set_aside") and not _t16_sent_home.get("_set_aside")
+      and "overrides" not in _t16_moved_since["_prev"])
 
 
 def _t10_side(rnd, tag, ops):

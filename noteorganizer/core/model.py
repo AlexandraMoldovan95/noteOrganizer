@@ -401,9 +401,19 @@ def copy_days_set_aside(note):
     prev = note.get("_prev")
     if not _series_own_copy(prev) or _repeats_as(note, prev):
         return
+    mine, moved = note.get("overrides") or {}, note.get("moved") or {}
+    came = {to: day for day, to in (prev.get("moved") or {}).items()}
+
+    def held(key):
+        # The note's day for it: on its date, on the day the copy moved there
+        # from, or where the note has moved that day since -- by date alone, a
+        # day the note moved was set aside as words it still held (round 16).
+        day = came.get(key, key)
+        return any(at in mine and _own_words_held(prev, key, note, at)
+                   for at in {key, day, moved.get(day, day)})
+
     aside = [_aside_entry(prev, key, key) for key in sorted(prev.get("overrides") or {})
-             if day_has_words(prev, key) and not (
-                 key in (note.get("overrides") or {}) and _own_words_held(prev, key, note, key))]
+             if day_has_words(prev, key) and not held(key)]
     if aside:
         note["_set_aside"] = (note.get("_set_aside") or []) + aside
     for key in DAY_FIELDS:
@@ -417,12 +427,35 @@ def notes_set_aside(note):
     rounds, each leaving a case; a note of its own is seen and kept as it is
     (round 15, the owner's choice)."""
     made = []
-    for entry in note.pop("_set_aside", None) or []:
+    # Shaped as a read shapes them: an entry with no words made an empty
+    # note at a save, and none at the start (round 16).
+    for entry in _shaped_aside(note.pop("_set_aside", None)):
         title = entry.get("title") or note.get("title") or ""
         made.append({"title": (title + " (earlier text)").strip(), "body": entry.get("body", ""),
                      "comments": entry.get("comments", ""),
                      "category": entry.get("category") or note.get("category") or "",
                      "color": entry.get("color", ""), "date": entry.get("day", "")})
+    return made
+
+
+def settle_set_aside(notes):
+    """Each note of *notes* whose days were set aside given them as notes of
+    their own (notes_set_aside), added at the end and numbered on from the
+    highest, worked out once -- asked for each, the whole notebook was walked
+    for every note made. Returns how many. At the start (core load_notes,
+    which writes them at once: left for the next save, each start made them
+    again under new identities -- round 16) and at every save."""
+    stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    made, next_id = 0, None
+    for note in list(notes):
+        if not isinstance(note, dict) or not note.get("_set_aside"):
+            continue
+        if next_id is None:
+            next_id = max([n["id"] for n in notes], default=0) + 1
+        for fresh in notes_set_aside(note):
+            notes.append(normalize_note(dict(fresh, id=next_id, created=stamp, updated=stamp)))
+            next_id += 1
+            made += 1
     return made
 
 
@@ -491,26 +524,37 @@ def _copy_days_placed(note, prev, moved):
 
 
 def moves_home(note):
-    """Each day of *note* moved onto a date its rule gives by itself -- the
-    rule or its start changed since -- sent home with its words, until none
-    is left: drawn where the rule had a day already, it was drawn nowhere,
-    and a delete there took it. Not off a date whose own day was deleted or
-    moved away. At every read and at every save of the series (round 15)."""
+    """Each day of *note* moved onto a date its rule now gives, drawn nowhere
+    there, taken off it: home with its words where the rule still gives its
+    own date, else its words stay on the rule's day there. Not off a date
+    whose own day stays deleted or moved away; each chain walked once. At
+    every read, save, update and restore of the series (ISSUES_LOG: "Round
+    sixteen")."""
     moved = note.get("moved")
     if not moved or not isinstance(moved, dict) or not is_recurring(note):
         return
     deleted = set(note.get("exceptions") or [])
-    gives, home = _rule_days_among(note, list(moved.values())), {}
-    while True:
-        more = {orig: new for orig, new in moved.items()
-                if new in gives and new not in deleted and new not in moved}
-        if not more:
-            break
-        for orig in more:
-            del moved[orig]
-        home.update(more)
+    gives = _rule_days_among(note, list(moved) + list(moved.values()))
+    goes = {}
+    for start in moved:
+        path, on_path, at = [], set(), start
+        while at in moved and at not in goes and at not in on_path:
+            path.append(at)
+            on_path.add(at)
+            at = moved[at]
+        # The chain's end, a day already settled, or a loop -- none of whose
+        # days is ever free to come back to.
+        after = False if at in on_path else goes.get(at, True)
+        for orig in reversed(path):
+            new = moved[orig]
+            after = after and new in gives and new not in deleted
+            goes[orig] = after
+    home = {orig: moved.pop(orig) for orig in [day for day, going in goes.items() if going]}
+    if not home:
+        return
     days = note.setdefault("overrides", {})
-    words = {new: days.pop(new) for new in home.values() if new in days}
+    words = {new: days.pop(new) for orig, new in home.items()
+             if orig in gives and orig not in deleted and new in days}
     for orig, new in home.items():
         if new in words and orig not in days:
             days[orig] = words.pop(new)
