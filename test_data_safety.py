@@ -4153,9 +4153,13 @@ _t22_book = [_t22_mine]
 _t22_first = _model_mod.settle_set_aside(_t22_book)
 _t22_mine["_set_aside"] = [{"day": "2026-11-09", "body": "Words from the backup"}]
 _t22_again = _model_mod.settle_set_aside(_t22_book)
-check("an '(earlier text)' note already holding the same words on its day is not made again (%s, %s, %d notes)"
-      % (_t22_first, _t22_again, len(_t22_book)),
-      _t22_first == 1 and _t22_again == 0 and len(_t22_book) == 2)
+# ...its comments among its words: the same text with other comments is
+# another note, or its comments arrived nowhere.
+_t22_mine["_set_aside"] = [{"day": "2026-11-09", "body": "Words from the backup", "comments": "ask the physio"}]
+_t22_commented = _model_mod.settle_set_aside(_t22_book)
+check("an '(earlier text)' note already holding the same words on its day is not made again (%s, %s, %s, %d notes)"
+      % (_t22_first, _t22_again, _t22_commented, len(_t22_book)),
+      _t22_first == 1 and _t22_again == 0 and _t22_commented == 1 and len(_t22_book) == 3)
 # ...and a copy holding the series as the note does, its weekday lit and the
 # note's not, is spent: compared as stored, Restore previous stayed offered
 # for nothing, and the next turn-off brought back an old agenda.

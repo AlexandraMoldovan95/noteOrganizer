@@ -14522,7 +14522,7 @@
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "            if (made_note[\"title\"], made_note[\"date\"], made_note[\"body\"]) in held:\n                continue\n",
+        "find": "            if key in held:\n                continue\n",
         "replace": ""
       }
     ],

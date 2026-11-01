@@ -490,12 +490,15 @@ def settle_set_aside(notes):
             # A note already holding the same words on the same day is that
             # note: a backup's Update made it again at every import (the lows
             # wave's verification).
-            held = {(n.get("title"), n.get("date"), n.get("body")) for n in notes if isinstance(n, dict)}
+            held = {(n.get("title"), n.get("date"), n.get("body"), n.get("comments"))
+                    for n in notes if isinstance(n, dict)}
         for fresh in notes_set_aside(note):
             made_note = normalize_note(dict(fresh, id=next_id, created=stamp, updated=stamp))
-            if (made_note["title"], made_note["date"], made_note["body"]) in held:
+            # Its comments among its words: other comments are another note.
+            key = (made_note["title"], made_note["date"], made_note["body"], made_note["comments"])
+            if key in held:
                 continue
-            held.add((made_note["title"], made_note["date"], made_note["body"]))
+            held.add(key)
             notes.append(made_note)
             next_id += 1
             made += 1
