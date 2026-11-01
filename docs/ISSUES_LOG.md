@@ -217,6 +217,7 @@ is in the table below as well.
 | [Round fourteen: the old text again after an edit in the middle](#round-fourteen-the-old-text-again-after-an-edit-in-the-middle) | To keep what is lacking, compare what both hold, in order; a table by what its cells say. | next |
 | [Round fifteen: four ways of adding, and a note of its own](#round-fifteen-four-ways-of-adding-and-a-note-of-its-own) | When each fix of a merging rule leaves a new case, stop merging: keep both where the person sees them. | next |
 | [Round sixteen: a home the rule no longer gives, and a chain walked once a link](#round-sixteen-a-home-the-rule-no-longer-gives-and-a-chain-walked-once-a-link) | A rule that moves something "back" must ask whether "back" still exists; a fixpoint loop over links is a quadratic waiting for a long chain. | next |
+| [Round seventeen: a week shifted a day at a time, and a day no list showed](#round-seventeen-a-week-shifted-a-day-at-a-time-and-a-day-no-list-showed) | Decide where everything lands before moving anything, and refuse any landing that writes over something. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -3543,6 +3544,64 @@ The import's own status line still follows the made notes' one.
 
 **Takeaway:** a rule that moves something "back" must ask whether "back" still exists; a
 fixpoint loop over links is a quadratic waiting for a long chain.
+
+### Round seventeen: a week shifted a day at a time, and a day no list showed
+
+*(2026-11-01 · found by the final audit's seventeenth break-it round, small, on round sixteen's
+fixes and the series' days as a whole; the phone's round found two of these)*
+
+**Symptom:**
+- **A day's text in no file (critical, round sixteen's).** A week's standups shifted a day at a
+  time (Wed to Thu, Tue to Wed, Mon to Tue), then the shift made the rule (Tue-Thu): the
+  Monday's words stayed on Tuesday as round sixteen wanted, the Tuesday came home there, and the
+  words left over were written over the Wednesday's. Nothing asked or said, and a 0.97.405
+  notebook in that shape lost them at its first start.
+- **A day no list showed.** A day moved onto a deleted date, its own date then no longer the
+  rule's: drawn by no day, and `off_schedule_days` left out every deleted date.
+- **A dead move's date taken twice.** A move whose own date the rule no longer gives is kept
+  (a rule changed back brings it back), drawn nowhere; a day moved onto its date wrote a second
+  move there, and every reader took the dead one.
+- **A series turned back on as it was read as another** when its start's weekday was lit once
+  and not the next time: its deleted days came back and its copy's days became "earlier text".
+- **An Update's copy, as a restore leaves it**, was not set aside when replaced (round fifteen
+  asked the copy's shape), so its days' words went with it; and a backup's Update set aside words
+  the backup itself brought back.
+
+**Root cause:** round sixteen moved words one by one and then wrote what was left over the
+dates, never asking where each would land; and several questions about a day were asked of its
+date, or of a copy's shape, instead of what each holds. Underneath: since round eleven nearly
+every finding came from rules that moved a day's words on their own, and each such rule was the
+next round's finding.
+
+**Fix (the owner's choice, with three changes to the audit itself):**
+- Words never move on their own. `moves_home` became `drop_hidden_moves`: a move onto a date
+  the rule now gives -- the day drawn nowhere there -- is dropped, its words staying where they
+  showed, as that date's day; nothing is written anywhere, so nothing can be written over. A
+  day's words left on a date the series no longer has are listed off the schedule, for the
+  person to settle.
+- `off_schedule_days` asks a deleted date a day was moved onto of the series as it is.
+- `move_day` drops a dead move onto the date it moves a day to.
+- `_same_series`: a weekly rule's start weekday, or a monthly rule's day, lit or left to the
+  start, is one rule -- for `_repeats_as` and `kept_days_fit`.
+- `copy_days_set_aside` takes any copy that repeats, an Update's too, except the one a turn-off
+  keeps whole; a backup's Update counts its own days as held.
+- The notes made of days set aside are said on an info banner of their own, with Show, the
+  status line left to the save.
+- `test_data_safety` (the shifted week, a stray word, a deleted date listed, the weekday lit,
+  the dead move, an Update's copy, a backup's days), qa5 (the banner, a turn-off keeping an
+  Update's copy of another series); round fifteen's and sixteen's checks of words "sent home"
+  now expect them where they showed. Mutants DR169 re-aimed, DR170 and DR172-DR178 new;
+  DR154, DR162 and DR171 gone with the code they mutated.
+- The audit, the owner's choices: a committed fuzz of a series' days checks that no action
+  sequence loses or doubles a day's words; a finding keeps a round open only if ordinary steps
+  in the app reproduce it (data loss always counts); lows wait for a wave of their own.
+
+**Written down, not fixed:** Restore previous of a copy holding some day kinds and not others
+restores those beside the current series' others, and a move can then send an old day's words
+to another weekday (five uncommon steps, nothing lost).
+
+**Takeaway:** decide where everything lands before moving anything, and refuse any landing
+that writes over something -- or, simpler, do not move a person's words on their own at all.
 
 ## Tk & platform gotchas
 

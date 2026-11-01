@@ -704,6 +704,11 @@ def move_day(note, day, to):
     if not isinstance(moved, dict):
         moved = note["moved"] = {}
     orig = moved_from(note, day) or day
+    # Another move onto *to*, which the caller found free, is a dead one --
+    # its own date no longer the rule's -- and goes: two moves onto one date
+    # were read as the dead one, and the next read kept only one (round 17).
+    for dead in [other for other, new in moved.items() if new == to and other != orig]:
+        del moved[dead]
     if to == orig:
         moved.pop(orig, None)
     else:
@@ -1281,18 +1286,24 @@ def off_schedule_days(note):
     if not isinstance(overrides, dict) or not overrides:
         return []
     exceptions = set(note.get("exceptions") or [])
+    moved = note.get("moved")
+    landed = set(moved.values()) if isinstance(moved, dict) else set()
     # Asked with no day skipped, so a skipped day reads as on the schedule
-    # here -- and is left out above, as a deletion rather than a fall.
+    # here -- and is left out above, as a deletion rather than a fall. A
+    # deleted date a day was moved onto holds that day's words, and is asked
+    # of the series as it is: hidden there, they were listed nowhere (round 17).
     schedule = dict(note, exceptions=[])
     asked = [(day, when) for day, when in
              ((d, parse_date(d)) for d in sorted(
                  d for d in overrides if isinstance(d, str)))
-             if when is not None and day not in exceptions]
+             if when is not None and (day not in exceptions or day in landed)]
     # What expand_occurrences(schedule, when, when) says of each day, worked
     # out for all of them at once: asked once per edited day, it read every
     # moved day each time (_drawn_on_days).
-    shown = _drawn_on_days(schedule, [when for _day, when in asked])
-    return [day for day, when in asked if shown[when] != [day]]
+    shown = _drawn_on_days(schedule, [when for day, when in asked if day not in exceptions])
+    kept = _drawn_on_days(note, [when for day, when in asked if day in exceptions])
+    return [day for day, when in asked
+            if (kept if day in exceptions else shown)[when] != [day]]
 
 
 def describe_recurrence(note):

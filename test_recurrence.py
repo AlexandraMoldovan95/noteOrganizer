@@ -725,11 +725,15 @@ def _per_day_moves(note):
 
 
 def _per_day_off(note):
+    # A deleted date a day was moved onto is asked of the series as it is
+    # (round 17 of the final audit); any other, with no day skipped.
     sched = dict(note, exceptions=[])
     exc = set(note.get('exceptions') or [])
+    landed = set((note.get('moved') or {}).values())
     return [d for d in sorted(note.get('overrides') or {})
-            if NO.parse_date(d) and d not in exc
-            and NO.expand_occurrences(sched, NO.parse_date(d), NO.parse_date(d)) != [d]]
+            if NO.parse_date(d) and (d not in exc or d in landed)
+            and NO.expand_occurrences(note if d in exc else sched,
+                                      NO.parse_date(d), NO.parse_date(d)) != [d]]
 
 
 _rng = _random.Random(20261028)

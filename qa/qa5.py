@@ -1837,6 +1837,29 @@ check(f"a turn-off after an import's Update keeps the update's copy, the series 
       _uc_prev.get('body') == 'SERIES TEXT' and 'category' in _uc_prev
       and (_uc_prev.get('recurrence') or {}).get('freq') == 'weekly'
       and not app.find_note(1)['recurrence'].get('freq'))
+# ...kept whole with its own days when it holds another series: they stay in
+# it, not set aside as earlier text the turn-off then left out (round 17).
+_ro_fixture()
+_uc2 = app.find_note(1)
+NO.apply_shared_update(_uc2, dict(
+    {key: _uc2[key] for key in ('uid', 'created')}, title='Standup', body='FROM THE PHONE',
+    date='2026-09-08', recurrence={'freq': 'weekly'},
+    overrides={'2026-09-15': {'body': 'PHONE TUESDAY'}}), NO.UPDATABLE_FROM_BACKUP)
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app._themed_dialog = lambda *a, **k: True
+try:
+    app.rec_freq_var.set(NO.FREQ_LABELS[''])
+    app.on_recurrence_changed(); app.update()
+    app.save_current_note(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+_uc2_prev = app.find_note(1).get('_prev') or {}
+_uc2_made = [n.get('title') for n in app.notes if n['id'] > 2]
+check(f"a turn-off keeps an import's Update copy of another series whole, its days in it, nothing set "
+      f"aside ({sorted(_uc2_prev.get('overrides') or {})}, {_uc2_made})",
+      sorted(_uc2_prev.get('overrides') or {}) == ['2026-09-14', '2026-09-21'] and _uc2_made == []
+      and _uc2_prev.get('body') == 'SERIES TEXT')
 # A day reset to the series came back from the turn-off's copy at every
 # start, in a duplicate and after a Trash restore (round 8): once the note
 # repeats as its copy's series again, the copy's days are spent.
@@ -2138,7 +2161,7 @@ app.notes = [NO.normalize_note({'id': 1, 'title': 'Standup', 'body': 'SERIES TEX
                                 '_prev': dict(_tb_copy)}),
              NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
 app.save_notes()
-_sa_line = str(app.status_lbl.cget('text'))
+_sa_line = str(app.toast_lbl.cget('text'))
 app.save_notes()
 _sa_made = [(n.get('title'), n.get('body'), n.get('date')) for n in app.notes if n['id'] > 2]
 with open(NO.DATA_FILE, encoding='utf-8') as _f:
@@ -2202,8 +2225,13 @@ app.notes = [NO.normalize_note(dict(app.find_note(1), _prev={
              app.find_note(2)]
 app.save_notes()
 _ob_line = _ro_off(None, save_first=True)[1][3]
-check(f"the notes made are said after the turn-off's own line, not over it ({_ob_line!r})",
-      'the repeat is off' in _ob_line and 'kept as notes of their own' in _ob_line)
+_ob_toast = str(app.toast_lbl.cget('text'))
+app._run_toast_action(); app.update()
+_ob_shown = (app.find_note(app.selected_note_id) or {}).get('title')
+check(f"the notes made are said on a banner of their own that opens them, the turn-off's own line "
+      f"kept ({_ob_line!r}; {_ob_toast!r}; {_ob_shown!r})",
+      'the repeat is off' in _ob_line and 'kept as notes of their own' not in _ob_line
+      and 'kept as notes of their own' in _ob_toast and _ob_shown == 'Standup (earlier text)')
 # ...and a big delete over such a copy sets its days aside first too: no
 # check reached that road (round 16).
 _ro_fixture()
@@ -2223,7 +2251,8 @@ check(f"a big delete over another series' copy makes that copy's days with words
       and 'TUESDAY' not in _json5g.dumps(app.find_note(1).get('_prev')))
 # A day moved onto a Tuesday, the repeat then made daily: the Tuesday is the
 # rule's own day, and the moved day was drawn nowhere until the next start
-# (round 15). The save sends it home with its words.
+# (round 15). The save drops the move; its words stay where they showed (the
+# owner's choice, round 17: words never move on their own).
 _ro_fixture()
 _mh = app.find_note(1)
 _mh['moved'] = {'2026-09-14': '2026-09-15'}
@@ -2239,13 +2268,14 @@ finally:
 _mh = app.find_note(1)
 _mh_seen = (_mh.get('moved'), NO.effective_note(_mh, '2026-09-14').get('body'),
             NO.effective_note(_mh, '2026-09-15').get('body').rstrip('\n'))
-check(f"a day moved onto a date the new rule gives goes home with its words at the save ({_mh_seen})",
+check(f"a day moved onto a date the new rule gives loses its move at the save, its words where they "
+      f"showed ({_mh_seen})",
       _mh['recurrence']['freq'] == 'daily'
-      and _mh_seen == ({}, 'DAY TEXT: room 9', 'SERIES TEXT'))
-# ...and an older rule Restore previous brings back sends a day moved since
-# home at once: a share code made the daily series weekly, a day was moved;
-# left till the next start, a delete on the shared date took the hidden day
-# and its Undo was refused (round 16).
+      and _mh_seen == ({}, 'SERIES TEXT', 'DAY TEXT: room 9'))
+# ...and an older rule Restore previous brings back drops a move made since
+# onto its days at once: a share code made the daily series weekly, a day was
+# moved; left till the next start, a delete on the shared date took the hidden
+# day and its Undo was refused (round 16).
 app.new_note(); app.update()
 _rp = NO.normalize_note({'id': 1, 'uid': 'rp', 'title': 'Standup', 'body': 'SERIES TEXT',
                          'date': '2026-11-02', 'recurrence': {'freq': 'daily'}})
@@ -2257,8 +2287,9 @@ app.notes = [_rp, NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
 app.save_notes()
 _ro_restored()
 _rp = app.find_note(1)
-_rp_seen = (_rp['recurrence']['freq'], _rp.get('moved'), NO.effective_note(_rp, '2026-11-09').get('body'))
-check(f"Restore previous bringing an older rule back sends a day moved since home at once ({_rp_seen})",
+_rp_seen = (_rp['recurrence']['freq'], _rp.get('moved'), NO.effective_note(_rp, '2026-11-11').get('body'))
+check(f"Restore previous bringing an older rule back drops a move made since onto its days at once "
+      f"({_rp_seen})",
       _rp_seen == ('daily', {}, 'MOVED DAY WORDS'))
 
 # ---- "THIS OCCURRENCE ONLY" KEEPS WHAT A DAY CANNOT HOLD ----

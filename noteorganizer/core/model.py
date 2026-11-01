@@ -308,11 +308,27 @@ def comments_kept_by_copy(copy_comments, comments):
     return comments
 
 
+def _same_series(day, rule, other_day, other_rule):
+    """Whether two starts and rules are one series. A weekly rule's start
+    weekday lit, or left to the start, is the same rule -- as a monthly
+    rule's day: the editor stores both, and a series turned back on as it
+    was read as another (round 17)."""
+    if day != other_day:
+        return False
+    rules = (normalize_recurrence(rule), normalize_recurrence(other_rule))
+    when = parse_date(day)
+    for rec in rules if when is not None else ():
+        if rec["freq"] == "weekly" and not rec["weekdays"]:
+            rec["weekdays"] = [when.weekday()]
+        if rec["freq"] == "monthly" and not rec["month_days"]:
+            rec["month_days"] = [when.day]
+    return rules[0] == rules[1]
+
+
 def _repeats_as(note, prev):
     """Whether *note* repeats as the series *prev* holds: its date and rule."""
-    return (is_recurring(note) and prev.get("date") == note.get("date")
-            and normalize_recurrence(prev.get("recurrence"))
-            == normalize_recurrence(note.get("recurrence")))
+    return (is_recurring(note) and _same_series(prev.get("date"), prev.get("recurrence"),
+                                                note.get("date"), note.get("recurrence")))
 
 
 def copy_holds_this_series(note):
@@ -393,24 +409,29 @@ def _aside_entry(prev, key, at):
     return entry
 
 
-def copy_days_set_aside(note):
+def copy_days_set_aside(note, incoming=None):
     """Before *note*'s rescue copy is replaced: the days with words of their
     own of a series' copy the note no longer repeats as, set aside to be
     notes of their own. The copy was the only place they were kept, and the
-    next turn-off or big delete erased them (round 15)."""
+    next turn-off or big delete erased them (round 15). An Update's copy too,
+    as a restore leaves it (round 17); held by the note, or by the *incoming*
+    note whose days a backup's Update is about to write."""
     prev = note.get("_prev")
-    if not _series_own_copy(prev) or _repeats_as(note, prev):
+    if not isinstance(prev, dict) or not is_recurring(prev) or _repeats_as(note, prev):
         return
-    mine, moved = note.get("overrides") or {}, note.get("moved") or {}
     came = {to: day for day, to in (prev.get("moved") or {}).items()}
 
     def held(key):
-        # The note's day for it: on its date, on the day the copy moved there
-        # from, or where the note has moved that day since -- by date alone, a
+        # A holder's day for it: on its date, on the day the copy moved there
+        # from, or where the holder has moved that day since -- by date alone, a
         # day the note moved was set aside as words it still held (round 16).
         day = came.get(key, key)
-        return any(at in mine and _own_words_held(prev, key, note, at)
-                   for at in {key, day, moved.get(day, day)})
+        for holder in (note, incoming) if incoming is not None else (note,):
+            mine, moved = holder.get("overrides") or {}, holder.get("moved") or {}
+            if any(at in mine and _own_words_held(prev, key, holder, at)
+                   for at in {key, day, moved.get(day, day)}):
+                return True
+        return False
 
     aside = [_aside_entry(prev, key, key) for key in sorted(prev.get("overrides") or {})
              if day_has_words(prev, key) and not held(key)]
@@ -523,18 +544,18 @@ def _copy_days_placed(note, prev, moved):
     return overrides, aside
 
 
-def moves_home(note):
-    """Each day of *note* moved onto a date its rule now gives, drawn nowhere
-    there, taken off it: home with its words where the rule still gives its
-    own date, else its words stay on the rule's day there. Not off a date
-    whose own day stays deleted or moved away; each chain walked once. At
-    every read, save, update and restore of the series (ISSUES_LOG: "Round
-    sixteen")."""
+def drop_hidden_moves(note):
+    """Each move of *note* onto a date its rule now gives -- the day drawn
+    nowhere there, a delete there taking it -- dropped; its words stay where
+    they showed, on the rule's day there. Words never move on their own (the
+    owner's choice). Not off a date whose own day stays deleted or moved
+    away; each chain walked once. At every read, save, update and restore of
+    the series (ISSUES_LOG: "Round seventeen")."""
     moved = note.get("moved")
     if not moved or not isinstance(moved, dict) or not is_recurring(note):
         return
     deleted = set(note.get("exceptions") or [])
-    gives = _rule_days_among(note, list(moved) + list(moved.values()))
+    gives = _rule_days_among(note, list(moved.values()))
     goes = {}
     for start in moved:
         path, on_path, at = [], set(), start
@@ -549,16 +570,8 @@ def moves_home(note):
             new = moved[orig]
             after = after and new in gives and new not in deleted
             goes[orig] = after
-    home = {orig: moved.pop(orig) for orig in [day for day, going in goes.items() if going]}
-    if not home:
-        return
-    days = note.setdefault("overrides", {})
-    words = {new: days.pop(new) for orig, new in home.items()
-             if orig in gives and orig not in deleted and new in days}
-    for orig, new in home.items():
-        if new in words and orig not in days:
-            days[orig] = words.pop(new)
-    days.update(words)
+    for orig in [day for day, leaving in goes.items() if leaving]:
+        del moved[orig]
 
 
 def _days_back_from_copy(note):
@@ -594,9 +607,7 @@ def kept_days_fit(note, date_value, recurrence):
     if not kept or not (isinstance(prev, dict) and is_recurring(prev)
                         and all(prev.get(key) == value for key, value in kept.items())):
         return True
-    return (prev.get("date") == date_value
-            and normalize_recurrence(prev.get("recurrence"))
-            == normalize_recurrence(recurrence))
+    return _same_series(prev.get("date"), prev.get("recurrence"), date_value, recurrence)
 
 
 def apply_shared_update(note, incoming, fields=UPDATABLE_FROM_SHARED):
@@ -631,14 +642,15 @@ def apply_shared_update(note, incoming, fields=UPDATABLE_FROM_SHARED):
     if restarted and note.get("exceptions"):
         prev["exceptions"] = copy.deepcopy(note["exceptions"])
     # The copy this one replaces may hold another series' days alone: set
-    # aside once kept_days_fit has read them (round 15).
-    copy_days_set_aside(note)
+    # aside once kept_days_fit has read them (round 15) -- held by the days
+    # a backup brings, too (round 17).
+    copy_days_set_aside(note, fresh if "overrides" in fields else None)
     note["_prev"] = prev
     for field in fields:
         note[field] = copy.deepcopy(fresh[field])
     if restarted:
         note["exceptions"] = []
-    moves_home(note)
+    drop_hidden_moves(note)
     note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     return note
 
@@ -1117,7 +1129,7 @@ def normalize_note(note):
         for d, patch in clean["overrides"].items()
         if isinstance(d, str) and parse_date(d) and isinstance(patch, dict)
     }
-    moves_home(clean)
+    drop_hidden_moves(clean)
 
     # Tags were removed as a feature — drop any leftover "tags" key from
     # notes saved before this cleanup, so old data doesn't keep carrying it

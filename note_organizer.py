@@ -382,7 +382,7 @@ from noteorganizer.core.model import (
     days_hold_own_text,
     spend_series_days,
     copy_days_set_aside,
-    moves_home,
+    drop_hidden_moves,
     settle_set_aside,
     copy_holds_this_series,
     update_copy,
@@ -2234,10 +2234,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if made and say:
             news = (f"Earlier text of {made} day{'s' if made != 1 else ''} of a "
                     "repeating note kept as notes of their own")
-            # After the line the save's caller set before it -- a turn-off's,
-            # with its Restore previous -- not over it (round 16).
-            said = str(self.status_lbl.cget("text")) if hasattr(self, "status_lbl") else ""
-            self.set_status(f"{said} — {news}" if said.strip() else news)
+            # A banner of its own, the status line left to the save: over it,
+            # a turn-off's Restore previous went; after it, it ran past the
+            # bar's edge or onto a line about something else (rounds 16-17).
+            first = self.notes[-made]
+            self._show_toast(news, kind="info", action=lambda: self.open_note_in_tab(first),
+                             action_text="Show")
         return made
 
     def save_notes(self):
@@ -21964,8 +21966,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     and patch["category"] not in CATEGORY_COLORS):
                 patch["category"] = "General"
         # An older rule brought back can give a date a day was moved onto
-        # since: it goes home now, not at the next start (round 16).
-        moves_home(note)
+        # since: that move goes now, not at the next start (round 16).
+        drop_hidden_moves(note)
         if replaced is None:
             note.pop("_prev", None)
         else:
@@ -22380,13 +22382,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         turn-off's copy too, whatever series it held, so Restore previous
         brings back the words and the series together (2026-10-28, the
         final audit; another series' copy, round 10)."""
+        existing = note.get("_prev")
         # Another series' copy, replaced here, held its days alone: they are
-        # set aside, to be notes of their own (round 15).
-        copy_days_set_aside(note)
+        # set aside, to be notes of their own (round 15) -- not an Update's
+        # copy this turn-off keeps whole (round 17).
+        if takes_text or not (update_copy(existing) and not rescue_copy_spent(note)):
+            copy_days_set_aside(note)
         prev = self._whole_note_rescue_copy(note)
         held = getattr(self, "_held_text_rescue", None)
         self._held_text_rescue = None
-        existing = note.get("_prev")
         if takes_text:
             pass                # the newest text, whatever an older copy holds
         elif update_copy(existing) and not rescue_copy_spent(note):
@@ -22791,10 +22795,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # _write_series_owned.
                 note["attachments"] = [dict(a) for a in self.current_attachments]
                 note["recurrence"] = recurrence
-                # A day moved onto a date the new rule gives goes home now,
-                # not at the next start (moves_home). Turned back on as the
-                # series its copy holds: the note holds the days again.
-                moves_home(note)
+                # A day moved onto a date the new rule gives loses its move
+                # now, not at the next start (drop_hidden_moves). Turned back on
+                # as the series its copy holds: the note holds the days again.
+                drop_hidden_moves(note)
                 spend_series_days(note)
                 note["checklist"] = [dict(it) for it in self._get_checklist()]
                 note["updated"] = now

@@ -3382,7 +3382,7 @@
     "edits": [
       {
         "file": "noteorganizer/core/recurrence.py",
-        "find": "    return [day for day, when in asked if shown[when] != [day]]\n",
+        "find": "    return [day for day, when in asked\n            if (kept if day in exceptions else shown)[when] != [day]]\n",
         "replace": "    return [day for day, when in asked if False]\n"
       }
     ],
@@ -3396,7 +3396,7 @@
     "edits": [
       {
         "file": "noteorganizer/core/recurrence.py",
-        "find": "             if when is not None and day not in exceptions]\n",
+        "find": "             if when is not None and (day not in exceptions or day in landed)]\n",
         "replace": "             if when is not None]\n"
       }
     ],
@@ -13578,12 +13578,13 @@
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "    if not _series_own_copy(prev) or _repeats_as(note, prev):\n        return\n    mine, moved = ",
-        "replace": "    if True:\n        return\n    mine, moved = "
+        "find": "    if not isinstance(prev, dict) or not is_recurring(prev) or _repeats_as(note, prev):\n        return\n    came = ",
+        "replace": "    if True:\n        return\n    came = "
       }
     ],
     "must_fail": [
       "another series' copy keeps its days while it waits, and sets aside those with words",
+      "a fuzz of a series' days",
       "a turn-off over another series' copy makes that copy's days with words notes"
     ],
     "suites": [
@@ -13598,7 +13599,7 @@
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "    copy_days_set_aside(note)\n    note[\"_prev\"] = prev\n",
+        "find": "    copy_days_set_aside(note, fresh if \"overrides\" in fields else None)\n    note[\"_prev\"] = prev\n",
         "replace": "    note[\"_prev\"] = prev\n"
       }
     ],
@@ -13616,8 +13617,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        copy_days_set_aside(note)\n        prev = self._whole_note_rescue_copy(note)\n",
-        "replace": "        prev = self._whole_note_rescue_copy(note)\n"
+        "find": "            copy_days_set_aside(note)\n        prev = self._whole_note_rescue_copy(note)\n",
+        "replace": "            pass\n        prev = self._whole_note_rescue_copy(note)\n"
       }
     ],
     "must_fail": [
@@ -13675,7 +13676,7 @@
       }
     ],
     "must_fail": [
-      "a day moved onto a date its rule now gives goes home with its words"
+      "a day moved onto a date its rule now gives loses its move, its words where they showed"
     ],
     "suites": [
       "test_data_safety"
@@ -13701,35 +13702,17 @@
     "expect": "killed"
   },
   {
-    "id": "DR154",
-    "about": "a day going home leaves its words on the date it was moved to, under the rule's own day there",
-    "edits": [
-      {
-        "file": "noteorganizer/core/model.py",
-        "find": "            days[orig] = words.pop(new)\n",
-        "replace": "            pass\n"
-      }
-    ],
-    "must_fail": [
-      "a day moved onto a date its rule now gives goes home with its words"
-    ],
-    "suites": [
-      "test_data_safety"
-    ],
-    "expect": "killed"
-  },
-  {
     "id": "DR157",
     "about": "a save making a series' rule give a moved day's new date leaves the move: the day is drawn nowhere until the next start",
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                moves_home(note)\n                spend_series_days(note)\n",
+        "find": "                drop_hidden_moves(note)\n                spend_series_days(note)\n",
         "replace": "                spend_series_days(note)\n"
       }
     ],
     "must_fail": [
-      "a day moved onto a date the new rule gives goes home with its words at the save"
+      "a day moved onto a date the new rule gives loses its move at the save, its words where they showed"
     ],
     "suites": [
       "qa5"
@@ -13742,12 +13725,12 @@
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "        note[\"exceptions\"] = []\n    moves_home(note)\n",
+        "find": "        note[\"exceptions\"] = []\n    drop_hidden_moves(note)\n",
         "replace": "        note[\"exceptions\"] = []\n"
       }
     ],
     "must_fail": [
-      "a share code making the series daily sends a day moved onto its new days home at once"
+      "a share code making the series daily drops a move onto its new days at once"
     ],
     "suites": [
       "test_data_safety"
@@ -13832,33 +13815,15 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        # since: it goes home now, not at the next start (round 16).\n        moves_home(note)\n",
-        "replace": "        # since: it goes home now, not at the next start (round 16).\n"
+        "find": "        # since: that move goes now, not at the next start (round 16).\n        drop_hidden_moves(note)\n",
+        "replace": "        # since: that move goes now, not at the next start (round 16).\n"
       }
     ],
     "must_fail": [
-      "Restore previous bringing an older rule back sends a day moved since home at once"
+      "Restore previous bringing an older rule back drops a move made since onto its days at once"
     ],
     "suites": [
       "qa5"
-    ],
-    "expect": "killed"
-  },
-  {
-    "id": "DR162",
-    "about": "a day whose own date the rule no longer gives is sent there all the same: its words leave the day they showed on for a date nothing draws",
-    "edits": [
-      {
-        "file": "noteorganizer/core/model.py",
-        "find": "             if orig in gives and orig not in deleted and new in days}\n",
-        "replace": "             if new in days}\n"
-      }
-    ],
-    "must_fail": [
-      "a day moved onto a date the rule now gives, its own date no longer the rule's, keeps its words"
-    ],
-    "suites": [
-      "test_data_safety"
     ],
     "expect": "killed"
   },
@@ -13886,8 +13851,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "                   for at in {key, day, moved.get(day, day)})\n",
-        "replace": "                   for at in {key})\n"
+        "find": "                   for at in {key, day, moved.get(day, day)}):\n",
+        "replace": "                   for at in {key}):\n"
       }
     ],
     "must_fail": [
@@ -13976,12 +13941,156 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            self.set_status(f\"{said} — {news}\" if said.strip() else news)\n",
+        "find": "            self._show_toast(news, kind=\"info\", action=lambda: self.open_note_in_tab(first),\n                             action_text=\"Show\")\n",
         "replace": "            self.set_status(news)\n"
       }
     ],
     "must_fail": [
-      "the notes made are said after the turn-off's own line, not over it"
+      "the notes made are said on a banner of their own that opens them"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR170",
+    "about": "a move onto a date its rule now gives stays: the day is drawn nowhere, and a delete there takes it",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    for orig in [day for day, leaving in goes.items() if leaving]:\n        del moved[orig]\n",
+        "replace": "    pass\n"
+      }
+    ],
+    "must_fail": [
+      "a week shifted a day at a time, the shift then made the rule, keeps every day's words where"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR172",
+    "about": "a day moved onto a deleted date, its own date no longer the rule's, is listed nowhere: its words shown and said by nothing",
+    "edits": [
+      {
+        "file": "noteorganizer/core/recurrence.py",
+        "find": "             if when is not None and (day not in exceptions or day in landed)]\n",
+        "replace": "             if when is not None and day not in exceptions]\n"
+      }
+    ],
+    "must_fail": [
+      "a day moved onto a deleted date, its own date no longer the rule's, is listed off the schedule"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR173",
+    "about": "a weekly series with its start's weekday lit is another series than the same left to the start: its deleted days come back",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "        if rec[\"freq\"] == \"weekly\" and not rec[\"weekdays\"]:\n            rec[\"weekdays\"] = [when.weekday()]\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a weekly series turned back on as it was is the same with its weekday lit or not"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR174",
+    "about": "a monthly series with its start's day lit is another series than the same left to the start",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "        if rec[\"freq\"] == \"monthly\" and not rec[\"month_days\"]:\n            rec[\"month_days\"] = [when.day]\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a weekly series turned back on as it was is the same with its weekday lit or not"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR175",
+    "about": "a day moved onto a date a dead move still points at leaves both moves: the dead one is read",
+    "edits": [
+      {
+        "file": "noteorganizer/core/recurrence.py",
+        "find": "    for dead in [other for other, new in moved.items() if new == to and other != orig]:\n        del moved[dead]\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a day moved onto a date a dead move points at takes it"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR176",
+    "about": "an Update's copy, as a restore leaves it, is replaced with its days with words in it alone: they are in no file",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    if not isinstance(prev, dict) or not is_recurring(prev) or _repeats_as(note, prev):\n",
+        "replace": "    if not _series_own_copy(prev) or _repeats_as(note, prev):\n"
+      }
+    ],
+    "must_fail": [
+      "an Update's copy sets its days with words aside when replaced"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR177",
+    "about": "a backup's Update sets aside a copy's day words the backup brings back: an earlier-text note of words the day shows",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    copy_days_set_aside(note, fresh if \"overrides\" in fields else None)\n",
+        "replace": "    copy_days_set_aside(note)\n"
+      }
+    ],
+    "must_fail": [
+      "an Update's copy sets its days with words aside when replaced"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR178",
+    "about": "a turn-off that keeps an import's Update copy whole sets its days aside all the same, and fills the copy with the note's",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if takes_text or not (update_copy(existing) and not rescue_copy_spent(note)):\n            copy_days_set_aside(note)\n",
+        "replace": "        copy_days_set_aside(note)\n"
+      }
+    ],
+    "must_fail": [
+      "a turn-off keeps an import's Update copy of another series whole"
     ],
     "suites": [
       "qa5"
