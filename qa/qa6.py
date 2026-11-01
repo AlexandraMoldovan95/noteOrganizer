@@ -3431,6 +3431,26 @@ check(f"a day showing the series' words shows its lines' looks, a day of its own
       and not any(p.get('align') for p in _pl_own_day)
       and any(p.get('line') == 0 and p.get('align') == 'center'
               for p in app.find_note(6).get('paragraphs') or []))
+# ...but a list's depth, which lives in its entries alone, stays on a day of
+# its own text where the line keeps its marker: dropped, a nested numbered
+# list read flat and the next Enter renumbered it as one run (the lows
+# wave's verification).
+app.new_note(); app.update()
+app.notes.append(NO.normalize_note({'id': 7, 'title': 'Weekly agenda',
+                                'body': 'Agenda\n1. Buy\n1. milk\n2. eggs\n2. Clean',
+                                'date': '2026-11-02', 'recurrence': {'freq': 'weekly'},
+                                'paragraphs': [{'line': 1, 'kind': 'number'},
+                                               {'line': 2, 'kind': 'number', 'indent': 1},
+                                               {'line': 3, 'kind': 'number', 'indent': 1},
+                                               {'line': 4, 'kind': 'number'}],
+                                'overrides': {'2026-11-16': {
+                                    'body': 'Agenda today\n1. Buy\n1. milk\n2. eggs\n2. Clean'}}}))
+app.save_notes()
+app.open_note_in_tab(app.find_note(7), occurrence_date='2026-11-16'); app.update()
+_nl_day = app._extract_paragraphs(app.body_text)
+check(f"a day of its own text keeps the series' list depth where its lines keep their markers ({_nl_day})",
+      [(p.get('line'), p.get('indent', 0)) for p in _nl_day if p.get('kind')]
+      == [(1, 0), (2, 1), (3, 1), (4, 0)])
 # A change made behind a day opened from the calendar -- an import's Update,
 # a category change -- reads the note back and keeps "Back to Calendar": the
 # reopening cleared it (the audit's round 24).

@@ -4033,6 +4033,15 @@ check("a weekly rule is one series whatever 'Skip that month' it keeps hidden; a
                               "2026-11-02", {"freq": "weekly"})
       and not _model_mod._same_series("2026-01-31", {"freq": "monthly", "month_day_policy": "skip"},
                                       "2026-01-31", {"freq": "monthly"}))
+# ...nor the weekdays, month days or policy a rule keeps that its frequency
+# never reads: the phone's sheet stores all three (the lows wave).
+check("a rule is one series whatever fields it keeps that its frequency never reads",
+      _model_mod._same_series("2026-11-02", {"freq": "weekly", "month_days": [15]}, "2026-11-02", {"freq": "weekly"})
+      and _model_mod._same_series("2026-11-02", {"freq": "daily", "weekdays": [0, 2]}, "2026-11-02", {"freq": "daily"})
+      and _model_mod._same_series("2026-11-07", {"freq": "monthly", "month_day_policy": "skip"},
+                                  "2026-11-07", {"freq": "monthly"})
+      and not _model_mod._same_series("2026-11-02", {"freq": "weekly", "weekdays": [0, 2]},
+                                      "2026-11-02", {"freq": "weekly"}))
 # ...and an import reads the repeat by the days it gives: the start's weekday
 # lit in the backup and not here is no change, and the Update spent the
 # note's only earlier version for nothing (round 19).
@@ -4137,6 +4146,16 @@ _model_mod.apply_shared_update(_t22_mine, _t22_theirs, _model_mod.UPDATABLE_FROM
 check("a backup's Update keeps the earlier text its note's copy set aside as it was read (%s)"
       % _t10_aside(_t22_mine),
       _t10_aside(_t22_mine) == [("2026-11-09", "Words from the backup")])
+# ...made once: a note already holding the same words on the same day is that
+# note, and each later Update from the same device made it again (the lows
+# wave's verification).
+_t22_book = [_t22_mine]
+_t22_first = _model_mod.settle_set_aside(_t22_book)
+_t22_mine["_set_aside"] = [{"day": "2026-11-09", "body": "Words from the backup"}]
+_t22_again = _model_mod.settle_set_aside(_t22_book)
+check("an '(earlier text)' note already holding the same words on its day is not made again (%s, %s, %d notes)"
+      % (_t22_first, _t22_again, len(_t22_book)),
+      _t22_first == 1 and _t22_again == 0 and len(_t22_book) == 2)
 # ...and a copy holding the series as the note does, its weekday lit and the
 # note's not, is spent: compared as stored, Restore previous stayed offered
 # for nothing, and the next turn-off brought back an old agenda.
@@ -4376,7 +4395,10 @@ for _f17_seed in range(_F17_ROADS):
         # in every field but its days: an Update over an Update's copy.
         _was, _now = _copy_was or {}, _note.get("_prev")
         _spent = {key: value for key, value in _was.items() if key not in _model_mod.DAY_FIELDS}
-        if isinstance(_now, dict) and _now != _was and _now != _spent:
+        # ...and never an Update's copy a turn-off replaced: kept whole is
+        # the promise there (round 9), which the slot rule must not excuse.
+        if (isinstance(_now, dict) and _now != _was and _now != _spent
+                and not (_op in ("off", "rule") and _model_mod.update_copy(_copy_was))):
             for _word in _only_copy - _held:
                 _live[_word] = 0
         for _word in _older_lost - _held:

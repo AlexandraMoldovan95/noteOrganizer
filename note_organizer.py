@@ -219,6 +219,7 @@ from noteorganizer.core.richtext import (html_to_note, note_to_html,
                                         MAX_PASTE_CHARS, MAX_PASTE_SPANS)
 from noteorganizer.core.formatting import (
     tag_to_spans,
+    day_paragraphs,
     normalize_paragraphs,
     parse_list_marker,
     strip_list_markers,
@@ -17257,7 +17258,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "title": shown.get("title") or "",
             "body": shown.get("body") or "",
             "formatting": copy.deepcopy(note.get("formatting") or []) if same_body else [],
-            "paragraphs": copy.deepcopy(note.get("paragraphs") or []),
+            # ...and the lines' looks the day view shows (day_paragraphs).
+            "paragraphs": day_paragraphs(note.get("paragraphs"), shown.get("body"), same_body),
             "comments": shown.get("comments") or "",
             "category": shown.get("category") or note.get("category"),
             "color": shown.get("color") or "",
@@ -20714,12 +20716,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # against override text of a different length/content would place
         # bold/italic on the wrong characters. Only apply when what's shown
         # actually IS the base content (no override for this occurrence).
-        # The lines' looks the same: put on a day's own text by line number,
-        # they centred and indented the wrong lines (the phone's twenty-fifth
-        # round, which now shows them on such a day as this does).
-        if shown.get("body") == note.get("body"):
+        same_body = shown.get("body") == note.get("body")
+        if same_body:
             self._apply_formatting(self.body_text, note.get("formatting", []))
-            self._apply_paragraphs(self.body_text, note.get("paragraphs", []))
+        # The lines' looks: all on the series' words, only its lists' on a
+        # day's own text (day_paragraphs, the phone's the same).
+        self._apply_paragraphs(self.body_text, day_paragraphs(
+            note.get("paragraphs", []), shown.get("body"), same_body))
         self._render_table_grids()
         self.comments_text.delete("1.0", "end")
         self.comments_text.insert("1.0", shown.get("comments", ""))

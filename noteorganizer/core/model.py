@@ -322,11 +322,17 @@ def _same_series(day, rule, other_day, other_rule):
             rec["weekdays"] = [when.weekday()]
         if rec["freq"] == "monthly" and not rec["month_days"]:
             rec["month_days"] = [when.day]
-    # "Skip that month" is read by a monthly or a yearly rule alone: kept
-    # hidden in a weekly one saved from a monthly draft, it made a series
-    # turned back on as it was read as another (the audit's round 19).
+    # A field the frequency never reads changes no day: kept hidden (the
+    # phone's sheet stores all three), it made a series turned back on as it
+    # was read as another (the audit's round 19 and the lows wave).
     for rec in rules:
-        if rec["freq"] not in ("monthly", "yearly"):
+        if rec["freq"] != "weekly":
+            rec["weekdays"] = []
+        if rec["freq"] != "monthly":
+            rec["month_days"] = []
+        # "Skip that month" is read only where a month can lack the day.
+        if not (rec["freq"] == "monthly" and any(day > 28 for day in rec["month_days"])
+                or rec["freq"] == "yearly" and when is not None and (when.month, when.day) == (2, 29)):
             rec["month_day_policy"] = "clamp"
     return rules[0] == rules[1]
 
@@ -473,14 +479,22 @@ def settle_set_aside(notes):
     which writes them at once: left for the next save, each start made them
     again under new identities -- round 16) and at every save."""
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    made, next_id = 0, None
+    made, next_id, held = 0, None, set()
     for note in list(notes):
         if not isinstance(note, dict) or not note.get("_set_aside"):
             continue
         if next_id is None:
             next_id = max([n["id"] for n in notes], default=0) + 1
+            # A note already holding the same words on the same day is that
+            # note: a backup's Update made it again at every import (the lows
+            # wave's verification).
+            held = {(n.get("title"), n.get("date"), n.get("body")) for n in notes if isinstance(n, dict)}
         for fresh in notes_set_aside(note):
-            notes.append(normalize_note(dict(fresh, id=next_id, created=stamp, updated=stamp)))
+            made_note = normalize_note(dict(fresh, id=next_id, created=stamp, updated=stamp))
+            if (made_note["title"], made_note["date"], made_note["body"]) in held:
+                continue
+            held.add((made_note["title"], made_note["date"], made_note["body"]))
+            notes.append(made_note)
             next_id += 1
             made += 1
     return made

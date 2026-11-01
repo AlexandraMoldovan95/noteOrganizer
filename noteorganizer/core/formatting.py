@@ -714,6 +714,23 @@ def normalize_paragraphs(value, line_count=None):
     return sorted(clean, key=lambda b: b["line"])
 
 
+def day_paragraphs(paragraphs, body, same_body):
+    """The series' *paragraphs* a day of it shows, *body* the day's text: all
+    of them while the day shows the series' words (*same_body*); on text of
+    its own, only the list entries whose line still carries their marker,
+    without alignment. A list's depth lives nowhere else -- dropped, a nested
+    numbered list read flat and the next Enter renumbered it as one run --
+    while the rest, put on by line number, centred the wrong lines (ISSUES_LOG:
+    "The lows wave: a fuzz that never took the road it guarded")."""
+    lines = (body or "").split("\n")
+    kept = normalize_paragraphs(paragraphs, len(lines))
+    if same_body:
+        return kept
+    return [{key: value for key, value in entry.items() if key != "align"}
+            for entry in kept
+            if entry.get("kind") and parse_list_marker(lines[entry["line"]])[0] == entry["kind"]]
+
+
 def renumber(body, paragraphs):
     """Make every numbered run read 1, 2, 3 from its own start.
 

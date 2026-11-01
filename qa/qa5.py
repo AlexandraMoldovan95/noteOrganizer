@@ -248,7 +248,9 @@ if sys.platform == 'win32':
     app.update()
     _msid = app.selected_note_id
     _mdisk = _mjson.load(_mio.open('notes_data.json', encoding='utf-8'))
-    _mnote = next(n for n in _mdisk if n['id'] == _msid)
+    # With a default, as every lookup a mutant can empty: a bare next()
+    # stopped the suite before its footer (the lows wave's verification).
+    _mnote = next((n for n in _mdisk if n['id'] == _msid), {'title': '', 'body': ''})
     _mflat = (_mnote['title'] + _mnote['body'] + _mnote.get('comments', '')
               + _mjson.dumps(_mnote.get('checklist', []),
                              ensure_ascii=False))
@@ -1882,7 +1884,7 @@ try:
 finally:
     app._themed_dialog = _ro_real_dlg
     app.ask_yes_no = _rz_real_yes
-_rz_disk = next(n for n in _json5e.load(open(NO.DATA_FILE, encoding='utf-8')) if n.get('id') == 1)
+_rz_disk = next((n for n in _json5e.load(open(NO.DATA_FILE, encoding='utf-8')) if n.get('id') == 1), {})
 _rz_read = NO.normalize_note(_rz_disk)
 check(f"a day reset after the series came back on stays reset at the next start "
       f"(copy's days spent: {_rz_spent}; days read back: {sorted(_rz_read['overrides'])})",
@@ -2246,16 +2248,24 @@ class _ShKey:
 
 _sh_took = app._toast_undo_key(_ShKey())
 app._hide_toast()
-_sh_note = next(n for n in app.notes if n.get('title') == 'Standup (earlier text)')
-app.show_settings_page(); app.update()
-app.toggle_settings_panel('trash'); app.update()
-_sh_in_settings = getattr(app, '_settings_open', None)
-app._show_set_aside(_sh_note['id'], _sh_note.get('uid')); app.update()
+# A default, and Settings closed whatever happens: under a mutant that makes
+# no such note, a bare next() stopped the suite before its footer.
+_sh_note = next((n for n in app.notes if n.get('title') == 'Standup (earlier text)'), None)
+_sh_in_settings = _sh_after = None
+if _sh_note is not None:
+    app.show_settings_page(); app.update()
+    try:
+        app.toggle_settings_panel('trash'); app.update()
+        _sh_in_settings = getattr(app, '_settings_open', None)
+        app._show_set_aside(_sh_note['id'], _sh_note.get('uid')); app.update()
+        _sh_after = getattr(app, '_settings_open', None)
+    finally:
+        if getattr(app, '_settings_open', False):
+            app.hide_settings_page(); app.update()
 check(f"Ctrl+Z leaves a banner's Show alone, and Show from Settings opens the note in sight "
-      f"({_sh_took}, {_sh_seen}, {_sh_in_settings} -> {getattr(app, '_settings_open', None)}, "
-      f"{app.selected_note_id})",
-      _sh_took is None and _sh_seen == [] and _sh_in_settings is True
-      and not getattr(app, '_settings_open', False) and app.selected_note_id == _sh_note['id'])
+      f"({_sh_took}, {_sh_seen}, {_sh_in_settings} -> {_sh_after}, {app.selected_note_id})",
+      _sh_took is None and _sh_seen == [] and _sh_in_settings is True and not _sh_after
+      and _sh_note is not None and app.selected_note_id == _sh_note['id'])
 # ...and a big delete over such a copy sets its days aside first too: no
 # check reached that road (round 16).
 _ro_fixture()

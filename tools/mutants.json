@@ -14341,9 +14341,9 @@
     "about": "a day with text of its own is given the series' lines' looks by line number, on the wrong lines",
     "edits": [
       {
-        "file": "note_organizer.py",
-        "find": "            self._apply_formatting(self.body_text, note.get(\"formatting\", []))\n            self._apply_paragraphs(self.body_text, note.get(\"paragraphs\", []))\n        self._render_table_grids()\n",
-        "replace": "            self._apply_formatting(self.body_text, note.get(\"formatting\", []))\n        self._apply_paragraphs(self.body_text, note.get(\"paragraphs\", []))\n        self._render_table_grids()\n"
+        "file": "noteorganizer/core/formatting.py",
+        "find": "    if same_body:\n        return kept\n    return [{key: value",
+        "replace": "    if True:\n        return kept\n    return [{key: value"
       }
     ],
     "must_fail": [
@@ -14432,8 +14432,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "        if rec[\"freq\"] not in (\"monthly\", \"yearly\"):\n            rec[\"month_day_policy\"] = \"clamp\"\n",
-        "replace": "        pass\n"
+        "find": "            rec[\"month_day_policy\"] = \"clamp\"\n    return rules[0] == rules[1]\n",
+        "replace": "            pass\n    return rules[0] == rules[1]\n"
       }
     ],
     "must_fail": [
@@ -14495,6 +14495,60 @@
     ],
     "suites": [
       "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR201",
+    "about": "a day of its own text takes none of the series' list entries: a nested numbered list reads flat, and the next Enter renumbers it as one run",
+    "edits": [
+      {
+        "file": "noteorganizer/core/formatting.py",
+        "find": "    return [{key: value for key, value in entry.items() if key != \"align\"}\n            for entry in kept\n            if entry.get(\"kind\") and parse_list_marker(lines[entry[\"line\"]])[0] == entry[\"kind\"]]\n",
+        "replace": "    return []\n"
+      }
+    ],
+    "must_fail": [
+      "a day of its own text keeps the series' list depth where its lines keep their markers"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR202",
+    "about": "a backup's Update makes the same '(earlier text)' note again at every import from the same device",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "            if (made_note[\"title\"], made_note[\"date\"], made_note[\"body\"]) in held:\n                continue\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "an '(earlier text)' note already holding the same words on its day is not made again"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR203",
+    "about": "a rule keeping weekdays or month days its frequency never reads reads as another series: a deleted day comes back at a turn-on as it was",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "        if rec[\"freq\"] != \"weekly\":\n            rec[\"weekdays\"] = []\n        if rec[\"freq\"] != \"monthly\":\n            rec[\"month_days\"] = []\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a rule is one series whatever fields it keeps that its frequency never reads"
+    ],
+    "suites": [
+      "test_data_safety"
     ],
     "expect": "killed"
   }
