@@ -220,6 +220,7 @@ is in the table below as well.
 | [Round seventeen: a week shifted a day at a time, and a day no list showed](#round-seventeen-a-week-shifted-a-day-at-a-time-and-a-day-no-list-showed) | Decide where everything lands before moving anything, and refuse any landing that writes over something. | next |
 | [Round eighteen: History, the one search of a day's words, and the days it never asked about](#round-eighteen-history-the-one-search-of-a-days-words-and-the-days-it-never-asked-about) | A fix to one reader of a shape is a question to every reader of it. | next |
 | [Round nineteen: two moves onto one date, and a list that threw](#round-nineteen-two-moves-onto-one-date-and-a-list-that-threw) | A grade is about the road a person takes: a crash an upgrade can reach is not low because this build alone makes it rarely. | next |
+| [Round twenty-three: the day the editor stayed on](#round-twenty-three-the-day-the-editor-stayed-on) | A guard written for one way a day stops being drawn is a question about every way: ask whether the day is drawn, not why it might not be. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -3664,6 +3665,30 @@ for it are set aside, a note "(earlier text)" (`_copy_days_placed`); mutant DR18
 
 **Takeaway:** a grade is about the road a person takes: a crash an upgrade can reach is not low
 because this build alone makes it rarely.
+
+### Round twenty-three: the day the editor stayed on
+
+*(2026-11-01 · found by the phone's twenty-third round; the desktop had the same hole)*
+
+**Symptom:** a weekly meeting's day deleted, then a backup from before the delete imported with
+Update: the day was back, and the note kept a copy holding it deleted. Open that day, press
+"↩ Restore previous": the restored version deletes the day again, and the editor stayed on it.
+What was typed next was saved to that day -- one the calendar did not draw, the list of days off
+the schedule did not list, and History's search did not find.
+
+**Mechanism:** `load_note` kept the day whenever the note still repeats. A note can repeat and
+not draw that day: deleted, or a rule that no longer gives the date. Every reload of the editor
+goes through `load_note` -- Restore previous, an import's Update behind the editor
+(`_editor_follows_external_change`), Reset this day -- so each could leave it on such a date,
+and the day's save never asks.
+
+**Fix:** `load_note` opens a day only where the series draws one (`expand_occurrences` on that
+date); elsewhere the whole note opens, as for a note that no longer repeats. The phone the same,
+and its `Days.saveDay` also refuses a day it does not draw, as its other day actions do. qa6;
+mutant DR186.
+
+**Takeaway:** a guard written for one way a day stops being drawn is a question about every way:
+ask whether the day is drawn, not why it might not be.
 
 ## Tk & platform gotchas
 

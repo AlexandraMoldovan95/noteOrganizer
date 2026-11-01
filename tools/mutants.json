@@ -14222,5 +14222,23 @@
       "test_data_safety"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "DR186",
+    "about": "the editor reloaded on a day the series no longer draws stays on it: Restore previous from a day its version deleted, and what is typed there is saved where no screen shows it",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        day = (occurrence_date if is_recurring(note) and when is not None\n               and expand_occurrences(note, when, when) == [occurrence_date]\n               else None)\n",
+        "replace": "        day = occurrence_date if is_recurring(note) else None\n"
+      }
+    ],
+    "must_fail": [
+      "Restore previous from a day the restored version deleted leaves the day for the whole note"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
   }
 ]

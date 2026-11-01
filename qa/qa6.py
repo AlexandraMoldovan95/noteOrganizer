@@ -3372,6 +3372,36 @@ app.ask_yes_no = _rn_yes
 check('...and a day restored under a category that is gone comes back under General',
       (app.find_note(2).get('overrides') or {}).get('2026-09-14', {}).get('category')
       == 'General')
+# Restore previous from a day the restored version had deleted: the editor
+# leaves the day for the whole note. It stayed on the date, and what was
+# typed there was saved to a day no screen showed and no search found
+# (the phone's round 23).
+app.new_note(); app.update()
+_rg_note = NO.normalize_note({'id': 5, 'title': 'Team meeting',
+                              'body': 'Agenda', 'date': '2026-11-03',
+                              'recurrence': {'freq': 'weekly',
+                                             'weekdays': [1]}})
+_rg_note['_prev'] = {'title': 'Team meeting', 'body': 'Agenda',
+                     'formatting': [], 'paragraphs': [], 'comments': '',
+                     'exceptions': ['2026-11-17']}
+app.notes = [_rg_note]; app.save_notes()
+app.open_note_in_tab(app.find_note(5), occurrence_date='2026-11-17')
+app.update()
+_rg_on_day = app.current_occurrence_date
+app.ask_yes_no = lambda *a, **k: True
+app.restore_previous_version(); app.update()
+app.ask_yes_no = _rn_yes
+app.body_text.insert('end', '\nCall the supplier')
+app._flush_autosave(); app.update()
+_rg_after = app.find_note(5) or {}
+check(f'Restore previous from a day the restored version deleted leaves the '
+      f'day for the whole note ({_rg_on_day} -> '
+      f'{app.current_occurrence_date}, days of its own: '
+      f'{sorted(_rg_after.get("overrides") or {})})',
+      _rg_on_day == '2026-11-17' and app.current_occurrence_date is None
+      and '2026-11-17' in (_rg_after.get('exceptions') or [])
+      and '2026-11-17' not in (_rg_after.get('overrides') or {})
+      and 'Call the supplier' in _rg_after.get('body', ''))
 # The note the question named is the note restored, and the editor is
 # filled only while it still holds that note. Moved on to another note
 # while the question waited, the editor took the rescue copy's text into

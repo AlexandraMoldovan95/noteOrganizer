@@ -20630,7 +20630,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # brings ANOTHER checklist -- a rescue copy's own, an import's
         # Update -- starts a new list: the item it brought back as a new
         # entry was put back again beside it, and stored twice.
-        day = occurrence_date if is_recurring(note) else None
+        # A day only where the series still draws one: reloaded after Restore
+        # previous brought back a version with that day deleted, or an
+        # import's Update, the editor stayed on the date, and what was typed
+        # there was saved to a day no screen showed and no search found
+        # (ISSUES_LOG: "Round twenty-three: the day the editor stayed on").
+        # The whole note opens instead, as for a note that no longer repeats.
+        when = parse_date(occurrence_date) if occurrence_date else None
+        day = (occurrence_date if is_recurring(note) and when is not None
+               and expand_occurrences(note, when, when) == [occurrence_date]
+               else None)
         same_session = (self.selected_note_id == note.get("id")
                         and self.current_occurrence_date == day)
         kept_checklist = (getattr(self, "_working_checklist", None)
