@@ -8660,7 +8660,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         over a list, the next item keeping its number (see
         _delete_selection_reaching_list), and the lists renumbered."""
         self._caret_out_of_hidden()
-        listed = self._delete_selection_reaching_list()
+        listed = self._delete_selection_reaching_list(text)
         if not listed:
             try:
                 self.body_text.delete("sel.first", "sel.last")
@@ -8853,13 +8853,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if hi > lo:
                 clipped.append(dict(span, start=lo - first, end=hi - first))
         # Once, not once per paragraph. A copy ending in a line break holds
-        # nothing of the next line: counted in, that line's looks went onto
-        # the line a paste landed before (the lows wave's verification).
+        # nothing of the next line, nor one begun at a line's end of that
+        # line: counted in, its looks went onto the line a paste landed in.
         line_count = text.count("\n") + (0 if text.endswith("\n") else 1)
+        skipped = 1 if text.startswith("\n") and int(start.split(".")[1]) > 0 else 0
         paragraphs = [
             dict(p, line=p["line"] - first_line)
             for p in self._extract_paragraphs(self.body_text, whole)
-            if 0 <= p["line"] - first_line < line_count]
+            if skipped <= p["line"] - first_line < line_count]
 
         # inline_tables: a clipboard fragment travels without the file
         # export's stylesheet, and Word shows a bare HTML table with no
@@ -8871,6 +8872,32 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Kept for a paste into another note, which reads no size or font
         # back out of HTML (a web page's are left behind by design).
         self._formatted_clip = (text, clipped, paragraphs, html)
+        return "break"
+
+    def _cut_formatted(self, event):
+        """Cut as Copy copies -- the words, their styles, their lines' looks
+        -- then delete, writing nothing more. Tk's own Cut and the list's put
+        the words alone over it, so a move by Ctrl+X and Ctrl+V lost its bold,
+        its centring and a nested item's level, saved (the lows wave's
+        verification, round 6). Cells keep their own cut."""
+        if getattr(self, "_grid_sel", None) is not None or self._copy_formatted() != "break":
+            return None
+        if self._list_aware_delete(event, virtual="clear") == "break":
+            return "break"
+        self._note_styled_delete(event, virtual=True)
+        b = self.body_text
+        # Tk's own Cut, less its clipboard: one step of Ctrl+Z.
+        auto = b.tk.getboolean(b.cget("autoseparators"))
+        if auto:
+            b.configure(autoseparators=False)
+            b.edit_separator()
+        try:
+            b.delete("sel.first", "sel.last")
+        except tk.TclError:
+            pass
+        if auto:
+            b.edit_separator()
+            b.configure(autoseparators=True)
         return "break"
 
     def _refresh_list_buttons(self, line=None):
@@ -9820,11 +9847,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.update_word_count()
         return "break"
 
-    def _list_range_for(self, doomed, typing):
+    def _list_range_for(self, doomed, typing, pasted=None):
         """The body's ``(start, end)`` to delete instead of *doomed* when it
-        reaches a list (core/formatting's list_deletion_range), or None: no
-        list reached, or a table's row among its lines, which the table's
-        own guards answer for."""
+        reaches a list (core/formatting's list_deletion_range; *pasted*, what
+        a paste brings), or None: no list reached, or a table's row among
+        its lines, which the table's own guards answer for."""
         b = self.body_text
         (l1, t1), (l2, t2) = (tuple(int(p) for p in b.index(i).split("."))
                               for i in doomed)
@@ -9833,15 +9860,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return None
         plan = list_deletion_range(
             lines, (0, self._py_col(lines[0], t1)),
-            (l2 - l1, self._py_col(lines[-1], t2)), typing=typing)
+            (l2 - l1, self._py_col(lines[-1], t2)), typing=typing, pasted=pasted)
         if plan is None:
             return None
         (p1, q1), (p2, q2) = plan
         return (f"{l1 + p1}.{self._tk_col(lines[p1], q1)}",
                 f"{l1 + p2}.{self._tk_col(lines[p2], q2)}")
 
-    def _delete_selection_reaching_list(self):
-        """For text about to take the selection's place -- a paste -- the
+    def _delete_selection_reaching_list(self, pasted=None):
+        """For *pasted*, text about to take the selection's place, the
         selection deleted as typing over it is, when it reaches a list: the
         next item keeps its number, and no marker lands among the words.
         True when it did, the caret then where the text goes; the caller
@@ -9849,7 +9876,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         b = self.body_text
         if getattr(self, "_grid_sel", None) is not None or not b.tag_ranges("sel"):
             return False
-        span = self._list_range_for((b.index("sel.first"), b.index("sel.last")), True)
+        span = self._list_range_for((b.index("sel.first"), b.index("sel.last")), True, pasted)
         if span is None:
             return False
         start, end = span
@@ -9869,12 +9896,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         b = self.body_text
         if getattr(self, "_grid_sel", None) is not None or not b.tag_ranges("sel"):
             return None
+        try:
+            pasted = b.clipboard_get()      # what the paste brings, its marker and its breaks
+        except tk.TclError:
+            pasted = None
         if self._list_range_for((b.index("sel.first"), b.index("sel.last")),
-                                True) is None:
+                                True, pasted) is None:
             return None
         self._undo_atom_begin()
         try:
-            self._delete_selection_reaching_list()
+            self._delete_selection_reaching_list(pasted)
             if self._on_body_paste() != "break":
                 try:
                     text, cut = self._cap_paste(b.clipboard_get())
@@ -9897,8 +9928,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Cut, Clear and Paste in the styled-delete bindtag: the key noted;
         a cut or clear reaching a list done as _list_aware_delete says, a
         paste over one as _paste_reaching_list does; anything else's
-        formatting noted for Ctrl+Z (_note_styled_delete)."""
+        formatting noted for Ctrl+Z (_note_styled_delete). A cut carries its
+        formatting (_cut_formatted)."""
         self._note_key_down()
+        if name == "cut" and self._cut_formatted(event) == "break":
+            return "break"
         if name and self._list_aware_delete(event, virtual=name) == "break":
             return "break"
         if name is None and self._paste_reaching_list() == "break":

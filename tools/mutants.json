@@ -5700,8 +5700,8 @@
     "id": "LD02",
     "about": "two lines joined keep the second line's marker among the words",
     "edits": [{"file": "noteorganizer/core/formatting.py",
-               "find": "        if keeps_words:\n            return (l1, c1), (l2, len(m2))\n",
-               "replace": "        if keeps_words:\n            return (l1, c1), (l2, c2)\n"}],
+               "find": "        if keeps_words:\n            return (l1, c1), upto or (l2, len(m2))\n",
+               "replace": "        if keeps_words:\n            return (l1, c1), upto or (l2, c2)\n"}],
     "must_fail": ["list deletion: BackSpace at item 3's very start",
                   "BackSpace at the very start of item 3: renumbered"],
     "suites": ["test_richtext", "qa1"],
@@ -5711,7 +5711,7 @@
     "id": "LD03",
     "about": "typing over whole items swallows the next item's marker",
     "edits": [{"file": "noteorganizer/core/formatting.py",
-               "find": "        if typing:\n            return (l1, len(m1) if k1 else 0), (l2 - 1, len(lines[l2 - 1]))\n",
+               "find": "        if typing:\n            own = bool(pasted) and bool(parse_list_marker(pasted.split(\"\\n\", 1)[0])[0])\n            return ((l1, len(m1) if k1 and not own else 0),\n                    upto or (l2 - 1, len(lines[l2 - 1])))\n",
                "replace": ""}],
     "must_fail": ["list deletion: a letter typed over items 2 and 3",
                   "a letter typed over items 2 and 3: renumbered",
@@ -5743,7 +5743,7 @@
     "id": "LD06",
     "about": "Ctrl+Shift+V over list items deletes the whole selection, the next marker swallowed",
     "edits": [{"file": "note_organizer.py",
-               "find": "        listed = self._delete_selection_reaching_list()\n",
+               "find": "        listed = self._delete_selection_reaching_list(text)\n",
                "replace": "        listed = False\n"}],
     "must_fail": ["Ctrl+Shift+V over items 2 and 3: renumbered"],
     "suites": ["qa1"],
@@ -14636,6 +14636,115 @@
     ],
     "must_fail": [
       "a whole line copied with its break carries none of the next line's looks"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR209",
+    "about": "the body's Cut puts the words alone on the clipboard: a line moved by Ctrl+X and Ctrl+V loses its level and its bold",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if name == \"cut\" and self._cut_formatted(event) == \"break\":\n            return \"break\"\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a line moved by Cut and Paste keeps its level and its bold"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR210",
+    "about": "a formatted cut reaching a list deletes as Tk's cut, which writes the words alone over the copy",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if self._list_aware_delete(event, virtual=\"clear\") == \"break\":\n",
+        "replace": "        if self._list_aware_delete(event, virtual=\"cut\") == \"break\":\n"
+      }
+    ],
+    "must_fail": [
+      "a line moved by Cut and Paste keeps its level and its bold"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR211",
+    "about": "a copy begun at a line's end carries that line's looks onto the line a paste lands in",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        skipped = 1 if text.startswith(\"\\n\") and int(start.split(\".\")[1]) > 0 else 0\n",
+        "replace": "        skipped = 0\n"
+      }
+    ],
+    "must_fail": [
+      "a copy begun at a line's end carries none of that line's looks"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR212",
+    "about": "a whole item pasted over another keeps the covered item's marker: '2. 3. three'",
+    "edits": [
+      {
+        "file": "noteorganizer/core/formatting.py",
+        "find": "            own = bool(pasted) and bool(parse_list_marker(pasted.split(\"\\n\", 1)[0])[0])\n",
+        "replace": "            own = False\n"
+      }
+    ],
+    "must_fail": [
+      "list deletion: a whole item pasted over item 2, without its break"
+    ],
+    "suites": [
+      "test_richtext"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR213",
+    "about": "a paste bringing its own line break leaves the covered break too: an empty line after it",
+    "edits": [
+      {
+        "file": "noteorganizer/core/formatting.py",
+        "find": "        upto = (l2, 0) if pasted and pasted.endswith(\"\\n\") else None\n",
+        "replace": "        upto = None\n"
+      }
+    ],
+    "must_fail": [
+      "list deletion: a whole item pasted over item 2, its break and all",
+      "list deletion: words and a break pasted from item 2's words to item 3's start"
+    ],
+    "suites": [
+      "test_richtext"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR214",
+    "about": "Ctrl+V over list items deletes as a letter typed would, blind to the marker and break it brings",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            pasted = b.clipboard_get()      # what the paste brings, its marker and its breaks\n",
+        "replace": "            pasted = None\n"
+      }
+    ],
+    "must_fail": [
+      "a whole item pasted over item 2, its break and all: renumbered"
     ],
     "suites": [
       "qa1"

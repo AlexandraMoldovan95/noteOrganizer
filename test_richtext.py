@@ -942,9 +942,9 @@ from noteorganizer.core.formatting import (list_deletion_range as _ldr,
                                            parse_list_marker, renumber)
 
 
-def _ld_apply(body, start, end, typed=""):
+def _ld_apply(body, start, end, typed="", pasted=False):
     lines = body.split("\n")
-    plan = _ldr(lines, start, end, typing=bool(typed))
+    plan = _ldr(lines, start, end, typing=bool(typed), pasted=typed if pasted else None)
     (l1, c1), (l2, c2) = plan if plan else (start, end)
     out = "\n".join(lines[:l1] + [lines[l1][:c1] + typed + lines[l2][c2:]]
                     + lines[l2 + 1:])
@@ -982,7 +982,16 @@ for _ld_name, _ld_args, _ld_want in (
         ("words typed over a line up to an item", ("plain words\n1. one", (0, 0), (1, 0), "x"),
          "x\n1. one"),
         ("everything selected from the first line's start", (_LD, (0, 0), (3, 7)), ""),
-        ("bullets joined", ("• a\n• b\n• c", (0, 3), (1, 0)), "• ab\n• c")):
+        ("bullets joined", ("• a\n• b\n• c", (0, 3), (1, 0)), "• ab\n• c"),
+        # A paste bringing its own marker or line break takes the place of
+        # the one it covers: kept as a letter's are, "2. 3. three" (the lows
+        # wave's verification, round 6).
+        ("a whole item pasted over item 2, its break and all",
+         (_LD, (1, 0), (2, 0), "3. three\n", True), "1. one\n2. three\n3. three\n4. four"),
+        ("a whole item pasted over item 2, without its break",
+         (_LD, (1, 0), (2, 0), "3. three", True), "1. one\n2. three\n3. three\n4. four"),
+        ("words and a break pasted from item 2's words to item 3's start",
+         (_LD, (1, 4), (2, 0), "x\n", True), "1. one\n2. tx\n3. three\n4. four")):
     _ld_got = _ld_apply(*_ld_args)
     check(f"list deletion: {_ld_name} ({_ld_got!r})", _ld_got == _ld_want)
 check("a deletion that reaches no list is left alone, as is one inside an "

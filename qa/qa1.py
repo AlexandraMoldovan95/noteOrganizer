@@ -1114,6 +1114,9 @@ for _ld_name, _ld_where, _ld_do, _ld_want in (
          lambda: (_ld_clip('zz'), _ld_virtual('<<Paste>>')), '1. one\n2. zz\n3. four'),
         ('Ctrl+Shift+V over items 2 and 3', ('2.0', '4.0'),
          lambda: (_ld_clip('zz'), app._paste_plain(), app.update()), '1. one\n2. zz\n3. four'),
+        ('a whole item pasted over item 2, its break and all', ('2.0', '3.0'),
+         lambda: (_ld_clip('3. three\n'), _ld_virtual('<<Paste>>')),
+         '1. one\n2. three\n3. three\n4. four'),
         ('BackSpace at the very start of item 3', ('3.0', None),
          lambda: _list_key('BackSpace'), '1. one\n2. twothree\n3. four'),
         ('Delete at the end of item 2', ('2.end', None),
@@ -8433,6 +8436,94 @@ check(f'a whole line copied with its break carries none of the next line\'s look
       f'({_cl_lines}; {_cl_after}; {body()!r})',
       _cl_lines == [] and _cl_after == [(1, 'center')]
       and body() == 'Call the bank\nTuesday\nCall the bank\nDentist at 10')
+# ...nor one begun at a line's end of that line: copied from a centred
+# title's end, the copy centred the line it was pasted into (round 6).
+set_body('Title' + chr(10) + 'Monday: gym' + chr(10) + 'Tuesday')
+app._apply_paragraphs(app.body_text, [{'line': 0, 'align': 'center'}])
+app.body_text.tag_remove('sel', '1.0', 'end')
+app.body_text.tag_add('sel', '1.end', '2.end')
+app.update()
+_stub_clipboard(loopback=True)
+app._copy_formatted()
+_cs_lines = app._formatted_clip[2]
+app.body_text.tag_remove('sel', '1.0', 'end')
+app.body_text.mark_set('insert', '3.end')
+app._on_body_paste()
+app.update()
+_cs_after = [(p['line'], p.get('align')) for p in app._extract_paragraphs(app.body_text)
+             if p.get('align')]
+check(f'a copy begun at a line\'s end carries none of that line\'s looks '
+      f'({_cs_lines}; {_cs_after}; {body()!r})',
+      _cs_lines == [] and _cs_after == [(0, 'center')]
+      and body() == 'Title\nMonday: gym\nTuesday\nMonday: gym')
+# A cut carries what a copy carries: moved by Ctrl+X and Ctrl+V, a nested
+# item kept its words alone -- it landed on the outer list, renumbered, its
+# bold gone (the lows wave's verification, round 6).
+set_body('Trip\n1. Book hotel\n1. Pick dates\n2. Pay deposit\n2. Pack\n3. Go')
+app._apply_paragraphs(app.body_text, [{'line': 1, 'kind': 'number'},
+                                      {'line': 2, 'kind': 'number', 'indent': 1},
+                                      {'line': 3, 'kind': 'number', 'indent': 1},
+                                      {'line': 4, 'kind': 'number'}, {'line': 5, 'kind': 'number'}])
+app._resync_list_tags()
+app.body_text.tag_remove('sel', '1.0', 'end')
+app.body_text.tag_add('sel', '3.8', '3.13')
+app._toggle_body_style('bold')
+app.body_text.tag_remove('sel', '1.0', 'end')
+app.body_text.tag_add('sel', '3.0', '4.0')
+_stub_clipboard(loopback=True)
+
+
+def _ct_clear(_tk_clear=app.body_text.clipboard_clear):
+    # Tk's clipboard clear empties Windows' clipboard, the HTML on it too.
+    _written.pop('html', None)
+    _tk_clear()
+
+
+app.body_text.clipboard_clear = _ct_clear
+try:
+    take_focus(app.body_text)
+    app.body_text.event_generate('<<Cut>>')
+    app.update()
+finally:
+    del app.body_text.clipboard_clear
+app.body_text.tag_remove('sel', '1.0', 'end')
+app.body_text.mark_set('insert', '4.0')
+app._on_body_paste()
+app.update()
+_ct_levels = [(p['line'], p.get('indent', 0)) for p in app._extract_paragraphs(app.body_text)
+              if p.get('kind')]
+_ct_bold = [(s['start'], s['end']) for s in app._extract_formatting(app.body_text)
+            if s['style'] == 'bold']
+_ct_at = body().find('Pick dates') + 5
+check(f'a line moved by Cut and Paste keeps its level and its bold ({_ct_levels}; {_ct_bold}; {body()!r})',
+      body() == 'Trip\n1. Book hotel\n1. Pay deposit\n2. Pick dates\n2. Pack\n3. Go'
+      and _ct_levels == [(1, 0), (2, 1), (3, 1), (4, 0), (5, 0)]
+      and _ct_bold == [(_ct_at, _ct_at + 5)])
+# ...outside a list too, the delete its own, and one Ctrl+Z brings the word back bold.
+set_body('a bold word here')
+app.body_text.tag_add('sel', '1.2', '1.6')
+app._toggle_body_style('bold')
+app.body_text.tag_remove('sel', '1.0', 'end')
+app.body_text.tag_add('sel', '1.2', '1.7')
+_stub_clipboard(loopback=True)
+take_focus(app.body_text)
+app.body_text.event_generate('<<Cut>>')
+app.update()
+_ct_cut = body()
+app._body_undo_redo('undo')
+app.update()
+_ct_undone = (body(), [(s['start'], s['end']) for s in app._extract_formatting(app.body_text)
+                       if s['style'] == 'bold'])
+app._body_undo_redo('redo')
+app.body_text.tag_remove('sel', '1.0', 'end')
+app.body_text.mark_set('insert', '1.end')
+app._on_body_paste()
+app.update()
+_ct_moved = [(s['start'], s['end']) for s in app._extract_formatting(app.body_text) if s['style'] == 'bold']
+check(f'a bold word cut and pasted stays bold, and Ctrl+Z puts the cut back as one step '
+      f'({_ct_cut!r}; {_ct_undone}; {body()!r} {_ct_moved})',
+      _ct_cut == 'a word here' and _ct_undone == ('a bold word here', [(2, 6)])
+      and body() == 'a word herebold ' and _ct_moved == [(11, 15)])
 _stub_clipboard()
 set_body('')
 
