@@ -666,8 +666,11 @@ def drawn_moves(note):
              for orig, new in moved.items()]
     shown = _drawn_on_days(note, [day for _o, _n, day in pairs
                                   if day is not None])
+    # One a date, the move moved_from names: two onto one date were listed
+    # twice in History (the phone's list threw on the twin key, round 19).
+    came = _moved_from_map(note)
     return [(orig, new) for orig, new, day in pairs
-            if day is not None and shown[day] == [new]]
+            if day is not None and shown[day] == [new] and came.get(new) == orig]
 
 
 def _moved_from_map(note):

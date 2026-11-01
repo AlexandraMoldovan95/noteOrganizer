@@ -23276,6 +23276,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         skipped = came_from or date_str
         moves = dict(note.get("moved") or {})
         if came_from:
+            # A dead move onto the date goes, as Move this day drops one: two
+            # moves onto one date were listed twice, and the phone's History
+            # threw on the twin (round 19 of the final audit).
+            for dead in [other for other, new in moves.items() if new == date_str and other != came_from]:
+                del moves[dead]
             moves[came_from] = date_str
         # Asked of the calendar, the day as if it were not skipped: a repeat
         # picked anew, or one whose rule, start or end was changed since, may

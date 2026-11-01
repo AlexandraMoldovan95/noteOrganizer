@@ -14150,5 +14150,41 @@
       "test_data_safety"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "DR182",
+    "about": "two moves onto one date are both listed: twice in History and in the banner's count",
+    "edits": [
+      {
+        "file": "noteorganizer/core/recurrence.py",
+        "find": "            if day is not None and shown[day] == [new] and came.get(new) == orig]\n",
+        "replace": "            if day is not None and shown[day] == [new]]\n"
+      }
+    ],
+    "must_fail": [
+      "two moves onto one date are listed once"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR183",
+    "about": "the Undo of a deleted moved day puts its move back beside a dead move onto the same date: two moves on one date",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            for dead in [other for other, new in moves.items() if new == date_str and other != came_from]:\n                del moves[dead]\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "the Undo of a deleted moved day drops a dead move onto its date"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
   }
 ]

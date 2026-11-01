@@ -4067,6 +4067,16 @@ def _t18_found(note):
     return [c["date"] for row in _rec_t10.history_entries([note], "Budget") for c in row.get("children", [])]
 
 
+# Round 19. Two moves onto one date -- an older build's, or an Undo's beside a
+# dead move -- are listed once: twice in History, and the phone's list threw.
+_t19_two = {"id": 46, "title": "Meeting", "body": "x", "date": "2026-11-02",
+            "recurrence": {"freq": "weekly", "interval": 2}, "exceptions": [], "overrides": {},
+            "moved": {"2026-12-14": "2026-12-10", "2026-12-07": "2026-12-10"}}
+check("two moves onto one date are listed once, by the banner's count and in History (%s)"
+      % _rec_t10.drawn_moves(_t19_two),
+      _rec_t10.drawn_moves(_t19_two) == [("2026-12-14", "2026-12-10")]
+      and [c["date"] for row in _rec_t10.history_entries([_t19_two]) for c in row.get("children", [])]
+      == ["2026-12-10"])
 # ...and a copy holding the series as the note does, its weekday lit and the
 # note's not, is spent: compared as stored, Restore previous stayed offered
 # for nothing, and the next turn-off brought back an old agenda.

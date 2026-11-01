@@ -2272,6 +2272,19 @@ check(f"a day moved onto a date the new rule gives loses its move at the save, i
       f"showed ({_mh_seen})",
       _mh['recurrence']['freq'] == 'daily'
       and _mh_seen == ({}, 'SERIES TEXT', 'DAY TEXT: room 9'))
+# Round 19. The Undo of a deleted moved day drops a dead move onto its date
+# (its own date no longer the rule's), as Move this day does: put back beside
+# it, the date held two moves, listed twice, and the phone's History threw.
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Standup', 'body': 'SERIES TEXT', 'date': '2026-11-02',
+                                'recurrence': {'freq': 'weekly'}, 'exceptions': ['2026-11-16'],
+                                'moved': {'2026-11-18': '2026-11-20'}}),
+             NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+app.save_notes()
+app._undo_occurrence_delete(1, '2026-11-20', None, None, '2026-11-16'); app.update()
+check(f"the Undo of a deleted moved day drops a dead move onto its date ({app.find_note(1).get('moved')})",
+      app.find_note(1).get('moved') == {'2026-11-16': '2026-11-20'}
+      and '2026-11-16' not in app.find_note(1).get('exceptions'))
 # ...and an older rule Restore previous brings back drops a move made since
 # onto its days at once: a share code made the daily series weekly, a day was
 # moved; left till the next start, a delete on the shared date took the hidden

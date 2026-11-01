@@ -219,6 +219,7 @@ is in the table below as well.
 | [Round sixteen: a home the rule no longer gives, and a chain walked once a link](#round-sixteen-a-home-the-rule-no-longer-gives-and-a-chain-walked-once-a-link) | A rule that moves something "back" must ask whether "back" still exists; a fixpoint loop over links is a quadratic waiting for a long chain. | next |
 | [Round seventeen: a week shifted a day at a time, and a day no list showed](#round-seventeen-a-week-shifted-a-day-at-a-time-and-a-day-no-list-showed) | Decide where everything lands before moving anything, and refuse any landing that writes over something. | next |
 | [Round eighteen: History, the one search of a day's words, and the days it never asked about](#round-eighteen-history-the-one-search-of-a-days-words-and-the-days-it-never-asked-about) | A fix to one reader of a shape is a question to every reader of it. | next |
+| [Round nineteen: two moves onto one date, and a list that threw](#round-nineteen-two-moves-onto-one-date-and-a-list-that-threw) | A grade is about the road a person takes: a crash an upgrade can reach is not low because this build alone makes it rarely. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -3630,6 +3631,26 @@ person can reach it, and fails with round sixteen's code put back. `test_data_sa
 DR179-DR181. The phone's `Recurrence.history` and `copyFieldHeld` the same.
 
 **Takeaway:** a fix to one reader of a shape is a question to every reader of it.
+
+### Round nineteen: two moves onto one date, and a list that threw
+
+*(2026-11-01 · found by the phone's nineteenth round; the finder graded it low by the owner's
+rule, the session did not)*
+
+**Symptom:** a series holding two moves onto one date -- left by the phone's 0.13.0 after three
+ordinary taps (a day moved, the repeat made every two weeks, another day moved onto the same
+date), or here by the Undo of a deleted moved day beside a dead move -- was listed twice in
+History. The desktop drew a double row; the phone's list threw on the twin key at every
+unfolding. The finder graded it low, the road on this build alone being an Undo race; but the
+road through 0.13.0, the version on the owner's phone, then the install, is ordinary.
+
+**Fix:** `drawn_moves` (History and the banner's count) lists a date once, for the move
+`moved_from` names; `_undo_occurrence_delete` drops a dead move onto the date it puts a day back
+on, as `move_day` does. The phone also keeps one move a date in the raw notes at its read.
+`test_data_safety`, qa5; mutants DR182, DR183.
+
+**Takeaway:** a grade is about the road a person takes: a crash an upgrade can reach is not low
+because this build alone makes it rarely.
 
 ## Tk & platform gotchas
 
