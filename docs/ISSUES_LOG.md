@@ -3483,8 +3483,11 @@ made under, never against the rule after it.
   none is left, at every read and every save or update of the series. A chain on dates the rule
   leaves free holds, and so does a deleted day's date.
 - `_same_word`: a title without its spaces, a text with the table's line on both sides or neither.
+- A file's `_set_aside` is read at most `MAX_OCCURRENCES` long, as moved days are, and the notes
+  made of it are numbered from one look at the notebook: a commit's security review found a
+  long list in a file walking the whole notebook again for each note made at the start.
 - `test_data_safety`, `test_recurrence` (its 2,000 moved days now under a rule that ends before
-  the dates moved to), qa5; mutants DR143, DR144 re-aimed, DR146–DR148 and DR150–DR158 new. The
+  the dates moved to), qa5; mutants DR143, DR144 re-aimed, DR146–DR148 and DR150–DR160 new. The
   phone's fixture gains eleven cases and compares the notes made.
 
 **Written down, not fixed:** `_write_series_owned`'s whole-note copy for a turn-off has no

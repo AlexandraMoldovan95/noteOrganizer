@@ -2230,13 +2230,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         its date, and say so (*say*). Returns how many were made."""
         made = 0
         stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # Worked out once: asked again for each note made, the whole notebook
+        # was walked for every one of them.
+        next_id = None
         for note in list(self.notes):
             if not note.get("_set_aside"):
                 continue
+            if next_id is None:
+                next_id = max([n["id"] for n in self.notes], default=0) + 1
             for fresh in notes_set_aside(note):
                 self.notes.append(normalize_note(dict(
-                    fresh, id=max([n["id"] for n in self.notes], default=0) + 1,
-                    created=stamp, updated=stamp)))
+                    fresh, id=next_id, created=stamp, updated=stamp)))
+                next_id += 1
                 made += 1
         if made and say:
             self.set_status(f"Earlier text of {made} day{'s' if made != 1 else ''} of a "

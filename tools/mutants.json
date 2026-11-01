@@ -13789,5 +13789,41 @@
       "test_data_safety"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "DR159",
+    "about": "the notes made of days set aside all take the one number worked out before them: two notes edited as one",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                next_id += 1\n                made += 1\n",
+        "replace": "                made += 1\n"
+      }
+    ],
+    "must_fail": [
+      "days set aside on two notes become notes numbered on from the highest, one number each"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR160",
+    "about": "a file's days set aside are read without a cap: each becomes a note at the next start, as many as the file says",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "            if len(kept) >= MAX_OCCURRENCES:\n                break\n    return kept\n",
+        "replace": "    return kept\n"
+      }
+    ],
+    "must_fail": [
+      "a file's days set aside are read at most as many as a series' moved days"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
   }
 ]

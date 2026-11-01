@@ -3880,6 +3880,14 @@ _model_mod.apply_shared_update(_t15_coded, {"uid": "coded", "title": "Gym", "bod
 check("a share code making the series daily sends a day moved onto its new days home at once (%s, %s)"
       % (_t15_coded["moved"], _t15_coded["overrides"]),
       _t15_coded["moved"] == {} and _t10_shows(_t15_coded, "2026-11-09") == "Held on Tuesday")
+# Days set aside are capped as moved days are: each becomes a note at the next
+# start, and a file can say anything; a save empties the list each time.
+_t15_flood = _model_mod.normalize_note({"id": 30, "title": "Gym", "body": "x", "_set_aside": [
+    {"day": "2026-11-09", "body": "words %d" % i} for i in range(_model_mod.MAX_OCCURRENCES + 1)]})
+check("a file's days set aside are read at most as many as a series' moved days (%d)"
+      % len(_t15_flood["_set_aside"]),
+      len(_t15_flood["_set_aside"]) == _model_mod.MAX_OCCURRENCES
+      and _t15_flood["_set_aside"][0]["body"] == "words 0")
 
 
 def _t10_side(rnd, tag, ops):

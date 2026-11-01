@@ -2152,6 +2152,22 @@ check(f"a day with words of its own keeps them, and the copy's words for it beco
       and 'kept as notes of their own' in _sa_line
       and not any('_set_aside' in n for n in _sa_disk)
       and len(_sa_disk) == 3)
+# ...and several at once, from two notes: each its own number, counted on
+# from the notebook's highest, worked out once -- asked again for each, the
+# whole notebook was walked for every note made (round 15's security review).
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Standup', 'body': 'S', 'date': '2026-09-07',
+                                'recurrence': {'freq': 'weekly'},
+                                '_set_aside': [{'day': '2026-09-14', 'body': 'A'},
+                                               {'day': '2026-09-21', 'body': 'B'}]}),
+             NO.normalize_note({'id': 7, 'title': 'Gym', 'body': 'G', 'date': '2026-09-08',
+                                'recurrence': {'freq': 'weekly'},
+                                '_set_aside': [{'day': '2026-09-15', 'body': 'C'}]})]
+app.save_notes()
+_sm_made = sorted((n['id'], n.get('body')) for n in app.notes if n['id'] not in (1, 7))
+check(f"days set aside on two notes become notes numbered on from the highest, one number each "
+      f"({_sm_made})",
+      _sm_made == [(8, 'A'), (9, 'B'), (10, 'C')])
 # ...and a copy of another series than the note repeats as now, replaced by
 # the next turn-off: its days with words were in it alone, and the new copy
 # put them in no file (round 15). Made notes of their own first.

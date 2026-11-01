@@ -439,6 +439,10 @@ def _shaped_aside(entries):
         shaped["day"] = format_date(when)
         if any(shaped[word].strip() for word in DAY_WORDS):
             kept.append(shaped)
+            # Capped as moved days are: each becomes a note at the next start,
+            # and a file can say anything. A save empties the list each time.
+            if len(kept) >= MAX_OCCURRENCES:
+                break
     return kept
 
 
