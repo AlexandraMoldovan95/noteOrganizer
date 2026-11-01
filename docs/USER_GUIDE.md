@@ -737,7 +737,8 @@ saves the day and takes you to the series.
 
 Files you attach and items you tick while looking at one day belong to the whole series — a day
 has nowhere else to keep them — and the editor says so: **☑ Checklist · whole series**, **📎
-Attachments · whole series**. A day's text is plain: formatting made there is not kept. Deleting
+Attachments · whole series**. A day's text is plain: formatting made there is not kept, except its
+lists — bullets, numbers and how deep each item sits, which the day keeps as its own. Deleting
 still asks — **Only this day** or **The whole series** — since a delete is worth a moment's
 thought.
 

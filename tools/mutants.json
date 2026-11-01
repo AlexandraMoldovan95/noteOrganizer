@@ -4099,7 +4099,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                follows_again = day_matches_series(note, patch)\n",
+        "find": "                follows_again = (day_matches_series(note, patch) and patch.get(\"paragraphs\")\n                                 == list_lines(note.get(\"paragraphs\"), note.get(\"body\") or \"\"))\n",
         "replace": "                follows_again = False\n"
       }
     ],
@@ -14342,8 +14342,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/formatting.py",
-        "find": "    if same_body:\n        return kept\n    return [{key: value",
-        "replace": "    if True:\n        return kept\n    return [{key: value"
+        "find": "    if not same_body:\n        return list_lines(paragraphs if own is None else own, body)\n",
+        "replace": "    if False:\n        return list_lines(paragraphs if own is None else own, body)\n"
       }
     ],
     "must_fail": [
@@ -14504,8 +14504,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/formatting.py",
-        "find": "    return [{key: value for key, value in entry.items() if key != \"align\"}\n            for entry in kept\n            if entry.get(\"kind\") and parse_list_marker(lines[entry[\"line\"]])[0] == entry[\"kind\"]]\n",
-        "replace": "    return []\n"
+        "find": "        return list_lines(paragraphs if own is None else own, body)\n",
+        "replace": "        return []\n"
       }
     ],
     "must_fail": [
@@ -14549,6 +14549,78 @@
     ],
     "suites": [
       "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR204",
+    "about": "a day of its own text takes its lists' depth from the series by line, not its own: an item added to a sub-list slides out of it when the day is opened again",
+    "edits": [
+      {
+        "file": "noteorganizer/core/formatting.py",
+        "find": "        return list_lines(paragraphs if own is None else own, body)\n",
+        "replace": "        return list_lines(paragraphs, body)\n"
+      }
+    ],
+    "must_fail": [
+      "a day keeps its own lists' structure: an item added to a sub-list keeps its level"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR205",
+    "about": "a day's save drops its own list lines: its lists' structure is in no file",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "        out[\"paragraphs\"] = list_lines(patch[\"paragraphs\"], out.get(\"body\"))\n",
+        "replace": "        pass\n"
+      }
+    ],
+    "must_fail": [
+      "a day keeps its own lists' structure: an item added to a sub-list keeps its level"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR206",
+    "about": "a list's level changed on a day of the series' words follows the series again at the save: the change undone, the day unsaved for ever",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                follows_again = (day_matches_series(note, patch) and patch.get(\"paragraphs\")\n                                 == list_lines(note.get(\"paragraphs\"), note.get(\"body\") or \"\"))\n",
+        "replace": "                follows_again = day_matches_series(note, patch)\n"
+      }
+    ],
+    "must_fail": [
+      "a level changed on a day of the series' words is that day's, and reopening saves nothing"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR207",
+    "about": "the editor reads a list's level changed on a day as nothing to save",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                    and list_lines(st.get(\"paragraphs\"), st[\"body\"])\n                    == list_lines(day_paragraphs_shown(note, occ), shown[\"body\"])):\n",
+        "replace": "                    ):\n"
+      }
+    ],
+    "must_fail": [
+      "a level changed on a day of the series' words is that day's, and reopening saves nothing"
+    ],
+    "suites": [
+      "qa6"
     ],
     "expect": "killed"
   }

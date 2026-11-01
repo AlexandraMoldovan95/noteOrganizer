@@ -20,9 +20,11 @@ from datetime import datetime
 
 from .categories import CATEGORY_COLORS
 from .formatting import (normalize_formatting, normalize_paragraphs,
-                         clamp_spans_per_line, strip_list_markers)
+                         clamp_spans_per_line, strip_list_markers,
+                         day_paragraphs, list_lines)
 from .tables import with_caret_line
 from .recurrence import (
+    effective_note,
     normalize_recurrence,
     parse_date,
     format_date,
@@ -906,7 +908,21 @@ def clean_override(patch):
             # always read as unsaved.
             v = with_caret_line(v)
         out[k] = v
+    # ...and the day's own list lines, kept even empty: a day saved since
+    # keeps its lists' structure, one saved before takes the series' by line
+    # (day_paragraphs; the owner's choice, the lows wave).
+    if isinstance(patch.get("paragraphs"), list):
+        out["paragraphs"] = list_lines(patch["paragraphs"], out.get("body"))
     return out
+
+
+def day_paragraphs_shown(note, day):
+    """The lines' looks *note*'s *day* shows (day_paragraphs): what the day
+    view puts on, a day's save compares with, and Make it a note keeps."""
+    shown = effective_note(note, day)
+    own = ((note.get("overrides") or {}).get(day) or {}).get("paragraphs")
+    return day_paragraphs(note.get("paragraphs"), shown.get("body"),
+                          shown.get("body") == note.get("body"), own)
 
 
 def _bare_file_name(name):

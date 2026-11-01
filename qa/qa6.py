@@ -3451,6 +3451,50 @@ _nl_day = app._extract_paragraphs(app.body_text)
 check(f"a day of its own text keeps the series' list depth where its lines keep their markers ({_nl_day})",
       [(p.get('line'), p.get('indent', 0)) for p in _nl_day if p.get('kind')]
       == [(1, 0), (2, 1), (3, 1), (4, 0)])
+# ...and a day keeps its OWN lists' structure (the owner's choice, the lows
+# wave): an item added to a sub-list keeps its level when the day is opened
+# again -- taken from the series by line, it slid to the outer list.
+app.open_note_in_tab(app.find_note(7), occurrence_date='2026-11-23'); app.update()
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'Agenda\n1. Buy\n1. milk\n2. butter\n3. eggs\n2. Clean')
+app._apply_paragraphs(app.body_text, [{'line': 1, 'kind': 'number'},
+                                      {'line': 2, 'kind': 'number', 'indent': 1},
+                                      {'line': 3, 'kind': 'number', 'indent': 1},
+                                      {'line': 4, 'kind': 'number', 'indent': 1},
+                                      {'line': 5, 'kind': 'number'}])
+# (Laid on lines whose tags the delete above took: as typing then Enter leave them.)
+app._flush_autosave(); app.update()
+_kl_kept = ((app.find_note(7).get('overrides') or {}).get('2026-11-23') or {}).get('paragraphs')
+app.open_note_in_tab(app.find_note(6)); app.update()
+app.open_note_in_tab(app.find_note(7), occurrence_date='2026-11-23'); app.update()
+_kl_day = [(p['line'], p.get('indent', 0)) for p in app._extract_paragraphs(app.body_text) if p.get('kind')]
+check(f"a day keeps its own lists' structure: an item added to a sub-list keeps its level ({_kl_day}; {_kl_kept})",
+      _kl_day == [(1, 0), (2, 1), (3, 1), (4, 1), (5, 0)]
+      and [(p['line'], p.get('indent', 0)) for p in _kl_kept or []] == _kl_day)
+# ...a list's level changed on a day showing the series' words -- Tab on a
+# one-item list, its words unchanged -- stays that day's, the series
+# untouched; and opening it again saves nothing.
+app.notes.append(NO.normalize_note({'id': 8, 'title': 'Plan', 'body': 'Plan\n1. Only',
+                                    'date': '2026-11-02', 'recurrence': {'freq': 'weekly'},
+                                    'paragraphs': [{'line': 1, 'kind': 'number'}]}))
+app.save_notes()
+app.open_note_in_tab(app.find_note(8), occurrence_date='2026-11-30'); app.update()
+app.body_text.mark_set('insert', '2.end')
+app._on_body_tab(None, +1); app.update()
+_kl_tabbed = (app.body_text.get('1.0', 'end-1c'),
+              [(p['line'], p.get('indent', 0)) for p in app._extract_paragraphs(app.body_text) if p.get('kind')])
+app._flush_autosave(); app.update()
+app.open_note_in_tab(app.find_note(6)); app.update()
+app.open_note_in_tab(app.find_note(8), occurrence_date='2026-11-30'); app.update()
+_kl_same = [(p['line'], p.get('indent', 0)) for p in app._extract_paragraphs(app.body_text) if p.get('kind')]
+_kl_stamp = app.find_note(8).get('updated')
+_kl_clean = app.editor_state_matches_saved(app.capture_editor_state())
+app._flush_autosave(); app.update()
+check(f"a level changed on a day of the series' words is that day's, and reopening saves nothing "
+      f"({_kl_tabbed}, {_kl_same}, {_kl_clean}, {(app.find_note(8).get('overrides') or {}).get('2026-11-30')})",
+      _kl_tabbed[0].startswith('Plan\n1. Only') and _kl_same == [(1, 1)] and _kl_clean
+      and app.find_note(8).get('updated') == _kl_stamp
+      and [p.get('indent', 0) for p in app.find_note(8).get('paragraphs')] == [0])
 # A change made behind a day opened from the calendar -- an import's Update,
 # a category change -- reads the note back and keeps "Back to Calendar": the
 # reopening cleared it (the audit's round 24).

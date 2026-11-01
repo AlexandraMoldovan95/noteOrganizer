@@ -714,21 +714,49 @@ def normalize_paragraphs(value, line_count=None):
     return sorted(clean, key=lambda b: b["line"])
 
 
-def day_paragraphs(paragraphs, body, same_body):
-    """The series' *paragraphs* a day of it shows, *body* the day's text: all
-    of them while the day shows the series' words (*same_body*); on text of
-    its own, only the list entries whose line still carries their marker,
-    without alignment. A list's depth lives nowhere else -- dropped, a nested
-    numbered list read flat and the next Enter renumbered it as one run --
-    while the rest, put on by line number, centred the wrong lines (ISSUES_LOG:
-    "The lows wave: a fuzz that never took the road it guarded")."""
-    lines = (body or "").split("\n")
-    kept = normalize_paragraphs(paragraphs, len(lines))
-    if same_body:
-        return kept
-    return [{key: value for key, value in entry.items() if key != "align"}
-            for entry in kept
-            if entry.get("kind") and parse_list_marker(lines[entry["line"]])[0] == entry["kind"]]
+def list_lines(paragraphs, body=None):
+    """The list lines of *body*: each line starting with a list marker, its
+    kind and the depth *paragraphs* give it (none when they give it to no
+    such line). The one look a day of a series keeps of its own -- its text
+    is plain, but a nested list's depth lives nowhere else (the owner's
+    choice, the lows wave). Without *body*, the list entries as they are."""
+    if not isinstance(body, str):
+        return [{key: value for key, value in entry.items() if key != "align"}
+                for entry in normalize_paragraphs(paragraphs) if entry.get("kind")]
+    lines = body.split("\n")
+    depth = {entry["line"]: (entry["kind"], entry.get("indent", 0))
+             for entry in normalize_paragraphs(paragraphs, len(lines)) if entry.get("kind")}
+    out = []
+    for number, line in enumerate(lines):
+        kind, marker, _rest = parse_list_marker(line)
+        if kind:
+            given = depth.get(number)
+            # Given none, a bullet's glyph tells its level, as the editor reads it.
+            indent = (given[1] if given and given[0] == kind
+                      else bullet_level_of(marker) if kind == "bullet" else 0)
+            entry = {"line": number, "kind": kind}
+            if indent:
+                entry["indent"] = indent
+            out.append(entry)
+    return out
+
+
+def day_paragraphs(paragraphs, body, same_body, own=None):
+    """The lines' looks a day of a series shows, *body* the day's text: the
+    series' *paragraphs* while the day shows the series' words (*same_body*),
+    its lists' depth its *own* when it keeps them; on text of its own, its
+    own list lines, or -- a day saved before it kept them -- the series' list
+    entries, by line (ISSUES_LOG: "The lows wave: a fuzz that never took the
+    road it guarded")."""
+    body = body or ""
+    if not same_body:
+        return list_lines(paragraphs if own is None else own, body)
+    looks = {entry["line"]: entry for entry in normalize_paragraphs(paragraphs, len(body.split("\n")))}
+    for entry in list_lines(own, body) if own is not None else ():
+        looks[entry["line"]] = dict(looks.get(entry["line"], {}), **entry)
+        if "indent" not in entry:
+            looks[entry["line"]].pop("indent", None)
+    return [looks[line] for line in sorted(looks)]
 
 
 def renumber(body, paragraphs):

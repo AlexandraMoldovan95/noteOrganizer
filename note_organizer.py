@@ -219,7 +219,7 @@ from noteorganizer.core.richtext import (html_to_note, note_to_html,
                                         MAX_PASTE_CHARS, MAX_PASTE_SPANS)
 from noteorganizer.core.formatting import (
     tag_to_spans,
-    day_paragraphs,
+    list_lines,
     normalize_paragraphs,
     parse_list_marker,
     strip_list_markers,
@@ -368,6 +368,7 @@ from noteorganizer.core.categories import (
 )
 from noteorganizer.core.model import (
     NOTE_DEFAULTS,
+    day_paragraphs_shown,
     find_note as core_find_note,
     notes_on_date as core_notes_on_date,
     count_notes_in_category as core_count_in_category,
@@ -17258,8 +17259,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "title": shown.get("title") or "",
             "body": shown.get("body") or "",
             "formatting": copy.deepcopy(note.get("formatting") or []) if same_body else [],
-            # ...and the lines' looks the day view shows (day_paragraphs).
-            "paragraphs": day_paragraphs(note.get("paragraphs"), shown.get("body"), same_body),
+            # ...and the lines' looks the day view shows (day_paragraphs_shown).
+            "paragraphs": day_paragraphs_shown(note, day),
             "comments": shown.get("comments") or "",
             "category": shown.get("category") or note.get("category"),
             "color": shown.get("color") or "",
@@ -19408,7 +19409,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     and st["body"] == shown["body"]
                     and st["comments"] == (shown.get("comments") or "")
                     and st["category"] == shown["category"]
-                    and st["color"] == shown.get("color", "")):
+                    and st["color"] == shown.get("color", "")
+                    # ...and its lists' structure, which a day keeps of its
+                    # looks (the owner's choice, the lows wave).
+                    and list_lines(st.get("paragraphs"), st["body"])
+                    == list_lines(day_paragraphs_shown(note, occ), shown["body"])):
                 return False
             # ...and the SERIES-owned fields against the BASE note, which
             # is where the editor loaded them from: load_note reads
@@ -20716,13 +20721,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # against override text of a different length/content would place
         # bold/italic on the wrong characters. Only apply when what's shown
         # actually IS the base content (no override for this occurrence).
-        same_body = shown.get("body") == note.get("body")
-        if same_body:
+        if shown.get("body") == note.get("body"):
             self._apply_formatting(self.body_text, note.get("formatting", []))
-        # The lines' looks: all on the series' words, only its lists' on a
-        # day's own text (day_paragraphs, the phone's the same).
-        self._apply_paragraphs(self.body_text, day_paragraphs(
-            note.get("paragraphs", []), shown.get("body"), same_body))
+        # The lines' looks: all on the series' words, a day's own list lines
+        # on its own text (day_paragraphs_shown, the phone's the same).
+        self._apply_paragraphs(self.body_text, day_paragraphs_shown(note, day)
+                               if day else note.get("paragraphs", []))
         self._render_table_grids()
         self.comments_text.delete("1.0", "end")
         self.comments_text.insert("1.0", shown.get("comments", ""))
@@ -22678,7 +22682,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     or body != (shown_now.get("body") or "")
                     or comments != (shown_now.get("comments") or "")
                     or category != shown_now.get("category")
-                    or self.current_note_color != (shown_now.get("color") or ""))
+                    or self.current_note_color != (shown_now.get("color") or "")
+                    # ...or its lists' structure, the one look a day keeps.
+                    or list_lines(paragraphs, body) != list_lines(
+                        day_paragraphs_shown(note, occurrence_date), shown_now.get("body") or ""))
                 # The date and the repeat are the series' own, and a day
                 # leaves them as they are. The day shows neither as a field
                 # to change, but whatever reached the fields behind it --
@@ -22727,6 +22734,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     "comments": comments,
                     "category": category,
                     "color": self.current_note_color,
+                    # Its own list lines (clean_override keeps those alone).
+                    "paragraphs": paragraphs,
                 })
                 if not self.current_note_color and note.get("color"):
                     patch["color"] = ""
@@ -22734,7 +22743,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # own, and follows the series again (day_matches_series): a
                 # letter typed and taken back left one, and cut the day off
                 # from every later edit of the series.
-                follows_again = day_matches_series(note, patch)
+                # ...and its lists as the series' are: a day's own depth on the
+                # series' words is kept, or its save undid it every time.
+                follows_again = (day_matches_series(note, patch) and patch.get("paragraphs")
+                                 == list_lines(note.get("paragraphs"), note.get("body") or ""))
                 if follows_again:
                     follows_again = occurrence_date in (note.get("overrides") or {})
                     (note.get("overrides") or {}).pop(occurrence_date, None)
