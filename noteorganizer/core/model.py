@@ -677,8 +677,18 @@ def rescue_copy_spent(note):
     if (normalize_paragraphs(note.get("paragraphs") or [], lines)
             != normalize_paragraphs(prev.get("paragraphs") or [], lines)):
         return False
-    return all(prev[key] == note.get(key, NOTE_DEFAULTS.get(key))
-               for key in prev if key not in PREV_TEXT_FIELDS)
+    return all(_copy_field_held(note, prev, key) for key in prev if key not in PREV_TEXT_FIELDS)
+
+
+def _copy_field_held(note, prev, key):
+    """Whether *note* holds *prev*'s field *key* again: a repeat rule by the
+    days it gives (_same_series), any other as it is. Compared as stored, a
+    rule with its weekday lit was never the same, and the copy never spent
+    (round 18 of the final audit)."""
+    if key == "recurrence":
+        day = note.get("date")
+        return _same_series(prev.get("date", day), prev[key], day, note.get(key, NOTE_DEFAULTS.get(key)))
+    return prev[key] == note.get(key, NOTE_DEFAULTS.get(key))
 
 
 def text_lost(old, new):
@@ -782,7 +792,7 @@ def copy_replaced_by_restore(note, prev):
                     and (not title.strip() or title == (prev.get("title") or ""))
                     and (note.get("comments") or "").strip() in (prev.get("comments") or "")
                     and styles_kept
-                    and all(prev[key] == note.get(key, NOTE_DEFAULTS.get(key))
+                    and all(_copy_field_held(note, prev, key)
                             for key in prev if key not in PREV_TEXT_FIELDS)
                     and not taken)
     if nothing_lost:

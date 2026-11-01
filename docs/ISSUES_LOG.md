@@ -3616,9 +3616,18 @@ nothing, and the row counted one day fewer. An endless series skipped every dele
 day moved onto one was missed the same way (round seventeen fixed that for the off-schedule list
 and not for History).
 
+The desktop's round found a sibling round seventeen left: `_same_series` read a weekly rule's
+weekday lit or not as one rule for three readers, but `rescue_copy_spent` and
+`copy_replaced_by_restore` still compared the rule as stored. Turned back on as it was with the
+weekday unlit, the copy was never spent: Restore previous stayed offered for nothing, and the
+next turn-off brought back an old agenda.
+
 **Fix:** `history_entries` adds the dates moved days are drawn on (`drawn_moves`) to a bounded
-series' days, and skips a deleted date only when no move lands on it. `test_data_safety`;
-mutants DR179, DR180. The phone's `Recurrence.history` the same.
+series' days, and skips a deleted date only when no move lands on it. `_copy_field_held`
+compares a copy's rule by the days it gives, in both copy readers. The fuzz of a series' days
+now shifts a run of days a day later (round seventeen's road), counts a word kept only where a
+person can reach it, and fails with round sixteen's code put back. `test_data_safety`; mutants
+DR179-DR181. The phone's `Recurrence.history` and `copyFieldHeld` the same.
 
 **Takeaway:** a fix to one reader of a shape is a question to every reader of it.
 

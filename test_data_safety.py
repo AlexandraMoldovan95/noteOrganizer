@@ -4067,6 +4067,18 @@ def _t18_found(note):
     return [c["date"] for row in _rec_t10.history_entries([note], "Budget") for c in row.get("children", [])]
 
 
+# ...and a copy holding the series as the note does, its weekday lit and the
+# note's not, is spent: compared as stored, Restore previous stayed offered
+# for nothing, and the next turn-off brought back an old agenda.
+_t18_lit_copy = _model_mod.normalize_note({
+    "id": 45, "title": "Gym", "body": "plan", "date": "2026-11-02", "recurrence": {"freq": "weekly"},
+    "_prev": {"title": "Gym", "body": "plan", "comments": "", "formatting": [], "paragraphs": [],
+              "date": "2026-11-02", "recurrence": {"freq": "weekly", "weekdays": [0]}}})
+check("a copy holding the series as the note does, its weekday lit and the note's not, is spent, and "
+      "a restore keeps nothing of it",
+      _model_mod.rescue_copy_spent(_t18_lit_copy)
+      and _model_mod.copy_replaced_by_restore(_t18_lit_copy, _t18_lit_copy["_prev"]) is None
+      and not _model_mod.rescue_copy_spent(dict(_t18_lit_copy, recurrence={"freq": "weekly", "weekdays": [1]})))
 check("History lists a day moved past a bounded series' end, or onto a deleted date, and finds its "
       "words (%s, %s)" % (_t18_found(_t18_bounded), _t18_found(_t18_endless)),
       _t18_found(_t18_bounded) == ["2026-12-18"] and _t18_found(_t18_endless) == ["2026-12-14"]
@@ -4088,13 +4100,26 @@ import collections as _f17_coll
 _F17_START = _dtT.date(2026, 11, 2)
 _F17_DAYS = [(_F17_START + _dtT.timedelta(days=i)).isoformat() for i in range(42)]
 _F17_RULES = [{"freq": "weekly"}, {"freq": "weekly", "weekdays": [0, 2]}, {"freq": "daily"},
-              {"freq": "daily", "interval": 2}, {"freq": "weekly", "weekdays": [1, 3]}, {"freq": ""}]
+              {"freq": "daily", "interval": 2}, {"freq": "weekly", "weekdays": [1, 3]}, {"freq": ""},
+              {"freq": "weekly", "weekdays": [0, 1, 2]}, {"freq": "weekly", "weekdays": [1, 2, 3]}]
 
 
 def _f17_where(note, made):
-    """(the words of the note's days and of the notes made, all words held)."""
-    days = [p.get("body") for p in (note.get("overrides") or {}).values() if p.get("body")]
-    held = list(days) + list(made)
+    """(the words of the note's days and of the notes made; every word a person
+    can reach -- a day the calendar draws or lists off the schedule, any day of
+    a note that no longer repeats (a repeat brings it back), the copy Restore
+    previous brings, a note made of them). A word in the file alone, on a date
+    nothing shows, is not kept (round 18: the fuzz counted it kept)."""
+    overrides = note.get("overrides") or {}
+    days = [p.get("body") for p in overrides.values() if p.get("body")]
+    if _rec_t10.is_recurring(note):
+        off = set(_rec_t10.off_schedule_days(note))
+        seen = [p.get("body") for d, p in overrides.items() if p.get("body") and (
+            d in off or _rec_t10.expand_occurrences(
+                note, _rec_t10.parse_date(d), _rec_t10.parse_date(d)) == [d])]
+    else:
+        seen = list(days)
+    held = seen + list(made)
     prev = note.get("_prev") or {}
     held += [p.get("body") for p in (prev.get("overrides") or {}).values() if p.get("body")]
     held += [e.get("body") for e in note.get("_set_aside") or []]
@@ -4146,7 +4171,7 @@ def _f17_restore(note):
 
 
 _f17_failures, _f17_steps = [], 0
-for _f17_seed in range(250):
+for _f17_seed in range(300):
     _rng17 = _f17_random.Random(_f17_seed)
     _note = _model_mod.normalize_note({"id": 1, "uid": "f17", "title": "Gym", "body": "plan",
                                        "date": "2026-11-02", "recurrence": {"freq": "weekly"}})
@@ -4167,9 +4192,29 @@ for _f17_seed in range(250):
                       if _slot_copy else set())
         # A day is edited, moved or deleted only while the note repeats.
         _repeats = _rec_t10.is_recurring(_note)
-        _op = _rng17.choice(["edit", "edit", "move", "delete", "rule", "read", "share", "backup", "restore"])
+        _op = _rng17.choice(["edit", "edit", "move", "shift", "delete", "rule", "rule", "read", "share",
+                             "backup", "restore"])
         _road.append(_op)
-        if _op == "edit" and _repeats and _drawn:
+        if _op == "shift" and _repeats and len(_drawn) >= 2:
+            # A run of days each given words, each held a day later, the last
+            # first -- the road round 17's critical loss took.
+            _i = _rng17.randrange(len(_drawn) - 1)
+            _run = _drawn[_i:_i + _rng17.randint(2, 4)]
+            for _d in _run:
+                _old = (_note.get("overrides") or {}).get(_d, {}).get("body")
+                if _old in _live:
+                    _live[_old] -= 1
+                _n += 1
+                _note.setdefault("overrides", {})[_d] = {"body": "w%d" % _n}
+                _live["w%d" % _n] += 1
+            for _d in reversed(_run):
+                _t = (_rec_t10.parse_date(_d) + _dtT.timedelta(days=1)).isoformat()
+                _now = set(_rec_t10.expand_occurrences(
+                    _note, _rec_t10.parse_date(_F17_DAYS[0]), _rec_t10.parse_date(_F17_DAYS[-1])))
+                if (_t in _F17_DAYS and _t not in _now and _t not in (_note.get("overrides") or {})
+                        and _t not in (_note.get("moved") or {}).values()):
+                    _rec_t10.move_day(_note, _d, _t)
+        elif _op == "edit" and _repeats and _drawn:
             _d = _rng17.choice(_drawn)
             _old = (_note.get("overrides") or {}).get(_d, {}).get("body")
             if _old in _live:
@@ -4219,8 +4264,8 @@ for _f17_seed in range(250):
         if _lost or _twice:
             _f17_failures.append((_f17_seed, _road[:], _lost, _twice))
             break
-check("a fuzz of a series' days: %d roads, %d steps, no day's words lost or doubled but those the "
-      "person deleted or typed over (%s)" % (250, _f17_steps, _f17_failures[:3]),
+check("a fuzz of a series' days: %d roads, %d steps, no day's words lost, out of reach or doubled but "
+      "those the person deleted or typed over (%s)" % (300, _f17_steps, _f17_failures[:3]),
       not _f17_failures)
 # ...and a copy of another series asks for each day where the note holds it
 # now: moved since by the note, or sent home -- by date alone, its words were

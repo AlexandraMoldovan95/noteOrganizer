@@ -14132,5 +14132,23 @@
       "test_data_safety"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "DR181",
+    "about": "a copy's repeat is compared as stored: the weekday lit in the copy and not in the note, the copy is never spent and Restore previous stays offered",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    if key == \"recurrence\":\n        day = note.get(\"date\")\n",
+        "replace": "    if False:\n        day = note.get(\"date\")\n"
+      }
+    ],
+    "must_fail": [
+      "a copy holding the series as the note does, its weekday lit and the note's not, is spent"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
   }
 ]
