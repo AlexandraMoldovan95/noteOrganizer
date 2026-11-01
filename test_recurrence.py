@@ -247,6 +247,12 @@ check('"Older" catches everything before two years ago',
       [e['note_id'] for e in _o] == [2])
 check('"2 years ago" is its own bucket, not part of Older',
       _hist(_h_notes, year_bucket='2 years ago', today=_H_TODAY) == [])
+# A day of a year to come is this year's work, not the archive's (the audit's
+# nineteenth round: it was filed under Older).
+_next = [{'id': 9, 'title': 'Booked', 'body': '', 'date': '%d-01-05' % (_H_TODAY.year + 1)}]
+check('a day of next year is under "This year", not "Older"',
+      [e['note_id'] for e in _hist(_next, year_bucket='This year', today=_H_TODAY)] == [9]
+      and _hist(_next, year_bucket='Older', today=_H_TODAY) == [])
 
 # ---- off_schedule_days: a day's own edit the schedule no longer reaches ----
 # A day saved "only this occurrence" keeps its edit under its date; change

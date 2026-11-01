@@ -805,6 +805,11 @@ blank). The day keeps its own words, or stays deleted, and the older ones become
 note on that date, so nothing is lost. The app says so when
 it makes one; delete it once you no longer need it.
 
+Now and then such a note, or a day the series gives back, repeats words you can already see on
+another day — after a few turns of the repeat off and on, or **Make it a note** followed by
+**↩ Restore previous**. Nothing is lost either way: it is the same words twice, and deleting the
+extra one is safe.
+
 ### Repeating notes in the list
 
 The small symbols on a repeating note's card in the list mean: `✎N` — N days edited separately,
@@ -859,7 +864,8 @@ you straight to its day on the calendar. A day whose own edits the series no lon
 listed too, greyed and marked "off the schedule"; clicking it goes through those days the way
 **Show them** above the note does. It has its own search — one that also looks *inside* what you
 wrote on those individual days, which the sidebar search cannot see — and year buttons
-(All / This year / Last year / 2 years ago / Older) for digging through the archive. Click any entry
+(All / This year / Last year / 2 years ago / Older) for digging through the archive; a day of a
+year still to come is filed under This year. Click any entry
 and you land back on that exact day's preview; right-click gives the usual day menu, including
 "Reset this day". Handy when you know a meeting happened *sometime* and only remember a word of
 what was discussed.

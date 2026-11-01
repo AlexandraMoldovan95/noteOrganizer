@@ -779,6 +779,7 @@
   "_show_off_schedule_days": "(self, note=None)",
   "_show_on_canvas": "(self, canvas, page, widget, part=None)",
   "_show_page_scrollbar": "(self, needed)",
+  "_show_set_aside": "(self, note_id, uid)",
   "_show_toast": "(self, text, kind='success', action=None, action_text='Undo', yield_to_action=False)",
   "_show_tooltip": "(self, widget, title, detail)",
   "_show_words_beneath": "(self, text)",

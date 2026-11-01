@@ -2232,6 +2232,30 @@ check(f"the notes made are said on a banner of their own that opens them, the tu
       f"kept ({_ob_line!r}; {_ob_toast!r}; {_ob_shown!r})",
       'the repeat is off' in _ob_line and 'kept as notes of their own' not in _ob_line
       and 'kept as notes of their own' in _ob_toast and _ob_shown == 'Standup (earlier text)')
+# ...Ctrl+Z, which takes a banner's Undo, never takes its Show; and Show from
+# Settings -- after a backup's Update there -- opens the note where the
+# editor is seen, found by its identity (the audit's round 18).
+_sh_seen = []
+app._show_toast("Earlier text of 1 day of a repeating note kept as notes of their own", kind="info",
+                action=lambda: _sh_seen.append('show'), action_text="Show")
+
+
+class _ShKey:
+    widget = app
+
+
+_sh_took = app._toast_undo_key(_ShKey())
+app._hide_toast()
+_sh_note = next(n for n in app.notes if n.get('title') == 'Standup (earlier text)')
+app.show_settings_page(); app.update()
+app.toggle_settings_panel('trash'); app.update()
+_sh_in_settings = getattr(app, '_settings_open', None)
+app._show_set_aside(_sh_note['id'], _sh_note.get('uid')); app.update()
+check(f"Ctrl+Z leaves a banner's Show alone, and Show from Settings opens the note in sight "
+      f"({_sh_took}, {_sh_seen}, {_sh_in_settings} -> {getattr(app, '_settings_open', None)}, "
+      f"{app.selected_note_id})",
+      _sh_took is None and _sh_seen == [] and _sh_in_settings is True
+      and not getattr(app, '_settings_open', False) and app.selected_note_id == _sh_note['id'])
 # ...and a big delete over such a copy sets its days aside first too: no
 # check reached that road (round 16).
 _ro_fixture()
@@ -2285,6 +2309,39 @@ app._undo_occurrence_delete(1, '2026-11-20', None, None, '2026-11-16'); app.upda
 check(f"the Undo of a deleted moved day drops a dead move onto its date ({app.find_note(1).get('moved')})",
       app.find_note(1).get('moved') == {'2026-11-16': '2026-11-20'}
       and '2026-11-16' not in app.find_note(1).get('exceptions'))
+# ...never a live one: within its seconds a Restore previous brought back a
+# version with another day moved onto that date, and the Undo dropped that
+# move as dead, its words read as this day's (the audit's twentieth round).
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Standup', 'body': 'SERIES TEXT', 'date': '2026-11-02',
+                                'recurrence': {'freq': 'weekly'}, 'moved': {'2026-11-23': '2026-11-20'},
+                                'overrides': {'2026-11-20': {'body': "the 23rd's words"}}}),
+             NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+app.save_notes()
+app._undo_occurrence_delete(1, '2026-11-20', {'body': 'deleted words'}, None, '2026-11-16'); app.update()
+_ul = app.find_note(1)
+check(f"...but keeps a live move onto that date, and the day stays away ({_ul.get('moved')}, "
+      f"{_ul.get('overrides')})",
+      _ul.get('moved') == {'2026-11-23': '2026-11-20'}
+      and (_ul.get('overrides') or {}).get('2026-11-20', {}).get('body') == "the 23rd's words")
+# Reset "The date and the text" of a moved day drops a dead move onto its home
+# date too, as Move this day does: left, the date held two moves (round 19).
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Standup', 'body': 'SERIES TEXT', 'date': '2026-11-02',
+                                'recurrence': {'freq': 'weekly'},
+                                'moved': {'2026-11-09': '2026-11-11', '2026-11-10': '2026-11-09'},
+                                'overrides': {'2026-11-11': {'body': 'moved words'}}}),
+             NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+app.save_notes()
+_rs_dialog = app._themed_dialog
+app._themed_dialog = lambda *a, **k: 'text'
+try:
+    app._reset_occurrence_override(app.find_note(1), '2026-11-11'); app.update()
+finally:
+    app._themed_dialog = _rs_dialog
+_rs = app.find_note(1)
+check(f"Reset of a moved day's date and text drops a dead move onto its home date ({_rs.get('moved')})",
+      _rs.get('moved') == {} and '2026-11-11' not in (_rs.get('overrides') or {}))
 # ...and an older rule Restore previous brings back drops a move made since
 # onto its days at once: a share code made the daily series weekly, a day was
 # moved; left till the next start, a delete on the shared date took the hidden
@@ -4674,9 +4731,11 @@ check(f"a day's Reset and its move's Undo leave it away while another day stands
       and _mv_s['moved'] == {'2026-10-12': '2026-10-14', '2026-10-19': '2026-10-12'}
       and _mv_s['overrides'].get('2026-10-12') == {'body': "the 19th's words"}
       and (_mv_s['overrides'].get('2026-10-14') or {}).get('body') == 'series text (room 2)')
-_mv_s['moved'].pop('2026-10-19')
+# Each with a default: under the check's mutant (DR141) the day came home,
+# and a bare pop stopped the suite before its footer, a verdict of NO-RUN.
+_mv_s['moved'].pop('2026-10-19', None)
 for _mv_day in ('2026-10-12', '2026-10-20'):
-    _mv_s['overrides'].pop(_mv_day)
+    _mv_s['overrides'].pop(_mv_day, None)
 app.save_notes()
 app._undo_day_move(1, _mv_s.get('uid'), '2026-10-12', '2026-10-14', '2026-10-12'); app.update()
 _mv_s = app.find_note(1)

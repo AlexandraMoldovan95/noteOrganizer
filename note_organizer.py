@@ -2064,12 +2064,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         made = getattr(self, "_set_aside_at_start", 0)
         if made:
+            # Both reasons said: a day the note deleted is one (round 21), and
+            # the line once named only the other. The phone's says the same.
             lines.append(
-                f"Some days of a repeating note had earlier text kept aside, where "
-                f"those days now hold text of their own. It is kept as {made} "
-                f"note{'s' if made != 1 else ''} of {'their' if made != 1 else 'its'} own, "
-                "each on its day, titled with the day's or the series' name and "
-                "\"(earlier text)\".")
+                f"Some days of a repeating note had earlier text that only an older "
+                f"copy of it kept: those days now show other text, or were deleted. "
+                f"It is kept as {made} note{'s' if made != 1 else ''} of "
+                f"{'their' if made != 1 else 'its'} own, each on its day, titled with "
+                "the day's or the series' name and \"(earlier text)\".")
 
         if STORAGE_WARNING:
             lines.append("⚠ " + STORAGE_WARNING)
@@ -2238,9 +2240,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # a turn-off's Restore previous went; after it, it ran past the
             # bar's edge or onto a line about something else (rounds 16-17).
             first = self.notes[-made]
-            self._show_toast(news, kind="info", action=lambda: self.open_note_in_tab(first),
+            first_id, first_uid = first.get("id"), first.get("uid")
+            self._show_toast(news, kind="info", action=lambda: self._show_set_aside(first_id, first_uid),
                              action_text="Show")
         return made
+
+    def _show_set_aside(self, note_id, uid):
+        """The '(earlier text)' banner's Show: the first note made, found by
+        its identity -- the list may have been read again since -- opened
+        where the editor is seen. From Settings, after a backup's Update, it
+        opened in the hidden editor (the audit's round 18), as show_welcome_note
+        leaves Settings first."""
+        note = self._note_for_undo(note_id, uid)
+        if note is None:
+            self._show_toast("That note is no longer here", kind="info")
+            return
+        if not self._leave_settings_for_the_editor():
+            return
+        try:
+            self.notebook.select(self.TAB_NOTES)
+        except tk.TclError:
+            pass
+        self.open_note_in_tab(note)
 
     def save_notes(self):
         """Write notes to disk, and say so plainly if it fails.
@@ -12426,7 +12447,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         note = self.find_note(self.selected_note_id)
         if note is not None:
+            # The same note read back: the way back to the calendar stays, as
+            # a move keeps it (_relocate_day). Opening clears it, and a day
+            # opened from the calendar lost its "Back to Calendar" to an
+            # import's Update or a category change (the audit's round 24).
+            pending = getattr(self, "_pending_calendar_return", None)
             self.open_note_in_tab(note, self.current_occurrence_date, flush=False)
+            if pending is not None:
+                self._pending_calendar_return = pending
+                self._update_calendar_return_button()
 
     def _share_code_on_context_switch(self):
         """A different note is in the editor now, so the code shown under it
@@ -13063,7 +13092,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if added_trash:
             save_trash(self.trash)
 
+        # The save makes notes '(earlier text)' of what a series' copy kept
+        # (_set_aside_days); its banner goes under this dialog, so the
+        # dialog says them too (the phone's twenty-third round).
+        before = len(self.notes)
         self.save_notes()
+        earlier = len(self.notes) - before
         self.refresh_note_list()
         self.render_calendar()
         shutil.rmtree(temp_dir, ignore_errors=True)
@@ -13084,6 +13118,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             parts.append(f"{added_trash} trashed note(s)")
         if parts:
             extras_note = " Also restored " + " and ".join(parts) + "."
+        if earlier > 0:
+            extras_note += (f" Earlier text of {earlier} day{'s' if earlier != 1 else ''} "
+                            "of a repeating note kept as notes of their own.")
         if refused_categories:
             extras_note += (
                 f"\n\n{refused_categories} of the backup's categories could "
@@ -20677,9 +20714,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # against override text of a different length/content would place
         # bold/italic on the wrong characters. Only apply when what's shown
         # actually IS the base content (no override for this occurrence).
+        # The lines' looks the same: put on a day's own text by line number,
+        # they centred and indented the wrong lines (the phone's twenty-fifth
+        # round, which now shows them on such a day as this does).
         if shown.get("body") == note.get("body"):
             self._apply_formatting(self.body_text, note.get("formatting", []))
-        self._apply_paragraphs(self.body_text, note.get("paragraphs", []))
+            self._apply_paragraphs(self.body_text, note.get("paragraphs", []))
         self._render_table_grids()
         self.comments_text.delete("1.0", "end")
         self.comments_text.insert("1.0", shown.get("comments", ""))
@@ -21253,6 +21293,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if origin is not None:
             # ...and the date goes back with the text: the day is home.
             note["moved"].pop(origin, None)
+            # A dead move onto that date goes too, as move_day drops one: the
+            # date was found free above, so no live day is moved there, and
+            # left, it was two moves onto one date (the audit's round 19).
+            for dead in [other for other, new in note["moved"].items() if new == origin]:
+                del note["moved"][dead]
         home = origin or occurrence_date
         note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.save_notes()
@@ -23285,10 +23330,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         skipped = came_from or date_str
         moves = dict(note.get("moved") or {})
         if came_from:
+            others = [other for other, new in moves.items() if new == date_str and other != came_from]
+            # Another day still moved onto the date -- its own date one the
+            # rule gives -- holds it: the date is not free, as below. Within
+            # the Undo's seconds a Restore previous brought one back, and the
+            # Undo dropped it as dead, its words read as this day's (the
+            # audit's twentieth round).
+            from noteorganizer.core.recurrence import _rule_days_among
+            if _rule_days_among(note, others) - exceptions:
+                when = parse_date(date_str)
+                self._show_toast(
+                    f"Another day of this series is on {show_day(when) if when else date_str} now, "
+                    "so that day can't come back", kind="info")
+                return
             # A dead move onto the date goes, as Move this day drops one: two
             # moves onto one date were listed twice, and the phone's History
             # threw on the twin (round 19 of the final audit).
-            for dead in [other for other, new in moves.items() if new == date_str and other != came_from]:
+            for dead in others:
                 del moves[dead]
             moves[came_from] = date_str
         # Asked of the calendar, the day as if it were not skipped: a repeat
@@ -23898,6 +23956,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         a text box (whose own Ctrl+Z undoes its typing): takes the offer.
         Eight seconds is short to reach the banner by Tab."""
         if (getattr(self, "_toast_action", None) is None
+                or not getattr(self, "_toast_action_undoes", True)
                 or getattr(self, "_toast_hide_job", None) is None
                 or self._a_dialog_is_asking()):
             return None
@@ -23965,6 +24024,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Undo would have read as a job well done.
         mark = {"success": "✓", "info": "i", "error": "!"}.get(kind, "✓")
         self._toast_action = action
+        # Ctrl+Z takes an Undo, never another word: "Show" on the '(earlier
+        # text)' banner was taken as one (the audit's round 18).
+        self._toast_action_undoes = action_text == "Undo"
         self._toast_kind = kind
         try:
             self.toast_frame.configure(bg=color)

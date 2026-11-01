@@ -1830,6 +1830,16 @@ app.announce_startup_changes()
 check('window not known: ...and says it once',
       not any('Nothing will be removed' in m for m in _rt_said)
       and NO.trash_retention_days() is None)
+# The start's '(earlier text)' notes are said for both reasons, a day the
+# note deleted among them: round 21's were said to be of days holding text
+# of their own. The phone's line is the same.
+_rt_said.clear()
+app._set_aside_at_start = 1
+app.announce_startup_changes()
+app._set_aside_at_start = 0
+check('the start says why earlier text became a note: other text there, or the day deleted',
+      any('those days now show other text, or were deleted' in m
+          and 'kept as 1 note of its own' in m for m in _rt_said))
 app.show_info = _rt_real_info
 app.trash = [dict(_RT_ANCIENT), dict(_RT_RECENT)]
 app.toggle_settings_panel('trash')
@@ -3402,6 +3412,40 @@ check(f'Restore previous from a day the restored version deleted leaves the '
       and '2026-11-17' in (_rg_after.get('exceptions') or [])
       and '2026-11-17' not in (_rg_after.get('overrides') or {})
       and 'Call the supplier' in _rg_after.get('body', ''))
+# A day showing the series' words shows the series' lines' looks; a day with
+# text of its own shows none: put on by line number, they centred the wrong
+# lines (the phone's twenty-fifth round).
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 6, 'title': 'Plan', 'body': 'Agenda\nsecond',
+                                'date': '2026-11-02', 'recurrence': {'freq': 'weekly'},
+                                'paragraphs': [{'line': 0, 'align': 'center'}],
+                                'overrides': {'2026-11-16': {'body': 'own words\nhere'}}})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(6), occurrence_date='2026-11-09'); app.update()
+_pl_series_day = app._extract_paragraphs(app.body_text)
+app.open_note_in_tab(app.find_note(6), occurrence_date='2026-11-16'); app.update()
+_pl_own_day = app._extract_paragraphs(app.body_text)
+check(f"a day showing the series' words shows its lines' looks, a day of its own text none "
+      f"({_pl_series_day}; {_pl_own_day})",
+      any(p.get('line') == 0 and p.get('align') == 'center' for p in _pl_series_day)
+      and not any(p.get('align') for p in _pl_own_day)
+      and any(p.get('line') == 0 and p.get('align') == 'center'
+              for p in app.find_note(6).get('paragraphs') or []))
+# A change made behind a day opened from the calendar -- an import's Update,
+# a category change -- reads the note back and keeps "Back to Calendar": the
+# reopening cleared it (the audit's round 24).
+app.open_note_in_tab(app.find_note(6), occurrence_date='2026-11-09'); app.update()
+app._pending_calendar_return = {'year': 2026, 'month': 11, 'date_str': '2026-11-09', 'origin': 'edit'}
+app._update_calendar_return_button()
+app.find_note(6)['title'] = 'Plan, renamed behind'
+app._editor_follows_external_change({6}); app.update()
+check(f'a change made behind a day opened from the calendar keeps its way back '
+      f'({app._pending_calendar_return}, {app.current_occurrence_date})',
+      (app._pending_calendar_return or {}).get('date_str') == '2026-11-09'
+      and app.current_occurrence_date == '2026-11-09'
+      and app.title_entry.get() == 'Plan, renamed behind')
+app._pending_calendar_return = None
+app._update_calendar_return_button()
 # The note the question named is the note restored, and the editor is
 # filled only while it still holds that note. Moved on to another note
 # while the question waited, the editor took the rescue copy's text into

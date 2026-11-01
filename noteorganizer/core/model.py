@@ -322,6 +322,12 @@ def _same_series(day, rule, other_day, other_rule):
             rec["weekdays"] = [when.weekday()]
         if rec["freq"] == "monthly" and not rec["month_days"]:
             rec["month_days"] = [when.day]
+    # "Skip that month" is read by a monthly or a yearly rule alone: kept
+    # hidden in a weekly one saved from a monthly draft, it made a series
+    # turned back on as it was read as another (the audit's round 19).
+    for rec in rules:
+        if rec["freq"] not in ("monthly", "yearly"):
+            rec["month_day_policy"] = "clamp"
     return rules[0] == rules[1]
 
 
@@ -656,6 +662,10 @@ def apply_shared_update(note, incoming, fields=UPDATABLE_FROM_SHARED):
     note["_prev"] = prev
     for field in fields:
         note[field] = copy.deepcopy(fresh[field])
+    # A backup's note sets aside what its own copy kept, as it is read: an
+    # Add kept those, an Update dropped them (the audit's twenty-second round).
+    if "overrides" in fields and fresh.get("_set_aside"):
+        note["_set_aside"] = (note.get("_set_aside") or []) + copy.deepcopy(fresh["_set_aside"])
     if restarted:
         note["exceptions"] = []
     drop_hidden_moves(note)
@@ -823,7 +833,11 @@ def shared_update_changes(note, incoming, fields=UPDATABLE_FROM_SHARED):
     # (ISSUES_LOG: the final audit's rounds 7 and 9).
     fresh = {key: value for key, value in normalize_note(dict(incoming)).items() if key != "_prev"}
     mine = normalize_note({key: value for key, value in note.items() if key != "_prev"})
-    return any(mine[field] != fresh[field] for field in fields)
+    # The repeat by the days it gives (_same_series): a start weekday lit or
+    # not read as changed, and the Update spent the only earlier version (the
+    # audit's round 19). Another start still changes "date".
+    return any(not _same_series(mine["date"], mine[field], mine["date"], fresh[field])
+               if field == "recurrence" else mine[field] != fresh[field] for field in fields)
 
 
 def split_by_identity(notes, incoming):

@@ -13941,7 +13941,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            self._show_toast(news, kind=\"info\", action=lambda: self.open_note_in_tab(first),\n                             action_text=\"Show\")\n",
+        "find": "            self._show_toast(news, kind=\"info\", action=lambda: self._show_set_aside(first_id, first_uid),\n                             action_text=\"Show\")\n",
         "replace": "            self.set_status(news)\n"
       }
     ],
@@ -14175,7 +14175,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            for dead in [other for other, new in moves.items() if new == date_str and other != came_from]:\n                del moves[dead]\n",
+        "find": "            for dead in others:\n                del moves[dead]\n",
         "replace": ""
       }
     ],
@@ -14238,6 +14238,263 @@
     ],
     "suites": [
       "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR187",
+    "about": "the fuzz of a series' days without the repeat put back as its copy holds it, nor the older versions' turn-off and turn-on: it never reaches a copy's words for a day the note deleted, the road round 21 fixed",
+    "edits": [
+      {
+        "file": "test_data_safety.py",
+        "find": "_F17_OFF_ON = [\"edit\", \"edit\", \"delete\", \"delete\", \"off\", \"back\", \"back\", \"older\", \"rule\", \"read\"]\n",
+        "replace": "_F17_OFF_ON = [\"edit\", \"edit\", \"delete\", \"delete\", \"off\", \"rule\", \"read\"]\n"
+      },
+      {
+        "file": "test_data_safety.py",
+        "find": "            \"off\", \"back\", \"back\", \"older\"]\n",
+        "replace": "            \"off\"]\n"
+      }
+    ],
+    "must_fail": [
+      "...and its roads turn a series back on as its copy, and set aside a copy's words for a day the note deleted"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR188",
+    "about": "round 21's fix taken out, watched by the fuzz alone: a copy's words for a day the note deleted are dropped",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "        if not _own_words_held(prev, key, note, key):\n            aside.append(_aside_entry(prev, key, key))\n",
+        "replace": "        pass\n"
+      }
+    ],
+    "must_fail": [
+      "a fuzz of a series' days"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR189",
+    "about": "the start says the '(earlier text)' notes are of days now holding text of their own, though round 21's are of deleted days",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                f\"copy of it kept: those days now show other text, or were deleted. \"\n",
+        "replace": "                f\"copy of it kept, where those days now hold text of their own. \"\n"
+      }
+    ],
+    "must_fail": [
+      "the start says why earlier text became a note: other text there, or the day deleted"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR190",
+    "about": "'Import complete' leaves out the '(earlier text)' notes the import made, their banner under the dialog",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if earlier > 0:\n",
+        "replace": "        if False:\n"
+      }
+    ],
+    "must_fail": [
+      "\"Import complete\" says the earlier text a backup's series kept as a note"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR191",
+    "about": "a backup's Update drops what its arriving note's copy set aside as it was read, where an Add keeps it",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    if \"overrides\" in fields and fresh.get(\"_set_aside\"):\n",
+        "replace": "    if False:\n"
+      }
+    ],
+    "must_fail": [
+      "a backup's Update keeps the earlier text its note's copy set aside as it was read"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR192",
+    "about": "a day with text of its own is given the series' lines' looks by line number, on the wrong lines",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self._apply_formatting(self.body_text, note.get(\"formatting\", []))\n            self._apply_paragraphs(self.body_text, note.get(\"paragraphs\", []))\n        self._render_table_grids()\n",
+        "replace": "            self._apply_formatting(self.body_text, note.get(\"formatting\", []))\n        self._apply_paragraphs(self.body_text, note.get(\"paragraphs\", []))\n        self._render_table_grids()\n"
+      }
+    ],
+    "must_fail": [
+      "a day showing the series' words shows its lines' looks, a day of its own text none"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR193",
+    "about": "History files a day of a year to come under 'Older', with the archive",
+    "edits": [
+      {
+        "file": "noteorganizer/core/recurrence.py",
+        "find": "    if d.year >= today.year:\n",
+        "replace": "    if d.year == today.year:\n"
+      }
+    ],
+    "must_fail": [
+      "a day of next year is under \"This year\", not \"Older\""
+    ],
+    "suites": [
+      "test_recurrence"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR194",
+    "about": "a change made behind a day opened from the calendar takes its 'Back to Calendar' away",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if pending is not None:\n                self._pending_calendar_return = pending\n                self._update_calendar_return_button()\n\n",
+        "replace": "\n"
+      }
+    ],
+    "must_fail": [
+      "a change made behind a day opened from the calendar keeps its way back"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR195",
+    "about": "the Undo of a deleted moved day drops a live move onto its date as if dead, the other day's words read as this one's",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if _rule_days_among(note, others) - exceptions:\n",
+        "replace": "            if False:\n"
+      }
+    ],
+    "must_fail": [
+      "...but keeps a live move onto that date, and the day stays away"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR196",
+    "about": "Reset 'The date and the text' brings a moved day home beside a dead move onto that date: two moves onto one date",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            for dead in [other for other, new in note[\"moved\"].items() if new == origin]:\n                del note[\"moved\"][dead]\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "Reset of a moved day's date and text drops a dead move onto its home date"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR197",
+    "about": "a weekly rule keeping a hidden 'Skip that month' reads as another series when turned back on as it was",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "        if rec[\"freq\"] not in (\"monthly\", \"yearly\"):\n            rec[\"month_day_policy\"] = \"clamp\"\n",
+        "replace": "        pass\n"
+      }
+    ],
+    "must_fail": [
+      "a weekly rule is one series whatever 'Skip that month' it keeps hidden; a monthly one reads it"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR198",
+    "about": "an import compares the repeat as stored: its start weekday lit or not reads as changed, and the Update spends the only earlier version",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "    return any(not _same_series(mine[\"date\"], mine[field], mine[\"date\"], fresh[field])\n               if field == \"recurrence\" else mine[field] != fresh[field] for field in fields)\n",
+        "replace": "    return any(mine[field] != fresh[field] for field in fields)\n"
+      }
+    ],
+    "must_fail": [
+      "an import reads a repeat whose start weekday is lit, or left to the start, as unchanged"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR199",
+    "about": "Ctrl+Z takes a banner's Show as its Undo",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                or not getattr(self, \"_toast_action_undoes\", True)\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "Ctrl+Z leaves a banner's Show alone, and Show from Settings opens the note in sight"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR200",
+    "about": "the '(earlier text)' banner's Show from Settings opens the note in the hidden editor",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if note is None:\n            self._show_toast(\"That note is no longer here\", kind=\"info\")\n            return\n        if not self._leave_settings_for_the_editor():\n            return\n",
+        "replace": "        if note is None:\n            self._show_toast(\"That note is no longer here\", kind=\"info\")\n            return\n"
+      }
+    ],
+    "must_fail": [
+      "Ctrl+Z leaves a banner's Show alone, and Show from Settings opens the note in sight"
+    ],
+    "suites": [
+      "qa5"
     ],
     "expect": "killed"
   }

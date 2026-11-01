@@ -892,7 +892,9 @@ def _history_bucket_of(date_str, today):
     d = parse_date(date_str)
     if d is None:
         return None
-    if d.year == today.year:
+    # A day already given words in a year to come is this year's work: under
+    # "Older" it read as the archive (the audit's nineteenth round).
+    if d.year >= today.year:
         return "This year"
     if d.year == today.year - 1:
         return "Last year"

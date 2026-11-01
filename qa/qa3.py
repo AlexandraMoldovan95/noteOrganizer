@@ -3029,6 +3029,31 @@ try:
           f'import cut short ({_ic_seen})',
           'said' in _ic_seen and _ic_seen['said'] is None
           and any(n.get('title') == 'Done at sign-out' for n in app.notes))
+    # A backup moving in a notebook from the phone's 0.13.0 -- a series turned
+    # off and on as it was, the blank-looking day deleted -- makes a note of
+    # the copy's words for that day, and "Import complete" says so: its banner
+    # went under the dialog (the phone's twenty-third round).
+    with zipfile.ZipFile(_hb_zip, 'w') as _zf:
+        _zf.writestr('notes_data.json', json.dumps([{
+            'uid': 'qa3-older-series', 'title': 'Gym older', 'body': 'plan', 'date': '2026-11-02',
+            'recurrence': {'freq': 'weekly'}, 'exceptions': ['2026-11-09'],
+            '_prev': {'title': 'Gym older', 'body': 'plan', 'comments': '', 'formatting': [],
+                      'paragraphs': [], 'date': '2026-11-02', 'recurrence': {'freq': 'weekly'},
+                      'exceptions': [], 'moved': {}, 'overrides': {'2026-11-09': {'body': 'knee'}}}}]))
+    _et_said = []
+    _et_info = app.show_info
+    app.show_info = lambda title, msg='', *a, **k: _et_said.append((title, msg))
+    app._themed_dialog = lambda *a, **k: True
+    try:
+        app.import_data()
+        _sx_wait(lambda: app._import_state is None, 15)
+        app.update()
+    finally:
+        app._themed_dialog = _sx_real_dlg
+        app.show_info = _et_info
+    check(f'"Import complete" says the earlier text a backup\'s series kept as a note ({_et_said})',
+          any(t == 'Import complete' and 'Earlier text of 1 day of a repeating note' in m for t, m in _et_said)
+          and any(n.get('title') == 'Gym older (earlier text)' and n.get('body') == 'knee' for n in app.notes))
     # An import's worker held past the session end's join (a file another
     # program holds): its word named nothing it copied or unpacked (round 8).
     app._import_state = {'zip': _hb_zip, 'done': False, 'stop': False,

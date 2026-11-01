@@ -4026,6 +4026,25 @@ check("a weekly series turned back on as it was is the same with its weekday lit
                                   "2026-11-02", {"freq": "monthly", "month_days": [2]})
       and not _model_mod._same_series("2026-11-02", {"freq": "monthly"},
                                       "2026-11-02", {"freq": "monthly", "month_days": [3]}))
+# ...whatever month-day policy a weekly rule keeps hidden (saved from a
+# monthly draft), which it never reads; a monthly one reads it (round 19).
+check("a weekly rule is one series whatever 'Skip that month' it keeps hidden; a monthly one reads it",
+      _model_mod._same_series("2026-11-02", {"freq": "weekly", "month_day_policy": "skip"},
+                              "2026-11-02", {"freq": "weekly"})
+      and not _model_mod._same_series("2026-01-31", {"freq": "monthly", "month_day_policy": "skip"},
+                                      "2026-01-31", {"freq": "monthly"}))
+# ...and an import reads the repeat by the days it gives: the start's weekday
+# lit in the backup and not here is no change, and the Update spent the
+# note's only earlier version for nothing (round 19).
+_t19_here = _model_mod.normalize_note({"id": 49, "uid": "t19-lit", "title": "Gym", "body": "x",
+                                       "date": "2026-11-02", "recurrence": {"freq": "weekly"}})
+check("an import reads a repeat whose start weekday is lit, or left to the start, as unchanged",
+      not _model_mod.shared_update_changes(
+          _t19_here, dict(_t19_here, recurrence={"freq": "weekly", "weekdays": [0]}),
+          _model_mod.UPDATABLE_FROM_BACKUP)
+      and _model_mod.shared_update_changes(
+          _t19_here, dict(_t19_here, recurrence={"freq": "weekly", "weekdays": [1]}),
+          _model_mod.UPDATABLE_FROM_BACKUP))
 # ...a day moved onto a date a dead move -- its own date no longer the rule's
 # -- still points at takes it: two moves onto one date were read as the dead.
 _t17_dead = _model_mod.normalize_note({"id": 40, "title": "Gym", "body": "x", "date": "2026-11-02",
@@ -4074,17 +4093,25 @@ def _t18_found(note):
 _t19_two = {"id": 46, "title": "Meeting", "body": "x", "date": "2026-11-02",
             "recurrence": {"freq": "weekly", "interval": 2}, "exceptions": [], "overrides": {},
             "moved": {"2026-12-14": "2026-12-10", "2026-12-07": "2026-12-10"}}
+# ...whichever the file lists first: the live move, or the dead one (the
+# check once built only the order that passes by luck).
+_t19_orders = [_t19_two, dict(_t19_two, moved={"2026-12-07": "2026-12-10", "2026-12-14": "2026-12-10"})]
+# Which origin an unread twin is named by follows the file's order (a read
+# keeps the live one, below; recorded as latent in the audit's lows): the
+# date is listed once either way.
 check("two moves onto one date are listed once, by the banner's count and in History (%s)"
-      % _rec_t10.drawn_moves(_t19_two),
+      % [_rec_t10.drawn_moves(n) for n in _t19_orders],
       _rec_t10.drawn_moves(_t19_two) == [("2026-12-14", "2026-12-10")]
-      and [c["date"] for row in _rec_t10.history_entries([_t19_two]) for c in row.get("children", [])]
-      == ["2026-12-10"])
+      and all([new for _orig, new in _rec_t10.drawn_moves(n)] == ["2026-12-10"]
+              and [c["date"] for row in _rec_t10.history_entries([n]) for c in row.get("children", [])]
+              == ["2026-12-10"] for n in _t19_orders))
 # Round 20. ...and a read keeps the one the calendar draws, whichever comes
 # first by date: by date alone it kept the dead 7 December, and a meeting
 # moved under the phone's 0.13.0 jumped back at the upgrade.
 check("of two moves onto one date, a read keeps the one the calendar draws (%s)"
-      % _model_mod.normalize_note(copy_mod.deepcopy(_t19_two))["moved"],
-      _model_mod.normalize_note(copy_mod.deepcopy(_t19_two))["moved"] == {"2026-12-14": "2026-12-10"})
+      % [_model_mod.normalize_note(copy_mod.deepcopy(n))["moved"] for n in _t19_orders],
+      all(_model_mod.normalize_note(copy_mod.deepcopy(n))["moved"] == {"2026-12-14": "2026-12-10"}
+          for n in _t19_orders))
 # Round 21 (the owner's choice). A day the note deleted stays deleted, but the
 # copy's words for it are set aside, not dropped: the phone's 0.13.0 showed
 # such a day blank, its words in the copy alone, and the install erased them.
@@ -4097,6 +4124,19 @@ _t21_hidden = _model_mod.normalize_note({
 check("a day the note deleted stays deleted, and the copy's words for it are set aside, not dropped (%s)"
       % _t10_aside(_t21_hidden),
       "2026-11-09" in _t21_hidden["exceptions"] and _t10_aside(_t21_hidden) == [("2026-11-09", "Hidden words")])
+# ...and a backup's Update of that note keeps what its copy set aside as it
+# was read: an Add kept it, an Update dropped it (round 22, the lows wave).
+_t22_mine = _model_mod.normalize_note({"id": 48, "uid": "t22-gym", "title": "Gym", "body": "here",
+                                       "date": "2026-11-02", "recurrence": {"freq": "weekly"}})
+_t22_theirs = {"uid": "t22-gym", "title": "Gym", "body": "x", "date": "2026-11-02",
+               "recurrence": {"freq": "weekly"}, "exceptions": ["2026-11-09"],
+               "_prev": {"title": "Gym", "body": "x", "comments": "", "formatting": [], "paragraphs": [],
+                         "date": "2026-11-02", "recurrence": {"freq": "weekly"}, "exceptions": [], "moved": {},
+                         "overrides": {"2026-11-09": {"body": "Words from the backup"}}}}
+_model_mod.apply_shared_update(_t22_mine, _t22_theirs, _model_mod.UPDATABLE_FROM_BACKUP)
+check("a backup's Update keeps the earlier text its note's copy set aside as it was read (%s)"
+      % _t10_aside(_t22_mine),
+      _t10_aside(_t22_mine) == [("2026-11-09", "Words from the backup")])
 # ...and a copy holding the series as the note does, its weekday lit and the
 # note's not, is spent: compared as stored, Restore previous stayed offered
 # for nothing, and the next turn-off brought back an old agenda.
@@ -4200,8 +4240,30 @@ def _f17_restore(note):
         note["_prev"] = replaced
 
 
-_f17_failures, _f17_steps = [], 0
-for _f17_seed in range(300):
+# Whether the roads reach the placement of a copy's days on a series turned
+# back on as it was (_copy_days_placed), and its setting aside of words for a
+# day the note deleted (round 21): the fuzz once took neither, in 3,000 roads.
+_f17_placed = {"calls": 0, "gone": 0}
+_f17_placed_fn = _model_mod._copy_days_placed
+
+
+def _f17_count_placed(note, prev, moved):
+    _f17_placed["calls"] += 1
+    overrides, aside = _f17_placed_fn(note, prev, moved)
+    deleted = set(note.get("exceptions") or [])
+    _f17_placed["gone"] += any(entry.get("day") in deleted for entry in aside)
+    return overrides, aside
+
+
+_model_mod._copy_days_placed = _f17_count_placed
+_F17_ALL = ["edit", "edit", "move", "shift", "delete", "rule", "rule", "read", "share", "backup", "restore",
+            "off", "back", "back", "older"]
+# A third of the roads keep to the turn-off and the turn-on with the days
+# edited and deleted between: the corner rounds 15 to 24 kept finding.
+_F17_OFF_ON = ["edit", "edit", "delete", "delete", "off", "back", "back", "older", "rule", "read"]
+_F17_ROADS = 1500
+_f17_failures, _f17_steps, _f17_doubles = [], 0, 0
+for _f17_seed in range(_F17_ROADS):
     _rng17 = _f17_random.Random(_f17_seed)
     _note = _model_mod.normalize_note({"id": 1, "uid": "f17", "title": "Gym", "body": "plan",
                                        "date": "2026-11-02", "recurrence": {"freq": "weekly"}})
@@ -4222,8 +4284,8 @@ for _f17_seed in range(300):
                       if _slot_copy else set())
         # A day is edited, moved or deleted only while the note repeats.
         _repeats = _rec_t10.is_recurring(_note)
-        _op = _rng17.choice(["edit", "edit", "move", "shift", "delete", "rule", "rule", "read", "share",
-                             "backup", "restore"])
+        _older_lost = set()
+        _op = _rng17.choice(_F17_ALL if _f17_seed % 3 else _F17_OFF_ON)
         _road.append(_op)
         if _op == "shift" and _repeats and len(_drawn) >= 2:
             # A run of days each given words, each held a day later, the last
@@ -4268,6 +4330,28 @@ for _f17_seed in range(300):
                 _live[_gone] -= 1
         elif _op == "rule":
             _f17_save(_note, _rng17.choice(_F17_DAYS[:7]), copy_mod.deepcopy(_rng17.choice(_F17_RULES)))
+        elif _op == "off" and _repeats:
+            _f17_save(_note, _note.get("date"), {"freq": ""})
+        elif _op == "older" and _repeats:
+            # The turn-off and the turn-on as it was of 0.97.405 and the
+            # phone's 0.13.0, the versions people upgrade from: the days left
+            # in the copy alone, each shown blank -- one, looking empty,
+            # perhaps deleted there (round 21's road) -- then this build's
+            # first read, at the install. What the copy they replaced held
+            # alone was theirs to lose, not this build's.
+            _older_lost = {p.get("body") for p in ((_copy_was or {}).get("overrides") or {}).values()} - _days_was
+            _note["_prev"] = NO.NoteOrganizer._whole_note_rescue_copy(_note)
+            _note["exceptions"], _note["overrides"], _note["moved"] = [], {}, {}
+            _blank = sorted(set(_rec_t10.expand_occurrences(
+                _note, _rec_t10.parse_date(_F17_DAYS[0]), _rec_t10.parse_date(_F17_DAYS[-1]))) & set(_F17_DAYS))
+            if _blank and _rng17.random() < 0.5:
+                _note["exceptions"] = [_rng17.choice(_blank)]
+            _note = _model_mod.normalize_note(json.loads(json.dumps(_note)))
+        elif (_op == "back" and isinstance(_note.get("_prev"), dict)
+              and _rec_t10.is_recurring(_note["_prev"])):
+            # The copy's repeat put back: as it was, or from another start.
+            _f17_save(_note, _note["_prev"].get("date") if _rng17.random() < 0.6
+                      else _rng17.choice(_F17_DAYS[:7]), copy_mod.deepcopy(_note["_prev"]["recurrence"]))
         elif _op == "read":
             _note = _model_mod.normalize_note(json.loads(json.dumps(_note)))
         elif _op in ("share", "backup"):
@@ -4286,17 +4370,48 @@ for _f17_seed in range(300):
         _model_mod.settle_set_aside(_box)
         _made += [made.get("body") for made in _box[1:]]
         _shown, _held = _f17_where(_note, _made)
-        if _note.get("_prev") != _copy_was:
+        # The slot rule excuses a copy REPLACED by another, never one spent --
+        # the same copy, its days taken out -- whose days are owed to the
+        # note, and were excused once (DR188). A new copy can match the old
+        # in every field but its days: an Update over an Update's copy.
+        _was, _now = _copy_was or {}, _note.get("_prev")
+        _spent = {key: value for key, value in _was.items() if key not in _model_mod.DAY_FIELDS}
+        if isinstance(_now, dict) and _now != _was and _now != _spent:
             for _word in _only_copy - _held:
                 _live[_word] = 0
+        for _word in _older_lost - _held:
+            _live[_word] = 0
         _lost = sorted(w for w, k in _live.items() if k > 0 and w not in _held)
-        _twice = sorted(w for w, k in _f17_coll.Counter(_shown).items() if k > 1)
-        if _lost or _twice:
-            _f17_failures.append((_f17_seed, _road[:], _lost, _twice))
+        # Words shown twice -- an '(earlier text)' note repeating words a day
+        # shows, or a copy's day given back on its own date while the day
+        # holds them where it was moved -- are the duplicates the owner chose
+        # to leave (1 Nov): nothing lost, the extra deleted by hand. Counted,
+        # not failed: the fuzz once held only for its own seeds, by luck.
+        _f17_doubles += sum(1 for w, k in _f17_coll.Counter(_shown).items() if k > 1)
+        if _lost:
+            _f17_failures.append((_f17_seed, _road[:], _lost))
             break
-check("a fuzz of a series' days: %d roads, %d steps, no day's words lost, out of reach or doubled but "
-      "those the person deleted or typed over (%s)" % (300, _f17_steps, _f17_failures[:3]),
+    else:
+        # ...and History, the one search of a day's own words, finds every
+        # day the calendar draws or lists off the schedule (round 18).
+        _off = set(_rec_t10.off_schedule_days(_note)) if _rec_t10.is_recurring(_note) else set()
+        for _d, _p in (_note.get("overrides") or {}).items():
+            if not (_p.get("body") and _rec_t10.is_recurring(_note) and (_d in _off or _rec_t10.expand_occurrences(
+                    _note, _rec_t10.parse_date(_d), _rec_t10.parse_date(_d)) == [_d])):
+                continue
+            _found = [c["date"] for row in _rec_t10.history_entries([_note], _p["body"])
+                      for c in row.get("children", [])]
+            if _d not in _found:
+                _f17_failures.append((_f17_seed, _road[:], "History misses %s %s" % (_d, _p["body"])))
+                break
+_model_mod._copy_days_placed = _f17_placed_fn
+check("a fuzz of a series' days: %d roads, %d steps, no day's words lost, out of reach or missed by "
+      "History but those the person deleted or typed over (%s; words shown twice, the duplicates left by "
+      "the owner's choice: %d)" % (_F17_ROADS, _f17_steps, _f17_failures[:3], _f17_doubles),
       not _f17_failures)
+check("...and its roads turn a series back on as its copy, and set aside a copy's words for a day the note "
+      "deleted (%s)" % _f17_placed,
+      _f17_placed["calls"] > 0 and _f17_placed["gone"] > 0)
 # ...and a copy of another series asks for each day where the note holds it
 # now: moved since by the note, or sent home -- by date alone, its words were
 # set aside as earlier text the note still held.
