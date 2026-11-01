@@ -14096,5 +14096,41 @@
       "qa5"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "DR179",
+    "about": "History lists a bounded series' days only between its start and end: a day moved past the end is in no row, its words found nowhere",
+    "edits": [
+      {
+        "file": "noteorganizer/core/recurrence.py",
+        "find": "                occ_days = sorted(set(occ_days) | {new for _orig, new in known[\"drawn\"]})\n",
+        "replace": "                pass\n"
+      }
+    ],
+    "must_fail": [
+      "History lists a day moved past a bounded series' end, or onto a deleted date"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR180",
+    "about": "History skips every deleted date: a day moved onto one, drawn there, is in no row, its words found nowhere",
+    "edits": [
+      {
+        "file": "noteorganizer/core/recurrence.py",
+        "find": "                    if (day in exceptions and day not in landed) or not is_date(day):\n",
+        "replace": "                    if day in exceptions or not is_date(day):\n"
+      }
+    ],
+    "must_fail": [
+      "History lists a day moved past a bounded series' end, or onto a deleted date"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
   }
 ]

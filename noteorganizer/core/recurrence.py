@@ -1032,6 +1032,13 @@ def history_entries(notes, query="", year_bucket="All", today=None, memo=None):
             # per series, not once per day listed -- asked per day, both read
             # every moved day each time (drawn_moves).
             came = _moved_from_map(note)
+            if "drawn" not in known:
+                known["drawn"] = drawn_moves(note)
+            # A day moved past the end or before the start is drawn, outside
+            # the span the rule's days were asked of: listed too, or it was in
+            # no row and no search found its words (round 18 of the final audit).
+            if occ_days is not None:
+                occ_days = sorted(set(occ_days) | {new for _orig, new in known["drawn"]})
 
             children = []
             any_child_match = False
@@ -1081,10 +1088,13 @@ def history_entries(notes, query="", year_bucket="All", today=None, memo=None):
                 children.sort(key=lambda c: c["date"], reverse=True)
             else:
                 children_kind = "edited"
+                landed = {new for _orig, new in known["drawn"]} | set(off)
                 for day, override in sorted(overrides.items(), reverse=True):
-                    if day in exceptions or not is_date(day):
+                    if (day in exceptions and day not in landed) or not is_date(day):
                         # A deleted day's override is normally popped with
-                        # the exception; a stray one must not resurface.
+                        # the exception; a stray one must not resurface --
+                        # but a day moved onto that date holds its own words
+                        # there, drawn or off the schedule (round 18).
                         continue
                     if not bucket_ok(day):
                         continue
@@ -1110,8 +1120,6 @@ def history_entries(notes, query="", year_bucket="All", today=None, memo=None):
                 # own or not: where it went is worth finding. Only while the
                 # calendar draws it there (drawn_moves), worked out once for
                 # what the series is (`memo`).
-                if "drawn" not in known:
-                    known["drawn"] = drawn_moves(note)
                 for orig, new in known["drawn"]:
                     if (new in overrides or not is_date(new) or not bucket_ok(new)
                             or not base_matches):

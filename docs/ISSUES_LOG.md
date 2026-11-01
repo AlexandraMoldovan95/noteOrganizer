@@ -218,6 +218,7 @@ is in the table below as well.
 | [Round fifteen: four ways of adding, and a note of its own](#round-fifteen-four-ways-of-adding-and-a-note-of-its-own) | When each fix of a merging rule leaves a new case, stop merging: keep both where the person sees them. | next |
 | [Round sixteen: a home the rule no longer gives, and a chain walked once a link](#round-sixteen-a-home-the-rule-no-longer-gives-and-a-chain-walked-once-a-link) | A rule that moves something "back" must ask whether "back" still exists; a fixpoint loop over links is a quadratic waiting for a long chain. | next |
 | [Round seventeen: a week shifted a day at a time, and a day no list showed](#round-seventeen-a-week-shifted-a-day-at-a-time-and-a-day-no-list-showed) | Decide where everything lands before moving anything, and refuse any landing that writes over something. | next |
+| [Round eighteen: History, the one search of a day's words, and the days it never asked about](#round-eighteen-history-the-one-search-of-a-days-words-and-the-days-it-never-asked-about) | A fix to one reader of a shape is a question to every reader of it. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -3602,6 +3603,24 @@ to another weekday (five uncommon steps, nothing lost).
 
 **Takeaway:** decide where everything lands before moving anything, and refuse any landing
 that writes over something -- or, simpler, do not move a person's words on their own at all.
+
+### Round eighteen: History, the one search of a day's words, and the days it never asked about
+
+*(2026-11-01 · found by the phone's eighteenth break-it round, on both apps, under the owner's
+severity rule)*
+
+**Symptom:** a series with an end (or a count) listed its days in History only between its
+start and end, so a day moved past the end, or before the start, was drawn on the calendar and
+in no row: a search for its words -- History is the one search of a day's own words -- found
+nothing, and the row counted one day fewer. An endless series skipped every deleted date, so a
+day moved onto one was missed the same way (round seventeen fixed that for the off-schedule list
+and not for History).
+
+**Fix:** `history_entries` adds the dates moved days are drawn on (`drawn_moves`) to a bounded
+series' days, and skips a deleted date only when no move lands on it. `test_data_safety`;
+mutants DR179, DR180. The phone's `Recurrence.history` the same.
+
+**Takeaway:** a fix to one reader of a shape is a question to every reader of it.
 
 ## Tk & platform gotchas
 

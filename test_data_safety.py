@@ -4050,6 +4050,29 @@ check("an Update's copy sets its days with words aside when replaced; a backup's
       _t10_aside(_t17_upd) == [("2026-11-22", "Room W2")] and _t10_aside(_t17_back) == [])
 
 
+# Round 18. History lists a day moved past a bounded series' end, and one
+# moved onto a deleted date, and its search finds their words: in no row,
+# they were found nowhere -- History is the one search of a day's own words.
+_t18_bounded = _model_mod.normalize_note({
+    "id": 43, "title": "Meeting", "body": "x", "date": "2026-11-02",
+    "recurrence": {"freq": "weekly", "end": "2026-12-14"}, "moved": {"2026-12-14": "2026-12-18"},
+    "overrides": {"2026-12-18": {"body": "Budget review"}}})
+_t18_endless = _model_mod.normalize_note({
+    "id": 44, "title": "Meeting", "body": "x", "date": "2026-11-02", "recurrence": {"freq": "weekly"},
+    "exceptions": ["2026-12-14"], "moved": {"2026-12-21": "2026-12-14"},
+    "overrides": {"2026-12-14": {"body": "Budget review"}}})
+
+
+def _t18_found(note):
+    return [c["date"] for row in _rec_t10.history_entries([note], "Budget") for c in row.get("children", [])]
+
+
+check("History lists a day moved past a bounded series' end, or onto a deleted date, and finds its "
+      "words (%s, %s)" % (_t18_found(_t18_bounded), _t18_found(_t18_endless)),
+      _t18_found(_t18_bounded) == ["2026-12-18"] and _t18_found(_t18_endless) == ["2026-12-14"]
+      and _rec_t10.history_entries([_t18_bounded])[0]["n_occurrences"] == 7)
+
+
 # The fuzz of a series' days (the owner's choice, round 17): rounds 11 to 17
 # each found a road that lost or doubled a day's words. Random roads on one
 # series -- a day edited, moved, deleted; the rule or start changed, the
