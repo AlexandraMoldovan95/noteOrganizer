@@ -991,7 +991,15 @@ for _ld_name, _ld_args, _ld_want in (
         ("a whole item pasted over item 2, without its break",
          (_LD, (1, 0), (2, 0), "3. three", True), "1. one\n2. three\n3. three\n4. four"),
         ("words and a break pasted from item 2's words to item 3's start",
-         (_LD, (1, 4), (2, 0), "x\n", True), "1. one\n2. tx\n3. three\n4. four")):
+         (_LD, (1, 4), (2, 0), "x\n", True), "1. one\n2. tx\n3. three\n4. four"),
+        # ...begun at an item's marker, wherever the selection ends: over the
+        # last item, one item's words ("3. 1. Milk", round 7).
+        ("a whole item pasted over the last item",
+         ("1. one\n2. two\nafter", (1, 3), (2, 0), "1. x\n", True), "1. one\n2. x\nafter"),
+        ("a whole item pasted over one item's words",
+         (_LD, (1, 3), (1, 6), "9. x", True), "1. one\n2. x\n3. three\n4. four"),
+        ("a letter typed over one item's words",
+         (_LD, (1, 3), (1, 6), "x"), "1. one\n2. x\n3. three\n4. four")):
     _ld_got = _ld_apply(*_ld_args)
     check(f"list deletion: {_ld_name} ({_ld_got!r})", _ld_got == _ld_want)
 check("a deletion that reaches no list is left alone, as is one inside an "

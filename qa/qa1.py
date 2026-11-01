@@ -1117,6 +1117,9 @@ for _ld_name, _ld_where, _ld_do, _ld_want in (
         ('a whole item pasted over item 2, its break and all', ('2.0', '3.0'),
          lambda: (_ld_clip('3. three\n'), _ld_virtual('<<Paste>>')),
          '1. one\n2. three\n3. three\n4. four'),
+        ("a whole item pasted over item 2's words", ('2.3', '2.6'),
+         lambda: (_ld_clip('9. three'), _ld_virtual('<<Paste>>')),
+         '1. one\n2. three\n3. three\n4. four'),
         ('BackSpace at the very start of item 3', ('3.0', None),
          lambda: _list_key('BackSpace'), '1. one\n2. twothree\n3. four'),
         ('Delete at the end of item 2', ('2.end', None),
@@ -8524,6 +8527,34 @@ check(f'a bold word cut and pasted stays bold, and Ctrl+Z puts the cut back as o
       f'({_ct_cut!r}; {_ct_undone}; {body()!r} {_ct_moved})',
       _ct_cut == 'a word here' and _ct_undone == ('a bold word here', [(2, 6)])
       and body() == 'a word herebold ' and _ct_moved == [(11, 15)])
+# Ctrl+V over list items reads what the paste puts in as its route reads it:
+# a Word paragraph's text ends in a line break the rich route drops, which
+# took the next item's ("2. Hello world3. three"); and with no text on the
+# clipboard -- a picture -- the selection went and nothing came (the lows
+# wave's verification, round 7).
+_ld_list('2.0', '3.0')
+_stub_clipboard(html='<p class=MsoNormal>Hello world<o:p></o:p></p>', text='Hello world\n')
+_ld_clip('Hello world\n')
+_ld_virtual('<<Paste>>')
+_pw_word = body()
+_ld_list('2.0', '4.0')
+_stub_clipboard()
+
+
+def _pw_no_text(*_args, **_kw):
+    # What Tk says on Windows when the clipboard holds a picture alone.
+    raise tk.TclError('CLIPBOARD selection does not exist or form "STRING" not defined')
+
+
+app.body_text.clipboard_get = _pw_no_text
+try:
+    _ld_virtual('<<Paste>>')
+finally:
+    del app.body_text.clipboard_get
+_pw_none = body()
+check(f'Ctrl+V over list items puts in what its route reads, and a paste of nothing '
+      f'changes nothing ({_pw_word!r}; {_pw_none!r})',
+      _pw_word == '1. one\n2. Hello world\n3. three\n4. four' and _pw_none == _LD_START)
 _stub_clipboard()
 set_body('')
 

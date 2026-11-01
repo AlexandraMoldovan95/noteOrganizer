@@ -851,9 +851,15 @@ def list_deletion_range(lines, start, end, typing=False, pasted=None):
     """
     (l1, c1), (l2, c2) = start, end
     k1, m1, _ = parse_list_marker(lines[l1])
+    # A paste bringing its own marker, over a selection begun at an item's
+    # marker, takes that marker's place wherever the selection ends: kept, a
+    # whole item pasted over the last one read "3. 1. Milk" (the lows wave's
+    # verification, rounds 6 and 7).
+    own = bool(pasted) and bool(parse_list_marker(pasted.split("\n", 1)[0])[0])
+    from_marker = own and bool(k1) and c1 <= len(m1)
     if l1 == l2:
         # Within one line only its own marker can be reached.
-        if not k1 or c1 >= len(m1):
+        if not k1 or (c1 >= len(m1) and not from_marker):
             return None
         return (l1, 0), (l2, max(c2, len(m1)))
     k2, m2, _ = parse_list_marker(lines[l2])
@@ -863,14 +869,12 @@ def list_deletion_range(lines, start, end, typing=False, pasted=None):
     keeps_words = c1 > (len(m1) if k1 else 0)
     if k2 and c2 <= len(m2):
         # The end is at the start of an item, before its words. A paste
-        # bringing its own line break, or its own marker, takes the place
-        # of the one it covers: kept, a whole item pasted over another read
-        # "2. 3. Bread" (the lows wave's verification, round 6).
+        # bringing its own line break takes the covered break's place: kept,
+        # a whole item pasted over another left an empty line after it.
         upto = (l2, 0) if pasted and pasted.endswith("\n") else None
         if keeps_words:
             return (l1, c1), upto or (l2, len(m2))
         if typing:
-            own = bool(pasted) and bool(parse_list_marker(pasted.split("\n", 1)[0])[0])
             return ((l1, len(m1) if k1 and not own else 0),
                     upto or (l2 - 1, len(lines[l2 - 1])))
         return (l1, 0), (l2, 0)
@@ -878,7 +882,7 @@ def list_deletion_range(lines, start, end, typing=False, pasted=None):
         # From just after (or inside) a marker into words: the item keeps
         # its marker. From the line's very start the marker was chosen too,
         # and goes with the rest -- Ctrl+A and BackSpace empty the note.
-        return (l1, len(m1)), (l2, c2)
+        return (l1, 0 if from_marker else len(m1)), (l2, c2)
     return (l1, c1), (l2, c2)
 
 

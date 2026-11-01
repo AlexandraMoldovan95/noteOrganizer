@@ -5711,7 +5711,7 @@
     "id": "LD03",
     "about": "typing over whole items swallows the next item's marker",
     "edits": [{"file": "noteorganizer/core/formatting.py",
-               "find": "        if typing:\n            own = bool(pasted) and bool(parse_list_marker(pasted.split(\"\\n\", 1)[0])[0])\n            return ((l1, len(m1) if k1 and not own else 0),\n                    upto or (l2 - 1, len(lines[l2 - 1])))\n",
+               "find": "        if typing:\n            return ((l1, len(m1) if k1 and not own else 0),\n                    upto or (l2 - 1, len(lines[l2 - 1])))\n",
                "replace": ""}],
     "must_fail": ["list deletion: a letter typed over items 2 and 3",
                   "a letter typed over items 2 and 3: renumbered",
@@ -14702,8 +14702,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/formatting.py",
-        "find": "            own = bool(pasted) and bool(parse_list_marker(pasted.split(\"\\n\", 1)[0])[0])\n",
-        "replace": "            own = False\n"
+        "find": "    own = bool(pasted) and bool(parse_list_marker(pasted.split(\"\\n\", 1)[0])[0])\n",
+        "replace": "    own = False\n"
       }
     ],
     "must_fail": [
@@ -14739,12 +14739,85 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            pasted = b.clipboard_get()      # what the paste brings, its marker and its breaks\n",
-        "replace": "            pasted = None\n"
+        "find": "        pasted = None if \"\\t\" in brings or any(\n            is_table_row(line) for line in brings.split(\"\\n\")) else brings\n",
+        "replace": "        pasted = None\n"
       }
     ],
     "must_fail": [
       "a whole item pasted over item 2, its break and all: renumbered"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR215",
+    "about": "Ctrl+V over list items reads the clipboard's plain text, not the HTML the rich route puts in: a Word paragraph's break takes the next item's",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        markup = clipboard.read_html()\n        if markup:\n            cut = {}\n            text, spans, paragraphs = html_to_note(markup, report=cut)\n            mine = getattr(self, \"_formatted_clip\", None)\n",
+        "replace": "        markup = None\n        if markup:\n            cut = {}\n            text, spans, paragraphs = html_to_note(markup, report=cut)\n            mine = getattr(self, \"_formatted_clip\", None)\n"
+      }
+    ],
+    "must_fail": [
+      "Ctrl+V over list items puts in what its route reads"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR216",
+    "about": "Ctrl+V of nothing over list items deletes the selection and puts nothing in",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if not brings:\n            # Nothing to paste -- a picture, a file: the selection stays, as\n            # under Tk's own paste (the lows wave's verification, round 7).\n            return \"break\"\n",
+        "replace": "        if not brings:\n            brings = \"\"\n"
+      }
+    ],
+    "must_fail": [
+      "Ctrl+V over list items puts in what its route reads"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR217",
+    "about": "a whole item pasted over the last item, or one item's words, keeps the covered marker: '3. 1. Milk'",
+    "edits": [
+      {
+        "file": "noteorganizer/core/formatting.py",
+        "find": "    from_marker = own and bool(k1) and c1 <= len(m1)\n",
+        "replace": "    from_marker = False\n"
+      }
+    ],
+    "must_fail": [
+      "list deletion: a whole item pasted over the last item",
+      "list deletion: a whole item pasted over one item's words"
+    ],
+    "suites": [
+      "test_richtext"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR218",
+    "about": "Ctrl+V of a whole item over one item's words is left to Tk: the covered marker stays",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        at_marker = bool(kind) and len(b.get(f\"{sel[0]} linestart\", sel[0])) <= len(marker)\n",
+        "replace": "        at_marker = False\n"
+      }
+    ],
+    "must_fail": [
+      "a whole item pasted over item 2's words: renumbered"
     ],
     "suites": [
       "qa1"

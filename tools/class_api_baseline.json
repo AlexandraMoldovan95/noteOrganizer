@@ -580,6 +580,7 @@
   "_paragraph_indent_of": "(self, text_widget, line_no, line=None)",
   "_paragraph_tag": "(self, text_widget, kind, indent)",
   "_part_put_away": "(self, event)",
+  "_paste_brings": "(self)",
   "_paste_formatted": "(self)",
   "_paste_pipe_text_on_own_lines": "(self)",
   "_paste_plain": "(self, event=None)",
