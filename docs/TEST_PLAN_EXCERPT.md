@@ -1,7 +1,7 @@
 # How it's tested
 
 An excerpt from the manual test plan, a spreadsheet,
-[`qa/NoteOrganizer_TestPlan.xlsx`](../qa/NoteOrganizer_TestPlan.xlsx): **859 cases** on 2 November
+[`qa/NoteOrganizer_TestPlan.xlsx`](../qa/NoteOrganizer_TestPlan.xlsx): **871 cases** on 3 November
 2026. I walk it
 by hand on the packaged `.exe` before a release - a case passes only when I've seen it pass.
 

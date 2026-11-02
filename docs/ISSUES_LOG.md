@@ -224,6 +224,7 @@ is in the table below as well.
 | [The lows wave: a fuzz that never took the road it guarded](#the-lows-wave-a-fuzz-that-never-took-the-road-it-guarded) | A random test proves only the roads it takes: count that it reaches the branch it guards, and take that branch's fix out to watch it fail alone. | next |
 | [The lows wave's own rounds: a day's lists, read by line](#the-lows-waves-own-rounds-a-days-lists-read-by-line) | What a copy can change, the copy keeps; structure borrowed by line number holds only until the first line moves. | next |
 | [The lows wave's last rounds: a paste meeting a list, one road at a time](#the-lows-waves-last-rounds-a-paste-meeting-a-list-one-road-at-a-time) | When each fix of a rule leaves the case beside it, write the rule down and test its whole matrix on both apps at once; a fix by road is a fix of one cell. | next |
+| [Wave 3: a promise about Enter, kept by one copy of the question](#wave-3-a-promise-about-enter-kept-by-one-copy-of-the-question) | A promise in the person's documents is a rule every copy of the code must keep; find the copies before trusting the one that was fixed. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -3796,6 +3797,41 @@ a plain paragraph, which is the owner's call.
 
 **Takeaway:** when each fix of a rule leaves the case beside it, write the rule down and test its
 whole matrix on both apps at once; a fix by road is a fix of one cell.
+
+### Wave 3: a promise about Enter, kept by one copy of the question
+
+*(2026-11-02 · the final audit's third wave, a read of the code and the documents for what was
+written by rote; round 3, high)*
+
+**Symptom:** the README and the user guide promise that on a question about something you cannot
+take back, Enter gives the safe answer. Resetting a day of a series that had been moved, and held
+text of its own, asked "Only the date / The date and the text" with no default. A dialog with no
+default focuses its last button, so Enter pressed "The date and the text", and the day's own words
+were gone: no Undo, no rescue copy. The same question for a day that had not moved passed
+`default="no"`.
+
+**Mechanism:** one question written twice, the rule given to one copy. The dialog's own rule --
+no default means the last button -- is right wherever the last answer is the safe one, and
+nothing asked which questions end on the other kind.
+
+**Fix:** "Only the date" holds the focus (qa5, mutant WS04). Every other question with buttons of
+its own was read: none else ends on an answer that cannot be taken back.
+
+**The wave's other lessons**, from eight rounds on both apps:
+
+- **A number lives in one place, dated.** Counts written into several documents -- the walk's
+  checks, the fixtures' cases, the tests -- were right in one and stale in the rest.
+- **A test of a dead copy proves nothing.** Tests drove helpers the app no longer called (the
+  phone's `setMarker`, `parseNotes`) while the road a person takes went untested.
+- **SKIP, not PASS.** A check that cannot run on a platform now says SKIP; several had passed
+  there without checking anything.
+- **One rule, one place.** Small rules spelled out by hand drifted apart: the stored stamp's
+  format in fourteen places, the contrast formula in the gate beside the one in `themes.py`, the
+  phone's paste keeping its own copy of the table rules.
+- **A comment says why, not when.** A fix's history belongs in this log, where it can be found.
+
+**Takeaway:** a promise in the person's documents is a rule every copy of the code must keep;
+find the copies before trusting the one that was fixed.
 
 ## Tk & platform gotchas
 
