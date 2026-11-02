@@ -8587,6 +8587,53 @@ check(f'a paste bringing its own marker at an item\'s marker end takes its place
       f'before the item ({_pm_before!r}; {_pm_empty})',
       _pm_before == '1. one\n2. two\n3. new\n4. three\n5. four'
       and _pm_empty == ('1. one\n2. two\n3. three\n1. Kiwi', 1))
+# ...the item keeping its kind and its depth whatever the paste's, as Word
+# keeps a paragraph's list when a paste brings no paragraph mark: our own copy
+# of a top-level item took the level of whichever margin tag Tk had made
+# first that session (round 9).
+_pk_got = []
+for _pk_clip in ('• Kiwi', None):
+    if _pk_clip is None:
+        _ld_list('3.0', '3.end')
+        _stub_clipboard(loopback=True)
+        app._copy_formatted()
+    _ld_list('4.3')
+    app.body_text.delete('4.3', '4.end')
+    app._set_paragraph_indent(4, 1)
+    app.body_text.mark_set('insert', '4.end')
+    if _pk_clip is not None:
+        _stub_clipboard()
+        _ld_clip(_pk_clip)
+    _ld_virtual('<<Paste>>')
+    _pk_got.append((body(), app._paragraph_indent_of(app.body_text, 4),
+                    [n for n in app.body_text.tag_names('4.0') if n.startswith('para_')]))
+_stub_clipboard()
+check(f'a paste at an empty nested item keeps the item\'s kind and depth, one margin on the line ({_pk_got})',
+      [(t, d, len(p)) for t, d, p in _pk_got]
+      == [('1. one\n2. two\n3. three\n1. Kiwi', 1, 1), ('1. one\n2. two\n3. three\n1. three', 1, 1)])
+# ...our own nested item pasted inside a top-level item's words gives the
+# line one margin, the copy's, as the phone's paste gives it -- not the tag Tk
+# made first; and an item whose number is stale in length ("10." where 4 is
+# due) loses the paste's marker all the same, renumbered under the paste's feet.
+_ld_list('3.0', '3.end')
+app._set_paragraph_indent(3, 1)
+_stub_clipboard(loopback=True)
+app._copy_formatted()
+_ld_list('4.4')
+_ld_virtual('<<Paste>>')
+_pk_mid = ([n for n in app.body_text.tag_names('4.0') if n.startswith('para_')],
+           app._paragraph_indent_of(app.body_text, 4))
+_ld_list('4.0')
+app.body_text.delete('4.0', '4.end')
+app.body_text.insert('4.0', '10. ')
+app.body_text.mark_set('insert', '4.4')
+_ld_virtual('<<Paste>>')
+_pk_stale = body()
+_stub_clipboard()
+check(f'one margin on a line our own item went into, and a stale number changes nothing '
+      f'({_pk_mid}; {_pk_stale!r})',
+      len(_pk_mid[0]) == 1 and _pk_mid[1] == 1
+      and _pk_stale == '1. one\n2. two\n3. three\n4. three')
 _stub_clipboard()
 set_body('')
 

@@ -14866,8 +14866,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            elif b.get(at, f\"{at}+{len(own)}c\") == own:\n",
-        "replace": "            elif False:\n"
+        "find": "            if b.get(where, f\"{where}+{len(own)}c\") == own:\n",
+        "replace": "            if False:\n"
       }
     ],
     "must_fail": [
@@ -14890,6 +14890,60 @@
     ],
     "must_fail": [
       "a paste bringing its own marker at an item's marker end takes its place"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR223",
+    "about": "a line given a margin by a paste keeps the one it had beside it: its depth is the tag Tk made first",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self._clear_paragraph_tags(text_widget, line_no)\n            text_widget.tag_add(\n                self._paragraph_tag(text_widget, kind, indent),\n",
+        "replace": "            text_widget.tag_add(\n                self._paragraph_tag(text_widget, kind, indent),\n"
+      }
+    ],
+    "must_fail": [
+      "one margin on a line our own item went into"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR224",
+    "about": "a paste at an empty nested item takes the copy's depth, not the item's",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self._set_paragraph_indent(int(where.split(\".\")[0]), depth)\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a paste at an empty nested item keeps the item's kind and depth"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR225",
+    "about": "the paste's own marker looked for where the item's marker ended before the paste renumbered it: '4. 3. three'",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            where = b.index(\"marker_paste\")\n",
+        "replace": "            where = at\n"
+      }
+    ],
+    "must_fail": [
+      "one margin on a line our own item went into, and a stale number changes nothing"
     ],
     "suites": [
       "qa1"

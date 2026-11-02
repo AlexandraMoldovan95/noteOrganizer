@@ -9173,6 +9173,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 continue
             if not kind and not indent:
                 continue
+            # One margin a line: beside the one it had -- a paste's line -- the
+            # depth was the tag Tk had made first that session (the lows
+            # wave's verification, round 9).
+            self._clear_paragraph_tags(text_widget, line_no)
             text_widget.tag_add(
                 self._paragraph_tag(text_widget, kind, indent),
                 f"{line_no}.0", f"{line_no}.end")
@@ -9987,21 +9991,29 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not own or ("\t" in brings and not rich) or is_table_row(head):
             return None
         at = b.index("insert")
+        depth = self._paragraph_indent_of(b, int(at.split(".")[0]))
+        # Carried through the paste's own renumbering, which can change the
+        # item's marker's length ("10." to "3.").
+        b.mark_set("marker_paste", at)
+        b.mark_gravity("marker_paste", "left")
 
-        def drop_own():
-            # Of one kind, the paste's marker goes; of another, the item's.
-            if parse_list_marker(own)[0] != kind:
-                b.delete(f"{at} linestart", at)
-            elif b.get(at, f"{at}+{len(own)}c") == own:
-                b.delete(at, f"{at}+{len(own)}c")
+        def keep_item():
+            # The item keeps its marker, its kind and its depth, as Word
+            # keeps a paragraph's list when a paste brings no paragraph mark:
+            # the paste's own marker goes (round 9).
+            where = b.index("marker_paste")
+            if b.get(where, f"{where}+{len(own)}c") == own:
+                b.delete(where, f"{where}+{len(own)}c")
+            self._set_paragraph_indent(int(where.split(".")[0]), depth)
 
         before = bool(rest.strip()) and brings.endswith("\n")
         self._undo_atom_begin()
         try:
             if before:
                 b.mark_set("insert", f"{at} linestart")
-            self._paste_renumbered(None if before else drop_own)
+            self._paste_renumbered(None if before else keep_item)
         finally:
+            b.mark_unset("marker_paste")
             self._undo_atom_end()
         self._schedule_autosave()
         self.update_word_count()
