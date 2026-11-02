@@ -36,12 +36,14 @@ WHAT IT RUNS
    keep their comments to a reason.
 7. ``check_contrast`` -- every theme's text against WCAG AA; the pairs
    still below it are listed, and the list can only shrink.
-8. ``check_shipped`` -- the Pillow CI tests is the one the .exe ships,
+8. ``check_mutant_targets`` -- every mutant in tools/mutants.json still
+   finds the code it mutates.
+9. ``check_shipped`` -- the Pillow CI tests is the one the .exe ships,
    and the licenses the build bundles name it.
-9. ``check_guest`` -- every runner sets tools/guest.py's ceiling before it
+10. ``check_guest`` -- every runner sets tools/guest.py's ceiling before it
    starts anything and bounds its children; the ceiling and the
    one-heavy-job turn are proved on this machine.
-10. ``compile()`` over every tracked ``.py`` in the repo -- tests and qa
+11. ``compile()`` over every tracked ``.py`` in the repo -- tests and qa
    scripts included, because a syntax error in a TEST file is exactly
    what the remote runner would otherwise find first (a locally-valid
    PEP 701 f-string once died only on CI's older Python; the interpreter
@@ -128,6 +130,9 @@ def main():
     # Every theme's text measured against WCAG, and kept from getting worse.
     _run_gate("contrast measured",
               [os.path.join("tools", "check_contrast.py")])
+    # A mutant whose code moved finds nothing to mutate; CI refuses it.
+    _run_gate("mutants find their code",
+              [os.path.join("tools", "check_mutant_targets.py")])
     _run_gate("what ships is what is tested",
               [os.path.join("tools", "check_shipped.py")])
     # Every runner settles first and bounds its children, the Linux image has
@@ -138,6 +143,10 @@ def main():
     print("== every tracked .py compiles", flush=True)
     listed = subprocess.run(["git", "ls-files", "*.py"], cwd=ROOT,
                             capture_output=True, text=True, timeout=120)
+    if listed.returncode != 0 or not listed.stdout.strip():
+        print("  git could not list the tracked files: %s" % listed.stderr.strip())
+        print("\nPRE-PUSH: FAILED at 'every tracked .py compiles'.")
+        sys.exit(1)
     bad = []
     for rel in listed.stdout.split():
         path = os.path.join(ROOT, rel)

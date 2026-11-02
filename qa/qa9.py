@@ -70,6 +70,12 @@ def check(name, cond):
     print(('PASS' if cond else 'FAIL'), name)
     if not cond: fails.append(name)
 
+
+def skip(name):
+    """A check this run could not make -- the keyboard never reached the
+    app. Not a PASS: run_tests counts these apart and says how many."""
+    print('SKIP', name)
+
 app = NO.NoteOrganizer(); app._poll_active_dirty = lambda: None
 app.show_info = lambda *a, **k: True
 app.show_warning = lambda *a, **k: True
@@ -1330,7 +1336,7 @@ if app.focus_get() is app._find_entry:
 else:
     # Focus is the one thing a test process cannot demand. Say so rather
     # than pass on a reading that never happened.
-    check('escape: SKIPPED -- the find entry never took focus', True)
+    skip('escape: the find entry never took focus')
     print('      (find-bar precedence unverified in this run: no focus)')
 app._dismiss_mini_popup(); app.update()
 app._close_find() if getattr(app, '_find_open', False) else None
@@ -2260,7 +2266,7 @@ app._maybe_dismiss_mini_popup(_outside)      # a click outside: asks, for real
 app.after_cancel(_es_job)
 app.update()
 if _es_seen.get('keyboard') is False:
-    check('escape on the question: SKIPPED -- the keyboard never reached it', True)
+    skip('escape on the question: the keyboard never reached it')
     print('      (Escape on "Save changes?" unverified in this run: no focus)')
 else:
     check('Escape on "Save changes?" keeps the editor open, with what was typed, '
@@ -2523,8 +2529,7 @@ if _keyboard_on(_cs_body):
     check('Ctrl+S with the keyboard in the template editor saves the template '
           '(%r)' % _cw_disk_body(), 'third line' in _cw_disk_body())
 else:
-    check('ctrl+s in the template editor: SKIPPED -- the keyboard never '
-          'reached it', True)
+    skip('ctrl+s in the template editor: the keyboard never reached it')
     print('      (Ctrl+S in the template editor unverified in this run: no focus)')
 app._dismiss_mini_popup(); app.update()
 
@@ -2572,8 +2577,7 @@ if not sys.platform.startswith('win'):
          'Q-keypad'))
 for _en_name, _en_want, (_en_got, _en_rescued), _en_title in _en_results:
     if _en_seen.get(_en_title) is False:
-        check('%s: SKIPPED -- the keyboard never reached the question' % _en_name,
-              True)
+        skip('%s: the keyboard never reached the question' % _en_name)
         continue
     check('%s (%r, rescued: %s)' % (_en_name, _en_got, _en_rescued),
           _en_got is _en_want and not _en_rescued)
@@ -2598,7 +2602,7 @@ _nq['outer'] = _while_asking(
     lambda: app.ask_yes_no('Outer question', 'Asked first.', default='yes'),
     _nq_outer_act, 'Yes', 'Outer question', cap_ms=15000)
 if _en_seen.get('Inner question') is False:
-    check('enter on nested questions: SKIPPED -- no keyboard', True)
+    skip('enter on nested questions: no keyboard')
 else:
     check('one Enter answers the question asked last, and leaves the one under '
           'it asking (%s)' % _nq,
@@ -2632,7 +2636,7 @@ _nx['outer'] = _while_asking(
     lambda: app.ask_yes_no('Outer escape', 'Asked first.', default='no'),
     _nx_outer_act, 'No', 'Outer escape', cap_ms=15000)
 if _nx.get('keyboard') is False:
-    check('escape on nested questions: SKIPPED -- no keyboard', True)
+    skip('escape on nested questions: no keyboard')
 else:
     check('one Escape answers the question asked last only: the one under it '
           'is still the person\'s to answer (%s)' % _nx,
@@ -2685,8 +2689,7 @@ _tb['answer'] = _while_asking(
     lambda: app.ask_yes_no_cancel('Q-tab', 'Tab stays among these.'),
     _tb_act, 'Yes', 'Q-tab')
 if _tb.get('keyboard') is False:
-    check('tab inside a question: SKIPPED -- the keyboard never reached it',
-          True)
+    skip('tab inside a question: the keyboard never reached it')
 else:
     check('Tab walks a question\'s own answers and comes back round, and '
           'Shift+Tab walks back -- never out into the note under it (%s)'
@@ -3190,8 +3193,7 @@ for _rb_key, _rb_name in (('Escape', 'Escape'), ('Return', 'Enter')):
               % (_rb_name, _bg9[_rb_bg:][:1]),
               not _rb_pop.winfo_exists() and len(_bg9) == _rb_bg)
     else:
-        check('%s in a rename box: SKIPPED -- the keyboard never reached it'
-              % _rb_name, True)
+        skip('%s in a rename box: the keyboard never reached it' % _rb_name)
     app._dismiss_mini_popup(); app.update()
 
 # ============================================================

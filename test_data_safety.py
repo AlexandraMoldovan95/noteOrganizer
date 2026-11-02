@@ -24,7 +24,7 @@ import _qa_support  # noqa: E402
 #
 # It is the qa scripts' own guard (qa/_qa_support.hermetic_seed), not a
 # copy: only where a throwaway folder has been declared (NOTEORG_SCRATCH=1,
-# set by tools/run_tests.py and by CI), failing CLOSED beside a notebook it
+# set by the runners and CI, or by hand in a scratch copy), failing CLOSED beside a notebook it
 # cannot prove empty, and only where the folder the app will open, asked of
 # its own resolver, is the working folder. The copy that was here looked
 # beside the test while the app opened the folder notebook_location.txt

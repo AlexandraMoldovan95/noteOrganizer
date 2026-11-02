@@ -642,12 +642,10 @@ class AttachmentsMixin:
 
     def refresh_attachments_list(self):
         # Direct .configure() calls, not self.track_theme(): this list is
-        # destroyed and rebuilt on every note switch (load_note runs this
-        # every single time you open a different note), so it always picks
-        # up the current theme fresh anyway. Same leak as the note list and
-        # calendar had — track_theme() never prunes entries for widgets that
-        # get destroyed, so this ran up fast given how often switching notes
-        # happens in a normal session.
+        # destroyed and rebuilt on every note switch, so it picks up the
+        # current theme fresh anyway, and registering widgets that live one
+        # note long only fills the registry (ARCHITECTURE, the two theming
+        # patterns).
         for widget in self.attachments_frame.winfo_children():
             widget.destroy()
 

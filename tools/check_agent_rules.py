@@ -2,12 +2,14 @@
 
 WHY THIS GATE EXISTS
 --------------------
-The qa scripts, the unit suites and the entry file all wipe or rewrite the
+The qa scripts, the unit suites and the entry file can wipe or rewrite the
 data files in their working folder. Run from the project root, that is the
 real notebook -- it has happened three times (CLAUDE.md, "QA testing
-safety"). Each of them now refuses to run outside a declared throwaway
-folder, and the AI agent that works on this project is also denied
-starting them from the project root at all.
+safety"). The qa scripts and test_data_safety refuse to run outside a
+declared throwaway folder; every suite refuses beside a
+notebook_location.txt. The AI agent that works on this project is denied
+starting any of them from the project root at all, with no judgement made
+per file.
 
 Those deny rules live in .claude/settings.json and settings.local.json,
 which are git-ignored because they hold one machine's paths -- so nobody

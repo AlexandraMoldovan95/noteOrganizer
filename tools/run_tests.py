@@ -222,8 +222,9 @@ def run_one(scratch, script, child_tmp):
     try:
         # The scratch marker: the scripts that wipe their working folder
         # refuse to run without it (qa/_qa_support.hermetic_seed,
-        # test_data_safety.py), and only a run in a throwaway folder --
-        # this one, or CI's fresh checkout -- sets it.
+        # test_data_safety.py), and only a run in a throwaway folder sets
+        # it -- this one, run_coverage's, check_guest's, CI's, or a scratch
+        # copy run by hand.
         proc = subprocess.run([sys.executable, script], cwd=scratch,
                               capture_output=True, text=True,
                               timeout=SCRIPT_TIMEOUT,
@@ -341,6 +342,7 @@ def main(argv):
     # Every check a suite runs prints one PASS or FAIL line: counted here, so
     # the docs' "how many checks" is a measurement, not a recollection.
     counted = {"unit": 0, "qa": 0}
+    skipped = []
     try:
         # Static first: they take a moment and catch the kind of mistake that
         # would otherwise be reported only after a minute of GUI tests.
@@ -359,7 +361,12 @@ def main(argv):
             ok = (code == 0 and not failed)
             ran = sum(1 for l in output.splitlines() if l.startswith(("PASS ", "FAIL ")))
             counted["qa" if script.startswith("qa") else "unit"] += ran
-            print(f"  {'PASS' if ok else 'FAIL'}  {script:<32} {took:5.1f}s {ran:6,} checks")
+            # A check the run could not make says SKIP, and is not counted
+            # among those that passed.
+            skips = [l[len("SKIP "):] for l in output.splitlines() if l.startswith("SKIP ")]
+            skipped.extend("%s: %s" % (script, s) for s in skips)
+            print(f"  {'PASS' if ok else 'FAIL'}  {script:<32} {took:5.1f}s {ran:6,} checks"
+                  + (f", {len(skips)} skipped" if skips else ""))
             if not ok:
                 broken.append(script)
                 for line in (failed if all_failures else failed[:8]):
@@ -415,6 +422,10 @@ def main(argv):
     if scripts:
         print(f"Individual checks run: {sum(counted.values()):,} (unit suites "
               f"{counted['unit']:,}, qa suite {counted['qa']:,}).")
+    if skipped:
+        print(f"Skipped, not made in this run: {len(skipped)}")
+        for line in skipped:
+            print(f"  {line}")
     if broken:
         print(f"{len(broken)} check(s) failed: {', '.join(broken)}")
         return 1

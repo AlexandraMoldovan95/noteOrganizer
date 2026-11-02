@@ -187,8 +187,9 @@ import sys
 import time
 import tkinter as tk
 
-# Set by tools/run_tests.py and by the CI workflow for the scripts they
-# start, each in a throwaway folder. Nothing else sets it.
+# Declares the working folder a throwaway: set by the runners
+# (tools/run_tests.py, run_coverage.py, check_guest.py) and by CI for the
+# scripts they start, or by hand in a scratch copy (CLAUDE.md).
 SCRATCH_MARKER = "NOTEORG_SCRATCH"
 
 _SETTLED = []   # tools/guest.py, once this process has settled

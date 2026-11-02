@@ -1,10 +1,11 @@
 """What the app may say about itself when something goes wrong, the pages
 it opens in the browser, and the licenses file it ships with.
 
-crash_log.txt says it, on this computer only. Each entry's first line is the
-version, the Windows it runs on, how it draws on this screen, and how big the
-notebook is: never what the notes say, and never a path, since a folder's path
-holds the person's name. The trace below it is Python's own, and can hold both.
+crash_log.txt says it, on this computer only. Under each entry's dated head,
+one line gives the version, the Windows it runs on, how it draws on this
+screen, and how big the notebook is: never what the notes say, and never a
+path, since a folder's path holds the person's name. The trace below it is
+Python's own, and can hold both.
 
 The app connects to nothing. Feedback goes through the Microsoft Store's
 reviews, and the privacy policy is a page on Google Sites -- the browser

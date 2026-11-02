@@ -697,10 +697,12 @@ def android_facts(android):
     if not m:
         fail("the Android app's build.gradle.kts no longer names a versionName")
     readme = read(os.path.join(android, "README.md"))
-    unit = re.search(r"# ([0-9][0-9,]*) JVM unit tests", readme)
-    walk = re.search(r"([0-9][0-9,]*) checks, each reading the file the app wrote", readme)
+    # The counts' one home there is its qa/README, which says so.
+    qa_readme = read(os.path.join(android, "qa", "README.md"))
+    unit = re.search(r"^([0-9][0-9,]*) tests across \S+ suites", qa_readme, re.M)
+    walk = re.search(r"[0-9]+ parts and about\s+([0-9][0-9,]*)\s+checks", qa_readme)
     if not unit or not walk:
-        fail("the Android README no longer gives its unit tests and walk checks "
+        fail("the Android qa/README no longer gives its unit tests and walk checks "
              "in the words build.py reads; update one of them")
     captions = {}
     shots_readme = read(os.path.join(android, "docs", "screenshots", "README.md"))
@@ -812,7 +814,7 @@ def android_page(shell, config, facts, sizes, version):
     parts.append(
         '<h2 id="where-it-stands">Where it stands</h2>'
         "<p>Version %s, on its way to Google Play and not published there yet. It is checked by "
-        "%s unit tests and by a walk of %s checks on an emulator, each reading the file the app "
+        "%s unit tests and by a walk of about %s checks on an emulator, each reading the file the app "
         "wrote; a note, a share code and a backup it makes are read back by the desktop app's own "
         "code. Its code lives %s.</p>"
         % (facts["version"], facts["unit_tests"], facts["walk_checks"], where))

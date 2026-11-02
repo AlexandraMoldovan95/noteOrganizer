@@ -34,12 +34,12 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-SUITES = [
-    "test_recurrence", "test_calculator", "test_data_safety",
-    "test_entry_module_identity", "test_richtext", "test_tables",
-    "test_note_identity",
-    "qa1", "qa2", "qa3", "qa4", "qa5", "qa6", "qa7", "qa8", "qa9",
-]
+# The suites run_tests runs, read from it: a list of its own here left
+# test_spelling out for a fortnight.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from run_tests import QA, STANDALONE  # noqa: E402
+
+SUITES = [name[:-len(".py")] for name in STANDALONE + QA]
 
 
 def _write_rc(cov_dir, run_dirs):

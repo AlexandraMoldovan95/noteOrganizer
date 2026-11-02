@@ -861,7 +861,8 @@
         el("p", null, el("b", { text: "Note Organizer for Android" }), PHONE.version ? " · version " + PHONE.version : ""),
         el("p", { text: "This page re-creates the app's screens in HTML and JavaScript. The real app is native " +
           "Android, written in Kotlin, and on its way to Google Play. It works entirely offline: no account, " +
-          "no server, no sync." }),
+          "no server, no sync. The phone's own backup to a Google account copies its notes while that is on; " +
+          "Settings → Backup turns that off." }),
         el("p", { text: "What you write here stays in this browser. Clearing this site's data removes it." }),
         el("p", null, el("a", { href: "../site-privacy.html", text: "This website's privacy notice" })),
         el("p", null, el("a", { href: "../demo/index.html", text: "The desktop demo" }), " · ",
