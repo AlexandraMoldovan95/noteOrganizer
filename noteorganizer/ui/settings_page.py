@@ -1020,6 +1020,7 @@ class SettingsPageMixin:
                 t.insert("1.0", initial)
                 t.pack(fill="x")
                 self._add_paste_menu(t)
+                self._swallow_format_keys(t)
                 # A table copied from Excel, Word or a web page arrives
                 # as pipe text instead of losing its shape to the plain
                 # clipboard.
@@ -2055,7 +2056,8 @@ class SettingsPageMixin:
         self._settings_subtitle(
             parent,
             "Notes with the " + SAME_AS + " (ignoring "
-            "case, spacing, date and color). Tick the copies you want to "
+            "case, spacing, a “(copy)” after the title, the text's styling, "
+            "date, color and pin). Tick the copies you want to "
             "remove — the rest are kept.")
         groups = find_duplicate_groups(self.notes)
         if not groups:
@@ -3587,8 +3589,10 @@ class SettingsPageMixin:
             buttons=[("Cancel", None),
                      (f"Delete the notes too (restorable"
                       f"{trash_window_words('for')})", "delete_notes", "danger"),
-                     (f"Move them to “{PROTECTED_CATEGORY}” (keep the notes)", "move")]
-        )
+                     (f"Move them to “{PROTECTED_CATEGORY}” (keep the notes)", "move")],
+            # Either answer deletes the category, and no Undo brings back
+            # each note's filing under it: Enter keeps it, as above.
+            default="Cancel")
 
     def _cleanup_selected_duplicates(self, del_vars, dlg, refresh, announce=False):
         """Move the checkbox-selected duplicates to trash. `del_vars` is a list of
@@ -4007,12 +4011,13 @@ class SettingsPageMixin:
             ("Ctrl+Z", "Right after a delete, with the keyboard outside a "
                        "text box: take it back, as the banner's Undo does."),
         )),
-        ("Text formatting", (
+        ("Text formatting, in the note", (
             ("Ctrl+B", "Bold the selection — or with nothing selected, "
                        "bold whatever you type next."),
             ("Ctrl+I", "Italic, the same way."),
             ("Ctrl+U", "Underline."),
-            ("Ctrl+D", "Strikethrough."),
+            ("Ctrl+D", "Strikethrough. In an open table cell with nothing "
+                       "selected, the four style the whole cell."),
         )),
         ("Clipboard", (
             ("Ctrl+V", "Paste, keeping the source's bold, colours, lists "

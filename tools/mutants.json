@@ -15082,8 +15082,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        if getattr(event, \"state\", 0) & 0x4:      # Control held\n",
-        "replace": "        if False:\n"
+        "find": "        if getattr(event, \"state\", 0) & 0x4:      # Control held\n            return self._leave_note_by_keys(delta)\n",
+        "replace": "        if False:\n            return self._leave_note_by_keys(delta)\n"
       }
     ],
     "must_fail": [
@@ -15091,6 +15091,79 @@
     ],
     "suites": [
       "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS08",
+    "about": "Ctrl+Tab in an open table cell is taken by the cell's own Tab binding: it moves a cell, and on the last one adds a row",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if getattr(event, \"state\", 0) & 0x4:      # Control held\n            self._commit_cell_editor()\n",
+        "replace": "        if False:\n            self._commit_cell_editor()\n"
+      }
+    ],
+    "must_fail": [
+      "...<Control-Tab> from a table cell leaves the note too",
+      "...the table no longer grows a row on it, and the cell keeps its typing"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS09",
+    "about": "The formatting keys in an open table cell fall to Tk's Text: Ctrl+I types a tab over the selected words",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        for key, style in self.FORMAT_KEYS:\n            entry.bind(key, lambda _e, s=style: (self._toggle_body_style(s), \"break\")[1])\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "...Ctrl+I in an open cell italicises its words and keeps them"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS10",
+    "about": "A box of plain text leaves the formatting keys to Tk's Text: Ctrl+I types a tab over the selection, Ctrl+D deletes a letter",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            text_widget.bind(key, lambda _e: \"break\")\n",
+        "replace": "            pass\n"
+      }
+    ],
+    "must_fail": [
+      "...and in the comments box the four do nothing to the words"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS11",
+    "about": "Deleting a category that holds notes: Enter fires the last button, which deletes the category with no Undo",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "            # each note's filing under it: Enter keeps it, as above.\n            default=\"Cancel\")",
+        "replace": "            )"
+      }
+    ],
+    "must_fail": [
+      "deleting a category, with notes in it or none, Enter is Cancel"
+    ],
+    "suites": [
+      "qa5"
     ],
     "expect": "killed"
   }

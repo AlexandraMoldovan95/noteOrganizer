@@ -2015,7 +2015,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         f"The backup saved to {name} as Note Organizer closed "
                         f"holds only the {count} note(s) written in that "
                         "session, not your notes file, which could not be "
-                        "opened then. '⬇ Import' brings its notes in beside yours.")
+                        "opened then. Settings → Backup → Import brings its "
+                        "notes in beside yours.")
                 named = cut.get("left_out")
                 left = ([n for n in named if isinstance(n, str)]
                         if isinstance(named, list) else [])
@@ -2565,16 +2566,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     f"It holds the {state['session_only']} note(s) written since "
                     "Note Organizer started, and not your notes file, which "
                     "could not be opened then. Close Note Organizer and open it "
-                    "again; '⬇ Import' brings this backup's notes in beside "
-                    "yours." + left_said)
+                    "again; Settings → Backup → Import brings this backup's "
+                    "notes in beside yours." + left_said)
             else:
                 self._remember_finished_export()
                 self.show_info(
                     "Export complete" if not left else "Export complete, but not all of it",
                     f"Your notes, settings, and attachments were saved to:\n"
                     f"{state['save_path']}\n\n"
-                    "Copy or email this single file to another device, then use "
-                    "'⬇ Import' there to bring everything in." + left_said
+                    "Copy or email this single file to another device; there, "
+                    "Settings → Backup → Import brings your notes in." + left_said
                 )
             return
         self._export_poll_job = self.after(100, self._poll_export_progress)
@@ -4115,17 +4116,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         entry.bind("<Destroy>",
                    lambda _e, this=entry: self._forget_dead_cell_editor(this),
                    add="+")
-        entry.bind("<Tab>", lambda _e: self._editor_step(+1))
-        entry.bind("<Shift-Tab>", lambda _e: self._editor_step(-1))
+        entry.bind("<Tab>", lambda e: self._editor_step(+1, e))
+        entry.bind("<Shift-Tab>", lambda e: self._editor_step(-1, e))
         # X11 reports Shift+Tab as its own keysym rather than a modified
         # Tab -- the body text learned this long ago; the cell editor
         # walked into the same wall on the CI. Unknown keysyms are an
         # error on Windows, so the binding is allowed to fail there.
         try:
             entry.bind("<ISO_Left_Tab>",
-                       lambda _e: self._editor_step(-1))
+                       lambda e: self._editor_step(-1, e))
         except tk.TclError:
             pass
+        # The toolbar's Bold and the rest style the open cell; so do their
+        # keys, which Tk's Text took for its own (Ctrl+I a tab over the words).
+        for key, style in self.FORMAT_KEYS:
+            entry.bind(key, lambda _e, s=style: (self._toggle_body_style(s), "break")[1])
         entry.bind("<Return>", lambda _e: self._editor_newline())
         entry.bind("<Shift-Return>", lambda _e: self._editor_newline())
         # The cell's menu from the keyboard, as a drawn control's opens: every
@@ -4375,13 +4380,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 b.insert(f"{line_no}.{t_a}", mid)
             self._align_table_block(first)
 
-    def _editor_step(self, delta):
+    def _editor_step(self, delta, event=None):
         """Tab and Shift+Tab between cells; Tab at the very last one adds
         a row, which is what lets a whole table be typed without the
-        mouse. Backwards out of the first cell stays put."""
+        mouse. Backwards out of the first cell stays put. Ctrl+Tab and
+        Ctrl+Shift+Tab reach these bindings too, and leave the note."""
         editor = getattr(self, "_cell_editor", None)
         if not editor:
             return "break"
+        if getattr(event, "state", 0) & 0x4:      # Control held
+            self._commit_cell_editor()
+            return self._leave_note_by_keys(delta)
         info, r, c = editor["info"], editor["r"], editor["c"]
         anchor_line = self._grid_first_line(info)
         self._commit_cell_editor()
@@ -9418,11 +9427,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         its own, so they are answered here, in a list or a table too.
         """
         if getattr(event, "state", 0) & 0x4:      # Control held
-            target = (self.body_text.tk_focusNext() if delta > 0
-                      else self.body_text.tk_focusPrev())
-            if target is not None:
-                target.focus_set()
-            return "break"
+            return self._leave_note_by_keys(delta)
         if self._tab_in_table(delta):
             return "break"
         first, last = self._selected_line_range()
@@ -9432,6 +9437,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not in_list:
             return "break" if delta < 0 else None
         self._change_paragraph_indent(delta)
+        return "break"
+
+    def _leave_note_by_keys(self, delta):
+        """Ctrl+Tab (*delta* 1) or Ctrl+Shift+Tab: the keyboard to the control
+        after or before the note's text, by Tk's own Tab traversal -- so what
+        it lands on is ringed and scrolled into sight as after any Tab
+        (_tab_target_into_sight). Focus set by hand skipped both."""
+        self.body_text.event_generate(
+            "<<NextWindow>>" if delta > 0 else "<<PrevWindow>>")
         return "break"
 
     def _selected_line_range(self):
@@ -11065,6 +11079,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         text_widget.bind("<Double-Button-1>", self._select_word_at_click)
         text_widget.bind("<Triple-Button-1>", self._select_line_no_newline)
 
+    # The formatting four, as the shortcuts page lists them: the note's text
+    # and an open table cell style with them; every other box swallows them.
+    FORMAT_KEYS = (
+        ("<Control-b>", "bold"), ("<Control-B>", "bold"),
+        ("<Control-i>", "italic"), ("<Control-I>", "italic"),
+        ("<Control-u>", "underline"), ("<Control-U>", "underline"),
+        ("<Control-d>", "strike"), ("<Control-D>", "strike"),
+    )
+
+    def _swallow_format_keys(self, text_widget):
+        """The formatting keys do nothing in a box of plain text -- the
+        comments, a template's boxes, the import box. Left to Tk's own Text
+        bindings they edited it: Ctrl+I typed a tab over the selected words,
+        Ctrl+D deleted the next letter (the final audit's wave 3)."""
+        for key, _style in self.FORMAT_KEYS:
+            text_widget.bind(key, lambda _e: "break")
+
     def _uniform_font_in_selection(self, style, start, end):
         """The one size (or family) covering the WHOLE range, or None.
 
@@ -11352,6 +11383,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.track_theme(self.import_box, bg="card", fg="text", insertbackground="text")
         self.import_box.pack(fill="x", padx=6)
         self._add_paste_menu(self.import_box)
+        self._swallow_format_keys(self.import_box)
         self.import_status = tk.Label(p, text="", font=("Segoe UI", 7), anchor="w",
                                       wraplength=self.px(200), justify="left",
                                       bg=self.colors["sidebar"], fg=self.colors["danger_text"])
@@ -12833,8 +12865,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # did not exist on this device was silently re-filed under
                 # "General" by normalize_note -- the whole filing system of
                 # a restored notebook, gone, with "Import complete" as the
-                # only feedback. Only the categories are taken; the rest of
-                # the file is this device's own business.
+                # only feedback. The categories, the calendar's markings and
+                # the Trash window are taken; the rest of the file is this
+                # device's own business (USER_GUIDE's "Full backup: import").
                 settings_path = os.path.join(temp_dir, "settings.json")
                 if os.path.exists(settings_path):
                     try:
@@ -16357,12 +16390,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # to stop Tk's own default handling of the key combo (relevant on
         # some Tk builds/platforms where Ctrl+letter combos have a default
         # Text-widget behavior of their own) from also running.
-        for key, style in (
-            ("<Control-b>", "bold"), ("<Control-B>", "bold"),
-            ("<Control-i>", "italic"), ("<Control-I>", "italic"),
-            ("<Control-u>", "underline"), ("<Control-U>", "underline"),
-            ("<Control-d>", "strike"), ("<Control-D>", "strike"),
-        ):
+        for key, style in self.FORMAT_KEYS:
             self.body_text.bind(key, lambda e, s=style: (self._toggle_body_style(s), "break")[1])
         # Let the mousewheel scroll the text box's own content when it overflows,
         # instead of bubbling up to the editor's outer scroll.
@@ -16470,6 +16498,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.comments_text.pack(side="left", fill="both", expand=True)
         self._bind_text_wheel(self.comments_text)
         self._add_paste_menu(self.comments_text)
+        self._swallow_format_keys(self.comments_text)
         self._spell_setup(self.comments_text)
         self._bind_text_selection_fixes(self.comments_text)
         # Comments never render tables (only the body does), so a pasted

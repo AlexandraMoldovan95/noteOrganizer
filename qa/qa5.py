@@ -3628,6 +3628,21 @@ check(f'a delete asks about what is stored: a waiting turn-off is not made '
       and _rn_dl.get('category: move') == (_RN_SERIES, 1, '', 0)
       and _rn_dl.get('duplicates: No') == (_RN_SERIES, 1, '', 0)
       and _rn_dl.get('duplicates: Yes') == (_RN_SERIES, 1, '', 1))
+# Deleting a category is not taken back, and with notes in it their filing
+# goes too: Enter there is Cancel, as on the question asked of an empty one.
+# It fired "Move them to General", the last button (the final audit's wave 3).
+_cd_q = []
+_cd_real_dlg = app._themed_dialog
+app._themed_dialog = lambda title, message, *a, **k: (
+    _cd_q.append([spec[0] for spec in k.get('buttons', [])][
+        app._dialog_focus_index(k.get('buttons', []), k.get('default'))]), None)[1]
+try:
+    app._ask_category_deletion('Work', 3)
+    app._ask_category_deletion('Work', 0)
+finally:
+    app._themed_dialog = _cd_real_dlg
+check(f'deleting a category, with notes in it or none, Enter is Cancel ({_cd_q})',
+      _cd_q == ['Cancel', 'Cancel'])
 # The duplicates clean-up fills the editor from the kept copy again and
 # carries a waiting turn-off across -- but the reload's own repeat cleared
 # the record of a big delete's rescue copy, and on leaving the turn-off's

@@ -4940,6 +4940,73 @@ for _kw_key, _kw_want, _kw_way in (('<Control-Shift-Tab>', _kw_prev, 'before'),
           f'the line as it was ({_kw_got})',
           _kw_got is _kw_want and app.body_text.get('1.0', 'end-1c') == '• milk'
           and app.capture_editor_state().get('paragraphs') == _kw_paras)
+# A drawn table's open cell has Tab bindings of its own, and Tk matched
+# Ctrl+Tab to them as well: it moved a cell, and on the last one added a
+# row (the final audit's wave 3). From there too it leaves the note, the
+# cell's typing kept.
+app.notes = [NO.normalize_note({'id': 982, 'title': 'CtNote',
+                                'body': '| Item | Qty |\n| --- | --- |\n| cinnamon | 1 |'})]
+app.save_notes()
+app.refresh_note_list()
+app.open_note_in_tab(app.notes[0])
+_kv_settle(8)
+_ct_way = {'<Control-Tab>': app.body_text.tk_focusNext(),
+           '<Control-Shift-Tab>': app.body_text.tk_focusPrev()}
+_ct_got = {}
+for _ct_key in _ct_way:
+    _ct_grid = app._grid_at_line(1)
+    if _ct_grid is None:
+        break
+    app._open_cell_editor(_ct_grid, *max(_ct_grid['cells']), select=False)
+    _kv_settle(4)
+    _ct_entry = app._cell_editor['entry'] if app._cell_editor else None
+    if _ct_entry is not None and _take_focus(_ct_entry):
+        _ct_entry.insert('end', 's')
+        _ct_entry.event_generate(_ct_key)
+        _kv_settle()
+        try:
+            _ct_got[_ct_key] = app.nametowidget(str(app.tk.call('focus', '-lastfor', app)))
+        except (KeyError, tk.TclError):
+            _ct_got[_ct_key] = None
+_ct_body = app.body_text.get('1.0', 'end-1c')
+for _ct_key, _ct_want in _ct_way.items():
+    check(f'...{_ct_key} from a table cell leaves the note too '
+          f'({_ct_got.get(_ct_key)} for {_ct_want})',
+          _ct_key in _ct_got and _ct_got[_ct_key] is _ct_want)
+check(f'...the table no longer grows a row on it, and the cell keeps its typing '
+      f'({_ct_body!r})',
+      len(_ct_body.strip('\n').split('\n')) == 3 and '1ss' in _ct_body)
+# The formatting four style an open cell, as the toolbar does; Tk's own Text
+# answered them there -- Ctrl+I put a tab over the selected words. The other
+# boxes of plain text swallow them.
+_ct_grid = app._grid_at_line(1)
+_ct_kept = None
+if _ct_grid is not None:
+    app._open_cell_editor(_ct_grid, 1, 0)
+    _kv_settle(4)
+    _ct_entry = app._cell_editor['entry'] if app._cell_editor else None
+    if _ct_entry is not None and _take_focus(_ct_entry):
+        _ct_entry.event_generate('<Control-i>')
+        _kv_settle()
+        _ct_kept = _ct_entry.get('1.0', 'end-1c')
+        app._commit_cell_editor()
+        _kv_settle()
+_ct_at = app.body_text.search('cinnamon', '1.0', 'end', elide=True)  # a drawn table's text is hidden
+check(f'...Ctrl+I in an open cell italicises its words and keeps them '
+      f'({_ct_kept!r}, {app.body_text.tag_names(_ct_at) if _ct_at else None})',
+      _ct_kept == 'cinnamon' and bool(_ct_at)
+      and any('italic' in t for t in app.body_text.tag_names(_ct_at)))
+app.comments_text.delete('1.0', 'end')
+app.comments_text.insert('1.0', 'pick up cinnamon')
+app.comments_text.tag_add('sel', '1.0', 'end-1c')
+if _take_focus(app.comments_text):
+    app.comments_text.event_generate('<Control-i>')
+    app.comments_text.event_generate('<Control-d>')
+    _kv_settle()
+check(f"...and in the comments box the four do nothing to the words "
+      f"({app.comments_text.get('1.0', 'end-1c')!r})",
+      app.comments_text.get('1.0', 'end-1c') == 'pick up cinnamon')
+app.comments_text.delete('1.0', 'end')
 # Text size makes the notes bigger, not the rest of the app: its words say so.
 def _walk_all(w):
     for c in w.winfo_children():
