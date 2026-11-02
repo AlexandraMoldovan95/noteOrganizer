@@ -611,13 +611,12 @@ bug being chased.
   harmless: the host's leaked click-outside handler closed every later dropdown on the click that
   opened it, until a restart. Each popup now keeps its own window-level lines, removed by any
   route out. See [the story](ISSUES_LOG.md#the-click-that-deleted-its-own-next-command).
-- *Theme-registry pruning cadence* — dead tracked widgets are pruned at each theme switch; a
-  session that never switches themes still accumulates them (Python-side memory only).
+- *Theme-registry pruning cadence* — **settled 2026-10-01.** Dead tracked widgets were pruned
+  only at a theme switch; the registry is now pruned whenever it has doubled since the last prune.
 - *`visual_scenes` burst errors* — a failed burst propagates loudly (nonzero exit) but is not
   counted in the tool's own scene-error tally; cosmetic asymmetry in a manual tool.
-- *Dialogs ignore `parent=`* — the confirm wrappers accept and discard a `parent=` kwarg; the
-  overlay always centres on the app window, so it never mattered, but a future caller could be
-  misled.
+- *Dialogs ignore `parent=`* — **settled 2026-09-28.** The confirm wrappers took and discarded a
+  `parent=` keyword; their parameters are now named and keyword-only, so Python refuses one.
 - *Commit-then-capture in `_grid_delete_table`* — deleting a table while one of its cell
   editors is still open commits that editor first, and the commit's re-render can run before the
   delete takes its view snapshot, so the restored scroll position is the one from before the

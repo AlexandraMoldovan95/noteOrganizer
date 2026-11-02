@@ -93,21 +93,21 @@ the one you happen to be editing:
 |---|---|
 | Bulk-action bar / selection mode | **qa1**, qa7, qa3, qa4, qa9, qa5, qa6 |
 | Theming (apply/track/toggle) | **qa1**, **qa4**, qa5, qa6 |
-| Autosave (debounce, guards, flush) | **qa5**, **qa1**, qa7, qa8, qa6, qa3, qa4, qa2, qa9 |
-| Editor page scroll/canvas | **qa1**, **qa8**, qa6 |
-| Note list (refresh, scroll guards, grouping) | **qa4**, qa1, qa7, qa6, qa9, qa3, qa8, qa2, qa5 |
-| Tables / drawn grids | **qa1**, qa5, qa7, qa3 |
-| Find in note (Ctrl+F) / find bar | **qa1**, qa5 |
-| Templates | **qa9**, qa1, qa6, qa3, qa7, qa4 |
-| Settings panels | **qa6**, qa9, qa3, qa4, qa7, qa1, qa2, qa5 |
-| Calendar | **qa7**, qa5, qa4, qa6, qa2, qa1, qa9, qa8, qa3 |
-| Trash | **qa3**, **qa6**, qa7, qa5, qa2, qa9, qa1, qa4 |
-| Share codes | **qa3**, qa1, qa5, qa4, qa9 |
+| Autosave (debounce, guards, flush) | **qa5**, **qa1**, qa6, qa7, qa8, qa3, qa4, qa2, qa9 |
+| Editor page scroll/canvas | **qa1**, **qa6**, qa8 |
+| Note list (refresh, scroll guards, grouping) | **qa4**, qa1, qa6, qa7, qa9, qa3, qa8, qa2, qa5 |
+| Tables / drawn grids | **qa1**, qa5, qa7, qa6, qa8, qa3 |
+| Find in note (Ctrl+F) / find bar | **qa1**, qa8, qa5 |
+| Templates | **qa9**, **qa6**, qa1, qa3, qa2, qa7, qa4 |
+| Settings panels | **qa6**, qa3, qa9, qa4, qa7, qa2, qa1, qa5, qa8 |
+| Calendar | **qa7**, qa5, qa6, qa2, qa4, qa1, qa9, qa8, qa3 |
+| Trash | **qa3**, **qa6**, qa7, qa2, qa5, qa9, qa1, qa4 |
+| Share codes | **qa3**, qa5, qa1, qa4, qa9, qa6 |
 | Export (files, backup) | **qa3**, qa1, qa6, qa8, qa9, qa4, qa5, qa7 |
-| Attachments | **qa7**, qa6, qa3, qa1, qa4, qa5, qa8, qa2 |
-| Recurrence / occurrences | **qa5**, qa7, qa2, qa3, qa1, qa6, qa8, qa4, qa9 |
-| Checklist | **qa1**, qa3, qa7, qa5, qa6, qa2, qa4, qa9, qa8 |
-| Formatting / rich text | **qa1**, qa3, qa5, qa2, qa6, qa9, qa7 |
+| Attachments | **qa7**, qa6, qa3, qa1, qa5, qa4, qa8, qa2 |
+| Recurrence / occurrences | **qa5**, qa7, qa2, qa3, qa6, qa1, qa8, qa4, qa9 |
+| Checklist | **qa1**, qa2, qa6, qa3, qa7, qa5, qa4, qa9, qa8 |
+| Formatting / rich text | **qa1**, qa3, qa5, qa6, qa2, qa9, qa8, qa7 |
 
 Bold = the heavy owner(s): a file carrying at least a quarter of a
 surface's mentions, or leading the next one by more than double.

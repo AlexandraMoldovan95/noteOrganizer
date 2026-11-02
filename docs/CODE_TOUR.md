@@ -118,7 +118,7 @@ test_*.py                 eight unit suites; seven need no window
 tools/                    what CI runs, and the tools behind the docs' numbers
 ├── check_*.py            eleven static gates: ten in CI, the link check before a push
 ├── guest.py              a run's turn on the machine, its memory ceiling, the sweep of dead runs' folders
-├── pre_push_check.py     the gates, locally, in seconds (links in, mutant targets left to CI)
+├── pre_push_check.py     CI's gates, locally, in seconds, and the link check CI leaves out
 ├── run_tests.py          the whole suite, safely, from a scratch copy
 ├── run_coverage.py       the whole suite again, measuring what it executes
 ├── mutate.py             takes each fix away and checks a check fails

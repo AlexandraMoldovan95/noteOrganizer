@@ -66,6 +66,11 @@ The build reads the repository it sits in (or the folder given with
 `--repo`) and only reads it: the documents, the screenshots, the
 icon, the test plan's case count, and a few values from the source code (the
 themes, the emoji, the version), read as text — none of the app's code runs.
+A few figures are read out of sentences, so those sentences keep their
+words: "About N checks" in `docs/AI_WORKFLOW.md`, the mutant count from
+`tools/mutants.json`, and from the Android repository its version in
+`app/build.gradle.kts` and, in its `qa/README.md`, "N tests across …
+suites" and "N parts and about N checks".
 It builds in `public.building/` first and only swaps that into `public/`
 once every check has passed, so it stops, and leaves the old site alone, if
 a link is broken, a value is missing, a page would contain something

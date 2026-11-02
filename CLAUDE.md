@@ -369,7 +369,8 @@ Instead (by hand): copy `note_organizer.py`, the `noteorganizer/` package,
 `qa/_qa_support.py`, `tools/guest.py` and the target test script into a
 scratch directory **outside the project tree entirely** (e.g. the
 session's own scratchpad folder), set `NOTEORG_SCRATCH=1` in that shell —
-it declares the folder a throwaway, and every suite refuses to start
+it declares the folder a throwaway, and the qa suite and
+`test_data_safety.py`, the suites that wipe their folder, refuse to start
 without it — and run and clean up there. This makes
 it physically impossible for a wrong-directory mistake to reach real user
 data, rather than relying on correctly remembering the working directory

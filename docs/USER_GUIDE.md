@@ -1212,10 +1212,11 @@ what leaves your computer — only what you send. If the browser cannot be opene
 copied instead, ready to paste into one.
 
 If the app ever hits an error, it writes what went wrong to `crash_log.txt` beside your notes.
-Each entry opens with one line of facts — the app's version, your Windows version, the screen
-scale and Sharp text, the theme, and how big your notebook is — and nothing from your notes.
-Below that line is the technical trace, and it can name a file or a folder (your user name with
-it) or quote a few words the app was working on: **look it over before you send it to anyone**.
+Each entry opens with its date and one line of facts — the app's version, your Windows version,
+the screen scale and Sharp text, the theme, and how big your notebook is — and nothing from your
+notes. Below them is the technical trace, and it can name a file or a folder (your user name
+with it) or quote a few words the app was working on: **look it over before you send it to
+anyone**.
 The log never leaves your computer unless you send it.
 
 ---
