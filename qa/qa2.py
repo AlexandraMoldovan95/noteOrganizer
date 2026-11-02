@@ -883,11 +883,8 @@ app.group_by_category.set(True)
 # the wrong order.
 app.sort_var.set(next(o for o in app.SORT_OPTIONS if o.startswith('Title A')))
 app.refresh_note_list(); app.update()
-_b3_order = [n['title'] for n in app._visible_notes_in_order()] \
-    if hasattr(app, '_visible_notes_in_order') else None
-if _b3_order is None:
-    # The cards in the order they are drawn, top to bottom.
-    _b3_order = [app.find_note(_cid)['title'] for _cid in app._card_order()]
+# The cards in the order they are drawn, top to bottom.
+_b3_order = [app.find_note(_cid)['title'] for _cid in app._card_order()]
 check('sorting A-Z orders the notes inside each group (plan 83)',
       _b3_order == ['Delta', 'Gamma', 'Alpha', 'Beta']
       or _b3_order == ['Alpha', 'Beta', 'Delta', 'Gamma'])

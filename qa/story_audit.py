@@ -472,11 +472,10 @@ def chapter_6():
     story.check("after a restart, the moment of deletion is the same",
                 back.get("deleted_at") == stamp,
                 "%r -> %r" % (stamp, back.get("deleted_at")))
-    left = NO2.days_left_in_trash(back) if hasattr(NO2, "days_left_in_trash") else None
-    if left is not None:
-        story.check("...and the days left are counted from it",
-                    isinstance(left, int) and 0 < left <= NO2.trash_retention_days(),
-                    repr(left))
+    left = NO2.core_days_left_in_trash(back.get("deleted_at"))
+    story.check("...and the days left are counted from it",
+                isinstance(left, int) and 0 < left <= NO2.trash_retention_days(),
+                repr(left))
     again.destroy()
     story.save()
 

@@ -1234,7 +1234,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # frame above it, which is what wm_frame names.
             handle = int(self.wm_frame(), 16)
             dwm = ctypes.windll.dwmapi
-            dark = self.theme_name.startswith("dark")
+            dark = self.theme_name in DARK_THEMES
             for attribute, value in (
                     (self._DWMWA_USE_IMMERSIVE_DARK_MODE, int(dark)),
                     (self._DWMWA_CAPTION_COLOR, colorref(self.colors["bg"])),
@@ -14795,10 +14795,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.style_ttk()
 
     def style_ttk(self):
-        """Theme all ttk widgets (notebook tabs + the sidebar comboboxes) so
-        they follow dark/light mode. ttk widgets ignore normal bg/fg, so this
-        has to go through ttk.Style and a few option_add calls for the popup
-        list, which isn't a real widget we can reach directly."""
+        """Theme the ttk widgets the app uses -- the notebook tabs and the
+        scrollbars -- so they follow the theme. ttk widgets ignore normal
+        bg/fg, so this goes through ttk.Style."""
         style = ttk.Style()
         try:
             style.theme_use("clam")

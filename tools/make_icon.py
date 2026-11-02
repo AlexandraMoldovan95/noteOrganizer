@@ -89,7 +89,8 @@ def accents_in_use():
     names would be a second place to keep in step, and a theme added
     later would quietly get the wrong icon or none. This way the app
     computes the filename from the colour it is already holding, and a
-    new theme needs nothing but a re-run of this script.
+    new theme's accent needs only a re-run of this script (--all); the
+    rest of a new theme is in core/themes.py's docstring.
     """
     import sys
     sys.path.insert(0, ROOT)

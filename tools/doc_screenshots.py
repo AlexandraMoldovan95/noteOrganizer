@@ -302,7 +302,7 @@ def clean():
     app.search_var.set(app.SEARCH_PLACEHOLDER)
     app.search_entry.config(fg=app.colors['subtext'])
     app.sort_var.set(app.SORT_OPTIONS[0])
-    app.category_filter_var.set('All') if hasattr(app, 'category_filter_var') else None
+    app.filter_var.set('All')
     if app.group_by_category.get():
         app.group_by_category.set(False)
         app._on_toggle_group_by_category()

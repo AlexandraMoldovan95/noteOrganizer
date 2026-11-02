@@ -170,11 +170,14 @@ app.trash = [
     {'id':2,'title':'bad_date','deleted_at':'garbage'},
     {'id':3,'title':'missing_date'},
 ]
+_pg_kept = []
 def purge():
-    if hasattr(app, 'purge_old_trash'):
-        app.purge_old_trash()
+    kept, _purged = NO.purge_expired_trash(app.trash, app.notes)
+    _pg_kept.extend(e.get('id') for e in kept)
     app.update()
 safe('purge survives bad deleted_at in trash', purge)
+check('...and keeps the entries whose moment it cannot read',
+      2 in _pg_kept and 3 in _pg_kept)
 
 # ---- MULTI-SCRIPT INPUT ----
 # The app's own functions speak English; the USER writes in whatever

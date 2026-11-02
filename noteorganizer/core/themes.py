@@ -25,10 +25,13 @@ WHY THEMES ARE SHAPED THIS WAY
 ------------------------------
 Every theme defines exactly the same keys. Nothing in the app asks "which
 theme is this?" before choosing a colour — it asks for ``colors["card"]``
-and gets whatever that means in the current theme. Adding a ninth theme
-means one dict in THEMES, its name in DARK_THEMES or LIGHT_THEMES (the
-Settings picker and tools/check_contrast.py read those), and its label in
-THEME_LABELS -- all here, and nothing elsewhere.
+and gets whatever that means in the current theme. Adding a ninth theme,
+the one recipe (CODE_TOUR points here): one dict in THEMES; its name in
+DARK_THEMES or LIGHT_THEMES, which the Settings picker, the title bar and
+tools/check_contrast.py read; its label in THEME_LABELS; then
+``py tools/make_icon.py --all`` if its accent is new (the window icon is
+named by the accent), and ``py tools/check_contrast.py --markdown`` pasted
+over ARCHITECTURE's contrast table -- the gate fails until both are done.
 
 That uniformity is also what makes the theme-switch safety net possible:
 because the palettes are known, the app can spot a widget still holding a

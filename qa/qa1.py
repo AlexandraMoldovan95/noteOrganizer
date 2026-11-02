@@ -159,7 +159,8 @@ check('trash has an entry', len(app.trash)>=1)
 # ---- CATEGORIES ----
 NO.CATEGORY_COLORS['TestCat'] = '#7c5cff'
 NO.persist_categories()
-check('category added', 'TestCat' in NO.CATEGORY_COLORS)
+check('category added, and read back from settings',
+      NO.load_categories().get('TestCat') == '#7c5cff')
 
 app.new_note()
 app.title_entry.insert(0,'CatNote')
@@ -177,20 +178,27 @@ check('category rename propagates to note', app.find_note(cn['id'])['category']=
 app.templates.append({'name':'MyTemplate','title':'Templated Title','body':'Templated body',
                       'comments':'','category':'General','checklist':[]})
 NO.save_templates(app.templates)
-check('template saved', any(t['name']=='MyTemplate' for t in app.templates))
+check('template saved, and read back from its file',
+      any(t['name']=='MyTemplate' for t in NO.load_templates()))
 
 app.new_note()
 tpl = next(t for t in app.templates if t['name']=='MyTemplate')
-app.apply_template(tpl) if hasattr(app,'apply_template') else None
+app._apply_template(tpl)
 app.update()
+check('a template fills a new note',
+      app.title_entry.get() == 'Templated Title'
+      and app.body_text.get('1.0', 'end-1c') == 'Templated body')
 
 # ---- SEARCH ----
 app.notes.append({'id':9991,'title':None,'body':'searchable unique body','comments':None,
                   'category':None,'updated':'2026-01-01 00:00','created':'2026-01-01 00:00',
                   'checklist':[],'attachments':[]})
 try:
-    app.search_var.set('searchable'); app.update()
-    check('search survives None-field note', True)
+    # The trace only schedules the search; ask for it now, so the note
+    # with None fields is searched before the next lines replace it.
+    app.search_var.set('searchable'); app.refresh_note_list(); app.update()
+    check('search survives a note whose fields are None, and finds it',
+          9991 in app._card_order())
 except Exception as e:
     check(f'search survives None-field note ({e})', False)
 
@@ -11163,7 +11171,6 @@ app.update()
 _tpl_said = []
 _real_info_tpl = app.show_info
 app.show_info = lambda t, m, **k: (_tpl_said.append((t, m)), True)[1]
-_real_ask_tpl = app.ask_text if hasattr(app, 'ask_text') else None
 try:
     app.save_current_as_template()
     app.update()
