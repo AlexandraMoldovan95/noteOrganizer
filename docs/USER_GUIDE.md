@@ -709,8 +709,9 @@ A table in the note is named there (**▦ 1 table**) rather than drawn as rows o
 
 ### Finding & cleaning up duplicates
 
-Settings → **Duplicates** groups notes that match on title, body, comments, category, checklist
-and repeat rule. Case, spacing and a “(copy)” after the title are ignored, and so are the text's
+Settings → **Duplicates** groups notes that match on title, body, comments, category, checklist,
+repeat rule and, for a repeating note, the days it keeps of its own (deleted, edited or moved).
+Case, spacing and a “(copy)” after the title are ignored, and so are the text's
 styling, the date, the colour and the pin — so when one copy is styled differently, look before
 you choose which to keep. Within a
 group, tick specific copies to remove (the rest are kept — nothing forces "keep exactly one"), or
