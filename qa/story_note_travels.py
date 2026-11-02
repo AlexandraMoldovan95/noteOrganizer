@@ -510,7 +510,7 @@ def chapter_2():
         seen["titles"] = _dialog_titles(app)
         _let_it_paint(app)
         _photograph("2-what-it-asks-me-on-import")
-        for label in ("Update this note", "Open it anyway", "Cancel"):
+        for label in ("Update this note", "Add it anyway", "Cancel"):
             if _click_dialog(app, label):
                 seen["answered"] = label
                 return

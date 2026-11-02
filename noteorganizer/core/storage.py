@@ -10,6 +10,7 @@ helper. docs/CODE_TOUR.md walks through it.
 """
 
 import copy
+import filecmp
 import json
 import os
 import re
@@ -316,6 +317,21 @@ def _attachment_path_within(stored_as):
         # which runs unguarded in the startup purge.
         return None
     return candidate
+
+
+def same_attached_file(one, other):
+    """Whether two attachments are one file twice -- the same name shown and
+    the same bytes under two stored names, as Duplicate makes them."""
+    if (one.get("filename") or "") != (other.get("filename") or ""):
+        return False
+    first = _attachment_path_within(one.get("stored_as"))
+    second = _attachment_path_within(other.get("stored_as"))
+    if first is None or second is None:
+        return False
+    try:
+        return filecmp.cmp(first, second, shallow=False)
+    except OSError:
+        return False
 
 
 def copy_attachment_file(stored_as):

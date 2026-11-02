@@ -11896,7 +11896,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     "This note looks identical to one you already have "
                     "(%s)." % SAME_AS,
                     kind="question",
-                    buttons=[("Cancel", "cancel"), ("Open it anyway", "open")]
+                    # "Add": it is saved as a new note at once, as every
+                    # other route that brings in a copy says.
+                    buttons=[("Cancel", "cancel"), ("Add it anyway", "open")]
                 )
                 if choice is None or choice == "cancel":
                     return

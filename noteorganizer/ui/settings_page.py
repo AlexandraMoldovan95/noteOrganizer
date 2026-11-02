@@ -80,6 +80,7 @@ from ..core.storage import (
     save_setting,
     load_settings,
     normalize_template,
+    same_attached_file,
     save_templates,
     save_trash,
 )
@@ -2112,8 +2113,11 @@ class SettingsPageMixin:
                      fg=self.colors["text"], anchor="w").pack(fill="x", padx=10, pady=(8, 2))
 
             hints = []
-            if any(n.get("attachments") for n in group) and \
-               len({bool(n.get("attachments")) for n in group}) > 1:
+            # By the names shown: copies that each hold files, but not the
+            # same ones, got no word that a merge was coming.
+            if len({tuple(sorted(str(a.get("filename") or "")
+                                 for a in (n.get("attachments") or [])))
+                    for n in group}) > 1:
                 hints.append("attachments")
             if hints:
                 tk.Label(box.add(), text=f"↳ differing {' & '.join(hints)} will be merged "
@@ -3681,6 +3685,11 @@ class SettingsPageMixin:
                     if a.get("stored_as") in seen_attach:
                         continue
                     seen_attach.add(a.get("stored_as"))
+                    # Duplicate gave the copy each file again under a new
+                    # name: the kept note holds it already, and merged, it
+                    # listed every file twice (the final audit's wave 3).
+                    if any(same_attached_file(a, k) for k in merged_attach):
+                        continue
                     new_name = copy_attachment_file(a.get("stored_as"))
                     if new_name:
                         merged_attach.append(dict(a, stored_as=new_name))

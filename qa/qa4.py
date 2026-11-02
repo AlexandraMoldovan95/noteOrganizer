@@ -239,6 +239,34 @@ check(f"cleanup-duplicates: the kept copy takes files up to the {NO.MAX_ATTACHME
       f"({len(_cap_kept['attachments'])}, {[len(e.get('attachments') or []) for e in app.trash]})",
       len(_cap_kept['attachments']) == NO.MAX_ATTACHMENTS
       and [len(e.get('attachments') or []) for e in app.trash] == [3])
+# Duplicate gives the copy each file again under a new name: cleaning the
+# copy up gave the kept note every file twice (the final audit's wave 3).
+_mk_att4("2026010100000002_a_photo.jpg", "PHOTO")
+_mk_att4("2026010100000002_b_photo.jpg", "PHOTO")
+_mk_att4("2026010100000002_c_other.txt", "OTHER")
+_mk_att4("2026010100000002_d_photo.jpg", "PHOTX")      # as long, other bytes
+_tw_kept = dict(_kept4, id=14, attachments=[
+    {'filename': 'photo.jpg', 'stored_as': '2026010100000002_a_photo.jpg'}])
+_tw_copy = dict(_removed4, id=15, title='Dup (copy)', attachments=[
+    {'filename': 'photo.jpg', 'stored_as': '2026010100000002_b_photo.jpg'},
+    {'filename': 'photo.jpg', 'stored_as': '2026010100000002_d_photo.jpg'},
+    {'filename': 'other.txt', 'stored_as': '2026010100000002_c_other.txt'}])
+app.notes = [_tw_kept, _tw_copy]
+app.trash = []
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app._cleanup_selected_duplicates(
+        [(_V4(False), _tw_kept, [_tw_kept, _tw_copy]),
+         (_V4(True), _tw_copy, [_tw_kept, _tw_copy])],
+        None, refresh=lambda: None, announce=False)
+finally:
+    app.ask_yes_no = _orig_ask4
+app.update()
+check(f"cleanup-duplicates: a file the kept note already holds is not merged "
+      f"again, a different one is "
+      f"({[a.get('filename') for a in _tw_kept['attachments']]})",
+      [a.get('filename') for a in _tw_kept['attachments']]
+      == ['photo.jpg', 'photo.jpg', 'other.txt'])
 
 # ---- THEME: long-lived borders and hover follow a switch (Z07-F03/F04) ----
 # The 0.66.97 lesson, reaching the instances it missed: a long-lived

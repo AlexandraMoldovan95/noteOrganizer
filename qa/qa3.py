@@ -744,11 +744,18 @@ app.open_blank_tab()
 app.update()
 app.import_box.delete('1.0','end')
 app.import_box.insert('1.0', single_dup_code)
-app.wait_variable = lambda var: click_dialog_button(app, 'Open it anyway')
+app.wait_variable = lambda var: click_dialog_button(app, 'Add it anyway')
+_sd_before = len(app.notes)
 app._do_inline_import()
 app.update()
 check('single-note import allows opening the duplicate anyway if chosen',
       app.title_entry.get() == 'ShareMe')
+# The button says Add, since the note is saved at once: "Open it anyway"
+# read as a look, and a second copy was in the list (the final audit's wave 3).
+app._autosave_now()
+app.update()
+check(f'...and "Add it anyway" adds it, as its word says ({_sd_before} -> {len(app.notes)})',
+      len(app.notes) == _sd_before + 1)
 
 # a genuinely fresh single note still opens directly, no dialog needed
 fresh_single_code = NO.encode_share_code([

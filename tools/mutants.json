@@ -15238,5 +15238,59 @@
       "qa6"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "WS16",
+    "about": "Cleaning up the app's own Duplicate merges each file again under a new name: the kept note lists every file twice",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                    if any(same_attached_file(a, k) for k in merged_attach):\n                        continue\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "cleanup-duplicates: a file the kept note already holds is not merged again"
+    ],
+    "suites": [
+      "qa4"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS18",
+    "about": "The clean-up takes a file of the same name with other bytes for one the kept note holds, and drops it",
+    "edits": [
+      {
+        "file": "noteorganizer/core/storage.py",
+        "find": "        return filecmp.cmp(first, second, shallow=False)\n",
+        "replace": "        return True\n"
+      }
+    ],
+    "must_fail": [
+      "cleanup-duplicates: a file the kept note already holds is not merged again"
+    ],
+    "suites": [
+      "qa4"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS17",
+    "about": "The one-note import's duplicate question calls its Add button Open, though the note is saved at once",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "(\"Add it anyway\", \"open\")",
+        "replace": "(\"Open it anyway\", \"open\")"
+      }
+    ],
+    "must_fail": [
+      "single-note import allows opening the duplicate anyway if chosen"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
   }
 ]
