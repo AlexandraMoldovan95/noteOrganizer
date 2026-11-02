@@ -39,6 +39,7 @@ here; go there when you want the summary.
 - [`noteorganizer/core/model.py`](#noteorganizercoremodelpy)
 - [`noteorganizer/core/welcome.py`](#noteorganizercorewelcomepy)
 - [`noteorganizer/core/diagnostics.py`](#noteorganizercorediagnosticspy)
+- [`noteorganizer/core/single_instance.py`](#noteorganizercoresingle_instancepy)
 - [Where the app starts](#where-the-app-starts)
 
 **Short on time?** Three sections repay a quick read:
@@ -59,7 +60,7 @@ py note_organizer.py
 
 `note_organizer.py` is still the front door. The pure logic has moved into
 the `noteorganizer/` package next to it and is imported back in; the entry
-file itself stays large (~22,000 lines) because it is the UI hub the pieces
+file itself stays large (about 24,000 lines) because it is the UI hub the pieces
 hang off, not a junk drawer of stray logic.
 
 To run every test — units + qa1–qa9 — safely in a scratch copy:
@@ -1228,6 +1229,36 @@ a dated line, the details on one line, then the trace. It never raises —
 it runs where something has already failed — and a crash before the data
 folder is known writes nothing rather than taking the crash window with it,
 which a hand-written writer once did.
+
+---
+
+## `noteorganizer/core/single_instance.py`
+
+**What it's for.** One window per notebook. The app reads the whole
+notebook at start and writes it back whole on every save, so two windows
+on one folder would each hold a copy, and whichever saved last would
+erase what the other wrote.
+
+### A lock the system lets go of
+
+`acquire()` takes an operating-system lock on `.notebook.lock` in the data
+folder (`msvcrt` on Windows, `fcntl` elsewhere, both standard library).
+The system releases it when the process ends, however it ends, so a crash
+never leaves a person locked out of their notes, as a stale PID file
+would. `_main()` takes it after the folder is resolved and before
+`initialise()` runs the migrations; refused, it shows the system's own
+"Note Organizer is already open" box (there is no app window yet) and
+stops.
+
+### Failing open, on purpose
+
+Only the answers that mean "another process holds it" refuse the start. A
+folder that cannot hold the lock file, or a filesystem that cannot lock at
+all (network shares answer with other errors), lets the app open: an app
+that will not start is a worse failure than the accident the lock guards
+against. A first version read every error as "already open" and left the
+app unable to start on such folders. A second window inside the same
+process — the qa suite builds several — counts as the owner.
 
 ---
 

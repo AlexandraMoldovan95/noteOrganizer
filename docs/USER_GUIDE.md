@@ -64,6 +64,10 @@ does with your data and where its privacy policy is. Delete it whenever you like
 Trash like any other note — and **Settings → About** brings it back if you want it again. It only
 greets a brand-new notebook: an update, or a notebook you have emptied, never gets one.
 
+The app opens one window at a time. Starting it again while it is open — a second click on its
+icon — says **Note Organizer is already open** and opens nothing: two windows would each keep
+their own copy of your notes, and whichever saved last would overwrite the other's work.
+
 The window can be made as small as 640 by 600 pixels. While you drag its edge, the page inside
 keeps its size — cut off at the edge, or with an empty strip beside it — and settles to fit the
 moment you pause or let go, so the edge keeps up with the mouse
@@ -700,7 +704,8 @@ A table in the note is named there (**▦ 1 table**) rather than drawn as rows o
 
 ### Finding & cleaning up duplicates
 
-Settings → **Duplicates** groups notes that match on title, body, comments, and category. Within a
+Settings → **Duplicates** groups notes that match on title, body, comments, category, checklist
+and repeat rule. Within a
 group, tick specific copies to remove (the rest are kept — nothing forces "keep exactly one"), or
 use **Clean up ALL groups** to apply "keep the first, remove the rest" across every group in one
 click.
@@ -1206,10 +1211,12 @@ itself never connects to the internet — it only opens the page.
 what leaves your computer — only what you send. If the browser cannot be opened, the link is
 copied instead, ready to paste into one.
 
-If the app ever hits an error, it writes what went wrong to `crash_log.txt` beside your notes,
-headed by the app's version, your Windows version, the screen scale and Sharp text, the theme,
-and how big your notebook is. **Nothing from your notes goes in** — no titles, no text, no file
-names, no folders — and the log never leaves your computer unless you send it to someone.
+If the app ever hits an error, it writes what went wrong to `crash_log.txt` beside your notes.
+Each entry opens with one line of facts — the app's version, your Windows version, the screen
+scale and Sharp text, the theme, and how big your notebook is — and nothing from your notes.
+Below that line is the technical trace, and it can name a file or a folder (your user name with
+it) or quote a few words the app was working on: **look it over before you send it to anyone**.
+The log never leaves your computer unless you send it.
 
 ---
 

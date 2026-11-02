@@ -34,7 +34,7 @@ nothing — `core/diagnostics.py`.)
   app was a single file by design for most of its life; it now lives as a
   `core/` layer (data and rules; **must never import tkinter**) and a `ui/`
   layer of mixin classes — eighteen `core/` modules and seven `ui/` mixins —
-  with `note_organizer.py` (~22,000 lines) remaining the entry point and
+  with `note_organizer.py` (about 24,000 lines) remaining the entry point and
   the genuinely shared UI hub, by measurement rather than by neglect (see
   `docs/ARCHITECTURE.md`'s call-graph case study for why the split stopped
   where it did, and why the note list moved later, once re-measured). The
@@ -60,9 +60,10 @@ nothing — `core/diagnostics.py`.)
   both deliberate: **choosing a file or folder** (`filedialog`, five call
   sites — save an export, open a backup `.zip`, pick a folder, attach
   files), because the OS chooser knows the user's drives and recent places
-  and a hand-built one would be worse; and **the app failing to start**
-  (the last-resort startup-crash dialog, and "Missing dependency" when
-  Pillow is not installed). This line used to say "no native OS dialogs anywhere except the
+  and a hand-built one would be worse; and **the app not starting**
+  (the last-resort startup-crash dialog, "Missing dependency" when
+  Pillow is not installed, and "Note Organizer is already open" when a
+  second launch finds its notebook in use). This line used to say "no native OS dialogs anywhere except the
   startup-crash dialog", which was wrong about the code while the code was
   right. Two different, deliberate theming patterns exist
   (`track_theme()` for persistent widgets vs. plain `.configure()` for
@@ -367,7 +368,9 @@ hand. A runaway test once took 43 GB and the owner's desktop with it
 Instead (by hand): copy `note_organizer.py`, the `noteorganizer/` package,
 `qa/_qa_support.py`, `tools/guest.py` and the target test script into a
 scratch directory **outside the project tree entirely** (e.g. the
-session's own scratchpad folder), and run and clean up there. This makes
+session's own scratchpad folder), set `NOTEORG_SCRATCH=1` in that shell —
+it declares the folder a throwaway, and every suite refuses to start
+without it — and run and clean up there. This makes
 it physically impossible for a wrong-directory mistake to reach real user
 data, rather than relying on correctly remembering the working directory
 every single time. The suite settles itself there as a runner would — the

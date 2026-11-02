@@ -73,10 +73,10 @@ that have moved, so existing callers — including the over 1,100 `note_organize
 references across the QA scripts — keep working untouched. That's deliberate: it means each extraction is
 a pure move that leaves the whole test suite green, rather than a rewrite.
 
-What remains in the file is ~22,000 lines of genuinely shared surface. It grew again through
-the rich-text and tables work even as the pure logic behind those features went into `core/`,
-and dropped by ~2,700 when the note list moved to `ui/note_list.py` (see the
-[case study](#the-list-measured-again)).
+What remains in the file is genuinely shared surface: about 24,400 lines on 2 November 2026. It
+grew through the rich-text and tables work even as the pure logic behind those features went
+into `core/`, dropped from ~22,400 to ~19,700 when the note list moved to `ui/note_list.py` (see
+the [case study](#the-list-measured-again)), and has grown again since.
 
 ### How it got here
 
@@ -351,7 +351,8 @@ The system's own dialogs appear in exactly two situations, both deliberate. Choo
 folder — saving an export, opening a backup, picking a folder, attaching files — uses
 `filedialog`, because the system's chooser knows the person's drives and recent places and a
 hand-built one would be worse. And when the app cannot start — the last-resort startup-crash
-dialog, and the "Missing dependency" one shown when Pillow is not installed — it uses the plain
+dialog, the "Missing dependency" one shown when Pillow is not installed, and "Note Organizer is
+already open" when a second launch finds its notebook in use — it uses the plain
 standard-library messagebox, precisely because that must not depend on the app's own UI having
 come up (see [ISSUES_LOG.md](ISSUES_LOG.md#a-crash-handler-that-would-have-crashed-itself)). This
 heading used to read "No native dialogs, anywhere", which was wrong about the first while the
@@ -1673,8 +1674,8 @@ imported — earlier than it must, since the data migrations run in `initialise(
 constructing the app calls ([Startup](#startup)) — and writes an empty `notes_data.json` and the
 migration marker, so a test's empty folder cannot invite the first-run migration to adopt the
 developer's real notebook from `%APPDATA%`. And it fails closed: it refuses to run unless a scratch run was
-declared (`NOTEORG_SCRATCH=1`, set only by `tools/run_tests.py`, `tools/run_coverage.py` and the
-CI workflow), and beside
+declared (`NOTEORG_SCRATCH=1`, set by the runners — `tools/run_tests.py`, `tools/run_coverage.py`,
+`tools/check_guest.py` — by the CI workflow, or by hand in a scratch copy), and beside
 any `notes_data.json` it cannot prove empty — one that holds notes, or one it cannot read. The
 copies it replaced read an unreadable notebook as empty and overwrote it.
 
