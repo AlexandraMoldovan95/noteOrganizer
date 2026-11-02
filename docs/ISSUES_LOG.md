@@ -223,6 +223,7 @@ is in the table below as well.
 | [Round twenty-three: the day the editor stayed on](#round-twenty-three-the-day-the-editor-stayed-on) | A guard written for one way a day stops being drawn is a question about every way: ask whether the day is drawn, not why it might not be. | next |
 | [The lows wave: a fuzz that never took the road it guarded](#the-lows-wave-a-fuzz-that-never-took-the-road-it-guarded) | A random test proves only the roads it takes: count that it reaches the branch it guards, and take that branch's fix out to watch it fail alone. | next |
 | [The lows wave's own rounds: a day's lists, read by line](#the-lows-waves-own-rounds-a-days-lists-read-by-line) | What a copy can change, the copy keeps; structure borrowed by line number holds only until the first line moves. | next |
+| [The lows wave's last rounds: a paste meeting a list, one road at a time](#the-lows-waves-last-rounds-a-paste-meeting-a-list-one-road-at-a-time) | When each fix of a rule leaves the case beside it, write the rule down and test its whole matrix on both apps at once; a fix by road is a fix of one cell. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -3753,6 +3754,46 @@ lines once, at this build's first read, would close it.
 
 **Takeaway:** what a copy can change, the copy keeps; structure borrowed by line number holds only
 until the first line moves.
+
+### The lows wave's last rounds: a paste meeting a list, one road at a time
+
+*(2026-11-01 to 2026-11-02 · the verification rounds 5 to 11 of the owner's lows wave)*
+
+**Symptom:** each round sent one agent at the last fix by name, and each found the next case of
+one class: what a copy carries and where a paste puts it, at a list. A whole line copied with its
+break carried the next line's looks; a copy begun at a line's end, the line it began on. Ctrl+X
+wrote the words alone, so an item moved by cut and paste lost its level, bold and centring. A
+whole item pasted over another kept the covered marker, "2. 3. three": over a selection ending at
+the next item, then over the last item, then with nothing selected in a new empty item, "3. 1.
+Kiwi". A Word paragraph's line break, which the rich route drops, took the next item's with it. A
+line's depth was whichever margin tag Tk had made first that session. A word copied out of a
+nested item set the level of the item it went into.
+
+**Mechanism:** two rules were never written down, so each road answered for itself: what of a
+line's looks a copy holds, and what a paste bringing its own marker does at an item's marker. Each
+fix covered the road it was found on, and the next round found the branch beside it -- twice a
+branch the fix itself had opened: a paste read off the clipboard's plain text while the rich
+route put in something else, and a copy's entry made a line's one margin.
+
+**Fix:** the rules as they now stand, on both apps. A line's looks travel with its start: a copy
+holds the looks only of lines it has from their start -- not the line after a final break, not
+the line it began inside. Ctrl+X writes what Ctrl+C writes. A paste over a list deletes as typing
+over it would, except that what the paste brings counts: its own marker takes the covered one's
+place when the selection begins at an item's marker, its own line break the covered break's --
+read from what the paste will really put in, and nothing changes when the clipboard holds no
+text. With nothing selected at an item's marker end, the item keeps its marker, kind and depth,
+and the paste's own marker goes, as Word keeps a paragraph's list when a paste brings no paragraph
+mark. A line has one margin. Round 9 gave each agent the rule written out and asked for its whole
+matrix -- the phone's agent replayed 84,138 cases, and the two apps' deletion rules agreed on all
+6,146 compared -- rather than one road; rounds 10 and 11 found one more case between them, then
+none. DR208-DR226.
+
+**Known, recorded:** a copy begun at a line's start still gives its looks to the line it is
+pasted into after words; a list copied from its first item's words reaches Word with that item as
+a plain paragraph, which is the owner's call.
+
+**Takeaway:** when each fix of a rule leaves the case beside it, write the rule down and test its
+whole matrix on both apps at once; a fix by road is a fix of one cell.
 
 ## Tk & platform gotchas
 

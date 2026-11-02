@@ -260,7 +260,11 @@ included, and a copy from Google Docs bold only where the document is.
   formatting** entry on the right-click menu too.
 - Copying works the same way outwards: select part of a note, copy it, and paste it into an email
   or a document, and it arrives still formatted, its font sizes and typefaces included. Copying
-  between two notes keeps everything.
+  between two notes keeps everything, and so does moving text with **Ctrl+X** and **Ctrl+V**.
+- A line's centring and list level go with the line's start: copy a line from its start and they
+  come along; copy a word from its middle and only the word does. A copied item pasted right
+  after an item's number — where Enter in a list leaves you — fills that item: it keeps its
+  number and its level. Pasted over a whole item, it takes that item's place.
 - A paste keeps up to **100,000 characters**, and a formatted one up to **2,000 styled pieces** (a
   bold word, a coloured line). Past either, a message says what was left out. A note longer than
   that is slow to edit, so paste the rest of a very long text into a note of its own. The limit is
