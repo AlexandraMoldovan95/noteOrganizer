@@ -463,10 +463,8 @@ role, and how they were chosen, is in
 
 Nothing in the app ever asks *"which theme is this?"* before picking a
 colour. It asks for `colors["card"]` and gets whatever that means right
-now. **Adding a ninth theme means one dict in `THEMES`, its name in
-`DARK_THEMES` or `LIGHT_THEMES` (the Settings picker and the contrast gate
-read those), and its label in `THEME_LABELS` — all in this module, and
-nothing elsewhere.**
+now. Adding a ninth theme is a dict, two lists, an icon and a table;
+the recipe is in the module's own docstring, its one home.
 
 That uniformity also enables the theme-switch safety net: because every
 palette is known, the app can spot a widget still holding a colour from a
