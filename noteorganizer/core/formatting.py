@@ -534,7 +534,7 @@ def tag_to_spans(tag, start, end):
     return spans
 
 
-def is_format_tag(name):
+def is_format_tag(name, fonts=True):
     """True for a Tk tag that carries CHARACTER formatting.
 
     A plain style, a colour (``text_color_``/``highlight_`` and a valid
@@ -542,7 +542,8 @@ def is_format_tag(name):
     the note's spans. The one answer for code that has to move or restore
     formatting tag by tag instead of through the span list; a tag list
     written out by hand at each such place is how a new kind of tag gets
-    carried by one of them and silently dropped by the next.
+    carried by one of them and silently dropped by the next. *fonts*
+    False leaves the composite fonts out, for code that fits them apart.
     """
     if not isinstance(name, str):
         return False
@@ -552,7 +553,7 @@ def is_format_tag(name):
         prefix = style + "_"
         if name.startswith(prefix):
             return _is_valid_hex_color("#" + name[len(prefix):])
-    return parse_font_tag(name) is not None
+    return fonts and parse_font_tag(name) is not None
 
 
 # ---- Bullet and numbered lists ----
@@ -566,7 +567,8 @@ def is_format_tag(name):
 #
 # ``paragraphs`` on a note records line-level formatting -- what a whole line
 # looks like, as opposed to the characters inside it, which ``formatting``
-# covers. Today that means which lines are list items:
+# covers: which lines are list items and how deep, a line's alignment, and
+# where a table sits on the page. A list line reads:
 #
 #     [{"line": 0, "kind": "bullet"}, {"line": 1, "kind": "number"}]
 #

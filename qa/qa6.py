@@ -4183,7 +4183,7 @@ if sys.platform.startswith('win') and _sp_win.languages():
     check(f"Windows' own dictionary is reached and finds a misspelling where it is "
           f"({[s.tag for s in _sp_real]}; {_sp_found})", _sp_found == [(2, 7)])
 elif sys.platform.startswith('win'):
-    print("INFO this Windows has no spelling dictionary; the real one is asked on a machine that does")
+    print("SKIP Windows' own dictionary: this Windows has none; the real one is asked on a machine that does")
 else:
     check('off Windows there is no dictionary to reach, and nothing is underlined '
           'with the real one', not _sp_win.available() and _sp_win.languages() == [])

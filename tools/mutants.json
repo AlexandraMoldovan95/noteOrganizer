@@ -15021,5 +15021,41 @@
       "test_data_safety"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "WS04",
+    "about": "Reset on a moved day with its own text: Enter presses 'The date and the text' and discards the text for good",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                    default=\"Only the date\")\n",
+        "replace": "                    )\n"
+      }
+    ],
+    "must_fail": [
+      "...and Enter there keeps the text: \"Only the date\" holds the focus, since the other answer cannot be taken back"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS05",
+    "about": "a table's caption keeps a size its last line wore: the scrub lists the formatting by hand, fonts left out",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if is_format_tag(tag) or tag.startswith(\"align_\"):\n",
+        "replace": "            if is_format_tag(tag, fonts=False) or tag.startswith(\"align_\"):\n"
+      }
+    ],
+    "must_fail": [
+      "...and of an inherited size: the caption starts at the default font"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
   }
 ]

@@ -7,8 +7,8 @@ having drifted from the suite through three audit rounds without anyone
 re-running it.
 
 Bold ownership is not a judgement here: a file is a heavy owner when it
-carries a clear majority of the mentions, which is the same rule the
-original table describes.
+carries at least a quarter of a surface's mentions, or leads the next one
+by more than double -- the rule qa/README states under the table.
 """
 import glob
 import os

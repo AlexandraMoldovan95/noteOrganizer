@@ -3689,11 +3689,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         s_idx, e_idx = idx(start), idx(end)
         if b.compare(s_idx, ">=", e_idx):
             return
-        for tag in ("bold", "italic", "bold_italic", "underline", "strike"):
-            b.tag_remove(tag, s_idx, e_idx)
         for tag in b.tag_names():
-            if (tag.startswith("text_color_")
-                    or tag.startswith("highlight_")):
+            if is_format_tag(tag, fonts=False):
                 b.tag_remove(tag, s_idx, e_idx)
         i = 0
         while i < len(raw_styles):
@@ -3863,11 +3860,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _editor_paint_range(self, t, s, e, st):
         """One uniform style over [s, e) in the editor -- the modeled
         tags are cleared first, so the range wears exactly *st*."""
-        for tag in ("bold", "italic", "bold_italic", "underline", "strike"):
-            t.tag_remove(tag, s, e)
         for tag in list(t.tag_names()):
-            if (tag.startswith("text_color_")
-                    or tag.startswith("highlight_")):
+            if is_format_tag(tag, fonts=False):
                 t.tag_remove(tag, s, e)
         if st["bold"] and st["italic"]:
             t.tag_add("bold_italic", s, e)
@@ -5413,10 +5407,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if not b.compare(start, "<", stop):
                 return
             for tag in b.tag_names(prev):
-                if (tag in ("bold", "italic", "bold_italic", "underline",
-                            "strike")
-                        or tag.startswith("text_color_")
-                        or tag.startswith("highlight_")):
+                if is_format_tag(tag, fonts=False):
                     b.tag_add(tag, start, stop)
             # ...its size and font too, drawn with the weight they now wear.
             self._fit_font_tags(start, stop, like=prev)
@@ -6487,10 +6478,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # highlight, full-width bars included). The caption starts from
         # zero, always.
         for tag in b.tag_names():
-            if (tag.startswith("highlight_") or tag.startswith("text_color_")
-                    or tag in ("bold", "italic", "bold_italic",
-                               "underline", "strike")
-                    or tag.startswith("align_")):
+            if is_format_tag(tag) or tag.startswith("align_"):
                 b.tag_remove(tag, f"{cap_line}.0", f"{cap_line + 2}.0")
         # Both lines follow the TABLE's own place on the page -- a left
         # table gets a left caption, a centred one a centred pair
@@ -14836,34 +14824,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             padding=[("selected", self.TAB_PADDING_SELECTED)],
         )
 
-        # --- Subtle sidebar comboboxes (sort + filter) ---
-        # Blend between sidebar and card so they read as recessed, not as a
-        # hard box shouting for attention. This is the "translucent" look:
-        # the control sits just barely above its background.
-        blended = self._blend(c["sidebar"], c["card"], 0.5)
-        style.configure(
-            "Subtle.TCombobox",
-            fieldbackground=blended,
-            background=blended,
-            foreground=c["subtext"],          # muted text = less "in your face"
-            arrowcolor=c["subtext"],
-            bordercolor=c["sidebar"],
-            lightcolor=blended,
-            darkcolor=blended,
-            borderwidth=0,
-            relief="flat",
-            padding=(6, 3),
-        )
-        style.map(
-            "Subtle.TCombobox",
-            # On hover/focus it "wakes up": accent arrow, brighter text.
-            fieldbackground=[("readonly", blended), ("focus", c["card"]),
-                             ("active", c["card"])],
-            foreground=[("focus", c["text"]), ("active", c["text"])],
-            arrowcolor=[("focus", c["accent"]), ("active", c["accent"])],
-            bordercolor=[("focus", c["accent"])],
-        )
-
         # --- Scrollbars (every ttk.Scrollbar in the app uses these default
         # style names, so styling them here re-themes all of them at once). ---
         for orient in ("Vertical", "Horizontal"):
@@ -14884,44 +14844,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 arrowcolor=[("active", self._on_fill("accent")),
                             ("pressed", self._on_fill("accent"))],
             )
-
-        # The dropdown popup list isn't a themeable ttk element — it's a Tk
-        # Listbox reached only through the option database.
-        # The dropdown popup list isn't a themeable ttk element — it's a Tk
-        # Listbox reached only through the option database. Priority 80
-        # (interactive) forces these to override the values cached from an
-        # earlier theme, so the popup recolors when the user toggles themes.
-        self.option_add("*TCombobox*Listbox.background", c["card"], 80)
-        self.option_add("*TCombobox*Listbox.foreground", c["text"], 80)
-        self.option_add("*TCombobox*Listbox.selectBackground", c["accent"], 80)
-        self.option_add("*TCombobox*Listbox.selectForeground",
-                        self._on_fill("accent"), 80)
-        self.option_add("*TCombobox*Listbox.font", "{Segoe UI} 9", 80)
-        self.option_add("*TCombobox*Listbox.borderWidth", 0, 80)
-
-        # option_add only affects popups created AFTER it runs. A combobox
-        # whose popup already exists (because the user opened it once) keeps
-        # its old colors, so recolor those existing popup listboxes directly.
-        self._recolor_existing_combo_popups()
-
-    def _recolor_existing_combo_popups(self):
-        """Find any already-created ttk.Combobox popdown listboxes and recolor
-        them to the current theme. The popup lives at .popdown.f.l under the
-        combobox in Tk's widget tree."""
-        c = self.colors
-        for combo in getattr(self, "_styled_combos", []):
-            try:
-                popdown = combo.tk.call("ttk::combobox::PopdownWindow", combo)
-                listbox = f"{popdown}.f.l"
-                combo.tk.call(listbox, "configure", "-background", c["card"])
-                combo.tk.call(listbox, "configure", "-foreground", c["text"])
-                combo.tk.call(listbox, "configure", "-selectbackground", c["accent"])
-                combo.tk.call(listbox, "configure", "-selectforeground",
-                              self._on_fill("accent"))
-            except tk.TclError:
-                # Popup not created yet (user never opened this combo) — the
-                # option_add defaults will handle it on first open.
-                pass
 
     @staticmethod
     def _blend(hex_a, hex_b, t):
@@ -19541,7 +19463,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # vetoed it, and the tick never reached disk.
             #
             # Formatting and paragraphs stay OUT, for the reason above:
-            # an override is plain text, so load_note only re-applies the
+            # an override is plain text and its own list lines (compared
+            # just above, by list_lines), so load_note only re-applies the
             # base's spans when the shown body equals the base's, and
             # comparing them made an overridden occurrence read as dirty
             # forever.
@@ -21379,7 +21302,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     "back to the series' content as well, or stay as it is.",
                     kind="question",
                     buttons=[("Cancel", None), ("Only the date", "date"),
-                             ("The date and the text", "text")])
+                             ("The date and the text", "text")],
+                    # Enter keeps the day's own text: the other answer
+                    # discards it with no way back.
+                    default="Only the date")
             else:
                 choice = "date" if self.ask_yes_no(
                     "Reset this day", f"Put this day back on {back}?") else None

@@ -2,8 +2,9 @@
 
 WHAT THIS MODULE IS FOR
 -----------------------
-Pure data: no logic, no file access, nothing that can fail. Everything the
-app needs to know about how it should *look*, in one place.
+Data, and the arithmetic of colour it is judged by (blends, contrast): no
+file access, nothing that can fail. Everything the app needs to know about
+how it should *look*, in one place.
 
 * :data:`THEMES` — eight palettes (four dark, four light). Each maps the
   same set of role names (``bg``, ``card``, ``text``, ``accent``...) to a
@@ -25,7 +26,9 @@ WHY THEMES ARE SHAPED THIS WAY
 Every theme defines exactly the same keys. Nothing in the app asks "which
 theme is this?" before choosing a colour — it asks for ``colors["card"]``
 and gets whatever that means in the current theme. Adding a ninth theme
-means adding one dict here and nothing else.
+means one dict in THEMES, its name in DARK_THEMES or LIGHT_THEMES (the
+Settings picker and tools/check_contrast.py read those), and its label in
+THEME_LABELS -- all here, and nothing elsewhere.
 
 That uniformity is also what makes the theme-switch safety net possible:
 because the palettes are known, the app can spot a widget still holding a
@@ -51,9 +54,8 @@ in `docs/ARCHITECTURE.md`.
 NOTE ON WHAT IS *NOT* HERE
 --------------------------
 The live, mutable category map (``CATEGORY_COLORS``) and the functions
-that load and save it are still in ``note_organizer.py``: they read and
-write ``settings.json``, so they belong with the storage layer, which
-hasn't been extracted yet. Only the immutable defaults live here.
+that load and save it are in ``core/categories.py``. Only the immutable
+defaults live here.
 """
 
 import colorsys

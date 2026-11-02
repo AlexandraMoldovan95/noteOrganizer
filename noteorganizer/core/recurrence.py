@@ -15,13 +15,14 @@ since 1990 is still one entry on disk. If occurrences were saved instead,
 the file would grow without limit and "edit the series" would mean
 rewriting thousands of records.
 
-Four fields on a note describe the whole thing:
+Five fields on a note describe the whole thing:
 
 ===================== ======================================================
 ``note["date"]``      the series anchor — the day it starts
 ``note["recurrence"]``the rule (see :data:`RECURRENCE_DEFAULTS`)
 ``note["exceptions"]``dates the user deleted individually
 ``note["overrides"]`` per-date content edits, keyed by date string
+``note["moved"]``     a day the rule gives -> the date it is held on instead
 ===================== ======================================================
 
 WHAT'S EXPORTED

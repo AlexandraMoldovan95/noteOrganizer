@@ -6987,9 +6987,11 @@ _sbW1 = app.sidebar.winfo_width()
 # fallback font at size 7 is far wider (407px measured), which says
 # nothing about the shipped product -- same reasoning as ISSUES_LOG's
 # "The pixel-perfect test that only worked on Windows".
-check('the bulk action bar fits the fixed sidebar '
-      '(%dpx of %dpx; asserted on Windows only)' % (_barW1, _sbW1),
-      _barW1 <= _sbW1 - 8 or sys.platform != 'win32')
+if sys.platform == 'win32':
+    check('the bulk action bar fits the fixed sidebar (%dpx of %dpx)' % (_barW1, _sbW1),
+          _barW1 <= _sbW1 - 8)
+else:
+    print('SKIP the bulk action bar fits the fixed sidebar: Windows metrics only')
 app._toggle_selection_mode()
 app.update()
 app.notes = _savedNotesX
@@ -7931,6 +7933,10 @@ _iL = app._grid_at_line(1)
 # table's last line wears a highlight -- the caption comes out CLEAN.
 app._ensure_color_tag(app.body_text, 'highlight', '#c8b8a8')
 app.body_text.tag_add('highlight_c8b8a8', '3.0', '4.0')
+# ...and a size, the one kind of formatting the caption's scrub once
+# listed by hand without (it asks is_format_tag now).
+_capFont = NO.core_font_tag_for(False, False, 16, None)
+app.body_text.tag_add(_capFont, '3.0', '4.0')
 app._grid_add_caption(_iL)
 app.update()
 _linesL = app.body_text.get('1.0', 'end-1c').split(chr(10))
@@ -7949,6 +7955,9 @@ check('and the caption is scrubbed clean of inherited styling '
                if t.startswith('highlight')]
       and not [t for t in app.body_text.tag_names('5.2')
                if t.startswith('highlight')])
+check('...and of an inherited size: the caption starts at the default font',
+      _capFont not in app.body_text.tag_names('4.2')
+      and _capFont not in app.body_text.tag_names('5.2'))
 app.body_text.insert('end', chr(10) + '| x | y |' + chr(10)
                      + '| --- | --- |' + chr(10) + '| 3 | 4 |')
 app._resync_list_tags()

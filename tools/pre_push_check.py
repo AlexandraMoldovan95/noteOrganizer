@@ -9,8 +9,8 @@ the first thing to notice was CI -- twenty minutes and one push later.
 
 CI's first step runs cheap, purely-static gates. There was never a
 reason to discover their verdict remotely; this script is those same
-gates, in the same order, on the machine where the fix is one keystroke
-away. It complements ``run_tests.py`` (the full suite in a safe scratch
+gates, in CI's order, plus the link check CI leaves out and a compile
+pass, on the machine where the fix is one keystroke away. It complements ``run_tests.py`` (the full suite in a safe scratch
 folder, minutes) -- this is the two-second half you run before EVERY
 push, that one is the real verdict you run before asking for one.
 
@@ -54,8 +54,8 @@ USAGE
     py tools/pre_push_check.py
 
 Exits non-zero on the first failing gate, so it can sit in front of any
-push ritual. Read-only: nothing here writes, so there is nothing it can
-break.
+push ritual. It writes nothing in the repository (check_guest proves the
+machine's guards with stand-in folders in the temporary folder, removed).
 """
 
 import os

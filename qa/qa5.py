@@ -4763,14 +4763,19 @@ check("a moved day offers its Reset in the day itself, beside Move this day",
       and _mv_row.index(app.day_move_btn) + 1 == _mv_row.index(app.day_reset_btn))
 _mv_q = []
 app._themed_dialog = lambda title, message, *a, **k: (
-    _mv_q.append((title, [b for b, _v in k.get('buttons', [])])), 'date')[1]
+    _mv_q.append((title, [b for b, _v in k.get('buttons', [])],
+                  app._dialog_focus_index(k.get('buttons', []), k.get('default')))),
+    'date')[1]
 app.day_reset_btn.invoke(); app.update()
 _dm_record()
 _mv_s = app.find_note(1)
 check(f'Reset on a moved day with text of its own asks: only the date, or the date '
       f'and the text ({_mv_q})',
-      _mv_q[:1] == [('Reset this day',
-                     ['Cancel', 'Only the date', 'The date and the text'])])
+      [q[:2] for q in _mv_q[:1]] == [('Reset this day',
+                                      ['Cancel', 'Only the date', 'The date and the text'])])
+check('...and Enter there keeps the text: "Only the date" holds the focus, '
+      'since the other answer cannot be taken back',
+      _mv_q[:1] and _mv_q[0][2] == 1)
 check('..."Only the date" puts the day back and keeps its text',
       _mv_s['moved'] == {}
       and (_mv_s.get('overrides') or {}).get('2026-10-12', {}).get('body')
