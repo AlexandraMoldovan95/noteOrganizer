@@ -15057,5 +15057,41 @@
       "qa1"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "WS06",
+    "about": "Use template, unable to tell whether the editor holds typing, replaces it without asking",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                self._log_swallowed(\"template: blank editor\")\n                has_content = True\n",
+        "replace": "                has_content = False\n"
+      }
+    ],
+    "must_fail": [
+      "a template asks before replacing an editor it cannot read, and No keeps it"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS07",
+    "about": "Ctrl+Tab and Ctrl+Shift+Tab are taken by the body's own Tab bindings: a list line indents, prose keeps the focus",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if getattr(event, \"state\", 0) & 0x4:      # Control held\n",
+        "replace": "        if False:\n"
+      }
+    ],
+    "must_fail": [
+      "...<Control-Shift-Tab> from a list line leaves for the control before it, the line as it was"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
   }
 ]

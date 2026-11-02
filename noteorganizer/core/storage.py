@@ -1,12 +1,12 @@
 """Reading and writing the app's data files.
 
-Everything that touches settings.json, templates.json and trash.json, and
-the copy of the notes file made before it is rewritten. The locations are
-read from :mod:`.paths` when a function runs, never copied at import time,
-when they are not yet known. Every loader returns something usable
-whatever it finds -- a missing, unreadable or wrongly shaped file gives an
-empty default, after the unreadable bytes are kept aside -- and every
-writer goes through one atomic helper. docs/CODE_TOUR.md walks through it.
+Everything that reads or writes notes_data.json, settings.json,
+templates.json and trash.json, the Trash's purge among it, and the copy of
+the notes file made before it is rewritten. Locations are read from
+:mod:`.paths` when a function runs, never at import. Every loader returns
+something usable whatever it finds -- an unreadable file gives an empty
+default, its bytes kept aside -- and every writer goes through one atomic
+helper. docs/CODE_TOUR.md walks through it.
 """
 
 import copy

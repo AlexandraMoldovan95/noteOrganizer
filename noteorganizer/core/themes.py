@@ -31,7 +31,10 @@ DARK_THEMES or LIGHT_THEMES, which the Settings picker, the title bar and
 tools/check_contrast.py read; its label in THEME_LABELS; then
 ``py tools/make_icon.py --all`` if its accent is new (the window icon is
 named by the accent), and ``py tools/check_contrast.py --markdown`` pasted
-over ARCHITECTURE's contrast table -- the gate fails until both are done.
+over ARCHITECTURE's contrast table -- the gate fails until both are done;
+and the same theme in the phone's Themes.kt (its THEMES, dark or light
+list and label), which the phone's tools/check_palettes.py holds to this
+file.
 
 That uniformity is also what makes the theme-switch safety net possible:
 because the palettes are known, the app can spot a widget still holding a

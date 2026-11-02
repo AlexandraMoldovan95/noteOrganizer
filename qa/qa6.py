@@ -4916,6 +4916,30 @@ except (KeyError, tk.TclError):
     pass
 check(f'...and Ctrl+Tab does leave the note, for the control after it ({_kw_held})',
       _kw_held is _kw_next and app.body_text.get('1.0', 'end-1c') == '')
+# The body's own Tab and Shift+Tab matched a Control-held press first: on a
+# list line Ctrl+Tab indented and Ctrl+Shift+Tab outdented, and in prose
+# Ctrl+Shift+Tab did nothing at all.
+app.new_note()
+_kv_settle()
+app.body_text.insert('1.0', '• milk')
+_kw_prev = app.body_text.tk_focusPrev()
+_kw_next = app.body_text.tk_focusNext()
+_kw_paras = app.capture_editor_state().get('paragraphs')
+for _kw_key, _kw_want, _kw_way in (('<Control-Shift-Tab>', _kw_prev, 'before'),
+                                   ('<Control-Tab>', _kw_next, 'after')):
+    _kw_got = None
+    if _take_focus(app.body_text):
+        app.body_text.mark_set('insert', '1.end')
+        app.body_text.event_generate(_kw_key)
+        _kv_settle()
+        try:
+            _kw_got = app.nametowidget(str(app.tk.call('focus', '-lastfor', app)))
+        except (KeyError, tk.TclError):
+            pass
+    check(f'...{_kw_key} from a list line leaves for the control {_kw_way} it, '
+          f'the line as it was ({_kw_got})',
+          _kw_got is _kw_want and app.body_text.get('1.0', 'end-1c') == '• milk'
+          and app.capture_editor_state().get('paragraphs') == _kw_paras)
 # Text size makes the notes bigger, not the rest of the app: its words say so.
 def _walk_all(w):
     for c in w.winfo_children():

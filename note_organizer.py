@@ -9413,8 +9413,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         Only inside one or the other: in ordinary prose Tab should still type
         a tab, which is what returning None leaves Tk to do. Shift+Tab always
         stops here, since its default is to move focus out of the editor
-        mid-sentence.
+        mid-sentence. Ctrl+Tab and Ctrl+Shift+Tab leave the note, as the
+        shortcuts page says: Tk matches them to these Tab bindings before
+        its own, so they are answered here, in a list or a table too.
         """
+        if getattr(event, "state", 0) & 0x4:      # Control held
+            target = (self.body_text.tk_focusNext() if delta > 0
+                      else self.body_text.tk_focusPrev())
+            if target is not None:
+                target.focus_set()
+            return "break"
         if self._tab_in_table(delta):
             return "break"
         first, last = self._selected_line_range()
@@ -14795,9 +14803,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.style_ttk()
 
     def style_ttk(self):
-        """Theme the ttk widgets the app uses -- the notebook tabs and the
-        scrollbars -- so they follow the theme. ttk widgets ignore normal
-        bg/fg, so this goes through ttk.Style."""
+        """Theme the notebook tabs and the scrollbars, two of the three ttk
+        widgets the app uses, so they follow the theme; ttk widgets ignore
+        normal bg/fg, so this goes through ttk.Style. The third, the export
+        and import progress bar, keeps the clam theme's own colours."""
         style = ttk.Style()
         try:
             style.theme_use("clam")
@@ -21460,8 +21469,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # or an item in the Add box also earn the "replace?" question:
                 # the Add box alone was dropped unasked (round 6).
                 has_content = self._editor_holds_typing()
-            except Exception:
-                has_content = False
+            except Exception:  # noqa: BLE001 -- not knowing asks, never replaces
+                self._log_swallowed("template: blank editor")
+                has_content = True
 
         if has_content:
             if not self.ask_yes_no(

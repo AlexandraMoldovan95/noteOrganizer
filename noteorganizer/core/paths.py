@@ -16,8 +16,10 @@ Importing the app is now inert too.
 
 TWO SITUATIONS, HANDLED DIFFERENTLY
 -----------------------------------
-* **Run as a .py script (development)** - data sits beside the script, so
-  ``notes_data.json`` is right there in the project folder.
+* **Run as a .py script (development)** - data sits beside the script, or
+  in the folder a git-ignored ``notebook_location.txt`` there names
+  (:func:`chosen_notebook_dir`): the owner's checkout holds no notebook,
+  so a guard that looks only beside the script finds the wrong folder.
 * **Run as a .exe (distributed)** - data goes to the app's own folder in
   the person's profile, ``Note Organizer`` beside Documents, which is
   per-user, writable, and left alone by Windows, uninstalling and the

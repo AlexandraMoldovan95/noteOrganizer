@@ -189,6 +189,25 @@ check('a template fills a new note',
       app.title_entry.get() == 'Templated Title'
       and app.body_text.get('1.0', 'end-1c') == 'Templated body')
 
+# Not knowing whether the editor holds typing asks; it once replaced it.
+app.new_note()
+app.body_text.insert('1.0', 'typed and not saved')
+_tq_asked = []
+_tq_ask = app.ask_yes_no
+def _tq_cannot_tell():
+    raise RuntimeError('the typing test failed')
+app._editor_holds_typing = _tq_cannot_tell
+app.ask_yes_no = lambda *a, **k: (_tq_asked.append(a[0] if a else ''), False)[1]
+try:
+    app._apply_template(tpl)
+    app.update()
+finally:
+    del app._editor_holds_typing
+    app.ask_yes_no = _tq_ask
+check('a template asks before replacing an editor it cannot read, and No keeps it',
+      _tq_asked == ['Replace current note?']
+      and app.body_text.get('1.0', 'end-1c') == 'typed and not saved')
+
 # ---- SEARCH ----
 app.notes.append({'id':9991,'title':None,'body':'searchable unique body','comments':None,
                   'category':None,'updated':'2026-01-01 00:00','created':'2026-01-01 00:00',

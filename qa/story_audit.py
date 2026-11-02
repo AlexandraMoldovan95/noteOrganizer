@@ -302,9 +302,9 @@ def chapter_3():
     story = Chapter()
     _seed(NO, app, 3)
     NO.CATEGORY_COLORS["OldFiling"] = "#993333"
-    app.save_templates([{"name": "An old template", "title": "T", "body": "b",
-                         "comments": "", "category": "General", "checklist": []}]) \
-        if hasattr(app, "save_templates") else None
+    NO.save_templates([{"name": "An old template", "title": "T", "body": "b",
+                        "comments": "", "category": "General", "checklist": []}])
+    app.templates = NO.load_templates()
 
     def texts(widget, out=None):
         if out is None:
@@ -332,6 +332,9 @@ def chapter_3():
                                         "body": "idem", "category": "General"}))
     app._delete_note(app.notes[0], None)
     app.save_notes()
+    app.templates.append(NO.normalize_template({"name": "A template added since",
+                                                "title": "T2", "body": "b2"}))
+    NO.save_templates(app.templates)
     app.update()
 
     app.show_settings_page()
@@ -347,6 +350,13 @@ def chapter_3():
                 "on screen: %s" % [t[:20] for t in seen if t][:6])
     story.check("...and no longer shows the deleted one",
                 not any("OldFiling" in t for t in seen))
+    app.toggle_settings_panel("templates")
+    app.update()
+    shown = texts(app.settings_templates_panel)
+    story.check("Templates, on a second visit, shows the template added in the meantime",
+                any("A template added since" in t for t in shown)
+                and any("An old template" in t for t in shown),
+                "on screen: %s" % [t[:24] for t in shown if t][:6])
     app.toggle_settings_panel("trash")
     app.update()
     story.check("Recently deleted shows the note deleted in the meantime",
