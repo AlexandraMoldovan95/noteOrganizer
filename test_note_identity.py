@@ -309,6 +309,21 @@ check('split_by_identity on an empty batch finds nothing',
       split_by_identity(_mine_all, []) == ([], []))
 check('split_by_identity against an empty notebook calls everything new',
       len(split_by_identity([], _batch)[1]) == 3)
+# A batch holding one identity twice: the first arrival claims it. Both were
+# paired with one note, which the Update then replaced twice -- its rescue
+# copy the first arrival, the person's own words in no copy -- or, both new,
+# added two notes wearing one identity (the final audit's wave 3; the
+# phone's Importing.plan already had it).
+_twice = [{"uid": _have2["uid"], "title": "first"},
+          {"uid": _have2["uid"], "title": "second"}]
+_known, _fresh = split_by_identity(_mine_all, _twice)
+check('a batch with one identity twice pairs the note here once, the second '
+      'arrival new and without the identity',
+      [t["title"] for _m, t in _known] == ["first"]
+      and [(n["title"], "uid" in n) for n in _fresh] == [("second", False)])
+_known, _fresh = split_by_identity(_mine_all, [dict(t, uid="both-new") for t in _twice])
+check('...and both new, the second comes in as a note of its own',
+      _known == [] and [n.get("uid") for n in _fresh] == ["both-new", None])
 
 # ---- the rescue copy, spent and swapped (2026-10-22, both apps) ----
 #

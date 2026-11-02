@@ -9,17 +9,18 @@ duplicate so Settings can offer to clean them up.
 HOW "THE SAME" IS DECIDED
 -------------------------
 :func:`_dup_key` builds a comparison key from title, body, comments and
-category — after two deliberate normalisations — plus the checklist and
-the repeat rule, compared exactly:
+category — after two deliberate normalisations — plus the checklist,
+the repeat rule and a series' own days, compared exactly:
 
 * :func:`_strip_copy_suffix` removes any number of trailing ``" (copy)"``
   markers, so a note and its duplicate still match even though the app
   renamed one of them.
 * :func:`_normalize_ws` collapses runs of whitespace and trims, so notes
   differing only by a stray blank line or trailing space still match.
-* The checklist and recurrence join the key un-fuzzed, because cleanup
-  does not merge them: whichever copy is dropped takes its checklist and
-  its series with it, so notes that differ there must never group.
+* The checklist, the recurrence and a series' own days (deleted, edited,
+  moved) join the key un-fuzzed, because cleanup does not merge them:
+  whichever copy is dropped takes them with it, so notes that differ
+  there must never group.
 
 Date, colour, attachments and pinned state are ignored on purpose. Two
 notes with identical text are the same note to a person even if one is
@@ -39,7 +40,8 @@ quadratic, which starts to matter at a few thousand notes.
 
 # What _dup_key compares, as every text about duplicates says it: three of
 # five copies written by hand missed the checklist and the repeat rule.
-SAME_AS = "same title, text, comments, category, checklist and repeat rule"
+SAME_AS = ("same title, text, comments, category, checklist, repeat rule "
+           "and a series' own days")
 
 
 def _strip_copy_suffix(title):
@@ -66,8 +68,9 @@ def _dup_key(note):
     the import flow's duplicate check, so both agree on what counts as a
     match.
 
-    The checklist and the repeat rule are part of the key: neither is
-    merged when a duplicate group is cleaned up (only attachments are),
+    The checklist, the repeat rule and a series' own days are part of the
+    key: none is merged when a duplicate group is cleaned up (only
+    attachments are),
     so treating two notes that differ there as 'the same' silently
     destroyed whichever copy the cleanup dropped — and on the import
     routes it skipped the incoming note outright, with no user in the
@@ -75,7 +78,9 @@ def _dup_key(note):
     gives the kept note the group's combined attachments, so differing
     files are preserved, not lost. Date stays out too — a copy carrying
     a different date is still, to a person, the same note twice."""
-    from .model import _checklist_signature, _recurrence_signature
+    from .model import _checklist_signature, _recurrence_signature, _stable
+    exceptions, overrides, moved = (note.get("exceptions"), note.get("overrides"),
+                                    note.get("moved"))
     return (
         _normalize_ws(_strip_copy_suffix(note.get("title") or "")).lower(),
         _normalize_ws(note.get("body") or "").lower(),
@@ -83,15 +88,21 @@ def _dup_key(note):
         note.get("category") or "",
         _checklist_signature(note.get("checklist")),
         _recurrence_signature(note.get("recurrence")),
+        # The days a series keeps of its own: a copy holding a deleted, an
+        # edited or a moved day grouped with one that did not, and the
+        # cleanup could drop it (the final audit's wave 3).
+        (tuple(sorted(str(d) for d in exceptions)) if isinstance(exceptions, list) else (),
+         _stable(overrides if isinstance(overrides, dict) else {}),
+         _stable(moved if isinstance(moved, dict) else {})),
     )
 
 
 def find_duplicate_groups(notes):
     """Group notes that are the same in title, body, comments, category,
-    checklist and repeat rule. Text matching ignores case and normalizes
-    whitespace, and a trailing ' (copy)' in the title is ignored; the
-    checklist and recurrence compare exactly, because cleanup does not
-    merge them. Date, attachments, color and IDs are IGNORED — attachments
+    checklist, repeat rule and a series' own days. Text matching ignores
+    case and normalizes whitespace, and a trailing ' (copy)' in the title
+    is ignored; the rest compare exactly, because cleanup does not merge
+    them. Date, attachments, color and IDs are IGNORED — attachments
     safely so: when the user cleans up, the kept copy inherits the group's
     combined attachments so nothing is lost."""
     groups = {}

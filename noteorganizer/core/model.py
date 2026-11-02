@@ -873,11 +873,21 @@ def split_by_identity(notes, incoming):
     for note in notes:
         if isinstance(note, dict) and isinstance(note.get("uid"), str):
             mine_by_uid.setdefault(note["uid"], note)
+    # The first arrival claims an identity; a second comes in as a note of
+    # its own, as the phone's Importing.plan has it. Paired twice, one note
+    # was updated twice and the person's words kept in no copy (wave 3).
+    claimed = set()
     known, fresh = [], []
     for note in incoming:
         if not isinstance(note, dict):
             continue
-        mine = mine_by_uid.get(_uid_wanted(note.get("uid")))
+        uid = _uid_wanted(note.get("uid"))
+        if uid is not None and uid in claimed:
+            fresh.append({k: v for k, v in note.items() if k != "uid"})
+            continue
+        if uid is not None:
+            claimed.add(uid)
+        mine = mine_by_uid.get(uid)
         if mine is None:
             fresh.append(note)
         else:

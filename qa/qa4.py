@@ -212,6 +212,33 @@ _storage4._delete_attachment_files([_removed4])
 check('cleanup-duplicates: purging the trashed twin leaves the survivor file intact',
       len(_merged4) == 1
       and _os4.path.isfile(_os4.path.join(_paths4.ATTACHMENTS_DIR, _merged4[0])))
+# The merge stops where a note's files do, as the backup import's: past
+# NO.MAX_ATTACHMENTS the next load cut the list, and the purge took the files
+# no note named any more (the final audit's wave 3).
+_cap_kept = dict(_kept4, id=12, attachments=[
+    {'filename': f'k{i}.txt', 'stored_as': f'2026010100000000{i:04d}_k.txt'}
+    for i in range(NO.MAX_ATTACHMENTS - 1)])
+_cap_extra = [f"2026010100000001{i:04d}_x.txt" for i in range(3)]
+for _name in _cap_extra:
+    _mk_att4(_name)
+_cap_removed = dict(_removed4, id=13, attachments=[
+    {'filename': f'x{i}.txt', 'stored_as': n} for i, n in enumerate(_cap_extra)])
+app.notes = [_cap_kept, _cap_removed]
+app.trash = []
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app._cleanup_selected_duplicates(
+        [(_V4(False), _cap_kept, [_cap_kept, _cap_removed]),
+         (_V4(True), _cap_removed, [_cap_kept, _cap_removed])],
+        None, refresh=lambda: None, announce=False)
+finally:
+    app.ask_yes_no = _orig_ask4
+app.update()
+check(f"cleanup-duplicates: the kept copy takes files up to the {NO.MAX_ATTACHMENTS} "
+      f"a note holds, the rest left with the copy in the Trash "
+      f"({len(_cap_kept['attachments'])}, {[len(e.get('attachments') or []) for e in app.trash]})",
+      len(_cap_kept['attachments']) == NO.MAX_ATTACHMENTS
+      and [len(e.get('attachments') or []) for e in app.trash] == [3])
 
 # ---- THEME: long-lived borders and hover follow a switch (Z07-F03/F04) ----
 # The 0.66.97 lesson, reaching the instances it missed: a long-lived

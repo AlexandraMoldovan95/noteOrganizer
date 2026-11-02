@@ -11080,7 +11080,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         text_widget.bind("<Triple-Button-1>", self._select_line_no_newline)
 
     # The formatting four, as the shortcuts page lists them: the note's text
-    # and an open table cell style with them; every other box swallows them.
+    # and an open table cell style with them; the other text boxes swallow
+    # them, and a one-line box takes Ctrl+D as nothing (see bind_class "Entry").
     FORMAT_KEYS = (
         ("<Control-b>", "bold"), ("<Control-B>", "bold"),
         ("<Control-i>", "italic"), ("<Control-I>", "italic"),
@@ -12671,9 +12672,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                   ).pack(fill="x", pady=(2, 0), ipady=5)
 
     def _open_imported_note_in_editor(self, shared_note, trimmed=False):
-        """Load an imported single note into a fresh editor tab WITHOUT saving,
-        so the user can review or edit it, then hit Save when ready. Crucially
-        this stays a NEW note (no selected_note_id) so Save creates a fresh one."""
+        """Load an imported single note into a fresh editor tab as a NEW note
+        (no selected_note_id), where the person reviews it. The autosave keeps
+        it as it keeps any note typed there, half a second on."""
         note = normalize_note(shared_note)
         self.notebook.select(self.TAB_NOTES)
         # A clean new-note editor -- unless the person chose to stay on a
@@ -12735,9 +12736,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # the imported note saved empty.
         self._reset_text_undo()
         self.set_status(
-            "Imported from code — trimmed to the app's size limits; review, "
-            "then Save to keep it" if trimmed
-            else "Imported from code — review, then Save to keep it")
+            "Imported from code — trimmed to the app's size limits; saved as "
+            "a new note, review it here" if trimmed
+            else "Imported from code — saved as a new note, review it here")
         if trimmed:
             # The status bar is not enough for this one: it is a transient
             # line, and the autosave that follows the import overwrites it
@@ -12754,7 +12755,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 f"{MAX_FORMATTING_SPANS} styled spans, "
                 f"{MAX_SPANS_PER_LINE} of them on any one line).\n\n"
                 "Nothing of yours was touched — this is only about what "
-                "arrived. Review it before saving.")
+                "arrived. It is saved as a new note: review it, and delete "
+                "it if you do not want it.")
         return True
 
     def import_data(self):
@@ -15142,6 +15144,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                       lambda e: self._tab_target_into_sight(e, backwards=True),
                       add="+")
         self._bind_keyboard_tags()
+        # Tk's Entry keeps edits no other Windows box has: Ctrl+D deleted a
+        # letter, Ctrl+K the rest of the line, Ctrl+T swapped two -- in a
+        # title saved at once, with no Undo (and Ctrl+D is Strikethrough on
+        # the shortcuts page). The final audit's wave 3.
+        for seq in ("<Control-d>", "<Control-D>", "<Control-k>", "<Control-K>",
+                    "<Control-t>", "<Control-T>"):
+            self.bind_class("Entry", seq, lambda _e: "break")
         self._watch_parts_put_away()
 
         notes_tab = tk.Frame(self.notebook)

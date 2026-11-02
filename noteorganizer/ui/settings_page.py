@@ -59,8 +59,8 @@ from ..core.recurrence import describe_recurrence, is_recurring, show_date
 # Shortens with an ellipsis rather than by slicing: a title cut at N
 # characters with nothing to show for it is the same defect as a
 # sentence clipped by a layout, only cheaper to make.
-from ..core.model import (MAX_CHECKLIST_ITEM_CHARS, MAX_CHECKLIST_ITEMS, _truncate,
-                          checklist_shown, normalize_note)
+from ..core.model import (MAX_ATTACHMENTS, MAX_CHECKLIST_ITEM_CHARS, MAX_CHECKLIST_ITEMS,
+                          _truncate, checklist_shown, normalize_note)
 from ..core.storage import (
     MAX_TEMPLATES,
     TRASH_RETENTION_DAYS,
@@ -2117,7 +2117,9 @@ class SettingsPageMixin:
                 hints.append("attachments")
             if hints:
                 tk.Label(box.add(), text=f"↳ differing {' & '.join(hints)} will be merged "
-                                   "into a kept copy",
+                                   f"into a kept copy, up to the {MAX_ATTACHMENTS} a "
+                                   "note holds; the rest stay with their copy in "
+                                   "the Trash",
                          font=("Segoe UI", 7, "italic"), bg=self.colors["sidebar"],
                          fg=self.colors["accent_text"], anchor="w",
                          wraplength=self.px(460),
@@ -3670,6 +3672,12 @@ class SettingsPageMixin:
             seen_attach = {a.get("stored_as") for a in merged_attach}
             for note in remove:
                 for a in note.get("attachments", []):
+                    # A note holds MAX_ATTACHMENTS files, as the backup
+                    # import's merge stops: past them, normalize_note cut
+                    # the list and the purge took the files no note named.
+                    # The rest stay with their copy, restorable from the Trash.
+                    if len(merged_attach) >= MAX_ATTACHMENTS:
+                        break
                     if a.get("stored_as") in seen_attach:
                         continue
                     seen_attach.add(a.get("stored_as"))

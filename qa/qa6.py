@@ -5007,6 +5007,19 @@ check(f"...and in the comments box the four do nothing to the words "
       f"({app.comments_text.get('1.0', 'end-1c')!r})",
       app.comments_text.get('1.0', 'end-1c') == 'pick up cinnamon')
 app.comments_text.delete('1.0', 'end')
+# Tk's Entry kept edits of its own on Ctrl+D, Ctrl+K and Ctrl+T: in the
+# title, saved at once with no Undo, a letter, the line's rest, two letters
+# swapped (the final audit's wave 3).
+app.title_entry.delete(0, 'end')
+app.title_entry.insert(0, 'Buy milk today')
+app.title_entry.icursor(8)
+if _take_focus(app.title_entry):
+    for _ek in ('<Control-d>', '<Control-k>', '<Control-t>'):
+        app.title_entry.event_generate(_ek)
+    _kv_settle()
+check(f"...and in the title Ctrl+D, Ctrl+K and Ctrl+T leave the words as they "
+      f"were ({app.title_entry.get()!r})",
+      app.title_entry.get() == 'Buy milk today')
 # Text size makes the notes bigger, not the rest of the app: its words say so.
 def _walk_all(w):
     for c in w.winfo_children():

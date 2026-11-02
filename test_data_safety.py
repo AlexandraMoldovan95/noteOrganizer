@@ -2815,6 +2815,18 @@ _t1 = dict(_base, title="Groceries", checklist=[{"text": "milk", "done": False}]
 _t2 = dict(_base, title="Groceries", checklist=[{"text": "gym", "done": False}])
 check("different checklists keep two same-text notes apart",
       _fdg([_t1, _t2]) == [])
+# A series' own days are never merged either: a copy holding a deleted, an
+# edited or a moved day grouped with one that did not (the final audit's
+# wave 3). The same days, or none on both, still group.
+_sd = dict(_base, title="Gym", date="2026-01-05", recurrence={"freq": "weekly"})
+check("a series' own days -- deleted, edited, moved -- keep two copies apart",
+      _fdg([_sd, dict(_sd, exceptions=["2026-01-12"])]) == []
+      and _fdg([_sd, dict(_sd, overrides={"2026-01-12": {"body": "legs"}})]) == []
+      and _fdg([_sd, dict(_sd, moved={"2026-01-12": "2026-01-13"})]) == [])
+check("...and the same days, or none on either, still group",
+      len(_fdg([dict(_sd, exceptions=["2026-01-12"]),
+                dict(_sd, exceptions=["2026-01-12"])])) == 1
+      and len(_fdg([dict(_sd, overrides={}), dict(_sd)])) == 1)
 # Every question about duplicates says what is compared through SAME_AS;
 # a field the key gains and the phrase lacks is the drift it stops.
 from noteorganizer.core.duplicates import SAME_AS as _same_as, _dup_key as _dk

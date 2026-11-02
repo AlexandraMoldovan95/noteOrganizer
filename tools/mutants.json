@@ -5115,8 +5115,8 @@
     "id": "MN01",
     "about": "an import walks the whole notebook again for every incoming note",
     "edits": [{"file": "noteorganizer/core/model.py",
-               "find": "        mine = mine_by_uid.get(_uid_wanted(note.get(\"uid\")))\n",
-               "replace": "        mine = find_by_uid(notes, note.get(\"uid\"))\n"}],
+               "find": "        mine = mine_by_uid.get(uid)\n",
+               "replace": "        mine = find_by_uid(notes, uid)\n"}],
     "must_fail": ["an import walks the notebook once, not once per incoming note"],
     "suites": ["test_note_identity"],
     "expect": "killed"
@@ -14992,7 +14992,7 @@
     "edits": [
       {
         "file": "noteorganizer/core/duplicates.py",
-        "find": "SAME_AS = \"same title, text, comments, category, checklist and repeat rule\"\n",
+        "find": "SAME_AS = (\"same title, text, comments, category, checklist, repeat rule \"\n           \"and a series' own days\")\n",
         "replace": "SAME_AS = \"same title, text, comments and category\"\n"
       }
     ],
@@ -15164,6 +15164,78 @@
     ],
     "suites": [
       "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS12",
+    "about": "A batch holding one identity twice pairs both arrivals with one note: the Update replaces it twice, the person's own words in no copy",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "        if uid is not None and uid in claimed:\n",
+        "replace": "        if False:\n"
+      }
+    ],
+    "must_fail": [
+      "a batch with one identity twice pairs the note here once"
+    ],
+    "suites": [
+      "test_note_identity"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS13",
+    "about": "The duplicate key forgets a series' own days: a copy holding a deleted, edited or moved day groups with one that has none",
+    "edits": [
+      {
+        "file": "noteorganizer/core/duplicates.py",
+        "find": "        (tuple(sorted(str(d) for d in exceptions)) if isinstance(exceptions, list) else (),\n         _stable(overrides if isinstance(overrides, dict) else {}),\n         _stable(moved if isinstance(moved, dict) else {})),\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a series' own days -- deleted, edited, moved -- keep two copies apart"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS14",
+    "about": "Cleaning up duplicates merges files past the ones a note holds: the load cuts the list and the purge takes the rest",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                    if len(merged_attach) >= MAX_ATTACHMENTS:\n                        break\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "cleanup-duplicates: the kept copy takes files up to the"
+    ],
+    "suites": [
+      "qa4"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS15",
+    "about": "A one-line box keeps Tk's Entry edits: Ctrl+D deletes a letter, Ctrl+K the line's rest, Ctrl+T swaps two, with no Undo",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self.bind_class(\"Entry\", seq, lambda _e: \"break\")\n",
+        "replace": "            pass\n"
+      }
+    ],
+    "must_fail": [
+      "...and in the title Ctrl+D, Ctrl+K and Ctrl+T leave the words as they were"
+    ],
+    "suites": [
+      "qa6"
     ],
     "expect": "killed"
   }
