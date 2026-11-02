@@ -26,7 +26,7 @@ def check(name, cond):
     if not cond: fails.append(name)
 
 
-def take_focus(widget, attempts=60):
+def take_focus(widget, cap_s=2.0):
     """Give a widget the keyboard focus, and wait until Tk agrees it has it.
 
     focus_force() is a request, not an accomplished fact. event_generate()
@@ -35,14 +35,8 @@ def take_focus(widget, attempts=60):
     a single update() -- which is why the shortcut checks below have failed
     at random and never once when this file is run on its own.
     """
-    widget.focus_force()
-    for _ in range(attempts):
-        app.update()
-        app.update_idletasks()
-        if app.focus_get() is widget:
-            return True
-        time.sleep(0.01)
-    return False
+    from _qa_support import take_focus as _qa_take_focus
+    return _qa_take_focus(app, widget, cap_s)
 
 
 def _walk_widgets(root, klass):
@@ -207,6 +201,22 @@ finally:
 check('a template asks before replacing an editor it cannot read, and No keeps it',
       _tq_asked == ['Replace current note?']
       and app.body_text.get('1.0', 'end-1c') == 'typed and not saved')
+# The flush of the blank editor, not knowing either, tries the save: it said
+# "nothing here", and the note opened next replaced the typing (wave 3).
+app.new_note()
+app.body_text.insert('1.0', 'typed before a click away')
+_fq_before, _fq_tabs = len(app.notes), app.open_tabs
+app.open_tabs = []                # the blank editor's road: no note open
+app._editor_holds_typing = _tq_cannot_tell
+try:
+    app._flush_autosave()
+    app.update()
+finally:
+    del app._editor_holds_typing
+    app.open_tabs = _fq_tabs
+check(f'a flush that cannot tell whether the blank editor holds typing saves it '
+      f'({_fq_before} -> {len(app.notes)})',
+      any(n.get('body') == 'typed before a click away' for n in app.notes))
 
 # ---- SEARCH ----
 app.notes.append({'id':9991,'title':None,'body':'searchable unique body','comments':None,
@@ -12410,21 +12420,8 @@ app.update()
 # not a promise this suite can currently break -- and a check that cannot
 # fail proves nothing. Written down rather than left as a passing line.
 def _sg_settle():
-    """Stop anything that rebuilds the list on a timer of its own.
-
-    The sidebar search debounces with after(180, refresh_note_list). A
-    full rebuild produces correct cards, so a timer landing between a
-    surgical removal and the reading below would repair whatever the
-    removal got wrong and report it as right. Once deleting stopped
-    costing 185ms there is no longer enough slack for that timer to have
-    always fired already, which is how a sibling check in qa7 turned red
-    without anything being wrong with it.
-    """
-    app._flush_autosave()
-    if getattr(app, '_search_debounce_job', None) is not None:
-        app.after_cancel(app._search_debounce_job)
-        app._search_debounce_job = None
-    app.update()
+    from _qa_support import settle_list
+    settle_list(app)
 
 
 _sg_settle()

@@ -40,22 +40,11 @@ def find_widget(w, cls, text_contains=None):
             return r
     return None
 
-def find_all_labels(w, acc=None):
-    if acc is None: acc = []
-    for c in w.winfo_children():
-        if isinstance(c, tk.Label):
-            acc.append(str(c.cget('text')))
-        find_all_labels(c, acc)
-    return acc
+from _qa_support import find_all_labels, list_texts as _qa_list_texts  # noqa: E402
 
 
 def list_texts():
-    """What the note list says, top to bottom: every drawn card's title,
-    then every header's label. The list is a drawing, with no labels to
-    walk."""
-    out = [app._card_view(n)['title'] for n in app._card_order()]
-    out += [app._header_view(c)['label'] for c in app._group_headers]
-    return out
+    return _qa_list_texts(app)
 
 os.makedirs(NO.ATTACHMENTS_DIR, exist_ok=True)
 
@@ -5229,19 +5218,11 @@ def _kc_settle(n=6):
         _kc_time.sleep(0.02)
 
 
+from _qa_support import take_focus as _qa_take_focus  # noqa: E402
+
+
 def _kc_take(w, cap_s=2.0):
-    """A PRECONDITION: the keyboard forced onto *w*, and Tk agreeing."""
-    w.focus_force()
-    t0 = _kc_time.time()
-    while _kc_time.time() - t0 < cap_s:
-        try:
-            if app.focus_get() is w:
-                return True
-        except (KeyError, tk.TclError):
-            pass
-        app.update()
-        _kc_time.sleep(0.02)
-    return False
+    return _qa_take_focus(app, w, cap_s)
 
 
 def _kc_rows(top):

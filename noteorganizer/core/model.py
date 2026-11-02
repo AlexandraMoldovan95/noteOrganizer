@@ -16,9 +16,9 @@ import os
 import re
 import uuid
 from collections import Counter
-from datetime import datetime
 
 from .categories import CATEGORY_COLORS
+from .storage import now_stamp
 from .formatting import (normalize_formatting, normalize_paragraphs,
                          clamp_spans_per_line, strip_list_markers,
                          day_paragraphs, list_lines)
@@ -480,7 +480,7 @@ def settle_set_aside(notes):
     for every note made. Returns how many. At the start (core load_notes,
     which writes them at once: left for the next save, each start made them
     again under new identities -- round 16) and at every save."""
-    stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    stamp = now_stamp()
     made, next_id, held = 0, None, set()
     for note in list(notes):
         if not isinstance(note, dict) or not note.get("_set_aside"):
@@ -688,7 +688,7 @@ def apply_shared_update(note, incoming, fields=UPDATABLE_FROM_SHARED):
     if restarted:
         note["exceptions"] = []
     drop_hidden_moves(note)
-    note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    note["updated"] = now_stamp()
     return note
 
 
@@ -1137,7 +1137,7 @@ def normalize_note(note):
     if not clean["updated"]:
         # Includes seconds (not just minutes) so two notes saved in the same
         # minute still sort correctly by "Recently updated" instead of tying.
-        clean["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        clean["updated"] = now_stamp()
     # Old notes predate the 'created' field — approximate it with 'updated' so
     # they still show a sensible creation date.
     if not clean["created"]:

@@ -252,6 +252,7 @@ from noteorganizer.core.formatting import (
 )
 
 from noteorganizer.core.storage import (
+    now_stamp,
     TRASH_RETENTION_DAYS,
     TRASH_WINDOW_UNKNOWN,
     trash_retention_days,
@@ -6121,6 +6122,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                  source=source)
         self._grid_after_op(first)
 
+    # No person's action calls this any more (the menus merge through
+    # _grid_merge_selection); qa1 and mutant TM01 still write a marker by it.
     @_undo_atom
     def _grid_set_marker(self, info, r, c, marker):
         context = self._grid_op_context(info)
@@ -6178,7 +6181,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # drag that touched none of them (field-tested: colour a cell,
         # resize a column, colour gone). Writing just the separator line
         # leaves every tag exactly where it is.
-        self._grid_write_separator(first, nrows, rows, sep_cols, sep_at)
+        self._grid_write_separator(first, rows, sep_cols, sep_at)
         self._grid_after_op(first)
 
     @staticmethod
@@ -6197,7 +6200,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             for cell in core_tables.make_separator(sep_cols)
         ) + core_tables.CELL
 
-    def _grid_write_separator(self, first, nrows, rows, sep_cols, sep_at):
+    def _grid_write_separator(self, first, rows, sep_cols, sep_at):
         """Write the block's separator line surgically: replace it in
         place when it exists, insert one under the header when it does
         not. Tags elsewhere in the block are never touched -- an insert
@@ -17214,7 +17217,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         the way back to the calendar following it there. Returns the date
         the rule gives the day."""
         origin = move_day(note, day, to)
-        note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        note["updated"] = now_stamp()
         self.save_notes()
         if (self.selected_note_id == note["id"]
                 and self.current_occurrence_date == day):
@@ -17313,7 +17316,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 made += choice == "note"
                 trashed += choice == "trash"
         if made or trashed:
-            note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            note["updated"] = now_stamp()
             self.save_notes()
             self._editor_follows_external_change({note.get("id")})
             self.refresh_note_list()
@@ -17338,7 +17341,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         they were never the day's."""
         shown = effective_note(note, day)
         same_body = shown.get("body") == note.get("body")
-        stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        stamp = now_stamp()
         fresh = normalize_note({
             "id": max([n["id"] for n in self.notes], default=0) + 1,
             "title": shown.get("title") or "",
@@ -19157,7 +19160,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # survive.
             marks = [(n["id"], n.get("category"), n.get("updated"),
                       n.get("uid")) for n in to_move]
-            stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            stamp = now_stamp()
             for n in to_move:
                 n["category"] = cat
                 n["updated"] = stamp
@@ -19725,9 +19728,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             try:
                 if not self._editor_holds_typing():
                     return True
-            except Exception:
+            except Exception:  # noqa: BLE001 -- not knowing tries the save, never skips it
                 self._log_swallowed("flush: blank editor")
-                return True
         # selected_note_id can end up stale — pointing at a note that no
         # longer exists — in the brief window between a delete removing the
         # note from self.notes and the editor being repointed somewhere
@@ -20890,7 +20892,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         clone.pop("uid", None)
         base_title = (note.get("title") or "").strip()
         clone["title"] = f"{base_title} (copy)" if base_title else "(copy)"
-        clone["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        clone["updated"] = now_stamp()
         # A duplicate is its own note, its series' own days (deleted, edited,
         # moved) copied with it, so it reads as the original does.
         clone = normalize_note(clone)
@@ -21398,7 +21400,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             for dead in [other for other, new in note["moved"].items() if new == origin]:
                 del note["moved"][dead]
         home = origin or occurrence_date
-        note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        note["updated"] = now_stamp()
         self.save_notes()
         # If the editor is showing exactly this day, reload it so the
         # series content replaces the dropped override on screen too --
@@ -22131,7 +22133,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # notes touched earlier in the same minute under "Recently
         # updated" (the precision-is-part-of-the-contract lesson, in
         # ISSUES_LOG).
-        note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        note["updated"] = now_stamp()
         self.save_notes()
         # Reload from the note so the editor and the dirty machinery agree
         # with what is now on disk (the widgets above were filled for the
@@ -22701,7 +22703,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # start date" — and the summary label already says so.
             pass
 
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now = now_stamp()
         reload_from_note = False
         put_back_schedule = False
         repeat_off_kept = False
@@ -23499,7 +23501,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # again already, which is newer than the one this Undo remembers.
         if own_edit and date_str not in (note.get("overrides") or {}):
             note.setdefault("overrides", {})[date_str] = dict(own_edit)
-        note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        note["updated"] = now_stamp()
         self.save_notes()
         self.refresh_note_list()
         self.render_calendar()
@@ -23696,7 +23698,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # went with it, and the Undo used to bring back the day
                 # showing the series' text instead -- the edit gone for good.
                 own_edit = note["overrides"].pop(occurrence_date, None)
-                note["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                note["updated"] = now_stamp()
                 self.save_notes()
                 if (self.selected_note_id == note["id"]
                         and self.current_occurrence_date == occurrence_date):

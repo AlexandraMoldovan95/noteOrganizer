@@ -198,7 +198,7 @@ app.ask_yes_no = lambda *a, **k: True
 try:
     app._cleanup_selected_duplicates(
         [(_V4(False), _kept4, _group4), (_V4(True), _removed4, _group4)],
-        None, refresh=lambda: None, announce=False)
+        refresh=lambda: None, announce=False)
 finally:
     app.ask_yes_no = _orig_ask4
 app.update()
@@ -230,7 +230,7 @@ try:
     app._cleanup_selected_duplicates(
         [(_V4(False), _cap_kept, [_cap_kept, _cap_removed]),
          (_V4(True), _cap_removed, [_cap_kept, _cap_removed])],
-        None, refresh=lambda: None, announce=False)
+        refresh=lambda: None, announce=False)
 finally:
     app.ask_yes_no = _orig_ask4
 app.update()
@@ -258,7 +258,7 @@ try:
     app._cleanup_selected_duplicates(
         [(_V4(False), _tw_kept, [_tw_kept, _tw_copy]),
          (_V4(True), _tw_copy, [_tw_kept, _tw_copy])],
-        None, refresh=lambda: None, announce=False)
+        refresh=lambda: None, announce=False)
 finally:
     app.ask_yes_no = _orig_ask4
 app.update()

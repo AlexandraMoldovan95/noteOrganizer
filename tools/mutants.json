@@ -15276,6 +15276,24 @@
     "expect": "killed"
   },
   {
+    "id": "WS21",
+    "about": "The blank editor's flush, unable to tell whether it holds typing, says there is nothing to keep: the next note replaces the typing unsaved",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                self._log_swallowed(\"flush: blank editor\")\n",
+        "replace": "                self._log_swallowed(\"flush: blank editor\")\n                return True\n"
+      }
+    ],
+    "must_fail": [
+      "a flush that cannot tell whether the blank editor holds typing saves it"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
     "id": "WS20",
     "about": "Ctrl+Tab leaves the note by focus set by hand: what it lands on is neither ringed nor scrolled into sight",
     "edits": [

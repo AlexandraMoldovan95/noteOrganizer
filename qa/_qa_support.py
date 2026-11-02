@@ -376,9 +376,62 @@ class EventNotDelivered(AssertionError):
     """An event could not be delivered, so the check below it means nothing."""
 
 
-# The original name, from when click() was this module's only door; kept so
-# older tracebacks and anything that names it stay true.
-ClickNotDelivered = EventNotDelivered
+def take_focus(app, widget, cap_s=2.0):
+    """FORCE the keyboard onto *widget* and wait until Tk agrees -- for a
+    PRECONDITION, never for an assertion about where the app put it. Under a
+    loaded machine focus_force() is a request that arrives late; the suites
+    each wrote this out once, five times in all.
+
+    The events run BEFORE each look: Tk can agree at once, and a return
+    then left the widget's <FocusIn> unrun -- qa1's ring round the
+    checklist row stayed on the row before."""
+    widget.focus_force()
+    t0 = time.time()
+    while time.time() - t0 < cap_s:
+        app.update()
+        app.update_idletasks()
+        try:
+            if app.focus_get() is widget:
+                return True
+        except (KeyError, tk.TclError):
+            pass
+        time.sleep(0.02)
+    return False
+
+
+def settle_list(app):
+    """Stop anything that rebuilds the note list on a timer of its own.
+
+    The sidebar search debounces with after(180, refresh_note_list), and a
+    full rebuild draws everything right -- which repaired a broken surgical
+    update before a check could see it, so a mutant died alone and survived
+    under load. A check whose answer depends on machine speed measures the
+    machine."""
+    app._flush_autosave()
+    if getattr(app, '_search_debounce_job', None) is not None:
+        app.after_cancel(app._search_debounce_job)
+        app._search_debounce_job = None
+    app.update()
+
+
+def find_all_labels(widget, acc=None):
+    """Every tk.Label's text under *widget*, depth first."""
+    if acc is None:
+        acc = []
+    for child in widget.winfo_children():
+        if isinstance(child, tk.Label):
+            acc.append(str(child.cget('text')))
+        find_all_labels(child, acc)
+    return acc
+
+
+def list_texts(app):
+    """What the note list says, top to bottom: every drawn card's title,
+    then every header's label. The list is a drawing, with no labels to
+    walk."""
+    out = [app._card_view(n)['title'] for n in app._card_order()]
+    out += [app._header_view(c)['label'] for c in app._group_headers]
+    return out
 
 
 def pin_the_desktop(NO):

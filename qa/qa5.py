@@ -1349,7 +1349,7 @@ _nl_routes = [
      lambda: app._cleanup_selected_duplicates(
          [(_NlVar(False), app.find_note(2), [app.find_note(2), app.find_note(3)]),
           (_NlVar(True), app.find_note(3), [app.find_note(2), app.find_note(3)])],
-         None, refresh=lambda: None)),
+         refresh=lambda: None)),
     ("deleting another note's category",
      lambda: app._delete_category('Temp5nl', lambda: None)),
     ('moving another note to a category from its menu',
@@ -3605,8 +3605,7 @@ for _rn_route in ('category: Cancel', 'category: move', 'duplicates: No',
         if _rn_route.startswith('category'):
             app._delete_category('TempHold5', lambda: None)
         else:
-            app._cleanup_selected_duplicates(_rn_dups, None,
-                                             refresh=lambda: None)
+            app._cleanup_selected_duplicates(_rn_dups, refresh=lambda: None)
         app.update()
     finally:
         app.__dict__.pop('_ask_category_deletion', None)
@@ -3669,7 +3668,7 @@ try:
     app._cleanup_selected_duplicates(
         [(_NlVar(False), app.find_note(1), [app.find_note(1), app.find_note(3)]),
          (_NlVar(True), app.find_note(3), [app.find_note(1), app.find_note(3)])],
-        None, refresh=lambda: None)
+        refresh=lambda: None)
     app.update()
 finally:
     app.ask_yes_no = _ro_yes

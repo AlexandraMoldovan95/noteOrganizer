@@ -51,20 +51,11 @@ while time.time() - t0 < 0.4:
     app.update()
     time.sleep(0.02)
 
-def find_all_labels(w, acc=None):
-    if acc is None: acc = []
-    for c in w.winfo_children():
-        if isinstance(c, tk.Label): acc.append(str(c.cget('text')))
-        find_all_labels(c, acc)
-    return acc
+from _qa_support import find_all_labels, list_texts as _qa_list_texts  # noqa: E402
 
 
 def list_texts():
-    """What the note list says: every drawn card's title, and every
-    header's label -- the list is a drawing, with no labels to walk."""
-    out = [app._card_view(n)['title'] for n in app._card_order()]
-    out += [app._header_view(c)['label'] for c in app._group_headers]
-    return out
+    return _qa_list_texts(app)
 
 
 texts = list_texts()

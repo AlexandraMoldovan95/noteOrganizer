@@ -3351,19 +3351,11 @@ def _kd_settle(n=6):
         time.sleep(0.02)
 
 
+from _qa_support import take_focus as _qa_take_focus  # noqa: E402
+
+
 def _kd_take(w, cap_s=2.0):
-    """A PRECONDITION: the keyboard forced onto *w*, and Tk agreeing."""
-    w.focus_force()
-    t0 = time.time()
-    while time.time() - t0 < cap_s:
-        try:
-            if app.focus_get() is w:
-                return True
-        except (KeyError, tk.TclError):
-            pass
-        app.update()
-        time.sleep(0.02)
-    return False
+    return _qa_take_focus(app, w, cap_s)
 
 
 def _kd_rows(pop):

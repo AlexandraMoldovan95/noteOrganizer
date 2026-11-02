@@ -220,18 +220,8 @@ def _take_focus(widget, cap_s=2.0):
     in a full-suite run (the same class as qa1's cell editor, closed as
     COVERAGE_LEDGER C11b). Forcing is correct here precisely because the
     promise under test is what happens when focus LEAVES."""
-    widget.focus_force()
-    t0 = time.time()
-    while time.time() - t0 < cap_s:
-        try:
-            if app.focus_get() is widget:
-                return True
-        except (KeyError, tk.TclError):
-            pass
-        app.update()
-        app.update_idletasks()
-        time.sleep(0.02)
-    return False
+    from _qa_support import take_focus
+    return take_focus(app, widget, cap_s)
 
 
 def _focus_leaves(widget, cap_s=2.0):
@@ -3013,21 +3003,8 @@ app.update()
 
 
 def _settle():
-    """Stop anything that would rebuild the list on a timer of its own.
-
-    The sidebar search debounces with after(180, refresh_note_list), and
-    a full rebuild puts every header back correctly -- which would repair
-    a broken surgical update before a check could see it. That is not
-    hypothetical: the mutant for the collapsed-group count died when its
-    suite ran alone and survived when it ran under load, because the
-    timer landed on the other side of the assertion. A check whose answer
-    depends on machine speed is measuring the machine.
-    """
-    app._flush_autosave()
-    if getattr(app, '_search_debounce_job', None) is not None:
-        app.after_cancel(app._search_debounce_job)
-        app._search_debounce_job = None
-    app.update()
+    from _qa_support import settle_list
+    settle_list(app)
 
 
 def _header_text(cat):
@@ -3174,7 +3151,7 @@ _dup_yes6 = app.ask_yes_no
 _kept6, _gone6, _dv6 = _dup_setup6()
 _files_before6 = sorted(os.listdir(NO.ATTACHMENTS_DIR))
 app.ask_yes_no = lambda *a, **k: False
-app._cleanup_selected_duplicates(_dv6, None, refresh=lambda: None)
+app._cleanup_selected_duplicates(_dv6, refresh=lambda: None)
 app.ask_yes_no = _dup_yes6
 check('answering No to the duplicates clean-up merges nothing',
       _kept6['attachments'] == []
@@ -3183,7 +3160,7 @@ check('answering No to the duplicates clean-up merges nothing',
 _kept6, _gone6, _dv6 = _dup_setup6()
 app.open_note_in_tab(_kept6); app.update()
 app.ask_yes_no = lambda *a, **k: True
-app._cleanup_selected_duplicates(_dv6, None, refresh=lambda: None)
+app._cleanup_selected_duplicates(_dv6, refresh=lambda: None)
 app.ask_yes_no = _dup_yes6
 app.update()
 check('...Yes gives the kept copy the merged file, in the editor too',
@@ -3196,7 +3173,7 @@ _kept6, _gone6, _dv6 = _dup_setup6()
 app.open_note_in_tab(_gone6); app.update()
 app.body_text.insert('end', '\naction: Ana sends the figures')
 app.ask_yes_no = lambda *a, **k: True
-app._cleanup_selected_duplicates(_dv6, None, refresh=lambda: None)
+app._cleanup_selected_duplicates(_dv6, refresh=lambda: None)
 app.ask_yes_no = _dup_yes6
 app.update()
 check('...and the copy open in the editor goes to the Trash with its typing',

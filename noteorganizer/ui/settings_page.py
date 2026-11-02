@@ -2188,7 +2188,7 @@ class SettingsPageMixin:
 
         def do_cleanup():
             self._cleanup_selected_duplicates(
-                del_vars, parent,
+                del_vars,
                 refresh=lambda: self._reopen_dup_panel(), announce=True)
 
         def clean_up_everything():
@@ -3589,7 +3589,7 @@ class SettingsPageMixin:
             # each note's filing under it: Enter keeps it, as above.
             default="Cancel")
 
-    def _cleanup_selected_duplicates(self, del_vars, dlg, refresh, announce=False):
+    def _cleanup_selected_duplicates(self, del_vars, refresh, announce=False):
         """Move the checkbox-selected duplicates to trash. `del_vars` is a list of
         (delete_var, note, group) — a note is removed when its var is set. Within
         each group, the attachments of removed notes are merged into a

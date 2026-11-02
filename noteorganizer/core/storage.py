@@ -24,6 +24,17 @@ from . import diagnostics, paths
 from .formatting import (normalize_formatting, normalize_paragraphs,
                          clamp_spans_per_line)
 
+# The stamp a note's created and updated and a Trash entry's deleted_at
+# wear, seconds included, as DATA_FORMAT fixes it: written and read here
+# once, where fifteen sites once spelled it each by hand.
+STAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+
+def now_stamp():
+    """Now, as a note's stamps are written."""
+    return datetime.now().strftime(STAMP_FORMAT)
+
+
 # Deleted notes live in the trash this many days, then auto-purge on
 # startup. This is the DEFAULT; the actual window is a setting, read
 # through trash_retention_days() below.
@@ -442,7 +453,7 @@ def _deleted_epoch(stamp):
     spring the purge took notes an hour before the window was up. Counted
     in real time, as the Android app counts (2026-10-26)."""
     try:
-        when = datetime.strptime(stamp or "", "%Y-%m-%d %H:%M:%S")
+        when = datetime.strptime(stamp or "", STAMP_FORMAT)
     except (ValueError, TypeError):
         return None
     try:
@@ -862,7 +873,7 @@ def move_notes_to_trash(trash, notes_to_trash):
         are in neither file (ISSUES_LOG: "A delete that trusted the Trash").
     """
     before = len(trash)
-    stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    stamp = now_stamp()
     for note in notes_to_trash:
         entry = dict(note)
         entry["deleted_at"] = stamp

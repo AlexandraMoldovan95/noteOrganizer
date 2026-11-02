@@ -123,20 +123,9 @@ def owed():
             for pair in PAIRS}
 
 
-def luminance(colour):
-    """Relative luminance, as WCAG 2.1 defines it."""
-    value = colour.lstrip("#")
-    if len(value) == 3:
-        value = "".join(ch * 2 for ch in value)
-    channels = [int(value[i:i + 2], 16) / 255.0 for i in (0, 2, 4)]
-    linear = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
-              for c in channels]
-    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
-
-
-def ratio(one, other):
-    light, dark = sorted((luminance(one), luminance(other)), reverse=True)
-    return (light + 0.05) / (dark + 0.05)
+# The app's own measure, the one letters_on answers by: a copy of the formula
+# here agreed with it only because nobody had changed either.
+ratio = themes.contrast_ratio
 
 
 def colour_of(theme, key):

@@ -3191,7 +3191,7 @@ class _DnVar:
 _dn_group = [app.find_note(1), app.find_note(2)]
 app._cleanup_selected_duplicates(
     [(_DnVar(False), _dn_group[0], _dn_group), (_DnVar(True), _dn_group[1], _dn_group)],
-    None, refresh=lambda: None)
+    refresh=lambda: None)
 app.ask_yes_no = _dn_stub
 check('the confirmations that move notes to the Trash keep the keyboard on No (%s)'
       % _dn_asked,
@@ -4649,19 +4649,11 @@ def _kt_settle(n=6):
         time.sleep(0.02)
 
 
+from _qa_support import take_focus as _qa_take_focus  # noqa: E402
+
+
 def _kt_take(w, cap_s=2.0):
-    """A PRECONDITION: the keyboard forced onto *w*, and Tk agreeing."""
-    w.focus_force()
-    t0 = time.time()
-    while time.time() - t0 < cap_s:
-        try:
-            if app.focus_get() is w:
-                return True
-        except (KeyError, tk.TclError):
-            pass
-        app.update()
-        time.sleep(0.02)
-    return False
+    return _qa_take_focus(app, w, cap_s)
 
 
 def _kt_rows():
