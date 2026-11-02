@@ -14967,5 +14967,59 @@
       "qa1"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "WS01",
+    "about": "the reclaim from %APPDATA% writes over a readable settings.json without copying it aside",
+    "edits": [
+      {
+        "file": "noteorganizer/core/paths.py",
+        "find": "        if os.path.exists(appdata_settings) and (\n                not os.path.exists(settings_path)\n                or _preserve_settings_if_unreadable(settings_path)\n                or _timestamped_backup(settings_path, \"replaced\")):\n",
+        "replace": "        if os.path.exists(appdata_settings):\n"
+      }
+    ],
+    "must_fail": [
+      "a readable settings.json is copied aside before it is replaced"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS02",
+    "about": "the words a duplicate question uses forget a part of the key",
+    "edits": [
+      {
+        "file": "noteorganizer/core/duplicates.py",
+        "find": "SAME_AS = \"same title, text, comments, category, checklist and repeat rule\"\n",
+        "replace": "SAME_AS = \"same title, text, comments and category\"\n"
+      }
+    ],
+    "must_fail": [
+      "the words every duplicate question uses name each part of the key"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS03",
+    "about": "the reclaim replaces this folder's settings even when copying them aside failed",
+    "edits": [
+      {
+        "file": "noteorganizer/core/paths.py",
+        "find": "                or _timestamped_backup(settings_path, \"replaced\")):\n",
+        "replace": "                or _timestamped_backup(settings_path, \"replaced\") or True):\n"
+      }
+    ],
+    "must_fail": [
+      "a readable settings.json that could not be copied aside stays"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed"
   }
 ]

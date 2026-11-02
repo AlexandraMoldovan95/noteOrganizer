@@ -53,10 +53,12 @@ def slug(text):
     """GitHub's heading -> anchor rule."""
     # Link syntax inside a heading contributes only its text.
     text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", text)
-    text = re.sub(r"[`*_~]", "", text)
+    # An underscore in code is a character, kept; outside, it is emphasis.
+    text = re.sub(r"`([^`]*)`", lambda m: m.group(1).replace("_", "\0"), text)
+    text = re.sub(r"[`*_~]", "", text).replace("\0", "_")
     out = []
     for ch in text.lower():
-        if ch.isalnum() or ch in " -":
+        if ch.isalnum() or ch in " -_":
             out.append(ch)
     return "".join(out).strip().replace(" ", "-")
 

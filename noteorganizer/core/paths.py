@@ -236,8 +236,8 @@ def resolve_data_dir(script_dir):
             ``noteorganizer/core/`` and the app quietly chose a data folder
             two levels below the real one. Taking it as an argument means
             the answer can't change again just because this file moves.
-            Ignored when running as a frozen ``.exe``, which always uses
-            the per-user AppData folder.
+            Ignored when running as a frozen ``.exe``, which uses the
+            profile's ``Note Organizer`` folder.
 
     Returns:
         ``(folder, note)`` where *note* is a user-facing warning if we had
@@ -302,8 +302,8 @@ def get_legacy_dirs(app_dir):
     """Other folders this app has historically written to, so old notes can be
     brought forward on first run of a new version."""
     candidates = []
-    # The other run-mode's folder (so switching between script and exe, or
-    # upgrading from an older build, still finds prior notes).
+    # The folder an .exe before 2026-10-27 kept its notebook in, so an
+    # older build's notes are still found.
     candidates.append(get_appdata_dir())
     if getattr(sys, "frozen", False):
         candidates.append(os.path.dirname(sys.executable))
@@ -390,12 +390,15 @@ def _copy_attachments(src_dir, dest_dir):
 
 
 def _timestamped_backup(path, label):
-    """Copy a file aside before it gets overwritten. Returns the new path."""
+    """Copy a file aside before it gets overwritten, as
+    ``<name>_<label>_<stamp>.json`` beside it. Returns the new path, or None
+    when there is no file or the copy failed."""
     if not os.path.exists(path):
         return None
     folder = os.path.dirname(path)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_path = os.path.join(folder, f"notes_data_{label}_{stamp}.json")
+    name = os.path.splitext(os.path.basename(path))[0]
+    backup_path = os.path.join(folder, f"{name}_{label}_{stamp}.json")
     try:
         shutil.copy2(path, backup_path)
         return backup_path
@@ -454,26 +457,26 @@ def preserve_corrupt_file(path):
 def _preserve_settings_if_unreadable(settings_path):
     """Before migration code overwrites settings.json, keep its bytes if it
     exists but holds no usable dict — the reclaim path used to clobber a
-    corrupt settings file with no trace at all."""
+    corrupt settings file with no trace at all. Returns the copy's path, or
+    None when nothing was kept aside."""
     if not os.path.exists(settings_path):
-        return
+        return None
     try:
         with open(settings_path, "r", encoding="utf-8") as f:
             if isinstance(json.load(f), dict):
-                return
+                return None
     except (*JSON_UNREADABLE, IOError, OSError):
         pass
-    preserve_corrupt_file(settings_path)
+    return preserve_corrupt_file(settings_path)
 
 
 def run_migrations(app_dir):
     """Bring data into app_dir from wherever a previous version left it.
 
     Two cases, in priority order:
-      1. The previous version stored everything in %APPDATA%\\NoteOrganizer.
-         That copy is authoritative (it has already been de-duplicated), so it
-         wins over whatever stale file is sitting in the project folder — but
-         the stale file is backed up first, never silently destroyed.
+      1. A run from source, once: the notebook an .exe before 2026-10-27
+         kept in %APPDATA%\\NoteOrganizer wins over the files in the source
+         folder -- which are copied aside first, never silently destroyed.
       2. Fresh install with nothing here yet: pull from the richest legacy
          folder found (e.g. an old dist\\ copy).
 
@@ -491,7 +494,7 @@ def run_migrations(app_dir):
             return {}
 
     # --- Case 1: reclaim data from %APPDATA% ---
-    # A run from source taking over from the installed app. The built app
+    # A run from source taking over from an older .exe's notebook. The built app
     # never replaces a notebook it has: it only fills an empty folder
     # (case 2), or an old exe run again would put its notebook in place
     # of the notes written since.
@@ -514,18 +517,17 @@ def run_migrations(app_dir):
             # again next launch instead of proceeding blind.
             return None
         moved = count_notes_in(appdata_notes)
-        try:
-            shutil.copy2(appdata_notes, notes_path)
-        except (IOError, OSError):
+        if not _copy_whole(appdata_notes, notes_path):
             return None
 
+        # This folder's own settings are copied aside too, readable or not;
+        # if that copy fails they stay, and only the notes come in.
         appdata_settings = os.path.join(appdata_dir, "settings.json")
-        if os.path.exists(appdata_settings):
-            _preserve_settings_if_unreadable(settings_path)
-            try:
-                shutil.copy2(appdata_settings, settings_path)
-            except (IOError, OSError):
-                pass
+        if os.path.exists(appdata_settings) and (
+                not os.path.exists(settings_path)
+                or _preserve_settings_if_unreadable(settings_path)
+                or _timestamped_backup(settings_path, "replaced")):
+            _copy_whole(appdata_settings, settings_path)
 
         _copy_attachments(appdata_dir, attachments_path)
         _copy_companions(appdata_dir, app_dir)

@@ -227,6 +227,57 @@ finally:
     shutil.rmtree(app_dir, ignore_errors=True)
     shutil.rmtree(appdata_dir, ignore_errors=True)
 
+# ---- run_migrations(): Case 1 replaces a READABLE settings.json too ----
+# The module's rule is that nothing is overwritten without a copy first;
+# the reclaim kept an unreadable settings.json aside but wrote over a
+# readable one -- this folder's categories and choices -- with no copy.
+for _rs_backup_fails in (False, True):
+    _rs_app = tempfile.mkdtemp()
+    _rs_old = tempfile.mkdtemp()
+    try:
+        NO_paths.get_appdata_dir = lambda: _rs_old
+        with open(os.path.join(_rs_old, 'notes_data.json'), 'w', encoding='utf-8') as f:
+            json.dump([{'id': 1, 'title': 'AppData note'}], f)
+        with open(os.path.join(_rs_old, 'settings.json'), 'w', encoding='utf-8') as f:
+            json.dump({'categories': ['From AppData']}, f)
+        _rs_set = os.path.join(_rs_app, 'settings.json')
+        with open(_rs_set, 'w', encoding='utf-8') as f:
+            json.dump({'categories': ['Local only']}, f)
+        _rs_copy2 = shutil.copy2
+        def _rs_failing(src, dst):
+            if _rs_backup_fails and src == _rs_set:
+                raise OSError('simulated backup failure')
+            return _rs_copy2(src, dst)
+        shutil.copy2 = _rs_failing
+        try:
+            _rs_msg = NO.run_migrations(_rs_app)
+        finally:
+            shutil.copy2 = _rs_copy2
+        with open(_rs_set, encoding='utf-8') as f:
+            _rs_now = json.load(f)
+        _rs_kept = [n for n in os.listdir(_rs_app) if n.startswith('settings_replaced_')]
+        _rs_held = ([json.load(open(os.path.join(_rs_app, n), encoding='utf-8'))
+                     for n in _rs_kept])
+        with open(os.path.join(_rs_app, 'notes_data.json'), encoding='utf-8') as f:
+            _rs_notes = json.load(f)
+        check('the reclaim brings the notes in (settings backup fails: %s)' % _rs_backup_fails,
+              _rs_msg is not None and _rs_notes[0]['title'] == 'AppData note')
+        check('nothing half-copied is left behind (%s)' % _rs_backup_fails,
+              not [n for n in os.listdir(_rs_app) if n.endswith('.part')])
+        if _rs_backup_fails:
+            check('a readable settings.json that could not be copied aside stays',
+                  _rs_now.get('categories') == ['Local only'] and not _rs_kept)
+        else:
+            check('a readable settings.json is copied aside before it is replaced',
+                  _rs_held == [{'categories': ['Local only']}])
+            check('...and the reclaimed settings take its place',
+                  _rs_now.get('categories') == ['From AppData']
+                  and _rs_now.get('reclaimed_from_appdata') is True)
+    finally:
+        NO_paths.get_appdata_dir = real_get_appdata_dir
+        shutil.rmtree(_rs_app, ignore_errors=True)
+        shutil.rmtree(_rs_old, ignore_errors=True)
+
 # ---- purge_stale_copies(): must never delete the real AppData folder ----
 # The bug this closes: AppData was treated as just another disposable
 # "legacy" folder, so the instant its content also existed somewhere else
@@ -2764,6 +2815,11 @@ _t1 = dict(_base, title="Groceries", checklist=[{"text": "milk", "done": False}]
 _t2 = dict(_base, title="Groceries", checklist=[{"text": "gym", "done": False}])
 check("different checklists keep two same-text notes apart",
       _fdg([_t1, _t2]) == [])
+# Every question about duplicates says what is compared through SAME_AS;
+# a field the key gains and the phrase lacks is the drift it stops.
+from noteorganizer.core.duplicates import SAME_AS as _same_as, _dup_key as _dk
+check("the words every duplicate question uses name each part of the key",
+      len(_same_as.replace(" and ", ", ").split(", ")) == len(_dk(_t1)))
 _r1 = dict(_base, title="Sport", date="2026-01-01",
            recurrence={"freq": "weekly", "weekdays": [0]})
 _r2 = dict(_base, title="Sport", date="2026-01-01", recurrence={})

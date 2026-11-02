@@ -202,6 +202,7 @@ def initialise(app_dir=None, resolved=None):
 # file locations from core.paths, which configure() filled in above.
 # Duplicate detection lives in noteorganizer/core/duplicates.py.
 from noteorganizer.core.duplicates import (
+    SAME_AS,
     find_duplicate_groups,
     _strip_copy_suffix,
     _normalize_ws,
@@ -5256,14 +5257,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if pend["page"] is not None:
             self._restore_editor_view(pend["page"])
 
-    def _grid_click(self, info, event):
-        canvas = info["canvas"]
-        hit = self._grid_cell_at_xy(info, canvas.canvasx(event.x),
-                                    canvas.canvasy(event.y))
-        if hit is not None:
-            self._open_cell_editor(info, *hit)
-        return "break"
-
     def _flush_table_grids(self):
         """Anything still sitting in the open cell editor reaches the text.
 
@@ -5844,16 +5837,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             rows.append(core_tables.split_row(line))
             aligns.append(core_tables.cell_alignments(line))
         return rows, aligns, sep_cols, sep_at
-
-    def _grid_read_rows(self, first, nrows):
-        return [core_tables.split_row(
-                    self.body_text.get(f"{n}.0", f"{n}.end"))
-                for n in range(first, first + nrows)]
-
-    def _grid_read_aligns(self, first, nrows):
-        return [core_tables.cell_alignments(
-                    self.body_text.get(f"{n}.0", f"{n}.end"))
-                for n in range(first, first + nrows)]
 
     def _grid_replace_block(self, first, old_nrows, rows, aligns=None,
                             sep_cols=None, source=None, extra=None):
@@ -11881,9 +11864,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if not asked and _dup_key(normalize_note(incoming)) in existing_keys:
                 choice = self._themed_dialog(
                     "Possible duplicate",
-                    "This note looks identical to one you already have (same "
-                    "title, text, comments, category, checklist and\n"
-                    "repeat rule).",
+                    "This note looks identical to one you already have "
+                    "(%s)." % SAME_AS,
                     kind="question",
                     buttons=[("Cancel", "cancel"), ("Open it anyway", "open")]
                 )
@@ -11939,8 +11921,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 choice = self._themed_dialog(
                     "Possible duplicates",
                     f"{dupe_count} of the{other} {len(valid)} note(s) in this code "
-                    "look identical to notes you already have (same title, text, "
-                    "comments and category).",
+                    f"look identical to notes you already have ({SAME_AS}).",
                     kind="question",
                     buttons=[("Cancel", "cancel"),
                              ("Import all anyway", "all"),
@@ -13066,8 +13047,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 choice = self._themed_dialog(
                     "Possible duplicates",
                     f"{dupe_count} of the{other} {len(valid_notes)} note(s) in this "
-                    "backup look identical to notes you already have (same title, "
-                    "text, comments, category, checklist and repeat rule).",
+                    f"backup look identical to notes you already have ({SAME_AS}).",
                     kind="question",
                     buttons=[("Cancel", "cancel"),
                              ("Import all anyway", "all"),
@@ -16954,8 +16934,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.set_status(
                     "Not saved yet — fix the date to go back to the calendar")
                 return
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001 -- a guard that fails must not trap Back
+            self._log_swallowed("return to calendar: unsaved check")
         info = getattr(self, "_pending_calendar_return", None)
         self._pending_calendar_return = None
         if hasattr(self, "calendar_return_btn"):

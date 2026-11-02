@@ -661,12 +661,6 @@ def forget_widths(text):
     return "\n".join(lines), shifts
 
 
-def to_rows(text, first, last):
-    """The cells of one block, as a list of rows."""
-    lines = (text or "").split("\n")
-    return [split_row(line) for line in lines[first:last + 1]]
-
-
 def content_text(text):
     """*text* with the table mechanics stripped out.
 

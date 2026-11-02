@@ -50,7 +50,7 @@ from ..core.categories import (CATEGORY_COLORS, category_name_refusal,
                                persist_categories)
 from ..core.formatting import FONT_FAMILIES, FONT_SIZES
 from ..core.spelling import SPELLING_SETTING
-from ..core.duplicates import find_duplicate_groups
+from ..core.duplicates import SAME_AS, find_duplicate_groups
 # The Trash is the one list in the app where deleting cannot be undone,
 # and it is the one that never said which of its rows is a whole
 # repeating series. Both of these read a note's own recurrence field, so
@@ -2054,7 +2054,7 @@ class SettingsPageMixin:
     def _build_settings_duplicates_panel(self, parent):
         self._settings_subtitle(
             parent,
-            "Notes with the same title, text, comments and category (ignoring "
+            "Notes with the " + SAME_AS + " (ignoring "
             "case, spacing, date and color). Tick the copies you want to "
             "remove — the rest are kept.")
         groups = find_duplicate_groups(self.notes)
@@ -2908,11 +2908,6 @@ class SettingsPageMixin:
             canvas.create_rectangle(4, 7.5, 12, 13.5, fill="", **o)
             canvas.create_arc(5.6, 2.8, 10.4, 9.2, start=0, extent=180,
                               style="arc", **o)
-        elif kind == "plus":                    # add
-            canvas.create_line(8, 3.5, 8, 12.5, fill=color, width=1.8,
-                               tags="glyph")
-            canvas.create_line(3.5, 8, 12.5, 8, fill=color, width=1.8,
-                               tags="glyph")
         elif kind == "updown":                  # ▲ over ▼: move one place
             canvas.create_polygon(8, 1.6, 12.6, 6.8, 3.4, 6.8, **f)
             canvas.create_polygon(3.4, 9.2, 12.6, 9.2, 8, 14.4, **f)
@@ -2998,19 +2993,6 @@ class SettingsPageMixin:
         # gone, under CI's fonts. The words have the rest now, and wrap.
         control.pack(side="right", padx=(16, 0), before=text_col)
         return control
-
-    # _add_row() stood here: an "+ Add category" affordance drawn as accent
-    # text with the drawn plus glyph, instead of a filled button. It had no
-    # callers -- the category panel builds its own "+ Add" button directly --
-    # and its docstring described itself as the add-category control, so a
-    # reader looking for that control found this and read twenty lines of a
-    # design that is not on screen. Removed rather than marked, because a
-    # comment saying "this is unused" is one more thing to keep true.
-    #
-    # The "plus" glyph in _draw_icon is left where it is. It has no caller
-    # now either, but it belongs to a set of eleven drawn icons that are
-    # built and themed together, and pulling one out of the set is a
-    # different change from removing a dead helper.
 
     def _note_banner(self, parent, text):
         """An informational strip -- retention notices and the like."""
@@ -3099,7 +3081,6 @@ class SettingsPageMixin:
                                  "do not go to the Trash."),
         "lock":       ("Protected", "A built-in item — it can't be renamed or "
                                     "deleted."),
-        "plus":       ("Add", ""),
         "templates":  ("Template", ""),
         "updown":     ("Move", "The top arrow moves this item up, the bottom "
                                "one down. Alt+Up and Alt+Down on its box do "
@@ -3355,21 +3336,6 @@ class SettingsPageMixin:
         tk.Label(parent, text=title, font=("Segoe UI", 16, "bold"), anchor="w",
                  bg=self.colors["bg"], fg=self.colors["text"]
                  ).pack(fill="x", pady=(0, 6))
-
-    def _settings_section_note(self, parent, subtitle):
-        """Optional explanatory line, then the frame a section builds into.
-
-        Replaces the old ``section()`` closure. That one created its own title
-        as well; titles now come from the nav list via
-        :meth:`_settings_section_heading`, so there is one place deciding what
-        a section is called.
-        """
-        if subtitle:
-            self._settings_subtitle(parent, subtitle)
-        holder = tk.Frame(parent, bg=self.colors["card"])
-        self.track_theme(holder, bg="card")
-        holder.pack(fill="x", padx=4)
-        return holder
 
     def _settings_big_button(self, parent_frame, text, command, kind="normal"):
         """A full-width action button, left-aligned like its section.

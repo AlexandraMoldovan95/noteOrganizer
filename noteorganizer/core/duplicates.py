@@ -37,6 +37,11 @@ every other note keeps this linear in the number of notes instead of
 quadratic, which starts to matter at a few thousand notes.
 """
 
+# What _dup_key compares, as every text about duplicates says it: three of
+# five copies written by hand missed the checklist and the repeat rule.
+SAME_AS = "same title, text, comments, category, checklist and repeat rule"
+
+
 def _strip_copy_suffix(title):
     """Remove any number of trailing ' (copy)' markers from a title, so a note
     and its duplicates ('X', 'X (copy)', 'X (copy) (copy)') compare as equal.
