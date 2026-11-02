@@ -250,7 +250,7 @@ SmartScreen check; the kinds that ask still ask.
 ### Recurrence model
 
 A recurring note is stored once — the "base" note carries a `recurrence` rule (frequency,
-interval, specific weekdays/month-days, an end condition) plus two small maps:
+interval, specific weekdays/month-days, an end condition) plus three small maps:
 
 - `exceptions`: dates removed from the series entirely
 - `overrides`: date → partial note, for edits that apply to one occurrence only
@@ -487,17 +487,20 @@ right colors to it. This is for **persistent** widgets — ones built once at st
 destroyed (the sidebar, the main buttons, the tab bar).
 
 For content that gets **destroyed and rebuilt** on every refresh — the attachments list, the
-History register's rows, anything inside a Settings section panel — widgets are colored with
-plain `.configure(bg=self.colors[...])` calls instead. (The note list and the calendar's month
+History register's rows, the plain labels and frames inside a Settings section panel — widgets
+are colored with plain `.configure(bg=self.colors[...])` calls instead. The shared controls a
+rebuilt Settings panel builds (its themed dropdowns, its buttons) still register through
+`track_theme` on every visit, which is what the pruning below is for. (The note list and the calendar's month
 are not widgets any more but drawings, whose items take their colours when drawn: the list is
 recoloured in place, below, and the month is drawn again.) Since this content is always rebuilt fresh, it
 never needs live tracking; using `track_theme` here just means every rebuilt widget's tracking
 registration outlives the widget itself. That was an actual bug this codebase had for a while
 (see [CHANGELOG.md](../CHANGELOG.md) 0.4.0) — a growing, unbounded list of registrations for
 windows that no longer existed, which measurably slowed the app down. Since 0.71.134
-`apply_theme` prunes dead entries at every switch, so a stray registration now costs one switch
-rather than living forever — a safety net, not a licence: re-registering per rebuild is still
-churn the pattern never needs.
+`apply_theme` prunes dead entries at every switch, and since 2026-10-01 `track_theme` prunes
+whenever the registry has doubled since the last prune (339 entries grew to 809 over 175
+Settings visits without a switch) — a safety net, not a licence: re-registering per rebuild is
+still churn the pattern never needs.
 
 **Rule of thumb: `track_theme` for widgets built once — and when you do, track EVERY colour
 option the widget sets (`insertbackground`, `selectcolor`, `highlightbackground`, the

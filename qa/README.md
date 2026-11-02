@@ -304,7 +304,8 @@ a Windows check.
 ## Photographs: did a screen change shape while nobody was looking?
 
 `py qa/story_look.py` opens the app on a fixed little notebook,
-photographs twenty-six screens — the list, the editor, the calendar,
+photographs every scene in its `SCENES` list (thirty-two on 2 November
+2026) — the list, the editor, the calendar,
 Settings sections, a light theme, and the popups, panels and states that
 releases changed — and compares each against the copy in `qa/screens/`. Those
 copies are committed, so a change of appearance shows up in a diff like
@@ -384,6 +385,10 @@ A new surface joins this list the moment it ships.
 
 - A new feature's checks land **with the feature**, covering its seams
   with the old features — not after a field test finds the gap.
+- **A check this run cannot make prints `SKIP <name>`, never a PASS.**
+  A focus Windows would not give, metrics only one platform has, a
+  dictionary this machine lacks: `run_tests.py` counts SKIP lines apart
+  and names each one, so "all passing" never counts a check nobody made.
 - Every new check is **mutation-tested**: break the mechanism it
   guards, watch it fail, then trust it. Old checks go stale silently —
   see the [Issues Log](../docs/ISSUES_LOG.md), "The teeth that had gone

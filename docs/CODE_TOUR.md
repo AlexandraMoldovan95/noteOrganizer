@@ -463,8 +463,10 @@ role, and how they were chosen, is in
 
 Nothing in the app ever asks *"which theme is this?"* before picking a
 colour. It asks for `colors["card"]` and gets whatever that means right
-now. **Adding a ninth theme means adding one dict here and changing
-nothing else.**
+now. **Adding a ninth theme means one dict in `THEMES`, its name in
+`DARK_THEMES` or `LIGHT_THEMES` (the Settings picker and the contrast gate
+read those), and its label in `THEME_LABELS` — all in this module, and
+nothing elsewhere.**
 
 That uniformity also enables the theme-switch safety net: because every
 palette is known, the app can spot a widget still holding a colour from a
@@ -1149,11 +1151,14 @@ one habit applied consistently, not three separate tricks.
 
 ### Richness, and why it exists
 
-`note_is_empty` and `note_richness` support cleanup. When duplicates are
-merged, richness decides *which copy to keep* — the one carrying the most
-actual content — rather than picking arbitrarily and hoping. `clean_notes`
-uses both to drop blank notes and de-duplicate on load, and reports what it
-did so the app can tell you rather than silently changing your notebook.
+`note_is_empty` and `note_richness` support the one-time cleanup a
+notebook gets on its first load (`clean_notes`, run once and then marked
+`cleanup_done` in settings): blank notes dropped, duplicates merged, and
+richness decides *which copy to keep* — the one carrying the most actual
+content — rather than picking arbitrarily and hoping. It reports what it did
+so the app can tell you rather than silently changing your notebook.
+Settings → Duplicates is a different, later clean-up: it keeps the first
+copy of each group.
 
 ---
 
