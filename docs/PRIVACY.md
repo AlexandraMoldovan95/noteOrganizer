@@ -1,6 +1,6 @@
 # Privacy policy
 
-*Note Organizer for Windows and for Android, made by Alexandra Moldovan. Last updated: 28 October
+*Note Organizer for Windows and for Android, made by Alexandra Moldovan. Last updated: 2 November
 2026.*
 
 Your notes stay on your device. Note Organizer has no accounts, no advertising, no analytics and
@@ -31,7 +31,10 @@ attached files - is kept in plain files on your device:
 - **Windows:** a folder on your computer, `Note Organizer` in your user folder (beside
   Documents) for the installed app; uninstalling the app leaves it, and your notes, where they
   are. Settings → About shows where it is. If the app ever fails, it writes what went wrong to
-  `crash_log.txt` in the same folder; the log is never sent anywhere.
+  `crash_log.txt` in the same folder; the log is never sent anywhere. So that no note is lost,
+  the app also keeps copies of the notes file in that folder - one from just before each update,
+  and any file it could not read or had to replace - and never deletes them itself: a note you
+  delete stays in those copies until you delete them.
 - **Android:** the app's private storage, which other apps cannot read.
 
 The apps do not encrypt these files. They are protected by your device's own security: your

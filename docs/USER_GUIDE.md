@@ -438,7 +438,7 @@ place up, the bottom one down. A press also picks the item — a ring shows roun
 **Alt+↑** or **Alt+↓** carries on moving it from the keyboard (Tab to an item's box picks it
 too). The new order is saved with the note, and a template's checklist moves the same way.
 The box sits beside the calculator at the same size; when a list gets long, **Expand ⌄**, under
-the list, grows it to give more room (**Collapse ⌃** puts it back) (and it always scrolls, expanded or not). The expanded size is a
+the list, grows it to give more room (**Collapse ⌃** puts it back); it scrolls either way. The expanded size is a
 per-view choice — switching notes returns it to the compact size. An item can be up to 2,000
 characters; a longer paste is shortened to fit, as a note's title is, and the status bar says so
 — or, while the status bar is scrolled out of sight, a banner at the top of the window.
@@ -680,20 +680,25 @@ bring the day back is to set the repeat up again.
 Deleting a note moves it to the Trash — **Recently deleted**, in Settings — where it's recoverable for 30 days
 before being purged automatically — or for however long you choose: a **Keep deleted notes for**
 selector at the top of the same panel offers 7 to 90 days, and a change applies from the next
-startup's cleanup. Restore individual notes, delete them permanently one at a time, or empty the
-whole trash at once. With a lot of deleted notes, the list loads the most recent batch first, with
+startup's cleanup. Restore notes or delete them permanently, one at a time or ticked together,
+or empty the whole trash at once. With a lot of deleted notes, the list loads the most recent batch first, with
 a button to reveal more — so it stays quick to open no matter how much has accumulated there.
 Deleting permanently — by hand or by the automatic cleanup — never removes an attached file that
-a note still uses.
+a note still uses. It does not reach the safety copies of the notes file either: the app keeps one
+from just before each update (`notes_data_backup_<date>.json`, beside your notes, named in the
+message after the update) and never deletes them itself, so a note deleted for good is still in
+those files until you delete them.
 
 If the settings file can't be read (a bad shutdown or a disk problem can do that), the app no
 longer knows how long you chose, so it removes nothing from the Trash until you choose again. It
 says so once when it starts, and the selector shows **Choose…** until you do.
 
 Each row also carries a tick box, so getting a batch back is one gesture rather than forty: tick
-what you want and an **↩ Restore N selected** button appears at the foot of the panel, just above
-**Empty trash**, counting what you ticked. It is only there while something is ticked — and it is
-deliberately the quieter of the two, because the sweeping button beside it is the irreversible one.
+what you want — or **Select all** above the rows, which ticks the whole Trash, the rows not
+shown yet too — and two buttons appear at the foot of the panel, above **Empty trash**, counting
+what you ticked: **↩ Restore N selected** and **Delete N selected permanently**. They are only
+there while something is ticked. Restore is the ordinary button; the two that cannot be undone are
+outlined in red, and each asks before it deletes.
 
 Two deleted notes with the same title used to be impossible to tell apart, which made restoring
 both the only safe choice. Hovering a row now floats a small preview of that note's contents
@@ -705,7 +710,9 @@ A table in the note is named there (**▦ 1 table**) rather than drawn as rows o
 ### Finding & cleaning up duplicates
 
 Settings → **Duplicates** groups notes that match on title, body, comments, category, checklist
-and repeat rule. Within a
+and repeat rule. Case, spacing and a “(copy)” after the title are ignored, and so are the text's
+styling, the date, the colour and the pin — so when one copy is styled differently, look before
+you choose which to keep. Within a
 group, tick specific copies to remove (the rest are kept — nothing forces "keep exactly one"), or
 use **Clean up ALL groups** to apply "keep the first, remove the rest" across every group in one
 click.
@@ -993,8 +1000,8 @@ attachments.
 ### Full backup: export
 
 Settings → Backup → **Export** creates a single `.zip` containing every note, your settings, every
-attachment, your templates and the Trash — the one file that moves *everything* to another
-device. A line under the button
+attachment, your templates and the Trash — the one file that moves your notebook to another
+device (what it brings back of your settings is under Import, below). A line under the button
 remembers when you last did this — worth a glance now and then, because that `.zip` is the only
 copy of your notes outside the app's data folder (see Getting started for where that lives). With a lot of attachments this can take a moment;
 a progress bar stays visible at the bottom of the window the whole time, and the app remains fully
@@ -1007,8 +1014,11 @@ backup was made, so you know to export again.
 
 ### Full backup: import
 
-Settings → Backup → **Import** brings a previously exported `.zip` back in — notes, settings,
-attachments, templates and the Trash together. Just like importing a code, you'll be asked
+Settings → Backup → **Import** brings a previously exported `.zip` back in — notes, attachments,
+templates and the Trash together, and from its settings your categories and the calendar's day
+colours and marks. The theme, your name, the text size, the list's order and the rest stay as this
+computer has them; so does how long the Trash keeps notes, unless you never chose it here and the
+backup's is longer. Just like importing a code, you'll be asked
 about any notes that look identical to what you already have before anything is added; a
 template only comes in if you don't already have one by that name, and re-importing the same
 backup never doubles the Trash.
@@ -1054,7 +1064,8 @@ protects the trash, templates and settings files.
 
 Failed *saves* speak up too: if a data file can't be written (a full disk, a file another program
 holds), an error message names the file instead of pretending the save worked, and a technical
-trace lands in `crash_log.txt` beside your data — worth attaching if you ever report a problem.
+trace lands in `crash_log.txt` beside your data ([what it holds](#feedback-and-the-privacy-policy)
+before you share any of it).
 While your latest changes are still unsaved, closing the app tries once more and then asks
 before it closes, so they are not lost without a word. A delete the Trash can't hold deletes
 nothing and says so.
@@ -1073,7 +1084,7 @@ you came for. A **← Back to Notes** button at the top returns you to your note
 
 ### Your name
 
-Settings → Your name sets the greeting shown above the note list ("Hi \<name\>,"). Leave it blank
+Settings → General → **Your name** sets the greeting shown above the note list ("Hi \<name\>,"). Leave it blank
 for no greeting.
 
 ### Statistics
@@ -1104,7 +1115,7 @@ keys that only mean something inside a list, in the find bar, or on the note lis
 | **Ctrl+Tab** / **Ctrl+Shift+Tab** | in the note or the comments box | Leaves the box (where Tab types a tab) for the next / previous control. |
 | **Esc** | a popup or a dropdown's list | Closes it, and the keyboard goes back to what opened it. |
 | **Space** / **Enter** | anywhere | Presses what the keyboard is on — a drawn button too: a theme, an alignment, a category's rename, colour or delete, the sidebar's ‹. |
-| **Ctrl+B** / **Ctrl+I** / **Ctrl+U** / **Ctrl+D** | editor | Bold / Italic / Underline / Strikethrough. |
+| **Ctrl+B** / **Ctrl+I** / **Ctrl+U** / **Ctrl+D** | the note's text, or an open table cell | Bold / Italic / Underline / Strikethrough — in a cell with nothing selected, the whole cell. The comments box is plain text: there they do nothing. |
 | **Ctrl+V** | editor | Pastes — the bold, the colours and the lists come with it. |
 | **Ctrl+Shift+V** | editor | Pastes the words on their own, with none of the styling. |
 | **Ctrl+Z** | editor | Undoes, in the note body and in comments. |
