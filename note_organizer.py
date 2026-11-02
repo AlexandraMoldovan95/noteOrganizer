@@ -2044,7 +2044,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if direction == "up":
                 msg = (
                     f"Updated to version {new} (from {old}).\n\n"
-                    "Your notes are unchanged — only the app was updated."
+                    "Your notes came through the update."
                 )
                 if self._version_backup_path:
                     msg += (
@@ -2063,7 +2063,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 lines.append(
                     f"⚠ You're running an older version ({new}) over data last "
                     f"used with {old}. Everything should still work, but if "
-                    "anything looks off, use the newer build."
+                    "anything looks off, open them with the newer version."
                 )
 
         made = getattr(self, "_set_aside_at_start", 0)
@@ -13112,7 +13112,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.refresh_category_widgets()
         # ...and only now are the notes you already have updated. Before
         # the claimed-file scan below, because an update can bring files in.
-        updated = self._apply_known_updates(updates, "backup")
+        # Files alone make no rescue copy, so Restore previous does not undo
+        # them: counted apart, as the phone counts them (wave 3).
+        files_only = sum(
+            1 for mine, theirs in updates
+            if not shared_update_changes(mine, theirs, UPDATABLE_FROM_BACKUP)
+            and self._files_to_adopt(mine, theirs))
+        updated = self._apply_known_updates(updates, "backup") - files_only
 
         # Calendar day colours and emoji markers ride the backup's
         # settings.json exactly like categories do, and used to be dropped
@@ -13284,6 +13290,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if updated:
             known_note += (f" Updated {updated} note(s) you already had "
                            "(“↩ Restore previous” undoes each one).")
+        if files_only:
+            known_note += (f" {files_only} note(s) you already had took "
+                           "attached files this computer lacked.")
         if unchanged:
             known_note += (f" {unchanged} note(s) were already here, "
                            "unchanged, and were skipped.")
@@ -19960,7 +19969,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return "break"
         try:
             st = self.capture_editor_state()
-        except Exception:
+        except Exception:  # noqa: BLE001 -- logged, as the autosave's is
+            self._log_swallowed("Ctrl+S: capture_editor_state")
             return "break"
         # The emptied-saved-note exemption applies to Ctrl+S too: without
         # it the shortcut was a silent no-op on exactly the edit T0-5 is

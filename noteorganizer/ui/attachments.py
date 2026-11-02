@@ -16,12 +16,12 @@ this group asking for a confirmation box.
 
 DELETING A FILE IS NOT THE SAME AS REMOVING A REFERENCE
 -------------------------------------------------------
-Removing an attachment from a note removes the *reference*. Whether the
-file on disk goes too depends on where the note is heading: a note moved
-to the trash keeps its files, because restoring it has to restore them
-as well. Only the permanent-deletion paths call
-``_delete_attachment_files``. See ``docs/ISSUES_LOG.md``, "The
-attachments that were never deleted".
+A note moved to the trash keeps its files, because restoring it has to
+restore them as well. The permanent-deletion paths, and removing one
+attachment from a note (its dialog says so), call
+``_delete_attachment_files``, which spares a file another note or Trash
+entry still names. See ``docs/ISSUES_LOG.md``, "The attachments that
+were never deleted".
 
 See :mod:`noteorganizer.ui` for what a mixin is and the two rules that
 keep them working.

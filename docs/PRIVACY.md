@@ -33,7 +33,7 @@ attached files - is kept in plain files on your device:
   are. Settings → About shows where it is. If the app ever fails, it writes what went wrong to
   `crash_log.txt` in the same folder; the log is never sent anywhere. So that no note is lost,
   the app also keeps copies of the notes file in that folder - one from just before each update,
-  and any file it could not read or had to replace - and never deletes them itself: a note you
+  and a copy of any file it could not read - and never deletes them itself: a note you
   delete stays in those copies until you delete them.
 - **Android:** the app's private storage, which other apps cannot read.
 

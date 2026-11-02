@@ -1603,7 +1603,8 @@ class SettingsPageMixin:
                 return
             if self.ask_yes_no(
                 "Delete permanently",
-                f"Permanently delete “{one_line(title, 200)}”? This can't be undone."
+                f"Permanently delete “{one_line(title, 200)}”"
+                f"{self._attached_files_words([entry])}? This can't be undone."
                 + self._series_warning([entry]),
                 icon="warning", default="no"
             ) and still_in_trash():
@@ -1741,11 +1742,6 @@ class SettingsPageMixin:
             # A window not known removed nothing, so any choice is shorter.
             if current is None or days < current:
                 doomed = trash_entries_past_window(self.trash, days)
-                # No parent= here, unlike its neighbours in this file: the
-                # dialog renders as an overlay inside the app window and
-                # _themed_dialog has no such parameter, so every parent=
-                # passed to it is silently dropped. Seven of those are
-                # already in this file; this is not the eighth.
                 if doomed and not self.ask_yes_no(
                         "Keep deleted notes for less time",
                         self._retention_loss_warning(doomed, days, current),
@@ -2008,7 +2004,8 @@ class SettingsPageMixin:
             if self.ask_yes_no(
                 "Empty trash",
                 f"Permanently delete all {len(named)} "
-                f"{'note' if len(named) == 1 else 'notes'} in the trash? "
+                f"{'note' if len(named) == 1 else 'notes'} in the trash"
+                f"{self._attached_files_words(named)}? "
                 "This can't be undone." + self._series_warning(named),
                 icon="warning", default="no"
             ):
@@ -4126,8 +4123,9 @@ class SettingsPageMixin:
         """
         self._settings_subtitle(
             parent,
-            "Everything the keyboard can do — Page Down reads on. The "
-            "formatting four are also on the note body's right-click menu.")
+            "The keyboard's shortcuts, by where they work — Page Down reads "
+            "on. The formatting four are also on the note body's right-click "
+            "menu.")
         for title, rows in self.SHORTCUT_GROUPS:
             tk.Label(parent, text=title, font=("Segoe UI", 9, "bold"),
                      anchor="w", bg=self.colors["bg"],

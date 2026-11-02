@@ -69,7 +69,7 @@ LINES = (
     "",
     "# 🛡 Your privacy",
     "- The app collects nothing and sends nothing anywhere. A note leaves "
-    "this computer only when you share it or save a backup.",
+    "this computer only when you share or export it, or save a backup.",
     "- **Settings → About → Privacy policy** has the whole of it.",
     "",
     "# 🎨 Make it yours",

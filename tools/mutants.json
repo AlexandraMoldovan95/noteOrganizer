@@ -2665,7 +2665,7 @@
     "edits": [
       {
         "file": "noteorganizer/core/welcome.py",
-        "find": "    \"\",\n    \"# 🛡 Your privacy\",\n    \"- The app collects nothing and sends nothing anywhere. A note leaves \"\n    \"this computer only when you share it or save a backup.\",\n    \"- **Settings → About → Privacy policy** has the whole of it.\",\n",
+        "find": "    \"\",\n    \"# 🛡 Your privacy\",\n    \"- The app collects nothing and sends nothing anywhere. A note leaves \"\n    \"this computer only when you share or export it, or save a backup.\",\n    \"- **Settings → About → Privacy policy** has the whole of it.\",\n",
         "replace": ""
       }
     ],

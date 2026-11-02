@@ -840,7 +840,8 @@
       var msg = el("p", { class: "msg", role: "status" });
       screen.appendChild(el("div", { class: "page-pad" },
         el("p", { text: "A share code from the desktop demo, the desktop app or the phone app brings its note here, " +
-          "formatting, checklist and repeat included. One you already have is updated." }),
+          "formatting, checklist and repeat included. One you already have is updated here; " +
+          "the app asks first, Update or Add as a new note." }),
         area, el("div", { class: "sheet-actions" },
           el("button", { type: "button", class: "btn primary", text: "Import", onclick: function () {
             if (!window.DecompressionStream) { msg.className = "msg bad"; msg.textContent = "This browser cannot read share codes."; return; }

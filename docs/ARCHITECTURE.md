@@ -1422,8 +1422,8 @@ rows do, no chunk is placed past 32,767 px (`RowStack.REACH`): placed there, X d
 Left as one frame, each sized by its own cap and measured at 300%:
 Settings → Categories (200 rows, 17,599 px) and the editor page (a note's 200 attachments,
 25,325 px), against about 33,400 px one frame can be scrolled through; the emoji picker and a
-dialog's message are smaller still. A table is drawn whole only up to 400 rows; the note list
-is one drawing.
+dialog's message are smaller still. A table is drawn whole only up to 400 rows, 3,000 cells and
+`MAX_DRAWN_TABLE_PX` (30,000 px) tall; the note list is one drawing.
 
 ### Showing and hiding asks the layout, not the screen
 

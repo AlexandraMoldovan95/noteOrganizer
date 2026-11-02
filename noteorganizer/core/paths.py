@@ -271,8 +271,8 @@ def resolve_data_dir(script_dir):
         if _is_writable(exe_dir):
             return exe_dir, (
                 "Your Windows profile folder isn't writable, so notes are being "
-                "saved next to the app instead. They'll persist, but move the app "
-                "out of Downloads/Program Files if notes ever go missing."
+                "saved next to the app instead. They'll persist there; make a "
+                "backup (Settings → Backup) before you move or remove the app."
             )
         tmp = os.path.join(tempfile.gettempdir(), "NoteOrganizer")
         return tmp, (

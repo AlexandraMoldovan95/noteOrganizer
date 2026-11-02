@@ -187,7 +187,8 @@ don't need to select a line exactly.
 
 - **Lists.** The **•** and **1.** buttons turn those lines into a bullet or numbered list. Click
   the same button again to turn the list off. Press **Enter** to start the next item; press it on
-  an item you haven't typed anything into and the list ends there. Pressed at the very start of
+  an item you haven't typed anything into and the list ends there (on an indented item, it steps
+  out one level first; Backspace after its marker does the same). Pressed at the very start of
   an item, before its marker, Enter leaves an empty item above it; pressed with words selected,
   it replaces them, as anywhere else. **Backspace** with the cursor just after a marker removes
   the marker rather than deleting it one character at a time — unless words are selected, which
@@ -303,8 +304,8 @@ nearest one would claim the note is set in something it never was.*
 The table button on the toolbar opens a small size grid — sweep across it to choose how many rows
 and columns, and a table appears at the cursor with the first cell ready to type into. (Tables
 start at two columns: a single-column row of pipes reads as ordinary text, not a table, so the
-picker never offers one.) A very large table — over 400 rows, or 3,000 cells — is shown as its
-text, the rows of `|` it is kept as, so the note stays quick to open; nothing in it changes.
+picker never offers one.) A very large table — over 400 rows, or 3,000 cells, or one too tall to
+draw (tall cells count) — is shown as its text, the rows of `|` it is kept as, so the note stays quick to open; nothing in it changes.
 
 ![A table in a note, with a highlighted header row](screenshots/tables.png)
 
@@ -462,8 +463,8 @@ click-to-insert on any past entry.
 
 ### Emoji
 
-Any text field in a note (title, body, comments) can have an emoji inserted at the cursor via the
-right-click menu, without leaving the keyboard to hunt through the system emoji picker.
+The 😀 button on the formatting bar puts an emoji at the cursor in the note's text, or in the open
+table cell. In the title and the comments, **Insert emoji…** on the right-click menu does the same.
 
 ![Emoji picker](screenshots/emoji-picker.png)
 
@@ -646,7 +647,7 @@ Trash besides.
 
 Save any note as a reusable template (🧩 **Save as template**), or build one from scratch in
 Settings → Templates. Starting a new note with **Use template** fills in the title, body,
-category, and checklist from the template — the template itself is never affected by what you do
+comments, category, and checklist from the template — the template itself is never affected by what you do
 with the note afterward. Over a note you have open, **Use template** saves that note first and
 starts a new one beside it; over a new note you have started writing, it asks before replacing
 what you wrote. Templates don't go to the Trash (Settings → Recently deleted) —
@@ -785,12 +786,11 @@ write over it. Undoing a day's delete is refused the same way while another day 
 
 To put it back, move it to its own date, press **↺ Reset this day…** beside **Move this day…**, or
 right-click it in the calendar and choose **↺ Reset this day to the series…**. The date goes back
-unless another day of the series has been moved onto it meanwhile - then the day stays where it is,
-and says so; when the day has text of its own, you choose whether the text goes back to the
+unless another day of the series has been moved onto it meanwhile, or the series keeps text or a
+colour of its own on that date - then the day stays where it is, and says so; when the day has text of its own, you choose whether the text goes back to the
 series' too, or stays. Deleting a moved day removes it, and its
-Undo brings it back moved. Turning the repeat off keeps the days' own text and their moves with
-the note, out of sight, and **↩ Restore previous** brings the series back with them; turn the
-repeat on again and they show again.
+Undo brings it back moved. What turning the repeat off does to the days is told once, under
+[Moving or ending a series](#moving-or-ending-a-series).
 
 ### Moving or ending a series
 
@@ -808,10 +808,12 @@ stays where you saw it, as that date's day, and its own date shows the series ag
 text never moves on its own; one left on a date the series no longer has is listed by the
 "off the schedule" line, for you to keep as a note or move to the Trash.
 
-Turning the repeat off ("Does not repeat", in the whole series) ends every day's own edits along
-with the series — but none of their text is lost. When any day had text of its own, the note as
-it was, repeat and days included, becomes its rescue copy, and **↩ Restore previous** brings the
-repeating note back whole. On such a series the turn-off itself is saved when you leave the note
+Turning the repeat off ("Does not repeat", in the whole series) ends the series, and none of its
+days' text is lost. When any day had text of its own, the days — their text and their moves —
+stay with the note, out of sight, and show again if you turn the repeat back on; the note as it
+was, repeat and days included, also becomes its rescue copy, and **↩ Restore previous** brings the
+repeating note back whole. When no day had text, the days' colours, moves and deletions go with
+the series. On such a series the turn-off itself is saved when you leave the note
 or press Save: until then everything else you change goes on saving, the status line says the
 turn-off waits, and picking the repeat again puts the series back as it was.
 
@@ -1104,7 +1106,7 @@ note you're editing, and **Ctrl+F** opens the find bar for searching within the 
 first (asking about a template you were halfway through). While a question is on screen, the
 shortcuts wait for your answer. Settings → Keyboard shortcuts carries this reference inside the app,
 grouped by where each combo works. The table below is the longer of the two — it also covers the
-keys that only mean something inside a list, in the find bar, or on the note list.
+keys inside a bulleted or numbered list, and Ctrl+Z in a table.
 
 | Shortcut | Where | What it does |
 | --- | --- | --- |
@@ -1121,8 +1123,8 @@ keys that only mean something inside a list, in the find bar, or on the note lis
 | **Ctrl+Shift+V** | editor | Pastes the words on their own, with none of the styling. |
 | **Ctrl+Z** | editor | Undoes, in the note body and in comments. |
 | **Ctrl+Y** / **Ctrl+Shift+Z** | editor | Redoes. |
-| **Enter** | in a list | Starts the next item; on an item you haven't typed anything into, the list ends there. |
-| **Backspace** | in a list | With the cursor just after a marker and nothing selected, removes the marker. |
+| **Enter** | in a list | Starts the next item; on an item you haven't typed anything into, the list ends there (an indented one steps out a level first). |
+| **Backspace** | in a list | With the cursor just after a marker and nothing selected, removes the marker (an indented item steps out a level first). |
 | **Tab** / **Shift+Tab** | in a list | Pushes an item one level in / pulls it back out. |
 | **Tab** / **Shift+Tab** | in a table | Moves to the next / previous cell; Tab on the very last cell adds a fresh row. |
 | **Enter** / **Shift+Enter** | in a table | Starts a new line inside the cell. |

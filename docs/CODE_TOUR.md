@@ -520,23 +520,22 @@ what the user meant; dropping is honest and can't corrupt the editor.
 A note carries formatting in two fields, because they answer different
 questions.
 
-`formatting` describes **characters** — bold, italic, colours, and now font
-size and family — as the spans above.
+`formatting` describes **characters** — bold, italic, colours, font size
+and family — as the spans above.
 
 `paragraphs` describes **whole lines** — which are list items, at what
-nesting depth, and how they are aligned — keyed by line number, since a
-line is the unit those apply to. Only non-default properties are stored, so
-an ordinary paragraph produces no entry at all.
+nesting depth, and how they are aligned — keyed by line number
+([what is stored](ARCHITECTURE.md#line-styles-paragraphs)).
 
 It has its own gatekeeper, `normalize_paragraphs()`, which drops bad
-entries the same way — and additionally throws away any pointing past the
+entries the same way — and throws away any pointing past the
 end of the body, so a note that was later shortened can't come back with
 an indent on a line that no longer exists.
 
 ### The rule that shapes most of this module
 
 **Two Tk tags that both set the widget's `font` option do not compose. One
-simply wins.**
+wins.**
 
 That single constraint explains a surprising amount:
 
@@ -565,12 +564,8 @@ A bullet really is a `"• "` at the start of the line, and a numbered item
 really begins `"1. "`. `parse_list_marker()` reads them back; `marker_for()`
 writes them.
 
-**Why store the marker instead of just drawing it?** Because `formatting`
-is character offsets into that same body. A marker that existed on screen
-but not in the text would put every offset after it out by the marker's
-length, on every line, forever. Keeping the text and the widget identical
-means the offsets need no translation — and a list still looks like a list
-when the note is exported, shared as a code, or pasted into an email.
+Why it is stored rather than only drawn is in
+[ARCHITECTURE](ARCHITECTURE.md#the-marker-lives-in-the-body-text).
 
 The cost is that renumbering rewrites real characters, which moves
 everything after them. So `renumber()` returns the shifts it caused and

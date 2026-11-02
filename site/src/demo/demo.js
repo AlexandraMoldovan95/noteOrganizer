@@ -1443,9 +1443,6 @@
     title.value = n.title;
     title.addEventListener("input", function () { n.title = title.value; touched(); });
     title.addEventListener("focus", function () { lastField = title; });
-    title.addEventListener("keydown", function (e) {
-      if (e.key === "Enter") { e.preventDefault(); $("#ed-body").focus(); }
-    });
     var catBtn = el("button", { type: "button", class: "ed-cat", "aria-haspopup": "menu", "aria-label": "Category: " + cat.name,
       onclick: function () {
         var items = S.categories.map(function (c) {
@@ -1926,7 +1923,7 @@
       body.appendChild(el("p", { class: "lead", text: "The ones this demo knows. The desktop app has more, listed on this same page." }));
       var rowsK = [["Ctrl+S", "Save now"], ["Ctrl+B / Ctrl+I / Ctrl+U", "Bold / italic / underline"],
                    ["Ctrl+Z", "Undo, in the note"], ["↑ ↓", "Walk the note list, and the items of a menu"],
-                   ["Enter", "From the title, go to the note's text"], ["Esc", "Close a menu or a question"]];
+                   ["Esc", "Close a menu or a question"]];
       var table = el("table", { class: "kbd-table" });
       rowsK.forEach(function (r) { table.appendChild(el("tr", null, el("td", null, el("kbd", { text: r[0] })), el("td", { text: r[1] }))); });
       body.appendChild(el("div", { class: "set-panel" }, table));
