@@ -13,9 +13,9 @@ being a private note the moment it is pushed.
 
 This app's interface is English throughout, so in THIS repository there
 is no legitimate Romanian to show -- which makes the rule simple to state
-and simple to check. (The Android companion is different: its interface
-speaks Romanian to its users, so its copy of this gate exempts the app's
-own strings. Same idea, different boundary.)
+and simple to check. (The Android companion keeps a copy of this gate; its
+interface has been English too since 2026-10-15, so it holds the app's own
+strings to the same rule.)
 
 One exception, agreed on purpose: the Romanian month names the date field
 understands ("17 octombrie 2026"), in noteorganizer/core/recurrence.py and
