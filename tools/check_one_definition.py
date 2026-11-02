@@ -117,13 +117,13 @@ RULES = [
         # The same question written with local variables instead of an
         # editor-state dict. The gate's first rule requires the
         # st["field"] spelling and so was blind to this one entirely --
-        # which meant save_current_note's guard, a deliberate second
+        # which meant the save's own guard, a deliberate second
         # answer, had an allowlist entry that had never matched
         # anything. An exception nobody can see is not a reviewed
         # exception; it is a comment.
         pattern=re.compile(r"(?s)not\s+title\b.{0,200}?\bnot\s+body\b"),
         allowed={
-            "save_current_note":
+            "_editor_fields_to_save":
                 "explicit Save additionally counts the date and the repeat "
                 "rule: pressing Save is what makes a bare dated reminder "
                 "deliberate, and the automatic routes agree with "
@@ -148,7 +148,7 @@ RULES = [
             # Constructors, not judgements: these BUILD a note or a
             # template dict out of editor state. Naming the fields is
             # what they are for.
-            "save_current_note": "builds the note being saved",
+            "_write_fields_to_note": "builds the note being saved",
             "do_save": "builds the template being saved",
             "collect": "builds the template the settings editor is editing",
             "notes_set_aside":

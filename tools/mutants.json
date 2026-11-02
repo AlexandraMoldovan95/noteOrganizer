@@ -268,8 +268,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        bar = getattr(self, \"_main_hscroll\", None)\n",
-        "replace": "        bar = getattr(self, \"_main_hscroll\", None)\n        needed = True\n"
+        "find": "        bar = self._main_hscroll\n",
+        "replace": "        bar = self._main_hscroll\n        needed = True\n"
       }
     ],
     "must_fail": [
@@ -287,8 +287,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        bar = getattr(self, \"_main_hscroll\", None)\n",
-        "replace": "        bar = getattr(self, \"_main_hscroll\", None)\n        needed = False\n"
+        "find": "        bar = self._main_hscroll\n",
+        "replace": "        bar = self._main_hscroll\n        needed = False\n"
       }
     ],
     "must_fail": [
@@ -1303,7 +1303,7 @@
     "id": "KC04",
     "about": "no ring shows which day the keyboard is on",
     "edits": [{"file": "noteorganizer/ui/calendar_view.py",
-               "find": "            if not getattr(self, \"_cal_has_keyboard\", False):\n",
+               "find": "            if not self._cal_has_keyboard:\n",
                "replace": "            if True:\n"}],
     "must_fail": ["with the keyboard on the month a ring is drawn round its first day"],
     "suites": ["qa7"],
@@ -5135,8 +5135,8 @@
     "id": "MN03",
     "about": "every save rebuilds the day left open on the Calendar, behind the Notes tab",
     "edits": [{"file": "note_organizer.py",
-               "find": "        if not self._calendar_is_showing():\n            self._calendar_needs_render = True\n            return\n        if getattr(self, \"_day_panel_mode\", \"empty\") == \"list\":\n",
-               "replace": "        if getattr(self, \"_day_panel_mode\", \"empty\") == \"list\":\n"}],
+               "find": "        if not self._calendar_is_showing():\n            self._calendar_needs_render = True\n            return\n        if self._day_panel_mode == \"list\":\n",
+               "replace": "        if self._day_panel_mode == \"list\":\n"}],
     "must_fail": ["a save made on the Notes tab does not rebuild the day left open"],
     "suites": ["qa7"],
     "expect": "killed"
@@ -6334,7 +6334,7 @@
     "id": "MD01",
     "about": "a new day passes unnoticed by the reminder",
     "edits": [{"file": "noteorganizer/ui/calendar_view.py",
-               "find": "        if today != getattr(self, \"_reminder_day\", today):\n",
+               "find": "        if today != self._reminder_day:\n",
                "replace": "        if False:\n"}],
     "must_fail": ["across midnight the new day's reminder replaces the old one"],
     "suites": ["qa8"],
@@ -7944,7 +7944,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        return self.sidebar_toggle if getattr(self, \"_sidebar_hidden\", False) else self.canvas\n",
+        "find": "        return self.sidebar_toggle if self._sidebar_hidden else self.canvas\n",
         "replace": "        return self.canvas\n"
       }
     ],

@@ -1267,7 +1267,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # and from the theme switch, and the constructor once called it
         # before the colours existed. Degrading to the default icon is a
         # better answer than degrading to none.
-        colors = getattr(self, "colors", None) or {}
+        colors = self.colors or {}
         accent = (colors.get("accent") or "").lstrip("#").lower()
         stems = ([("icon_%s.ico" % accent, "icon_%s.png" % accent)]
                  if accent else [])
@@ -1473,7 +1473,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         and one sitting beside the hint text suggests the hint is something
         you could remove.
         """
-        btn = getattr(self, "search_clear_btn", None)
+        btn = self.search_clear_btn
         if btn is None:
             return                      # called while the row is being built
         if self._search_query():
@@ -1524,8 +1524,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         near the cap says so straight away rather than waiting for a
         keystroke to reveal it.
         """
-        if not hasattr(self, "title_count_lbl"):
-            return
         used = len(self.title_entry.get())
         if self._title_is_placeholder():
             used = 0
@@ -1897,8 +1895,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _refresh_greeting(self):
         """Show 'Hi <name>,' if a name is set in Settings, otherwise a gentle
         nudge to set one. Recomputed whenever the name changes."""
-        if not hasattr(self, "greeting_lbl"):
-            return
         name = self.load_username()
         if name:
             self.greeting_lbl.config(text=f"Hi {name},")
@@ -2185,7 +2181,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         could not read it, or could not bring an older notebook in (its
         writes held, paths.hold_writes). What the app holds then is only what
         was written since -- a backup of it is not a backup of the notebook."""
-        return (getattr(self, "_corrupt_notes_report", None) is not None
+        return (self._corrupt_notes_report is not None
                 or _core_paths.writes_held(DATA_FILE))
 
     def _maybe_seed_welcome_note(self):
@@ -2853,7 +2849,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             save_setting("editor_font_size", size)
 
         spec = (self.editor_font_family, self.editor_font_size)
-        for widget in (self.body_text, getattr(self, "comments_text", None)):
+        for widget in (self.body_text, self.comments_text):
             if widget is not None:
                 widget.configure(font=spec)
         self._setup_body_formatting_tags(self.body_text)
@@ -8633,7 +8629,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except tk.TclError:
             return "break"
         if widget in (getattr(self, "body_text", None),
-                      getattr(self, "comments_text", None)):
+                      self.comments_text):
             self._schedule_autosave()
         self._say_if_paste_was_cut({"text_cut": True}, in_body=in_body)
         return "break"
@@ -8895,7 +8891,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         make the button claim the selection is a list. *line* is that line's
         text when its caller has just read it.
         """
-        if not getattr(self, "_list_buttons", None):
+        if not self._list_buttons:
             return
         line_no = int(self.body_text.index("insert").split(".")[0])
         current = self._list_kind_of(self.body_text, line_no, line)
@@ -8904,7 +8900,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         current_align = self._grid_align_context()
         if current_align is None:
             current_align = self._paragraph_align_of(self.body_text, line_no)
-        for align, btn in getattr(self, "_align_buttons", {}).items():
+        for align, btn in self._align_buttons.items():
             self._set_button_pressed(btn, align == current_align)
 
     def _attach_tooltip(self, widget, title, detail=""):
@@ -9024,7 +9020,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         without the font this was measured on -- CI is all three, and the
         same bar that needs 577px here needs 827px there.
         """
-        if not getattr(self, "_fmt_bar_items", None):
+        if not self._fmt_bar_items:
             return
         if available is None:
             available = self._fmt_bar.winfo_width()
@@ -11149,8 +11145,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         the pending styles queued up for the next typed character — in the
         toolbar buttons' pressed/unpressed look. Called on selection/cursor
         changes and whenever a pending style is toggled."""
-        if not hasattr(self, "_fmt_buttons"):
-            return
         # The caret's line read once, for both, and only as far as they read
         # it (_line_head): every key and click runs this.
         line_no = int(self.body_text.index("insert").split(".")[0])
@@ -11175,44 +11169,42 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 fg=self._on_fill("accent") if active else self.colors["text"],
             )
 
-        if hasattr(self, "font_size_var"):
-            if has_selection:
-                size = self._uniform_font_in_selection("font_size", start, end)
-                family = self._uniform_font_in_selection("font_family", start, end)
-            else:
-                size = self._pending_font_size
-                family = self._pending_font_family
-            # A mix across the selection reads as "Default" rather than as
-            # the first run's value, which would claim the whole selection
-            # is that size.
-            self.font_size_var.set(str(size) if size else self.DEFAULT_FONT_LABEL)
-            self.font_family_var.set(family or self.DEFAULT_FONT_LABEL)
+        if has_selection:
+            size = self._uniform_font_in_selection("font_size", start, end)
+            family = self._uniform_font_in_selection("font_family", start, end)
+        else:
+            size = self._pending_font_size
+            family = self._pending_font_family
+        # A mix across the selection reads as "Default" rather than as
+        # the first run's value, which would claim the whole selection
+        # is that size.
+        self.font_size_var.set(str(size) if size else self.DEFAULT_FONT_LABEL)
+        self.font_family_var.set(family or self.DEFAULT_FONT_LABEL)
 
-        if hasattr(self, "text_color_btn"):
-            if has_selection:
-                text_color = self._uniform_color_in_selection("text_color", start, end)
-                highlight_color = self._uniform_color_in_selection("highlight", start, end)
-            else:
-                text_color = self._pending_text_color
-                highlight_color = self._pending_highlight_color
-            # Both buttons show an actual swatch of the active color as
-            # their own background when one is set (matching the note's
-            # own color-swatch button elsewhere in the app — a familiar
-            # pattern, not a new visual language), falling back to the
-            # theme's normal button look when nothing is active. Either
-            # way the letter's contrast is computed from whatever
-            # background is actually showing, so it stays legible for
-            # any palette color against any app theme.
-            tc_bg = text_color or self.colors["sidebar"]
-            hl_bg = highlight_color or self.colors["sidebar"]
-            self.text_color_btn.configure(
-                bg=tc_bg, activebackground=tc_bg,
-                fg=self._contrasting_fg(tc_bg) if text_color else self.colors["text"],
-            )
-            self.highlight_btn.configure(
-                bg=hl_bg, activebackground=hl_bg,
-                fg=self._contrasting_fg(hl_bg) if highlight_color else self.colors["text"],
-            )
+        if has_selection:
+            text_color = self._uniform_color_in_selection("text_color", start, end)
+            highlight_color = self._uniform_color_in_selection("highlight", start, end)
+        else:
+            text_color = self._pending_text_color
+            highlight_color = self._pending_highlight_color
+        # Both buttons show an actual swatch of the active color as
+        # their own background when one is set (matching the note's
+        # own color-swatch button elsewhere in the app — a familiar
+        # pattern, not a new visual language), falling back to the
+        # theme's normal button look when nothing is active. Either
+        # way the letter's contrast is computed from whatever
+        # background is actually showing, so it stays legible for
+        # any palette color against any app theme.
+        tc_bg = text_color or self.colors["sidebar"]
+        hl_bg = highlight_color or self.colors["sidebar"]
+        self.text_color_btn.configure(
+            bg=tc_bg, activebackground=tc_bg,
+            fg=self._contrasting_fg(tc_bg) if text_color else self.colors["text"],
+        )
+        self.highlight_btn.configure(
+            bg=hl_bg, activebackground=hl_bg,
+            fg=self._contrasting_fg(hl_bg) if highlight_color else self.colors["text"],
+        )
 
     # A curated set — common, broadly useful emojis grouped loosely by theme,
     # not an exhaustive unicode picker. Keeps the popup a manageable size.
@@ -11450,8 +11442,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         what is drawn, and everything comes back when the panel closes or
         the window grows. Measured: 640x600 and 1366x690 both hold the
         panels whole; at 1150x860 nothing changes at all."""
-        zone = getattr(self, "_sidebar_bottom", None)
-        buttons = getattr(self, "_sidebar_zone_buttons", None)
+        zone = self._sidebar_bottom
+        buttons = self._sidebar_zone_buttons
         if zone is None or not buttons or getattr(self, "_fitting_sidebar", False):
             return
         if self._is_placed(self.share_panel):
@@ -12619,7 +12611,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         (see _find_on_context_switch) — for the same reason: it describes
         a note that is no longer on screen.
         """
-        area = getattr(self, "editor_code_area", None)
+        area = self.editor_code_area
         if area is None:
             return
         try:
@@ -13382,9 +13374,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._update_checklist_progress()
             # The rows are built on opening (see _render_checklist_items);
             # rows already drawn from this very list need no rebuild.
-            if _checklist_rows_current(getattr(self, "_checklist_drawn", None),
-                                       self._get_checklist(),
-                                       getattr(self, "theme_name", None)):
+            if self._checklist_in_step(self._get_checklist()):
                 self._update_checklist_progress()
             else:
                 self._render_checklist_items()
@@ -13567,7 +13557,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not hasattr(self, "_checklist_rows"):
             return
         self._update_checklist_progress()
-        if not getattr(self, "_checklist_open", False):
+        if not self._checklist_open:
             # What stands in the closed frame no longer matches the list;
             # the next open redraws it.
             self._checklist_drawn = None
@@ -13579,7 +13569,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                      bg=self.colors["card"], fg=self.colors["subtext"],
                      font=("Segoe UI", 9), anchor="w").pack(fill="x", padx=4, pady=6)
         self._checklist_drawn = {
-            "items": items, "theme": getattr(self, "theme_name", None),
+            "items": items, "theme": self.theme_name,
             "rows": [self._build_checklist_row(idx, item)
                      for idx, item in enumerate(items)]}
 
@@ -13642,9 +13632,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if index is None:
                 return
             drawn = getattr(self, "_checklist_drawn", None)
-            in_step = (getattr(self, "_checklist_open", False)
-                       and _checklist_rows_current(
-                           drawn, items, getattr(self, "theme_name", None)))
+            in_step = self._checklist_in_step(items)
             items.pop(index)
             if in_step and items:
                 # This row goes, the others stay: rebuilding every row
@@ -13834,15 +13822,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 if self.selected_note_id is not None else None)
         return (note.get("uid") or None) if note is not None else None
 
+    def _checklist_in_step(self, items):
+        """Whether the checklist is open with its rows drawn from exactly
+        *items*, in this theme: only then may a change touch one row
+        (_checklist_rows_current)."""
+        return (self._checklist_open
+                and _checklist_rows_current(getattr(self, "_checklist_drawn", None),
+                                            items, self.theme_name))
+
     def _append_checklist_item(self, text):
         """*text* as the list's last item: one new row when the rows on screen
         are this list's, the whole list drawn otherwise. The Add box taken on
         a save rebuilt every row, 2.2 s at 1,000 (round 6 of the audit)."""
         items = self._get_checklist()
         drawn = getattr(self, "_checklist_drawn", None)
-        in_step = (getattr(self, "_checklist_open", False)
-                   and _checklist_rows_current(
-                       drawn, items, getattr(self, "theme_name", None)))
+        in_step = self._checklist_in_step(items)
         item = {"text": text, "done": False}
         items.append(item)
         if in_step:
@@ -13886,9 +13880,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if at is None or not 0 <= at + step < len(items):
             return False
         drawn = getattr(self, "_checklist_drawn", None)
-        in_step = (getattr(self, "_checklist_open", False)
-                   and _checklist_rows_current(
-                       drawn, items, getattr(self, "theme_name", None)))
+        in_step = self._checklist_in_step(items)
         to = at + step
         items[at], items[to] = items[to], items[at]
         if in_step:
@@ -13978,7 +13970,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         X and Windows can place, and past 32,767 px into it the list was blank
         while Space still ticked the items there. The view stays where it
         was, and the keyboard on the item, and the part of its row, it held."""
-        if not getattr(self, "_checklist_open", False):
+        if not self._checklist_open:
             return
         drawn = getattr(self, "_checklist_drawn", None) or {}
         canvas = self._checklist_canvas
@@ -14039,7 +14031,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         refresh the button badge so the item count shows even when closed."""
         # Collapse on note switch to keep the editor tidy; the badge still shows
         # how many items exist.
-        if getattr(self, "_checklist_open", False):
+        if self._checklist_open:
             self.checklist_section.pack_forget()
             self._checklist_open = False
         # Also drop the expand back to compact — the expanded height is a
@@ -14052,8 +14044,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     height=self._checklist_list_compact)
             if hasattr(self, "checklist_expand_btn"):
                 self.checklist_expand_btn.config(text="Expand ⌄")
-        if hasattr(self, "checklist_btn"):
-            self._update_checklist_progress()
+        self._update_checklist_progress()
 
     # ---------- In-note calculator ----------
 
@@ -14065,8 +14056,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         table claimed twelve words and inflated the reading time. *text*
         is the body as its caller has just read it.
         """
-        if not hasattr(self, "word_count_lbl"):
-            return
         if text is None:
             text = self.body_text.get("1.0", "end-1c")
         self._word_count_due = False
@@ -14092,9 +14081,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Called after loading a note into the editor: snap back to the top and
         recompute whether scrolling is even needed, so switching from a long
         note to a short one never leaves the short one scrolled down."""
-        if hasattr(self, "_sync_editor_scroll"):
-            self.editor_canvas.yview_moveto(0)
-            self.after_idle(self._sync_editor_scroll)
+        self.editor_canvas.yview_moveto(0)
+        self.after_idle(self._sync_editor_scroll)
 
     def _canvas_width_sync(self, canvas, item):
         """Return a <Configure> handler that resizes the canvas's inner window to
@@ -14340,8 +14328,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _refresh_category_button(self):
         """Update the category button's colour dot + label to the current pick."""
-        if not hasattr(self, "_cat_dot"):
-            return
         cat = self.category_var.get()
         color = CATEGORY_COLORS.get(cat, self.colors["accent"])
         try:
@@ -14517,9 +14503,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Quick toggle between the last dark and last light theme. Kept for the
         existing 'Switch to Light/Dark mode' button."""
         if self.theme_name in DARK_THEMES:
-            self.set_theme(getattr(self, "_last_light_theme", "light"))
+            self.set_theme(self._last_light_theme)
         else:
-            self.set_theme(getattr(self, "_last_dark_theme", "dark"))
+            self.set_theme(self._last_dark_theme)
 
     def set_theme(self, name):
         """Switch to any named theme variant and persist the choice."""
@@ -14585,12 +14571,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # option reaches.
         self._spell_recolor()
         # The editor's quick toggle shows where a press would take you.
-        if hasattr(self, "editor_theme_btn"):
-            try:
-                self.editor_theme_btn.configure(
-                    text="☀" if self.theme_name in DARK_THEMES else "🌙")
-            except tk.TclError:
-                pass
+        try:
+            self.editor_theme_btn.configure(
+                text="☀" if self.theme_name in DARK_THEMES else "🌙")
+        except tk.TclError:
+            pass
         self.refresh_weekday_buttons()
         self._paint_end_fields()
         self.style_notebook()
@@ -14688,7 +14673,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         the notebook itself is visible (Settings replaces it). Uses the
         notebook's own selection rather than winfo_ismapped(), which
         pack()/pack_forget() don't update synchronously."""
-        tab = getattr(self, "_calendar_tab", None)
+        tab = self._calendar_tab
         if tab is None:
             return True  # unknown layout: rebuild rather than risk staleness
         # Settings replaces the whole notebook, and it used to be spotted
@@ -14801,7 +14786,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Drawn again from the notes, as _recolor_note_cards does for the
         # note list -- also while Settings hides it, so that it is right
         # when it shows. (The one-note view has no colour of its own.)
-        if getattr(self, "_day_panel_mode", "empty") == "list":
+        if self._day_panel_mode == "list":
             self.show_day_list()
 
     def _recolor_ring(self, w, remap, letters, held):
@@ -14836,7 +14821,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # rather than letting the list accumulate references that can
         # never be read again.
         alive = []
-        for entry, placeholder in getattr(self, "_placeholders", []):
+        for entry, placeholder in self._placeholders:
             try:
                 if entry.get() == placeholder:
                     entry.config(fg=self.colors["subtext"])
@@ -14937,7 +14922,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         (_fit_grid). Packed for good, it sat under every window wide enough
         not to need it. Its showing changes the window's height, never its
         width, so the answer cannot flip back and forth."""
-        bar = getattr(self, "_main_hscroll", None)
+        bar = self._main_hscroll
         if bar is None or needed == self._is_placed(bar):
             return
         if needed:
@@ -14959,8 +14944,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         text, laid out again at every step (60 ms a step for an ordinary
         month, 150 and more for a busy one, measured)."""
         return (self._calendar_is_showing()
-                and not getattr(self, "_history_visible", False)
-                and getattr(self, "_day_panel_mode", "empty") == "empty")
+                and not self._history_visible
+                and self._day_panel_mode == "empty")
 
     def _lay_out_at_window_size(self):
         """Give the window's content the window's size: the one place it
@@ -15207,7 +15192,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # view of it. Leaving the tab (or returning to it) resets to
             # the grid, so the calendar never reopens showing History
             # from a session two tab-switches ago (field report).
-            if getattr(self, "_history_visible", False):
+            if self._history_visible:
                 self._hide_calendar_history()
             # Defensive: some platforms move keyboard focus to whatever Entry
             # happens to sit first in the newly-shown tab (e.g. the search box)
@@ -15253,6 +15238,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._keyboard_to(self.sidebar_toggle)
 
     def build_notes_tab(self, parent):
+        """The Notes page: the list on the left, the editor on the right,
+        built top to bottom in the order they are drawn."""
+        self._build_note_sidebar(parent)
+        self._build_editor_frame(parent)
+        self._build_editor_banners()
+        self._build_title_and_meta_rows()
+        self._build_format_bar()
+        self._build_body_text()
+        self._build_editor_tools()
+        self._build_editor_actions()
+
+    def _build_note_sidebar(self, parent):
+        """The list's side: search, Sort and Show and the grouping above;
+        the selection bar, the list and its buttons below."""
         # --- Sidebar (note list) ---
         self.sidebar = tk.Frame(parent, width=self.px(SIDEBAR_WIDTH))
         self.track_theme(self.sidebar, bg="sidebar")
@@ -15474,7 +15473,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         )
         self.track_theme(self.select_toggle_btn, bg="card", fg="subtext")
         self.select_toggle_btn.pack(side="right", ipadx=6, ipady=2)
+        self._build_bulk_action_bar()
+        self._build_note_list_and_buttons(parent)
 
+    def _build_bulk_action_bar(self):
+        """The bar a selection acts through, built hidden."""
         # Bulk-action bar: hidden until selection mode is turned on. Built
         # once, like the rest of this persistent sidebar chrome — its inner
         # label/buttons get live theme tracking for the same reason group_cb
@@ -15577,6 +15580,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         _bulk_pack(self._bulk_pin_btn)
         # Not packed yet — shown by _toggle_selection_mode() when active.
 
+    def _build_note_list_and_buttons(self, parent):
+        """The list's canvas, New Note / Import / Share / Settings under it,
+        and the toggle that hides the sidebar."""
         # Bottom action zone — pinned to the bottom of the sidebar so New Note /
         # Import / Share and their inline panels always stay on-screen even when
         # the window is short. Packed BEFORE the list so it reserves its space;
@@ -15692,6 +15698,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             w.bind("<Button-1>", lambda e: self.toggle_sidebar())
         self._pressable(self.sidebar_toggle, self.toggle_sidebar)
 
+    def _build_editor_frame(self, parent):
+        """The editor's side: the open-note tabs, and the scrolling frame
+        (self.editor) every editor row is built in."""
         # --- Right side: open-note tab strip + editor panel ---
         right_side = tk.Frame(parent)
         self.track_theme(right_side, bg="bg")
@@ -15748,6 +15757,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.editor_canvas.pack(side="left", fill="both", expand=True)
         editor_scrollbar.pack(side="right", fill="y")
 
+    def _build_editor_banners(self):
+        """The lines over a note that only some notes show: from an empty
+        calendar day, one day of a series, its days off the schedule, and
+        the day strip of day mode."""
         # Shown only when the current note was started from an empty calendar
         # day — lets you jump straight back to that exact month/day instead of
         # hunting for it again. Not packed yet; shown/hidden as a whole by
@@ -15817,6 +15830,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.day_strip_lbl.bind("<Configure>", lambda e: self.day_strip_lbl.configure(
             wraplength=max(120, e.width - 8)), add="+")
 
+    def _build_title_and_meta_rows(self):
+        """The title and category, then the date and colour, then Repeat."""
         top_row = tk.Frame(self.editor)
         self.track_theme(top_row, bg="bg")
         top_row.pack(fill="x", padx=30, pady=(25, 5))
@@ -16030,6 +16045,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # --- Metadata row 2: Repeat (own line — it expands when active) ---
         self.build_recurrence_section(self.editor)
 
+    def _build_format_bar(self):
+        """The text's heading with its word count, and the format bar."""
         body_header = tk.Frame(self.editor)
         self.body_header = body_header
         self.track_theme(body_header, bg="bg")
@@ -16263,7 +16280,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # the full theme picker stays in Settings; this only swaps
         # between the last light and last dark choice.
         self.editor_theme_btn = tk.Button(
-            self.format_toolbar if hasattr(self, "format_toolbar") else
             self.emoji_btn.master,
             text="☀" if self.theme_name in DARK_THEMES else "🌙",
             relief="flat", cursor="hand2", bd=0,
@@ -16276,6 +16292,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "Switches between your last light and last dark theme; the "
             "full theme picker stays in Settings")
 
+    def _build_body_text(self):
+        """The note's text box and every binding it carries."""
         text_frame = tk.Frame(self.editor)
         self.track_theme(text_frame, bg="card")
         text_frame.pack(fill="both", expand=True, padx=30, pady=(0, 10))
@@ -16441,6 +16459,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pack_kwargs={"padx": 30, "pady": (0, 8)},
             remember_key="editor_body_expanded")
 
+    def _build_editor_tools(self):
+        """The checklist and the calculator side by side, the comments and
+        the attached files."""
         # --- Checklist and Calculator, side by side — each still its own
         # independent collapsible section, just sharing a row instead of
         # each taking the full editor width stacked one above the other.
@@ -16597,6 +16618,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.attachments_frame.pack(fill="x", padx=30, pady=(0, 10))
         self.refresh_attachments_list()
 
+    def _build_editor_actions(self):
+        """The note's buttons, the status line, and the share code's area."""
         action_row = tk.Frame(self.editor)
         self.track_theme(action_row, bg="bg")
         action_row.pack(fill="x", padx=30, pady=(0, 8))
@@ -16866,7 +16889,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not self._calendar_is_showing():
             self._calendar_needs_render = True
             return
-        if getattr(self, "_day_panel_mode", "empty") == "list":
+        if self._day_panel_mode == "list":
             self.show_day_list()
         elif self._day_panel_mode == "note":
             # Fall back to the list — the note may have changed or been deleted.
@@ -16912,8 +16935,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._log_swallowed("return to calendar: unsaved check")
         info = getattr(self, "_pending_calendar_return", None)
         self._pending_calendar_return = None
-        if hasattr(self, "calendar_return_btn"):
-            self.calendar_return_btn.pack_forget()
+        self.calendar_return_btn.pack_forget()
         if not info:
             self.notebook.select(self.TAB_CALENDAR)
             return
@@ -16926,8 +16948,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _update_calendar_return_button(self):
         """Show/hide the small 'Back to Calendar' link in the editor, only
         while there's a pending calendar-originated note to return to."""
-        if not hasattr(self, "calendar_return_btn") or not hasattr(self, "editor_top_row"):
-            return
         if getattr(self, "_pending_calendar_return", None):
             if not self._is_placed(self.calendar_return_btn):
                 self.calendar_return_btn.pack(fill="x", padx=30, pady=(14, 0),
@@ -16939,9 +16959,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Show which day of a repeating series the editor holds, or hide
         the line entirely for plain notes and series views. Called wherever
         current_occurrence_date changes (load, new, tab restore)."""
-        if not hasattr(self, "occurrence_banner") or not hasattr(self, "editor_top_row"):
-            return
-        occ = getattr(self, "current_occurrence_date", None)
+        occ = self.current_occurrence_date
         text = ""
         off = []
         if occ:
@@ -16999,7 +17017,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _day_mode(self):
         """Whether the editor holds one day of a repeating series, opened on
         its own (from the calendar): what it saves is that day's."""
-        if not getattr(self, "current_occurrence_date", None) \
+        if not self.current_occurrence_date \
                 or self.selected_note_id is None:
             return False
         note = self.find_note(self.selected_note_id)
@@ -17022,8 +17040,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         so a day can never move the series or stop it. Called wherever the
         editor's day changes, through _update_occurrence_banner; every step
         is idempotent, so it costs nothing called again."""
-        if not hasattr(self, "day_strip"):
-            return
         on = self._day_mode()
         note = self.find_note(self.selected_note_id) if on else None
         day = self.current_occurrence_date if on else None
@@ -17937,9 +17953,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 entry.configure(state="disabled",
                                 disabledbackground=self.colors["sidebar"],
                                 disabledforeground=self.colors["subtext"])
-        if hasattr(self, "rec_end_date_pick_btn"):
-            self.rec_end_date_pick_btn.configure(
-                state="normal" if mode == "on" else "disabled")
+        self.rec_end_date_pick_btn.configure(
+            state="normal" if mode == "on" else "disabled")
 
     def toggle_weekday(self, index):
         self.rec_weekday_state[index] = not self.rec_weekday_state[index]
@@ -17947,7 +17962,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.update_recurrence_summary()
 
     def refresh_weekday_buttons(self):
-        for index, btn in enumerate(getattr(self, "rec_weekday_btns", [])):
+        for index, btn in enumerate(self.rec_weekday_btns):
             if self.rec_weekday_state[index]:
                 btn.configure(bg=self.colors["accent"], fg=self._on_fill("accent"),
                               activebackground=self.colors["accent_hover"])
@@ -17992,7 +18007,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         # Show the details block, positioned just above the Note body section
         # (where the Tags section used to sit, before it was removed).
-        if hasattr(self, "body_header") and self.body_header.winfo_manager():
+        if self.body_header.winfo_manager():
             self.rec_details.pack(fill="x", padx=30, pady=(0, 4),
                                   before=self.body_header)
         else:
@@ -18167,7 +18182,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         Ctrl+Z can't undo back into a previous note's content. The body's
         formatting journal goes with it (see _body_undo_redo): it is only
         ever read beside the stack it was written next to."""
-        for w in (getattr(self, "body_text", None), getattr(self, "comments_text", None)):
+        for w in (getattr(self, "body_text", None), self.comments_text):
             if w is not None:
                 try:
                     w.edit_reset()
@@ -18886,7 +18901,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # A deliberate scroll beats a rebuild's still-pending restore,
             # and the list hears that the person scrolled it: the keyboard
             # coming back then starts in view, not back at the ring.
-            if canvas is getattr(self, "canvas", None):
+            if canvas is self.canvas:
                 self._list_scrolled_by_hand()
             canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
             return "break"
@@ -20844,7 +20859,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # waits for it (_take_pending_checklist_item).
         if hasattr(self, "checklist_add_var"):
             self.checklist_add_var.set(
-                getattr(self, "_add_box_waiting", {}).pop(note.get("uid"), ""))
+                self._add_box_waiting.pop(note.get("uid"), ""))
         if hasattr(self, "_checklist_rows"):
             self._render_checklist_items()
         self._sync_checklist_open_state()
@@ -21255,7 +21270,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _refresh_bulk_pin_label(self):
         """Say what pressing it will do, given what is ticked right now."""
-        btn = getattr(self, "_bulk_pin_btn", None)
+        btn = self._bulk_pin_btn
         if btn is None:
             return
         chosen = [n for n in self.notes if n["id"] in self.selected_note_ids]
@@ -21492,7 +21507,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             b.pack(fill="x", pady=2, ipady=3)
             self._button_choice(b)
 
-        anchor = getattr(self, "use_template_btn", None) or getattr(self, "editor", self)
+        anchor = self.use_template_btn or getattr(self, "editor", self)
         self._place_dropdown_popup(pop, anchor)
 
     def _apply_template(self, tpl):
@@ -21857,7 +21872,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if renamed:
             if self.category_var.get() == old_name:
                 self.category_var.set(new_name)
-            var = getattr(self, "filter_var", None)
+            var = self.filter_var
             if var is not None and var.get() == old_name:
                 var.set(new_name)
         # The Undo on offer for a category move names categories too. Left
@@ -21869,7 +21884,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # says those notes could not go back.
         offer = getattr(self, "_category_undo_offer", None)
         if offer is not None:
-            on_screen = getattr(self, "_toast_action", None) is offer["action"]
+            on_screen = self._toast_action is offer["action"]
             if renamed:
                 if offer["applied"] == old_name:
                     offer["applied"] = new_name
@@ -21913,8 +21928,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         # The category filter dropdown reads CATEGORY_COLORS live when opened,
         # so no values push is needed — just keep the selection valid.
-        if hasattr(self, "filter_menu"):
-            self._keep_filter_valid()
+        self._keep_filter_valid()
 
 
 
@@ -22610,6 +22624,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Store the editor in its note. *body_read* is the body's text as a
         capture read it just before, nothing run since (_capture_and_read):
         the autosave and the flush save from that read, not a second one."""
+        fields = self._editor_fields_to_save(auto, body_read)
+        if fields is not None:
+            self._write_fields_to_note(auto, *fields)
+
+    def _editor_fields_to_save(self, auto, body_read):
+        """What the editor holds, as a save stores it -- or None when there
+        is nothing to save, said out loud on an explicit Save."""
         title = self.title_entry.get().strip()
         if title == "Note title...":
             title = ""
@@ -22702,8 +22723,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # Empty selection is legal — it means "the same weekday as the
             # start date" — and the summary label already says so.
             pass
+        return (title, body, formatting, paragraphs, comments, category,
+                date_value, recurrence, left_out)
 
+    def _write_fields_to_note(self, auto, title, body, formatting, paragraphs,
+                              comments, category, date_value, recurrence, left_out):
+        """The fields written into a new note or into the open one, then
+        everything a save brings after it (_after_note_saved)."""
         now = now_stamp()
+        note = None
         reload_from_note = False
         put_back_schedule = False
         repeat_off_kept = False
@@ -23002,6 +23030,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # a big deletion -- so the copy is spent, and the button with it.
             if rescue_copy_spent(note):
                 note.pop("_prev", None)
+        self._after_note_saved(auto, note, now, left_out, put_back_schedule,
+                               reload_from_note, repeat_off_kept)
+
+    def _after_note_saved(self, auto, note, now, left_out, put_back_schedule,
+                          reload_from_note, repeat_off_kept):
+        """After the write: the banner, the file, the list, the editor's
+        snapshot, and what the save had to leave out, said."""
         # Recurrence or override counts may have just changed either way.
         self._update_occurrence_banner()
 
@@ -23065,7 +23100,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # status line dropped the words that say where the days went.
             self._cancel_pending_autosave()
         # If the calendar day panel is showing, reflect the edit there too.
-        if getattr(self, "_day_panel_mode", "empty") != "empty":
+        if self._day_panel_mode != "empty":
             self.refresh_day_panel()
         # What the save had to leave out is still on screen, waiting to be
         # fixed. The status line says so on every route and the explicit
@@ -23339,9 +23374,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # an index past the end as "at the end", and a min() in front of
         # it would be code no test could ever make matter.
         drawn = getattr(self, "_checklist_drawn", None)
-        in_step = (getattr(self, "_checklist_open", False)
-                   and _checklist_rows_current(
-                       drawn, items, getattr(self, "theme_name", None)))
+        in_step = self._checklist_in_step(items)
         items.insert(index, item)
         if in_step and drawn["rows"]:
             # The one row back where it was, the others untouched.
@@ -24042,7 +24075,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         or, on Settings, the entry of the section showing. Tk only notes a
         request for a hidden window, and the keyboard stayed on the Undo."""
         if getattr(self, "_settings_open", False):
-            return (getattr(self, "_settings_nav_buttons", None) or {}).get(
+            return (self._settings_nav_buttons or {}).get(
                 getattr(self, "_settings_selected_section", None))
         try:
             on_notes = self.notebook.index("current") == self.TAB_NOTES
@@ -24050,7 +24083,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return None
         if not on_notes:
             return self.notebook
-        return self.sidebar_toggle if getattr(self, "_sidebar_hidden", False) else self.canvas
+        return self.sidebar_toggle if self._sidebar_hidden else self.canvas
 
     def _keyboard_off_toast(self):
         """The Undo hidden while the keyboard is on it -- the banner gone, or
@@ -24065,9 +24098,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Ctrl+Z, while the toast offers an Undo and the keyboard is not in
         a text box (whose own Ctrl+Z undoes its typing): takes the offer.
         Eight seconds is short to reach the banner by Tab."""
-        if (getattr(self, "_toast_action", None) is None
+        if (self._toast_action is None
                 or not getattr(self, "_toast_action_undoes", True)
-                or getattr(self, "_toast_hide_job", None) is None
+                or self._toast_hide_job is None
                 or self._a_dialog_is_asking()):
             return None
         widget = getattr(event, "widget", None)
@@ -24113,10 +24146,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         true of the bulk category route, where typing anything at all
         removed the offer.
         """
-        if not hasattr(self, "toast_frame"):
-            return
         if yield_to_action and (self._offer_on_banner() or (
-                getattr(self, "_toast_hide_job", None) is not None
+                self._toast_hide_job is not None
                 and getattr(self, "_toast_kind", None) == "info")
                 or getattr(self, "_words_hide_job", None) is not None):
             # Nothing is lost by staying quiet: every caller that yields
@@ -24188,8 +24219,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         taken for a live offer -- or an error. The autosave that follows a
         failed action within its delay covered "something went wrong" with
         "Note updated", and the one message that mattered was gone."""
-        return (getattr(self, "_toast_hide_job", None) is not None
-                and (getattr(self, "_toast_action", None) is not None
+        return (self._toast_hide_job is not None
+                and (self._toast_action is not None
                      or getattr(self, "_toast_kind", None) == "error"))
 
     def _show_words_beneath(self, text):

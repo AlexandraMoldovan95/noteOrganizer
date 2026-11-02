@@ -375,7 +375,7 @@ class CalculatorPanelMixin:
         transient tool, not part of any note's saved content, so carrying
         a half-finished sum, history, or insertion point over from a
         previous note would be confusing rather than useful."""
-        if getattr(self, "_calculator_open", False):
+        if self._calculator_open:
             self.calculator_section.pack_forget()
             self._calculator_open = False
         if getattr(self, "_calc_more_open", False):
@@ -394,8 +394,7 @@ class CalculatorPanelMixin:
         self._calc_last_full_expr = ""
         self._calc_history = []
         self._calc_render_history()
-        if hasattr(self, "calculator_btn"):
-            self.calculator_btn.config(text="🧮 Calculator")
+        self.calculator_btn.config(text="🧮 Calculator")
         self._calc_refresh_insert_state()
         if "calc_insert_end" in self.body_text.mark_names():
             self.body_text.mark_unset("calc_insert_end")

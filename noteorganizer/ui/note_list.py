@@ -43,7 +43,7 @@ class NoteListMixin:
         fits sits AT the top, and the origin never rests above the first card
         (which showed as unexplained space under the top bar). The editor's
         canvas carries the same guard."""
-        canvas = getattr(self, "canvas", None)
+        canvas = self.canvas
         if canvas is None:
             return
         try:
@@ -73,7 +73,7 @@ class NoteListMixin:
         as it is now; content that fits pins to the top. The region is set
         from the list's own extent first: content that just shrank under a
         view scrolled past its new end would leave it in blank space."""
-        canvas = getattr(self, "canvas", None)
+        canvas = self.canvas
         if canvas is None:
             return
         try:
@@ -192,7 +192,7 @@ class NoteListMixin:
         categories, and at startup, where the value comes off disk and could
         name a category this notebook has never had.
         """
-        var = getattr(self, "filter_var", None)
+        var = self.filter_var
         if var is not None and var.get() not in self._filter_options():
             var.set("All")
 
@@ -210,7 +210,7 @@ class NoteListMixin:
         return note.get("category") == selected
 
     def refresh_note_list(self):
-        if not hasattr(self, "canvas") or not self._still_alive():
+        if not self._still_alive():
             return
         # A card lifted by a drag is drawn away from its record; the
         # rebuild below would draw the list around a card that is not
@@ -221,7 +221,7 @@ class NoteListMixin:
         self._prune_selection()
         # The sort this list is drawn in -- what Custom order starts from
         # when it is chosen for the first time (_on_sort_chosen).
-        sort_var = getattr(self, "sort_var", None)
+        sort_var = self.sort_var
         if sort_var is not None:
             self._sort_shown = sort_var.get()
         # The rebuild empties the drawing for a moment, and a Configure then
@@ -313,7 +313,7 @@ class NoteListMixin:
         # it once the app is idle, for a rebuild that ran while the list was
         # not the thing holding the keyboard.
         self.after_idle(self._restore_card_focus)
-        if getattr(self, "selection_mode", False):
+        if self.selection_mode:
             # What "all" means just changed (a search or filter), and the
             # Select all button says what a press would do; only while the
             # bar is up, so an ordinary refresh pays nothing.
@@ -387,7 +387,7 @@ class NoteListMixin:
                 for gone in [k for k in cache if k not in alive]:
                     del cache[gone]
         # Category/type filter (from the dropdown). "All" shows everything.
-        chosen_category = getattr(self, "filter_var", None)
+        chosen_category = self.filter_var
         if chosen_category is not None:
             selected = self.filter_var.get()
             if selected != "All":
@@ -413,7 +413,7 @@ class NoteListMixin:
         self._sort_notes(shown)
         if not shown:
             return []
-        if not (getattr(self, "group_by_category", None) is not None
+        if not (self.group_by_category is not None
                 and self.group_by_category.get()):
             return [("note", note) for note in shown]
         groups = {}
@@ -671,7 +671,7 @@ class NoteListMixin:
         coerce missing/None fields to safe defaults so a single odd note can't
         crash the whole list."""
         if choice is None:
-            choice = getattr(self, "sort_var", None)
+            choice = self.sort_var
             choice = choice.get() if choice is not None else "Recently updated"
 
         def _s(n, key):
@@ -787,7 +787,7 @@ class NoteListMixin:
         crossed either would be undone by the next rebuild."""
         if bool(a.get("pinned")) != bool(b.get("pinned")):
             return False
-        grouped = getattr(self, "group_by_category", None)
+        grouped = self.group_by_category
         if grouped is not None and grouped.get():
             return self._list_group_of(a) == self._list_group_of(b)
         return True
@@ -1462,7 +1462,7 @@ class NoteListMixin:
         on a folded one opens it. Without these (and Enter on a header) a
         folded group could be opened only with the mouse, and a list with
         every group folded gave the keyboard nothing at all to do."""
-        grouped = getattr(self, "group_by_category", None)
+        grouped = self.group_by_category
         key = self._ring_row()
         if key is None or grouped is None or not grouped.get():
             return "break"
@@ -1932,7 +1932,7 @@ class NoteListMixin:
         x1 = self.LIST_DRAW_WIDTH - self.CARD_INSET_X
         left = x0 + self.CARD_RING
         check_x = None
-        if getattr(self, "selection_mode", False):
+        if self.selection_mode:
             # Leftmost, ahead of the stripe, where the Checkbutton stood: 6
             # pixels before it and 22 wide, measured on the widget card (17,
             # guessed first, put the stripe five pixels off in the photograph).
@@ -2051,7 +2051,7 @@ class NoteListMixin:
         switch as through a rebuild; _recolor_stragglers never reaches the
         list (a drawing is not a widget), so this is its only recolour."""
         c = self.colors
-        cv = getattr(self, "canvas", None)
+        cv = self.canvas
         if cv is None:
             return
         try:
@@ -2286,7 +2286,7 @@ class NoteListMixin:
         self._ask_for_top_up()
         # Everything else refresh_note_list does on its way past.
         self._render_statistics()
-        if getattr(self, "selection_mode", False):
+        if self.selection_mode:
             self._update_bulk_selected_label()
         # A new note's first save draws its card as the open one, and the card
         # open before it still wears the outline: one card redrawn repaints
@@ -2324,7 +2324,7 @@ class NoteListMixin:
         them: a deleted note kept its tick, and a new note could take its freed
         id (the highest plus one) and arrive ticked, to be trashed by a Trash
         nobody aimed at it."""
-        chosen = getattr(self, "selected_note_ids", None)
+        chosen = self.selected_note_ids
         if not chosen:
             return
         kept = chosen & {n["id"] for n in self.notes}
@@ -2349,7 +2349,7 @@ class NoteListMixin:
         self._refresh_bulk_pin_label()
         # The button says what a press will do, asked of the same
         # _visible_note_ids() the press uses, so word and action agree.
-        button = getattr(self, "_bulk_select_all_btn", None)
+        button = self._bulk_select_all_btn
         if button is None:
             return
         try:
@@ -2414,8 +2414,8 @@ class NoteListMixin:
         not drawn yet), and leaving out a folded group's notes: counted, they
         let Select all and then bulk Trash take notes nobody could see."""
         shown = self._notes_on_the_list()
-        grouped = getattr(self, "group_by_category", None)
-        folded = getattr(self, "collapsed_groups", None)
+        grouped = self.group_by_category
+        folded = self.collapsed_groups
         if grouped is not None and grouped.get() and folded:
             shown = [n for n in shown if self._list_group_of(n) not in folded]
         return {n["id"] for n in shown}

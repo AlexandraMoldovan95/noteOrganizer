@@ -189,7 +189,7 @@ class SettingsPageMixin:
         target.pack(fill="both", expand=True, padx=48, pady=(40, 60))
         self._settings_selected_section = which
         self._highlight_settings_nav(which)
-        if getattr(self, "settings_canvas", None) is not None:
+        if self.settings_canvas is not None:
             try:
                 self.settings_canvas.yview_moveto(0)
             except tk.TclError:
@@ -203,10 +203,10 @@ class SettingsPageMixin:
         an accent rail plus a tint of the accent mixed into the sidebar, with
         the label in the accent colour rather than reversed out to white.
         """
-        rails = getattr(self, "_settings_nav_rails", {})
-        icons = getattr(self, "_settings_nav_icons", {})
+        rails = self._settings_nav_rails
+        icons = self._settings_nav_icons
         tint = self._blend(self.colors["sidebar"], self.colors["accent"], 0.16)
-        for key, btn in getattr(self, "_settings_nav_buttons", {}).items():
+        for key, btn in self._settings_nav_buttons.items():
             try:
                 selected = (key == which)
                 btn.configure(
@@ -251,7 +251,7 @@ class SettingsPageMixin:
                     return "break"
             except (tk.TclError, ValueError):
                 pass
-        page_canvas = getattr(self, "settings_canvas", None)
+        page_canvas = self.settings_canvas
         if page_canvas is not None:
             try:
                 page_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
@@ -3200,7 +3200,7 @@ class SettingsPageMixin:
         drawing 26 stacked lines would cost more than it is worth at this
         size, so it is a solid accent instead.
         """
-        c = getattr(self, "_settings_brand_mark", None)
+        c = self._settings_brand_mark
         if c is None:
             return
         try:
@@ -3319,7 +3319,7 @@ class SettingsPageMixin:
         """
         self._paint_brand_mark()
         self._refresh_mode_toggle()
-        if not getattr(self, "_settings_nav_icons", None):
+        if not self._settings_nav_icons:
             return
         self._highlight_settings_nav(
             getattr(self, "_settings_selected_section", None))

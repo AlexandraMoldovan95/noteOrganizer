@@ -378,11 +378,11 @@ class CalendarViewMixin:
         self._cal_last_font_size = None
 
         def _on_resize(event):
-            if getattr(self, "notebook", None) is None:
+            if self.notebook is None:
                 return
             if not self._is_calendar_visible():
                 return  # only when the Calendar tab is actually showing
-            if getattr(self, "_history_visible", False):
+            if self._history_visible:
                 return  # the grid is hidden behind History; nothing to redraw
             size = self._cal_note_font_size()
             if size != self._cal_last_font_size:
@@ -446,7 +446,7 @@ class CalendarViewMixin:
         if any(isinstance(w, typing_widgets) for w in (source, focused)):
             return
 
-        if getattr(self, "_history_visible", False):
+        if self._history_visible:
             # The register covers the month: the keys page the register, and
             # Home goes to its top. They used to move the hidden month, which
             # showed on the way back -- three PgDn from July came back October.
@@ -547,8 +547,6 @@ class CalendarViewMixin:
         self._draw_day_badge(date_str)
 
     def render_calendar(self):
-        if not hasattr(self, "cal_grid_frame"):
-            return
         # Rebuilding ~35-42 day cells for a month nobody is looking at is
         # work the user pays for and never sees. Measured from the Notes
         # tab: 36ms and 98 widgets, on every delete, save, import and
@@ -622,7 +620,7 @@ class CalendarViewMixin:
         # a THIRD view of the same data and must refresh here too, or a
         # delete only showed after a trip out to the grid and back
         # (field report).
-        if getattr(self, "_history_visible", False):
+        if self._history_visible:
             self._render_calendar_history()
 
     # ---------- The month grid, drawn ----------
@@ -667,7 +665,7 @@ class CalendarViewMixin:
         # the forgotten "nothing", so July's preview sat over August.
         self._cal_hover_key = None
         self.hide_day_tooltip()
-        data = getattr(self, "_cal_month_data", None)
+        data = self._cal_month_data
         if data is None:
             return
         width = cv.winfo_width()
@@ -746,10 +744,10 @@ class CalendarViewMixin:
         """The day the keyboard is on in the month shown: the one it was
         left on; after a change of month, the same day of the month; else
         the open day, today, or the first."""
-        cells = getattr(self, "_cal_cells", None) or {}
+        cells = self._cal_cells or {}
         if not cells:
             return None
-        key = getattr(self, "_cal_key_day", None)
+        key = self._cal_key_day
         if key in cells:
             return key
         days = sorted(cells)
@@ -812,12 +810,12 @@ class CalendarViewMixin:
         """The keyboard's ring round its day, in the gap between the cells,
         while the canvas holds the keyboard; the open day's own outline
         is drawn inside the cell, in the accent."""
-        cv = getattr(self, "cal_canvas", None)
+        cv = self.cal_canvas
         if cv is None:
             return
         try:
             cv.delete("cal_key")
-            if not getattr(self, "_cal_has_keyboard", False):
+            if not self._cal_has_keyboard:
                 return
             rec = self._cal_cells.get(self._cal_key_date())
             if rec is None:
@@ -947,7 +945,7 @@ class CalendarViewMixin:
         frame's height to fit its rows), and needs nothing."""
         if event.width == getattr(self, "_cal_drawn_width", None):
             return
-        if getattr(self, "_cal_month_data", None) is None:
+        if self._cal_month_data is None:
             return
         if not self._calendar_is_showing():
             return
@@ -1163,7 +1161,7 @@ class CalendarViewMixin:
         if not self._leave_settings_for_the_editor():
             return False
         self.notebook.select(self.TAB_CALENDAR)
-        if getattr(self, "_history_visible", False):
+        if self._history_visible:
             self._hide_calendar_history()
         d = parse_date(today)
         if d is not None:
@@ -1184,7 +1182,7 @@ class CalendarViewMixin:
             return
         today = datetime.now().strftime("%Y-%m-%d")
         try:
-            if today != getattr(self, "_reminder_day", today):
+            if today != self._reminder_day:
                 if getattr(self, "_reminder_bar_day", None) not in (None, today):
                     self.dismiss_reminder()
                 self.maybe_show_reminder()
@@ -1614,14 +1612,14 @@ class CalendarViewMixin:
         bar is a separate device and never changes; a selected today
         simply wears both."""
         selected = (self.selected_day
-                    if getattr(self, "_day_panel_mode", "empty") != "empty"
+                    if self._day_panel_mode != "empty"
                     else None)
-        cv = getattr(self, "cal_canvas", None)
+        cv = self.cal_canvas
         if cv is None:
             return
         try:
             cv.delete("cal_selected")
-            rec = (getattr(self, "_cal_cells", None) or {}).get(selected)
+            rec = (self._cal_cells or {}).get(selected)
             if rec is None:
                 return
             # Two pixels inside the cell's edge, where the Frame's
@@ -1635,7 +1633,7 @@ class CalendarViewMixin:
     def _toggle_calendar_history(self):
         """Swap the month grid (and day panel) for the History register,
         or bring the grid back."""
-        if getattr(self, "_history_visible", False):
+        if self._history_visible:
             self._hide_calendar_history()
         else:
             self._show_calendar_history()
@@ -1651,8 +1649,7 @@ class CalendarViewMixin:
         self._history_visible = True
         # Its 10 px below go under the rows, which stand under this chunk.
         self.history_frame.pack(side="top", fill="both", expand=True, padx=30)
-        if hasattr(self, "_history_toggle_btn"):
-            self._history_toggle_btn.configure(text="📅 Calendar")
+        self._history_toggle_btn.configure(text="📅 Calendar")
         self._render_calendar_history()
 
     def _hide_calendar_history(self):
@@ -1661,8 +1658,7 @@ class CalendarViewMixin:
         self._history_rows.clear()
         self.cal_grid_frame.pack(side="top", fill="both", expand=True,
                                  padx=30, pady=(0, 10))
-        if hasattr(self, "_history_toggle_btn"):
-            self._history_toggle_btn.configure(text="📋 History")
+        self._history_toggle_btn.configure(text="📋 History")
         self.render_calendar()
 
     def _build_history_ui(self):
@@ -1732,7 +1728,7 @@ class CalendarViewMixin:
         # while a typed search waits) makes the waiting one redundant, and
         # a timer only forgotten stayed scheduled with nothing tracking it
         # -- see _autosave_now.
-        job = getattr(self, "_history_search_job", None)
+        job = self._history_search_job
         self._history_search_job = None
         if job is not None:
             try:
@@ -1943,7 +1939,7 @@ class CalendarViewMixin:
         first = self._history_shown
         self._history_shown += 50
         more = getattr(self, "_history_more_btn", None)
-        if (getattr(self, "_history_search_job", None) is not None
+        if (self._history_search_job is not None
                 or not (self._history_visible and self._history_built)
                 or more is None or not more.winfo_exists()):
             self._render_calendar_history()
