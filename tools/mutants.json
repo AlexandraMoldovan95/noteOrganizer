@@ -14684,7 +14684,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        skipped = 1 if text.startswith(\"\\n\") and int(start.split(\".\")[1]) > 0 else 0\n",
+        "find": "        skipped = 1 if int(start.split(\".\")[1]) > 0 else 0\n",
         "replace": "        skipped = 0\n"
       }
     ],
@@ -14944,6 +14944,24 @@
     ],
     "must_fail": [
       "one margin on a line our own item went into, and a stale number changes nothing"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR226",
+    "about": "a copy begun inside a line carries that line's list entry: a word from a nested item nests the item it goes into",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        skipped = 1 if int(start.split(\".\")[1]) > 0 else 0\n",
+        "replace": "        skipped = 1 if text.startswith(\"\\n\") and int(start.split(\".\")[1]) > 0 else 0\n"
+      }
+    ],
+    "must_fail": [
+      "a word copied out of a nested item leaves the level of the item it goes into"
     ],
     "suites": [
       "qa1"

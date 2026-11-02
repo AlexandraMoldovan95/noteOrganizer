@@ -8630,6 +8630,22 @@ app.body_text.mark_set('insert', '4.4')
 _ld_virtual('<<Paste>>')
 _pk_stale = body()
 _stub_clipboard()
+# A line's looks travel with its start: a word copied out of a nested item
+# and pasted into a top-level one set that item's level, and the list around
+# it renumbered (round 10).
+_ld_list('3.3', '3.8')
+app._set_paragraph_indent(3, 1)
+_stub_clipboard(loopback=True)
+app._copy_formatted()
+_pw_lines = app._formatted_clip[2]
+app.body_text.tag_remove('sel', '1.0', 'end')
+app.body_text.mark_set('insert', '4.end')
+_ld_virtual('<<Paste>>')
+_pw_host = (body(), app._paragraph_indent_of(app.body_text, 4))
+_stub_clipboard()
+check(f'a word copied out of a nested item leaves the level of the item it goes into '
+      f'({_pw_lines}; {_pw_host})',
+      _pw_lines == [] and _pw_host == ('1. one\n2. two\n1. three\n3. fourthree', 0))
 check(f'one margin on a line our own item went into, and a stale number changes nothing '
       f'({_pk_mid}; {_pk_stale!r})',
       len(_pk_mid[0]) == 1 and _pk_mid[1] == 1

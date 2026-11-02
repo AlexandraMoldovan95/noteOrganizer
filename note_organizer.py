@@ -8852,11 +8852,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             lo, hi = max(span["start"], first), min(span["end"], last)
             if hi > lo:
                 clipped.append(dict(span, start=lo - first, end=hi - first))
-        # Once, not once per paragraph. A copy ending in a line break holds
-        # nothing of the next line, nor one begun at a line's end of that
-        # line: counted in, its looks went onto the line a paste landed in.
+        # Once, not once per paragraph. A line's looks travel with its start:
+        # a copy ending in a line break holds none of the next line's, one
+        # begun after a line's start none of that line's -- a word copied out
+        # of a nested item set the level of the item it was pasted into
+        # (the lows wave's verification, rounds 5, 6 and 10).
         line_count = text.count("\n") + (0 if text.endswith("\n") else 1)
-        skipped = 1 if text.startswith("\n") and int(start.split(".")[1]) > 0 else 0
+        skipped = 1 if int(start.split(".")[1]) > 0 else 0
         paragraphs = [
             dict(p, line=p["line"] - first_line)
             for p in self._extract_paragraphs(self.body_text, whole)
