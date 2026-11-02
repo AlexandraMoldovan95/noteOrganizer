@@ -247,7 +247,6 @@ from noteorganizer.core.formatting import (
     color_tag_name as core_color_tag_name,
     font_tag_for as core_font_tag_for,
     KNOWN_FORMAT_STYLES,
-    VALUE_FORMAT_STYLES,
     _is_valid_hex_color,
     normalize_formatting,
 )
@@ -1048,6 +1047,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _tab_ring_if_tabbed_to(self, event, backwards=False):
         # Asks where the Tab key is taking the keyboard, the way Tk's own
         # traversal does, rather than asking focus_get afterwards.
+        # ISSUES_LOG, smaller lessons: _tab_ring_if_tabbed_to.
         try:
             w = event.widget
             target = w.tk_focusPrev() if backwards else w.tk_focusNext()
@@ -4936,13 +4936,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return "break"
 
     def _grid_drag_autoscroll(self, info):
-        self._grid_view_restore = None
         """While a cell drag runs, the view follows the pointer: the
         grid pans sideways past its own viewport, and the NOTE scrolls
         when the pointer crosses the editor's top or bottom edge -- so a
         selection can reach cells that were not on screen when the drag
         began, the way any spreadsheet allows. The selection is then
         re-stretched to whatever sits under the pointer now."""
+        self._grid_view_restore = None
         canvas = info.get("canvas")
         try:
             if canvas is None or not int(canvas.winfo_exists()):
@@ -8861,7 +8861,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         -- then delete, writing nothing more. Tk's own Cut and the list's put
         the words alone over it, so a move by Ctrl+X and Ctrl+V lost its bold,
         its centring and a nested item's level, saved (the lows wave's
-        verification, round 6). Cells keep their own cut."""
+        verification, round 6). Cells have no cut of their own: with cells
+        selected, the key is left to Tk."""
         if getattr(self, "_grid_sel", None) is not None or self._copy_formatted() != "break":
             return None
         if self._list_aware_delete(event, virtual="clear") == "break":
@@ -9603,11 +9604,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._teardown_table_grids()
             self.body_text.insert("1.0", "\n")
             self.body_text.mark_set("insert", "1.0")
-            # The table moved under the caret; the caret did not leave it.
-            # Unnoted, this Enter's own release read as leaving the table
-            # and tidied and rebuilt every table in the note a second time
-            # (measured: two rebuilds per Enter, one with this line) -- the
-            # paste's rule (_on_body_paste).
+            # The table moved under the caret; the caret did not leave it,
+            # as the paste's rule says (_on_body_paste). ISSUES_LOG,
+            # smaller lessons: the push-down's caret line.
             self._last_caret_line = 1
             self._resync_list_tags()
             self._render_table_grids()
@@ -12894,7 +12893,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                     state["imported_" + decor_key] = decor
                             if "trash_retention_days" in loaded:
                                 state["imported_trash_window"] = loaded["trash_retention_days"]
-                    except (*_core_paths.JSON_UNREADABLE, IOError, OSError, AttributeError):
+                    except (*_core_paths.JSON_UNREADABLE, IOError, OSError):
                         pass
 
                 # Copy any attached files from the backup into our attachments
@@ -15477,13 +15476,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # once, like the rest of this persistent sidebar chrome — its inner
         # label/buttons get live theme tracking for the same reason group_cb
         # above does.
-        # Font size 7 (not the sidebar's usual 8) and tighter inter-widget
-        # spacing here specifically — measured with tkinter.font: at size 8
-        # with the original spacing, these four widgets need 260px total
-        # (including the gaps between them), more than the ~230px actually
-        # available in the fixed 280px-wide sidebar, which is exactly why
-        # "Category"'s last letter looked cramped. At size 7 with tighter
-        # spacing they need 209px — comfortable room to spare.
         self.bulk_action_bar = tk.Frame(self.sidebar)
         self.track_theme(self.bulk_action_bar, bg="sidebar")
         # The count on its own line, then the four actions two by two.
@@ -19869,6 +19861,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     # Where a click is on nothing: these classes take no click of their own.
     _EMPTY_CLICK_CLASSES = frozenset(
         ("Frame", "Label", "Canvas", "Labelframe", "TFrame", "TLabel", "Tk"))
+    # Every class Tk types into, the ones this app builds or not: a box
+    # added later is a typing box without anyone remembering this list.
     _TYPING_CLASSES = frozenset(
         ("Entry", "Text", "Spinbox", "TEntry", "TSpinbox", "TCombobox"))
     _CLICK_SEQUENCES = ("<Button-1>", "<ButtonRelease-1>",
@@ -20897,8 +20891,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         base_title = (note.get("title") or "").strip()
         clone["title"] = f"{base_title} (copy)" if base_title else "(copy)"
         clone["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # A duplicate is its own note; don't carry occurrence-specific edits that
-        # only made sense relative to the original's timeline.
+        # A duplicate is its own note, its series' own days (deleted, edited,
+        # moved) copied with it, so it reads as the original does.
         clone = normalize_note(clone)
         # Give the copy its OWN attachment files. The deep-copy above shared
         # the original's stored_as names — i.e. the same files on disk — so

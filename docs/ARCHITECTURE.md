@@ -250,7 +250,7 @@ SmartScreen check; the kinds that ask still ask.
 ### Recurrence model
 
 A recurring note is stored once — the "base" note carries a `recurrence` rule (frequency,
-interval, specific weekdays/month-days, an end condition) plus three small maps:
+interval, specific weekdays/month-days, an end condition) plus a list and two small maps:
 
 - `exceptions`: dates removed from the series entirely
 - `overrides`: date → partial note, for edits that apply to one occurrence only

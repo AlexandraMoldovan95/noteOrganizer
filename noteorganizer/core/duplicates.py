@@ -25,7 +25,8 @@ the repeat rule and a series' own days, compared exactly:
 Date, colour, attachments and pinned state are ignored on purpose. Two
 notes with identical text are the same note to a person even if one is
 pinned — and attachments are safe to ignore because the cleanup hands
-the kept note the group's combined files.
+the kept note the group's combined files, up to the MAX_ATTACHMENTS a note
+holds; the rest stay with their copy in the Trash.
 
 (The signature helpers are imported inside :func:`_dup_key`, not at module
 top: storage imports this module while model is still half initialised —
@@ -75,8 +76,8 @@ def _dup_key(note):
     destroyed whichever copy the cleanup dropped — and on the import
     routes it skipped the incoming note outright, with no user in the
     loop at all. Attachments stay OUT of the key on purpose: the cleanup
-    gives the kept note the group's combined attachments, so differing
-    files are preserved, not lost. Date stays out too — a copy carrying
+    gives the kept note the group's combined attachments (up to the cap,
+    the rest staying with their copy in the Trash). Date stays out too — a copy carrying
     a different date is still, to a person, the same note twice."""
     from .model import _checklist_signature, _recurrence_signature, _stable
     exceptions, overrides, moved = (note.get("exceptions"), note.get("overrides"),
@@ -104,7 +105,7 @@ def find_duplicate_groups(notes):
     is ignored; the rest compare exactly, because cleanup does not merge
     them. Date, attachments, color and IDs are IGNORED — attachments
     safely so: when the user cleans up, the kept copy inherits the group's
-    combined attachments so nothing is lost."""
+    combined attachments, up to the cap; the rest stay in the Trash."""
     groups = {}
     for n in notes:
         groups.setdefault(_dup_key(n), []).append(n)

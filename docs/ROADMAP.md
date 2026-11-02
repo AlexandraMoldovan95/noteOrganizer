@@ -10,8 +10,8 @@ list for a project developed in spare time by a small team of two.
 - [Versioning](#versioning)
 - [Known limitations](#known-limitations)
 
-The outside view of the app — what a hostile product review found and what is
-being done about it — lives in its own register, now archived:
+The outside view of the app — what a hostile product review found and what was
+done about it — lives in its own register, now archived:
 [`docs/archive/PRODUCT_FINDINGS.md`](archive/PRODUCT_FINDINGS.md).
 
 ## Under consideration
@@ -22,18 +22,12 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
   app, a web demo that re-creates its interface in a browser, and the key documents as pages —
   lives in this repository under [`site/`](../site/README.md) since 2026-10-14. It is built from
   this repository and published on Netlify by hand, with changes gathered into one upload because
-  every deploy counts against the account's credits. What is planned for it, nearest first:
-  - **The demo closer to the app.** Its formatting bar has the app's font and size lists and its
-    indent buttons since 2026-10-14, taken from the app's own source and carried in share codes
-    both ways. It stays as it is now (the owner's call, 2026-10-14): the calculator under a note,
-    and opening or moving one day of a repeating series, remain among the things the demo names
-    as the desktop app's alone.
-  - **One site for both apps** — done on 2026-10-24, the owner's call: the overview presents the
-    Android app beside the desktop one, an Android page is built from that repository's README
-    and screenshots, and an Android demo draws the phone's screens over the desktop demo's rules,
-    so a share code crosses between the two demos as between the apps. Its code stays in its own
-    repository, which the site's build reads the way it reads this one — no third repository for
-    the site. Each repository is named as a link once it is public (`site/site.json`).
+  every deploy counts against the account's credits. Settled already: the demo stays as it is
+  (the owner's call, 2026-10-14 — its formatting bar has the app's font and size lists and indent
+  buttons, and the calculator under a note and moving one day of a series remain the desktop
+  app's alone), and one site presents both apps (done on 2026-10-24: an Android page and an
+  Android demo beside the desktop's, each app's code in its own repository, which the build reads;
+  each repository is named as a link once it is public, `site/site.json`). Still planned:
   - **At the public launch, links to the stores** — the Microsoft Store for the desktop app,
     Google Play for Android — rather than the built `dist/` folder to download. A store signs the
     app (an unsigned `.exe` from a website meets Windows' unknown-publisher warning), keeps it up
@@ -320,7 +314,8 @@ General / Content / Data / More. The questions the redesign settled:
 The four follow-up quick wins all shipped on 2026-08-30: a "last exported" line in Backup (showing
 the last successful export's date and time; failed exports don't move it), trash retention as a
 real setting (a 7–90 day selector in the Trash panel; the purge, the days-left column and every
-message quote it, and unusable hand-edited values read as the 30-day default), a keyboard-shortcut
+message quote it, and unusable hand-edited values read as the 30-day default — reversed in
+0.95.391: an unreadable window now purges nothing until one is chosen), a keyboard-shortcut
 reference (Settings → Keyboard shortcuts, every bound combo grouped and verified against the
 bindings), and template deletion saying plainly that it skips the Trash and can't be undone
 (actually routing templates through the Trash was later
@@ -329,7 +324,7 @@ bindings), and template deletion saying plainly that it skips the Trash and can'
 ### Splitting the UI into modules
 
 Done, and stopped deliberately rather than out of steam. The data-and-rules layer went first —
-fifteen modules under `noteorganizer/core/`, none importing tkinter — and six UI areas were moved
+fifteen modules under `noteorganizer/core/` (eighteen now), none importing tkinter — and six UI areas were moved
 into `noteorganizer/ui/` as mixins: the calculator panel, the Settings page, the dialogs and popups,
 the calendar, attachments, and — re-measured once it became one drawing — the note list. Spelling
 (2026-10-14) was written into both layers from the start: two `core/` modules and a seventh mixin. All the

@@ -391,8 +391,9 @@ current = anchor + step * skipped
 ```
 
 A daily note anchored in 1990 costs the same to display in 2026 as one
-made yesterday. `test_recurrence.py` pins this down with a 36-year-old
-recurrence that resolves in about **0.01 ms**.
+made yesterday. `test_recurrence.py` pins it: that note still draws its
+July 2026 days, which a day-by-day walk, stopped by `MAX_OCCURRENCES`,
+would never reach.
 
 **Guard rails.** Every loop counts iterations against `MAX_OCCURRENCES`
 (5000) as well as checking dates. If a rule were ever malformed such that
@@ -414,16 +415,17 @@ Two are handled explicitly, because dates are full of them:
 
 ### Where it's tested
 
-`test_recurrence.py` — over 120 checks, no GUI. Read it alongside the module: it
-covers the clamp/skip policies, count and end-date limits, exceptions, and
-the performance case above.
+`test_recurrence.py` — no GUI. Read it alongside the module: it covers the
+clamp/skip policies, count and end-date limits, exceptions, and the
+skip-ahead above.
 
 ---
 
 ## `noteorganizer/core/themes.py`
 
-**What it's for.** Eight colour palettes and a few fixed layout numbers.
-Pure data — no logic, no file access, nothing that can fail.
+**What it's for.** Eight colour palettes, a few fixed layout numbers, and
+the arithmetic over them (blending, contrast, the surfaces drawn from a
+palette) — no file access, nothing that can fail.
 
 The thing worth noticing is the *shape*. Every theme defines exactly the
 same keys:
@@ -611,8 +613,9 @@ reverse. `clipboard.py` is the part that talks to Windows.
 **Why two modules rather than one?** Because only one of them can be
 tested here. Tkinter's clipboard only offers plain text, so reaching
 `CF_HTML` means the Win32 API through `ctypes` — Windows-only, and the
-test suite runs on Linux. Keeping that to one small module, where every
-function returns None rather than failing when it cannot work, leaves all
+test suite runs on Linux as well. Keeping that to one small module, where
+every function returns None or False rather than failing when it cannot
+work, leaves all
 the actual decisions — what maps to what, how lists nest, where offsets
 land — in a module that turns strings into strings and can be tested
 anywhere. That is `test_richtext.py`, which needs no window and no
@@ -629,9 +632,9 @@ already stores bold. The note format and HTML line up almost one to one.
 **And one that does not.** Everything else. HTML can say things a note
 cannot, so `<sup>`, `<code>`, a background image and a CSS class are
 dropped and their words kept. Font size and family are dropped too, even
-though the app has both: a web page uses neither of the eight the app
-offers, so matching would mean picking a nearest value and claiming the
-note is set in something it never was.
+though the app has both: a page's sizes and fonts rarely match the app's
+lists exactly, so matching would mean picking a nearest value and claiming
+the note is set in something it never was.
 
 ---
 

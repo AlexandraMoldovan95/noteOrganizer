@@ -24,17 +24,9 @@ as a whole, so they stay on :class:`NoteOrganizer`:
 Panels here still call those freely through ``self`` — mixins share one
 object, so nothing had to change to keep that working.
 
-A NOTE FOR THE REDESIGN
------------------------
-The plan (see `docs/ROADMAP.md`) is to move from one long scrolling column
-to a Chrome-style layout: categories listed down a narrow left column, the
-selected section's controls in the middle, space to the right.
-
-Most of this file survives that. Each ``_build_settings_*_panel`` renders
-one section and does not care how it is reached. What changes is
-:meth:`build_settings_tab`, which currently stacks the panels vertically
-and gives each a collapsible header — that assembly is what becomes a left
-nav plus a content pane.
+Each ``_build_settings_*_panel`` renders one section and does not care how
+it is reached; :meth:`build_settings_tab` lays them out as a navigation
+column beside a content pane.
 """
 
 import os
@@ -3601,8 +3593,9 @@ class SettingsPageMixin:
         """Move the checkbox-selected duplicates to trash. `del_vars` is a list of
         (delete_var, note, group) — a note is removed when its var is set. Within
         each group, the attachments of removed notes are merged into a
-        surviving copy (the first note in that group NOT marked for deletion), so
-        nothing unique is lost. If a whole group is checked, all are removed."""
+        surviving copy (the first note in that group NOT marked for deletion), up
+        to the MAX_ATTACHMENTS a note holds -- the rest stay with their copy in
+        the Trash. If a whole group is checked, all are removed."""
         # Figure out, per group, which notes are being removed and which survive.
         by_group = {}
         for var, note, group in del_vars:

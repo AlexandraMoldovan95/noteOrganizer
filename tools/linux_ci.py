@@ -373,7 +373,14 @@ def main(argv):
     sweep()
     if args == ["--build"]:
         return build()
-    if docker("image", "inspect", IMAGE, "--format", "{{.Id}}").returncode != 0:
+    found = docker("image", "inspect", IMAGE, "--format", "{{.Id}}")
+    if found.returncode != 0:
+        # A daemon that is not running said "no image here, build it": a
+        # wrong diagnosis, and a build that would fail the same way.
+        if "no such image" not in (found.stderr or "").lower():
+            print("linux_ci: docker is not answering (%s)"
+                  % ((found.stderr or "").strip().splitlines() or ["no reason given"])[-1])
+            return 2
         print("linux_ci: there is no %s image here; build it once with "
               "py tools/linux_ci.py --build" % IMAGE)
         return 2

@@ -100,7 +100,7 @@ Notes save automatically a moment after you stop typing (look for the "Auto-save
 always save immediately when you switch to a different note. There is a safety net under the
 autosave, too: if much of a note's text suddenly goes — emptied, a big part deleted, or replaced
 by something else (an accidental select-all-and-type, say) — the app quietly keeps the earlier
-version and an **↩ Restore previous** button appears in the editor — one click (past a warning
+version, and an **↩ Restore previous** button appears in the editor. One click (past a warning
 that pre-selects No) brings the old text back whole, tables redrawn and all. What it replaces is
 kept in turn, so pressing it again brings that back: nothing written since is lost. If you take
 the change back yourself with Ctrl+Z, the button goes away once the note is saved, as there is
@@ -113,19 +113,18 @@ there is nothing to lose.
 One day of a repeating note, opened on its own from the calendar, saves the same way — to that
 day, as you type (see [One day, or the whole series](#one-day-or-the-whole-series)).
 
-A field the app cannot read never costs you the rest of the note. A date it cannot read (see
-[Writing a date](#writing-a-date) for every way it can — what is left is a day that does not
-exist, like 31.09.2026), a repeat's end date the same, a repeat's **Every** or **After … times**
-box holding something other than a whole number, or a repeat with no start date is **left out**:
-the note keeps that field's last good value, everything else saves, and the status line says what
-was left out. When you then leave the note, you are asked —
+A field the app cannot read never costs you the rest of the note. These are **left out**: a date
+it cannot read (a day that does not exist, like 31.09.2026 — [Writing a date](#writing-a-date)
+has every way it can), a repeat's end date the same, a repeat's **Every** or **After … times**
+box holding something other than a whole number, and a repeat with no start date. The note keeps
+that field's last good value, everything else saves, and the status line says what was left out. When you then leave the note, you are asked —
 **Go back and fix it** (what Enter and Escape choose) or **Continue without it**, which puts the
 stored value back on screen.
 
 The writing area starts at twelve lines. **Expand**, underneath it, makes it roughly twice as tall
 for a long note, and **Collapse** puts it back — the note itself is unaffected either way, only
 how much of it you can see at once. The buttons at the bottom of the editor do not go out of
-reach; the page simply gets longer and scrolls. The app remembers which you chose. The comments
+reach; the page gets longer and scrolls. The app remembers which you chose. The comments
 box has the same toggle and remembers it too, so a box you expanded stays expanded next time.
 Comments are plain text only — pasting a
 table there keeps the words and drops the table (tables live in the body, which draws them as a
@@ -239,8 +238,8 @@ of these keys.
 
 **To make everything bigger**, don't format each note — go to **Settings → Appearance** and set
 **Editor font** and **Text size**. That is the size notes start at; anything you set from the
-toolbar overrides it just for that text. This is the setting to reach for if the default is simply
-too small to read comfortably.
+toolbar overrides it just for that text. This is the setting to reach for if the default is too
+small to read comfortably.
 
 A title can be up to 200 characters.
 
@@ -345,12 +344,11 @@ A table works the way a spreadsheet has taught your hands to expect:
   an alignment button aligns the text *inside* the cells, as a spreadsheet does — and a short
   dialog, which stays until you press OK, says how to move the table itself.
 - The full set: merge the selected cells into one (their texts join — the same with **Merge with
-  cell to the left / above**, which takes in all of a neighbour that is itself merged), split a
-  merge back apart, insert or delete rows and columns (**Insert row above** on the header row
-  puts the new row just under it, so the header stays the header), duplicate whole columns to
-  the end of the table (and whole
-  rows to the bottom), insert a **checkbox** (with its own colour palette) or an emoji, and
-  highlight cells from a small colour palette.
+  cell to the left / above**, which takes in all of a neighbour that is itself merged), or split a
+  merge back apart. Insert or delete rows and columns (**Insert row above** on the header row
+  puts the new row just under it, so the header stays the header). Duplicate whole columns to
+  the end of the table, and whole rows to the bottom. Insert a **checkbox** (with its own colour
+  palette) or an emoji, and highlight cells from a small colour palette.
 - A checkbox is a real little box, not text: **click it to tick and untick it** — for marking when
   a row's condition is met, a habit done, anything you invent. It is stored as Markdown's own task
   syntax (`[ ]` / `[x]`), so it survives share codes as readable text; the exported page draws it
@@ -717,7 +715,8 @@ styling, the date, the colour and the pin — so when one copy is styled differe
 you choose which to keep. Within a
 group, tick specific copies to remove (the rest are kept — nothing forces "keep exactly one"), or
 use **Clean up ALL groups** to apply "keep the first, remove the rest" across every group in one
-click.
+click. Attached files do not stop a match: cleaning up gives the kept copy the files the removed
+ones had, up to the 200 a note holds — the rest stay with their copy in the Trash.
 
 ![Duplicates panel](screenshots/duplicates-panel.png)
 
@@ -802,7 +801,7 @@ through those days one at a time. For each, **Make it a note** turns it into an 
 its own date, with that day's title, text, comments, category and colour (the checklist and the
 attached files stay with the series, which they belong to); **Move to the Trash** does the same
 but straight into Recently deleted, from where it can be restored; and **Leave it** changes
-nothing. Put the rule back the way it was and those days are simply part of the series again.
+nothing. Put the rule back the way it was and those days are part of the series again.
 A day you moved onto a date the new rule lands on anyway stops being a moved day: its text
 stays where you saw it, as that date's day, and its own date shows the series again. A day's
 text never moves on its own; one left on a date the series no longer has is listed by the
@@ -897,7 +896,7 @@ You can also mark the day itself, independent of any note on it — right-click 
 - **🏷 Mark this day…** puts emoji on it — a birthday, a trip, a payday. **Up to three**, and the
   picker says so: once you have three, the ones you have not picked go flat and a line reads
   "Three is the most a day can show — unpick one to choose another", rather than the fourth click
-  simply doing nothing. The day's cell shows them as a small badge in the corner, in the same
+  doing nothing. The day's cell shows them as a small badge in the corner, in the same
   colour as the day's number.
 
 Both can be cleared from the same menu, and both clears offer an **Undo** in the banner — as

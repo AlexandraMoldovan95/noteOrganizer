@@ -368,7 +368,7 @@ def main():
     errs = len(log['tk_errors'])
     # A scene that raised is recorded with an 'error' key — and used to
     # be invisible to the exit code, so a failed scene still exited 0
-    # and CI stayed green over it.
+    # and the run read as passed.
     scene_errs = sum(1 for entry in log['scenes'] + log['bursts']
                      if 'error' in entry)
     print(f"done: {len(log['scenes'])} scenes, {len(log['bursts'])} bursts, "

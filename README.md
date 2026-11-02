@@ -94,9 +94,8 @@ and approved every change before it was merged. The agent wrote most of
 the code and the documentation, working under the rules in
 [CLAUDE.md](CLAUDE.md); what she turned down is kept with its reasons
 ([not planned](docs/ROADMAP.md#explicitly-not-planned-right-now)). Commits
-the agent made carry a `Co-Authored-By` line naming the model — 721 of the
-807 that are not merges, counted at 0.89.371; the first week's predate the
-convention, and a few dozen after it were made without one. How the work
+the agent made carry a `Co-Authored-By` line naming the model
+([counted](docs/AI_WORKFLOW.md#models)). How the work
 is divided and checked: [built with an AI agent](docs/AI_WORKFLOW.md).
 
 > Everyone takes notes, whatever they do. I spent years in support — three
@@ -114,7 +113,7 @@ and checks what a person would notice: a note that must survive a restart,
 a share code or a backup; formatting and tables that must come back exactly;
 a question that must not lose what was typed. A fix lands with a check that
 fails when the fix is taken away, and the mutation runner proves it again
-on demand. The suite runs 89% of the app's lines on Windows, and CI holds
+on demand. The suite ran 89% of the app's lines on Windows ([measured](qa/README.md)), and CI holds
 a floor of 80% on Linux; a line run is not a line checked, which is what
 the mutants are for
 ([how we test, in one page](qa/README.md#how-we-test-in-one-page)).

@@ -305,7 +305,7 @@ def memory_peak():
         import resource
         kb = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
         return "memory  : the largest finished process used %s MB" % format(kb // 1024, ",")
-    except Exception:
+    except Exception:   # a report line only: no figure is said rather than a wrong one
         return ""
 
 
@@ -369,8 +369,12 @@ def take_turn(label=None, wait_s=None):
     try:
         with open(os.path.join(folder, HOLDER_NAME), "w", encoding="utf-8") as fh:
             json.dump(me, fh)
-    except OSError:
-        pass
+    except OSError as exc:
+        # Unwritten, the run's own children cannot tell its turn and wait an
+        # hour for it: no turn is taken, and said, as for an unopenable lock.
+        _lock_file, _token = None, None
+        handle.close()
+        return "machine : NO turn taken, the holder file could not be written (%s)" % exc
     os.environ[HOLDER_ENV] = "%s %s" % (_token, folder)
     import atexit
     atexit.register(_give_up_turn, folder)
@@ -506,7 +510,7 @@ def born_at(pid):
         with open("/proc/stat") as fh:
             boot = next(int(l.split()[1]) for l in fh if l.startswith("btime"))
         return boot + ticks / float(os.sysconf("SC_CLK_TCK"))
-    except Exception:
+    except Exception:   # a process gone or unreadable: no birth, so alive() trusts the pid alone
         return None
 
 
@@ -533,7 +537,7 @@ def _ancestors():
                             parents[int(name)] = int(fh.read().rsplit(")", 1)[1].split()[1])
                     except (OSError, ValueError, IndexError):
                         pass
-    except Exception:
+    except Exception:   # no process table: no ancestor is known, and the turn is asked for again
         return set()
     seen, pid = set(), os.getpid()
     while pid in parents and len(seen) < 64:

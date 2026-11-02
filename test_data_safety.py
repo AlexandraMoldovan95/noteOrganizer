@@ -2830,8 +2830,18 @@ check("...and the same days, or none on either, still group",
 # Every question about duplicates says what is compared through SAME_AS;
 # a field the key gains and the phrase lacks is the drift it stops.
 from noteorganizer.core.duplicates import SAME_AS as _same_as, _dup_key as _dk
-check("the words every duplicate question uses name each part of the key",
-      len(_same_as.replace(" and ", ", ").split(", ")) == len(_dk(_t1)))
+# Each part the words name, and a change to it the key must see: counting
+# the parts alone passed a phrase that swapped "repeat rule" for "date".
+_sa_parts = {"same title": ("title", "Other"), "text": ("body", "other"),
+             "comments": ("comments", "x"), "category": ("category", "Work"),
+             "checklist": ("checklist", [{"text": "a", "done": False}]),
+             "repeat rule": ("recurrence", {"freq": "weekly"}),
+             "a series' own days": ("exceptions", ["2026-01-12"])}
+_sa_named = _same_as.replace(" and ", ", ").split(", ")
+check("the words every duplicate question uses name each part of the key, "
+      "and each part they name is one the key sees",
+      len(_sa_named) == len(_dk(_t1)) and sorted(_sa_named) == sorted(_sa_parts)
+      and all(_dk(dict(_t1, **{f: v})) != _dk(_t1) for f, v in _sa_parts.values()))
 _r1 = dict(_base, title="Sport", date="2026-01-01",
            recurrence={"freq": "weekly", "weekdays": [0]})
 _r2 = dict(_base, title="Sport", date="2026-01-01", recurrence={})

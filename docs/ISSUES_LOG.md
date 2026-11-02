@@ -3429,6 +3429,8 @@ current hit was known, and never asked again.
 
 **Written down, not fixed:** in a table cell, Ctrl+Z right after Enter or an alignment change has
 nothing to take back -- the cell reopens, its Undo empty (the safe side of round twelve's fix).
+The same for a style: since wave 3, Ctrl+B/I/U/D style an open cell, and its Ctrl+Z takes back
+the typing before them, not the style.
 
 **Takeaway:** a rule that adds must ask what is already there, as lines, not as a whole -- and a
 window over a list follows the item it is for.

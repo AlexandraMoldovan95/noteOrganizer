@@ -17,11 +17,13 @@ moment the text wraps differently.
 valid span is dropped rather than repaired, so one bad entry from an old
 file or hand-edited JSON cannot corrupt the editor.
 
-TWO KINDS OF STYLE
-------------------
+THREE KINDS OF STYLE
+--------------------
 * :data:`KNOWN_FORMAT_STYLES` - on/off styles needing no extra data.
-* :data:`VALUE_FORMAT_STYLES` - styles carrying a colour, which must also
-  have a valid ``value``. A colour span without one is discarded.
+* :data:`COLOR_FORMAT_STYLES` - a text colour or highlight, whose ``value``
+  must be a valid colour; a colour span without one is discarded.
+* :data:`FONT_VALUE_STYLES` - a size or a family, whose ``value`` must be
+  one of FONT_SIZES or FONT_FAMILIES; any other is discarded.
 
 Why ``bold_italic`` is its own style rather than two overlapping spans is
 a Tkinter constraint, explained in the comment just below.
@@ -49,10 +51,6 @@ COLOR_FORMAT_STYLES = {"text_color", "highlight"}
 # font_tag_for. They are stored as separate spans regardless, so the four
 # properties stay independent in the note and only meet at render time.
 FONT_VALUE_STYLES = {"font_size", "font_family"}
-
-# Everything that carries a "value". Kept as one name because most callers
-# only need to know whether a span has one, not what kind.
-VALUE_FORMAT_STYLES = COLOR_FORMAT_STYLES | FONT_VALUE_STYLES
 
 # A curated list rather than whatever the machine happens to have installed.
 # Notes travel -- as share codes, as backups, between machines -- and a font
@@ -195,8 +193,9 @@ def clamp_spans_per_line(body, spans):
 def normalize_formatting(value):
     """Coerce a note/template's formatting list to valid spans, silently
     dropping anything malformed (bad type, unknown style, out-of-order or
-    non-integer offsets, or — for text_color/highlight — a missing/invalid
-    hex value) rather than ever letting bad data crash the editor."""
+    non-integer offsets, for text_color/highlight a missing or invalid hex
+    value, for a size or family one not in FONT_SIZES / FONT_FAMILIES)
+    rather than ever letting bad data crash the editor."""
     if not isinstance(value, list):
         return []
     spans = []

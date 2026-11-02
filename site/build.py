@@ -689,9 +689,9 @@ def build_images(repo):
 
 def android_facts(android):
     """What the pages say about the Android app, each from its own source
-    in that repository: the version from its build file, the figures and
-    the description from its README, the pictures' captions from the
-    README beside them."""
+    in that repository: the version from its build file, the figures from
+    its qa/README, the description from its README, the pictures' captions
+    from the README beside them."""
     gradle = read(os.path.join(android, "app", "build.gradle.kts"))
     m = re.search(r'versionName\s*=\s*"([^"]+)"', gradle)
     if not m:

@@ -4,8 +4,10 @@ WHAT THIS MODULE IS FOR
 -----------------------
 Categories are name -> colour pairs the user can add, rename, recolour
 and delete. The immutable starting set lives in :mod:`.themes`; what is
-here is the *live* map plus the two functions that move it to and from
-``settings.json``.
+here is the *live* map, the two functions that move it to and from
+``settings.json``, the ceilings (MAX_CATEGORIES, MAX_CATEGORY_NAME), the
+one rule for a name from any door (``category_name_refusal``), and
+``adopt_categories_of``, which believes the notes over the settings.
 
 WHY CATEGORY_COLORS IS A MODULE-LEVEL DICT
 ------------------------------------------

@@ -1,5 +1,8 @@
 # Product findings register
 
+*Archived on 15 October 2026: kept as history and no longer updated; each status is as of that
+date (the welcome note, for one, shipped in 0.89.362).*
+
 What a hostile, outside look at the app found — and what was done about
 each thing. This is the working list for getting the app to the standard
 a stranger who paid nothing but expects a real product would accept.

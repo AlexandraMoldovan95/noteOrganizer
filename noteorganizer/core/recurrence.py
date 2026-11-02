@@ -64,8 +64,9 @@ day from the anchor::
     current = anchor + step * skipped
 
 A daily note anchored in 1990 costs the same to display in 2026 as one
-created last week. There's a test pinning this: a 36-year-old yearly
-recurrence resolves in well under a millisecond.
+created last week. test_recurrence pins it: that daily note still draws
+its July 2026 days, which a day-by-day walk stopped by MAX_OCCURRENCES
+would never reach.
 
 **Why ``nonlocal``.** The inner ``take()`` function updates ``produced``
 in the enclosing function. Assigning to a name inside a nested function

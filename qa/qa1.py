@@ -216,8 +216,9 @@ try:
     # The trace only schedules the search; ask for it now, so the note
     # with None fields is searched before the next lines replace it.
     app.search_var.set('searchable'); app.refresh_note_list(); app.update()
-    check('search survives a note whose fields are None, and finds it',
-          9991 in app._card_order())
+    # Only it: the earlier notes, which do not say "searchable", stay out.
+    check(f'search survives a note whose fields are None, and finds it ({app._card_order()})',
+          app._card_order() == [9991])
 except Exception as e:
     check(f'search survives None-field note ({e})', False)
 

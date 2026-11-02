@@ -436,6 +436,7 @@ class CalendarViewMixin:
         # bind_all delivers the key to whichever widget has focus, so the
         # event's own widget is the reliable signal. focus_get() is only a
         # fallback for synthetic calls.
+        # Every kind of box Tk types into, built here or not.
         typing_widgets = (tk.Text, tk.Entry, tk.Spinbox, ttk.Entry, ttk.Combobox)
         source = getattr(event, "widget", None)
         try:
@@ -557,7 +558,7 @@ class CalendarViewMixin:
         # apply_theme has skipped this since the theme-switch flicker
         # work, with the reasoning written beside it; every OTHER caller
         # went through regardless. The decision belongs here, once, so
-        # all thirty-one call sites are right by construction rather than
+        # every call site is right by construction rather than
         # by each having remembered.
         #
         # Deferring is only safe because something catches it up before

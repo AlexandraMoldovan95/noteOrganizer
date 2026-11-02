@@ -392,13 +392,13 @@ _steppedQ = app._popups_step_back()
 # to honour it: on the CI's Xvfb (X11, no WM) the answer stays stale
 # at 1 even after a successful set-to-False -- measured, not assumed.
 # The app's own work (dropped + recorded for restore) asserts anywhere.
-check('step-back drops topmost and reports the popup '
-      f'(in={_popQ in _steppedQ}, '
-      f'top={_popQ.attributes("-topmost")!r}, '
-      f'n_stepped={len(_steppedQ)})',
-      _popQ in _steppedQ
-      and (sys.platform != 'win32'
-           or not int(_popQ.attributes('-topmost') or 0)))
+check(f'step-back reports the popup (in={_popQ in _steppedQ}, n_stepped={len(_steppedQ)})',
+      _popQ in _steppedQ)
+if sys.platform == 'win32':
+    check(f'...and drops its topmost (top={_popQ.attributes("-topmost")!r})',
+          not int(_popQ.attributes('-topmost') or 0))
+else:
+    skip('...and drops its topmost (no window manager here to answer)')
 app._popups_step_forward(_steppedQ)
 check('step-forward restores it',
       bool(int(_popQ.attributes('-topmost') or 0)))
@@ -1573,9 +1573,12 @@ def _rz_window():
 # every app it builds (_qa_support.pin_the_desktop), because a click held
 # in another program while the tests run would otherwise freeze layouts.
 _rz_real = NO.NoteOrganizer._desktop_pointer_button_held
-check('the mouse button can be asked, and says no when nobody holds it',
-      _rz_real(app) in (False, True)
-      and (sys.platform.startswith('win') or _rz_real(app) is False))
+check('the mouse button can be asked', _rz_real(app) in (False, True))
+if sys.platform.startswith('win'):
+    # The real desktop: a person's own click may be held right now.
+    skip('...and says no when nobody holds it (a real desktop: someone may)')
+else:
+    check('...and says no when nobody holds it', _rz_real(app) is False)
 _rz_held = {'now': True}
 app._pointer_button_held = lambda: _rz_held['now']
 # The pause must not land by accident between two steps of the check.

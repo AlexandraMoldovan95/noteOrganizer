@@ -43,7 +43,8 @@ can be reviewed; the memory is just the agent's working notebook.
 1. **Investigate, then plan.** For anything beyond a trivial fix, the agent explains its approach
    and walks the [surface inventory](../qa/README.md#the-surface-inventory-what-every-new-feature-is-walked-against) -
    what the change touches, what it risks - before writing any code. I approve it or send it back.
-2. **A branch of its own.** `main` only receives merged pull requests.
+2. **A branch of its own.** The agent's work reaches `main` only as a merged pull request (a typo
+   I fix by hand may go straight there: [GIT_WORKFLOW](GIT_WORKFLOW.md#scenario-a-trivial-docs-only-fix-straight-to-main)).
 3. **The pre-flight.** Name the mechanism, find its siblings, list every reader of a value whose
    meaning changes, and test the heavy features (tables, recurring notes, attachments,
    formatting) with a small probe.
@@ -150,9 +151,9 @@ on Linux, and the workflow skips work a change cannot affect.
 
 ## Models
 
-Commits the agent made carry a `Co-Authored-By` line naming the model. Of the 807 commits that are
-not merges, 721 carry one (counted at 0.89.371): Claude Opus 5.5 (338), Claude Fable 5 (187),
-Claude Opus 5 (167), Claude Sonnet 5 (16) and Claude Opus 4.8 (14). The project's first week, and
+Commits the agent made carry a `Co-Authored-By` line naming the model. Of the 806 commits that are
+not merges, 720 carry one (counted at the 0.89.371 release commit, `0eabe1e`): Claude Opus 5.5
+(336), Claude Fable 5 (187), Claude Opus 5 (167), Claude Sonnet 5 (16) and Claude Opus 4.8 (14). The project's first week, and
 a few dozen commits soon after, were made without the convention.
 
 ## How to read the other documents

@@ -142,6 +142,12 @@ d_stress = NO.expand_occurrences(n_stress, date(2026,7,1), date(2026,7,31))
 elapsed = (time.perf_counter()-t0)*1000
 check(f'36-year-old yearly recurrence still finds July 2026 occurrence ({elapsed:.2f}ms)',
       d_stress==['2026-07-04'])
+# The daily skip-ahead, pinned: walked day by day from 1990, MAX_OCCURRENCES
+# ends the walk around 2004 and July 2026 draws nothing.
+d_daily = NO.expand_occurrences({'id': 98, 'date': '1990-07-04', 'recurrence': {'freq': 'daily'}},
+                                date(2026, 7, 1), date(2026, 7, 3))
+check(f'a daily note anchored in 1990 still draws its July 2026 days ({d_daily})',
+      d_daily == ['2026-07-01', '2026-07-02', '2026-07-03'])
 
 # ---- next_occurrence_on_or_after: the "Calendar: soonest" sort key ----
 from noteorganizer.core.recurrence import next_occurrence_on_or_after as _nxt

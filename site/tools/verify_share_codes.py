@@ -65,7 +65,6 @@ def run(out):
     from noteorganizer.core.model import normalize_note
     from noteorganizer.core.formatting import (normalize_formatting, normalize_paragraphs,
                                                parse_list_marker)
-    from noteorganizer.core.recurrence import normalize_recurrence
     from noteorganizer.core.tables import is_table_row, is_separator_row
     from noteorganizer.core.welcome import build_welcome_note, TITLE
 
@@ -171,9 +170,11 @@ def run(out):
                     break
         check("  the checklist arrives whole", len(note["checklist"]) == len(raw.get("checklist") or []))
         if raw.get("recurrence", {}).get("freq"):
+            # Each part the demo set, read back as it set it: compared with the
+            # normalizer's own answer, the check could only see a bad date.
             check("  the repeat rule arrives as sent",
-                  note["recurrence"] == normalize_recurrence(raw["recurrence"]) and note["recurrence"]["freq"],
-                  repr(note["recurrence"]))
+                  all(note["recurrence"].get(k) == v for k, v in raw["recurrence"].items()),
+                  "%r, sent %r" % (note["recurrence"], raw["recurrence"]))
         lines = note["body"].split("\n")
         if any(line.startswith("|") for line in lines):
             rows = [l for l in lines if is_table_row(l)]

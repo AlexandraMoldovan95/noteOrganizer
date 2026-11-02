@@ -9,8 +9,8 @@ easier to eyeball than to automate.
 
 What all of it actually executes is measured: `py tools/run_coverage.py`
 prints the line-coverage total, the per-file table and the largest
-never-executed regions — 89% of the app's lines today, measured on
-Windows. CI measures on Linux, which runs fewer Windows-only branches,
+never-executed regions — 89.2% of the app's lines when last measured on
+Windows, on 3 October 2026. CI measures on Linux, which runs fewer Windows-only branches,
 and fails a run below 80%. A line executed is not a line checked: whether
 a check bites is what the mutants answer.
 
@@ -66,7 +66,7 @@ suite has had, and what each one really was:
 | `qa6` | grouping, settings, attachments, multi-feature combinations — and every control in sight, on every page, at an ordinary and the smallest window, and on a screen scaled to 150% and 200% (Sharp text); every control a click acts on within Tab's reach, and what Tab lands on in sight; spelling, with a stand-in dictionary |
 | `qa7` | calendar delete, the month drawn on one canvas, the calendar History register, multi-select, image preview, opening an attachment (what opens unasked, what asks and how, the name shown), autosave & memory fixes |
 | `qa8` | search debounce, background-timer robustness |
-| `qa9` | the nested-dropdown-inside-popup fix |
+| `qa9` | the template editor (its tables, live preview, name conflicts, click-away), questions and popups by keyboard (Escape and Enter), Settings sections, Statistics, Duplicates, the image preview, the short window — begun as the nested-dropdown-inside-popup fix |
 
 Beside the GUI suite run eight standalone **unit suites**, each runnable on
 its own (`py test_<name>.py`, from a scratch copy like everything else):
@@ -110,7 +110,8 @@ the one you happen to be editing:
 | Formatting / rich text | **qa1**, qa3, qa5, qa6, qa2, qa9, qa8, qa7 |
 
 Bold = the heavy owner(s): a file carrying at least a quarter of a
-surface's mentions, or leading the next one by more than double.
+surface's mentions (and three at least), or leading the next one by more
+than double.
 
 **Regenerate it rather than editing it** — `py tools/regen_seam_map.py`
 prints the table above, plus the raw per-file counts it came from. The

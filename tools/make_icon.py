@@ -10,9 +10,12 @@ anything else.
 
 THE DESIGNS
 -----------
-Five, so there is something to choose between rather than something to
-accept. Each has to say something true about this app, and each has to
-survive 16x16 in a taskbar -- the constraint that kills most icon ideas:
+Nine, in two families, so there is something to choose between rather than
+something to accept. The one that ships is ``tool`` (DEFAULT_DESIGN), of
+the second family -- square-cornered, in the app's own desktop idiom (see
+the comment above ``design_desktop``). The first family's five are below.
+Each has to say something true about this app, and each has to survive
+16x16 in a taskbar -- the constraint that kills most icon ideas:
 
 ``card``      A note card with a coloured stripe down its left edge.
               Every note in the app's list wears one, in its category's
@@ -44,7 +47,7 @@ RUNNING IT
 ----------
     py tools/make_icon.py                  # the chosen design -> assets/
     py tools/make_icon.py --all            # one icon per theme accent
-    py tools/make_icon.py --sheet          # all five, side by side
+    py tools/make_icon.py --sheet          # all nine, side by side
     py tools/make_icon.py --design stack   # build a different one
 
 The `.ico` carries the six sizes Windows asks for (16 through 256).
@@ -63,7 +66,7 @@ OUT_DIR = os.path.join(ROOT, "assets")
 PREVIEW_DIR = os.path.join(OUT_DIR, "previews")
 
 # The app's own palette (noteorganizer/core/themes.py, the default theme).
-# ACCENT is rebound per drawing -- see draw_icon and ACCENTS below -- so
+# ACCENT is rebound per drawing -- see draw_icon and accents_in_use below -- so
 # that every theme gets an icon in its own colour. Everything else stays
 # put on purpose: the panel keeps the dark background whatever the theme,
 # because a light icon disappears into a light taskbar, and the category
@@ -484,7 +487,7 @@ SHEET = []
 
 
 def write_sheet():
-    """All five designs, every size, on both grounds — for choosing."""
+    """All nine designs, every size, on both grounds — for choosing."""
     from PIL import ImageFont
     try:
         font = ImageFont.truetype("segoeuib.ttf", 24)
@@ -521,8 +524,8 @@ def write_every_accent(design=DEFAULT_DESIGN):
     """One .ico and one .png per accent the app can wear.
 
     One pair per distinct accent: two themes sharing an accent share an
-    icon. The app asks by accent name, which is why the keys of ACCENTS
-    are the filenames. An accent no theme wears any more leaves its pair
+    icon. The app asks by accent hex (``icon_<hex>.ico``), which is why
+    the keys of accents_in_use() are the filenames. An accent no theme wears any more leaves its pair
     behind, and the build would ship it: check_contrast names both the
     pairs missing and the pairs left over.
     """

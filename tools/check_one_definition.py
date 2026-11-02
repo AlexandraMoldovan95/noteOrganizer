@@ -34,21 +34,24 @@ reason — so the exceptions are readable, finite, and reviewed, instead of
 being whatever happened to be written.
 
 This gate is deliberately narrow. It does not try to find every possible
-duplicate judgement; it pins the three that have actually cost this
-project data, and gains a rule the next time one costs it another.
+duplicate judgement; it holds the questions that have cost this project
+something, each RULE below, and gains one the next time another does:
 
-One rule is not about a note. "Does this widget have its place in the
-layout?" was answered at fourteen show/hide sites with winfo_ismapped(),
-which answers a different question -- is it on the screen right now -- and
-says no for a widget whose page is merely hidden. A button that should
-have gone stayed, woken up with its page (0.82.233). The same shape as
-the rest: one question, answered by hand, the wrong way, everywhere.
+1-2. Does the editor hold anything worth keeping? -- asked of an editor
+   state, and again of bare local variables (the first of the three above).
+3. Are these two notes the same note?
+4. Has the body changed?
+5. Does this widget have its place in the layout? -- answered at fourteen
+   show/hide sites with winfo_ismapped(), which says no for a widget whose
+   page is merely hidden (0.82.233).
+6. Could this file or code be read as JSON? -- fourteen readers caught one
+   of the three ways a text turns out unreadable (0.83.338); its owner is
+   a constant, paths.JSON_UNREADABLE.
+7. Is this a figure from 0 to 9?
+8. What has the person typed in the date field?
 
-Nor is the last. "Could this be read as JSON?" was answered at fourteen
-readers by catching JSONDecodeError -- one of the three ways a text turns
-out unreadable -- and the app would not start beside a data file damaged
-in either of the other two (0.83.338). The owner there is a constant,
-paths.JSON_UNREADABLE, not a function.
+An allowance that matches nothing fails the gate too: an exception nobody
+can see is not a reviewed exception, it is a comment.
 """
 
 import ast
@@ -148,10 +151,6 @@ RULES = [
             "save_current_note": "builds the note being saved",
             "do_save": "builds the template being saved",
             "collect": "builds the template the settings editor is editing",
-            "_settle_off_schedule_day":
-                "builds the note a day off its series' schedule becomes; its "
-                "one comparison asks whether the day shows the series' own "
-                "text, the rule load_note applies the formatting by",
             "notes_set_aside":
                 "builds the notes a series' copy's days set aside become "
                 "(round 15 of the final audit); it compares nothing",
@@ -271,6 +270,7 @@ def enclosing_functions(tree):
 
 def main():
     problems = []
+    used = set()            # (rule's question, allowed name) that matched somewhere
     for path in FILES:
         src = io.open(path, encoding="utf-8").read()
         lines = src.split("\n")
@@ -297,10 +297,24 @@ def main():
                 # MEANS.
                 if func == "<module>":
                     continue
-                if func in rule.allowed or func in seen_funcs:
+                if func in rule.allowed:
+                    used.add((rule.question, func))
+                    continue
+                if func in seen_funcs:
                     continue
                 seen_funcs.add(func)
                 problems.append((rel, i + 1, func, rule))
+
+    # An allowance that matches nothing is a comment, not a reviewed
+    # exception: it once hid that its function had changed shape.
+    unused = [(rule, name) for rule in RULES for name in rule.allowed
+              if (rule.question, name) not in used]
+    if unused:
+        print("one-definition gate: %d allowance(s) that match nothing\n" % len(unused))
+        for rule, name in unused:
+            print("  %s -- in the rule %r" % (name, rule.question))
+        print("\n      Remove each, or aim it at the function as it is now.")
+        return 1
 
     if not problems:
         print("one-definition gate: clean (%d file(s), %d rule(s))"

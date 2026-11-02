@@ -4999,13 +4999,16 @@ check(f'...Ctrl+I in an open cell italicises its words and keeps them '
 app.comments_text.delete('1.0', 'end')
 app.comments_text.insert('1.0', 'pick up cinnamon')
 app.comments_text.tag_add('sel', '1.0', 'end-1c')
-if _take_focus(app.comments_text):
+# The keys pressed is part of the promise: a focus not taken pressed none,
+# and "the words unchanged" passed on nothing.
+_ct_pressed = _take_focus(app.comments_text)
+if _ct_pressed:
     app.comments_text.event_generate('<Control-i>')
     app.comments_text.event_generate('<Control-d>')
     _kv_settle()
 check(f"...and in the comments box the four do nothing to the words "
-      f"({app.comments_text.get('1.0', 'end-1c')!r})",
-      app.comments_text.get('1.0', 'end-1c') == 'pick up cinnamon')
+      f"({_ct_pressed}, {app.comments_text.get('1.0', 'end-1c')!r})",
+      _ct_pressed and app.comments_text.get('1.0', 'end-1c') == 'pick up cinnamon')
 app.comments_text.delete('1.0', 'end')
 # Tk's Entry kept edits of its own on Ctrl+D, Ctrl+K and Ctrl+T: in the
 # title, saved at once with no Undo, a letter, the line's rest, two letters
@@ -5013,13 +5016,30 @@ app.comments_text.delete('1.0', 'end')
 app.title_entry.delete(0, 'end')
 app.title_entry.insert(0, 'Buy milk today')
 app.title_entry.icursor(8)
-if _take_focus(app.title_entry):
+_ek_pressed = _take_focus(app.title_entry)
+if _ek_pressed:
     for _ek in ('<Control-d>', '<Control-k>', '<Control-t>'):
         app.title_entry.event_generate(_ek)
     _kv_settle()
 check(f"...and in the title Ctrl+D, Ctrl+K and Ctrl+T leave the words as they "
-      f"were ({app.title_entry.get()!r})",
-      app.title_entry.get() == 'Buy milk today')
+      f"were ({_ek_pressed}, {app.title_entry.get()!r})",
+      _ek_pressed and app.title_entry.get() == 'Buy milk today')
+# Ctrl+Tab leaves the note through Tk's own traversal, so what it lands on
+# is scrolled into sight as after any Tab; focus set by hand left it below
+# the fold (the final audit's wave 3).
+app.geometry('900x400'); app.update(); app.update_idletasks()
+app.editor_canvas.yview_moveto(0); app.update()
+_lv_target = app.body_text.tk_focusNext()
+_lv_hidden = _lv_target is not None and not app._in_sight(_lv_target)
+_lv_seen = False
+if _lv_hidden and _take_focus(app.body_text):
+    app.body_text.event_generate('<Control-Tab>')
+    _kv_settle()
+    _lv_seen = app._in_sight(_lv_target)
+check(f'Ctrl+Tab brings the control it lands on into sight '
+      f'({_lv_target}, out of sight before it: {_lv_hidden})',
+      _lv_hidden and _lv_seen)
+app.geometry('1100x850'); app.update()
 # Text size makes the notes bigger, not the rest of the app: its words say so.
 def _walk_all(w):
     for c in w.winfo_children():

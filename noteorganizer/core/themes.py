@@ -34,7 +34,9 @@ named by the accent), and ``py tools/check_contrast.py --markdown`` pasted
 over ARCHITECTURE's contrast table -- the gate fails until both are done;
 and the same theme in the phone's Themes.kt (its THEMES, dark or light
 list and label), which the phone's tools/check_palettes.py holds to this
-file.
+file. No gate counts the themes in prose: the "eight" in README, in
+ARCHITECTURE and in the phone's documents, and the theme-picker
+screenshots, are changed by hand.
 
 That uniformity is also what makes the theme-switch safety net possible:
 because the palettes are known, the app can spot a widget still holding a

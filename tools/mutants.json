@@ -15276,6 +15276,42 @@
     "expect": "killed"
   },
   {
+    "id": "WS20",
+    "about": "Ctrl+Tab leaves the note by focus set by hand: what it lands on is neither ringed nor scrolled into sight",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self.body_text.event_generate(\n            \"<<NextWindow>>\" if delta > 0 else \"<<PrevWindow>>\")\n",
+        "replace": "        target = (self.body_text.tk_focusNext() if delta > 0\n                  else self.body_text.tk_focusPrev())\n        if target is not None:\n            target.focus_set()\n"
+      }
+    ],
+    "must_fail": [
+      "Ctrl+Tab brings the control it lands on into sight"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS19",
+    "about": "A daily rule walks every day from its anchor instead of skipping to the window: one anchored in 1990 draws nothing in 2026",
+    "edits": [
+      {
+        "file": "noteorganizer/core/recurrence.py",
+        "find": "        if not limited and range_start > anchor:\n            skipped = (range_start - anchor).days // interval\n            current = anchor + step * skipped\n        guard = 0\n        while current <= horizon and guard < MAX_OCCURRENCES:\n",
+        "replace": "        guard = 0\n        while current <= horizon and guard < MAX_OCCURRENCES:\n"
+      }
+    ],
+    "must_fail": [
+      "a daily note anchored in 1990 still draws its July 2026 days"
+    ],
+    "suites": [
+      "test_recurrence"
+    ],
+    "expect": "killed"
+  },
+  {
     "id": "WS17",
     "about": "The one-note import's duplicate question calls its Add button Open, though the note is saved at once",
     "edits": [
