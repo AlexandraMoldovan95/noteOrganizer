@@ -437,8 +437,8 @@ To change the order, use the small **▲ ▼** at the left of an item: the top a
 place up, the bottom one down. A press also picks the item — a ring shows round its row — so
 **Alt+↑** or **Alt+↓** carries on moving it from the keyboard (Tab to an item's box picks it
 too). The new order is saved with the note, and a template's checklist moves the same way.
-The box sits beside the calculator at the same size; when a list gets long, **⤢ Expand** in its
-header grows it to give more room (and it always scrolls, expanded or not). The expanded size is a
+The box sits beside the calculator at the same size; when a list gets long, **Expand ⌄**, under
+the list, grows it to give more room (**Collapse ⌃** puts it back) (and it always scrolls, expanded or not). The expanded size is a
 per-view choice — switching notes returns it to the compact size. An item can be up to 2,000
 characters; a longer paste is shortened to fit, as a note's title is, and the status bar says so
 — or, while the status bar is scrolled out of sight, a banner at the top of the window.
@@ -644,7 +644,7 @@ Trash besides.
 
 ### Templates
 
-Save any note as a reusable template (📋 **Save as template**), or build one from scratch in
+Save any note as a reusable template (🧩 **Save as template**), or build one from scratch in
 Settings → Templates. Starting a new note with **Use template** fills in the title, body,
 category, and checklist from the template — the template itself is never affected by what you do
 with the note afterward. Over a note you have open, **Use template** saves that note first and
