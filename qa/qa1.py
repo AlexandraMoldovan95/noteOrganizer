@@ -10218,8 +10218,23 @@ def _tc_cell_seen():
     return top >= 0 and top + cell.get('h', 24) <= app.body_text.winfo_height()
 
 
+# A cell in sight of a tall table that starts lower in the note: seeing the
+# table's line first scrolled the note before the cell was measured (round 7).
+_tc_rows = ([_frow('Item', 'Cost'), _FSEP] + [_frow(f'line {i}', str(i)) for i in range(1, 16)]
+            + [_frow('rent', '900')])
+set_body('\n'.join(['Rent and bills for the flat'] * 4 + _tc_rows) + '\nend')
+app._render_table_grids()
+app.update()
+app.body_text.yview_moveto(0.0)
+app.update()
+_tc_view = app.body_text.yview()[0]
+app._open_cell_editor(app._grid_at_line(5), 1, 0)
+_tc_still = _tc_cell_seen() and app.body_text.yview()[0] == _tc_view
+app._commit_cell_editor()
+app.update()
 # Tab out of the last row in sight, its value wider than the column: the
 # rebuild's re-pin put the view back, the next cell below the edge (round 7).
+set_body('\n'.join(_tc_rows) + '\nend')
 app._render_table_grids()
 app.update()
 app.body_text.yview_moveto(0.0)
@@ -10228,11 +10243,7 @@ _tc_info = app._grid_at_line(1)
 _tc_line = app.body_text.dlineinfo('1.0')
 _tc_last = max(r for (r, c), cell in _tc_info['cells'].items()
                if _tc_line[1] + 6 + cell['y'] + cell.get('h', 24) <= app.body_text.winfo_height())
-_tc_view = app.body_text.yview()[0]
-app._open_cell_editor(_tc_info, 1, 0)
-_tc_still = _tc_cell_seen() and app.body_text.yview()[0] == _tc_view
-app._commit_cell_editor()
-app._open_cell_editor(app._grid_at_line(1), _tc_last, 1)
+app._open_cell_editor(_tc_info, _tc_last, 1)
 app.update()
 app._cell_editor['entry'].delete('1.0', 'end')
 app._cell_editor['entry'].insert('1.0', 'Electricity and gas, the whole winter')
