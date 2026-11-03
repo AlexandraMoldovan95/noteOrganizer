@@ -20,6 +20,7 @@ from ..core.categories import CATEGORY_COLORS
 from ..core.model import _truncate, fold_for_search
 from ..core.recurrence import (
     describe_recurrence,
+    history_entries,
     is_recurring,
     next_occurrence_on_or_after,
     parse_date,
@@ -201,6 +202,16 @@ class NoteListMixin:
         if note is not None:
             self._bring_card_into_view(note.get("id"))
 
+    def _list_empty_link(self, y, text, tag, command):
+        """A link drawn under the empty list's words, at *y*: its item."""
+        item = self.canvas.create_text(
+            13, y, anchor="nw", text=text, font=("Segoe UI", 10, "underline"),
+            fill=self.colors["accent_text"], tags=("row", tag))
+        self.canvas.tag_bind(tag, "<Button-1>", lambda _e: command())
+        self.canvas.tag_bind(tag, "<Enter>", lambda _e: self.canvas.configure(cursor="hand2"))
+        self.canvas.tag_bind(tag, "<Leave>", lambda _e: self.canvas.configure(cursor=""))
+        return item
+
     def _say_hidden_arrivals(self, notes, what):
         """*notes*, just brought in -- an import, a restore -- said with the
         banner a new note has when the list hides any of them: they landed
@@ -369,16 +380,23 @@ class NoteListMixin:
                 fill=self.colors["subtext"], tags=("row", "list_empty"))
             if hides:
                 below = self.canvas.bbox(text_id)[3] + self.px(6)
-                self.canvas.create_text(
-                    13, below, anchor="nw", text="Show all notes",
-                    font=("Segoe UI", 10, "underline"), fill=self.colors["accent_text"],
-                    tags=("row", "list_show_all"))
-                self.canvas.tag_bind("list_show_all", "<Button-1>",
-                                     lambda _e: self._show_all_notes())
-                self.canvas.tag_bind("list_show_all", "<Enter>",
-                                     lambda _e: self.canvas.configure(cursor="hand2"))
-                self.canvas.tag_bind("list_show_all", "<Leave>",
-                                     lambda _e: self.canvas.configure(cursor=""))
+                link = self._list_empty_link(below, "Show all notes", "list_show_all",
+                                             self._show_all_notes)
+                # The list does not read a day's own words; the History does.
+                # When a day of a repeating note holds them, said, with the
+                # way there (the owner's choice, wave 2).
+                typed = self.search_var.get().strip()
+                if (self._search_query() and typed != self.SEARCH_PLACEHOLDER
+                        and history_entries(self.notes, query=typed)):
+                    below = self.canvas.bbox(link)[3] + self.px(12)
+                    said = self.canvas.create_text(
+                        13, below, anchor="nw", font=("Segoe UI", 10),
+                        text="A day of a repeating note holds these words.",
+                        width=self.LIST_DRAW_WIDTH - 2 * 13,
+                        fill=self.colors["subtext"], tags=("row", "list_history_said"))
+                    self._list_empty_link(self.canvas.bbox(said)[3] + self.px(6),
+                                          "Search the Calendar's History", "list_history",
+                                          lambda: self._search_history_for(typed))
             self._list_extent_changed()
             return
 

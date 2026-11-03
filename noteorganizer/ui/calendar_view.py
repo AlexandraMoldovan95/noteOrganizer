@@ -1679,6 +1679,7 @@ class CalendarViewMixin:
                          insertbackground="text")
         search.pack(side="left", fill="x", expand=True, padx=10, ipady=4)
         self.add_placeholder(search, "Search all calendar entries...")
+        self._history_search_entry = search
         self._add_paste_menu(search)
         self._guard_entry_astral(search)
         self._history_search_var.trace_add(
@@ -1720,6 +1721,17 @@ class CalendarViewMixin:
     def _history_query(self):
         q = self._history_search_var.get()
         return "" if q == "Search all calendar entries..." else q.strip()
+
+    def _search_history_for(self, query):
+        """The Calendar's History, searching for *query*: it reads a day's own
+        words, which the list's search does not (the empty list's link)."""
+        self.notebook.select(self.TAB_CALENDAR)
+        if not getattr(self, "_history_visible", False):
+            self._show_calendar_history()
+        entry = self._history_search_entry
+        entry.delete(0, "end")
+        entry.insert(0, query)
+        entry.config(fg=self.colors["text"])
 
     def _render_calendar_history(self):
         """The rebuilt half: rows re-created per render, coloured with

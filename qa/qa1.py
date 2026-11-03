@@ -345,6 +345,28 @@ finally:
                  and not str(n.get('title') or '').startswith('Work item ')]
     app.save_notes(); app.new_note(); app.update()
 
+# A search the list finds nothing for, while a day of a repeating note holds
+# the words: said, with the way to the Calendar's History, which reads a day's
+# own words and the list does not (wave 2, the owner's choice).
+_hd_notes = app.notes
+app.notes = [NO.normalize_note({
+    'id': 9995, 'title': 'Team meeting', 'body': 'agenda', 'category': 'General',
+    'date': '2026-11-02', 'recurrence': {'freq': 'weekly'},
+    'overrides': {'2026-11-09': {'title': '', 'body': 'signed the contract', 'comments': '',
+                                 'category': 'General', 'color': ''}}})]
+app.search_var.set('contract'); app.refresh_note_list(); app.update()
+_hd_said = bool(app.canvas.find_withtag('list_history'))
+if _hd_said:
+    app._search_history_for('contract'); app.update()
+check(f'a search the list finds nothing for, held by a day of a series, points to the History '
+      f'({_hd_said}, {app._history_query() if getattr(app, "_history_built", False) else None!r})',
+      _hd_said and app._history_query() == 'contract')
+if getattr(app, '_history_visible', False):
+    app._hide_calendar_history()
+app.notebook.select(app.TAB_NOTES)
+app.search_var.set(''); app.refresh_note_list(); app.update()
+app.notes = _hd_notes
+
 # ---- SORTING ----
 # Uses the app's real sort-option labels (previously this loop used made-up
 # strings like 'Newest first' that don't match any real option, so every

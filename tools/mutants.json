@@ -15924,5 +15924,23 @@
       "qa1"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "WS54",
+    "about": "A search the list finds nothing for says nothing of a repeating note's day that holds the words",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/note_list.py",
+        "find": "                        and history_entries(self.notes, query=typed)):\n",
+        "replace": "                        and False):\n"
+      }
+    ],
+    "must_fail": [
+      "a search the list finds nothing for, held by a day of a series, points to the History"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
   }
 ]
