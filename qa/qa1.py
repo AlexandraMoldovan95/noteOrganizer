@@ -10173,6 +10173,33 @@ app._find_case.set(False)
 _fd_spaced = len(app._find_scan_model('creme '))
 app._close_find()
 app.update()
+# A word in a lower row of a tall table: Find brings its cell into the note's
+# view, not only the table's first line (wave 2, round 6: the outline was drawn
+# below the edge, the counter saying 1/1).
+set_body('\n'.join([_frow('Item', 'Cost'), _FSEP]
+                   + [_frow(f'line {i}', str(i)) for i in range(1, 16)]
+                   + [_frow('rent', '900')]) + '\nend')
+app._render_table_grids()
+app.update()
+app.body_text.yview_moveto(0.0)
+app._open_find()
+app._find_var.set('rent')
+app._find_rescan(reveal=True)
+app.update(); app.update()
+_tc_m = app._find_matches[app._find_index] if app._find_matches else None
+_tc_info = app._grid_at_line(_tc_m['line']) if _tc_m else None
+_tc_seen = None
+if _tc_info is not None:
+    _tc_line = app.body_text.dlineinfo(f"{app._grid_first_line(_tc_info)}.0")
+    _tc_cell = _tc_info['cells'].get((_tc_m['row'], _tc_m['col']))
+    if _tc_line and _tc_cell:
+        _tc_top = _tc_line[1] + 6 + _tc_cell['y']
+        _tc_seen = (_tc_top >= 0
+                    and _tc_top + _tc_cell.get('h', 24) <= app.body_text.winfo_height())
+app._close_find()
+app.update()
+check(f'find: a word in a lower row of a tall table brings its cell into view ({_tc_seen})',
+      _tc_seen is True)
 check(f'find: diacritics fold away unless Aa is on, each hit on its own letters ({_fd_read}, {_fd_exact})',
       _fd_read == ['Crème', 'creme', ('cell', 0, 0)] and _fd_exact == 1)
 check(f'find: a space picked up after the word is not part of it ({_fd_spaced})', _fd_spaced == 3)

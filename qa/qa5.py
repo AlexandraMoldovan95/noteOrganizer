@@ -1761,6 +1761,14 @@ check(f"after an Update, a big delete keeps the copy from before the Update, and
       f"{(_uc_aside.get('body') or '')[:20]!r})",
       _uc_prev.get('body') == 'My own words before the update.'
       and (_uc_aside.get('body') or '').startswith('From the backup:'))
+# ...and when those words come back -- Ctrl+Z, a cut pasted back -- their note
+# goes again, untouched since (round 6: one stayed for good after every Undo).
+app.body_text.delete('1.0', 'end')
+app.body_text.insert('1.0', 'From the backup: ' + 'renewed in March ' * 6)
+app.save_current_note(); app.update()
+check('...and when the words come back, their note kept aside goes again',
+      not any(n.get('title') == 'Passport (earlier text)' for n in app.notes)
+      and (app.find_note(1).get('_prev') or {}).get('body') == 'My own words before the update.')
 # Comments cleared after an Update: the copy keeps this computer's comments,
 # not the backup's, which go to a note of their own (round 5).
 app.new_note(); app.update()
@@ -1778,7 +1786,9 @@ _cc_aside = next((n for n in app.notes if n.get('title') == 'Flat (earlier text)
 check(f"after an Update, cleared comments leave the copy's own comments, and keep "
       f"theirs as a note ({_cc_prev.get('comments')!r}, {(_cc_aside.get('comments') or '')[:12]!r})",
       _cc_prev.get('comments') == 'Call Ana Tue'
-      and (_cc_aside.get('comments') or '').startswith('Booked the venue'))
+      and (_cc_aside.get('comments') or '').startswith('Booked the venue')
+      # the comments alone, not a whole copy of the note (round 6)
+      and _cc_aside.get('body') == '')
 # The repeat turned off in the same save as a big delete: the Update's copy
 # still kept whole, the words taken as a note of their own (round 5).
 _ro_fixture()

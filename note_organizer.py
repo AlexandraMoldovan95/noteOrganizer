@@ -2227,28 +2227,58 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                              action_text="Show")
         return made
 
-    def _keep_text_aside(self, note):
+    def _keep_text_aside(self, note, comments_only=False):
         """The words *note* holds before this save, kept as a note of their
         own, "<title> (earlier text)", and said with Show: the rescue copy is
         an Update's, the note as it was before it in no other file, and stays;
-        the words a big delete takes away now would be in no file."""
+        the words a big delete takes away now would be in no file. Only the
+        comments when the save clears no more (*comments_only*): a whole copy
+        was made of a note whose comment alone went (round 6)."""
         title, body = note.get("title") or "", note.get("body") or ""
         comments = note.get("comments") or ""
+        if comments_only:
+            body = ""
         if not (title.strip() or body.strip() or comments.strip()):
             return
         stamp = now_stamp()
         kept = normalize_note({
             "id": max([n["id"] for n in self.notes], default=0) + 1,
             "title": (title + " (earlier text)").strip(), "body": body,
-            "formatting": copy.deepcopy(note.get("formatting") or []),
-            "paragraphs": copy.deepcopy(note.get("paragraphs") or []),
+            "formatting": [] if comments_only else copy.deepcopy(note.get("formatting") or []),
+            "paragraphs": [] if comments_only else copy.deepcopy(note.get("paragraphs") or []),
             "comments": comments, "category": note.get("category") or "General",
             "color": note.get("color") or "", "created": stamp, "updated": stamp})
         self.notes.append(kept)
-        self._show_toast("The words this took away are kept as a note of their own: "
-                         + one_line(kept["title"], 60), kind="info",
+        self._asides_changed = True
+        # What makes it spent: those words back in the note (_take_back_aside).
+        words = {"comments": comments} if comments_only else {
+            "title": title, "body": body, "comments": comments}
+        self._kept_asides = getattr(self, "_kept_asides", {})
+        self._kept_asides[note.get("uid")] = (kept.get("uid"), words)
+        said = ("The comments this cleared are kept as a note of their own: " if comments_only
+                else "The words this took away are kept as a note of their own: ")
+        self._show_toast(said + one_line(kept["title"], 60), kind="info",
                          action=lambda: self._show_set_aside(kept["id"], kept.get("uid")),
                          action_text="Show")
+
+    def _take_back_aside(self, note):
+        """The note _keep_text_aside made of *note*'s words taken away again,
+        when the note holds those words once more -- Ctrl+Z, a cut pasted
+        back -- and that note is untouched since: it is spent, as a rescue
+        copy is (round 6: one stayed in the list for good after every Undo)."""
+        held = getattr(self, "_kept_asides", {}).get(note.get("uid"))
+        if not held:
+            return
+        aside_uid, words = held
+        if any((note.get(key) or "") != value for key, value in words.items()):
+            return
+        del self._kept_asides[note.get("uid")]
+        aside = next((n for n in self.notes if aside_uid and n.get("uid") == aside_uid), None)
+        if aside is not None and aside.get("updated") == aside.get("created"):
+            self.notes.remove(aside)
+            self._asides_changed = True
+            self.set_status("The words are back in the note; the note kept aside of them is gone again")
+            self._box_words_until = time.monotonic() + 4
 
     def _show_set_aside(self, note_id, uid):
         """The '(earlier text)' banner's Show: the first note made, found by
@@ -4187,6 +4217,36 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if cell["x"] < left or cell["x"] + cell["w"] > left + shown:
                 canvas.xview_moveto(
                     max(0.0, cell["x"] / max(1, info["natural"])))
+        except tk.TclError:
+            pass
+        # ...and inside the note's view, top to bottom: Tab into a row below
+        # the edge sent the typing into a cell nobody could see (round 6).
+        self.after_idle(lambda: self._see_cell(info, r, c))
+
+    def _see_cell(self, info, row, col):
+        """Bring a drawn table's cell into the note's view, top to bottom. A
+        table is one line as tall as its grid, and seeing that line left a
+        cell of a tall table below the edge."""
+        first = self._grid_first_line(info)
+        cell = info["cells"].get((row, col))
+        if first is None or cell is None:
+            return
+        b = self.body_text
+        try:
+            b.see(f"{first}.0")
+            line = b.dlineinfo(f"{first}.0")
+            if line is None:
+                return
+            top = line[1] + 6 + cell["y"]          # 6: the grid window's pady
+            bottom = top + cell.get("h", info.get("row_h", 24))
+            if top < 0:
+                b.yview_scroll(int(top) - 4, "pixels")
+            elif bottom > b.winfo_height():
+                b.yview_scroll(int(bottom - b.winfo_height()) + 4, "pixels")
+            else:
+                return
+            # A deliberate move: the commit's re-pin must not pull it back.
+            self._grid_view_restore = None
         except tk.TclError:
             pass
 
@@ -20681,7 +20741,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             else:
                 info = self._grid_at_line(m["line"])
                 if info is not None:
-                    self.body_text.see(f"{self._grid_first_line(info)}.0")
+                    self._see_cell(info, m["row"], m["col"])
         except tk.TclError:
             pass
         self._find_ensure_visible()
@@ -20717,6 +20777,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 canvas.xview_moveto(max(0.0, x / total[2]))
         except tk.TclError:
             pass
+        self._see_cell(info, m["row"], m["col"])
         self._find_flash = {"line": m["line"]}
 
     def _retint_find_tags(self, text_widget):
@@ -23047,7 +23108,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     note["_prev"] = self._turn_off_rescue_copy(
                         note, takes_text=rescue_due and not comments_alone)
                     if comments_alone and update_copy(note["_prev"]):
-                        self._keep_text_aside(note)
+                        self._keep_text_aside(note, comments_only=True)
                     elif comments_alone:
                         note["_prev"]["comments"] = comments_kept_by_copy(
                             note["_prev"].get("comments", ""), note.get("comments", ""))
@@ -23057,7 +23118,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     # no other file: that copy is kept whole, and the words this
                     # save takes away -- written since, or brought back by
                     # Restore previous -- become a note of their own (round 5).
-                    self._keep_text_aside(note)
+                    self._keep_text_aside(note, comments_only=comments_alone)
                 elif rescue_due:
                     # The copy's own comments too, when theirs is the larger
                     # loss: two letters cleared after a long comment was
@@ -23133,6 +23194,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # a big deletion -- so the copy is spent, and the button with it.
             if rescue_copy_spent(note):
                 note.pop("_prev", None)
+            self._take_back_aside(note)
         self._after_note_saved(auto, note, now, left_out, put_back_schedule,
                                reload_from_note, repeat_off_kept)
 
@@ -23162,8 +23224,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._note_list_needs_refresh = True
         else:
             # One note changed, so one card is redrawn; the whole list is
-            # rebuilt only when that cannot be known to be enough.
-            if not self._redraw_saved_card(self.selected_note_id):
+            # rebuilt only when that cannot be known to be enough -- or when
+            # the save made or took away a note of words kept aside.
+            aside = self.__dict__.pop("_asides_changed", False)
+            if aside or not self._redraw_saved_card(self.selected_note_id):
                 self.refresh_note_list()
             self.render_calendar()
             self._note_list_needs_refresh = False

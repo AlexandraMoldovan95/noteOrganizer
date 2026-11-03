@@ -16022,7 +16022,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                    # Restore previous -- become a note of their own (round 5).\n                    self._keep_text_aside(note)\n",
+        "find": "                    # Restore previous -- become a note of their own (round 5).\n                    self._keep_text_aside(note, comments_only=comments_alone)\n",
         "replace": "                    # Restore previous -- become a note of their own (round 5).\n                    pass\n"
       }
     ],
@@ -16049,6 +16049,60 @@
     ],
     "suites": [
       "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS61",
+    "about": "The note of words kept aside stays for good after Ctrl+Z puts the words back",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                note.pop(\"_prev\", None)\n            self._take_back_aside(note)\n",
+        "replace": "                note.pop(\"_prev\", None)\n"
+      }
+    ],
+    "must_fail": [
+      "...and when the words come back, their note kept aside goes again"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS62",
+    "about": "Clearing a comment after an Update keeps a whole copy of the note aside, not the comment",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                    self._keep_text_aside(note, comments_only=comments_alone)\n",
+        "replace": "                    self._keep_text_aside(note)\n"
+      }
+    ],
+    "must_fail": [
+      "after an Update, cleared comments leave the copy's own comments, and keep theirs as a note"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS63",
+    "about": "Find in a tall table shows only the table's first line: the found cell is outlined below the edge",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            elif bottom > b.winfo_height():\n                b.yview_scroll(int(bottom - b.winfo_height()) + 4, \"pixels\")\n",
+        "replace": "            elif False:\n                pass\n"
+      }
+    ],
+    "must_fail": [
+      "find: a word in a lower row of a tall table brings its cell into view"
+    ],
+    "suites": [
+      "qa1"
     ],
     "expect": "killed"
   }
