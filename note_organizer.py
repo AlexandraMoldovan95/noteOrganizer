@@ -19808,6 +19808,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._update_open_highlight()
         return True
 
+    def _open_unless_shown(self, note, occurrence_date=None):
+        """open_note_in_tab for a person's open -- a card clicked, Enter on
+        it, the menu's Open -- left alone when the editor already shows that
+        note on that day: loaded again, it jumped to its top and Ctrl+Z lost
+        all it held (wave 2, round 8). True when the note is shown."""
+        if (self.selected_note_id is not None and note.get("id") == self.selected_note_id
+                and occurrence_date == self.current_occurrence_date):
+            return True
+        return self.open_note_in_tab(note, occurrence_date=occurrence_date)
+
     def open_blank_tab(self):
         """Start a brand-new empty note, replacing whatever was open (after
         auto-saving any unsaved work in it).
@@ -20774,13 +20784,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         first = self._grid_first_line(info)
         if first is None:
             return
-        try:
-            self.body_text.see(f"{first}.0")
-        except tk.TclError:
-            return
         cell = info["cells"].get((m["row"], m["col"]))
         canvas = info.get("canvas")
         if cell is None or canvas is None:
+            # The table's line only: a cell in sight is _see_cell's, which a
+            # see() first made the note jump at every step (round 8).
+            try:
+                self.body_text.see(f"{first}.0")
+            except tk.TclError:
+                return
             self._find_flash = {"line": m["line"]}  # counted, no box (hidden col)
             return
         try:
@@ -21439,7 +21451,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Not opened -- the person went back to the note still in the
         # editor, to fix a date -- means no way back to arm either: it would
         # point at a note never opened.
-        if not self.open_note_in_tab(note, occurrence_date=occurrence_date):
+        if not self._open_unless_shown(note, occurrence_date=occurrence_date):
             return
         if return_day is not None:
             self._pending_calendar_return = {

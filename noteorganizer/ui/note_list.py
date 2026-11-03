@@ -1476,7 +1476,7 @@ class NoteListMixin:
             # A refused open (Cancel on a day's or a template's save question)
             # returns "break": the window's click-outside, still to run for
             # this press, would ask again, and its "No" lost the template.
-            if self.open_note_in_tab(note) is False:
+            if self._open_unless_shown(note) is False:
                 return "break"
             # Before the ring's scroll-into-view, which then still brings a
             # card clicked at the list's edge fully into sight.
@@ -1609,7 +1609,7 @@ class NoteListMixin:
             self._toggle_note_selected(nid, nid not in self.selected_note_ids)
             self._paint_card_check(nid)
         else:
-            self.open_note_in_tab(rec["note"])
+            self._open_unless_shown(rec["note"])
         return "break"
 
     def _list_open_menu(self, _event=None):

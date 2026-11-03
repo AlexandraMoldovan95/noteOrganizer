@@ -16213,5 +16213,77 @@
       "qa9"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "WS70",
+    "about": "The open note's own card loads the note again: the editor jumps to its top and Ctrl+Z loses all it held",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if (self.selected_note_id is not None and note.get(\"id\") == self.selected_note_id\n",
+        "replace": "        if (False and note.get(\"id\") == self.selected_note_id\n"
+      }
+    ],
+    "must_fail": [
+      "the open note's own card, Enter or a press on it, leaves its Undo in place"
+    ],
+    "suites": [
+      "qa4"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS71",
+    "about": "A press on the open note's own card loads it again, its Undo gone",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/note_list.py",
+        "find": "            if self._open_unless_shown(note) is False:\n",
+        "replace": "            if self.open_note_in_tab(note) is False:\n"
+      }
+    ],
+    "must_fail": [
+      "the open note's own card, Enter or a press on it, leaves its Undo in place"
+    ],
+    "suites": [
+      "qa4"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS72",
+    "about": "Enter on the open note's own card loads it again, its Undo gone",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/note_list.py",
+        "find": "            self._open_unless_shown(rec[\"note\"])\n",
+        "replace": "            self.open_note_in_tab(rec[\"note\"])\n"
+      }
+    ],
+    "must_fail": [
+      "the open note's own card, Enter or a press on it, leaves its Undo in place"
+    ],
+    "suites": [
+      "qa4"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS73",
+    "about": "Find onto a cell in sight of a tall table sees the table's line first, and the note jumps",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        cell = info[\"cells\"].get((m[\"row\"], m[\"col\"]))\n        canvas = info.get(\"canvas\")\n        if cell is None or canvas is None:\n            # The table's line only",
+        "replace": "        self.body_text.see(f\"{first}.0\")\n        cell = info[\"cells\"].get((m[\"row\"], m[\"col\"]))\n        canvas = info.get(\"canvas\")\n        if cell is None or canvas is None:\n            # The table's line only"
+      }
+    ],
+    "must_fail": [
+      "find onto a cell in sight of a tall table leaves the note where it is"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
   }
 ]

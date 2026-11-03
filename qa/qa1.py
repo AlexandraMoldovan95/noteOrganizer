@@ -10232,6 +10232,20 @@ app._open_cell_editor(app._grid_at_line(5), 1, 0)
 _tc_still = _tc_cell_seen() and app.body_text.yview()[0] == _tc_view
 app._commit_cell_editor()
 app.update()
+# ...and Find onto a cell in sight there: a see() of the table's line first
+# made the note jump at every step (round 8).
+app._open_find()
+app._find_var.set('line 3')
+app._find_rescan(reveal=True)
+_tc_end = time.monotonic() + 0.7
+while time.monotonic() < _tc_end:
+    app.update()
+    time.sleep(0.02)
+_tc_find_still = (bool(app._find_matches) and app.body_text.yview()[0] == _tc_view)
+app._close_find()
+app.update()
+check(f'find onto a cell in sight of a tall table leaves the note where it is ({_tc_find_still})',
+      _tc_find_still is True)
 # Tab out of the last row in sight, its value wider than the column: the
 # rebuild's re-pin put the view back, the next cell below the edge (round 7).
 set_body('\n'.join(_tc_rows) + '\nend')

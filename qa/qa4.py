@@ -8,6 +8,7 @@ from _qa_support import hermetic_seed as _qa_seed
 _qa_seed()
 
 import sys
+import types
 import note_organizer as NO, tkinter as tk, time
 # A generated click is DISCARDED in silence when its widget is not
 # viewable, and the app hides popups whenever another program holds the
@@ -2705,6 +2706,29 @@ app.collapsed_groups.clear()
 app.refresh_note_list(); _ls_settle()
 if _bl_work_colour is None:
     NO.CATEGORY_COLORS.pop('Work', None)
+
+# The open note's own card, pressed or Enter on it, leaves the note as it is:
+# loaded again, it jumped to its top and Ctrl+Z lost all it held (wave 2,
+# round 8).
+_co_fresh(_bl_notes)
+_oc_id = (app._card_order() or [None])[0]
+app.open_note_in_tab(app.find_note(_oc_id)); _ls_settle()
+
+
+def _oc_can_undo():
+    return bool(app.body_text.tk.call(app.body_text._w, 'edit', 'canundo'))
+
+
+app.body_text.insert('end', ' and a line typed since')
+app.body_text.edit_separator()
+_oc_typed = _oc_can_undo()
+app._put_keyboard_on_card(_oc_id); _ls_settle()
+app._list_activate(); _ls_settle()
+_oc_enter = _oc_can_undo()
+app._list_press_row(app._note_cards[_oc_id], types.SimpleNamespace(x=5, y=5)); _ls_settle()
+check(f"the open note's own card, Enter or a press on it, leaves its Undo in place "
+      f"({_oc_typed}, {_oc_enter}, {_oc_can_undo()})",
+      _oc_typed and _oc_enter and _oc_can_undo())
 
 # 5i. The ring stays where the person can see it. It could sit on a card
 # 900px above the view: Tab brought the keyboard back to a list the wheel

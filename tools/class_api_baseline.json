@@ -583,6 +583,7 @@
   "_open_note_uid": "(self)",
   "_open_table_size_popup": "(self)",
   "_open_today_from_reminder": "(self, today)",
+  "_open_unless_shown": "(self, note, occurrence_date=None)",
   "_opened_from_keyboard": "(self, opener)",
   "_opens_list_from_keyboard": "(self, opener, open_list)",
   "_order_identity": "(note)",
