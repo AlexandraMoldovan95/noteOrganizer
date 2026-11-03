@@ -444,6 +444,7 @@
   "_is_placed": "(self, widget)",
   "_keep_filter_valid": "(self)",
   "_keep_row_under_pointer": "(self, key, on_screen)",
+  "_keep_text_aside": "(self, note)",
   "_key_menu": "(self, event)",
   "_key_press": "(self, event)",
   "_key_walk": "(self, widget, step)",

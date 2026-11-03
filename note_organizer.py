@@ -2227,6 +2227,29 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                              action_text="Show")
         return made
 
+    def _keep_text_aside(self, note):
+        """The words *note* holds before this save, kept as a note of their
+        own, "<title> (earlier text)", and said with Show: the rescue copy is
+        an Update's, the note as it was before it in no other file, and stays;
+        the words a big delete takes away now would be in no file."""
+        title, body = note.get("title") or "", note.get("body") or ""
+        comments = note.get("comments") or ""
+        if not (title.strip() or body.strip() or comments.strip()):
+            return
+        stamp = now_stamp()
+        kept = normalize_note({
+            "id": max([n["id"] for n in self.notes], default=0) + 1,
+            "title": (title + " (earlier text)").strip(), "body": body,
+            "formatting": copy.deepcopy(note.get("formatting") or []),
+            "paragraphs": copy.deepcopy(note.get("paragraphs") or []),
+            "comments": comments, "category": note.get("category") or "General",
+            "color": note.get("color") or "", "created": stamp, "updated": stamp})
+        self.notes.append(kept)
+        self._show_toast("The words this took away are kept as a note of their own: "
+                         + one_line(kept["title"], 60), kind="info",
+                         action=lambda: self._show_set_aside(kept["id"], kept.get("uid")),
+                         action_text="Show")
+
     def _show_set_aside(self, note_id, uid):
         """The '(earlier text)' banner's Show: the first note made, found by
         its identity -- the list may have been read again since -- opened
@@ -22609,6 +22632,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         brings back the words and the series together (2026-10-28, the
         final audit; another series' copy, round 10)."""
         existing = note.get("_prev")
+        # An Update's copy is kept whole even when this save takes text away:
+        # that text becomes a note of its own instead (wave 2, round 5).
+        if takes_text and update_copy(existing) and not rescue_copy_spent(note):
+            self._keep_text_aside(note)
+            takes_text = False
         # Another series' copy, replaced here, held its days alone: they are
         # set aside, to be notes of their own (round 15) -- not an Update's
         # copy this turn-off keeps whole (round 17).
@@ -23018,17 +23046,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     # in place of it left the newest words in no file (round 4).
                     note["_prev"] = self._turn_off_rescue_copy(
                         note, takes_text=rescue_due and not comments_alone)
-                    if comments_alone:
+                    if comments_alone and update_copy(note["_prev"]):
+                        self._keep_text_aside(note)
+                    elif comments_alone:
                         note["_prev"]["comments"] = comments_kept_by_copy(
                             note["_prev"].get("comments", ""), note.get("comments", ""))
-                elif (rescue_due and not comments_alone and update_copy(note.get("_prev"))
+                elif (rescue_due and update_copy(note.get("_prev"))
                       and not rescue_copy_spent(note)):
-                    # An import's Update left the note as it was here before
-                    # in no other file; the words deleted now are the
-                    # backup's, still in it. That copy is kept whole: replaced,
-                    # one big delete (or a slip and Ctrl+Z) lost the note as it
-                    # was before the Update, unsaid (wave 2, round 4).
-                    pass
+                    # An import's Update left the note as it was here before in
+                    # no other file: that copy is kept whole, and the words this
+                    # save takes away -- written since, or brought back by
+                    # Restore previous -- become a note of their own (round 5).
+                    self._keep_text_aside(note)
                 elif rescue_due:
                     # The copy's own comments too, when theirs is the larger
                     # loss: two letters cleared after a long comment was

@@ -149,6 +149,9 @@ RULES = [
             # template dict out of editor state. Naming the fields is
             # what they are for.
             "_write_fields_to_note": "builds the note being saved",
+            "_keep_text_aside":
+                "builds the note a big delete's words become beside an "
+                "Update's copy (wave 2); it compares nothing",
             "_day_as_shown":
                 "builds the copy of one day a file is made of (wave 2); its "
                 "one comparison asks whether the day's text is the series' own, "

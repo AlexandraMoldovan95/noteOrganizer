@@ -1752,9 +1752,57 @@ app.open_note_in_tab(app.find_note(1)); app.update()
 app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'x')
 app.save_current_note(); app.update()
 _uc_prev = app.find_note(1).get('_prev') or {}
-check(f"after an Update, a big delete keeps the copy from before the Update "
-      f"({(_uc_prev.get('body') or '')[:30]!r})",
-      _uc_prev.get('body') == 'My own words before the update.')
+# ...and the words it took away -- written since the Update, or brought back by
+# Restore previous -- are kept too, as a note of their own (round 5: kept in
+# neither, they were in no file).
+_uc_aside = next((n for n in app.notes if n.get('title') == 'Passport (earlier text)'), {})
+check(f"after an Update, a big delete keeps the copy from before the Update, and the "
+      f"words it took away as a note of their own ({(_uc_prev.get('body') or '')[:30]!r}, "
+      f"{(_uc_aside.get('body') or '')[:20]!r})",
+      _uc_prev.get('body') == 'My own words before the update.'
+      and (_uc_aside.get('body') or '').startswith('From the backup:'))
+# Comments cleared after an Update: the copy keeps this computer's comments,
+# not the backup's, which go to a note of their own (round 5).
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'uid': _rd_uid, 'title': 'Flat', 'body': 'b',
+                                'comments': 'Booked the venue; deposit paid on Friday, receipt in the drawer'})]
+app.notes[0]['_prev'] = {'title': 'Flat', 'body': 'b', 'formatting': [], 'paragraphs': [],
+                         'comments': 'Call Ana Tue', 'category': 'General', 'color': '',
+                         'checklist': [], 'pinned': False}
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.comments_text.delete('1.0', 'end')
+app.save_current_note(); app.update()
+_cc_prev = app.find_note(1).get('_prev') or {}
+_cc_aside = next((n for n in app.notes if n.get('title') == 'Flat (earlier text)'), {})
+check(f"after an Update, cleared comments leave the copy's own comments, and keep "
+      f"theirs as a note ({_cc_prev.get('comments')!r}, {(_cc_aside.get('comments') or '')[:12]!r})",
+      _cc_prev.get('comments') == 'Call Ana Tue'
+      and (_cc_aside.get('comments') or '').startswith('Booked the venue'))
+# The repeat turned off in the same save as a big delete: the Update's copy
+# still kept whole, the words taken as a note of their own (round 5).
+_ro_fixture()
+app.notes[0]['body'] = 'SERIES TEXT ' + 'words from the backup ' * 6
+app.notes[0]['_prev'] = {'title': 'Standup', 'body': 'Before the update.', 'formatting': [],
+                         'paragraphs': [], 'comments': '', 'category': 'General', 'color': '',
+                         'checklist': [], 'pinned': False}
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app._themed_dialog = lambda *a, **k: True
+try:
+    app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'x')
+    app.rec_freq_var.set(NO.FREQ_LABELS[''])
+    app.on_recurrence_changed(); app.update()
+    app.save_current_note(); app.update()
+finally:
+    app._themed_dialog = _ro_real_dlg
+_to_prev = app.find_note(1).get('_prev') or {}
+_to_aside = next((n for n in app.notes if n.get('title') == 'Standup (earlier text)'), {})
+check(f"after an Update, the repeat off and a big delete in one save keep the copy from "
+      f"before the Update, and the words as a note ({(_to_prev.get('body') or '')[:20]!r}, "
+      f"{(_to_aside.get('body') or '')[:12]!r})",
+      _to_prev.get('body') == 'Before the update.'
+      and (_to_aside.get('body') or '').startswith('SERIES TEXT'))
 check(f"a big delete, then the repeat turned off: the copy holds the deleted words "
       f"and the series ({(_rd_prev.get('body') or '')[:20]!r}, "
       f"{(_rd_prev.get('recurrence') or {}).get('freq')})",

@@ -15949,12 +15949,13 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                elif (rescue_due and not comments_alone and update_copy(note.get(\"_prev\"))\n                      and not rescue_copy_spent(note)):\n",
+        "find": "                elif (rescue_due and update_copy(note.get(\"_prev\"))\n                      and not rescue_copy_spent(note)):\n",
         "replace": "                elif False:\n"
       }
     ],
     "must_fail": [
-      "after an Update, a big delete keeps the copy from before the Update"
+      "after an Update, a big delete keeps the copy from before the Update, and the words it took away as a note of their own",
+      "after an Update, cleared comments leave the copy's own comments, and keep theirs as a note"
     ],
     "suites": [
       "qa5"
@@ -16012,6 +16013,42 @@
     ],
     "suites": [
       "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS59",
+    "about": "After an Update, a big delete keeps the copy but drops the words it takes away, written since the Update",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                    # Restore previous -- become a note of their own (round 5).\n                    self._keep_text_aside(note)\n",
+        "replace": "                    # Restore previous -- become a note of their own (round 5).\n                    pass\n"
+      }
+    ],
+    "must_fail": [
+      "after an Update, a big delete keeps the copy from before the Update, and the words it took away as a note of their own"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS60",
+    "about": "The repeat off and a big delete in one save replace an Update's copy, the note as it was before the Update",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if takes_text and update_copy(existing) and not rescue_copy_spent(note):\n",
+        "replace": "        if False:\n"
+      }
+    ],
+    "must_fail": [
+      "after an Update, the repeat off and a big delete in one save keep the copy from before the Update, and the words as a note"
+    ],
+    "suites": [
+      "qa5"
     ],
     "expect": "killed"
   }
