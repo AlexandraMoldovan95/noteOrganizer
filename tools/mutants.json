@@ -16094,7 +16094,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            elif bottom > b.winfo_height():\n                b.yview_scroll(int(bottom - b.winfo_height()) + 4, \"pixels\")\n",
+        "find": "            elif bottom > b.winfo_height():\n                self._grid_view_restore = None\n                b.yview_scroll(int(bottom - b.winfo_height()) + 4, \"pixels\")\n",
         "replace": "            elif False:\n                pass\n"
       }
     ],
@@ -16103,6 +16103,114 @@
     ],
     "suites": [
       "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS64",
+    "about": "A note kept aside, taken away by the save its own opening makes, is loaded anyway: what is typed into it no save stores",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        here = (find_by_uid(self.notes, note.get(\"uid\")) if note.get(\"uid\")\n",
+        "replace": "        here = (note if note.get(\"uid\")\n"
+      }
+    ],
+    "must_fail": [
+      "a note kept aside, taken away by the save its opening makes, is not opened"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS65",
+    "about": "A second note kept aside takes the first one's place in the record: undoing both deletes leaves the first for good",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._kept_asides.setdefault(note.get(\"uid\"), []).append((kept.get(\"uid\"), words))\n",
+        "replace": "        self._kept_asides[note.get(\"uid\")] = [(kept.get(\"uid\"), words)]\n"
+      }
+    ],
+    "must_fail": [
+      "a paragraph moved, and two deletes undone in turn, leave no note kept aside"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS66",
+    "about": "A note kept aside is spent only by its words back exactly as they were: a paragraph moved leaves it for good",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                if all(words_lost(value, note.get(key) or \"\") == 0 for key, value in words.items())]\n",
+        "replace": "                if all((note.get(key) or \"\") == value for key, value in words.items())]\n"
+      }
+    ],
+    "must_fail": [
+      "a paragraph moved, and two deletes undone in turn, leave no note kept aside"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS67",
+    "about": "Tab out of a widened last row in sight: the rebuild's re-pin puts the view back, the next cell below the edge",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            elif bottom > b.winfo_height():\n                self._grid_view_restore = None\n",
+        "replace": "            elif bottom > b.winfo_height():\n"
+      }
+    ],
+    "must_fail": [
+      "a cell in sight opens where it is, and Tab out of a widened last row in sight shows the next cell"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS68",
+    "about": "A cell already in sight scrolls the note: the table's line is seen before the cell is measured",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        try:\n            line = b.dlineinfo(f\"{first}.0\")\n            if line is None:\n                self._grid_view_restore = None\n",
+        "replace": "        try:\n            b.see(f\"{first}.0\")\n            line = b.dlineinfo(f\"{first}.0\")\n            if line is None:\n                self._grid_view_restore = None\n"
+      }
+    ],
+    "must_fail": [
+      "a cell in sight opens where it is, and Tab out of a widened last row in sight shows the next cell"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS69",
+    "about": "The template editor's own close button throws a half-written template away without asking",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "command=self._dismiss_mini_popup_asking, relief=\"flat\",\n                  cursor=\"hand2\", bg=self.colors[\"card\"], fg=self.colors[\"subtext\"],\n                  font=(\"Segoe UI\", 10, \"bold\"), bd=0).pack(side=\"right\")\n",
+        "replace": "command=self._dismiss_mini_popup, relief=\"flat\",\n                  cursor=\"hand2\", bg=self.colors[\"card\"], fg=self.colors[\"subtext\"],\n                  font=(\"Segoe UI\", 10, \"bold\"), bd=0).pack(side=\"right\")\n"
+      }
+    ],
+    "must_fail": [
+      "the template editor's ✕ asks before a half-written template goes, and Cancel keeps it"
+    ],
+    "suites": [
+      "qa9"
     ],
     "expect": "killed"
   }

@@ -967,7 +967,9 @@ class SettingsPageMixin:
         tk.Label(head, text=("New template" if is_new else "Edit template"),
                  bg=self.colors["card"], fg=self.colors["text"],
                  font=("Segoe UI", 11, "bold")).pack(side="left")
-        tk.Button(head, text="✕", command=self._dismiss_mini_popup, relief="flat",
+        # A person's close, so it asks as Escape does: it threw a half-written
+        # template away without a word (wave 2, round 7).
+        tk.Button(head, text="✕", command=self._dismiss_mini_popup_asking, relief="flat",
                   cursor="hand2", bg=self.colors["card"], fg=self.colors["subtext"],
                   font=("Segoe UI", 10, "bold"), bd=0).pack(side="right")
         # What a box's limit did is said here, under the heading: the status

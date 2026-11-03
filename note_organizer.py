@@ -382,6 +382,7 @@ from noteorganizer.core.model import (
     normalize_note,
     rescue_copy_spent,
     rescue_copy_due,
+    words_lost,
     kept_days_fit,
     days_hold_own_text,
     spend_series_days,
@@ -2254,7 +2255,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         words = {"comments": comments} if comments_only else {
             "title": title, "body": body, "comments": comments}
         self._kept_asides = getattr(self, "_kept_asides", {})
-        self._kept_asides[note.get("uid")] = (kept.get("uid"), words)
+        self._kept_asides.setdefault(note.get("uid"), []).append((kept.get("uid"), words))
         said = ("The comments this cleared are kept as a note of their own: " if comments_only
                 else "The words this took away are kept as a note of their own: ")
         self._show_toast(said + one_line(kept["title"], 60), kind="info",
@@ -2265,20 +2266,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """The note _keep_text_aside made of *note*'s words taken away again,
         when the note holds those words once more -- Ctrl+Z, a cut pasted
         back -- and that note is untouched since: it is spent, as a rescue
-        copy is (round 6: one stayed in the list for good after every Undo)."""
+        copy is (round 6: one stayed in the list for good after every Undo).
+        Each of the note's asides, by words_lost: a paragraph moved, or two
+        deletes undone in turn, left one for good (round 7)."""
         held = getattr(self, "_kept_asides", {}).get(note.get("uid"))
         if not held:
             return
-        aside_uid, words = held
-        if any((note.get(key) or "") != value for key, value in words.items()):
-            return
-        del self._kept_asides[note.get("uid")]
-        aside = next((n for n in self.notes if aside_uid and n.get("uid") == aside_uid), None)
-        if aside is not None and aside.get("updated") == aside.get("created"):
-            self.notes.remove(aside)
-            self._asides_changed = True
-            self.set_status("The words are back in the note; the note kept aside of them is gone again")
-            self._box_words_until = time.monotonic() + 4
+        back = [(aside_uid, words) for aside_uid, words in held
+                if all(words_lost(value, note.get(key) or "") == 0 for key, value in words.items())]
+        for entry in back:
+            held.remove(entry)
+            aside = next((n for n in self.notes if entry[0] and n.get("uid") == entry[0]), None)
+            if aside is not None and aside.get("updated") == aside.get("created"):
+                self.notes.remove(aside)
+                self._asides_changed = True
+                self.set_status("The words are back in the note; the note kept aside of them is gone again")
+                self._box_words_until = time.monotonic() + 4
+        if not held:
+            del self._kept_asides[note.get("uid")]
 
     def _show_set_aside(self, note_id, uid):
         """The '(earlier text)' banner's Show: the first note made, found by
@@ -4226,27 +4231,30 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _see_cell(self, info, row, col):
         """Bring a drawn table's cell into the note's view, top to bottom. A
         table is one line as tall as its grid, and seeing that line left a
-        cell of a tall table below the edge."""
+        cell of a tall table below the edge. Measured where the view is: a
+        cell in sight moves nothing, and every move made here comes before
+        the commit's re-pin is let go, which put a moved view back (round 7)."""
         first = self._grid_first_line(info)
         cell = info["cells"].get((row, col))
         if first is None or cell is None:
             return
         b = self.body_text
         try:
-            b.see(f"{first}.0")
             line = b.dlineinfo(f"{first}.0")
             if line is None:
-                return
+                self._grid_view_restore = None
+                b.see(f"{first}.0")
+                line = b.dlineinfo(f"{first}.0")
+                if line is None:
+                    return
             top = line[1] + 6 + cell["y"]          # 6: the grid window's pady
             bottom = top + cell.get("h", info.get("row_h", 24))
             if top < 0:
+                self._grid_view_restore = None
                 b.yview_scroll(int(top) - 4, "pixels")
             elif bottom > b.winfo_height():
+                self._grid_view_restore = None
                 b.yview_scroll(int(bottom - b.winfo_height()) + 4, "pixels")
-            else:
-                return
-            # A deliberate move: the commit's re-pin must not pull it back.
-            self._grid_view_restore = None
         except tk.TclError:
             pass
 
@@ -19774,6 +19782,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._pending_calendar_return = pending_return
             self._update_calendar_return_button()
             return False
+        # Looked up again after that save, which can take the very note
+        # being opened away (_take_back_aside): loaded anyway, it took typing
+        # that no save would ever store, and said nothing (wave 2, round 7).
+        here = (find_by_uid(self.notes, note.get("uid")) if note.get("uid")
+                else next((n for n in self.notes if n is note), None))
+        if here is None:
+            self._pending_calendar_return = pending_return
+            self._update_calendar_return_button()
+            self._show_toast("That note is no longer here", kind="info")
+            return False
+        note = here
         self.load_note(note, occurrence_date)
         self._remember_last_open_note(note["id"])
         # Keep a single-entry tab list so the save/flush machinery still works.

@@ -1769,6 +1769,59 @@ app.save_current_note(); app.update()
 check('...and when the words come back, their note kept aside goes again',
       not any(n.get('title') == 'Passport (earlier text)' for n in app.notes)
       and (app.find_note(1).get('_prev') or {}).get('body') == 'My own words before the update.')
+# A paragraph moved -- cut, then pasted elsewhere -- and two big deletes undone
+# in turn: each note kept aside goes as its words come back (round 7).
+_mv_p1 = 'First part: ' + 'packing the tent ' * 4
+_mv_p2 = 'Second part: ' + 'buying the tickets ' * 4
+
+
+def _mv_fixture():
+    app.new_note(); app.update()
+    app.notes = [NO.normalize_note({'id': 1, 'uid': _rd_uid, 'title': 'Trip',
+                                    'body': _mv_p1 + '\n' + _mv_p2})]
+    app.notes[0]['_prev'] = {'title': 'Trip', 'body': 'Mine before.', 'formatting': [],
+                             'paragraphs': [], 'comments': '', 'category': 'General',
+                             'color': '', 'checklist': [], 'pinned': False}
+    app.save_notes()
+    app.open_note_in_tab(app.find_note(1)); app.update()
+
+
+def _mv_body(text):
+    app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', text)
+    app.save_current_note(); app.update()
+
+
+def _mv_asides():
+    return sum(1 for n in app.notes if n.get('title') == 'Trip (earlier text)')
+
+
+_mv_fixture()
+_mv_body(_mv_p2)
+_mv_made = _mv_asides()
+_mv_body(_mv_p2 + '\n' + _mv_p1)
+_mv_moved = _mv_asides()
+_mv_fixture()
+_mv_body(_mv_p2)
+_mv_body('x')
+_mv_two = _mv_asides()
+_mv_body(_mv_p2)
+_mv_body(_mv_p1 + '\n' + _mv_p2)
+check(f'a paragraph moved, and two deletes undone in turn, leave no note kept aside '
+      f'({_mv_made}, {_mv_moved}; {_mv_two}, {_mv_asides()})',
+      (_mv_made, _mv_moved, _mv_two, _mv_asides()) == (1, 0, 2, 0))
+# The note kept aside, opened in the half second before the words put back are
+# saved: that save takes it away, and it was loaded anyway, what was typed into
+# it stored by no save (round 7).
+_mv_fixture()
+_mv_body(_mv_p2)
+_gh_aside = next((n for n in app.notes if n.get('title') == 'Trip (earlier text)'), None)
+app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', _mv_p1 + '\n' + _mv_p2)
+_gh_opened = app.open_note_in_tab(_gh_aside) if _gh_aside else None
+app.update()
+check(f'a note kept aside, taken away by the save its opening makes, is not opened '
+      f'({_gh_opened}, {app.selected_note_id})',
+      _gh_aside is not None and _gh_opened is False and app.selected_note_id == 1
+      and _mv_asides() == 0)
 # Comments cleared after an Update: the copy keeps this computer's comments,
 # not the backup's, which go to a note of their own (round 5).
 app.new_note(); app.update()

@@ -10200,6 +10200,49 @@ app._close_find()
 app.update()
 check(f'find: a word in a lower row of a tall table brings its cell into view ({_tc_seen})',
       _tc_seen is True)
+
+
+def _tc_cell_seen():
+    """Whether the open cell editor's cell lies inside the note's box, once
+    the re-pin a table rebuild holds for half a second has run out."""
+    _tc_end = time.monotonic() + 0.7
+    while time.monotonic() < _tc_end:
+        app.update()
+        time.sleep(0.02)
+    ed = app._cell_editor
+    line = app.body_text.dlineinfo(f"{app._grid_first_line(ed['info'])}.0") if ed else None
+    cell = ed['info']['cells'].get((ed['r'], ed['c'])) if ed else None
+    if not (line and cell):
+        return None
+    top = line[1] + 6 + cell['y']
+    return top >= 0 and top + cell.get('h', 24) <= app.body_text.winfo_height()
+
+
+# Tab out of the last row in sight, its value wider than the column: the
+# rebuild's re-pin put the view back, the next cell below the edge (round 7).
+app._render_table_grids()
+app.update()
+app.body_text.yview_moveto(0.0)
+app.update()
+_tc_info = app._grid_at_line(1)
+_tc_line = app.body_text.dlineinfo('1.0')
+_tc_last = max(r for (r, c), cell in _tc_info['cells'].items()
+               if _tc_line[1] + 6 + cell['y'] + cell.get('h', 24) <= app.body_text.winfo_height())
+_tc_view = app.body_text.yview()[0]
+app._open_cell_editor(_tc_info, 1, 0)
+_tc_still = _tc_cell_seen() and app.body_text.yview()[0] == _tc_view
+app._commit_cell_editor()
+app._open_cell_editor(app._grid_at_line(1), _tc_last, 1)
+app.update()
+app._cell_editor['entry'].delete('1.0', 'end')
+app._cell_editor['entry'].insert('1.0', 'Electricity and gas, the whole winter')
+app._editor_step(+1)
+_tc_tab = _tc_cell_seen()
+app._commit_cell_editor()
+app.update()
+check(f'a cell in sight opens where it is, and Tab out of a widened last row in sight '
+      f'shows the next cell ({_tc_still}, {_tc_tab})',
+      _tc_still is True and _tc_tab is True)
 check(f'find: diacritics fold away unless Aa is on, each hit on its own letters ({_fd_read}, {_fd_exact})',
       _fd_read == ['Crème', 'creme', ('cell', 0, 0)] and _fd_exact == 1)
 check(f'find: a space picked up after the word is not part of it ({_fd_spaced})', _fd_spaced == 3)

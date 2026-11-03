@@ -2534,6 +2534,25 @@ if _keyboard_on(_cs_body):
 else:
     skip('ctrl+s in the template editor: the keyboard never reached it')
     print('      (Ctrl+S in the template editor unverified in this run: no focus)')
+# The editor's own ✕ asks as Escape does: it closed a half-written template
+# without a word (wave 2, round 7).
+app._dismiss_mini_popup(); app.update()
+app._edit_template(app.templates[0], redraw=lambda: None); app.update()
+_cs_pop = app._mini_popup
+_cs_body = [w for w in _walk9(_cs_pop) if isinstance(w, tk.Text)][0]
+_cs_body.insert('end', '\nfourth line')
+_cx_asked = []
+_cx_button = next(w for w in _walk9(_cs_pop)
+                  if isinstance(w, tk.Button) and w.cget('text') == '✕')
+try:
+    app.ask_yes_no_cancel = lambda *a, **k: (_cx_asked.append(a[0]), None)[1]
+    _cx_button.invoke(); app.update()
+finally:
+    app.__dict__.pop('ask_yes_no_cancel', None)
+check("the template editor's ✕ asks before a half-written template goes, and "
+      "Cancel keeps it (%s)" % _cx_asked,
+      _cx_asked == ['Save changes?'] and app._mini_popup is _cs_pop
+      and 'fourth line' in _cs_body.get('1.0', 'end'))
 app._dismiss_mini_popup(); app.update()
 
 # ============================================================
