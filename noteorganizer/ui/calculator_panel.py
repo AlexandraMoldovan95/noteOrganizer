@@ -90,7 +90,7 @@ class CalculatorPanelMixin:
         # app — plus a normal Ctrl+V/<<Paste>> binding below, so pasting an
         # expression copied from somewhere else just works either way.
         self._add_paste_menu(self.calculator_display)
-        self.calculator_display.bind("<KeyRelease>", self._calc_on_direct_edit)
+        self.calculator_display.bind("<KeyRelease>", self._calc_on_key_release)
         self.calculator_display.bind("<<Paste>>", self._calc_on_direct_edit)
         # A sum typed here ends with Enter, as on any calculator.
         for key in ("<Return>", "<KP_Enter>"):
@@ -239,6 +239,18 @@ class CalculatorPanelMixin:
         self._calc_just_evaluated = False
         self._calc_refresh_insert_state()
 
+    def _calc_on_key_release(self, event=None):
+        """A key let go in the display: an edit only when the text changed.
+        The release of the Enter that had just pressed = greyed Insert out,
+        and the next digit was added onto the result."""
+        try:
+            now = self._calc_display_var.get()
+        except tk.TclError:
+            return
+        if now != getattr(self, "_calc_display_was", None):
+            self._calc_display_was = now
+            self._calc_on_direct_edit(event)
+
     def _calc_press(self, token):
         """Handle one calculator button press. Reads and writes the same
         editable display field a user could also type or paste into
@@ -277,6 +289,7 @@ class CalculatorPanelMixin:
                 self._calc_just_evaluated = False
             current += token
         self._calc_display_var.set(current)
+        self._calc_display_was = current
         # Button presses set the StringVar programmatically, which doesn't
         # move the Entry's own cursor the way normal typing would — without
         # this, the cursor can end up stuck mid-text instead of following

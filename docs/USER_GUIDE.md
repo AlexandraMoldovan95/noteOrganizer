@@ -606,7 +606,8 @@ next save. Custom order is the one sort that means "where I put it".*
 When nothing matches, the list says so rather than going blank — naming what hides the notes, the
 search or the Show choice — and **Show all notes** under it, or the **✕** in the search box, brings
 every note back. A new note saved where the list is not looking (Show set to another category, a
-search left in the box) says so on a banner, with **Show all**:
+search left in the box) says so on a banner, with **Show all**, which also brings its card into
+sight — and so do notes an import or a restore from Recently deleted brings in:
 
 ![A search that matches nothing](screenshots/no-match.png)
 

@@ -11955,15 +11955,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Every question is answered: only now do the updates happen.
         updated = self._apply_known_updates(updates, "code")
         added = 0
+        arrived = []
         for sn in list(to_import) + copies:
             note = normalize_note(sn)
             note["id"] = next_id
             next_id += 1
             self.notes.append(note)
+            arrived.append(note)
             added += 1
         self.save_notes()
         self.refresh_note_list()
         self.render_calendar()
+        self._say_hidden_arrivals(arrived, f"Added {added} notes")
         self.import_box.delete("1.0", "end")
         skipped_note = f" ({dupe_count} duplicate(s) skipped)" if dupe_count and to_import is not valid else ""
         oversize_note = (f" — {oversized} oversized note(s) trimmed to safe limits"
@@ -13068,6 +13071,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # copied go too: nothing was imported to own them.
             shutil.rmtree(temp_dir, ignore_errors=True)
             self._drop_unclaimed_import_files(state)
+            self.set_status(self._IMPORT_CANCELLED)
             return
         existing_keys = self._dup_keys_after(updates)
         fresh = [n for n in valid_notes if _dup_key(normalize_note(n)) not in existing_keys]
@@ -13099,6 +13103,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 _undo_category_merge()
                 shutil.rmtree(temp_dir, ignore_errors=True)
                 self._drop_unclaimed_import_files(state)
+                self.set_status(self._IMPORT_CANCELLED)
                 return
             if choice == "skip":
                 to_import = fresh
@@ -13161,6 +13166,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         next_id = max([n["id"] for n in self.notes], default=0) + 1
         # With the copies asked for of notes already here, past the
         # look-alike question: they were just asked about, by name.
+        arrived = []
         for note in list(to_import) + copies:
             note = normalize_note(note)
             for a in note.get("attachments", []):
@@ -13177,6 +13183,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             note["id"] = next_id
             next_id += 1
             self.notes.append(note)
+            arrived.append(note)
 
         # Templates and trash from the backup merge ADDITIVELY — nothing
         # local is replaced or removed (Z05-F07: both used to be left out
@@ -13304,6 +13311,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.show_info("Import complete",
                        f"Added {len(to_import) + len(copies)} note(s) from the backup."
                        f"{known_note}{skipped_note}{extras_note}")
+        self._say_hidden_arrivals(arrived, f"Added {len(arrived)} note(s) from the backup")
 
     # ---------- Theme helpers ----------
     def get_note_color(self, note):
@@ -20236,7 +20244,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Build the ordered match list for `query`. Prose matches are Tk
         ranges (skipping any that cross an elided table); table-cell matches
         are (live_line, data_row, col), located via core/tables and keyed
-        the way info['cells'] is (separator excluded)."""
+        the way info['cells'] is (separator excluded). The spaces at its ends
+        are not part of it unless it is nothing else, as in the list's
+        search; a line break there is, to find the words that end a line."""
+        query = query.strip(" ") or query
         nocase = not self._find_case.get()
         needle = fold_for_search(query) if nocase else query
         b = self.body_text
@@ -23209,6 +23220,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         save_trash(self.trash)
         self.refresh_note_list()
         self.render_calendar()
+        self._say_hidden_arrivals(restored, "Restored from Recently deleted")
         return restored
 
     def _refresh_open_trash_panel(self):
@@ -24040,6 +24052,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     _IMPORT_STOPPED_AT_SESSION_END = (
         "The import was stopped as Windows began to sign out or shut down, so "
         "nothing from the backup was kept. Import it again to bring it in.")
+    # Said when a question of the backup's is answered Cancel: asked while
+    # the person may be typing, a stray Enter cancelled it without a word.
+    _IMPORT_CANCELLED = "Import cancelled: nothing from the backup was added or changed."
 
     def set_status(self, text, reassurance=False):
         # *reassurance* -- the autosave's own "Auto-saved" -- does not write
@@ -24138,6 +24153,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     kind in ("Entry", "TEntry")
                     or (kind == "Text" and not self._can_edit_undo(widget))):
                 return None
+            # A one-line box only while nothing is typed in it (its hint
+            # aside): a title begun after the delete had its typo "undone" by
+            # the deleted note coming back over it.
+            if kind in ("Entry", "TEntry"):
+                hint = next((p for e, p in getattr(self, "_placeholders", ()) if e is widget), None)
+                if widget.get() not in ("", hint):
+                    return None
         except (tk.TclError, AttributeError):
             return None
         self._run_toast_action()

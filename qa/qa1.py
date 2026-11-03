@@ -312,11 +312,25 @@ try:
     check(f'...and with the list scrolled, Show all brings its card into sight '
           f'({_fh_rec and app._row_on_screen(_fh_rec)})',
           _fh_rec is not None and app._row_on_screen(_fh_rec) == 'all')
+    # Notes brought in by a code land where the list does not look too: said
+    # the same way (wave 2, round 2 -- "Added 2 notes" over an unchanged list).
+    app.filter_var.set('Work'); app.refresh_note_list(); app.update()
+    app.toggle_import_panel(); app.update()
+    app.import_box.delete('1.0', 'end')
+    app.import_box.insert('1.0', NO.encode_share_code([{'title': 'Arrived one', 'body': 'a'},
+                                                       {'title': 'Arrived two', 'body': 'b'}]))
+    app._do_inline_import(); app.update()
+    if app._is_placed(app.import_panel):
+        app.toggle_import_panel(); app.update()
+    _fh_last = _fh_toasts[-1] if _fh_toasts else (None, None, None)
+    check(f'notes a code brings in where Show does not look are said, with Show all ({_fh_last[:2]})',
+          _fh_last[0] == 'Added 2 notes, 2 of them hidden by Show: Work' and _fh_last[1] == 'Show all')
 finally:
     app._show_toast = _fh_real_toast
     app.filter_var.set('All')
     app._clear_search()
-    app.notes = [n for n in app.notes if n.get('title') not in ('Call the dentist', 'Second hidden note')
+    app.notes = [n for n in app.notes if n.get('title') not in ('Call the dentist', 'Second hidden note',
+                                                                'Arrived one', 'Arrived two')
                  and not str(n.get('title') or '').startswith('Work item ')]
     app.save_notes(); app.new_note(); app.update()
 
@@ -594,6 +608,21 @@ check('pressing "=" evaluates a pasted/typed expression correctly',
       app._calc_display_var.get() == '12')
 check('insert becomes enabled after evaluating a pasted expression',
       str(app.calculator_insert_btn.cget('state')) == 'normal')
+# Enter gives the result, and its release edits nothing: Insert stays on
+# (wave 2, round 2 -- the release greyed it out, and a digit then went on
+# the end of the result).
+find_calc_btn('C').invoke()
+app.update()
+app._calc_display_var.set('12*3')
+take_focus(app.calculator_display)
+app.calculator_display.event_generate('<KeyRelease>')
+app.calculator_display.event_generate('<Return>')
+app.calculator_display.event_generate('<KeyRelease>', keysym='Return')
+app.update()
+check(f'Enter gives the result, and its release leaves Insert on '
+      f'({app._calc_display_var.get()!r}, {app.calculator_insert_btn.cget("state")})',
+      app._calc_display_var.get() == '36'
+      and str(app.calculator_insert_btn.cget('state')) == 'normal')
 
 # ---- Extra functions (brackets, root, power, percent) ----
 find_calc_btn('C').invoke()
@@ -639,9 +668,9 @@ check('history section is now actually packed on screen',
 # explanatory line from breaking it.
 history_labels = [w for w in app.calculator_history_rows.rows()
                   if isinstance(w, tk.Label) and '<Button-1>' in w.bind()]
-# 5 successful "="es so far this test (7x8, 9-4, 6+6, sqrt9, 3^3) — the
-# 5/0 division-by-zero attempt correctly did NOT add an entry.
-check('history shows one entry per past calculation', len(history_labels) == 5)
+# 6 successful "="es so far this test (7x8, 9-4, 6+6, 12*3 by Enter, sqrt9,
+# 3^3) — the 5/0 division-by-zero attempt correctly did NOT add an entry.
+check('history shows one entry per past calculation', len(history_labels) == 6)
 # And the hint itself: a row that inserts into the note on a plain click,
 # with nothing saying so, is what this row of the register was about.
 _calc_hint = [str(w.cget('text')) for w in
@@ -10068,10 +10097,13 @@ _fd_read = [app.body_text.get(m['start'], m['end']) if m['kind'] == 'prose'
 app._find_case.set(True)
 _fd_exact = len(app._find_scan_model('creme'))
 app._find_case.set(False)
+# A space after the word is not part of it, as in the list's search.
+_fd_spaced = len(app._find_scan_model('creme '))
 app._close_find()
 app.update()
 check(f'find: diacritics fold away unless Aa is on, each hit on its own letters ({_fd_read}, {_fd_exact})',
       _fd_read == ['Crème', 'creme', ('cell', 0, 0)] and _fd_exact == 1)
+check(f'find: a space picked up after the word is not part of it ({_fd_spaced})', _fd_spaced == 3)
 
 # A query holding a line break is read in Python as well: Tk's -nocase search,
 # kept for it, ended the process on Linux whenever the searched line held an

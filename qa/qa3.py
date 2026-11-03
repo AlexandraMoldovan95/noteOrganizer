@@ -3450,6 +3450,13 @@ _ra_note = app.find_note(1)
 _ra_note['body'] = 'March, paid'
 _ra_note['updated'] = '2099-01-01 00:00:00'
 app.save_notes()
+# Cancel on its question says so: asked while the person may be typing, a
+# stray Enter ended the import without a word (wave 2, round 2).
+app.set_status('')
+_ra_import('cancel')
+check(f"an import cancelled at its question says nothing was added ({app.status_lbl.cget('text')!r})",
+      app.status_lbl.cget('text') == app._IMPORT_CANCELLED
+      and (app.find_note(1) or {}).get('body') == 'March, paid')
 _ra_before = _ra_files()
 _ra_asked = _ra_import('update')
 _ra_note = next((n for n in app.notes if n.get('uid') == _ra_uid), {})
@@ -4862,6 +4869,15 @@ _kz_back = next((n for n in app.notes if n.get('title') == 'KeyUndoMe'), None)
 if _kz_back is not None:
     app._delete_note(_kz_back, None)
     _kt_settle(2)
+# ...but not in a title typed in since: the next note's typo "undone" brought
+# the deleted note back over it (wave 2, round 2).
+app.title_entry.insert(0, 'Shopping lisr')
+if _kt_take(app.title_entry):
+    app.title_entry.event_generate('<Control-z>')
+    _kt_settle()
+check('...but in a title typed in since the delete, Ctrl+Z leaves the deleted note where it is',
+      'KeyUndoMe' in _trash_titles() and app._toast_action is not None)
+app.title_entry.delete(0, 'end')
 # ...and in the blank note's text and comments, which take Ctrl+Z themselves:
 # with nothing to take back the press ended there, and did nothing.
 _kz_boxes = []

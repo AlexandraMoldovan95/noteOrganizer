@@ -201,6 +201,21 @@ class NoteListMixin:
         if note is not None:
             self._bring_card_into_view(note.get("id"))
 
+    def _say_hidden_arrivals(self, notes, what):
+        """*notes*, just brought in -- an import, a restore -- said with the
+        banner a new note has when the list hides any of them: they landed
+        where Show or the search kept the list from looking, under "Added 3
+        notes" and a list that had not changed."""
+        shown = self._visible_note_ids()
+        hidden = [n for n in notes or () if n.get("id") not in shown]
+        hides = self._what_hides_notes(hidden[0]) if hidden else ""
+        if hides:
+            tail = (f"hidden by {hides}" if len(notes) == 1
+                    else f"{len(hidden)} of them hidden by {hides}")
+            self._show_toast(f"{what}, {tail}", kind="info",
+                             action=lambda: self._show_all_notes(hidden[0]),
+                             action_text="Show all")
+
     def _bring_card_into_view(self, note_id):
         """Draw the list down to *note_id*'s card, if it is still waiting to
         be drawn, and scroll it all into sight."""

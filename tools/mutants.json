@@ -15780,5 +15780,95 @@
       "qa3"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "WS46",
+    "about": "The release of the Enter that pressed = reads as an edit: Insert greys out",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/calculator_panel.py",
+        "find": "        if now != getattr(self, \"_calc_display_was\", None):\n",
+        "replace": "        if True:\n"
+      }
+    ],
+    "must_fail": [
+      "Enter gives the result, and its release leaves Insert on"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS47",
+    "about": "A backup import cancelled at its known-notes question ends without a word",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self._drop_unclaimed_import_files(state)\n            self.set_status(self._IMPORT_CANCELLED)\n            return\n        existing_keys",
+        "replace": "            self._drop_unclaimed_import_files(state)\n            return\n        existing_keys"
+      }
+    ],
+    "must_fail": [
+      "an import cancelled at its question says nothing was added"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS48",
+    "about": "Ctrl+Z in a title typed in since a delete brings the deleted note back over it",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                if widget.get() not in (\"\", hint):\n",
+        "replace": "                if False:\n"
+      }
+    ],
+    "must_fail": [
+      "...but in a title typed in since the delete, Ctrl+Z leaves the deleted note where it is"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS49",
+    "about": "Notes a code brings in where Show does not look land unseen, under Added 2 notes",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._say_hidden_arrivals(arrived, f\"Added {added} notes\")\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "notes a code brings in where Show does not look are said, with Show all"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS50",
+    "about": "Find in note searches for the space picked up after a word",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        query = query.strip(\" \") or query\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "find: a space picked up after the word is not part of it"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
   }
 ]
