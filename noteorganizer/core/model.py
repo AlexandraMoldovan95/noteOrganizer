@@ -11,9 +11,11 @@ duplicate it keeps. docs/CODE_TOUR.md walks through it.
 """
 
 import copy
+import functools
 import math
 import os
 import re
+import unicodedata
 import uuid
 from collections import Counter
 
@@ -37,6 +39,40 @@ from .recurrence import (
     off_schedule_days,
     _rule_days_among,
 )
+
+
+# ---- What a search compares ----
+
+@functools.lru_cache(maxsize=1)
+def _search_fold_table():
+    """Each character of the basic plane as a search compares it: its base
+    letter, the diacritic dropped, then lowered -- always one character for
+    one, so a match's place in the text is its place in the folded text.
+    Only marks are dropped: a Korean syllable comes apart into letters, and
+    cut to its first it found every syllable that starts with the same one."""
+    table = {}
+    for code in range(0x10000):
+        if 0xD800 <= code <= 0xDFFF:
+            continue
+        ch = chr(code)
+        parts = unicodedata.normalize("NFD", ch)
+        marks = all(unicodedata.category(m) == "Mn" for m in parts[1:])
+        base = parts[0] if marks else ch
+        low = base.lower()
+        folded = low if len(low) == 1 else base
+        if folded != ch:
+            table[code] = folded
+    return table
+
+
+def fold_for_search(text):
+    """*text* as every search in the app compares it -- the list, Find in
+    note, the History: case and diacritics gone, so "creme brulee" finds
+    "Crème brûlée", and an s with a comma below finds one with a cedilla."""
+    if text.isascii():
+        return text.lower()          # the same answer, without the table
+    return text.translate(_search_fold_table())
+
 
 # ---- Note schema + one-time cleanup ----
 

@@ -906,14 +906,13 @@ def _history_bucket_of(date_str, today):
 
 
 def _history_match(query, *texts):
-    """Case-insensitive substring match across any of *texts* — the same
-    plain judgment the sidebar search uses, so the two can't disagree
-    about what 'contains' means (and any script matches, diacritics or
-    not, exactly as typed)."""
+    """Whether *query* is in any of *texts*, folded as the sidebar search
+    folds (model.fold_for_search), so the two cannot disagree."""
     if not query:
         return True
-    q = query.lower()
-    return any(q in (t or "").lower() for t in texts)
+    from .model import fold_for_search
+    q = fold_for_search(query)
+    return any(q in fold_for_search(t or "") for t in texts)
 
 
 _UNKNOWN = object()

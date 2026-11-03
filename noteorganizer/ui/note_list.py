@@ -17,7 +17,7 @@ from datetime import datetime
 
 from ..core import tables as core_tables
 from ..core.categories import CATEGORY_COLORS
-from ..core.model import _truncate
+from ..core.model import _truncate, fold_for_search
 from ..core.recurrence import (
     describe_recurrence,
     is_recurring,
@@ -159,6 +159,60 @@ class NoteListMixin:
         self._list_hand_scrolled = (rec is None
                                     or self._row_on_screen(rec) == "none")
 
+    def _what_hides_notes(self, note=None):
+        """In words, what keeps notes off the list now -- the search, Show,
+        *note*'s folded group, and of those only what keeps *note* off when
+        one is given -- or '' when nothing does. A new note filed under
+        General vanished as it was written, with Show picked once and
+        forgotten, and the empty list blamed a search nobody had typed."""
+        parts = []
+        query, show = self._search_query(), self.filter_var.get()
+        if query and (note is None or not self._query_matches_note(query, note)):
+            parts.append("your search")
+        if show != "All" and (note is None or not self._note_passes_filter(note, show)):
+            parts.append("Show: " + show)
+        if (note is not None and self.group_by_category.get()
+                and self._list_group_of(note) in self.collapsed_groups):
+            parts.append("its folded group")
+        return " and ".join(parts)
+
+    def _show_all_notes(self, note=None):
+        """The list with nothing hiding: Show at All, the search emptied,
+        *note*'s group unfolded, drawn again at once (Show's variable set by
+        hand draws nothing). The search box is emptied without the focus:
+        the banner comes while a new note is being written, and the words
+        typed after Show all went into the search."""
+        if note is not None and self._list_group_of(note) in self.collapsed_groups:
+            self._toggle_group_collapsed(self._list_group_of(note))
+        self.filter_var.set("All")
+        if self.search_var.get() not in ("", self.SEARCH_PLACEHOLDER):
+            try:
+                in_box = self.focus_get() is self.search_entry
+            except (KeyError, tk.TclError):
+                in_box = False
+            if in_box:
+                self.search_var.set("")
+            else:
+                self.search_var.set(self.SEARCH_PLACEHOLDER)
+                self.search_entry.config(fg=self.colors["subtext"])
+        self.refresh_note_list()
+        # Its card in sight: the list keeps its place, and the notes Show
+        # had hidden can come in above it.
+        if note is not None:
+            self._bring_card_into_view(note.get("id"))
+
+    def _bring_card_into_view(self, note_id):
+        """Draw the list down to *note_id*'s card, if it is still waiting to
+        be drawn, and scroll it all into sight."""
+        pending = getattr(self, "_list_pending", None) or ()
+        index = next((i for i, row in enumerate(pending)
+                      if row[0] == "note" and row[1].get("id") == note_id), None)
+        if index is not None:
+            self._draw_list_rows(index + 1)
+        rec = self._list_row_record(("note", note_id))
+        if rec is not None and self._row_on_screen(rec) != "all":
+            self._scroll_row_into_view(rec)
+
     def _toggle_group_collapsed(self, category):
         if category in self.collapsed_groups:
             self.collapsed_groups.discard(category)
@@ -284,18 +338,32 @@ class NoteListMixin:
         rows = self._list_rows()
 
         if not rows:
-            # Distinguish "no notes at all" from "nothing matches the filter".
+            # Distinguish "no notes at all" from "nothing matches the filter",
+            # and name what is hiding them, with the way back.
+            hides = self._what_hides_notes() if self.notes else ""
             if self.notes:
-                msg = "No notes match your search or filter."
+                msg = "No notes match " + (hides or "the list's choices") + "."
             else:
                 msg = "No notes yet.\nClick '+ New Note' to start!"
             # Kept inside the list's width, like every other text on it:
             # a message that fits here can run off the edge in another
             # font or at another scaling.
-            self.canvas.create_text(
+            text_id = self.canvas.create_text(
                 13, 23, anchor="nw", text=msg, font=("Segoe UI", 10),
                 width=self.LIST_DRAW_WIDTH - 2 * 13,
                 fill=self.colors["subtext"], tags=("row", "list_empty"))
+            if hides:
+                below = self.canvas.bbox(text_id)[3] + self.px(6)
+                self.canvas.create_text(
+                    13, below, anchor="nw", text="Show all notes",
+                    font=("Segoe UI", 10, "underline"), fill=self.colors["accent_text"],
+                    tags=("row", "list_show_all"))
+                self.canvas.tag_bind("list_show_all", "<Button-1>",
+                                     lambda _e: self._show_all_notes())
+                self.canvas.tag_bind("list_show_all", "<Enter>",
+                                     lambda _e: self.canvas.configure(cursor="hand2"))
+                self.canvas.tag_bind("list_show_all", "<Leave>",
+                                     lambda _e: self.canvas.configure(cursor=""))
             self._list_extent_changed()
             return
 
@@ -692,12 +760,17 @@ class NoteListMixin:
             notes.sort(key=lambda n: _s(n, "updated"))
         elif choice == "Title A–Z":
             # Untitled notes sink to the bottom rather than clustering at top.
-            notes.sort(key=lambda n: (not _s(n, "title").strip(), _s(n, "title").lower()))
+            # Folded as a search folds: by code point, É and every letter
+            # with a mark came after Z.
+            notes.sort(key=lambda n: (not _s(n, "title").strip(),
+                                      fold_for_search(_s(n, "title")), _s(n, "title")))
         elif choice == "Title Z–A":
-            notes.sort(key=lambda n: (not _s(n, "title").strip(), _s(n, "title").lower()),
+            notes.sort(key=lambda n: (not _s(n, "title").strip(),
+                                      fold_for_search(_s(n, "title")), _s(n, "title")),
                        reverse=True)
         elif choice == "Category":
-            notes.sort(key=lambda n: (_s(n, "category"), _s(n, "updated")),
+            notes.sort(key=lambda n: (fold_for_search(_s(n, "category")), _s(n, "category"),
+                                      _s(n, "updated")),
                        reverse=False)
         elif choice == "Calendar: soonest":
             # Each note's NEXT relevant date from today (a series by its next
@@ -2376,17 +2449,19 @@ class NoteListMixin:
     @staticmethod
     def _search_texts(note):
         """What the sidebar search looks through in a note: its title, its
-        body as text -- a table's plumbing stripped -- and its comments,
-        lowercased (see _query_matches_note)."""
+        body as text -- a table's plumbing stripped -- its comments and its
+        checklist's rows, folded (core.model.fold_for_search)."""
         def _txt(value):
-            return value.lower() if isinstance(value, str) else ""
+            return fold_for_search(value) if isinstance(value, str) else ""
 
         body = note.get("body")
         if isinstance(body, str) and core_tables.CELL in body:
-            body_txt = core_tables.content_text(body).lower()
+            body_txt = fold_for_search(core_tables.content_text(body))
         else:
             body_txt = _txt(body)
-        return (_txt(note.get("title")), body_txt, _txt(note.get("comments")))
+        rows = "\n".join(it.get("text") or "" for it in note.get("checklist") or []
+                         if isinstance(it, dict) and isinstance(it.get("text"), str))
+        return (_txt(note.get("title")), body_txt, _txt(note.get("comments")), _txt(rows))
 
     @staticmethod
     def _query_in_texts(query, texts):
@@ -2394,18 +2469,21 @@ class NoteListMixin:
         return any(query in text for text in texts)
 
     def _cached_search_texts(self, note):
-        """_search_texts, kept for each note until one of the three fields
-        is replaced. Asked of the field objects themselves: a save writes
-        new strings, and the cache holds on to the old ones, so an old one's
-        identity cannot be reused by a new string while it is compared."""
+        """_search_texts, kept for each note until one of its fields is
+        replaced. The three texts are asked by the objects themselves: a save
+        writes new strings, and the cache holds on to the old ones, so an old
+        one's identity cannot be reused by a new string while it is compared.
+        The checklist's rows are compared as words: a row is edited in place."""
         cache = self.__dict__.setdefault("_search_text_cache", {})
         fields = (note.get("title"), note.get("body"), note.get("comments"))
+        rows = tuple(it.get("text") for it in note.get("checklist") or [] if isinstance(it, dict))
         hit = cache.get(note.get("id"))
         if (hit is None or hit[0][0] is not fields[0]
-                or hit[0][1] is not fields[1] or hit[0][2] is not fields[2]):
-            hit = (fields, self._search_texts(note))
+                or hit[0][1] is not fields[1] or hit[0][2] is not fields[2]
+                or hit[1] != rows):
+            hit = (fields, rows, self._search_texts(note))
             cache[note.get("id")] = hit
-        return hit[1]
+        return hit[2]
 
     def _visible_note_ids(self):
         """The notes the list is showing right now, by id: the ONE definition,

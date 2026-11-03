@@ -93,6 +93,28 @@ _CALC_CLOSE_BRACKETS = ")}]"
 # because that is literally what ends up in the display text.
 _CALC_SINGLE_CHAR_TOKENS = "+−×÷√^%" + _CALC_OPEN_BRACKETS + _CALC_CLOSE_BRACKETS
 
+# What a keyboard types for the buttons' symbols. Typed sums gave "Error".
+_CALC_TYPED = {"-": "−", "*": "×", "x": "×", "X": "×", "/": "÷", ":": "÷"}
+
+
+def _as_buttons_spell(expr):
+    """*expr* with what a keyboard types read as the buttons' symbols, and a
+    comma between two digits as the decimal point, as Romanian writes 2,5 --
+    unless exactly three digits follow it: 1,000 is a thousand in English
+    and one in Romanian, so it stays a comma and the sum says Error, never
+    a number nobody meant."""
+    out = []
+    for k, ch in enumerate(expr):
+        if ch == "," and k > 0 and expr[k - 1].isdecimal():
+            run = 0
+            while k + 1 + run < len(expr) and expr[k + 1 + run].isdecimal():
+                run += 1
+            if run and run != 3:
+                out.append(".")
+                continue
+        out.append(_CALC_TYPED.get(ch, ch))
+    return "".join(out)
+
 
 def _tokenize_calc_expression(expr):
     """Split raw expression text into a flat list of tokens.
@@ -103,6 +125,7 @@ def _tokenize_calc_expression(expr):
     Raises:
         CalcError: if a character can't be part of any valid expression.
     """
+    expr = _as_buttons_spell(expr)
     tokens = []
     i, n = 0, len(expr)
     while i < n:

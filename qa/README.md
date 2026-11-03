@@ -744,6 +744,14 @@ A new surface joins this list the moment it ships.
   older checks asked for the ring's *thickness* — two pixels, which every
   card has — and could not fail at all. A property every candidate shares
   cannot tell them apart.
+
+  And a check about where the list is scrolled sets where it starts. A
+  rebuild keeps the place in pixels and holds it for 0.4 s, and the next
+  rebuild inside that window carries the same target forward: qa1's
+  scroll guards passed for weeks because the list happened to be at the
+  top when they began, and failed together the day a check far above them
+  (Show all bringing a card into sight, 2026-11-03) left it 33 px down.
+  They now start from the top with no restore in force.
 - **A widget clipped by its window still reports its full height.** The
   check for the window's smallest size first asked whether the note
   list's `winfo_height()` could hold a card, and passed at the old,

@@ -178,6 +178,16 @@ app.update()
 check('share code area becomes visible', app.editor_code_area.winfo_ismapped())
 code_entry = find_text_widget(app.editor_code_area)
 check('share code text widget exists', code_entry is not None)
+# Generate, fix a word, Copy: the code that went out was the one from before
+# the fix, a wall of characters nobody proofreads (wave 2).
+app.body_text.insert('end', ' and the fix')
+_sc_copy = next(w for w in app.editor_code_area.winfo_children()
+                if isinstance(w, tk.Button) and 'Copy code' in str(w.cget('text')))
+_sc_copy.invoke(); app.update()
+_sc_out = NO.decode_share_code(app.clipboard_get())[0]
+check(f'Copy code copies the note as it is now, not as it was at Generate ({_sc_out.get("body")!r})',
+      _sc_out.get('body') == 'share body and the fix')
+app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'share body')
 
 # decode round trip
 # Paragraphs travel too: without them a shared note arrived flush
@@ -190,6 +200,19 @@ _para_back = NO.decode_share_code(
     NO.encode_share_code([_para_note]))[0]
 check('a share code carries the paragraphs (table position, indents)',
       _para_back.get('paragraphs') == _para_note['paragraphs'])
+# A code with words around it -- a greeting, a mail signature, a "Thanks!" --
+# read only now and then: whether it did hung on the code's padding (wave 2).
+_cw_found = []
+for _cw_body in ('x', 'xy', 'xyz', 'wxyz'):   # codes of every padding length
+    _cw_code = NO.encode_share_code([{'title': _cw_body, 'body': _cw_body}])
+    for _cw_text in ('Hi Ana!\n' + _cw_code + '\nThanks', _cw_code + ' Sent from my phone',
+                     'Here: ' + _cw_code[:30] + '\n' + _cw_code[30:]):
+        try:
+            _cw_found.append(NO.decode_share_code(_cw_text)[0].get('title') == _cw_body)
+        except ValueError:
+            _cw_found.append(False)
+check(f'a code is found among the words around it, padded or not ({_cw_found})',
+      all(_cw_found) and len(_cw_found) == 12)
 check('and an old code without paragraphs still decodes',
       'paragraphs' not in NO.decode_share_code(NO.encode_share_code([
           {'title': 'v', 'body': 'x', 'formatting': []}]))[0])
@@ -343,8 +366,12 @@ app.body_text.insert('1.0', 'second version, edited here')
 app.save_current_note()
 app.update()
 _id_asked = []
+_id_focus = []
 _real_dialog = app._themed_dialog
-app._themed_dialog = lambda *a, **k: (_id_asked.append(a), 'update')[1]
+app._themed_dialog = lambda *a, **k: (
+    _id_asked.append(a),
+    _id_focus.append(k['buttons'][app._dialog_focus_index(k['buttons'], k.get('default'))][0]),
+    'update')[2]
 app.toggle_import_panel(); app.update()
 app.import_box.delete('1.0', 'end')
 app.import_box.insert('1.0', _id_code)
@@ -353,6 +380,8 @@ app.update()
 app._themed_dialog = _real_dialog
 check('...so bringing it back asks about THIS note instead of copying it',
       len(_id_asked) == 1 and _id_asked[0][0] == 'Same note, a different version')
+check(f'...and Enter there replaces nothing: Cancel holds the focus ({_id_focus})',
+      _id_focus == ['Cancel'])
 check('...and answering "update" leaves one note, not two',
       len(app.notes) == 1)
 check('...the same note, with the version the code carried',
@@ -3223,6 +3252,18 @@ _ie_mem = app.find_note(1)
 check("fixture: the edit is saved as that day's own",
       (_ie_mem['overrides'].get('2026-09-14') or {}).get('title')
       == 'Weekly (moved to 10:00)')
+# The day, shared from here, travels as a note of that date: the series'
+# identity and repeat went with the day's words, and an Update on the other
+# device wrote that one day over the whole series (wave 2).
+app.share_current_note_as_code(copy=True); app.update()
+_sc_day = NO.decode_share_code(app.clipboard_get())[0]
+check(f"a day of a series shares as a note of that date, not as the series "
+      f"({_sc_day.get('date')!r}, {(_sc_day.get('recurrence') or {}).get('freq')!r}, "
+      f"{_sc_day.get('uid')!r})",
+      _sc_day.get('date') == '2026-09-14'
+      and not (_sc_day.get('recurrence') or {}).get('freq')
+      and not _sc_day.get('uid')
+      and _sc_day.get('title') == 'Weekly (moved to 10:00)')
 check(f"a day's edit held in memory is the edit a restart reads back "
       f"({_ie_mem['overrides']})",
       _ie_mem['overrides']
@@ -3322,7 +3363,10 @@ def _ra_import(answer):
     the questions' titles."""
     asked = []
     real_dlg, real_info = app._themed_dialog, app.show_info
-    app._themed_dialog = lambda *a, **k: (asked.append(a[0]), answer)[1]
+    app._themed_dialog = lambda *a, **k: (
+        asked.append(a[0]),
+        _ra_focus.append((a[0], k['buttons'][app._dialog_focus_index(k['buttons'], k.get('default'))][0])),
+        answer)[2]
     app.show_info = lambda *a, **k: None
     fd.askopenfilename = lambda **k: _ra_zip
     try:
@@ -3333,6 +3377,9 @@ def _ra_import(answer):
     finally:
         app._themed_dialog, app.show_info = real_dlg, real_info
     return asked
+
+
+_ra_focus = []      # (question, the button Enter presses), every import
 
 
 def _ra_owned(note):
@@ -3408,6 +3455,38 @@ _ra_asked = _ra_import('update')
 _ra_note = next((n for n in app.notes if n.get('uid') == _ra_uid), {})
 check(f'an edited note offers Update ({_ra_asked})',
       _ra_asked == ['1 note you already have'])
+# Asked from a timer once the backup is unpacked, while the person may be
+# typing: a stray Space or Enter answered it, and the notes were replaced.
+check(f'...and Enter there replaces nothing: Cancel holds the focus ({_ra_focus[-1:]})',
+      _ra_focus[-1:] == [('1 note you already have', 'Cancel')])
+# Every question with buttons of its own names the one Enter presses: left
+# to the dialog, Enter pressed the last, which replaced or deleted (wave 2).
+import ast as _dq_ast
+_dq_root = os.path.dirname(os.path.abspath(NO.__file__))
+_dq_missing = []
+for _dq_rel in ['note_organizer.py'] + ['noteorganizer/ui/' + _f for _f in
+                                        sorted(os.listdir(os.path.join(_dq_root, 'noteorganizer', 'ui')))
+                                        if _f.endswith('.py')]:
+    _dq_src = open(os.path.join(_dq_root, _dq_rel), encoding='utf-8').read()
+    for _dq_n in _dq_ast.walk(_dq_ast.parse(_dq_src)):
+        if (isinstance(_dq_n, _dq_ast.Call) and isinstance(_dq_n.func, _dq_ast.Attribute)
+                and _dq_n.func.attr == '_themed_dialog'):
+            _dq_kw = {k.arg: k.value for k in _dq_n.keywords}
+            _dq_b = _dq_kw.get('buttons')
+            if (isinstance(_dq_b, (_dq_ast.List, _dq_ast.Tuple)) and len(_dq_b.elts) > 1
+                    and 'default' not in _dq_kw):
+                _dq_missing.append('%s:%d' % (_dq_rel, _dq_n.lineno))
+check(f'every question with buttons of its own names the one Enter presses ({_dq_missing})',
+      not _dq_missing)
+_sc_focus = []
+_sc_real = app._themed_dialog
+app._themed_dialog = lambda *a, **k: (
+    _sc_focus.append(k['buttons'][app._dialog_focus_index(k['buttons'], k.get('default'))][0]), None)[1]
+try:
+    app.ask_occurrence_scope('Delete', '2026-11-10')
+finally:
+    app._themed_dialog = _sc_real
+check(f'deleting one day of a series: Enter keeps everything ({_sc_focus})', _sc_focus == ['Cancel'])
 check('..."Update" attaches the shared file once, and leaves no file behind',
       len(app.notes) == 1 and _ra_owned(_ra_note) == [_ra_file]
       and _ra_files() == _ra_before)
@@ -4772,11 +4851,51 @@ _kz_back = next((n for n in app.notes if n.get('title') == 'KeyUndoMe'), None)
 if _kz_back is not None:
     app._delete_note(_kz_back, None)
     _kt_settle(2)
+# A delete leaves the keyboard in the new note's title, which has no undo of
+# its own: Ctrl+Z there did nothing at all (wave 2).
 if _kt_take(app.title_entry):
     app.title_entry.event_generate('<Control-z>')
     _kt_settle()
-check('...but in a text box Ctrl+Z is the box\'s own, and the offer stays',
+check('...and in the title, which has no undo of its own, it takes the offer too',
+      'KeyUndoMe' in _titles() and 'KeyUndoMe' not in _trash_titles())
+_kz_back = next((n for n in app.notes if n.get('title') == 'KeyUndoMe'), None)
+if _kz_back is not None:
+    app._delete_note(_kz_back, None)
+    _kt_settle(2)
+# ...and in the blank note's text and comments, which take Ctrl+Z themselves:
+# with nothing to take back the press ended there, and did nothing.
+_kz_boxes = []
+for _kz_box in (app.body_text, app.comments_text):
+    if _kt_take(_kz_box):
+        _kz_box.event_generate('<Control-z>')
+        _kt_settle()
+    _kz_boxes.append('KeyUndoMe' in _titles() and 'KeyUndoMe' not in _trash_titles())
+    _kz_back = next((n for n in app.notes if n.get('title') == 'KeyUndoMe'), None)
+    if _kz_back is not None:
+        app._delete_note(_kz_back, None)
+        _kt_settle(2)
+check(f'...and in the note\'s text and comments with nothing to take back, it takes the offer '
+      f'({_kz_boxes})', _kz_boxes == [True, True])
+app.body_text.insert('end', 'typed here')
+app.body_text.edit_separator()
+if _kt_take(app.body_text):
+    app.body_text.event_generate('<Control-z>')
+    _kt_settle()
+check('...but in a text box with typing of its own Ctrl+Z is the box\'s, and the offer stays',
       'KeyUndoMe' in _trash_titles() and app._toast_action is not None)
+app.body_text.delete('1.0', 'end')
+# A text box with an undo of its own and no Ctrl+Z binding (Tk's own <<Undo>>
+# takes it back): the offer stays, or one press undid twice.
+_kz_own = tk.Text(app, undo=True, height=1, width=10)
+_kz_own.place(x=0, y=0)
+_kz_own.insert('end', 'one'); _kz_own.edit_separator()
+_kz_own.insert('end', ' two'); _kz_own.edit_separator()
+if _kt_take(_kz_own):
+    _kz_own.event_generate('<Control-z>')
+    _kt_settle()
+check(f'...and in any box with an undo of its own, the box\'s too ({_kz_own.get("1.0", "end-1c")!r})',
+      'KeyUndoMe' in _trash_titles() and app._toast_action is not None)
+_kz_own.destroy()
 check('the toast\'s Undo is a Tab stop',
       str(app.toast_action_lbl.cget('takefocus')) == '1')
 _kz_waited = False

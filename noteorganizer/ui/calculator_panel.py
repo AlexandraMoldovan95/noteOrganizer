@@ -89,13 +89,12 @@ class CalculatorPanelMixin:
         # Right-click Cut/Copy/Paste, same as every other text field in the
         # app — plus a normal Ctrl+V/<<Paste>> binding below, so pasting an
         # expression copied from somewhere else just works either way.
-        # (No Return-triggers-"=" binding: it would only fire reliably when
-        # this exact field has keyboard focus, which isn't guaranteed after
-        # a sequence of button clicks — the "=" button already covers this
-        # without that fragility.)
         self._add_paste_menu(self.calculator_display)
         self.calculator_display.bind("<KeyRelease>", self._calc_on_direct_edit)
         self.calculator_display.bind("<<Paste>>", self._calc_on_direct_edit)
+        # A sum typed here ends with Enter, as on any calculator.
+        for key in ("<Return>", "<KP_Enter>"):
+            self.calculator_display.bind(key, lambda _e: (self._calc_press("="), "break")[1])
 
         grid = tk.Frame(sec, bg=self.colors["card"])
         grid.pack(fill="x", padx=10, pady=(0, 2))

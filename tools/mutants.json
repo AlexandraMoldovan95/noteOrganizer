@@ -1202,9 +1202,9 @@
     "id": "KB07",
     "about": "Ctrl+Z in a text box takes the toast's offer instead of undoing the typing",
     "edits": [{"file": "note_organizer.py",
-               "find": "            if isinstance(widget, str) or widget.winfo_class() in self._TYPING_CLASSES:\n",
-               "replace": "            if isinstance(widget, str):\n"}],
-    "must_fail": ["...but in a text box Ctrl+Z is the box's own, and the offer stays"],
+               "find": "            if kind in self._TYPING_CLASSES and not (\n",
+               "replace": "            if False and not (\n"}],
+    "must_fail": ["...and in any box with an undo of its own, the box's too"],
     "suites": ["qa3"],
     "expect": "killed"
   },
@@ -2085,8 +2085,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            notes = list(self.notes)\n            self._sort_notes(notes)\n            query = query_var.get().lower()\n",
-        "replace": "            notes = list(self.notes)\n            query = query_var.get().lower()\n"
+        "find": "            notes = list(self.notes)\n            self._sort_notes(notes)\n            query = fold_for_search(query_var.get())\n",
+        "replace": "            notes = list(self.notes)\n            query = fold_for_search(query_var.get())\n"
       }
     ],
     "must_fail": ["share: the panel lists the notes in the list's order, pins first", "share: and in another sort, the same order as the list"],
@@ -2113,7 +2113,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            query = query_var.get().lower()\n",
+        "find": "            query = fold_for_search(query_var.get())\n",
         "replace": "            query = query_var.get()\n"
       }
     ],
@@ -13106,8 +13106,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        fold = _tcl_lower if nocase else str\n",
-        "replace": "        fold = (((lambda s: s.lower()) if any(ord(ch) > 0xFFFF for ch in query) else _tcl_lower) if nocase else str)\n"
+        "find": "        fold = fold_for_search if nocase else str\n",
+        "replace": "        fold = (((lambda s: s.lower()) if any(ord(ch) > 0xFFFF for ch in query) else fold_for_search) if nocase else str)\n"
       }
     ],
     "must_fail": [
@@ -15341,6 +15341,440 @@
     ],
     "must_fail": [
       "single-note import allows opening the duplicate anyway if chosen"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS22",
+    "about": "Deleting one day of a series names no button for Enter, and Enter presses the last: Only this day",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            # A delete: Enter and Space keep everything.\n            default=\"Cancel\",\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "deleting one day of a series: Enter keeps everything",
+      "every question with buttons of its own names the one Enter presses"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS23",
+    "about": "Copy code copies the code made at Generate, before the words fixed since",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "command=lambda: self.share_current_note_as_code(copy=True), bg=",
+        "replace": "command=lambda: (self.clipboard_clear(), self.clipboard_append(code)), bg="
+      }
+    ],
+    "must_fail": [
+      "Copy code copies the note as it is now, not as it was at Generate"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS24",
+    "about": "A day of a series shares as the series, its identity and repeat with the day's words",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if self._day_mode():\n            note[\"date\"] = self.current_occurrence_date\n",
+        "replace": "        if False:\n            note[\"date\"] = self.current_occurrence_date\n"
+      }
+    ],
+    "must_fail": [
+      "a day of a series shares as a note of that date, not as the series"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS25",
+    "about": "A share code is read as the whole text, the words around it joined to it",
+    "edits": [
+      {
+        "file": "noteorganizer/core/sharing.py",
+        "find": "    code = code_in(code)\n",
+        "replace": "    code = \"\".join(code.split())\n"
+      }
+    ],
+    "must_fail": [
+      "a code is found among the words around it, padded or not"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS26",
+    "about": "Ctrl+Z in the title, which has no undo of its own, leaves the deleted note's offer untaken",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if kind in self._TYPING_CLASSES and not (\n                    kind in (\"Entry\", \"TEntry\")\n",
+        "replace": "            if kind in self._TYPING_CLASSES and not (\n                    False\n"
+      }
+    ],
+    "must_fail": [
+      "...and in the title, which has no undo of its own, it takes the offer too"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS27",
+    "about": "A search folds case only: creme brulee misses Crème brûlée",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "        base = parts[0] if marks else ch\n",
+        "replace": "        base = ch\n"
+      }
+    ],
+    "must_fail": [
+      "search folds diacritics and case, and looks in the checklist"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS28",
+    "about": "The list's search leaves the checklist's rows out",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/note_list.py",
+        "find": "body_txt, _txt(note.get(\"comments\")), _txt(rows))\n",
+        "replace": "body_txt, _txt(note.get(\"comments\")), \"\")\n"
+      }
+    ],
+    "must_fail": [
+      "search folds diacritics and case, and looks in the checklist"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS29",
+    "about": "A Korean syllable folds to its first letter, and 한 finds 할",
+    "edits": [
+      {
+        "file": "noteorganizer/core/model.py",
+        "find": "        base = parts[0] if marks else ch\n",
+        "replace": "        base = parts[0]\n"
+      }
+    ],
+    "must_fail": [
+      "search folds diacritics and case, and looks in the checklist"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS30",
+    "about": "The texts kept for a note's search outlive a checklist row edited in place",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/note_list.py",
+        "find": "                or hit[1] != rows):\n",
+        "replace": "                or False):\n"
+      }
+    ],
+    "must_fail": [
+      "...and a row edited in place is found by its new words"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS31",
+    "about": "A new note saved where Show does not look vanishes from the list without a word",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                     if new_id not in self._visible_note_ids() else \"\")\n",
+        "replace": "                     if new_id in self._visible_note_ids() else \"\")\n"
+      }
+    ],
+    "must_fail": [
+      "a new note hidden by Show says so, with Show all"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS32",
+    "about": "A new note's banner blames a search the note matches",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/note_list.py",
+        "find": "        if query and (note is None or not self._query_matches_note(query, note)):\n",
+        "replace": "        if query:\n"
+      }
+    ],
+    "must_fail": [
+      "a new note hidden by Show says so, with Show all"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS33",
+    "about": "Show all hands the search box the focus, and the words typed next go into the search",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/note_list.py",
+        "find": "            if in_box:\n                self.search_var.set(\"\")\n",
+        "replace": "            if True:\n                self._clear_search()\n"
+      }
+    ],
+    "must_fail": [
+      "...and the search box is left to its hint"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS34",
+    "about": "The empty list blames the search and filter, naming neither",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/note_list.py",
+        "find": "                msg = \"No notes match \" + (hides or \"the list's choices\") + \".\"\n",
+        "replace": "                msg = \"No notes match your search or filter.\"\n"
+      }
+    ],
+    "must_fail": [
+      "an empty list names what hides the notes"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS35",
+    "about": "Title A-Z sorts by code point, and every initial with a mark comes after Z",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/note_list.py",
+        "find": "                                      fold_for_search(_s(n, \"title\")), _s(n, \"title\")))\n        elif choice == \"Title Z–A\":\n",
+        "replace": "                                      _s(n, \"title\").lower(), _s(n, \"title\")))\n        elif choice == \"Title Z–A\":\n"
+      }
+    ],
+    "must_fail": [
+      "Title A–Z puts a letter with a mark beside the letter"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS36",
+    "about": "A space picked up after a word is part of the search, and the word at a line's end is missed",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "fold_for_search(typed.strip())\n",
+        "replace": "fold_for_search(typed)\n"
+      }
+    ],
+    "must_fail": [
+      "search folds diacritics and case, and looks in the checklist"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS37",
+    "about": "The calculator reads a keyboard's - * x / : and a decimal comma as nothing it knows",
+    "edits": [
+      {
+        "file": "noteorganizer/core/calculator.py",
+        "find": "    expr = _as_buttons_spell(expr)\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a keyboard's - * x / : are the buttons' signs"
+    ],
+    "suites": [
+      "test_calculator"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS38",
+    "about": "A comma before exactly three digits is read as a decimal point: 1,000+5 makes 6",
+    "edits": [
+      {
+        "file": "noteorganizer/core/calculator.py",
+        "find": "            if run and run != 3:\n",
+        "replace": "            if run:\n"
+      }
+    ],
+    "must_fail": [
+      "a comma before exactly three digits is refused, never read as a point"
+    ],
+    "suites": [
+      "test_calculator"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS39",
+    "about": "Find in note lowers the prose without folding its diacritics: creme misses Crème",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        fold = fold_for_search if nocase else str\n",
+        "replace": "        fold = (lambda s: \"\".join(c.lower() if len(c.lower()) == 1 else c for c in s)) if nocase else str\n"
+      }
+    ],
+    "must_fail": [
+      "find: diacritics fold away unless Aa is on, each hit on its own letters"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS40",
+    "about": "Find in note lowers a table cell without folding its diacritics",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                    hay = fold_for_search(val) if nocase else val\n",
+        "replace": "                    hay = val.lower() if nocase else val\n"
+      }
+    ],
+    "must_fail": [
+      "find: diacritics fold away unless Aa is on, each hit on its own letters"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS41",
+    "about": "Show all sets Show to All and draws nothing: the list stays as Show left it",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/note_list.py",
+        "find": "                self.search_entry.config(fg=self.colors[\"subtext\"])\n        self.refresh_note_list()\n",
+        "replace": "                self.search_entry.config(fg=self.colors[\"subtext\"])\n"
+      }
+    ],
+    "must_fail": [
+      "...and Show all puts it on the list"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS42",
+    "about": "Show all leaves the list where it stood, and the new note it is pressed for comes in above, out of sight",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/note_list.py",
+        "find": "        if note is not None:\n            self._bring_card_into_view(note.get(\"id\"))\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "...and with the list scrolled, Show all brings its card into sight"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS43",
+    "about": "A rebuilt list keeps no restore in force: the first clamp sends it to the top",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/note_list.py",
+        "find": "        if saved_list_scroll > 0:\n            # In force from here, not from idle:",
+        "replace": "        if False:\n            # In force from here, not from idle:"
+      }
+    ],
+    "must_fail": [
+      "a full list rebuild restores the scroll in pixels, clamp or not",
+      "the rebuild restore outlives staged re-clamps"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS44",
+    "about": "Ctrl+Z in a blank note's text after a delete ends there and takes nothing back",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                return (self._toast_undo_key(event) if undo and event is not None\n                        else None) or \"break\"\n",
+        "replace": "                return \"break\"\n"
+      }
+    ],
+    "must_fail": [
+      "...and in the note's text and comments with nothing to take back, it takes the offer"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS45",
+    "about": "Ctrl+Z in the comments with nothing to take back ends there and takes nothing back",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "if self._can_edit_undo(w) else (self._toast_undo_key(e) or \"break\"))\n",
+        "replace": "if self._can_edit_undo(w) else \"break\")\n"
+      }
+    ],
+    "must_fail": [
+      "...and in the note's text and comments with nothing to take back, it takes the offer"
     ],
     "suites": [
       "qa3"

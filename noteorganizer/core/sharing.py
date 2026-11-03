@@ -55,6 +55,7 @@ backups the app wrote that it then refused to restore.
 import base64
 import json
 import os
+import re
 import shutil
 import zlib
 
@@ -148,14 +149,38 @@ def _bounded_decompress(compressed, limit):
     return out
 
 
+# A code after its prefix: Base64 in either spelling, the whitespace and the
+# invisible break marks (soft hyphen, zero-width space) a chat app wraps it
+# with, and its padding.
+_CODE_SKIP = "\\s\u00ad\u200b-\u200d\u2060\ufeff"
+_CODE_BODY = re.compile("[A-Za-z0-9_\\-+/" + _CODE_SKIP + "]*(?:=[=" + _CODE_SKIP + "]*)?")
+_CODE_SKIPPED = re.compile("[" + _CODE_SKIP + "]")
+
+
+def code_in(text):
+    """The share code inside *text*, whitespace and invisible break marks
+    taken out (a chat app wraps a long code): from its prefix to its
+    padding, or to the first character a code is not written in -- so "Hi!
+    NOTE1:... Thanks" reads, where every word around a code made it
+    unreadable now and then. Without padding, the letters past the last
+    whole group of four are left (a word after it). *text* itself,
+    whitespace out, when it holds no prefix."""
+    at = text.find(SHARE_CODE_PREFIX)
+    if at < 0:
+        return "".join(text.split())
+    body = _CODE_SKIPPED.sub("", _CODE_BODY.match(text, at + len(SHARE_CODE_PREFIX)).group(0))
+    if "=" not in body:
+        body = body[:len(body) - len(body) % 4]
+    return SHARE_CODE_PREFIX + body
+
+
 def decode_share_code(code):
     """Parse a share code back into a list of note dicts. Raises ValueError with
     a human-readable message if the code is malformed, oversized, or from a
     newer version."""
     if not isinstance(code, str):
         raise ValueError("That doesn't look like a share code.")
-    # Tolerate extra whitespace/newlines from a chat app.
-    code = "".join(code.split())
+    code = code_in(code)
     if not code:
         raise ValueError("No code was pasted.")
     if len(code) > MAX_SHARE_CODE_CHARS:

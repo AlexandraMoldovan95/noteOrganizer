@@ -131,6 +131,16 @@ def _deep(expression):
         return "raised"
 
 
+# Typed on a keyboard, a sum said Error (wave 2): - * x / : are the buttons'
+# − × ÷, and a comma between digits is the decimal point, as Romanian writes.
+check('a keyboard\'s - * x / : are the buttons\' signs',
+      (ev('5-3'), ev('5*3'), ev('5x3'), ev('5/2'), ev('5:2')) == (2.0, 15.0, 15.0, 2.5, 2.5))
+check('a comma between digits is the decimal point, and nowhere else',
+      ev('2,5+2,5') == 5.0 and ev('2,+3') is None and ev('1,2345') == 1.2345)
+# ...but not before exactly three digits: 1,000 is a thousand in English.
+check('a comma before exactly three digits is refused, never read as a point',
+      ev('1,000+5') is None and ev('2,500') is None)
+
 check('200 nested brackets give no answer rather than an error',
       _deep('(' * 200 + '1' + ')' * 200) is None)
 check('a thousand minus signs give no answer rather than an error',

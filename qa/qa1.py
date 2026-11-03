@@ -232,6 +232,94 @@ try:
 except Exception as e:
     check(f'search survives None-field note ({e})', False)
 
+# Diacritics and case fold away in every search, and the checklist's rows are
+# searched too (wave 2, the owner's choice): "creme brulee" missed "Crème
+# brûlée", an s with a comma below (U+0219, as Romanian writes it) missed the
+# s with a cedilla older keyboards type (U+015F), and a shopping list could
+# not be found by what was on it. Escaped, the letters this repository's
+# English gate keeps out of its text.
+_fd_notes = app.notes
+app.notes = [
+    {'id': 9992, 'title': 'Crème brûlée in Bra\u0219ov', 'body': 'for Zoë', 'category': 'General',
+     'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00', 'checklist': [], 'attachments': []},
+    {'id': 9993, 'title': 'Shopping', 'body': '', 'category': 'General',
+     'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',
+     'checklist': [{'text': 'Gruyère', 'done': False}], 'attachments': []},
+    {'id': 9994, 'title': '할머니', 'body': '', 'category': 'General',
+     'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00', 'checklist': [], 'attachments': []},
+]
+_fd_found = {}
+# A Korean syllable is letters, not a letter and a mark: cut to its first,
+# 한 found 할. A space picked up after a word is not part of the search.
+for _fd_q in ('creme brulee', 'ZOE', 'bra\u015fov', 'gruyere ', '한', '할'):
+    app.search_var.set(_fd_q); app.refresh_note_list(); app.update()
+    _fd_found[_fd_q] = app._card_order()
+check(f'search folds diacritics and case, and looks in the checklist ({_fd_found})',
+      _fd_found == {'creme brulee': [9992], 'ZOE': [9992], 'bra\u015fov': [9992], 'gruyere ': [9993],
+                    '한': [], '할': [9994]})
+# A row is edited in place, so the texts kept for a note are kept only while
+# its rows' words are the same.
+app.notes[1]['checklist'][0]['text'] = 'Emmental'
+app.search_var.set('emmental'); app.refresh_note_list(); app.update()
+check(f'...and a row edited in place is found by its new words ({app._card_order()})',
+      app._card_order() == [9993])
+app.search_var.set(''); app.refresh_note_list(); app.update()
+app.notes = _fd_notes
+
+# A new note saved where the list does not look -- Show picked once and
+# forgotten -- vanished as it was written; the app says so, and Show all
+# brings it back (wave 2, the owner's choice).
+_fh_toasts = []
+_fh_real_toast = app._show_toast
+app._show_toast = lambda text, *a, **k: (_fh_toasts.append((text, k.get('action_text'), k.get('action'))),
+                                         _fh_real_toast(text, *a, **k))[1]
+try:
+    app.filter_var.set('Work'); app.refresh_note_list(); app.update()
+    check(f'an empty list names what hides the notes ({app.canvas.itemcget("list_empty", "text")!r})',
+          app.canvas.itemcget('list_empty', 'text') == 'No notes match Show: Work.'
+          and app.canvas.find_withtag('list_show_all'))
+    # A search the new note matches is not named as hiding it.
+    app.search_var.set('dentist'); app.refresh_note_list(); app.update()
+    app.new_note(); app.update()
+    app._insert_title('Call the dentist')
+    app.save_current_note(); app.update()
+    _fh_last = _fh_toasts[-1] if _fh_toasts else (None, None, None)
+    check(f'a new note hidden by Show says so, with Show all ({_fh_last[:2]})',
+          _fh_last[0] == 'Saved in General, hidden by Show: Work' and _fh_last[1] == 'Show all')
+    if _fh_last[2]:
+        _fh_last[2](); app.update()
+    _fh_new = app.selected_note_id
+    check(f'...and Show all puts it on the list ({app.filter_var.get()!r}, {app._card_order()})',
+          app.filter_var.get() == 'All' and _fh_new in app._card_order() and not app._search_query())
+    # ...the search box emptied to its hint, not handed the focus: the words
+    # typed next belong to the note being written.
+    check(f'...and the search box is left to its hint ({app.search_var.get()!r})',
+          app.search_var.get() == app.SEARCH_PLACEHOLDER)
+    # With no search the list keeps its place, and the notes Show had hidden
+    # come in above where it stood: Show all brings the new note's card into
+    # sight, or the note it is pressed for stays out of view.
+    app.filter_var.set('Work')
+    app.notes.extend(dict(id=8800 + i, title=f'Work item {i}', body='', category='Work',
+                          updated='2026-01-01 00:00', created='2026-01-01 00:00',
+                          checklist=[], attachments=[]) for i in range(40))
+    app.refresh_note_list(); app.update()
+    app.canvas.yview_moveto(1.0); app.update()
+    app.new_note(); app.update()
+    app._insert_title('Second hidden note')
+    app.save_current_note(); app.update()
+    ((_fh_toasts[-1][2] if _fh_toasts else None) or (lambda: None))(); app.update()
+    _fh_rec = app._list_row_record(('note', app.selected_note_id))
+    check(f'...and with the list scrolled, Show all brings its card into sight '
+          f'({_fh_rec and app._row_on_screen(_fh_rec)})',
+          _fh_rec is not None and app._row_on_screen(_fh_rec) == 'all')
+finally:
+    app._show_toast = _fh_real_toast
+    app.filter_var.set('All')
+    app._clear_search()
+    app.notes = [n for n in app.notes if n.get('title') not in ('Call the dentist', 'Second hidden note')
+                 and not str(n.get('title') or '').startswith('Work item ')]
+    app.save_notes(); app.new_note(); app.update()
+
 # ---- SORTING ----
 # Uses the app's real sort-option labels (previously this loop used made-up
 # strings like 'Newest first' that don't match any real option, so every
@@ -272,6 +360,17 @@ for opt, expected in [
         check(f'sort "{opt}" orders notes correctly ({actual})', actual == expected)
     except Exception as e:
         check(f'sort option {opt} works ({e})', False)
+# Initials with a mark sort beside their letters, not after Z (wave 2): the
+# Romanian A with a breve, I with a circumflex, S with a comma, T with a cedilla.
+_rs_notes = app.notes
+app.notes = [dict(_rs_notes[0], id=310 + i, title=t)
+             for i, t in enumerate(['Zebra', '\u0218erban', 'Ana', '\u00celie', '\u0102dam',
+                                    '\u0162epe\u015f', 'Sam'])]
+app.sort_var.set('Title A–Z')
+_rs_order = rendered_order()
+check(f'Title A–Z puts a letter with a mark beside the letter ({_rs_order})',
+      _rs_order == ['\u0102dam', 'Ana', '\u00celie', 'Sam', '\u0218erban', '\u0162epe\u015f', 'Zebra'])
+app.notes = _rs_notes
 
 # ---- SORT DROPDOWN WIDTH (regression) ----
 # "Recently updated" used to render at exactly its natural text width with
@@ -6062,6 +6161,12 @@ set_body('')
 # The editor page has pinned short content to the top since 0.32.x;
 # the list showed the same family of symptoms (a displaced origin, and
 # a rebuild clamping the scroll to the top) without either guard.
+# Each starts from the top with no rebuild's restore in force: a list left
+# 33 px down by an earlier step (Show all bringing a card into sight) carried
+# that target through every rebuild below, each in the last one's window.
+app._list_restore_px = None
+app.canvas.yview_moveto(0)
+app.update()
 _savedNotes23 = app.notes
 app.notes = [NO.normalize_note({'id': 9000 + i, 'title': 'Short %d' %i,
                                 'body': 'x', 'category': 'General'})
@@ -9950,6 +10055,24 @@ check(f'find: an emoji query on a line holding "İ" is highlighted on its own wo
       f'and a drawn table\'s is its cell\'s hit alone ({_fe_read})',
       _fe_read == ['\U0001F600ok', '\U0001F600ok', ('cell', 0, 0)])
 
+# Diacritics fold away in Find as in the list's search, prose and cells alike,
+# unless Aa is on (wave 2, the owner's choice): "creme" missed "Crème".
+set_body('Crème brûlée and creme\n'
+         + '\n'.join([_frow('Crème', 'b'), _FSEP, _frow('c', 'd')]) + '\nend')
+app._render_table_grids()
+app.update()
+app._open_find()
+app._find_case.set(False)
+_fd_read = [app.body_text.get(m['start'], m['end']) if m['kind'] == 'prose'
+            else ('cell', m['row'], m['col']) for m in app._find_scan_model('CREME')]
+app._find_case.set(True)
+_fd_exact = len(app._find_scan_model('creme'))
+app._find_case.set(False)
+app._close_find()
+app.update()
+check(f'find: diacritics fold away unless Aa is on, each hit on its own letters ({_fd_read}, {_fd_exact})',
+      _fd_read == ['Crème', 'creme', ('cell', 0, 0)] and _fd_exact == 1)
+
 # A query holding a line break is read in Python as well: Tk's -nocase search,
 # kept for it, ended the process on Linux whenever the searched line held an
 # emoji (Tk 8.6.16, round 10). Never asked; each hit its own letters, across
@@ -13821,8 +13944,8 @@ def _ck_press(code, state):
 app.bind_class('QaKeySeen', '<KeyPress>',
                lambda e: _ck_seen.append((e.keysym, e.state & 0x7)))
 app.body_text.bindtags(('QaKeySeen',) + tuple(_ck_tags))
-app._body_undo_redo = lambda action: (_ck_calls.append(action),
-                                      _ck_real(action))[1]
+app._body_undo_redo = lambda action, event=None: (_ck_calls.append(action),
+                                                  _ck_real(action, event))[1]
 try:
     _ck_z, _ck_y = _ck_codes('z', 'y')
     check(f'caps lock: the keyboard codes of Z and Y were read ({_ck_z}, {_ck_y}) '

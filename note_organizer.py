@@ -370,6 +370,7 @@ from noteorganizer.core.categories import (
 from noteorganizer.core.model import (
     NOTE_DEFAULTS,
     day_paragraphs_shown,
+    fold_for_search,
     find_note as core_find_note,
     notes_on_date as core_notes_on_date,
     count_notes_in_category as core_count_in_category,
@@ -587,29 +588,6 @@ def _whole_number(text):
         return int(text) >= 1
     except (TypeError, ValueError):
         return False
-
-
-@functools.lru_cache(maxsize=1)
-def _tcl_lower_table():
-    """Each character of the basic plane as Tcl lowers it on its own, as
-    Tk's -nocase search compares: one for one (its simple case mapping),
-    and left as it is when its lower case takes more UTF-8 bytes, as
-    Tcl_UtfToLower leaves it. str.lower() makes two characters of "İ"."""
-    table = {}
-    for code in range(0x10000):
-        if 0xD800 <= code <= 0xDFFF:
-            continue
-        upper = chr(code)
-        low = "i" if code == 0x130 else upper.lower()
-        if (len(low) == 1 and low != upper
-                and len(low.encode("utf-8")) <= len(upper.encode("utf-8"))):
-            table[code] = low
-    return table
-
-
-def _tcl_lower(text):
-    """*text* lowered as Tk's -nocase search lowers it (_tcl_lower_table)."""
-    return text.translate(_tcl_lower_table())
 
 
 def _index_key(index):
@@ -1456,18 +1434,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     SEARCH_PLACEHOLDER = "Search notes..."
 
     def _search_query(self):
-        """What the user is actually searching for, lowercased.
+        """What the user is actually searching for, folded as the notes'
+        texts are (fold_for_search), its ends trimmed: a word picked from a
+        phone keyboard's suggestions comes with a space, and the two apps
+        search alike.
 
         Empty when the box is only showing its hint, which is not a query
         even though it is the box's contents: the entry is wired to
         `search_var`, so `add_placeholder` writing the hint in makes it
         readable as one.
         """
-        query = self.search_var.get().lower()
-        return "" if query == self.SEARCH_PLACEHOLDER.lower() else query
+        typed = self.search_var.get()
+        return "" if typed == self.SEARCH_PLACEHOLDER else fold_for_search(typed.strip())
 
     def _refresh_search_clear(self):
-        """Show the ✕ only while the box holds a real query.
+        """Show the ✕ only while the box holds something typed, spaces too.
 
         A clear button that is always there invites clearing an empty box,
         and one sitting beside the hint text suggests the hint is something
@@ -1476,7 +1457,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         btn = self.search_clear_btn
         if btn is None:
             return                      # called while the row is being built
-        if self._search_query():
+        if self.search_var.get() not in ("", self.SEARCH_PLACEHOLDER):
             if not self._is_placed(btn):
                 btn.pack(side="right", padx=(0, 6))
         elif self._is_placed(btn):
@@ -11634,6 +11615,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             buttons=[("Cancel", "cancel"),
                      ("Add it as a new note" if count == 1 else "Add them as new notes", "add"),
                      ("Update it" if count == 1 else f"Update the {count}", "update")],
+            # Asked from a timer once a backup is unpacked, while the person
+            # may be typing: a stray Space or Enter replaced their notes.
+            default="Cancel",
         )
         if choice is None or choice == "cancel":
             return False, [], [], unchanged, []
@@ -11840,7 +11824,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     kind="question",
                     buttons=[("Cancel", "cancel"),
                              ("Add as a new note", "add"),
-                             ("Update this note", "update")]
+                             ("Update this note", "update")],
+                    default="Cancel",
                 )
                 if choice is None or choice == "cancel":
                     return
@@ -11892,7 +11877,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     kind="question",
                     # "Add": it is saved as a new note at once, as every
                     # other route that brings in a copy says.
-                    buttons=[("Cancel", "cancel"), ("Add it anyway", "open")]
+                    buttons=[("Cancel", "cancel"), ("Add it anyway", "open")],
+                    default="Add it anyway",
                 )
                 if choice is None or choice == "cancel":
                     return
@@ -11950,7 +11936,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     kind="question",
                     buttons=[("Cancel", "cancel"),
                              ("Import all anyway", "all"),
-                             (f"Skip the {dupe_count} duplicate(s)", "skip")]
+                             (f"Skip the {dupe_count} duplicate(s)", "skip")],
+                    default=f"Skip the {dupe_count} duplicate(s)",
                 )
             else:
                 choice = self._themed_dialog(
@@ -11958,7 +11945,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     f"All {len(valid)}{other} note(s) in this code look identical "
                     "to notes you already have. Import them anyway as new copies?",
                     kind="question",
-                    buttons=[("Cancel", "cancel"), ("Import anyway", "all")]
+                    buttons=[("Cancel", "cancel"), ("Import anyway", "all")],
+                    default="Cancel",
                 )
             if choice is None or choice == "cancel":
                 return
@@ -12126,7 +12114,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             narrowed by the search box, with the sidebar search's own rule."""
             notes = list(self.notes)
             self._sort_notes(notes)
-            query = query_var.get().lower()
+            query = fold_for_search(query_var.get())
             if query:
                 notes = [n for n in notes if self._query_in_texts(
                     query, self._cached_search_texts(n))]
@@ -12507,9 +12495,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # share-code and disk-write boundaries already do.
         return mend_surrogates(content)
 
-    def share_current_note_as_code(self):
+    def share_current_note_as_code(self, copy=False):
         """Generate a share code for the note currently open and show it inline
-        in the editor (no pop-up), with a Copy button."""
+        in the editor (no pop-up), with a Copy button -- which makes it again
+        from the note as it is then (*copy*): an edit made after Generate was
+        missing from the code that went out, with nothing on screen to say so."""
+        made = self._code_for_open_note()
+        if made is None:
+            return
+        code, had_attachments = made
+        # Render inline in the editor's code area.
+        for w in self.editor_code_area.winfo_children():
+            w.destroy()
+        if not self._is_placed(self.editor_code_area):
+            self.editor_code_area.pack(fill="x", padx=30, pady=(0, 20))
+        self._render_editor_code(code, had_attachments, copy=copy)
+
+    def _code_for_open_note(self):
+        """The share code of the note in the editor, and whether it has files
+        a code does not carry -- or None, the reason said on the status line.
+        One day of a series (day mode) travels as a note of that date: the
+        series' identity and repeat went with the day's words, and an Update
+        on the other device wrote that one day over the whole series."""
         # Asking for a code is finishing with the fields: a date typed short
         # is settled first (17.10 -> 17.10.2026), so the code carries it.
         self._settle_date_fields()
@@ -12529,7 +12536,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.set_status(
                 "Nothing to share yet — a code carries a note's title, "
                 "text, comments, checklist and repeat rule.")
-            return
+            return None
         # Built from SHAREABLE_FIELDS, never a hand-rolled list: this dict
         # once named seven fields by hand and silently dropped everything
         # added to sharing later -- a code generated HERE lost the
@@ -12554,20 +12561,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # correctly travels without one.
         open_note = (self.find_note(st.get("selected_note_id"))
                      if st.get("selected_note_id") is not None else None)
-        if open_note and str(open_note.get("uid") or "").strip():
+        if self._day_mode():
+            note["date"] = self.current_occurrence_date
+            note["recurrence"] = dict(RECURRENCE_DEFAULTS)
+        elif open_note and str(open_note.get("uid") or "").strip():
             note["uid"] = open_note["uid"]
-        had_attachments = bool(st["attachments"])
         try:
-            code = encode_share_code(note)
+            return encode_share_code(note), bool(st["attachments"])
         except ShareCodeTooLarge as exc:
             self.set_status(str(exc))
-            return
-        # Render inline in the editor's code area.
-        for w in self.editor_code_area.winfo_children():
-            w.destroy()
-        if not self._is_placed(self.editor_code_area):
-            self.editor_code_area.pack(fill="x", padx=30, pady=(0, 20))
-        self._render_editor_code(code, had_attachments)
+            return None
 
     def _editor_follows_external_change(self, changed_ids):
         """Make the editor agree with notes that were rewritten behind it.
@@ -12623,7 +12626,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # Teardown: the editor is going away and the code with it.
             pass
 
-    def _render_editor_code(self, code, had_attachments):
+    def _render_editor_code(self, code, had_attachments, copy=False):
         # Direct .configure() calls, not self.track_theme(): this area is
         # destroyed and rebuilt every time "Copy code" is clicked, so it
         # always picks up the current theme fresh anyway — same leak fixed
@@ -12653,7 +12656,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                           bg=self.colors["bg"], fg=self.colors["success_text"])
         status.pack(fill="x")
 
-        def copy():
+        if copy:
             try:
                 self.clipboard_clear()
                 self.clipboard_append(code)
@@ -12662,7 +12665,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             except tk.TclError:
                 status.config(text="Select the code above and copy it manually (Ctrl+C).",
                               fg=self.colors["danger_text"])
-        tk.Button(parent, text="📋 Copy code", command=copy, bg=self.colors["accent"],
+        tk.Button(parent, text="📋 Copy code",
+                  command=lambda: self.share_current_note_as_code(copy=True), bg=self.colors["accent"],
                   fg=self._on_fill("accent"), relief="flat", font=("Segoe UI", 10, "bold"),
                   cursor="hand2"
                   ).pack(fill="x", pady=(2, 0), ipady=5)
@@ -13078,7 +13082,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     kind="question",
                     buttons=[("Cancel", "cancel"),
                              ("Import all anyway", "all"),
-                             (f"Skip the {dupe_count} duplicate(s)", "skip")]
+                             (f"Skip the {dupe_count} duplicate(s)", "skip")],
+                    default=f"Skip the {dupe_count} duplicate(s)",
                 )
             else:
                 choice = self._themed_dialog(
@@ -13087,7 +13092,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     "identical to notes you already have. Import them anyway as "
                     "new copies?",
                     kind="question",
-                    buttons=[("Cancel", "cancel"), ("Import anyway", "all")]
+                    buttons=[("Cancel", "cancel"), ("Import anyway", "all")],
+                    default="Cancel",
                 )
             if choice is None or choice == "cancel":
                 _undo_category_merge()
@@ -16560,7 +16566,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # redraws the tables the undone text describes; the comments box
         # has no tables and keeps the plain stack walk.
         self.body_text.bind("<Control-z>",
-                            lambda e: self._body_undo_redo("undo"))
+                            lambda e: self._body_undo_redo("undo", e))
         self.body_text.bind("<Control-y>",
                             lambda e: self._body_undo_redo("redo"))
         self.body_text.bind("<Control-Shift-Z>",
@@ -16578,12 +16584,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.body_text.bind("<Control-Shift-z>",
                             lambda e: self._body_undo_redo("redo"))
         self.body_text.bind("<<Undo>>",
-                            lambda e: self._body_undo_redo("undo"))
+                            lambda e: self._body_undo_redo("undo", e))
         self.body_text.bind("<<Redo>>",
                             lambda e: self._body_undo_redo("redo"))
         _tw = self.comments_text
+        # With nothing of its own to take back, the toast's Undo (as the body).
         _tw.bind("<Control-z>", lambda e, w=_tw: (w.edit_undo(), "break")[1]
-                 if self._can_edit_undo(w) else "break")
+                 if self._can_edit_undo(w) else (self._toast_undo_key(e) or "break"))
         _tw.bind("<Control-y>", lambda e, w=_tw: (w.edit_redo(), "break")[1]
                  if self._can_edit_redo(w) else "break")
         _tw.bind("<Control-Shift-Z>", lambda e, w=_tw: (w.edit_redo(), "break")[1]
@@ -18174,7 +18181,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             f"The day: {show_date(occurrence_date)}",
             kind="question",
             buttons=[("Cancel", None), ("The whole series", "series"),
-                     ("Only this day", "occurrence")]
+                     ("Only this day", "occurrence")],
+            # A delete: Enter and Space keep everything.
+            default="Cancel",
         )
 
     def _reset_text_undo(self):
@@ -18731,8 +18740,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._trim_fmt_journal(journal)
         self._fmt_redo = []
 
-    def _body_undo_redo(self, action):
-        """Ctrl+Z / Ctrl+Y on the note body.
+    def _body_undo_redo(self, action, event=None):
+        """Ctrl+Z / Ctrl+Y on the note body (*event*, the key's, when a key
+        asked).
 
         Tk walks its stack; what Tk cannot know is that the text it just
         put back may hold tables -- the drawn grids would keep showing
@@ -18805,7 +18815,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         else:
             can = (self._can_edit_undo if undo else self._can_edit_redo)(b)
             if not can:
-                return "break"
+                # Nothing of its own to take back: Ctrl+Z is the toast's
+                # Undo, when it offers one. A delete leaves a blank note
+                # open, and the press there did nothing at all.
+                return (self._toast_undo_key(event) if undo and event is not None
+                        else None) or "break"
             came, went = ("after", "before") if undo else ("before", "after")
             # Tk replays a step in the state it was recorded in: a step
             # recorded with the tables taken down is replayed with them
@@ -20224,7 +20238,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         are (live_line, data_row, col), located via core/tables and keyed
         the way info['cells'] is (separator excluded)."""
         nocase = not self._find_case.get()
-        needle = query.lower() if nocase else query
+        needle = fold_for_search(query) if nocase else query
         b = self.body_text
         text = b.get("1.0", "end-1c")
         self._find_model_text = text
@@ -20251,7 +20265,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     val = self._find_norm_cell(raw)
                     if val is None:
                         continue
-                    hay = val.lower() if nocase else val
+                    hay = fold_for_search(val) if nocase else val
                     if needle and needle in hay and (data_r, c) in info["cells"]:
                         matches.append({"kind": "cell", "line": live_first,
                                         "row": data_r, "col": c,
@@ -20267,8 +20281,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _find_prose(self, query, nocase, text):
         """The prose matches of *query* in the body (*text*, as read), top
         to bottom, no more than FIND_MATCH_CAP: Tk ranges, as Tk's own search
-        gives them -- the shown text of each line, case folded as Tk folds
-        it, overlapping hits each one -- found in Python, each line read
+        gives them -- the shown text of each line, folded as every search
+        folds it, overlapping hits each one -- found in Python, each line read
         once. Tk's search measured a line from its start for each hit (15 s
         a rescan, round 9), and its -nocase search ends the app on Linux."""
         b = self.body_text
@@ -20288,10 +20302,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         if not query:
             return matches
-        # One fold for every query, an emoji in it or not: str.lower() made
-        # two characters of "İ", and the hits after one on its line landed
-        # one place late (round 10).
-        fold = _tcl_lower if nocase else str
+        # One fold for every query, letter for letter, so a hit's place in
+        # the folded line is its place on screen: str.lower() made two
+        # characters of "İ", and the hits after one landed one place late.
+        fold = fold_for_search if nocase else str
         needle = fold(query)
         windows = {}
         for _kind, _name, index in b.dump("1.0", "end", window=True):
@@ -22769,7 +22783,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._remember_last_open_note(new_id)
             self.set_status(("Auto-saved " if auto else "Saved at ") + show_stamp(now),
                             reassurance=auto)
-            if auto:
+            # Saved where the list does not look -- Show picked once and
+            # forgotten, a search left in its box -- the note vanished from
+            # the list as it was written, without a word.
+            made = self.notes[-1]
+            hides = (self._what_hides_notes(made)
+                     if new_id not in self._visible_note_ids() else "")
+            if hides:
+                self._show_toast(f"Saved in {made.get('category') or 'General'}, hidden by {hides}",
+                                 kind="info", action=lambda: self._show_all_notes(made),
+                                 action_text="Show all")
+            elif auto:
                 self._show_toast("Note created", yield_to_action=True)
         else:
             note = self.find_note(self.selected_note_id)
@@ -24096,8 +24120,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _toast_undo_key(self, event):
         """Ctrl+Z, while the toast offers an Undo and the keyboard is not in
-        a text box (whose own Ctrl+Z undoes its typing): takes the offer.
-        Eight seconds is short to reach the banner by Tab."""
+        a text box with typing of its own to take back: takes the offer.
+        Eight seconds is short to reach the banner by Tab. A delete leaves
+        the keyboard in the new note's title, and an Entry has no undo: Ctrl+Z
+        there did nothing at all."""
         if (self._toast_action is None
                 or not getattr(self, "_toast_action_undoes", True)
                 or self._toast_hide_job is None
@@ -24105,7 +24131,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return None
         widget = getattr(event, "widget", None)
         try:
-            if isinstance(widget, str) or widget.winfo_class() in self._TYPING_CLASSES:
+            if isinstance(widget, str):
+                return None
+            kind = widget.winfo_class()
+            if kind in self._TYPING_CLASSES and not (
+                    kind in ("Entry", "TEntry")
+                    or (kind == "Text" and not self._can_edit_undo(widget))):
                 return None
         except (tk.TclError, AttributeError):
             return None

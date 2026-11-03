@@ -452,7 +452,11 @@ the app stays open, and closing the window asks before letting them go.
 Click **🧮 Calculator** in the editor, next to Checklist, for a collapsible built-in calculator —
 standard arithmetic with real operator precedence, three interchangeable bracket styles, a square
 root, powers, and percent, either from the on-screen buttons or by typing/pasting an expression
-directly. Press **=** to see the result, then **Insert into note** to drop the whole formula (not
+directly — a keyboard's **-**, **\***, **x**, **/** and **:** are read as − × ÷, and a comma
+between two digits as the decimal point (2,5) — but not before exactly three digits: 1,000 is a
+thousand in some languages and one in others, so it says Error rather than guess. Press **=**,
+or **Enter** while typing in the
+display, to see the result, then **Insert into note** to drop the whole formula (not
 just the answer) into the note body — repeated inserts stack cleanly below each other. A
 collapsible history keeps every calculation from the session, with a Clear button and
 click-to-insert on any past entry.
@@ -510,7 +514,10 @@ Appearance → Spelling**.
 ### Finding notes: search, sort, and grouping
 
 Search the note list by keyword, and sort by recency, title, category, or date, from the controls
-above the list. This is the search for finding *which* note you want, across the whole notebook.
+above the list. This is the search for finding *which* note you want, across the whole notebook:
+it looks in each note's title, text, comments and checklist, and ignores capitals and diacritics,
+so "creme brulee" finds "Crème brûlée". Sorting by title puts É, Ö and every letter with a mark
+beside the letter it marks.
 An **✕** appears inside the search box once you have typed something; it empties the box and puts
 the whole list straight back. A new search — and clearing one — shows the list from the top,
 wherever you had scrolled to; the list keeps its place for anything else, such as a note being
@@ -538,7 +545,8 @@ To search *within* the note you already have open, press **Ctrl+F**. A small fin
 the top-right corner of the editor — inside the window, not a separate dialog. It looks through
 the note's text and its tables: type a word and every match highlights, with the current one
 filled in and boxed; **Enter** and **Shift+Enter** step forward and back (wrapping around at the ends), the
-count reads "3/12", and **Aa** switches on case-sensitivity. A match inside a table scrolls the
+count reads "3/12", and **Aa** switches on case-sensitivity (off, it also ignores diacritics, as
+the list's search does). A match inside a table scrolls the
 table into view and outlines the cell it's in. Words found nowhere tint the box a light shade of
 red and the count reads "0/0". Find only highlights — it never changes the note — and **Esc** or
 the **✕** closes the bar.
@@ -595,8 +603,10 @@ next save. Custom order is the one sort that means "where I put it".*
 
 ![Search and sort](screenshots/search-and-sort.png)
 
-When nothing matches, the list says so rather than going blank, and the **✕** in the search box
-brings every note back:
+When nothing matches, the list says so rather than going blank — naming what hides the notes, the
+search or the Show choice — and **Show all notes** under it, or the **✕** in the search box, brings
+every note back. A new note saved where the list is not looking (Show set to another category, a
+search left in the box) says so on a banner, with **Show all**:
 
 ![A search that matches nothing](screenshots/no-match.png)
 
@@ -666,8 +676,9 @@ them come back.
 The banner stays for eight seconds, which is long enough to read it and decide. After that
 it fades, and the note is still in the Trash below.
 
-From the keyboard, **Ctrl+Z** takes the offer while the banner is up, as long as the keyboard
-is not in a text box (there, Ctrl+Z undoes your typing). The Undo can also be reached with Tab,
+From the keyboard, **Ctrl+Z** takes the offer while the banner is up — in the blank note the
+delete leaves open too, its title, text or comments — unless the keyboard is in a text box with
+typing of its own to take back (there, Ctrl+Z undoes your typing). The Undo can also be reached with Tab,
 and the banner waits while the keyboard is on it.
 
 Undo is the **only** way back for one other thing: removing a single day from a repeating
@@ -914,7 +925,9 @@ does saving the marker picker with nothing picked. The app keeps up to 20,000 co
 Open a note → Generate code. This generates a compact block of text representing that note's
 content, checklist included (attachments stay home — the full backup is what carries files) — paste it to someone
 else, and they can import it with **Import code** in the sidebar. Either way the code area carries
-an **✕** to put it away once you have copied it.
+an **✕** to put it away once you have copied it. **Copy code** copies the note as it is when you
+press it, so a fix made after Generate goes too. From one day of a repeating note, opened on its
+own, the code carries that day as a note of its own on its date, not the series.
 
 To put several notes in one code, use **🔗 Share notes** in the sidebar: a tick box per note, with
 **Select all** above the list. It ticks the notes the panel is actually *showing* — with a long
@@ -1112,7 +1125,7 @@ keys inside a bulleted or numbered list, and Ctrl+Z in a table.
 | **Ctrl+N** | anywhere | Starts a new note. |
 | **Ctrl+S** | anywhere | Saves the note you're editing. |
 | **Ctrl+F** | anywhere | Opens the find bar for searching within the current note. |
-| **Ctrl+Z** | right after a delete, outside a text box | Takes the delete back, as the banner's **Undo** does. The banner stays while the keyboard is on its Undo. |
+| **Ctrl+Z** | right after a delete, anywhere with no typing of its own to take back | Takes the delete back, as the banner's **Undo** does. The banner stays while the keyboard is on its Undo. |
 | **Tab** / **Shift+Tab** | anywhere | Moves to the next / previous control; the page scrolls to show it. Every control a click can press is on the way. |
 | **Ctrl+Tab** / **Ctrl+Shift+Tab** | in the note or the comments box | Leaves the box (where Tab types a tab) for the next / previous control. |
 | **Esc** | a popup or a dropdown's list | Closes it, and the keyboard goes back to what opened it. |

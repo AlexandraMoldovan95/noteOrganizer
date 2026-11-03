@@ -243,6 +243,11 @@ check('search reaches into a day\'s own override content',
 _q2 = _hist(_h_notes, query='agenda', today=_H_TODAY)
 check('a base-only match keeps the group collapsed (no auto-expand)',
       [e['note_id'] for e in _q2] == [3] and _q2[0]['auto_expand'] is False)
+# Folded as the list's search folds (wave 2): "creme" missed "Crème" here.
+_qf = _hist([{'id': 9, 'title': 'Crème brûlée night', 'body': 'x', 'comments': '',
+              'date': '2026-05-04'}], query='CREME BRULEE', today=_H_TODAY)
+check("the History's search folds case and diacritics, as the list's does",
+      [e['note_id'] for e in _qf] == [9])
 
 _y = _hist(_h_notes, year_bucket='Last year', today=_H_TODAY)
 check('the year filter keeps only that year\'s activity',
