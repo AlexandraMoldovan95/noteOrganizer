@@ -2208,7 +2208,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.notebook.select(self.TAB_NOTES)
         except tk.TclError:
             pass
-        self.open_note_in_tab(note)
+        self._open_unless_shown(note)
 
     def _set_aside_days(self, say=True):
         """Make notes of their own of the days a series' copy held that a day
@@ -2301,7 +2301,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.notebook.select(self.TAB_NOTES)
         except tk.TclError:
             pass
-        self.open_note_in_tab(note)
+        self._open_unless_shown(note)
 
     def save_notes(self):
         """Write notes to disk, and say so plainly if it fails.
@@ -11795,6 +11795,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return ({_dup_key(n) for n in self.notes if id(n) not in replaced}
                 | {_dup_key(normalize_note(theirs)) for _, theirs in updates})
 
+    def _all_lookalike_choice(self, count, other, where, pending):
+        """The question when every note left in a code or a backup (*where*)
+        looks like one already here. With the rest of the import *pending* --
+        an Update agreed to, copies kept -- it can skip them and go on:
+        Cancel, its only no, dropped those unsaid (wave 2, round 9)."""
+        said = (f"All {count}{other} note(s) in this {where} look identical "
+                "to notes you already have")
+        if not pending:
+            return self._themed_dialog(
+                "All notes already imported",
+                said + ". Import them anyway as new copies?", kind="question",
+                buttons=[("Cancel", "cancel"), ("Import anyway", "all")], default="Cancel")
+        return self._themed_dialog(
+            "Possible duplicates",
+            f"{said} ({SAME_AS}). Skipped, the rest of this import still happens.",
+            kind="question",
+            buttons=[("Cancel the import", "cancel"), ("Import anyway", "all"),
+                     ("Skip them", "skip")],
+            default="Skip them")
+
     def _known_note_differs(self, mine, theirs, source):
         """Whether importing *theirs* over *mine* would change anything: a
         field the route may update, or -- from a backup, whose files are
@@ -12031,14 +12051,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     default=f"Skip the {dupe_count} duplicate(s)",
                 )
             else:
-                choice = self._themed_dialog(
-                    "All notes already imported",
-                    f"All {len(valid)}{other} note(s) in this code look identical "
-                    "to notes you already have. Import them anyway as new copies?",
-                    kind="question",
-                    buttons=[("Cancel", "cancel"), ("Import anyway", "all")],
-                    default="Cancel",
-                )
+                choice = self._all_lookalike_choice(len(valid), other, "code",
+                                                    bool(updates or copies))
             if choice is None or choice == "cancel":
                 return
             if choice == "skip":
@@ -13181,15 +13195,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     default=f"Skip the {dupe_count} duplicate(s)",
                 )
             else:
-                choice = self._themed_dialog(
-                    "All notes already imported",
-                    f"All {len(valid_notes)}{other} note(s) in this backup look "
-                    "identical to notes you already have. Import them anyway as "
-                    "new copies?",
-                    kind="question",
-                    buttons=[("Cancel", "cancel"), ("Import anyway", "all")],
-                    default="Cancel",
-                )
+                choice = self._all_lookalike_choice(len(valid_notes), other, "backup",
+                                                    bool(updates or copies))
             if choice is None or choice == "cancel":
                 _undo_category_merge()
                 shutil.rmtree(temp_dir, ignore_errors=True)
@@ -19812,11 +19819,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """open_note_in_tab for a person's open -- a card clicked, Enter on
         it, the menu's Open -- left alone when the editor already shows that
         note on that day: loaded again, it jumped to its top and Ctrl+Z lost
-        all it held (wave 2, round 8). True when the note is shown."""
+        all it held (wave 2, round 8). Asked of the day load_note would open:
+        a one-off note opened from its calendar day is the note (round 9)."""
         if (self.selected_note_id is not None and note.get("id") == self.selected_note_id
-                and occurrence_date == self.current_occurrence_date):
+                and self._day_to_open(note, occurrence_date) == self.current_occurrence_date):
             return True
         return self.open_note_in_tab(note, occurrence_date=occurrence_date)
+
+    @staticmethod
+    def _day_to_open(note, occurrence_date):
+        """The day of *note* the editor opens for *occurrence_date*: that day
+        where the series still draws it, else None -- the whole note."""
+        when = parse_date(occurrence_date) if occurrence_date else None
+        return (occurrence_date if is_recurring(note) and when is not None
+                and expand_occurrences(note, when, when) == [occurrence_date]
+                else None)
 
     def open_blank_tab(self):
         """Start a brand-new empty note, replacing whatever was open (after
@@ -20942,10 +20959,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # there was saved to a day no screen showed and no search found
         # (ISSUES_LOG: "Round twenty-three: the day the editor stayed on").
         # The whole note opens instead, as for a note that no longer repeats.
-        when = parse_date(occurrence_date) if occurrence_date else None
-        day = (occurrence_date if is_recurring(note) and when is not None
-               and expand_occurrences(note, when, when) == [occurrence_date]
-               else None)
+        day = self._day_to_open(note, occurrence_date)
         same_session = (self.selected_note_id == note.get("id")
                         and self.current_occurrence_date == day)
         kept_checklist = (getattr(self, "_working_checklist", None)
@@ -21464,7 +21478,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Open a plain dated note in the editor and focus the Repeat control so
         the user can turn it into a recurring series."""
         self.notebook.select(self.TAB_NOTES)
-        if not self.open_note_in_tab(note):
+        if not self._open_unless_shown(note):
             return  # gone back to the note still in the editor: see _ctx_open
         if return_day is not None:
             # Raised on a calendar day — same way-back memory as _ctx_open.

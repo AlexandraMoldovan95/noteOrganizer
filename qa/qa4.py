@@ -2729,6 +2729,21 @@ app._list_press_row(app._note_cards[_oc_id], types.SimpleNamespace(x=5, y=5)); _
 check(f"the open note's own card, Enter or a press on it, leaves its Undo in place "
       f"({_oc_typed}, {_oc_enter}, {_oc_can_undo()})",
       _oc_typed and _oc_enter and _oc_can_undo())
+# ...and so do the Calendar's Open in editor and the menu's Open / Edit, for a
+# one-off note on its own date: they asked of the date, not of the note the
+# editor opens for it, and loaded it again (round 9).
+_oc_note = app.find_note(_oc_id)
+_oc_note['date'] = '2026-11-05'
+app.save_notes()
+app.open_note_in_tab(_oc_note); _ls_settle()
+app.body_text.insert('end', ' and a line more')
+app.body_text.edit_separator()
+app._open_note_from_calendar(_oc_note, '2026-11-05'); _ls_settle()
+_oc_panel = _oc_can_undo()
+app._ctx_open(_oc_note, '2026-11-05'); _ls_settle()
+check(f"...and the Calendar's Open in editor and the menu's Open / Edit too "
+      f"({_oc_panel}, {_oc_can_undo()})",
+      _oc_panel and _oc_can_undo())
 
 # 5i. The ring stays where the person can see it. It could sit on a card
 # 900px above the view: Tab brought the keyboard back to a list the wheel

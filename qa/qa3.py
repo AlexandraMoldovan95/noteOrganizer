@@ -584,6 +584,38 @@ check('...still the same note: the identity did not move',
 check('an update leaves the rescue copy Restore previous reads',
       (_ident_note.get('_prev') or {}).get('body') == 'text original')
 
+# An Update agreed to, the code's other notes all look-alikes: the question
+# about them can skip them and go on -- Cancel, its only no, dropped the
+# Update unsaid (wave 2, round 9).
+_la_known = NO.normalize_note({'id': 9601, 'uid': 'la-known', 'title': 'Synced',
+                               'body': 'first words'})
+_la_same = NO.normalize_note({'id': 9602, 'title': 'Look alike', 'body': 'same words'})
+app.notes += [_la_known, _la_same]
+app.save_notes()
+_la_asked = []
+
+
+def _la_answer(*a, **k):
+    labels = [label for label, _v in k.get('buttons') or []]
+    _la_asked.append(labels)
+    return 'update' if 'Update it' in labels else ('skip' if 'Skip them' in labels else 'cancel')
+
+
+app._themed_dialog = _la_answer
+app.import_box.delete('1.0', 'end')
+app.import_box.insert('1.0', NO.encode_share_code([
+    {'uid': 'la-known', 'title': 'Synced', 'body': 'second words'},
+    {'title': 'Look alike', 'body': 'same words'}]))
+app._do_inline_import()
+app.update()
+app._themed_dialog = _real_dlg_id
+check(f"an Update agreed to, then look-alikes skipped: the Update still happens ({_la_asked})",
+      any('Skip them' in labels for labels in _la_asked)
+      and app.find_note(9601)['body'] == 'second words'
+      and sum(1 for n in app.notes if n.get('title') == 'Look alike') == 1)
+app.notes = [n for n in app.notes if n.get('id') not in (9601, 9602)]
+app.save_notes()
+
 # The other answer. "Add as a new note" must land a SECOND note -- and
 # strip the identity on the way, or the two would be one note wearing two
 # ids, which is the collision the whole field exists to prevent.
@@ -3587,7 +3619,8 @@ def _ic_import(notes, files, answer):
     _ic_shutil.rmtree(src, ignore_errors=True)
     asked = []
     real = app._themed_dialog
-    app._themed_dialog = lambda *a, **k: (asked.append(a[0]), answer)[1]
+    app._themed_dialog = lambda *a, **k: (asked.append(a[0]),
+                                          answer(*a, **k) if callable(answer) else answer)[1]
     fd.askopenfilename = lambda **k: zpath
     app.import_data()
     t0 = time.time()
@@ -3642,6 +3675,26 @@ check('...while the note imported keeps its own file, on disk',
 for _ic_name in _ic_names:
     if os.path.exists(_ic_path(_ic_name)):
         os.remove(_ic_path(_ic_name))
+# A backup's Update agreed to, its other notes all look-alikes: skipped, the
+# Update still happens -- Cancel was the only no, and dropped it (round 9).
+app.notes = [NO.normalize_note({'id': 1, 'uid': 'bk-known', 'title': 'Synced', 'body': 'first words'}),
+             NO.normalize_note({'id': 2, 'title': 'Look alike', 'body': 'same words'})]
+app.save_notes()
+_bk_asked = []
+
+
+def _bk_answer(*a, **k):
+    labels = [label for label, _v in k.get('buttons') or []]
+    _bk_asked.append(labels)
+    return 'update' if 'Update it' in labels else ('skip' if 'Skip them' in labels else 'cancel')
+
+
+_ic_import([{'uid': 'bk-known', 'title': 'Synced', 'body': 'second words'},
+            {'title': 'Look alike', 'body': 'same words'}], [], _bk_answer)
+check(f"a backup's Update agreed to, then look-alikes skipped: the Update still happens ({_bk_asked})",
+      any('Skip them' in labels for labels in _bk_asked)
+      and (app.find_note(1) or {}).get('body', '').rstrip('\n') == 'second words'
+      and sum(1 for n in app.notes if n.get('title') == 'Look alike') == 1)
 app.notes = []; app.save_notes()
 
 # ---- A BACKUP WITH A DAMAGED FILE IN IT ----

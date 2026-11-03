@@ -2651,7 +2651,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            self.refresh_note_list()\n        try:\n            self.notebook.select(self.TAB_NOTES)\n        except tk.TclError:\n            pass\n        self.open_note_in_tab(note)\n",
+        "find": "            self.refresh_note_list()\n        try:\n            self.notebook.select(self.TAB_NOTES)\n        except tk.TclError:\n            pass\n        self._open_unless_shown(note)\n",
         "replace": "            self.refresh_note_list()\n"
       }
     ],
@@ -14229,8 +14229,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        day = (occurrence_date if is_recurring(note) and when is not None\n               and expand_occurrences(note, when, when) == [occurrence_date]\n               else None)\n",
-        "replace": "        day = occurrence_date if is_recurring(note) else None\n"
+        "find": "        return (occurrence_date if is_recurring(note) and when is not None\n                and expand_occurrences(note, when, when) == [occurrence_date]\n                else None)\n",
+        "replace": "        return occurrence_date if is_recurring(note) else None\n"
       }
     ],
     "must_fail": [
@@ -16283,6 +16283,78 @@
     ],
     "suites": [
       "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS74",
+    "about": "A one-off note opened from its calendar day is asked of the date, not of the note the editor opens: loaded again, its Undo gone",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                and self._day_to_open(note, occurrence_date) == self.current_occurrence_date):\n",
+        "replace": "                and occurrence_date == self.current_occurrence_date):\n"
+      }
+    ],
+    "must_fail": [
+      "...and the Calendar's Open in editor and the menu's Open / Edit too"
+    ],
+    "suites": [
+      "qa4"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS75",
+    "about": "The Calendar's Open in editor loads the note on screen again, its Undo gone",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/calendar_view.py",
+        "find": "        if not self._open_unless_shown(\n                base_note, occurrence_date=None if whole_series else date_str):\n",
+        "replace": "        if not self.open_note_in_tab(\n                base_note, occurrence_date=None if whole_series else date_str):\n"
+      }
+    ],
+    "must_fail": [
+      "...and the Calendar's Open in editor and the menu's Open / Edit too"
+    ],
+    "suites": [
+      "qa4"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS76",
+    "about": "A code's look-alikes asked about with Cancel the only no, after an Update agreed to: the Update is dropped unsaid",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                choice = self._all_lookalike_choice(len(valid), other, \"code\",\n                                                    bool(updates or copies))\n",
+        "replace": "                choice = self._all_lookalike_choice(len(valid), other, \"code\",\n                                                    False)\n"
+      }
+    ],
+    "must_fail": [
+      "an Update agreed to, then look-alikes skipped: the Update still happens"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS77",
+    "about": "A backup's look-alikes asked about with Cancel the only no, after an Update agreed to: the Update is dropped",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                choice = self._all_lookalike_choice(len(valid_notes), other, \"backup\",\n                                                    bool(updates or copies))\n",
+        "replace": "                choice = self._all_lookalike_choice(len(valid_notes), other, \"backup\",\n                                                    False)\n"
+      }
+    ],
+    "must_fail": [
+      "a backup's Update agreed to, then look-alikes skipped: the Update still happens"
+    ],
+    "suites": [
+      "qa3"
     ],
     "expect": "killed"
   }

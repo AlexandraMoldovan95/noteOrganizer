@@ -1569,7 +1569,8 @@ class CalendarViewMixin:
         # Going back to the note still in the editor -- to fix a date it
         # could not save -- means this note was not opened, and the way
         # back must not be re-pointed at it.
-        if not self.open_note_in_tab(
+        # The note already on screen is left as it is (_open_unless_shown).
+        if not self._open_unless_shown(
                 base_note, occurrence_date=None if whole_series else date_str):
             return
         self._pending_calendar_return = remembered
