@@ -15931,12 +15931,84 @@
     "edits": [
       {
         "file": "noteorganizer/ui/note_list.py",
-        "find": "                        and history_entries(self.notes, query=typed)):\n",
-        "replace": "                        and False):\n"
+        "find": "                        and any(e.get(\"auto_expand\")\n",
+        "replace": "                        and False and any(e.get(\"auto_expand\")\n"
       }
     ],
     "must_fail": [
       "a search the list finds nothing for, held by a day of a series, points to the History"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS55",
+    "about": "After an Update, one big delete replaces the only copy of the note as it was before the Update",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                elif (rescue_due and not comments_alone and update_copy(note.get(\"_prev\"))\n                      and not rescue_copy_spent(note)):\n",
+        "replace": "                elif False:\n"
+      }
+    ],
+    "must_fail": [
+      "after an Update, a big delete keeps the copy from before the Update"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS56",
+    "about": "The History link opens the History before the tab change is handled, which shuts it: the month grid shows",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/calendar_view.py",
+        "find": "        self.after_idle(lambda: self._open_history_searching(query))\n",
+        "replace": "        self._open_history_searching(query)\n"
+      }
+    ],
+    "must_fail": [
+      "a search the list finds nothing for, held by a day of a series, points to the History"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS57",
+    "about": "The History link keeps the year picked there earlier, and the day it promised is filtered out",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/calendar_view.py",
+        "find": "    def _open_history_searching(self, query):\n        self._history_bucket = \"All\"\n",
+        "replace": "    def _open_history_searching(self, query):\n"
+      }
+    ],
+    "must_fail": [
+      "a search the list finds nothing for, held by a day of a series, points to the History"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS58",
+    "about": "The empty list says a repeating note's day holds the words when a dated note Show hides holds them",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/note_list.py",
+        "find": "                        and any(e.get(\"auto_expand\")\n                                for e in history_entries(self.notes, query=typed))):\n",
+        "replace": "                        and history_entries(self.notes, query=typed)):\n"
+      }
+    ],
+    "must_fail": [
+      "...and not for a dated note Show hides, which is no day of a repeating note"
     ],
     "suites": [
       "qa1"

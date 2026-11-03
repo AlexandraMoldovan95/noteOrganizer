@@ -1738,6 +1738,23 @@ finally:
 check(f"an update that would replace an earlier version Restore previous holds "
       f"says so ({' '.join(_rd_said)[-90:]!r})",
       any('replaced by the one from before this update' in s for s in _rd_said))
+# After an Update, a big delete in the note keeps the Update's copy -- the note
+# as it was here before, in no other file -- not the backup's words it deletes,
+# which are still in the backup (wave 2, round 4: the copy was replaced).
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'uid': _rd_uid, 'title': 'Passport',
+                                'body': 'From the backup: ' + 'renewed in March ' * 6})]
+app.notes[0]['_prev'] = {'title': 'Passport', 'body': 'My own words before the update.',
+                         'formatting': [], 'paragraphs': [], 'comments': '',
+                         'category': 'General', 'color': '', 'checklist': [], 'pinned': False}
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'x')
+app.save_current_note(); app.update()
+_uc_prev = app.find_note(1).get('_prev') or {}
+check(f"after an Update, a big delete keeps the copy from before the Update "
+      f"({(_uc_prev.get('body') or '')[:30]!r})",
+      _uc_prev.get('body') == 'My own words before the update.')
 check(f"a big delete, then the repeat turned off: the copy holds the deleted words "
       f"and the series ({(_rd_prev.get('body') or '')[:20]!r}, "
       f"{(_rd_prev.get('recurrence') or {}).get('freq')})",

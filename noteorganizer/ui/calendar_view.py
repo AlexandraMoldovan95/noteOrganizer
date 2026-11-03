@@ -1724,8 +1724,14 @@ class CalendarViewMixin:
 
     def _search_history_for(self, query):
         """The Calendar's History, searching for *query*: it reads a day's own
-        words, which the list's search does not (the empty list's link)."""
+        words, which the list's search does not (the empty list's link).
+        Opened once the tab change is handled -- its handler shuts the
+        History, and the link landed on the month grid -- on every year."""
         self.notebook.select(self.TAB_CALENDAR)
+        self.after_idle(lambda: self._open_history_searching(query))
+
+    def _open_history_searching(self, query):
+        self._history_bucket = "All"
         if not getattr(self, "_history_visible", False):
             self._show_calendar_history()
         entry = self._history_search_entry

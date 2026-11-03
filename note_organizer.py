@@ -17361,6 +17361,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.set_status("Days off the schedule: " + ", ".join(said))
         self._update_occurrence_banner()
 
+    def _day_as_shown(self, note, day):
+        """A copy of *note* as one *day* of it shows, for a file made of that
+        day: the day's own words and looks (the series' formatting only on
+        the series' own text, as below), on its date, with no repeat."""
+        shown = effective_note(note, day)
+        out = copy.deepcopy(note)
+        out.update(title=shown.get("title") or "", body=shown.get("body") or "",
+                   formatting=(copy.deepcopy(note.get("formatting") or [])
+                               if shown.get("body") == note.get("body") else []),
+                   paragraphs=day_paragraphs_shown(note, day),
+                   comments=shown.get("comments") or "",
+                   category=shown.get("category") or note.get("category"),
+                   color=shown.get("color") or "", date=day,
+                   recurrence=dict(RECURRENCE_DEFAULTS))
+        return out
+
     def _settle_off_schedule_day(self, note, day, how):
         """One day off *note*'s schedule made a note of its own (*how* is
         "note") or moved to the Trash as one ("trash"), and taken out of the
@@ -21099,12 +21115,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             activebackground=self.colors["accent"], activeforeground=self._on_fill("accent"),
             relief="flat", bd=0, font=("Segoe UI", 9)
         )
+        # From one day of a series, that day as it shows: the series' text
+        # went out, none of the day's own words (wave 2, round 4).
+        exported = (self._day_as_shown(note, occurrence_date)
+                    if occurrence_date and is_recurring(note) else note)
         for fmt, fmt_label in (
                 ("html", "Web page (.html) — full formatting; opens in a browser or Word"),
                 ("txt", "Plain text (.txt)")):
             export_menu.add_command(
                 label=fmt_label,
-                command=lambda f=fmt: self.export_note_as_file(note, f))
+                command=lambda f=fmt: self.export_note_as_file(exported, f))
         menu.add_cascade(label="💾  Export as file", menu=export_menu)
 
         # Recategorising one note had exactly one route that did not mean
@@ -23001,6 +23021,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     if comments_alone:
                         note["_prev"]["comments"] = comments_kept_by_copy(
                             note["_prev"].get("comments", ""), note.get("comments", ""))
+                elif (rescue_due and not comments_alone and update_copy(note.get("_prev"))
+                      and not rescue_copy_spent(note)):
+                    # An import's Update left the note as it was here before
+                    # in no other file; the words deleted now are the
+                    # backup's, still in it. That copy is kept whole: replaced,
+                    # one big delete (or a slip and Ctrl+Z) lost the note as it
+                    # was before the Update, unsaid (wave 2, round 4).
+                    pass
                 elif rescue_due:
                     # The copy's own comments too, when theirs is the larger
                     # loss: two letters cleared after a long comment was

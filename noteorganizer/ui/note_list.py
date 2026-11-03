@@ -382,12 +382,13 @@ class NoteListMixin:
                 below = self.canvas.bbox(text_id)[3] + self.px(6)
                 link = self._list_empty_link(below, "Show all notes", "list_show_all",
                                              self._show_all_notes)
-                # The list does not read a day's own words; the History does.
-                # When a day of a repeating note holds them, said, with the
-                # way there (the owner's choice, wave 2).
+                # A day's own words (auto_expand) the list does not read: said,
+                # with the way to the History (the owner's choice, wave 2). Not
+                # a dated note Show hid, which the History lists too.
                 typed = self.search_var.get().strip()
                 if (self._search_query() and typed != self.SEARCH_PLACEHOLDER
-                        and history_entries(self.notes, query=typed)):
+                        and any(e.get("auto_expand")
+                                for e in history_entries(self.notes, query=typed))):
                     below = self.canvas.bbox(link)[3] + self.px(12)
                     said = self.canvas.create_text(
                         13, below, anchor="nw", font=("Segoe UI", 10),

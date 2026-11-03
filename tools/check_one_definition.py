@@ -149,6 +149,10 @@ RULES = [
             # template dict out of editor state. Naming the fields is
             # what they are for.
             "_write_fields_to_note": "builds the note being saved",
+            "_day_as_shown":
+                "builds the copy of one day a file is made of (wave 2); its "
+                "one comparison asks whether the day's text is the series' own, "
+                "as _settle_off_schedule_day's does",
             "do_save": "builds the template being saved",
             "collect": "builds the template the settings editor is editing",
             "notes_set_aside":

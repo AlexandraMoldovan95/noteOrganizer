@@ -357,13 +357,27 @@ app.notes = [NO.normalize_note({
 app.search_var.set('contract'); app.refresh_note_list(); app.update()
 _hd_said = bool(app.canvas.find_withtag('list_history'))
 if _hd_said:
-    app._search_history_for('contract'); app.update()
+    app._history_bucket = 'Last year'     # a year picked there earlier
+    app._search_history_for('contract'); app.update(); app.update()
+# ...the History open, not the month grid the tab's own handler went back to,
+# and on every year (round 4).
 check(f'a search the list finds nothing for, held by a day of a series, points to the History '
-      f'({_hd_said}, {app._history_query() if getattr(app, "_history_built", False) else None!r})',
-      _hd_said and app._history_query() == 'contract')
+      f'({_hd_said}, {app._history_query() if getattr(app, "_history_built", False) else None!r}, '
+      f'{getattr(app, "_history_visible", None)}, {getattr(app, "_history_bucket", None)!r})',
+      _hd_said and app._history_query() == 'contract' and app._history_visible
+      and app._history_bucket == 'All')
 if getattr(app, '_history_visible', False):
     app._hide_calendar_history()
 app.notebook.select(app.TAB_NOTES)
+app.update()
+# ...but not for a dated note Show hides: no day of a repeating note holds it,
+# and the sentence said one did (round 4).
+app.notes = [NO.normalize_note({'id': 9996, 'title': 'Dentist', 'body': 'x', 'category': 'General',
+                                'date': '2026-11-12'})]
+app.filter_var.set('Work'); app.search_var.set('dentist'); app.refresh_note_list(); app.update()
+check('...and not for a dated note Show hides, which is no day of a repeating note',
+      not app.canvas.find_withtag('list_history') and bool(app.canvas.find_withtag('list_show_all')))
+app.filter_var.set('All')
 app.search_var.set(''); app.refresh_note_list(); app.update()
 app.notes = _hd_notes
 
@@ -7070,6 +7084,18 @@ _origAskYNX = app.ask_yes_no
 _openAsksX = []
 app.ask_yes_no = (lambda title, msg, **kw:
                   (_openAsksX.append(title), False)[1])
+
+# Exported from one day of a series, the file holds that day as it shows:
+# its own words on its date, not the series' text (wave 2, round 4).
+_dayX = app._day_as_shown(NO.normalize_note({
+    'id': 77, 'title': 'Team meeting', 'body': 'agenda',
+    'formatting': [{'start': '1.0', 'end': '1.6', 'tag': 'bold'}],
+    'date': '2026-11-02', 'recurrence': {'freq': 'weekly'},
+    'overrides': {'2026-11-09': {'title': '', 'body': 'minutes of the day', 'comments': '',
+                                 'category': 'General', 'color': ''}}}), '2026-11-09')
+check(f"a day's export is the day as it shows ({_dayX.get('body')!r}, {_dayX.get('date')!r})",
+      _dayX.get('body') == 'minutes of the day' and _dayX.get('date') == '2026-11-09'
+      and not _dayX.get('formatting') and not (_dayX.get('recurrence') or {}).get('freq'))
 
 _pX = os.path.join(_exp_dir, 'note.html')
 _fdX.asksaveasfilename = lambda **kw: _pX
