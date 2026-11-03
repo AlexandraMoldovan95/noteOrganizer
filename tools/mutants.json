@@ -15805,7 +15805,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            self._drop_unclaimed_import_files(state)\n            self.set_status(self._IMPORT_CANCELLED)\n            return\n        existing_keys",
+        "find": "            self._drop_unclaimed_import_files(state)\n            self._say_import_cancelled()\n            return\n        existing_keys",
         "replace": "            self._drop_unclaimed_import_files(state)\n            return\n        existing_keys"
       }
     ],
@@ -15865,6 +15865,60 @@
     ],
     "must_fail": [
       "find: a space picked up after the word is not part of it"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS51",
+    "about": "A cancelled import's line is written over by the autosave's Auto-saved within a second",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self._box_words_until = time.monotonic() + 8\n        self._show_toast(self._IMPORT_CANCELLED, kind=\"info\")\n",
+        "replace": "        self._show_toast(self._IMPORT_CANCELLED, kind=\"info\")\n"
+      }
+    ],
+    "must_fail": [
+      "an import cancelled at its question says nothing was added"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS52",
+    "about": "A number typed after a result goes on the end of it, and after Error onto the word",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/calculator_panel.py",
+        "find": "    def _calc_on_key_press(self, event=None):\n        self._calc_starts_afresh(getattr(event, \"char\", \"\"))\n",
+        "replace": "    def _calc_on_key_press(self, event=None):\n        pass\n"
+      }
+    ],
+    "must_fail": [
+      "a number typed after a result or Error starts a new sum"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS53",
+    "about": "A template used on a note started from a calendar day throws the day away",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if day:\n            self._show_date_in_field(day)\n        if pending is not None:\n",
+        "replace": "        if pending is not None:\n"
+      }
+    ],
+    "must_fail": [
+      "a template used on a note started from a calendar day keeps the day"
     ],
     "suites": [
       "qa1"

@@ -91,7 +91,8 @@ class CalculatorPanelMixin:
         # expression copied from somewhere else just works either way.
         self._add_paste_menu(self.calculator_display)
         self.calculator_display.bind("<KeyRelease>", self._calc_on_key_release)
-        self.calculator_display.bind("<<Paste>>", self._calc_on_direct_edit)
+        self.calculator_display.bind("<KeyPress>", self._calc_on_key_press)
+        self.calculator_display.bind("<<Paste>>", self._calc_on_paste)
         # A sum typed here ends with Enter, as on any calculator.
         for key in ("<Return>", "<KP_Enter>"):
             self.calculator_display.bind(key, lambda _e: (self._calc_press("="), "break")[1])
@@ -238,6 +239,28 @@ class CalculatorPanelMixin:
         produces a real result from whatever's now in the field."""
         self._calc_just_evaluated = False
         self._calc_refresh_insert_state()
+
+    def _calc_starts_afresh(self, first):
+        """A number typed or pasted (*first*, its first character) after a
+        result or Error starts a new sum, as the buttons do: typed, 12*3
+        Enter 5 read 365, and after Error every sum said Error again."""
+        if (first and (first.isdecimal() or first in ".,([{√")
+                and (self._calc_just_evaluated or self._calc_display_var.get() == "Error")):
+            self._calc_display_var.set("")
+            self._calc_display_was = ""
+            self._calc_just_evaluated = False
+            self._calc_refresh_insert_state()
+
+    def _calc_on_key_press(self, event=None):
+        self._calc_starts_afresh(getattr(event, "char", ""))
+
+    def _calc_on_paste(self, event=None):
+        try:
+            pasted = self.clipboard_get()
+        except tk.TclError:
+            pasted = ""
+        self._calc_starts_afresh(pasted.lstrip()[:1])
+        self._calc_on_direct_edit(event)
 
     def _calc_on_key_release(self, event=None):
         """A key let go in the display: an edit only when the text changed.

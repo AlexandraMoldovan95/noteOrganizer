@@ -13071,7 +13071,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # copied go too: nothing was imported to own them.
             shutil.rmtree(temp_dir, ignore_errors=True)
             self._drop_unclaimed_import_files(state)
-            self.set_status(self._IMPORT_CANCELLED)
+            self._say_import_cancelled()
             return
         existing_keys = self._dup_keys_after(updates)
         fresh = [n for n in valid_notes if _dup_key(normalize_note(n)) not in existing_keys]
@@ -13103,7 +13103,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 _undo_category_merge()
                 shutil.rmtree(temp_dir, ignore_errors=True)
                 self._drop_unclaimed_import_files(state)
-                self.set_status(self._IMPORT_CANCELLED)
+                self._say_import_cancelled()
                 return
             if choice == "skip":
                 to_import = fresh
@@ -21567,9 +21567,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 icon="warning", default="no"):
                 return
 
-        # Start a fresh note, then fill it from the template.
+        # Start a fresh note, then fill it from the template -- on the day a
+        # new note was started from on the calendar, with its way back: the
+        # template threw the day away, and the note never showed on it.
+        day, pending = "", None
+        if self.selected_note_id is None:
+            day = self._typed_date()
+            pending = getattr(self, "_pending_calendar_return", None)
         self.new_note()
         self.selected_note_id = None
+        if day:
+            self._show_date_in_field(day)
+        if pending is not None:
+            self._pending_calendar_return = pending
+            self._update_calendar_return_button()
         if tpl.get("title"):
             self.title_entry.delete(0, "end")
             self._insert_title(tpl["title"])
@@ -24055,6 +24066,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     # Said when a question of the backup's is answered Cancel: asked while
     # the person may be typing, a stray Enter cancelled it without a word.
     _IMPORT_CANCELLED = "Import cancelled: nothing from the backup was added or changed."
+
+    def _say_import_cancelled(self):
+        """On the banner, and on the status line held against the autosave's
+        "Auto-saved", which wrote over it within a second while the person
+        typed on -- the road a stray key took to that Cancel."""
+        self.set_status(self._IMPORT_CANCELLED)
+        self._box_words_until = time.monotonic() + 8
+        self._show_toast(self._IMPORT_CANCELLED, kind="info")
 
     def set_status(self, text, reassurance=False):
         # *reassurance* -- the autosave's own "Auto-saved" -- does not write

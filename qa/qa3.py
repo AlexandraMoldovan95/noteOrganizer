@@ -3454,6 +3454,9 @@ app.save_notes()
 # stray Enter ended the import without a word (wave 2, round 2).
 app.set_status('')
 _ra_import('cancel')
+# ...and the autosave's "Auto-saved" that follows the person's typing does
+# not write over it (round 3: it did, within a second).
+app.set_status('Auto-saved 10:00', reassurance=True)
 check(f"an import cancelled at its question says nothing was added ({app.status_lbl.cget('text')!r})",
       app.status_lbl.cget('text') == app._IMPORT_CANCELLED
       and (app.find_note(1) or {}).get('body') == 'March, paid')

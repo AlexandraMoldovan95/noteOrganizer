@@ -182,6 +182,17 @@ app.update()
 check('a template fills a new note',
       app.title_entry.get() == 'Templated Title'
       and app.body_text.get('1.0', 'end-1c') == 'Templated body')
+# Started from a calendar day, the note keeps the day and its way back to the
+# calendar (wave 2, round 3: the template threw both away).
+app._add_note_for_date('2026-11-06')
+app.update()
+app._apply_template(tpl)
+app.update()
+check(f'a template used on a note started from a calendar day keeps the day '
+      f'({app._typed_date()!r}, {app._pending_calendar_return is not None})',
+      app._typed_date() == '06.11.2026' and app._pending_calendar_return is not None)
+app.new_note()
+app.update()
 
 # Not knowing whether the editor holds typing asks; it once replaced it.
 app.new_note()
@@ -623,6 +634,19 @@ check(f'Enter gives the result, and its release leaves Insert on '
       f'({app._calc_display_var.get()!r}, {app.calculator_insert_btn.cget("state")})',
       app._calc_display_var.get() == '36'
       and str(app.calculator_insert_btn.cget('state')) == 'normal')
+# ...and a number typed next starts a new sum, as a button's does: typed, it
+# went on the end of the result, and after Error onto the word (round 3).
+app.calculator_display.event_generate('<KeyPress-5>')
+app.update()
+_ck_after_result = app._calc_display_var.get()
+app._calc_display_var.set('Error')
+app.calculator_display.event_generate('<KeyPress-7>')
+app.update()
+check(f'a number typed after a result or Error starts a new sum '
+      f'({_ck_after_result!r}, {app._calc_display_var.get()!r})',
+      _ck_after_result == '5' and app._calc_display_var.get() == '7')
+find_calc_btn('C').invoke()
+app.update()
 
 # ---- Extra functions (brackets, root, power, percent) ----
 find_calc_btn('C').invoke()
