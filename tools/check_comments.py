@@ -45,8 +45,15 @@ ISSUES_LOG = os.path.join(ROOT, "docs", "ISSUES_LOG.md")
 
 # Modules whose comments have been condensed (paths from the repo root).
 BRIEF = [
+    "noteorganizer/__init__.py",
+    "noteorganizer/core/__init__.py",
+    "noteorganizer/core/clipboard.py",
+    "noteorganizer/core/diagnostics.py",
     "noteorganizer/core/model.py",
     "noteorganizer/core/storage.py",
+    "noteorganizer/core/welcome.py",
+    "noteorganizer/core/winspell.py",
+    "noteorganizer/ui/__init__.py",
     "noteorganizer/ui/note_list.py",
 ]
 

@@ -5,11 +5,8 @@ crash_log.txt says it, on this computer only. Under each entry's dated head,
 one line gives the version, the Windows it runs on, how it draws on this
 screen, and how big the notebook is: never what the notes say, and never a
 path, since a folder's path holds the person's name. The trace below it is
-Python's own, and can hold both.
-
-The app connects to nothing. Feedback goes through the Microsoft Store's
-reviews, and the privacy policy is a page on Google Sites -- the browser
-opens both.
+Python's own, and can hold both. The app connects to nothing: the Store's
+reviews and the privacy policy on Google Sites open in the browser.
 """
 
 import os
@@ -100,11 +97,9 @@ def details():
 def append_crash_log(kind, text, folder=None):
     """Add one entry to crash_log.txt: when, what kind of failure, the
     details above on one line, then *text*. *folder* is where the log goes;
-    the data folder when not given.
-
-    Never raises -- it runs where something has already gone wrong, and a
-    start-up crash before the folder is known simply goes unlogged rather
-    than taking the crash window with it.
+    the data folder when not given. Never raises -- it runs where something
+    has already gone wrong, and a start-up crash before the folder is known
+    goes unlogged rather than taking the crash window with it.
 
     Returns:
         The log's path, or None when nothing could be written.
