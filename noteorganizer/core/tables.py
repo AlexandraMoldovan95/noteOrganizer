@@ -1,28 +1,11 @@
-"""Tables, as lines of text.
-
-A table row really is the line ``| Milk | 2 |`` in the note's body, in the
-same way a bullet really is the ``"• "`` at the start of its line. That is
-not a shortcut: ``formatting`` stores character offsets into that same body,
-so anything drawn on screen but absent from the text would put every offset
-after it out by however wide the drawing was -- see ``docs/ARCHITECTURE.md``,
-"The marker lives in the body text".
-
-What follows from keeping it in the text:
-
-* the note format does not change at all, so old notes, share codes, export
-  and search keep working with no special case anywhere;
-* a table survives being pasted into anything else as something still
-  readable, which a grid of widgets would not;
-* and re-padding a table rewrites real characters, which moves every offset
-  after them -- the same problem ``renumber()`` already solves by returning
-  its shifts for ``shift_spans()`` to apply. This module returns shifts in
-  the same shape for the same reason.
-
-Pipes rather than box-drawing characters, because prose does not begin with
-one, which is what makes a row recognisable from its own text.
-
-Nothing here imports tkinter: it turns strings into strings, so it can be
-tested on any machine.
+"""Tables, as lines of text: a row really is the line ``| Milk | 2 |`` in the
+body, as a bullet is its ``"• "``, since ``formatting``'s offsets count that
+same body (``docs/ARCHITECTURE.md``, "The marker lives in the body text").
+So the note format does not change, a pasted table stays readable, and
+re-padding a row moves the offsets after it: this module returns its shifts
+in ``renumber()``'s shape for ``shift_spans()``. Pipes, because prose does
+not begin with one, so a row is known from its own text. Strings in,
+strings out: no tkinter, tested on any machine.
 """
 
 import re
@@ -32,11 +15,9 @@ CELL = "|"
 # row must stay one line of text, so the break is a marker in the value.
 # Export, share codes and any markdown-aware tool read it natively.
 LINE_BREAK = "<br>"
-# A cell holding exactly one of these IS a checkbox -- markdown's own
-# task idiom, so the stored text stays plainly readable and any
-# markdown-aware tool shows a task box. The app draws it as a real
-# box and a click toggles it; opened, it shows empty, and what is
-# typed there takes the box's place.
+# A cell holding exactly one of these IS a checkbox, markdown's own task
+# idiom: drawn as a box a click toggles; opened, it shows empty, and what is
+# typed takes the box's place.
 CHECKBOX_EMPTY = "[ ]"
 CHECKBOX_DONE = "[x]"
 
@@ -67,11 +48,9 @@ def is_caption_line(line):
 def is_source_line(line):
     """True for the line a caption keeps its source on."""
     return (line or "").strip().startswith("Source:")
-# A cell holding exactly one of these is not content but a merge marker:
-# "<" belongs to the cell on its left, "^" to the cell above. Anchors sit
-# at the top-left of their rectangle. Typing one of these alone into a cell
-# genuinely means merging -- the same kind of accepted trade-off as "2."
-# starting a numbered item.
+# A cell holding exactly one of these is a merge marker: "<" belongs to the
+# cell on its left, "^" to the one above, anchors at their rectangle's top
+# left. Typed alone it means a merge, as "2." starts a numbered item.
 MERGE_LEFT = "<"
 MERGE_UP = "^"
 # A row needs at least this much text to be worth calling a table. A line
@@ -136,21 +115,16 @@ def cell_bounds(line):
         if text:
             start = pos + (len(part) - len(part.lstrip()))
         else:
-            # An empty cell is all padding, and skipping past it would put
-            # the caret on the closing pipe -- outside the cell it is meant
-            # to be in. One space in from the opening pipe is where typing
-            # should start.
+            # An empty cell is all padding: skipped, the caret landed on the
+            # closing pipe. Typing starts one space in from the opening one.
             start = pos + min(1, len(part))
         bounds.append((start, start + len(text)))
         pos += len(part) + 1
     return bounds
 
 
-# No column is drawn narrower than this, however little is in it. A new
-# table is all empty cells, and cells one character wide read as a row of
-# specks rather than as something to type into -- and they lurch wider as
-# soon as anything is typed. A floor costs a little width and makes an empty
-# table look like the thing it is.
+# No column narrower: a new table's empty cells, one character wide, read as
+# specks rather than places to type, and lurched wider at the first letter.
 MIN_COLUMN = 8
 
 
@@ -158,14 +132,10 @@ ALIGN_LEFT, ALIGN_CENTER, ALIGN_RIGHT = "left", "center", "right"
 
 
 def cell_alignments(line):
-    """Per-cell alignment, read off the padding itself.
-
-    Two or more spaces on both sides of the text is centred; two or more on
-    the left alone is right-aligned; anything else -- including an empty
-    cell -- is left. The padding is the store: no marker, no field, and a
-    row hand-typed with its text against the left pipe means exactly what
-    it looks like.
-    """
+    """Per-cell alignment, read off the padding itself: two or more spaces
+    on both sides of the text is centred, on the left alone right-aligned,
+    anything else -- an empty cell too -- left. The padding is the store, so
+    a row typed by hand means what it looks like."""
     pipes = pipe_positions(line)
     aligns = []
     for i in range(len(pipes) - 1):
@@ -247,15 +217,9 @@ def format_row(cells, widths, aligns=None):
     return CELL + CELL.join(padded) + CELL
 
 
-# Lining a table up pads every cell to its column's widest, so the padding is
-# the widest cell times the rows: one 60,000-character cell over 3,500 rows
-# made 210 million characters of a 162 KB paste (ISSUES_LOG: "Limits that held
-# at the door but not after it"). Past this many spaces a table is left
-# ragged instead: each cell keeps only the spaces its alignment needs, which
-# is all the padding says, and the drawn grid, which sizes its columns from
-# the cells, looks the same. The paste ceiling's number (MAX_PASTE_CHARS): a
-# tidy adds no more than a whole paste may bring, and a table typed by hand
-# never comes near it.
+# Padding is the widest cell times the rows; past this many spaces (the paste
+# ceiling's number) a table is left ragged, and the drawn grid looks the same.
+# ISSUES_LOG: "Limits that held at the door but not after it".
 MAX_TABLE_PADDING = 100_000
 
 
@@ -342,20 +306,12 @@ def longest_fitting(count, size_of, limit):
 
 
 def pad_ops(line, widths, aligns=None):
-    """The space edits that would line this row up, listed right to left.
-
-    Each is ``(offset, delta)``: a positive delta inserts that many spaces at
-    that offset in the line, a negative one deletes that many characters
-    there. Right to left so applying one does not move the next one's offset.
-
-    Editing the spaces rather than rewriting the line is what makes this
-    usable in a widget. Tk moves a tag along with the text around it, so
-    inserting a space beside a cell leaves the bold inside it exactly where
-    it was; replacing the whole line would take the tags with it.
-
-    *aligns* preserves each cell's stored alignment: the padding is dealt to
-    the sides the alignment asks for, which is also how it is read back.
-    """
+    """The space edits that would line this row up, right to left so one
+    does not move the next: ``(offset, delta)``, a positive delta inserting
+    that many spaces, a negative one deleting that many characters. Edits,
+    not a new line, so Tk keeps the bold inside a cell where it was.
+    *aligns* deals the padding to the sides each cell's alignment asks for,
+    which is how it is read back."""
     bounds = cell_bounds(line)
     if not bounds:
         return []
@@ -436,15 +392,9 @@ def parse_separator(line):
         align = (ALIGN_CENTER if left and right
                  else ALIGN_RIGHT if right
                  else ALIGN_LEFT if left else None)
-        # A minimum-width separator (bare "---", or ":-:" and friends —
-        # anything three characters or fewer) is markdown's conventional
-        # spelling, not an authored size: the wild writes it regardless
-        # of content, and honouring it exactly clipped the drawn column
-        # under its own text. A hand-dragged width is always wider. The
-        # alignment colons still count; only the width opinion is waived.
-        # The wild also writes "---:" and "|------|", longer than this:
-        # those are spelled at the minimum as they are pasted in
-        # (forget_widths), since only there is it known whose they are.
+        # Three characters or fewer ("---", ":-:") is markdown's usual spelling,
+        # not a size: honoured, it clipped the column under its own text. Longer
+        # pasted ones are spelled at the minimum as they come in (forget_widths).
         width = len(cell) if len(cell) > 3 else None
         columns.append({"width": width, "align": align, "hidden": False})
     return columns
@@ -488,14 +438,11 @@ def separator_index(lines):
 
 
 def merge_map(rows):
-    """Resolve merge markers into spans.
-
-    Returns ``(spans, covered)``: ``spans[(r, c)] = (rowspan, colspan)`` for
-    every anchor that spans more than one cell, and ``covered`` is the set
-    of (r, c) positions swallowed by some anchor. A marker with nothing to
-    attach to -- "<" in the first column, "^" in the first row -- is left
-    alone as ordinary content rather than guessed at.
-    """
+    """Resolve merge markers into spans: ``(spans, covered)``, with
+    ``spans[(r, c)] = (rowspan, colspan)`` for every anchor spanning more
+    than one cell, and ``covered`` the (r, c) positions some anchor swallows.
+    A marker with nothing to attach to -- "<" in the first column, "^" in
+    the first row -- is left as ordinary content rather than guessed at."""
     anchor_of = {}
     for r, row in enumerate(rows):
         for c, value in enumerate(row):
@@ -537,35 +484,23 @@ def find_blocks(text):
 
 
 def align(text):
-    """Re-pad every table in *text* so its columns line up.
-
-    Returns ``(text, shifts)``, where *shifts* is a list of
-    ``(offset, delta)`` describing where characters were added or removed --
-    the same shape ``renumber()`` returns, so ``shift_spans()`` can move the
-    formatting to match. Without that, re-padding a table would slide the
-    bold in every line after it.
-    """
+    """Re-pad every table in *text* so its columns line up. Returns ``(text,
+    shifts)``, *shifts* the ``(offset, delta)`` list of characters added or
+    removed, in ``renumber()``'s shape, for ``shift_spans()`` to move the
+    formatting: without it, the bold in every later line would slide."""
     lines = (text or "").split("\n")
     shifts = []
-    # Offsets are counted from the start of the body: the lines before each
-    # block, as earlier blocks left them, are summed once and kept running.
-    # Summed afresh for every block, 6,000 small pasted tables walked the
-    # text 6,000 times.
+    # Offsets from the body's start, the lines before each block summed once
+    # and kept running: summed afresh, 6,000 pasted tables walked it 6,000 times.
     counted = prefix = 0
     for first, block, per_row, aligns in _alignment_plans(lines):
         prefix += sum(len(line) + 1 for line in lines[counted:first])
         counted = first
         pos = prefix
         for offset, old in enumerate(block):
-            # Each edit is recorded where it actually happens, not at the end
-            # of the line. Padding goes in *between* cells, so a word in a
-            # later cell of the same row moves too -- recording it at the
-            # line end left the bold in the second cell sitting on a space,
-            # which only showed once columns had a minimum width and there
-            # was padding to speak of. The ops come right to left, each at
-            # its place in the line as it was, so the line is put together
-            # once from its pieces -- rebuilt at every op, a row of thousands
-            # of cells was copied thousands of times.
+            # Each edit recorded where it happens, between cells: at the line's
+            # end, a later cell's bold sat on a space. Right to left, the line
+            # is joined once from its pieces, not copied at every edit.
             pieces, end = [], len(old)
             for at, delta in pad_ops(old, per_row[offset],
                                      aligns[offset] if offset < len(aligns)
@@ -593,12 +528,9 @@ def _alignment_plans(lines):
         rows = [split_row(line) for line in block]
         aligns = [cell_alignments(line) for line in block]
         if sep_at is not None:
-            # The separator is mechanics, not data. Its dashes must not be
-            # treated as content when measuring -- but where a column was
-            # hand-widened, the dash count IS the wider width, and the data
-            # cells pad out to honour it. Narrower-than-content dashes are
-            # left alone: they are a display width for the drawn grid, and
-            # the text never truncates what a cell holds.
+            # The separator is not content, but a hand-widened column's dash
+            # count is its width, which the cells pad out to; narrower dashes
+            # are only the drawn grid's width, never a cut of the text.
             data_rows = [row for i, row in enumerate(rows) if i != sep_at]
             data_aligns = [a for i, a in enumerate(aligns) if i != sep_at]
             widths = layout_widths(data_rows, data_aligns)
@@ -624,20 +556,12 @@ def aligned_length(text):
 
 
 def forget_widths(text):
-    """Every table's separator in *text* without the widths its dashes spell.
-
-    For text that came from outside this app. A separator there is
-    markdown's, its dashes as many as its writer typed: "---:" and ":---:"
-    are how markdown spells an aligned column, and "|------|" one as wide
-    as its header. Read as this app's own record, each was a width set by
-    hand -- the column drawn exactly that narrow, its words cut to
-    "How…". Each cell longer than markdown's minimum is spelled at the
-    minimum instead, its colons and a hidden mark kept, so
-    parse_separator's waiver applies and the column sizes to what it holds.
-
-    Returns ``(text, shifts)`` in align()'s shape, every offset counted in
-    the text as it came, for shift_spans().
-    """
+    """Every table's separator in *text* without the widths its dashes spell,
+    for text from outside: markdown's "---:" or "|------|", read as this
+    app's record of a width set by hand, drew the column that narrow, its
+    words cut. Each cell past markdown's minimum is spelled at it, colons
+    and a hidden mark kept. Returns ``(text, shifts)`` in align()'s shape,
+    offsets counted in the text as it came."""
     lines = (text or "").split("\n")
     starts, pos = [], 0
     for line in lines:
@@ -662,14 +586,10 @@ def forget_widths(text):
 
 
 def content_text(text):
-    """*text* with the table mechanics stripped out.
-
-    Separator rows vanish, pipes and merge markers vanish, checkbox cells
-    vanish (a checkbox is a control, not a word), and the ``<br>`` marker
-    becomes the gap it draws. What remains is what the user actually
-    wrote -- the right text to count words in or search through. Prose
-    lines pass through untouched.
-    """
+    """*text* with the table mechanics stripped out: separator rows, pipes,
+    merge markers and checkbox cells (a control, not a word) go, and
+    ``<br>`` becomes the gap it draws. What remains is what the person wrote
+    -- the text to count words in or search through; prose passes untouched."""
     out = []
     for line in (text or "").split("\n"):
         if is_table_row(line):
@@ -692,27 +612,12 @@ def blank_table(rows, columns):
 
 
 def with_caret_line(body):
-    """A body ending in a table, plus the line the editor guarantees below it.
-
-    The editor ALWAYS draws a line under a trailing table — the caret needs
-    somewhere to live or writing could never continue past the table, and
-    ``_render_table_grids`` appends one on every draw. So "the note as
-    stored" and "the note as shown" disagree by that one newline unless
-    something reconciles them.
-
-    Nothing had to, while every save ran ``.strip()`` over the body: the
-    trim erased the difference (and much else the user had typed). Storing
-    the body exactly as typed made it visible, and every table-ending note
-    became permanently "unsaved" — an autosave rewrite on each note switch,
-    a dirty dot that lied, and a recurring note asking its save-scope
-    question unprompted.
-
-    The render is not the bug, so this canonicalises the other side: apply
-    it wherever a body is read out of the editor or written into a note,
-    and the stored form becomes a FIXED POINT of the render — draw it and
-    nothing changes. Idempotent, and a no-op for every body that does not
-    end in a table.
-    """
+    """A body ending in a table, plus the line the editor always draws below
+    it for the caret: applied wherever a body leaves the editor or enters a
+    note, so the stored form is a fixed point of the render. Without it, a
+    body kept as typed differed from the editor by that newline, and every
+    note ending in a table read as unsaved for good. Idempotent; a no-op
+    for every other body."""
     if not body or body.endswith("\n"):
         return body
     blocks = find_blocks(body)
@@ -722,24 +627,11 @@ def with_caret_line(body):
 
 
 def _reads_as_plumbing(line):
-    """True if a PERSON would see this line as part of a table.
-
-    Deliberately looser than :func:`is_table_row`, and the difference is
-    the whole point. That function decides what the editor will treat as
-    a row, so it is strict: both ends must be a pipe. A line whose last
-    cell was typed past -- ``| a | b | c |and then this`` -- is therefore
-    not a row, and every caller that filtered on it left the line in.
-
-    In an editor that is right: the line is what the user typed and must
-    be shown back. In a PREVIEW it is wrong, because a preview shows a
-    note's words and that line has none to show -- just punctuation. It
-    was field-reported twice from the calendar, as "I only see vertical
-    lines".
-
-    Loose, but not past the way a row is written: every cell the app
-    writes opens with a pipe and a space. A line of maths does not --
-    "|x| = 5" stayed words, where a card had claimed a table for it.
-    """
+    """True if a PERSON would see this line as part of a table: looser than
+    :func:`is_table_row`, which the editor needs strict (a pipe at both
+    ends), so a row typed past -- ``| a | b |and then this`` -- is not shown
+    in a preview as a line of pipes. Not past how a row is written: every
+    cell opens with a pipe and a space, so "|x| = 5" stays words."""
     stripped = (line or "").strip()
     if is_table_row(stripped):
         return True
@@ -748,19 +640,11 @@ def _reads_as_plumbing(line):
 
 
 def preview_text(body):
-    """A note's words, without its tables, and how many it had.
-
-    Returns ``(prose, tables)``. Both halves come from the same pass on
-    purpose: a preview says what a note CARRIES rather than drawing it,
-    so the sentence "this note has 2 tables" and the text beside it have
-    to be answering about the same lines. Counting with one rule and
-    stripping with another is how a preview came to announce five tables
-    and then show a sixth as pipes.
-
-    A run of consecutive table lines counts as one table, the way
-    :func:`find_blocks` counts, and the blank line a table leaves behind
-    is collapsed so the prose does not float in a gap.
-    """
+    """A note's words, without its tables, and how many it had: ``(prose,
+    tables)`` from one pass, so "2 tables" and the text beside it answer
+    about the same lines (two rules once announced five and showed a sixth
+    as pipes). A run of table lines is one table, as :func:`find_blocks`
+    counts, and the blank line a table leaves is collapsed."""
     lines = (body or "").split("\n")
     kept, tables, inside = [], 0, False
     for line in lines:
