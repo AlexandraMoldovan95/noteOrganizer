@@ -5052,15 +5052,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return True
 
     def _selection_ends_off_tables(self):
-        """A selection end left on a drawn table's hidden text, with the
-        caret elsewhere, goes to the table's edge facing the other end.
-
-        A mouse press beside a drawn table, right of the grid, lands on the
-        end of its last row's hidden text. Dragged down, the selection began
-        inside that row, and the next key glued the row onto the paragraph
-        under it ("| Tea | 2 |er") -- out of the table. Dragged up, it took
-        the whole table in, unasked. The caret guard looked only at the end
-        the drag finished on."""
+        """A selection end left on a drawn table's hidden text, the caret
+        elsewhere, goes to the table's edge facing the other end: a press
+        right of a grid lands in its last row, and the next key glued the
+        row onto the paragraph under it ("| Tea | 2 |er")."""
         b = self.body_text
         for info in getattr(self, "_table_grids", []):
             first = self._grid_first_line(info)
@@ -5072,11 +5067,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 return
             top = f"{first}.0"
             below = b.index(f"{first + info['nrows']}.0")
-            # A start exactly at the table's top is its edge, not a point on
-            # it: Ctrl+A in a note that begins with a table starts there,
-            # and read as "on the table" it was cut down to what follows.
-            # An END at the top is on it -- that end holds the line break
-            # above the table, the shape a first press is stopped from.
+            # A start at the table's top is its edge (Ctrl+A in a note opening
+            # with a table was cut short); an END there is on it, holding the
+            # line break above.
             start_on = (b.compare(top, "<", start)
                         and b.compare(start, "<", below))
             end_on = (b.compare(top, "<=", end)
@@ -5112,20 +5105,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return None
 
     def _caret_out_of_hidden(self, _event=None):
-        """Keep the caret off a rendered table's lines entirely.
-
-        The hidden pipe text, and the window line's visible edges left and
-        right of the drawn table, are all places where typing would either
-        edit characters nobody can see or land text floating beside the
-        grid. The caret is walked to the line under the table instead, so
-        writing always continues from the start of a real row.
-
-        On a key press it also holds the table's edges against Tk's own
-        line-joining keys, which reach no handler of their own: Ctrl+H
-        deletes backwards as BackSpace does, and Ctrl+K at the end of a
-        line deletes its line break -- at a drawn table's edge either one
-        pulled a table row onto the prose beside it. Delete and BackSpace
-        ask the same question in their own handlers.
+        """Keep the caret off a drawn table's lines entirely -- there, typing
+        edits hidden text or floats beside the grid -- walking it to the line
+        under the table. On a key press it also holds the edges against Tk's
+        own line-joining Ctrl+H and Ctrl+K, which pulled a row onto the
+        prose; Delete and BackSpace ask in their own handlers.
         """
         b = self.body_text
         try:
@@ -5145,19 +5129,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     except tk.TclError:
                         pass
                 break
-        # Every time, not only when the caret is off the tables: a drag from
-        # beside one table to beside another put the caret's end at the
-        # second table's edge and left the start on the first one's hidden
-        # text, so Delete or a paste -- which run no guard of their own --
-        # glued a row or merged the two tables.
+        # Every time: a drag between two tables left its start on the first's
+        # hidden text, and Delete or a paste merged them.
         self._selection_ends_off_tables()
         if met:
-            # The caret never rests on a drawn table: it was where this left
-            # it. _align_table_on_leaving, which runs first, had noted the
-            # table's line Tk moved it to, and the next key's release "left"
-            # that table and padded it -- an edit of its own, outside that
-            # key's undo unit: after a first Shift+Down stopped at a table, a
-            # letter or a Delete over the selection took two Ctrl+Z.
+            # The caret was where this left it, not on the table: noted there,
+            # the next key "left" the table and padded it outside its undo unit
+            # -- two Ctrl+Z for one letter.
             try:
                 self._last_caret_line = int(b.index("insert").split(".")[0])
             except (tk.TclError, ValueError):
@@ -5186,15 +5164,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                             True, selection_wins=False))):
                 return "break"
             if keysym == "t":
-                # Tk's Ctrl+T swaps the two characters around the caret
-                # (the two before it at a line's end). At a table's edge
-                # one of them is the table's line break, which moves: the
-                # last row became "| Eggs | 12 |r" and dropped out of the
-                # grid. A swap removes no line, so the empty-line leniency
-                # of _deletion_joins_table does not apply: any character
-                # the edge holds stops it. (Under Caps Lock alone the keysym
-                # is "T", which no Tk binding answers; with Shift as well
-                # it is "t" again and lands here.)
+                # Tk's Ctrl+T swaps the characters around the caret: at a
+                # table's edge one is its line break ("| Eggs | 12 |r"). Any
+                # character the edge holds stops it, empty line or not.
                 at = "insert" if at_line_end else "insert+1c"
                 try:
                     pair = (b.index(f"{at}-2c"), b.index(f"{at}-1c"))
@@ -5205,24 +5177,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return None
 
     def _deletion_joins_table(self, forward, selection_wins=True):
-        """Would a one-character deletion at the caret break a drawn table?
-
-        True when the character it takes is the line break just above a
-        drawn table, the one just below it, or anything in between. Tk's
-        own Delete and BackSpace glued the neighbouring line onto the
-        table's first or last row -- the row then read as prose, fell out
-        of the grid and was saved that way. The same boundary the caret
-        guard keeps: the table is one block, and the keys stop at its
-        edge. *selection_wins* mirrors Tk's rule for Delete and
-        BackSpace: with the caret inside a selection they delete the
-        selection instead, which is not a question about the edge.
-
-        Except where the caret's own line is EMPTY: taking its line break
-        removes that line and glues nothing onto a row (Delete on the
-        empty line above a table, BackSpace on the one below), so it goes
-        -- unless the line beyond it is a table row, which would merge two
-        tables into one block, or there is no line beyond it, which is the
-        writable line the renderer keeps under a note-ending table.
+        """Would a one-character deletion at the caret break a drawn table --
+        take its edge (the line breaks above and below, or anything between),
+        gluing a line onto a row? An EMPTY line of the caret's own may go,
+        unless that merges two tables or takes the line kept under a
+        note-ending table. *selection_wins*: a caret inside a selection
+        deletes the selection instead, as Tk does.
         """
         b = self.body_text
         try:
@@ -5318,20 +5278,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _grid_replace_block(self, first, old_nrows, rows, aligns=None,
                             sep_cols=None, source=None, extra=None):
-        """Wholesale rewrite for the structural ops that reshape columns.
-
-        The text is rewritten whole, but no cell the operation did not
-        touch may change: each cell's styles are read off the old block
-        first and laid back on the cell they belong to afterwards. It used
-        to be "the accepted cost of reshaping" -- and the same rewrite
-        served clearing one cell with Delete, dropping one checkbox and
-        deleting one row, so a bold word anywhere in the table died for an
-        edit three cells away. *source* maps a new (row, column) to the
-        old one it came from, for the ops that move cells (an inserted or
-        deleted row or column, copies appended at an edge); the identity
-        otherwise. See _grid_lay_cell_styles for what a changed cell keeps.
-        *extra* gives styles for new cells that came from elsewhere -- cells
-        pasted in from our own copy -- keyed by their new (row, column).
+        """Wholesale rewrite for the ops that reshape a table, no cell they
+        did not touch changing: styles read off first and laid back (a bold
+        word died for an edit three cells away). *source* maps a new (row,
+        column) to its old one for ops that move cells; *extra* gives cells
+        pasted from our own copy their styles. See _grid_lay_cell_styles.
         """
         b = self.body_text
         # The rewrite deletes the tagged text, and the table's position on
@@ -5351,19 +5302,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 b.tag_add(f"align_{table_align}", f"{n}.0", f"{n}.end")
 
     def _grid_read_cell_styles(self, first, nrows):
-        """Every data cell's styles, read off the block's tags before a
-        rewrite deletes them: ``{(row, col): {"value", "runs", "pad_bg",
-        "paint_bg"}}``.
-
-        *runs* are the character-format tags on the cell's text, as
-        ``(tag, start, end)`` in the value's own characters. *pad_bg* is a
-        CELL-level highlight -- one reaching into the padding, where the
-        table's highlight action puts it. *paint_bg* is the colour the
-        drawing washes the whole cell with (the highlight on its first
-        character, or on its padding when empty; see _grid_cell_paint),
-        which is what a person sees as "a coloured cell". Read range by
-        range, not character by character: a table of hundreds of cells
-        is a few dozen Tk calls this way.
+        """Every data cell's styles, read before a rewrite deletes them:
+        ``{(row, col): {"value", "runs", "pad_bg", "paint_bg"}}`` -- *runs*
+        its text's format tags as ``(tag, start, end)``, *pad_bg* a
+        CELL-level highlight, *paint_bg* the colour the drawing washes it
+        with (_grid_cell_paint). Read range by range: a few dozen Tk calls.
         """
         b = self.body_text
         block = [b.get(f"{n}.0", f"{n}.end")
@@ -5424,20 +5367,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _grid_lay_cell_styles(self, first, lines, carried, source=None):
         """Lay the styles _grid_read_cell_styles read back on the cells of
-        the freshly written *lines*.
-
-        A cell whose text is exactly what it was gets every style back,
-        where it was on that text, and its cell-level highlight over its
-        new padding. A cell the operation CHANGED keeps only the colour it
-        was drawn with, over the whole cell: its character styles
-        described text that is no longer there, while a coloured cell is
-        still the same cell (a dropped checkbox or a cleared cell keeps
-        its colour, as the fill always promised).
-
-        A merge's cell is the exception: *source* gives it as
-        ``(anchor, joined)``, the cells whose text it holds in reading
-        order, and while it reads exactly as their texts joined by a space
-        each piece's styles go back on that piece, where it now sits.
+        the freshly written *lines*: an unchanged cell gets all of them; one
+        the operation CHANGED keeps only its colour, over the whole cell. A
+        merge's cell, given as ``(anchor, joined)``, gives each piece's
+        styles back while it reads as their texts joined by a space.
         """
         b = self.body_text
         sep_at = core_tables.separator_index(lines)
@@ -5499,10 +5432,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         rows, _aligns, _sep, sep_at = self._grid_block_parts(first, nrows)
         data_off = [i for i in range(nrows) if i != sep_at]
         if sep_at is not None and at < sep_at:
-            # Insert row above, asked on the header, goes under it: above,
-            # the separator moves to the third line, where it is no longer
-            # one (separator_index) -- the header becomes data and the
-            # dashes, with the widths they hold, a row of content.
+            # Insert row above, on the header, goes under it: above, the
+            # separator moves to the third line, where it is no separator.
             at = sep_at
         blank = core_tables.blank_table(1, ncols)[0]
         if at >= len(data_off):
@@ -5651,13 +5582,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             sep_cols = [{"width": width, "align": None, "hidden": False}
                         for width in widths]
         mutate(sep_cols, rows, aligns)
-        # These ops change ONLY the separator's story (widths, hidden
-        # flags) -- no data row's text moves. The wholesale
-        # _grid_replace_block this used to go through re-formatted every
-        # row, and every character style in the table died for a column
-        # drag that touched none of them (field-tested: colour a cell,
-        # resize a column, colour gone). Writing just the separator line
-        # leaves every tag exactly where it is.
+        # These change ONLY the separator line, written alone: rewritten whole,
+        # a column drag took every style (colour a cell, resize, colour gone).
         self._grid_write_separator(first, rows, sep_cols, sep_at)
         self._grid_after_op(first)
 
@@ -5701,11 +5627,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _grid_set_col_width(self, info, c, width):
         def mutate(sep_cols, rows, aligns):
             if c < len(sep_cols):
-                # Floor 4, not 1: parse_separator reads a <=3-char cell as
-                # markdown's conventional "no width opinion", so an
-                # authored 2-3 wrote "---" and came straight back as
-                # unclamped — the narrowest a hand-set column can be is
-                # the narrowest width that still round-trips as authored.
+                # Floor 4: three dashes read as "no width opinion", so 4 is
+                # the narrowest hand-set width that round-trips.
                 sep_cols[c]["width"] = max(4, int(width))
                 sep_cols[c]["hidden"] = False
         self._grid_column_mechanics(info, mutate)
