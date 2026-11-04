@@ -2571,13 +2571,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return getattr(self, "_body_base_size", 0)
 
     def _paragraph_tag(self, text_widget, kind, indent):
-        """The margin tag for this combination of properties, made on demand.
-
-        There is one tag per combination rather than one per property,
-        because they all set the same two Tk options -- lmargin1 and
-        lmargin2 -- and a widget applies only the winning tag's value for an
-        option. Building them lazily is the same pattern the colour tags
-        use: the app cannot know which combinations a note will want.
+        """The margin tag for this combination of properties, made on demand:
+        one per combination, as they all set lmargin1 and lmargin2 and only
+        the winning tag's value applies; lazily, as the colour tags are.
         """
         name = f"para_{kind or 'plain'}_{indent}"
         if name not in self._paragraph_tags:
@@ -2607,24 +2603,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     @_undo_atom
     def _align_table_block(self, line_no):
-        """Line the columns of one table up again.
-
-        Only the spaces are touched, never the whole line: Tk carries a tag
-        along with the text around it, so a space inserted beside a cell
-        leaves the bold inside it where it was, while rewriting the line
-        would take its tags with it.
-
-        The caret is not put back by index. Tk already moves the insert mark
-        along with the text around it, which keeps it beside the character it
-        was beside; setting it back to the index it had before would drag it
-        to a column that now holds something else -- measured, with the caret
-        just after "Z" in a widened row, it landed nineteen characters early.
-
-        What it does need is gravity. Padding is added at the end of a cell's
-        text, which is exactly where a caret sits after typing there, and a
-        mark's default gravity puts it to the *right* of text inserted at it
-        -- so the caret drifted past the new spaces to the far side of the
-        cell. Left gravity keeps it against the word it was against.
+        """Line the columns of one table up again, touching only spaces, so
+        the cells keep their tags. The caret is left to Tk's insert mark,
+        not put back by index (it landed nineteen characters early), with
+        left gravity: padding goes where a caret sits after typing, and the
+        default gravity drifted it past the new spaces.
         """
         block = self._table_block_at(line_no)
         if not block:
@@ -2703,31 +2686,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # An edit, made on a click as well as on a key's release.
             self._schedule_autosave()
 
-    # ---------- Tables drawn as real grids ----------
-    #
-    # The pipe text stays the stored form and the single source of truth;
-    # the grid is only how a table is shown and edited. Search, share codes,
-    # export, word counts and save never know the grid exists, because the
-    # text they read is the text the grid writes back into. The spike that
-    # cleared this approach also measured the one hazard: _char_offset counts
-    # with "chars", which skips embedded windows, so formatting offsets are
-    # safe -- but Tk *index* columns on the window's own line shift by one,
-    # which is what _col_base is for.
+    # ---------- Tables drawn as real grids: the pipe text stays the one stored
+    # truth, which everything else reads. A grid's window shifts Tk's index
+    # columns on its line by one (_col_base); offsets skip it ----------
 
     TABLE_HIDE_TAG = "table_hidden"
 
     def _grid_first_line(self, info):
-        """The 1-based line a grid currently starts on, or None if gone.
-
-        Read from a mark rather than remembered as a number: text edited
-        above the table moves it, and a mark moves with it.
-
-        Liveness first: a full-range delete (New note, typing over a
-        Ctrl+A selection) destroys the embedded windows WITHOUT a
-        teardown, and Tk marks survive that delete — collapsed to 1.0.
-        Answering for such a dead grid made _caret_out_of_hidden walk the
-        caret of a fresh note to its end on the next keystroke, and
-        shifted line-1 column math by a phantom window character.
+        """The 1-based line a grid starts on, read from a mark that moves with
+        the text, or None if gone -- asked alive first: a full delete kills
+        the windows and leaves the marks at 1.0, and a dead grid walked a
+        fresh note's caret to its end.
         """
         try:
             if not info["frame"].winfo_exists():
@@ -2747,14 +2716,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return 1 if self._grid_at_line(line_no) is not None else 0
 
     def _teardown_table_grids(self):
-        """Take every drawn table down to its text (_remove_grid_windows).
-
-        Inside an undo unit, the edits recorded so far were made with the
-        grids up and those that follow will be made with them down -- and
-        Tk records each edit by its index, while a drawn table's first line
-        holds the grid's window at column 0. So the unit is told first
-        (_undo_atom_grids_coming_down), with Tk still recording: a
-        separator inserted once the recording is off would be ignored."""
+        """Take every drawn table down to its text (_remove_grid_windows),
+        telling an open undo unit first (_undo_atom_grids_coming_down), while
+        Tk still records: its edits are by index, and a grid's window holds
+        column 0 of its line."""
         if (getattr(self, "_table_grids", None)
                 and getattr(self, "_undo_atom_depth", 0) > 0):
             self._undo_atom_grids_coming_down()
@@ -2763,22 +2728,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     @_undo_hidden
     def _remove_grid_windows(self):
         for info in getattr(self, "_table_grids", []):
-            # Deleting the window's character is what actually removes it
-            # from the text. Destroying the widget alone leaves the slot
-            # behind as a phantom index that still shifts every column on
-            # its line -- one more per re-render, which is how "a/b" once
-            # became " |a/be" as the edits landed a column further left
-            # each time.
+            # The window's character deleted, or a phantom index shifted its
+            # line one more each redraw ("a/b" became " |a/be").
             try:
                 self.body_text.delete(self.body_text.index(info["frame"]))
             except tk.TclError:
                 pass
-            # Deleting the character destroys the widget inside Tk, but
-            # not tkinter's record of it: the callbacks each draw binds on
-            # the grid stayed registered as Tcl commands, and the frame
-            # stayed among the body's children with every cell it held --
-            # ten commands more at every redraw, for as long as the app
-            # ran. tkinter's destroy() lets both go.
+            # ...and tkinter's destroy() too: Tk's alone kept the callbacks as
+            # Tcl commands, ten more at every redraw.
             try:
                 info["frame"].destroy()
             except tk.TclError:
@@ -2797,14 +2754,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pass
 
     def _add_line_under_last_table(self):
-        """The line under the note's last table, which the caret guard needs
-        to put the caret under it. It is the drawing's, and Tk never records
-        it (the drawing is _undo_hidden), so the app holds it instead: while
-        the text has not changed since, undo counts the note without it and
-        the next Ctrl+Z or Ctrl+Y takes it out before Tk replays a step
-        (_undo_tail_held). Tk's modified flag is what says the text changed
-        -- every insert and delete sets it, recorded or not, and nothing
-        else in the app reads it."""
+        """The line under the note's last table, for the caret guard: the
+        drawing's, unrecorded by Tk, so the app holds it -- while the text is
+        unchanged (Tk's modified flag), undo counts the note without it and
+        takes it out before Tk replays a step (_undo_tail_held)."""
         b = self.body_text
         # A line held before this one is settled first: a second line can
         # only be needed once the text has changed under the first.
@@ -2819,14 +2772,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._undo_tail = None
 
     def _undo_tail_held(self):
-        """Whether the note's last line is still the one the drawing put
-        under its last table, with not a character changed since.
-
-        A letter typed on that line and erased again leaves the same text,
-        but Tk has steps on the line now: taken out, Tk replayed them on a
-        line that was gone and the word landed on the table's last row. So
-        the moment anything changes the text, the line is the note's for
-        good (_settle_undo_tail), and this answers False."""
+        """Whether the note's last line is still the drawing's, with not a
+        character changed since: once anything changes, it is the note's for
+        good (_settle_undo_tail) -- taken out, Tk replayed a typed letter's
+        steps onto the table's last row."""
         if getattr(self, "_undo_tail", None) is None:
             return False
         try:
@@ -2839,15 +2788,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return True
 
     def _settle_undo_tail(self):
-        """The line the drawing put under the last table stays in the note
-        for good: every state undo noted before now gets it at its end.
-
-        Tk never recorded the line, so it is still there when Tk walks back
-        past where it was made, at the end of every older text. A state's
-        text is not kept, so its signature cannot be worked out again with
-        the line; it counts one more line break at its end instead
-        (_undo_sig_is). The snapshots of a unit or a run of deletes still
-        open are counted too: the edit that settles the line is theirs."""
+        """The line the drawing put under the last table stays for good:
+        every state undo noted gets it at its end, counted as one more line
+        break (_undo_sig_is), as Tk walking back leaves the unrecorded line
+        there -- open units' and delete runs' snapshots too."""
         self._undo_tail = None
 
         def counted(state):
@@ -2889,35 +2833,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     @_undo_hidden
     def _render_table_grids(self, keep_typed=None):
-        """Draw every table in the note as a grid of real cells.
-
-        Torn down and rebuilt whole: a grid is cheap to make, and tracking
-        which of them an arbitrary edit invalidated is not. Never called
-        while focus is in a cell -- rebuilding would destroy the widget
-        being typed into -- which the call sites guarantee: they all run
-        with focus in the text or on a toolbar control.
-
-        *keep_typed*: a line of a table still being typed, which a paste
-        left the caret on (_tidy_table_paste_left), or the caret's own row
-        when a redraw is no edit of the person's (_row_being_typed). That
-        table stays text, as after a letter typed there, until the caret
-        leaves it. Drawn, it took the line the caret was on, and the caret
-        guard put the caret under the table: the next letter typed went
-        there.
+        """Draw every table in the note as a grid of real cells, rebuilt
+        whole -- never with focus in a cell, which the callers see to.
+        *keep_typed*: a table line still being typed (a paste left the caret
+        there, or the caret's row in a redraw that is no edit) stays text
+        until the caret leaves; drawn, the next letter went under it.
         """
         if not hasattr(self, "body_text"):
             return
-        # Tearing the grids down shrinks the editor page for a moment, and
-        # the page's own keep-short-content-at-top handler read that as a
-        # short note and snapped the scroll to the top -- on every insert,
-        # and on every commit that re-rendered. The handlers run from the
-        # event queue, so the view is restored after them, not merely after
-        # this function.
-        # A menu operation tears the grids down BEFORE this runs, and
-        # deleting the window characters shifts body_text's scroll on the
-        # spot -- capturing here was too late, and the restore faithfully
-        # pinned the already-jumped view. The op context captures first and
-        # leaves its snapshot for this render to honour.
+        # Torn down, the page reads as short and snapped to the top: the view
+        # is restored after the queue's handlers. A menu operation tears down
+        # first and leaves its own snapshot, taken before the jump.
         saved = getattr(self, "_grid_saved_view", None)
         self._grid_saved_view = None
         explicit_capture = saved is not None
@@ -2972,10 +2898,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     info["canvas"].xview_moveto(restore_x[line])
                 except tk.TclError:
                     pass
-        # Both restores wait for the queue: the fresh windows are not yet
-        # mapped here, the Text estimates their heights wrong, and a
-        # fraction restored against those estimates lands somewhere else
-        # once geometry settles -- measured drifting 0.316 to 0.164.
+        # Both wait for the queue: unmapped, the windows' heights are guessed,
+        # and a fraction restored drifted 0.316 to 0.164.
         if restore_body is not None or restore_view is not None:
             self.after_idle(lambda page=restore_view, body=restore_body,
                             expl=explicit_capture:
