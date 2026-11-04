@@ -1,32 +1,13 @@
-"""In-app dialogs, dropdowns and popups.
+"""In-app dialogs, dropdowns and popups: everything the app puts *over*
+itself, drawn from scratch -- the system's own dialogs only choose files
+and report a start that failed. Grouped by the call graph (60% of these
+methods' calls are to each other), and the most called code in the app, so
+one place decides how an overlay looks and where it goes.
 
-WHAT THIS IS FOR
-----------------
-Everything the app puts *over* itself: the message and confirmation
-dialogs, the themed dropdowns, and the small floating popups. No native
-OS dialog appears anywhere in the app except the last-resort startup
-crash box, so all of this is drawn from scratch.
-
-WHY THESE BELONG TOGETHER
--------------------------
-This group was chosen from the call graph rather than from a heading:
-roughly 60% of the calls these methods make are to each other, which is
-the highest of any group in the class. They are also the most *called*
-code in the app -- show_info alone has eleven callers -- so having one
-place that decides how an overlay looks and where it goes matters more
-here than almost anywhere else.
-
-THE POSITIONING RULE WORTH KNOWING
-----------------------------------
-:meth:`_place_dropdown_popup` measures against the app window's own
-bounds, never the screen's. Measuring against the screen looks equivalent
-until someone has two monitors, at which point a popup can open on a
-display the app is not on. Every popup goes through this one function for
-that reason -- see ``docs/ISSUES_LOG.md``, "The dropdown that opened on
-the wrong monitor".
-
-See :mod:`noteorganizer.ui` for what a mixin is and the two rules that
-keep them working.
+:meth:`_place_dropdown_popup` measures against the app window, never the
+screen, or a popup opened on another monitor (ISSUES_LOG: "The dropdown
+that opened on the wrong monitor"). What a mixin is, and the two rules that
+keep them working: :mod:`noteorganizer.ui`.
 """
 
 import time
@@ -102,29 +83,21 @@ def _natural_height(widget):
 
 
 class RowStack:
-    """A scrolled list's rows, built into chunk frames of a few rows each
-    that the stack places on *canvas* itself. One frame holding them all
-    stopped scrolling at about 32,767 px: Tk keeps a canvas window's place,
-    and X a window's, in 16 bits (ISSUES_LOG: "The list that ended in the
-    middle"). A chunk in the view stands at its true place, every other one
-    parked out of sight beside it -- placed, never unmapped, so Tab reaches
-    it."""
+    """A scrolled list's rows, in chunk frames of a few rows that the stack
+    places on *canvas* itself: one frame for all stopped at 32,767 px, as
+    places are kept in 16 bits (ISSUES_LOG: "The list that ended in the
+    middle"). A chunk in view stands at its true place, every other parked
+    beside it -- placed, never unmapped, so Tab reaches it."""
 
-    # Where a chunk out of sight is parked: this far left of the view and
-    # this far above it. Beside the view it never reaches it, whatever its
-    # height: parked only above, a chunk taller than this hung down over the
-    # rows in sight. And inside 16 bits: X keeps a window's place in its
-    # parent in 16 bits, and Windows its place on the screen (parked 32,000
-    # px below, a row was pinned at 32,767 inside its chunk).
+    # A chunk out of sight is parked this far left of the view and above it:
+    # only above, a tall one hung over the rows in sight; and inside 16 bits,
+    # where X and Windows keep a window's place.
     PARK = 20_000
     # Rows to a chunk unless a list says otherwise...
     EVERY = 8
-    # ...and no row more once a chunk is this tall, by its rows' heights as
-    # they stand (_RowGroup.height): a chunk in the view stands at its true
-    # place, which X and Windows draw only inside 16 bits, and four checklist
-    # items of 100 lines, or of 2,000 wide letters, stood up to 42,656 px at
-    # 300%. Rows that grow after they were chunked -- a narrower window wraps
-    # them again -- have their block chunked again (_RowGroup.too_tall).
+    # ...and no row more once a chunk is this tall (_RowGroup.height): four
+    # long checklist items stood 42,656 px at 300%. Rows that grow later are
+    # chunked again (_RowGroup.too_tall).
     TALLEST = 4_000
     # The farthest from its parent's corner X keeps a window's place, in 16
     # bits; Windows pins a row there. No chunk is placed past it.
@@ -510,31 +483,18 @@ class DialogsMixin:
 
     def _themed_dialog(self, title, message, kind="info", buttons=None,
                        default=None):
-        """A modal, in-theme replacement for tkinter's messagebox. Renders as an
-        overlay INSIDE the app window (not a separate OS window), so it can't be
-        dragged off-screen and moves/minimizes with the app. Blocks until the
-        user picks a button, then returns that button's value.
-
-        `default` is the LABEL (case-insensitive) of the button that should
-        take keyboard focus, i.e. the one Enter triggers. Without it the
-        last (primary) button is focused — which is wrong for a
-        destructive confirm, where Enter would fire "Yes": pass
-        default="No" so a reflexive Enter is safe. Escape still returns
-        the first button's value (the safe/cancel choice) regardless.
-
-        Both keys answer only the innermost question when one is asked
-        over another, and Enter takes the button holding the keyboard --
-        the default, unless the person moved it (Tab)."""
+        """A modal, in-theme messagebox drawn INSIDE the app window, moving
+        with it; blocks until a button is picked and returns its value.
+        `default` is the label of the button holding the keyboard (else the
+        last): pass "No" for a destructive question. Enter presses the
+        button holding the keyboard, Escape answers the first (the safe
+        one) -- both only for the innermost question."""
         if buttons is None:
             buttons = [("OK", True)]
         focus_index = self._dialog_focus_index(buttons, default)
-        # Where the keyboard was, so it goes back there when the question
-        # is answered. The dialog takes the focus onto its own button and
-        # is then destroyed, and Tk handed the keyboard to the bare window:
-        # someone typing a note, interrupted by a question, answered it and
-        # kept typing into nothing until they clicked back in. focus_get()
-        # answers None while another program holds the desktop foreground
-        # (qa/README), so the window's own record is the fallback.
+        # Where the keyboard was, for it to go back once answered -- typing
+        # went into nothing after a question. focus_get() is None while
+        # another program is in front, so the window's record backs it up.
         returns_to = None
         try:
             returns_to = self.focus_get()
@@ -547,10 +507,8 @@ class DialogsMixin:
             except (KeyError, tk.TclError):
                 returns_to = None
 
-        # The overlay lives INSIDE the main window, and a -topmost
-        # popup floats above that -- so a question ABOUT the popup (save
-        # your changes?) rendered underneath it, unreachable. The popups
-        # step back for the dialog's duration and return after.
+        # A -topmost popup floats over the window, and a question about it
+        # sat underneath: the popups step back while it asks.
         stepped_back = self._popups_step_back()
         icon = {"info": "ℹ", "warning": "⚠", "error": "⛔",
                 "question": "❓", "success": "✅"}.get(kind, "ℹ")
@@ -560,25 +518,16 @@ class DialogsMixin:
         result = {"value": None, "answered": False}
         done = tk.IntVar(value=0)
 
-        # A thin transparent-ish "click catcher" that keeps the background
-        # VISIBLE but swallows clicks/keys so the app underneath can't be used
-        # while the dialog is open. It's a 1x1-anchored full-size frame drawn
-        # only where the card isn't — but since tk frames are opaque, we instead
-        # place the card directly and block interaction via an event grab on a
-        # tiny transparent overlay strip. Simpler and flicker-free: place the
-        # card over the window (background stays visible) and intercept clicks
-        # through a global binding while the dialog is up.
+        # The card is placed over the window, the app still VISIBLE under it;
+        # a grab keeps the clicks for the dialog (below).
         border = tk.Frame(self, bg=accent, highlightthickness=0)
         border.place(relx=0.5, rely=0.42, anchor="center")
         card = tk.Frame(border, bg=self.colors["card"])
         card.pack(padx=2, pady=2, fill="both", expand=True)
 
-        # The answers first, against the bottom. When the card is given less
-        # height than it asks for, pack takes the shortfall from what was
-        # packed LAST -- the message, which then scrolls (fit, below) -- so
-        # no length of message can push a button out of the window. A
-        # startup notice joining four messages drew its only button below a
-        # 600px window, with the X refused while it asked.
+        # The answers first, against the bottom: short of height, pack takes
+        # it from the message, packed last, which scrolls -- four startup
+        # messages drew the one button below a 600px window.
         btn_row = tk.Frame(card, bg=self.colors["card"])
         btn_row.pack(side="bottom", fill="x", padx=20, pady=(0, 16))
 
@@ -658,12 +607,9 @@ class DialogsMixin:
             if i == focus_index:
                 b.focus_set()
 
-        # Tab walks the question's own answers and comes back round, as a
-        # Windows message box does. The grab holds the pointer only, and
-        # Tab walked on out of the card: into the note under the question,
-        # where typing landed, and onto the note list, whose Shift+F10 menu
-        # holds Delete. The order is the one Tab always took. Shift+Tab is
-        # <<PrevWindow>> too: on X11 it arrives as ISO_Left_Tab.
+        # Tab walks the answers round, as a Windows message box does: the grab
+        # holds the pointer only, and Tab walked into the note under it.
+        # Shift+Tab is <<PrevWindow>> too (X11's ISO_Left_Tab).
         def cycle(button, step):
             i = dialog_buttons.index(button)
             dialog_buttons[(i + step) % len(dialog_buttons)].focus_set()
@@ -690,15 +636,9 @@ class DialogsMixin:
                 choose(safe_val)
 
         def enter(event):
-            # The docstring above and ARCHITECTURE always said Enter takes
-            # the default, and it did nothing at all: a tk.Button answers
-            # Space and the mouse, and nothing bound Return. The button
-            # holding the keyboard is what Enter presses. A key typed into
-            # some other field (Tab stays in the card now, but a timer can
-            # still move the keyboard) is that field's own business. Asked
-            # first, for every press: Enter held on what opened the question
-            # answered it, and the next repeat asked it again
-            # (_enter_repeats).
+            # Enter presses the button holding the keyboard -- a tk.Button
+            # answers only Space. Pressed, not held: held, it answered the
+            # question and asked it again (_enter_repeats).
             held = self._enter_repeats(event)
             if held or not innermost():
                 return
@@ -711,20 +651,14 @@ class DialogsMixin:
         esc_bind = self.bind("<Escape>", escape, add="+")
         enter_binds = [(seq, self.bind(seq, enter, add="+"))
                        for seq in ("<Return>", "<KP_Enter>")]
-        # No wait may outlive its window. Closing the app under a question
-        # destroyed the window while this still waited for `done`, which
-        # nothing would ever set again: the process lived on with no
-        # window, holding the notebook lock, and every later launch was
-        # refused as "already open". on_app_close refuses the close while
-        # a question asks; this is the net under every other route.
+        # No wait outlives its window: closed under a question, the process
+        # lived on windowless, holding the lock, and every launch was refused.
+        # on_app_close refuses that close; this is the net under the rest.
         border.bind("<Destroy>", lambda e: choose(safe_val), add="+")
 
-        # The card inside the window, its answers on screen, whatever the
-        # message's length and the window's size: placed at 0.42 of the
-        # height as it always was when it fits; otherwise the message's
-        # viewport gives way, and a row of buttons wider than the window
-        # stands one under another. Asked again when the window is resized
-        # while the question waits.
+        # The card inside the window, its answers on screen: at 0.42 of the
+        # height when it fits, else the message gives way and wide buttons
+        # stack. Asked again at every resize while it waits.
         margin = 12
         layout = {"natural_w": None, "stacked": False, "job": None,
                   "size": None}
@@ -805,22 +739,16 @@ class DialogsMixin:
         fit()
         self._bind_window_for_popup(border, "<Configure>", refit_later)
 
-        # Modal, but the background stays fully visible (we don't cover it). A
-        # local grab on the dialog frame routes input to the dialog only; because
-        # this is an ordinary in-window Frame (not a borderless Toplevel), the
-        # grab is safe and won't freeze the app.
+        # A local grab on an in-window Frame (not a borderless Toplevel, which
+        # could freeze the app) routes input to the dialog only.
         self.update_idletasks()
         try:
             border.grab_set()
         except tk.TclError:
             pass
-        # While this waits for an answer, the app's global shortcuts stand
-        # still (_a_dialog_is_asking). A grab confines the POINTER only;
-        # keys bound with bind_all still ran underneath -- Ctrl+S twice
-        # stacked the same question on itself, and Ctrl+N under the
-        # repeating-day question cleared the editor so the answer wrote
-        # the edit under a day of None. Raised here, right beside the
-        # finally that lowers it, so no failure can leave it raised.
+        # The global shortcuts stand still while it waits (_a_dialog_is_asking):
+        # under a grab, Ctrl+N cleared the editor the answer wrote into.
+        # Raised beside the finally that lowers it.
         self._modal_depth = getattr(self, "_modal_depth", 0) + 1
         # Innermost last: what the keys answer, and what a close of the
         # window brings to the front (_bring_question_forward).
@@ -838,12 +766,9 @@ class DialogsMixin:
                 border.grab_release()
             except tk.TclError:
                 pass
-            # Tk has ONE grab. A question asked inside this one's wait -- a
-            # timer's "Export complete" over a waiting "Move to trash?" --
-            # took it, and its release above left none: the question still
-            # on screen, and the app under it taking clicks (a note ticked
-            # there was removed with no Trash copy). The question asked
-            # before it, still waiting, gets the grab back.
+            # Tk has ONE grab: a question asked inside this wait took it, and
+            # its release left none, the app under a question taking clicks.
+            # The question still waiting gets it back.
             still_asking = getattr(self, "_asking_dialogs", None) or []
             if still_asking:
                 try:
@@ -900,23 +825,11 @@ class DialogsMixin:
             pass
 
     def _toggles_its_popup(self, btn, open_popup):
-        """Make a button open its popup on one click and close it on the next.
-
-        A tk.Button acts on the RELEASE, and the app-wide click-outside
-        handler closes the open popup on the PRESS -- so a second click on
-        the button that opened a popup closed it and then opened a fresh
-        one: a blink instead of a toggle. The themed dropdowns were fixed
-        for exactly this after a field report (their guard, in
-        _build_themed_dropdown, is the same idea); eleven other openers --
-        the text colour, the highlight, the emoji, both date pickers, the
-        note's colour, the table size, the template picker, the calendar's
-        month, and the selection bar's Category and Export -- never were.
-
-        The decision is taken on the press, in the button's own binding,
-        which runs before the window's: at that moment the popup is still
-        open and it is knowable whether it is this button's. It is taken
-        afresh on every press, so a press dragged off the button leaves
-        nothing behind to swallow the next click.
+        """Make a button open its popup on one click and close it on the
+        next: a button acts on the release, click-outside on the press, so a
+        second click closed the popup and opened it again -- a blink. Decided
+        on each press, in the button's binding, which runs before the
+        window's, while it is knowable whether the open popup is this one's.
         """
         state = {"closing": False}
 
@@ -949,19 +862,9 @@ class DialogsMixin:
                     return i
         return len(buttons) - 1
 
-    # These five took **kw and forwarded a subset of it, so anything a
-    # caller sent that they did not understand was dropped without a word.
-    # That has cost this project twice: first a `default="no"` on a
-    # destructive confirm that never reached the dialog (ISSUES_LOG, "the
-    # safety request the dialog never read"), then seven `parent=`
-    # arguments that read like they anchored the dialog somewhere and did
-    # nothing at all — this is an overlay inside the app window, and
-    # _themed_dialog has never had such a parameter.
-    #
-    # Named parameters instead, keyword-only, so Python itself refuses
-    # anything else at the call rather than swallowing it. A stray keyword
-    # is now a TypeError the first time that path runs, which is the whole
-    # point: the failure this class produces is silence.
+    # Keyword-only, named parameters: taking **kw, these dropped what they
+    # did not understand -- a destructive confirm's default="no" among it
+    # (ISSUES_LOG: "The safety request the dialog never read").
 
     @staticmethod
     def _kind_from(icon, kind, fallback):
@@ -1005,30 +908,14 @@ class DialogsMixin:
 
     def _build_themed_dropdown(self, parent, var, options, on_change,
                                dot_color_fn=None, width_chars=14, nested=False):
-        # width_chars=0 means "as wide as whatever is showing" -- Tk's own
-        # content sizing. Use it for a dropdown that shares a row and is
-        # packed to flex: a width fixed in CHARACTERS makes the control
-        # ask for more than the row has, and pack takes the difference off
-        # its right edge (arrow first, then letters) instead of the label
-        # simply shrinking. No fixed number can be right for both
-        # platforms anyway -- the same count that fits Segoe UI on Windows
-        # is 19px over-full in DejaVu Sans on the Linux CI image.
-        """Build a small themed dropdown button (replaces ttk.Combobox for
-        simple single-choice selectors like sort/filter). Returns the button
-        Frame; pack it into the caller's layout. `dot_color_fn(value)` — if
-        given — returns a hex color to show a bullet next to each option (used
-        for the category filter); return None/falsy to skip the bullet for
-        that option (e.g. "All").
-
-        `nested=True` — use when this dropdown lives INSIDE another popup
-        (e.g. the category picker inside the template editor). The default
-        path calls self._dismiss_mini_popup() to close whatever popup was
-        open before opening a new, unrelated one — but a dropdown nested
-        inside another popup IS that popup's content, not something separate
-        to replace; calling the shared dismiss would destroy the very editor
-        this dropdown is sitting inside, before its own list even opens.
-        Nested mode tracks its own small popup instead, leaving whatever the
-        app's main self._mini_popup is completely alone."""
+        # width_chars=0 sizes to what shows, for a dropdown flexing in a
+        # shared row: a width in characters asked more than the row had,
+        # and pack cut its arrow off (fonts differ on Linux).
+        """A small themed dropdown button for single-choice selectors; pack
+        the Frame it returns. `dot_color_fn(value)` gives a bullet's colour
+        per option (falsy: none). `nested=True` for one INSIDE another popup:
+        it keeps its own list rather than closing the shared popup -- which
+        is the editor it sits in."""
         btn = tk.Frame(parent, bg=self.colors["sidebar"],
                       highlightthickness=1, highlightbackground=self.colors["card"])
         lbl = tk.Label(btn, textvariable=var, bg=self.colors["sidebar"],
@@ -1048,12 +935,8 @@ class DialogsMixin:
 
         def open_list():
             if nested:
-                # Close only THIS dropdown's own previous popup, if any —
-                # never touch self._mini_popup, which belongs to whatever
-                # popup this dropdown is living inside. (No toggle here,
-                # deliberately: adding one destabilized qa9's template
-                # flows intermittently, and the nested blink was never
-                # field-reported — tracked in the triage list instead.)
+                # Only THIS dropdown's previous list closes, never the host's
+                # popup. No toggle: one made qa9's template flows flaky.
                 existing = getattr(btn, "_nested_popup", None)
                 if existing is not None:
                     try:
@@ -1069,17 +952,12 @@ class DialogsMixin:
                 self._close_nested_popup()
                 pop = tk.Toplevel(self)
                 btn._nested_popup = pop
-                # Also remembered app-wide, so the app-window Escape can
-                # close THIS list rather than the popup it lives inside.
-                # btn._nested_popup alone is not enough: the handler runs on
-                # the window, and has no button to ask.
+                # Remembered app-wide too, for the window's Escape -- which
+                # has no button to ask -- to close THIS list, not its host.
                 self._nested_dropdown = pop
             else:
-                # Clicking the button while its OWN list is open closes
-                # it and stops. Without this, the shared dismiss below
-                # closed the list and the reopen brought it straight
-                # back — a blink instead of a toggle (field report:
-                # the only way to close it was clicking elsewhere).
+                # A click while its OWN list is open closes it and stops --
+                # else a blink, not a toggle (field report).
                 if (getattr(btn, "_dd_popup", None) is not None
                         and self._mini_popup is btn._dd_popup):
                     self._dismiss_mini_popup()
@@ -1142,10 +1020,8 @@ class DialogsMixin:
                     on_change(v)
 
                 for w in widgets:
-                    # "break": the pick destroys the popup this row lives
-                    # in, and Tk has already read every script of this
-                    # click -- a later one naming the popup's commands
-                    # would call them dead (the rename box's Escape did).
+                    # "break": the pick destroys this popup, and a later
+                    # script of the same click would call its dead commands.
                     w.bind("<Button-1>", lambda e, v=opt: (pick(v), "break")[1])
                     if not is_cur:
                         w.bind("<Enter>", lambda e, r=row, ws=widgets:
@@ -1154,10 +1030,8 @@ class DialogsMixin:
                                [x.configure(bg=self.colors["card"]) for x in ws])
 
             if nested:
-                # Escape is this dropdown's own way to back out without
-                # picking anything, since it can't rely on the shared
-                # click-outside-dismiss (that's scoped to self._mini_popup,
-                # which nested mode deliberately never touches).
+                # Its own Escape: the shared click-outside belongs to the
+                # host popup, which nested mode never touches.
                 pop.bind("<Escape>", lambda e: pop.destroy())
             self._place_dropdown_popup(pop, btn)
 
@@ -1196,25 +1070,9 @@ class DialogsMixin:
         path, root = str(widget), str(pop)
         return path == root or path.startswith(root + ".")
 
-    # ---- Window-level bindings that belong to one popup ----
-    #
-    # A popup listens on the app window for two things while it is open: a
-    # click outside it (to close) and the window moving (to follow). These
-    # used to be kept in ONE attribute per kind, overwritten by every
-    # placement -- and a dropdown nested inside a popup is placed while its
-    # host is still open, so the host's ids were lost and its handlers
-    # stayed bound for good. From then on every click ran a stale
-    # click-outside that closed the dropdown the same click had just
-    # opened: after one nested list, no dropdown in the app would open.
-    #
-    # So each popup keeps its own, and they go when IT goes, by whatever
-    # route. And they are lines that NAME their popup and call one command
-    # that is never deleted: Tk expands every script for a click before it
-    # runs any of them, so unbinding a handler from a widget's own
-    # <Button-1> deleted a command the same click was still about to call
-    # -- a silent background error on every such click. A line removed
-    # after Tk read it now just calls with a popup that is no longer
-    # registered, and does nothing.
+    # ---- Window-level bindings that belong to one popup: its own, gone when
+    # IT goes, lines naming it to one command never deleted (ARCHITECTURE,
+    # "The window-level lines a popup adds") ----
 
     def _bind_window_for_popup(self, pop, sequence, handler):
         """Run handler(widget_path) for `sequence` on the app window for as
@@ -1288,34 +1146,12 @@ class DialogsMixin:
 
     def _place_dropdown_popup(self, pop, anchor_widget=None, anchor_xy=None,
                               enable_click_outside=True, keyboard_from=None):
-        """Position a popup like a dropdown anchored to a button: directly below
-        it if there's room, otherwise flipped above so it never runs off-screen.
-        Horizontally aligned to the button's left edge (nudged in if needed).
-
-        Pass either `anchor_widget` (a button/label to dock under) or
-        `anchor_xy` (an (x, y) root-coordinate pair, e.g. from a right-click
-        event) when there's no persistent widget to anchor to — a calendar day
-        cell reached via a context menu, for instance.
-
-        Clamped to the APP WINDOW's own bounds, not the system screen. On a
-        multi-monitor setup, winfo_screenwidth/height() reports the primary
-        display's size even when the app sits on a different monitor, which
-        used to yank the dropdown back onto the wrong screen entirely. The
-        app window's own root x/y/width/height are always correct for
-        whichever monitor it's actually on, so anchoring to those keeps the
-        dropdown next to the button regardless of monitor arrangement.
-
-        Also re-anchors LIVE while the popup is open: if the user drags or
-        resizes the app window, the popup used to stay put at its original
-        screen position — visibly detached from the app. Binding this to the
-        app's own <Configure> event keeps it docked the whole time.
-
-        Marked -topmost so it can't get pushed behind the main window when
-        focus shifts elsewhere in the app (e.g. inserting an emoji sets focus
-        on the text field being edited) — without this, a borderless Toplevel
-        with no owner/topmost relationship can silently drop behind its
-        parent window on focus changes, which looks exactly like the popup
-        having closed even though it's technically still open."""
+        """Place a popup as a dropdown: under `anchor_widget`, or at
+        `anchor_xy` (root coordinates, as a right-click gives), flipped above
+        when there is no room. Clamped to the APP WINDOW, not the screen,
+        which names the primary monitor wherever the app is; re-placed as
+        the window moves; -topmost, or a borderless popup dropped behind the
+        window when an emoji's insert moved the focus."""
         try:
             pop.attributes("-topmost", True)
         except tk.TclError:
@@ -1335,10 +1171,8 @@ class DialogsMixin:
                     ax, ay = anchor_xy
                     ah = 0
                 else:
-                    # The anchor is gone. Asking it for its place raised,
-                    # the error was swallowed, and the popup was never
-                    # placed at all -- it sat at the screen's corner,
-                    # detached from the app. The window's middle instead.
+                    # The anchor is gone: unplaced, the popup sat at the
+                    # screen's corner. The window's middle instead.
                     ax = self.winfo_rootx() + self.winfo_width() // 3
                     ay = self.winfo_rooty() + self.winfo_height() // 3
                     ah = 0
@@ -1378,12 +1212,8 @@ class DialogsMixin:
 
         reposition()
 
-        # Configure fires a LOT — not just window move/resize, but also
-        # cascading from things like text insertion changing a Text widget's
-        # geometry. Coalescing rapid bursts into one actual reposition (via
-        # after_idle) keeps the popup docked without redoing the work on
-        # every single event, which was contributing to visible stutter
-        # while quickly inserting several emojis in a row.
+        # Configure fires a LOT (a Text growing as emoji go in): a burst is
+        # one reposition, after_idle -- each one stuttered.
         pending = {"job": None}
 
         def throttled_reposition(event=None):
@@ -1404,24 +1234,13 @@ class DialogsMixin:
         # Once more when the moment has passed: it can grow during the first
         # placing itself, before that binding was there to hear it.
         throttled_reposition()
-        # Never clobber a popup's OWN Escape: a nested dropdown binds
-        # Escape→close-just-this-list before being placed, and replacing
-        # that here made Escape tear down the HOST editor the list sits
-        # inside instead of the list itself. Innermost first, like the
-        # window's own Escape below, and asking where there is work.
+        # A popup's OWN Escape is kept: a nested list binds one, and replaced
+        # it closed the host editor instead. Innermost first, asking first.
         if not pop.bind("<Escape>"):
             pop.bind("<Escape>", lambda e: self._escape_backs_out())
-        # ...and that binding could never fire. These popups are borderless
-        # and take no keyboard focus, so Tk delivers a keypress to whatever
-        # DOES hold it — the app window, which had no Escape binding at all
-        # while a popup was open. Measured: with the focus forced inside the
-        # popup the binding above closes it at once, so the handler was
-        # always sound and the key simply went elsewhere.
-        #
-        # Bound here the way _themed_dialog binds its own, and bound ONCE:
-        # a nested dropdown is placed through this same method while the
-        # host's binding is still live, and a second one would mean a
-        # single Escape closing both levels.
+        # ...which never fires: these popups take no focus, so the key goes
+        # to the window. Bound there too, ONCE -- a nested list placed here
+        # again would have one Escape close both levels.
         if getattr(self, "_mini_popup_escape_bind", None) is None:
             self._mini_popup_escape_bind = self.bind(
                 "<Escape>", self._escape_backs_out, add="+")
@@ -1517,25 +1336,12 @@ class DialogsMixin:
         self._dismiss_mini_popup_asking()
 
     def _dismiss_mini_popup_asking(self, holding_work_only=False):
-        """Close the open popup the way a person closing it means it: one
-        holding typed work -- the template editor -- asks first, through its
-        _confirm_dismiss. Every close a PERSON makes comes through here: a
-        click outside, Escape, a widget that opens something in its place,
-        leaving the page it sits on, closing the window. Programmatic closes
-        (after a save, an explicit Cancel) call _dismiss_mini_popup.
-
-        Returns True when no popup is left open, False when it stays: the
-        person chose to keep editing, or the save they asked for could not
-        happen. With `holding_work_only`, a popup with nothing to lose is
-        left alone rather than closed -- for callers that are not about
-        popups at all (a Settings section, the window closing).
-
-        A widget's own <Button-1> runs before the window's click-outside,
-        so a widget opening something in the popup's place closed it
-        without the question -- the template half written, gone. Such a
-        widget calls this first, and on False returns "break": otherwise
-        the window's click-outside, still to run for the same click, asks
-        the same question a second time.
+        """Close the open popup as a PERSON closing it means it -- a click
+        outside, Escape, a widget opening something in its place, the page
+        or window leaving: one holding typed work asks first
+        (_confirm_dismiss); programmatic closes call _dismiss_mini_popup.
+        True when no popup is left open. `holding_work_only` leaves one with
+        nothing to lose alone. A widget's caller returns "break" on False.
         """
         pop = getattr(self, "_mini_popup", None)
         confirm = getattr(pop, "_confirm_dismiss", None) if pop is not None else None
@@ -1560,13 +1366,9 @@ class DialogsMixin:
         return True
 
     def _foreground_is_ours(self):
-        """Is the OS foreground window one of this app's windows?
-
-        The only honest witness: override-redirect popups can hold the
-        activation without ever receiving <Activate>/<Deactivate>, so
-        event-based detection missed exactly the case where the user had
-        typed into a popup and then switched away. Off Windows there is
-        no GetForegroundWindow; answer "ours" so nothing ever hides.
+        """Is the OS foreground window one of this app's windows? The only
+        honest witness: a borderless popup holds activation without
+        <Activate>/<Deactivate>. Off Windows, "ours", so nothing hides.
         """
         try:
             import ctypes
@@ -1654,28 +1456,10 @@ class DialogsMixin:
         self.after_idle(self._popup_watch_step)
 
     def _escape_backs_out(self, event=None):
-        """Escape, arriving at the app window, closes the innermost popup.
-
-        It has to be the innermost, and that is the whole difficulty. A
-        nested dropdown — a category list inside the template editor, say —
-        is deliberately NOT `self._mini_popup`; the host popup is. So a
-        handler that simply called `_dismiss_mini_popup()` would tear down
-        the editor the list is sitting in, which is exactly the breakage
-        recorded beside the per-popup binding in `_place_dropdown_popup`.
-        One level at a time: the list first, its host only once the list is
-        gone.
-
-        No "break" returned, deliberately. `_themed_dialog` binds its own
-        Escape on this same window, and breaking here would leave a modal
-        dialog open while the popup underneath it closed — the wrong one
-        answered. Widget-level Escapes (the find bar, an inline rename
-        entry) already return "break" of their own, so they never reach
-        this at all.
-
-        And nothing at all while a question is on screen: its own Escape
-        answers it. Closing the popup here too meant Escape on the template
-        editor's "Save changes?" threw away the template it was asking
-        about.
+        """Escape, arriving at the app window, closes the INNERMOST popup:
+        a nested list (not `_mini_popup`) before its host. No "break", as
+        `_themed_dialog` binds Escape here too; and nothing while a question
+        asks -- Escape on "Save changes?" threw the template away.
         """
         if self._a_dialog_is_asking():
             return
@@ -1707,11 +1491,8 @@ class DialogsMixin:
         if pop is not None:
             try:
                 pop.destroy()
-                # Force Tk to fully finish processing the destroy (and its
-                # own OS-level repaint) right now, synchronously, instead of
-                # letting it overlap with whatever runs next. A fixed-length
-                # timer alone was a guess at "enough time" that didn't always
-                # hold; this actually waits for the pending work to drain.
+                # The destroy and its repaint finished now, not overlapping
+                # what runs next (a fixed timer only guessed).
                 self.update_idletasks()
             except tk.TclError:
                 pass
@@ -1731,18 +1512,9 @@ class DialogsMixin:
         # and goes WITH it: it is a window of its own, not a child of the
         # host, so forgetting it left it floating over the app.
         self._close_nested_popup()
-        # Run any deferred work now that the popup is actually closing — e.g.
-        # a full note-list/calendar rebuild, which is heavy enough to cause a
-        # visible flicker if it runs WHILE a popup is open on top of it (this
-        # is a list, not a single slot, so several independent features can
-        # each defer their own work without overwriting one another).
-        #
-        # Scheduled via after() — on top of the update_idletasks() above —
-        # rather than called immediately: running a heavy rebuild in the very
-        # same call stack as destroying the popup Toplevel still caused a
-        # visible tear even after settling the destroy first. Giving the
-        # event loop one more full cycle before the rebuild starts keeps the
-        # two from ever overlapping into a single glitchy frame.
+        # Work deferred while the popup was open (a rebuild under it
+        # flickered) runs now -- a list, so features never overwrite each
+        # other's -- one event-loop cycle on, or it tore the frame.
         callbacks = getattr(self, "_mini_popup_on_close", None) or []
         self._mini_popup_on_close = []
 
@@ -1788,10 +1560,8 @@ class DialogsMixin:
                           ("<KeyPress-Home>", "first"), ("<KeyPress-End>", "last")):
             self.bind_class(self.KEY_WALK_TAG, seq,
                             lambda e, s=step: self._key_walk(e.widget, s))
-        # Counted so a popup closing can tell a click's keyboard from one
-        # Windows moved for it (_keyboard_back). Per button: Tk runs only a
-        # tag's most specific binding, and "all" holds <ButtonPress-1> too,
-        # so a bare <ButtonPress> here never heard a left click.
+        # Counted for _keyboard_back to tell a click's focus from Windows'.
+        # Per button: "all" holds <ButtonPress-1>, which a bare one missed.
         self._pointer_presses = 0
         for button in (1, 2, 3):
             self.bind_all(f"<ButtonPress-{button}>", self._count_pointer_press,
@@ -1801,13 +1571,9 @@ class DialogsMixin:
         self._enter_seen = {}
         for seq in ("<KeyRelease-Return>", "<KeyRelease-KP_Enter>"):
             self.bind_all(seq, self._enter_released, add="+")
-        # Tk's own buttons take Space through their class binding, which
-        # runs the command and never _key_press: a "Show 25 more" that goes
-        # as it draws the next page left the keyboard on the window. Tk runs
-        # a Button's command 100 ms after the key, so the look afterwards is
-        # a timer made just after Tk's own, which Tcl runs after it. A tick
-        # box runs its command at once, and so is looked at at once: a Tab
-        # in the 100 ms after it landed on the template editor's ✕.
+        # Space on a Tk button skips _key_press, and runs the command 100 ms
+        # later: looked at by a timer made just after Tk's. A tick box runs
+        # at once, and is looked at at once.
         self._tk_presses = {}
         starts = self.register(self._tk_press_starts)
         ends = self.register(self._tk_press_ends)
@@ -1822,10 +1588,9 @@ class DialogsMixin:
             except tk.TclError:
                 pass
 
-    # A key held down repeats: X11 sends each repeat as a release and a press
-    # at one time stamp, Windows as a press alone. A press of Enter this soon
-    # after the last, no release between, is the key still held: the slowest
-    # repeat Windows offers comes within a second of the press.
+    # A press of Enter this soon after the last, no release between (X11
+    # sends one at the same stamp), is the key held: Windows' slowest repeat
+    # comes within a second.
     KEY_REPEAT_MS = 1_100
 
     def _enter_repeats(self, event):
@@ -2029,10 +1794,8 @@ class DialogsMixin:
         w = widget
         try:
             while w is not None and not isinstance(w, (tk.Tk, tk.Toplevel)):
-                # A row of a RowStack: its place among its block's rows, its
-                # chunk passed over -- an index into a chunk the redraw did
-                # not make again sent the keyboard to another chunk's first
-                # row, or, past a block's end, into the next block.
+                # A RowStack row: its place among its block's rows, not its
+                # chunk's, which a redraw may not make again.
                 stack = getattr(getattr(w.master, "master", None),
                                 "_row_stack", None)
                 at = stack.place_of_row(w) if stack is not None else None
@@ -2144,10 +1907,8 @@ class DialogsMixin:
         return sorted(found, key=lambda w: (self._root_y(w), self._root_x(w)))
 
     def _centre_of(self, w):
-        # Both read where the choice stands in its list: a chunk parked beside
-        # the view puts every choice in it 20,000 px to the left as well as
-        # above, and Left in the picker's one column went to a template 30
-        # further down, parked there.
+        # Where the choice stands in its list, not its parked chunk's place:
+        # Left in a one-column picker went to a template 30 rows down.
         return (self._root_x(w) + w.winfo_width() / 2,
                 self._root_y(w) + w.winfo_height() / 2)
 
@@ -2220,17 +1981,11 @@ class DialogsMixin:
                 and opener.winfo_class() not in self._TYPING_CLASSES)
 
     def _keyboard_into_popup(self, pop, opener):
-        """A popup opened from the keyboard takes it, on its current choice,
-        else its first, else its first box to type in, else its first
-        control -- unless it has already placed it -- and hands it back to
-        *opener* when it closes.
-
-        The box comes before the first control because that is the ✕ of a
-        popup's header, built first: the template editor opened on it, and
-        the first space typed into the name closed the editor. And a popup
-        that asks for its own box before it is placed (the month jump's
-        year) cannot be heard here: Tk holds that request until the window
-        is drawn, and `focus -lastfor` still names the popup."""
+        """A popup opened from the keyboard takes it -- its current choice,
+        else its first, else its first box, else its first control, unless
+        it placed it itself -- and hands it back to *opener* on closing.
+        The box before the control: the first control is the header's ✕,
+        and a space typed into the template's name closed the editor."""
         try:
             if str(self.tk.call("focus", "-lastfor", pop)) == str(pop):
                 choices = self._walk_choices(pop, drawn=False)
