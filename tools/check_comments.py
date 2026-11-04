@@ -55,6 +55,7 @@ BRIEF = [
     "noteorganizer/core/model.py",
     "noteorganizer/core/paths.py",
     "noteorganizer/core/recurrence.py",
+    "noteorganizer/core/richtext.py",
     "noteorganizer/core/sharing.py",
     "noteorganizer/core/single_instance.py",
     "noteorganizer/core/spelling.py",

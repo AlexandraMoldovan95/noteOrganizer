@@ -1,36 +1,12 @@
-"""Turning HTML into a note, and a note back into HTML.
+"""Turning HTML into a note, and a note back into HTML: pasting from a
+browser or a word processor, and copying a note out still formatted.
 
-WHAT THIS MODULE IS FOR
------------------------
-Pasting from a browser or a word processor, and copying a note back out
-so it arrives somewhere else still formatted.
-
-It is pure text work: no clipboard, no widgets, no Windows. The clipboard
-itself is :mod:`noteorganizer.core.clipboard`, which is where the
-platform-specific part lives. Keeping the conversion separate means it can
-be tested with strings on any machine, which matters here more than usual
--- the app runs on Windows and the tests run on Linux.
-
-THE MAPPING IS DELIBERATELY LOSSY
----------------------------------
-HTML can express unlimited styling. A note can express bold, italic,
-underline, strikethrough, two colours, a font, lists, alignment and
-indentation. Everything else is dropped rather than approximated, the same
-choice :func:`~noteorganizer.core.formatting.normalize_formatting` makes
-about malformed spans: guessing what a `<blockquote>` or a CSS class was
-meant to become would produce notes nobody asked for.
-
-Font size and family are dropped on the way *in* for a related reason.
-The app offers eight families and eight sizes; a web page uses neither, so
-matching would mean picking a nearest value and silently claiming the note
-is set in something it never was.
-
-WHY LIST MARKERS ARE WRITTEN INTO THE TEXT
-------------------------------------------
-Because that is how this app stores them -- see ``formatting.py``. An
-``<li>`` becomes a line beginning ``"• "`` and a ``paragraphs`` entry
-saying so, which is exactly what the editor would have produced had the
-list been typed by hand.
+Pure text work, testable with strings anywhere; the clipboard itself is
+:mod:`noteorganizer.core.clipboard`. The mapping is lossy on purpose: what a
+note cannot say is dropped, not approximated, and a page's font size and
+family are dropped on the way in rather than matched to a nearest one. An
+``<li>`` becomes a line starting ``"• "`` and a ``paragraphs`` entry, as
+typing it would. The walk through it is in docs/CODE_TOUR.md.
 """
 
 import bisect
@@ -67,10 +43,8 @@ _VOID_TAGS = {"br", "hr", "img", "input", "area", "base", "col", "embed",
 _BLOCK_TAGS = {"p", "div", "br", "tr", "h1", "h2", "h3", "h4", "h5", "h6",
                "blockquote", "pre", "section", "article"}
 
-# A cell is not a block tag: a cell does not start a line, the row does. Its
-# text is wrapped in the pipes that make it a cell, opened at the start of
-# each cell and closed once at the end of the row, which puts exactly one
-# pipe between neighbours and one at either end -- "| A | B |".
+# A cell starts no line, the row does: a pipe opens each cell and one closes
+# the row, so neighbours share one -- "| A | B |".
 _CELL_TAGS = {"td", "th"}
 
 # Inline tags this app has a style for. Anything else is dropped.
@@ -102,12 +76,9 @@ def _as_hex(value):
     return None
 
 
-# Below this, a colour is near enough to grey that it is almost certainly
-# the page's own theme rather than a decision anyone made about the words.
-# The app's own text-colour palette runs from 17 up to 247, so this does
-# cut across the bottom of it -- but a grey chosen from a picker and a grey
-# arriving from a stylesheet are different things, and only one of them was
-# meant.
+# Below this, a colour is near enough to grey to be the page's theme, not a
+# choice about the words -- a grey from the app's own picker was meant; one
+# from a stylesheet was not.
 _MIN_SATURATION = 40
 
 # A highlighter is pale by definition. The app's own highlight palette sits
@@ -120,13 +91,10 @@ def _channels(hex_colour):
 
 
 def _is_meaningful(hex_colour, kind):
-    """Whether a colour says something about the words, or about the page.
-
-    Pasting from a dark-mode page used to bring its theme along: near-white
-    text on a near-black highlight, which is unreadable in a note and was
-    never anybody's idea of emphasis. What survives is colour that is
-    actually coloured -- a red warning, a yellow highlight -- and, for a
-    highlight, only if it is pale enough to read black text through.
+    """Whether a colour says something about the words, or about the page:
+    a dark-mode page brought near-white text on near-black. What survives is
+    actually coloured -- a red warning, a yellow highlight -- and a
+    highlight only when pale enough to read black text through.
     """
     red, green, blue = _channels(hex_colour)
     if max(red, green, blue) - min(red, green, blue) < _MIN_SATURATION:
@@ -210,22 +178,15 @@ class _Reader(HTMLParser):
     def _at_line_start(self):
         return not self.length or "".join(self.text[-1:]).endswith("\n")
 
-    # Set when the fragment carries no block-level tag at all. HTML says
-    # a newline in text is just whitespace, and for a web page that is right
-    # -- the markup was laid out for a human to read. A PDF viewer offers no
-    # block tags and puts the page's real line breaks in the text, so
-    # collapsing them there throws away the only structure on offer and
-    # produces one run-on paragraph.
+    # Set when the fragment has no block tag at all: a PDF viewer's line
+    # breaks are its only structure, and collapsed as HTML whitespace they
+    # made one run-on paragraph.
     keep_newlines = False
-    # How deep inside <td>/<th> the parser currently is. A cell is one line
-    # of the note, so a block tag inside it -- and a spreadsheet puts a <p>
-    # or a <div> in every cell -- must not start a new one. Left unguarded,
-    # a pasted table shattered: the header row survived because its cells
-    # held bare text, and every row under it became six separate lines.
+    # How deep inside <td>/<th>: a cell is one line, so the <p> a spreadsheet
+    # puts in every cell must not start another -- a pasted table shattered.
     cell_depth = 0
-    # Whether the caps left anything out: text past MAX_PASTE_CHARS, styles
-    # past MAX_PASTE_SPANS. The paste was cut there without a word, and the
-    # rest of a long article was simply not in the note.
+    # Whether the caps left text or styles out: cut without a word, the rest
+    # of a long article was simply not in the note.
     text_cut = False
     styles_cut = False
 
@@ -347,10 +308,8 @@ class _Reader(HTMLParser):
             self.cell_depth += 1
             css = _css(dict(attrs).get("style"))
             self._tbl_cell_align = css.get("text-align", "").strip().lower()
-            # Columns still covered by a rowspan from an earlier row are
-            # owed their marker before this cell can take its place --
-            # without it every later cell lands one column too far left,
-            # which is how a merged header shears the whole table under it.
+            # Columns a rowspan above still covers get their marker first, or
+            # every later cell lands a column left and the table shears.
             while self._owed_merge_cell():
                 pass
             self._tbl_cell = (getattr(self, "_tbl_col", 0),
@@ -364,20 +323,16 @@ class _Reader(HTMLParser):
             self._cell(tables.CELL + lead)
         elif tag in _BLOCK_TAGS:
             if self.cell_depth:
-                # A <br> inside a cell is the cell's own line break — the
-                # export writes exactly that marker back out, and
-                # flattening it to a space silently lost the break on
-                # every round-trip. Any OTHER block inside a cell can
-                # only be a gap between words.
+                # A <br> in a cell is its own line break, which the export
+                # writes back; flattened, it was lost at every round trip.
+                # Any other block there is a gap between words.
                 self._add(tables.LINE_BREAK if tag == "br" else " ")
             else:
                 self._newline()
 
         if tag in _VOID_TAGS:
-            # A void tag never gets an end tag, so any style span it
-            # opened could only close at end-of-document — the exact
-            # bleed this registry exists to stop. A styled <br>/<img>
-            # simply has its inline style ignored.
+            # A void tag has no end tag, so a style it opened would bleed to
+            # the end: a styled <br> or <img> has its style ignored.
             return
         opened = []
         for prop, name in (("color", "text_color"),
@@ -394,11 +349,8 @@ class _Reader(HTMLParser):
             self._open_style("italic")
             opened.append("italic")
         if opened:
-            # Remember exactly which style spans THIS tag opened, so its
-            # end tag can close them all. Inline styles on <p>/<div>/<li>
-            # and the cell tags used to never close (the style bled to
-            # the end of the document), and a span opening two styles
-            # closed only the first.
+            # Which styles THIS tag opened, for its end tag to close them all:
+            # a <p>'s style bled to the end, and a span of two closed one.
             reg = getattr(self, "_style_opens", None)
             if reg is None:
                 reg = self._style_opens = {}
@@ -408,12 +360,9 @@ class _Reader(HTMLParser):
             self.paragraphs.append({"line": self._line, "align": align})
 
     def handle_endtag(self, tag):
-        # Close the style spans this tag's start opened FIRST, before any
-        # structural output below — a </p> adds its newline before
-        # anything else, and closing after it swept that newline into
-        # the span. Keyed by tag name rather than a strict stack, so
-        # HTML soup with a stray unclosed element degrades to closing at
-        # the next same-named end tag instead of desynchronising.
+        # The styles this tag opened close FIRST, before a </p>'s newline
+        # joins the span; keyed by tag name, not a strict stack, so a stray
+        # unclosed element closes at the next end tag of its name.
         reg = getattr(self, "_style_opens", None)
         if reg:
             lst = reg.get(tag)
@@ -433,10 +382,8 @@ class _Reader(HTMLParser):
             self._add("  " if getattr(self, "_tbl_cell_align", "")
                       == "center" else " ")
             col, span_c, span_r = getattr(self, "_tbl_cell", (0, 1, 1))
-            # A colspan is written out as the anchor followed by "<" cells,
-            # and a rowspan owes "^" cells to the rows below -- "^" under
-            # the anchor, "<" under the rest of its width, so the rectangle
-            # reads back unambiguously.
+            # A colspan is the anchor and "<" cells; a rowspan owes the rows
+            # below "^" under the anchor and "<" under the rest of its width.
             for _ in range(span_c - 1):
                 self._cell(tables.CELL + " " + tables.MERGE_LEFT + " ")
             if span_r > 1:
@@ -559,17 +506,11 @@ def _unframe_lone_cells(text, rows):
 
 
 def html_to_note(fragment, report=None):
-    """Convert an HTML fragment into ``(text, formatting, paragraphs)``.
-
-    Everything the app cannot express is dropped. The result is passed
-    through the same normalisers the editor uses, so nothing reaches a note
-    that would not have been allowed if it had been typed.
-
-    A dict passed as *report* is told whether the caps left anything out:
-    ``text_cut`` (text past MAX_PASTE_CHARS) and ``styles_cut`` (styles past
-    MAX_PASTE_SPANS) -- so the paste can say so instead of cutting quietly.
-    A fragment that cannot be read at all leaves it untouched: nothing is
-    pasted, so there is nothing to say.
+    """Convert an HTML fragment into ``(text, formatting, paragraphs)``,
+    passed through the editor's own normalisers: nothing reaches a note that
+    typing would not allow. A *report* dict is told ``text_cut`` and
+    ``styles_cut`` when the caps left something out, for the paste to say
+    so; a fragment that cannot be read leaves it untouched.
     """
     reader = _Reader()
     # Looked for in the source rather than during parsing: a block tag late in
@@ -606,21 +547,15 @@ def html_to_note(fragment, report=None):
     spans = [s for s in spans if s["end"] > s["start"] and s["start"] < len(text)]
     for span in spans:
         span["end"] = min(span["end"], len(text))
-    # A pasted table arrives with cells of whatever width they had. Padding
-    # them here rather than in the editor keeps the offsets and the text in
-    # step from the moment the note is built -- and align() reports what it
-    # moved, so the spans move with it.
+    # A pasted table is padded here, so offsets and text agree from the start;
+    # align() says what it moved, and the spans move with it.
     if tables.find_blocks(text):
-        # A page's own markdown -- a table written out in a code block --
-        # brings its separator's dashes as whoever typed them, never a width
-        # set in this app; the app's own copy is put back whole by the paste
-        # (_paste_formatted), whatever this returns.
+        # A page's own markdown table brings dashes someone typed, never a
+        # width set here (the app's own copy is put back whole by the paste).
         text, forgotten = tables.forget_widths(text)
         spans = shift_spans(spans, forgotten)
-        # The ceiling holds on what goes into the note, its padding counted:
-        # lined up, a 16 KB clipboard became a 2-million-character note. Past
-        # it the text is cut at a line before align() pads anything, and the
-        # paste says so (ISSUES_LOG: "Limits that held at the door but not
+        # The ceiling holds with the padding counted: lined up, 16 KB became 2
+        # million characters (ISSUES_LOG: "Limits that held at the door but not
         # after it").
         if tables.aligned_length(text) > MAX_PASTE_CHARS:
             lines = text.split("\n")
@@ -632,10 +567,8 @@ def html_to_note(fragment, report=None):
                      if s["start"] < len(text)]
             if report is not None:
                 report["text_cut"] = True
-        # A cell that held a block tag has picked up the space put in its
-        # place, and one that held several has picked up several. align()
-        # rebuilds each row from its cells' stripped text, which settles all
-        # of it, but the spans have to be moved by however much it removed.
+        # A cell that held block tags picked up a space for each; align()
+        # rebuilds each row from stripped cells, and the spans move by it.
         text, table_shifts = tables.align(text)
         spans = shift_spans(spans, table_shifts)
     paragraphs = [dict(p, line=line_moved(p["line"])) for p in reader.paragraphs]
@@ -725,13 +658,9 @@ def _spans_by_line(spans, lines):
 
 
 def _cell_html(line, spans, offset, start, end):
-    """One table cell's inner HTML.
-
-    A multi-line cell stores its breaks as the literal ``<br>`` marker
-    inside the value (see core/tables.LINE_BREAK). Left to _line_html
-    alone, escaping turned each one into visible ``&lt;br&gt;`` text in
-    the exported page -- so the value is split ON the markers, each
-    segment styled from its own offsets, and rejoined with real breaks.
+    """One table cell's inner HTML: split on its ``<br>`` markers
+    (tables.LINE_BREAK), each piece styled from its own offsets and rejoined
+    with real breaks -- escaped whole, they showed as ``&lt;br&gt;``.
     """
     value = line[start:end]
     parts, pos = [], 0
@@ -754,19 +683,10 @@ def cell_html(value, spans):
 
 
 def html_document(title, body_html):
-    """A complete standalone HTML file around one note's fragment.
-
-    note_to_html() makes clipboard fragments; a FILE needs the document
-    around one -- doctype, charset, a title, and just enough styling
-    that the table borders exist (the fragment's <td>s carry none, and
-    a borderless table reads as loose words in a browser).
-
-    The visible title is a styled <div>, deliberately NOT an <h1>: Word
-    maps HTML headings onto its own Heading styles, and a modern Word
-    puts a collapse triangle on every heading -- with the whole note
-    under the one heading, the exported document arrived offering to
-    fold itself away. A div that merely looks like a title renders the
-    same everywhere and means nothing to Word's outline.
+    """A complete standalone HTML file around one note's fragment: doctype,
+    charset, a title, and the table borders a browser would not draw. The
+    title is a styled <div>, NOT an <h1>: Word made a heading of it, and the
+    exported note arrived offering to fold itself away under it.
     """
     safe_title = escape(title or "Untitled note")
     return (
@@ -798,12 +718,9 @@ def html_document(title, body_html):
 
 def note_to_html(text, formatting=None, paragraphs=None,
                  inline_tables=False):
-    """Render a note as an HTML fragment other applications understand.
-
-    List markers are taken back out of the text and expressed as real
-    ``<ul>``/``<ol>`` elements, because that is what a word processor or a
-    mail client will recognise -- a literal bullet character would paste as
-    a bullet-shaped letter rather than as a list.
+    """Render a note as an HTML fragment other applications understand:
+    list markers go out as real ``<ul>``/``<ol>``, as a bullet character
+    pastes as a letter, and a table's pipes as ``<table>``.
     """
     text = text or ""
     lines = text.split("\n")
@@ -823,9 +740,8 @@ def note_to_html(text, formatting=None, paragraphs=None,
             # Mechanics, not data: the separator's dashes never reach the
             # markup a word processor sees.
             separator_lines.add(block_first + sep_at)
-            # A column the author hid is hidden in the export too: the
-            # page should show what the app shows. The data itself stays
-            # in the note -- unhide, and the next export carries it.
+            # A hidden column is hidden in the export too; its data stays in
+            # the note for the next export after it is shown again.
             hidden_cols = {
                 i for i, col in enumerate(
                     tables.parse_separator(block[sep_at]))
@@ -865,10 +781,8 @@ def note_to_html(text, formatting=None, paragraphs=None,
             body, body_offset = line[len(marker):], offset + len(marker)
 
         target = indent + 1 if kind else 0
-        # Close while there are too many levels open, and also when the
-        # level we are about to write into is the wrong kind: a numbered
-        # item following a bulleted one at the same depth needs its own
-        # <ol>, not another <li> in the open <ul>.
+        # Close levels too deep, and one of the wrong kind: a numbered item
+        # after a bulleted one at its depth needs its own <ol>.
         while open_lists and (
                 len(open_lists) > target
                 or (kind and len(open_lists) == target
@@ -888,11 +802,8 @@ def note_to_html(text, formatting=None, paragraphs=None,
             in_table = False
         if kind:
             while len(open_lists) < target:
-                # A sub-list belongs *inside* the item it hangs off, so the
-                # item's closing tag is taken back and re-emitted after the
-                # sub-list ends. Browsers tolerate the flat version; Word and
-                # mail clients are less forgiving, and this is markup other
-                # applications have to read.
+                # A sub-list goes INSIDE its item: the </li> is taken back and
+                # written after it, as Word and mail clients need.
                 nested = bool(out) and out[-1].endswith("</li>")
                 if nested:
                     out[-1] = out[-1][:-len("</li>")]
@@ -900,25 +811,15 @@ def note_to_html(text, formatting=None, paragraphs=None,
                 out.append("<ul>" if kind == "bullet" else "<ol>")
             out.append(f"<li>{_line_html(body, spans, body_offset)}</li>")
         elif row is not None:
-            # Real <table> markup rather than the pipes, for the same reason
-            # a list goes out as <ul>: a word processor understands one and
-            # would paste the other as a row of pipe characters. Each cell
-            # is rendered from its own offsets so formatting inside it
-            # survives the trip.
+            # Real <table> markup, each cell from its own offsets so its
+            # formatting survives the trip.
             if not in_table:
-                # The table's place on the page (centred / right) lives
-                # as an alignment entry on its lines. It goes out TWICE:
-                # auto margins for browsers, and the legacy align
-                # attribute for Word, which ignores margin:auto on
-                # tables entirely. align="right" would also make
-                # browsers float the table with text wrapping around it
-                # (the UA sheet maps it to float:right), so float:none
-                # rides along to keep the browser on the margin path.
+                # The table's place goes out twice: auto margins for browsers,
+                # align for Word, which ignores them -- and float:none, as
+                # align="right" makes a browser float it.
                 place = entry.get("align")
-                # A clipboard fragment travels without the document's
-                # stylesheet, and Word gives a bare HTML table no visible
-                # borders at all -- the pasted table was a selectable
-                # phantom. inline_tables rides the border on every tag.
+                # A clipboard fragment has no stylesheet, and Word drew the
+                # bare table borderless: inline_tables puts it on every tag.
                 base = "border-collapse:collapse;" if inline_tables else ""
                 if place == "center":
                     t_style = f' align="center" style="{base}margin:0.5em auto;"'
@@ -956,17 +857,13 @@ def note_to_html(text, formatting=None, paragraphs=None,
                 state = tables.checkbox_state(line[start:end])
                 styles = []
                 if state is not None:
-                    # The app draws a checkbox centred in its cell no
-                    # matter what the padding says -- the page does too,
-                    # or a left-padded box sits left only once exported.
+                    # A checkbox is drawn centred whatever the padding, so
+                    # the page centres it too.
                     styles.append("text-align:center;")
                 elif c < len(row_aligns) and row_aligns[c] != tables.ALIGN_LEFT:
                     styles.append(f"text-align:{row_aligns[c]};")
-                # A highlight covering the whole cell colours the <td>
-                # itself, the way the app draws it. Left as a <span>, an
-                # EMPTY highlighted cell (the highlight rides the pad
-                # spaces) would collapse with the whitespace and show as
-                # a sliver or nothing.
+                # A highlight over the whole cell colours the <td>, as the app
+                # draws it: as a <span>, an EMPTY cell's showed as nothing.
                 cell_a, cell_b = offset + start, offset + end
                 if cell_b == cell_a:
                     # An empty cell's highlight rides its padding.
@@ -985,15 +882,10 @@ def note_to_html(text, formatting=None, paragraphs=None,
                     styles.append("border:1px solid #999;padding:4px 10px;")
                 if styles:
                     attr += f' style="{"".join(styles)}"'
-                # The FIRST row is the header the app draws bold on
-                # its own surface -- exported as <th>, so Word and the
-                # browsers bold it too instead of flattening it into an
-                # ordinary row.
+                # The first row is the header the app draws bold: <th>.
                 tag_name = "th" if header_row else "td"
-                # A checkbox cell leaves as the glyph the app draws, not
-                # as its bracket markers; its colour (a text_color span
-                # riding the markers) comes along. The import maps the
-                # glyphs back, so a round trip keeps a real checkbox.
+                # A checkbox leaves as its glyph, with its colour; the import
+                # maps the glyph back, so a round trip keeps a checkbox.
                 if state is not None:
                     glyph = "☑" if state else "☐"
                     for sp in spans:
@@ -1025,23 +917,8 @@ def note_to_html(text, formatting=None, paragraphs=None,
 
 
 # --- Rejoining text that a column broke -------------------------------------
-#
-# A PDF has no paragraphs. It has lines placed on a page, and copying from one
-# hands those line breaks over as though they were meant. Keeping them gives a
-# note broken at the PDF's column width, narrow and ragged; dropping them all
-# gives one run-on block. Neither is what the page said.
-#
-# Every break is judged by one question: **would the next line's first word
-# have fitted on this one?** If it would have, the line was ended on purpose
-# and the break is a real one. If it would not, the column forced it and the
-# two lines are one. That test needs no threshold tuned to a particular width,
-# which an earlier attempt did need -- and it got 60-character text wrong in
-# one direction and 110-character text wrong in the other.
-#
-# Rejoining is still guesswork, so it only runs where the evidence is strong.
-# Everything else -- an address, a list, a poem, a couple of lines -- comes
-# back untouched. A break someone meant is worse to lose than a break left in:
-# the first destroys what they wrote, the second is merely untidy.
+# A PDF copies its column's line breaks as if meant. Each is judged by: would
+# the next word have fitted on this line? Run only on strong evidence (CODE_TOUR).
 
 # Fewer lines than this is not a pattern, it is a coincidence.
 _MIN_WRAPPED_LINES = 3
@@ -1051,19 +928,13 @@ _MIN_COLUMN_WIDTH = 40
 _MOSTLY_FORCED = 0.6
 
 
-# The column is never narrower than the longest line seen, and usually a
-# little wider -- no line ends exactly at the edge unless a word happens to
-# land there. Judging a near-miss as a deliberate ending therefore splits
-# paragraphs that were only wrapped, so a couple of characters of slack are
-# allowed and a borderline break counts as forced. That errs towards joining,
-# which loses a paragraph break at worst; erring the other way cuts sentences
-# in half.
+# The column is a little wider than its longest line, so a near-miss counts
+# as forced: joining loses a paragraph break at worst, the other way cuts
+# sentences in half.
 _COLUMN_SLACK = 2
 
-# A paragraph almost never stops in the middle of a sentence, so a line that
-# ends without any of these was almost certainly broken by the column even if
-# the next word looked like it would have fitted. Closing quotes and brackets
-# count, since a sentence can end inside them.
+# A line ending in none of these was broken by the column, even if the next
+# word looked as if it fitted (a sentence can end inside quotes or brackets).
 _SENTENCE_END = ('.', '!', '?', ':', ';', '"', "'", ')', ']', '’', '”')
 # Unless the line is far short of the column, in which case it ended early on
 # purpose -- a heading, or the last line of a paragraph -- whatever it ends in.
@@ -1081,14 +952,10 @@ def _ends_a_paragraph(line, width):
 
 
 def _forced_break(line, next_line, width, slack=0):
-    """True when the next line's first word could not have fitted on this one.
-
-    Which means the column broke the line rather than the writer ending it.
-
-    *slack* is used only when deciding where a paragraph ended, never when
-    deciding whether this is a column at all. Allowing it in the detection
-    made three short paragraphs -- each a single line, each followed by a
-    word too long to join it -- look like wrapped prose and become one.
+    """True when the next line's first word could not have fitted on this
+    one: the column broke it. *slack* only decides where a paragraph ended,
+    never whether this is a column -- there, three one-line paragraphs read
+    as wrapped prose and became one.
     """
     word = next_line.strip().split(" ")[0] if next_line.strip() else ""
     if not word:
@@ -1125,15 +992,9 @@ def _join_wrapped(lines):
             joined = piece
         elif (len(joined) > 1 and joined[-1] == "-" and joined[-2].isalpha()
               and piece[:1].islower()):
-            # A hyphen at the break joins without a space: "more-" + "or-less"
-            # is one word, and so is "type-" + "setting". The hyphen is kept,
-            # because those two cases cannot be told apart and only one of the
-            # two possible mistakes is survivable -- keeping it turns a
-            # syllable break into "type-setting", which still reads, while
-            # dropping it turned "more-or-less" into "moreor-less", which is
-            # not a word at all. Only when a letter precedes the hyphen and
-            # the next line goes on in lower case, so "see page 12 -" and
-            # "- and then" keep their space.
+            # A hyphen after a letter, the next line in lower case, joins with
+            # no space and is kept: "type-setting" still reads, while dropped,
+            # "more-or-less" became "moreor-less".
             joined += piece
         else:
             joined += " " + piece
@@ -1157,10 +1018,8 @@ def reflow_wrapped(text):
             blocks.append("\n".join(lines))
             continue
         width = max(len(line) for line in lines)
-        # Many documents mark a new paragraph by indenting its first line.
-        # Where that happens it is a far better signal than any measurement:
-        # a line whose break looks forced still ends a paragraph if the line
-        # after it is indented past the block's own left edge.
+        # A first line indented past the block's edge starts a paragraph,
+        # whatever the measurement says.
         edge = min(len(line) - len(line.lstrip()) for line in lines)
         paragraphs, current = [], []
         for i, line in enumerate(lines):
