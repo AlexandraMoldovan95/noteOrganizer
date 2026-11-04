@@ -5810,13 +5810,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     @_undo_atom
     def _grid_set_table_align(self, info, align):
-        """The whole table sits left, centred or right on the page.
-
-        The block's lines carry an ordinary paragraph-alignment tag, which
-        is what positions the embedded window -- and what the paragraphs
-        store already saves and reloads. Deliberate, so it survives; the
-        PASTE path scrubs the same tags, so a table copied from a centred
-        source still lands flush left.
+        """The whole table sits left, centred or right on the page, by an
+        ordinary alignment tag on its lines, which places the window and
+        the paragraphs save; a paste scrubs it, landing flush left.
         """
         first = self._grid_first_line(info)
         if first is None:
@@ -5875,27 +5871,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         below = first + info["nrows"] - 1
         b = self.body_text
-        # Count only caption-shaped lines ("Table 3:"), not any prose that
-        # happens to start with the word -- and keep counting the "Tab. N:"
-        # captions inserted before the labels went English, so numbering in
-        # an older note carries on instead of restarting at 1.
+        # Only caption-shaped lines ("Table 3:"), older "Tab. N:" ones too, so
+        # an older note's numbering carries on.
         n = 1 + sum(1 for ln in b.get("1.0", "end-1c").split("\n")
                     if core_tables.is_caption_line(ln))
         caption_text = f"Table {n}: description"
         b.insert(f"{below}.end", "\n" + caption_text + "\nSource: ")
         cap_line = below + 1
-        # SCRUB, then dress: text inserted at the table's last line can
-        # inherit whatever styling that line's edge happens to carry
-        # (field-tested: the caption arrived wearing the table's cell
-        # highlight, full-width bars included). The caption starts from
-        # zero, always.
+        # SCRUB, then dress: the caption came wearing the table's cell
+        # highlight (field-tested); it starts from zero.
         for tag in b.tag_names():
             if is_format_tag(tag) or tag.startswith("align_"):
                 b.tag_remove(tag, f"{cap_line}.0", f"{cap_line + 2}.0")
-        # Both lines follow the TABLE's own place on the page -- a left
-        # table gets a left caption, a centred one a centred pair
-        # (field request: the label and the source line must never sit
-        # at two different alignments).
+        # Both lines follow the TABLE's place, never two alignments (field
+        # request).
         place = self._grid_table_align_of(first)
         if place in ("center", "right"):
             b.tag_add(f"align_{place}", f"{cap_line}.0", f"{cap_line}.end")
@@ -5917,10 +5906,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         nrows = info["nrows"]
         self._commit_cell_editor()
-        # Capture BEFORE teardown+delete, like every other grid op: the
-        # deletion shifts body_text's scroll on the spot, and without this
-        # snapshot the render below faithfully pins the already-jumped
-        # view — deleting a table yanked the page.
+        # Captured BEFORE the teardown, as every grid op: deleting a table
+        # yanked the page.
         self._grid_saved_view = self._capture_grid_views()
         self._teardown_table_grids()
         self.body_text.delete(f"{first}.0", f"{first + nrows - 1}.end +1c")
@@ -5982,11 +5969,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 [row_aligns[r][c] if c < len(row_aligns[r])
                  else core_tables.ALIGN_LEFT for c in range(c0, c1 + 1)]
                 for r in range(r0, min(r1 + 1, len(row_aligns)))]
-        # The HTML mirror of the copy follows the file export's rules:
-        # the first row leaves as <th>, merges as colspan/rowspan, hidden
-        # columns stay hidden. The TSV keeps every value verbatim for a
-        # spreadsheet and for a paste back here, which lays the styles
-        # remembered above back on the cells.
+        # The HTML follows the export's rules (<th>, colspan, hidden columns);
+        # the TSV keeps every value verbatim, for a paste back here.
         m_spans, m_covered = core_tables.merge_map(matrix)
         hidden = {i for i, col in enumerate(self._grid_cell_clip_widths or [])
                   if col.get("hidden")}
@@ -6110,13 +6094,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         def choose(color):
             self._dismiss_mini_popup()
-            # Surgical writes, NOT the wholesale fill: the fill's block
-            # rewrite expelled the caret to the line under the table
-            # (the caret guard walks it out of rebuilt table lines) and
-            # the view scrolled after it -- "the cursor lands outside
-            # the table and the scroll jumps". An emoji dropped into a
-            # cell never moved anything because it goes through
-            # surgical paths; the checkbox now does the same.
+            # Surgical writes, as an emoji's, NOT the fill's block rewrite:
+            # "the cursor lands outside the table and the scroll jumps".
             fresh = (self._grid_at_line(anchor_line)
                      if anchor_line is not None else None)
             if fresh is None:
@@ -6135,11 +6114,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                          core_tables.CHECKBOX_EMPTY)
                         cell["value"] = core_tables.CHECKBOX_EMPTY
                         self._grid_redraw_cell_text(fresh, r, c)
-                # No forced centring: it went through the alignment op's
-                # full teardown-and-rebuild and the whole table visibly
-                # flickered for one dropped checkbox. The box sits with
-                # the cell's own alignment, redrawn in place -- same
-                # quiet path a toggle uses.
+                # No forced centring (the table flickered): the box keeps the
+                # cell's alignment, redrawn in place as a toggle is.
                 if color:
                     self._grid_apply_style(fresh, box, "text_color", color)
             finally:
@@ -6209,10 +6185,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     for cc in range(ac, ac + cs):
                         if (rr, cc) != (ar, ac) and cc < len(rows[rr]):
                             rows[rr][cc] = ""
-        # Nothing the merge swallows is thrown away: every cell's text
-        # moves into the merged cell, joined in reading order. Merging "A"
-        # with an empty neighbour used to keep whichever cell was the
-        # anchor -- and lose the text when the anchor was the empty one.
+        # Every swallowed cell's text moves into the merge, in reading order:
+        # an empty anchor lost its neighbour's "A".
         pieces, piece_cells = [], []
         for r in range(r0, min(r1 + 1, len(rows))):
             for c in range(c0, min(c1 + 1, len(rows[r]))):
@@ -6250,21 +6224,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             raw = None
         # Within the ceiling every paste keeps (_cap_paste).
         raw, cut = self._cap_paste(raw) if raw is not None else (None, False)
-        # The system clipboard is the ground truth. The remembered matrix is
-        # only trusted while it still MATCHES the clipboard -- someone who
-        # copied something newer meant the newer thing, and the remembered
-        # matrix used to shadow it.
+        # The system clipboard is the truth: the remembered matrix only while
+        # it MATCHES it, or a newer copy was shadowed.
         if matrix is not None and raw is not None:
             remembered = "\n".join("\t".join(row) for row in matrix)
             if raw != remembered:
                 matrix = None
         own = bool(matrix)          # still our own copy, styles and all
         if not matrix:
-            # Cells copied from a browser: the plain text stacks every
-            # cell on its own line ("A\nB" for two side-by-side cells),
-            # but the HTML still knows the true rows and columns. Read
-            # the shape from there, through the same parser a whole-table
-            # paste already trusts.
+            # A browser's cells stack in the plain text ("A\nB" side by side);
+            # the shape is read from the HTML, by the whole-table parser.
             html = clipboard.read_html()
             if html and "<table" in html.lower():
                 try:
@@ -6280,11 +6249,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                              else value
                              for value in core_tables.split_row(line)]
                             for i, line in enumerate(block) if i != sep_at]
-                    # The plain clipboard stays the authority on
-                    # FRESHNESS: the HTML only supplies the shape when
-                    # its cells are the same ones the plain text holds --
-                    # i.e. both came from the same copy. A newer,
-                    # unrelated plain copy wins over stale HTML.
+                    # The plain text decides FRESHNESS: the HTML's shape only
+                    # when its cells are the plain text's, one copy.
                     if matrix is not None and raw is not None:
                         html_cells = [v.strip() for row in matrix
                                       for v in row if v.strip()]
@@ -6312,10 +6278,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             styles its cells bring."""
             rows = [list(row) for row in old_rows]
             aligns = [list(row) for row in old_aligns]
-            # Columns grow the way rows always have: four columns copied
-            # from a spreadsheet into a two-column table used to lose the
-            # last two without a word. The separator gains its columns in
-            # the rewrite.
+            # Columns grow as rows do: four into a two-column table lost two
+            # without a word.
             width = max([ncols] + [c + len(line) for line in block])
             for row in rows:
                 row.extend([""] * (width - len(row)))
@@ -6342,11 +6306,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                             extra[(r + dr, c + dc)] = clip_styles[(dr, dc)]
             return rows, aligns, extra
 
-        # The paste may grow the table by no more than the ceiling every
-        # paste keeps: a row of 30,000 cells gave every row of the table
-        # 30,000 more. What fits is found before anything is written --
-        # whole rows first, then cells of the first row, then characters
-        # of its first cell -- and the cut is said.
+        # Grown no more than every paste's ceiling (30,000 cells gave every
+        # row 30,000 more): what fits found first -- rows, cells, characters --
+        # and the cut said.
         before = len(self.body_text.get(f"{first}.0",
                                         f"{first + nrows - 1}.end"))
 
@@ -6391,10 +6353,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         cell = info["cells"].get((r, c))
         if cell is None:
             return
-        # Remembered exactly like a multi-cell copy: pasting cells used to
-        # prefer whatever matrix an OLDER copy had remembered, so a fresh
-        # single-cell copy pasted stale content -- and nothing of an older
-        # copy's styles may ride along with it.
+        # Remembered as a multi-cell copy is, or an OLDER copy's matrix and
+        # styles were pasted instead.
         self._grid_cell_clip = [[cell["value"]]]
         self._grid_cell_clip_styles = {}
         self._grid_cell_clip_aligns = None
@@ -6476,10 +6436,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                  if anchor_line is not None else None)
         if fresh is not None:
             self._grid_paste_cells(fresh, r, c)
-        # Back in the cell the paste began at, as the same paste from the
-        # cell's menu brings it -- or in the table's text, once the paste took
-        # it past what is drawn. The editor the commit closed held it, and
-        # what was typed next went nowhere.
+        # The keyboard back in the cell the paste began at (or the table's
+        # text, past what is drawn), or the next typing went nowhere.
         self._grid_keyboard_back(anchor_line, r, c)
         return "break"
 
@@ -6540,15 +6498,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._keyboard_to(self.body_text)
 
     def _keyboard_to_kept_table(self, first, r, c, typed=None):
-        """The keyboard into the text of the table starting on line *first*,
-        at the end of data row *r*'s cell *c* -- past a row's last cell, the
-        next row's first, as Tab walks. A commit that takes a table past what
-        is drawn leaves it as text: its editor went, and the keys typed next
-        went nowhere, or to wherever the note's own caret had been left.
-
-        *typed*: the cell's text before the editor's caret, when Enter made a
-        line break mid-cell -- the caret goes after that break, as the editor
-        had it. At the cell's end, the next letters followed its old tail."""
+        """The keyboard into the text of the table on line *first*, at the
+        end of row *r*'s cell *c* (past a row's last, the next row's first):
+        a commit past what is drawn leaves it as text, and the next keys
+        went nowhere. *typed*: the text before the editor's caret, when
+        Enter broke a cell -- the caret goes after that break."""
         if not self._keyboard_nowhere():
             return
         b = self.body_text
