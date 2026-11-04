@@ -1861,15 +1861,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     # ---------- Data handling ----------
     def load_notes(self):
-        """Read the notes file, and remember anything the user should be told.
-
-        The work happens in core/storage.py; this keeps the two pieces of
-        news it produces -- an upgrade backup, and the one-time cleanup
-        report -- on the app, where the code that shows them looks for them.
-
-        VERSION_CHANGE is passed in rather than read inside core on purpose:
-        it is a global on this module, and this module has two identities
-        when the app is launched as a script. See core/storage.load_notes.
+        """Read the notes file (core/storage.py) and keep its two pieces of
+        news -- an upgrade backup, the cleanup report -- on the app.
+        VERSION_CHANGE is passed in, as this module has two identities when
+        launched as a script (see core/storage.load_notes).
         """
         notes, report = core_load_notes(VERSION_CHANGE)
         self._fresh_notebook = bool(report.get("fresh_notebook"))
@@ -2055,10 +2050,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if getattr(self, "_ending_session", False):
             return False
         if _core_paths.writes_held(DATA_FILE):
-            # A held run saves nothing until it is opened again: the advice
-            # below (make a change and it saves) is false there, and it came
-            # back at every pause in typing. Said once, and on the status line
-            # the first time too: the save's own "Auto-saved" stood under it.
+            # A held run saves nothing, so "make a change" is false there: said
+            # once, on the status line too, over the save's "Auto-saved".
             self.set_status("Not saved — nothing is saved in this session; "
                             "Settings → Backup → Export keeps what you wrote")
             if getattr(self, "_held_save_said", False):
@@ -2100,20 +2093,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return t
 
     def _wait_for_io_workers(self, cap_s=30.0):
-        """Let an in-flight export finish before the process goes away, and
-        stop an import. Hard-capped: a genuinely hung worker must not make
-        the app refuse to close — the threads stay daemon for that reason,
-        and the export's tmp-then-replace protocol means even the
-        capped-out case can no longer destroy an existing backup.
-
-        The close drops an import that was never merged whole anyway
-        (_settle_background_work_at_close), so it is stopped at once: the
-        wait bought only time to copy files that were then removed, and
-        past the cap the process died mid-file, leaving the unpacked backup
-        in the temp folder and a half-copied file in attachments. An
-        export still writing at the cap is stopped too, and takes its
-        unfinished file away. Each answers within one chunk
-        (StoppableFile)."""
+        """Let an export finish before the process goes, and stop an import
+        at once (the close drops it anyway: past the cap it died mid-file).
+        Hard-capped, the threads daemon, so a hung worker cannot hold the
+        close; an export stopped at the cap takes its unfinished file away,
+        and the tmp-then-replace keeps the old backup. Each answers within
+        one chunk (StoppableFile)."""
         workers = [t for t in getattr(self, "_io_workers", [])
                    if t.is_alive()]
         if not workers:
@@ -2139,28 +2124,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             join(5.0)
 
     def export_data(self):
-        """Bundle notes_data.json, settings.json, and every attached file
-        into one .zip, so moving to another device is copying one file
-        instead of hunting down three separate pieces.
-
-        The actual writing runs on a background thread — for a lot of
-        attachments this used to visibly freeze the whole app for a few
-        seconds. The main thread only ever touches Tkinter widgets from the
-        polling callback below; the worker thread does file I/O and updates
-        a plain shared dict, which is all it's allowed to touch."""
-        # One file operation at a time (audit Z05-F05): a second click on
-        # Export mid-run used to start a second worker onto the SAME .tmp,
-        # interleaving the two, and overwrote _export_state so the first
-        # worker's outcome was never reported.
+        """Bundle the notebook -- notes, settings, Trash, templates, every
+        attached file -- into one .zip, so moving is copying one file. Written
+        on a background thread (it froze the app) that touches only a shared
+        dict; the main thread polls it and alone touches widgets."""
+        # One file operation at a time (audit Z05-F05): a second Export ran a
+        # second worker onto the SAME .tmp.
         if self._export_state is not None or self._import_state is not None:
             self.set_status("An export or import is already running — "
                             "let it finish first.")
             return
-        # A start that could not read the notes file holds none, and the
-        # backup packs what the app holds: it said "Export complete" over an
-        # empty notebook, on the very launch whose warning sends people here.
-        # Notes written since are another matter: on a run that saves nothing
-        # the backup is their only way out, so it is made, and says so.
+        # A start that could not read the notes file holds none: "Export
+        # complete" stood over an empty notebook. Notes written since go out,
+        # their only way out on a run that saves nothing, and it says so.
         session_only = self._notes_file_unread()
         if session_only and not self.notes:
             self.show_warning(
@@ -2183,22 +2159,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # The last typing first, as every route that saves on its way does.
         self._flush_autosave(leaving=False)
 
-        # Build the file list up front (fast — just enumerating), so the
-        # progress bar has a real total to work against, not a guess.
-        # The notes, Trash and templates are what the app holds, written
-        # out here on the main thread (bytes, not a path): after a failed
-        # save they are ahead of their files, the failure's own message
-        # sends the person here, and a backup packed from the files said
-        # "Export complete" without the work it was made to rescue.
+        # The list up front, for a real progress total. The notes, Trash and
+        # templates as the app holds them, as bytes: after a failed save the
+        # files are behind, and a backup of them lost the work it rescued.
         entries = []  # list of (source path or bytes, arcname)
         entries.append((json_text(self.notes).encode("utf-8"), "notes_data.json"))
         if os.path.exists(SETTINGS_FILE):
             entries.append((SETTINGS_FILE, "settings.json"))
-        # A backup is only a backup if it carries the WHOLE notebook:
-        # templates and the trash used to be silently left out, and moving
-        # to another device lost them. Held as nothing while the file is
-        # there, they travel as the file is: one this start could not read
-        # keeps its bytes in the backup instead of an empty list.
+        # The WHOLE notebook, templates and Trash too; one this start could
+        # not read travels as its file's bytes, not an empty list.
         left_out = []
         for held, path, arcname, ident in (
                 (self.templates, TEMPLATES_FILE, "templates.json", lambda e: e.get("name")),
@@ -2213,9 +2182,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     kept = []
                 if arcname == "templates.json":
                     # A name the session made again, unable to see the file's:
-                    # both travel, the session's first, as an import keeps
-                    # the first of a name. The file's won, and the newest
-                    # was in no backup (round 7 of the audit).
+                    # both travel, the session's first, as an import keeps it.
                     mine = {json_text(e) for e in held}
                     kept = list(held) + [e for e in kept if json_text(e) not in mine]
                 else:
@@ -2246,10 +2213,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
             def stop():
                 return state.get("stop")   # asked by the close, past its wait
-            # Write beside the target and move into place only when whole —
-            # the zip used to be opened ON the target, so a failure (or the
-            # app dying) mid-write destroyed the very backup being replaced.
-            # Same one-safe-way rule as _write_json_atomic.
+            # Beside the target, moved into place only when whole: opened ON
+            # it, a failure destroyed the backup being replaced.
             tmp_path = save_path + ".tmp"
             try:
                 with open(tmp_path, "wb") as raw:
@@ -2283,15 +2248,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     raise ValueError("This backup would not import back. " + problem)
                 os.replace(tmp_path, save_path)
             except Exception as e:
-                # Deliberately broad: this runs in a background thread, where
-                # an uncaught exception of ANY kind kills the thread silently
-                # (Python's default thread behavior) without ever reaching
-                # state["done"] = True below — leaving the progress bar
-                # polling forever against a dict that will never say it's
-                # finished, with no error shown. A background worker must
-                # never let anything escape uncaught; the specific IOError/
-                # OSError message is still preserved when that's the cause,
-                # just no longer the only kind of failure that's handled.
+                # Broad on purpose: anything escaping kills the thread silently,
+                # before state["done"], and the progress bar polled for ever.
                 state["error"] = str(e)
                 try:
                     os.remove(tmp_path)
@@ -2382,19 +2340,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 pass
 
     def _settle_background_work_at_close(self):
-        """Finish what the main thread does once a backup's worker is done
-        -- at close, where the timer that would have done it never runs.
-
-        An export that finished is recorded as the last one. An import
-        whose worker finished, but whose notes were never merged, is dropped
-        whole: the unpacked backup leaves the temp folder, and the files it
-        copied into attachments -- which no note points at yet -- leave that
-        folder. The close used to wait for the worker and quit, leaving both
-        behind (forty orphaned files in one run) and the export unrecorded.
-        Merging instead would mean asking the import's questions in a window
-        that is closing. An import dropped, or an export cut short, leaves a
-        line the next start reads out (announce_startup_changes): nothing
-        said it before, and the work looked done.
+        """At close, what the poll would have done once a worker finished: an
+        export is recorded; an import never merged is dropped whole, its
+        unpacked backup and copied files removed (forty were orphaned in one
+        run). Either leaves a line the next start reads out
+        (announce_startup_changes), or the work looked done.
         """
         state = self._export_state
         if state is not None and state.get("done") and not state.get("error"):
@@ -2450,15 +2400,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _drop_unclaimed_import_files(self, state):
         """Remove the files a backup import copied into attachments that no
-        note and no Trash entry uses.
-
-        The worker copies a backup's files before anything is asked, so
-        every way out of an import that did not take them all -- Cancel on
-        any of its questions, an error, skipping duplicates, the window
-        closing -- leaves files that belong to nobody. Only the close did
-        this; each Cancel left one copy per distinct backup behind, out of
-        sight. A file a note or a Trash entry points at is never touched,
-        and neither is anything the import did not copy itself.
+        note and no Trash entry uses: copied before anything is asked, they
+        were left by every Cancel, error or skip. Nothing a note names, or
+        the import did not copy itself, is touched.
         """
         in_use = attachment_names_in(self.notes + self.trash)
         for name in state.get("copied") or []:
@@ -2471,24 +2415,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     # ---------- Share codes ----------
     def _add_paste_menu(self, text_widget, extra_items=None):
-        """Give a Text/Entry widget a right-click menu with Cut/Copy/Paste/Select
-        All, so users can paste without knowing Ctrl+V.
-
-        extra_items, when given, is a list of (label, command) or (label,
-        command, accelerator_text) tuples appended after the emoji entry —
-        used only for the note body, to expose the same
-        Bold/Italic/Underline/Strikethrough toggles as the formatting
-        toolbar (with their keyboard shortcuts shown alongside, display
-        only — the actual key bindings live on body_text itself) without
-        adding them to every other text field that shares this same
-        menu-building function."""
+        """Give a Text/Entry widget a right-click menu with Cut, Copy, Paste
+        and Select All, for those who do not know Ctrl+V. *extra_items*,
+        (label, command[, accelerator]) tuples after the emoji entry, give
+        the note body the toolbar's formatting toggles, shortcuts shown."""
         menu = tk.Menu(text_widget, tearoff=0)
-        # Hover colour resolved at POST time, not build time: these menus
-        # hang off both long-lived fields (body, title, search…) and
-        # transient ones, so track_theme would leak entries for the
-        # transient ones while a build-time capture froze the long-lived
-        # ones on the old accent. postcommand runs on every open — live
-        # palette, zero tracking.
+        # Hover colour at POST time: track_theme leaked for short-lived fields,
+        # a build-time colour froze long-lived ones on the old accent.
         menu.configure(postcommand=lambda m=menu: m.configure(
             activebackground=self.colors["accent"], activeforeground=self._on_fill("accent")))
         menu.configure(bg=self.colors["card"], fg=self.colors["text"],
@@ -2514,12 +2447,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                              command=self._paste_plain)
         menu.add_separator()
         menu.add_command(label="Select All",
-                         # "end" (not "end-1c") is a Text widget's implicit
-                         # trailing newline -- including it in the
-                         # selection is why the highlight used to visibly
-                         # stretch to the full width of the last line,
-                         # well past the actual last character, regardless
-                         # of how short that line was.
+                         # "end-1c": "end" takes Text's own trailing newline,
+                         # and the highlight ran the last line's full width.
                          command=lambda: (text_widget.tag_add("sel", "1.0", "end-1c")
                                           if isinstance(text_widget, tk.Text)
                                           else text_widget.select_range(0, "end")))
@@ -2545,47 +2474,30 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 menu.grab_release()
         text_widget.bind("<Button-3>", popup)
 
-    # ---------- Note body rich text formatting ----------
-    # Storage: a note's "formatting" field is a flat list of {start, end,
-    # style} character-offset spans (see normalize_formatting). The live
-    # Tkinter Text widget is the only thing that ever manipulates ranges
-    # directly, via its own tags — these two functions are the sole bridge
-    # between "tags on a live widget" and "a plain-JSON-serializable list",
-    # called once at load time and once at save time. Tkinter itself keeps
-    # tag ranges correctly anchored to the surrounding text as the user
-    # types/deletes in between, so nothing needs to track offsets while
-    # editing is actually happening.
+    # ---------- Note body rich text formatting: offset spans in the note
+    # (normalize_formatting), Tk tags on the widget, bridged at load and save
+    # only -- Tk keeps tags anchored while typing ----------
     _FONT_STYLES = ("bold", "italic", "bold_italic")  # mutually exclusive
     _PENDING_STYLE_ANCHOR = "pending_style_anchor"  # see _toggle_body_style
 
     # ---------- Bullet and numbered lists ----------
     def _setup_list_tags(self, text_widget):
-        """Tags for the paragraph properties: hanging indent and alignment.
-
-        lmargin1 indents the first line, lmargin2 the wrapped continuation --
-        which is what keeps a long item lined up under its own text instead
-        of back under the marker.
-
-        Alignment gets its own tags rather than being folded into the list
-        ones. They set different Tk options (justify vs lmargin), so the two
-        compose: a centred bullet keeps its hanging indent.
+        """Tags for the paragraph properties: hanging indent (lmargin1 the
+        first line, lmargin2 the wrapped rest, under the item's text) and
+        alignment, its own tags -- justify and lmargin compose, so a centred
+        bullet keeps its indent.
         """
         self._paragraph_tags = {}
         text_widget.tag_configure("align_center", justify="center")
         text_widget.tag_configure("align_right", justify="right")
 
-    # Pixels per indent step, and the room a marker needs in front of its
-    # text so a wrapped line hangs under the text rather than the marker.
-    # Shown in both font dropdowns for "no span at all", which is what lets
-    # a note follow the Settings default instead of being pinned to whatever
-    # that happened to be the day it was written.
+    # Shown in both font dropdowns for "no span at all": the note follows the
+    # Settings default, not whatever it was on the day it was written.
     DEFAULT_FONT_LABEL = "Default"
 
     INDENT_STEP = 24
-    # Widths measured at _MARKER_ROOM_AT point. A marker set larger is
-    # wider, so these are scaled rather than used raw -- see _marker_room.
-    # The reference is a fixed number, not the current base size: that moves
-    # with the setting, and comparing it against itself scales by one.
+    # A marker's room before its text, measured at _MARKER_ROOM_AT points and
+    # scaled (_marker_room) -- against a fixed size, not the moving base one.
     _MARKER_ROOM = {"bullet": 24, "number": 28}
     _MARKER_ROOM_AT = 12
 

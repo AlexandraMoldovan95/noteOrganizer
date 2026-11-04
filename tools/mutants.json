@@ -8473,8 +8473,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        if _core_paths.writes_held(DATA_FILE):\n            # A held run saves nothing until it is opened again: the advice\n",
-        "replace": "        if False:\n            # A held run saves nothing until it is opened again: the advice\n"
+        "find": "        if _core_paths.writes_held(DATA_FILE):\n            # A held run saves nothing, so \"make a change\" is false there: said\n",
+        "replace": "        if False:\n            # A held run saves nothing, so \"make a change\" is false there: said\n"
       }
     ],
     "must_fail": [
