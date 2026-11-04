@@ -66,6 +66,7 @@ BRIEF = [
     "noteorganizer/core/welcome.py",
     "noteorganizer/core/winspell.py",
     "noteorganizer/ui/__init__.py",
+    "noteorganizer/ui/attachments.py",
     "noteorganizer/ui/calculator_panel.py",
     "noteorganizer/ui/note_list.py",
     "noteorganizer/ui/spelling.py",
