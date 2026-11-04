@@ -1272,10 +1272,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.search_entry.focus_set()
         except tk.TclError:
             pass
-        # The var write above queued a rebuild 180ms out. Clearing a search
-        # should feel like the list snapping back, so the wait is dropped and
-        # the rebuild happens now -- the debounce is there to make TYPING
-        # cheap, and this is one event, not a stream of them.
+        # A cleared search snaps back now: the 180 ms debounce is for typing,
+        # and this is one event.
         if self._search_debounce_job is not None:
             try:
                 self.after_cancel(self._search_debounce_job)
@@ -1284,12 +1282,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._search_debounce_job = None
         self.refresh_note_list()
 
-    # One sentence for one fact. A share code carries a note's text and not
-    # its files, and the two places that say so said it differently -- the
-    # sidebar "Attachments not included", the editor "Attachments aren't
-    # included in a code". It names where the files DO travel, as the note
-    # export's status line does: "use Export" left three exports to guess
-    # between, and read as a warning that the files were being lost.
+    # One sentence for one fact, said alike in the sidebar and the editor: a
+    # code carries no files, and the sentence names where files DO travel.
     SHARE_ATTACHMENT_WARNING = (
         "⚠ A code carries the text, not attached files — "
         "use Settings → Backup → Export for those.")
@@ -1324,13 +1318,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return self.title_entry.get() == "Note title..."
 
     def _insert_title(self, text):
-        """Put a stored title into the field, cap or no cap.
-
-        Validation fires on programmatic inserts as well as on typing. A
-        note whose title predates the cap -- or one hand-edited in the JSON
-        -- would otherwise have the widget silently drop the overflow, and
-        the next autosave would write that shortened title back over the
-        real one. Loading a note must never edit it.
+        """Put a stored title into the field, cap or no cap: validation fires
+        on inserts too, and an older, longer title was cut and saved back
+        shortened. Loading a note must never edit it.
         """
         self._setting_title = True
         try:
@@ -1403,10 +1393,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return "break"
         if chosen:
             self.title_entry.delete("sel.first", "sel.last")
-        # Weighed as it goes in, on one line: weighed as copied, a line
-        # copied with its line break, or CR LF, read as shortened. Only the
-        # breaks are joined: split() took the paste's edge spaces too, and
-        # "fresh " pasted before "milk" made "freshmilk" (round 8).
+        # Weighed as it goes in, on one line: a copied line break read as cut.
+        # Only breaks are joined -- split() made "fresh " + "milk" "freshmilk".
         whole = self._title_paste_line(pasted)
         clipped = whole[:room]
         self.title_entry.insert("insert", clipped)
@@ -1420,16 +1408,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return "break"
 
     def _schedule_autosave(self, event=None, skip_word_count=False):
-        """Debounced auto-save: (re)start a short timer on every edit. When the
-        user pauses even briefly, the note saves itself. Save button still works
-        for those who want to save immediately.
-
-        `skip_word_count`: the word/character count recompute reads the whole
-        body text on every call — cheap for a single keystroke, but calling it
-        on every click while rapid-inserting many emojis in a row adds up to
-        noticeable lag. The count still catches up once the debounce timer
-        below fires, just not on every single click. So it does while the
-        find bar shows hits (_count_waits_for_pause)."""
+        """Debounced auto-save: (re)start a short timer on every edit, so a
+        pause saves the note. `skip_word_count` leaves the count, which reads
+        the whole body, to the timer -- emoji inserted fast lagged -- as it
+        does while the find bar shows hits (_count_waits_for_pause)."""
         # Every edit passes here, whatever made it, so the find bar hears of
         # each: a key's release alone left a menu's paste or a toolbar's list
         # stepping to stale places (round 10).
@@ -1485,14 +1467,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._autosave_job = None
 
     def _log_swallowed(self, where):
-        """A guarded spot chose to carry on — leave the trace the bare
-        `pass` never did (audit Z02-F04: a persistent bug in the autosave
-        spine could stop saving in complete silence). Same file as every
-        other crash record; deliberately no toast — a background path can
-        hit its guard on every keystroke. Logged ONCE per spot per
-        session for the same reason: a persistent bug would otherwise
-        append a traceback per keystroke, growing the log without bound
-        and putting file I/O on the typing path."""
+        """A guarded spot chose to carry on: leave the trace a bare `pass`
+        never did (audit Z02-F04 -- the autosave could stop in silence). The
+        crash log, no toast, once per spot a session, as a guard on the
+        typing path can be hit at every keystroke."""
         seen = getattr(self, "_swallowed_seen", None)
         if seen is None:
             seen = self._swallowed_seen = set()
@@ -1509,35 +1487,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         actually differs from what's on disk. A repeat turned off on a series
         whose days hold edits of their own is held back from it (see
         _date_and_repeat_to_store): leaving the note or Save makes that save."""
-        # Cancelled, not forgotten: whoever runs this -- its timer, or a
-        # caller saving right now -- leaves no other autosave pending. A
-        # timer whose job was only set to None stayed scheduled with
-        # nothing tracking it, and on firing it set the NEXT job to None
-        # the same way: a relay of untracked saves going off at random
-        # moments (28 in one qa1 run, one in the middle of a held
-        # BackSpace, splitting the undo step it was building).
+        # Cancelled, not forgotten: a timer only set to None ran untracked and
+        # passed it on -- 28 stray saves a qa1 run, one splitting a held
+        # BackSpace's undo step.
         self._cancel_pending_autosave()
         if not self._still_alive():
             return
-        # selected_note_id can end up stale — pointing at a note that no
-        # longer exists (e.g. it was removed by another action while this
-        # timer was pending). save_current_note() would otherwise hit its
-        # "Note missing" error dialog here — appropriate for an explicit,
-        # user-initiated Save, but not for a silent background autosave the
-        # user never directly asked for. Same guard _flush_autosave() already
-        # uses for the same reason.
+        # A note gone while the timer waited: no "Note missing" dialog from a
+        # save nobody asked for (as _flush_autosave guards).
         if self.selected_note_id is not None and self.find_note(self.selected_note_id) is None:
             return
         # Before any early return below: an editor that matches the note has
         # nothing to save.
         self._say_nothing_is_left_out()
-        # A day of a series saves here like any note: to that day, asking
-        # nothing (save_current_note). It used to wait, because its save
-        # asked "this occurrence or the whole series?" and a silent timer
-        # must never open a dialog -- every pause in typing raised the
-        # question, and one stacked on a manual save's own produced a frozen
-        # "ghost" save (see ISSUES_LOG). The wait was invisible: a category
-        # picked for one day seemed to do nothing (field report, 2026-10-12).
+        # A day of a series saves here like any note, to that day, asking
+        # nothing: it waited for the old question, and a category picked for
+        # one day seemed to do nothing (field report).
         try:
             st, body_read = self._capture_and_read()
         except Exception:
@@ -1552,13 +1517,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._log_swallowed("autosave: catch-up word count")
         if body_read is None:
             return
-        # Never auto-save a completely empty NEVER-SAVED note — that would
-        # spawn junk notes every time the user clicks "New Note". A note
-        # that already exists on disk is the opposite case: an empty editor
-        # there is a deliberate emptying, and this very gate silently
-        # throwing it away was T0-5's actual mechanism — the fix in
-        # save_current_note was unreachable because this early-return ran
-        # first on the autosave route.
+        # An empty NEVER-SAVED note is not saved (junk at every New Note); a
+        # saved one emptied is, deliberately (this gate threw it away: T0-5).
         if not self._editor_state_has_content(st) and not self._editing_saved_note():
             return
         # Only save if something actually changed vs. the saved version.
@@ -1582,13 +1542,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     and (note.get("overrides") or note.get("exceptions")))
 
     def _say_nothing_is_left_out(self):
-        """Put the status line right once nothing is left out any more.
-
-        Only a save writes "-- except the date ..." and only a save rewrote
-        it: a value put back to what the note already stores leaves nothing
-        to save, and the line went on naming it as not saved while leaving
-        asked nothing. The save's own words, without the except, come back
-        (kept by save_current_note)."""
+        """Put the status line right once nothing is left out any more: a
+        value put back leaves nothing to save, and "-- except the date ..."
+        stayed. The save's own words come back (kept by save_current_note)."""
         said = getattr(self, "_status_names_left_out", None)
         if not said:
             return
@@ -1614,21 +1570,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return False
 
     def _is_placed(self, widget):
-        """Whether a widget has its place in the layout -- packed, gridded
-        or placed -- which is what every "show it" / "hide it" decision
-        means to ask.
-
-        Not winfo_ismapped(). That asks whether the widget is on the SCREEN,
-        and Tk answers no for a widget that has its place in two ordinary
-        moments: until Tk first draws it after it was packed, and for as
-        long as the page holding it is hidden -- Tk unmaps every child of a
-        hidden container and maps them again when it comes back. So "hide
-        it if it shows" skipped a widget that was only asleep, and it woke
-        up with its page: Restore previous stayed on a note with nothing to
-        restore, opened from the Calendar. And "show it if it does not" packed
-        again a widget that already had a place, which moves it to the end
-        of its container. tools/check_one_definition.py keeps
-        winfo_ismapped() out of these decisions."""
+        """Whether a widget has its place in the layout -- packed, gridded or
+        placed -- as every show/hide decision means to ask. Not
+        winfo_ismapped(), which says no until first drawn and while its page
+        is hidden: a hidden button woke up with its page. The one-definition
+        gate keeps winfo_ismapped() out of these decisions."""
         try:
             return bool(widget.winfo_manager())
         except tk.TclError:
@@ -1647,10 +1593,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     self._sync_editor_snapshot()
         except (tk.TclError, Exception):
             pass
-        # Only reschedule if the window is still around — this timer refires
-        # forever otherwise, and calling self.after() against an already
-        # destroyed root raises its own error (observed in practice, e.g.
-        # when a script closes the app while this timer is still pending).
+        # Rescheduled only while the window lives: after() on a destroyed root
+        # raises (a script closing the app under the timer).
         if self._still_alive():
             self.after(600, self._poll_active_dirty)
 
@@ -1855,18 +1799,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             lines.append("⚠ " + STORAGE_WARNING)
 
         if MIGRATION_INFO:
-            # Said by the migration itself, per case, and only what is
-            # true. A fixed tail used to follow it here -- "the script and
-            # dist\NoteOrganizer.exe both read this same folder, so they
-            # can never drift apart" -- which was false in source mode
-            # after a reclaim, and developer jargon in the built app.
+            # Said by the migration itself, per case, only what is true (a
+            # fixed tail here was false in source mode, and jargon).
             lines.append(MIGRATION_INFO)
 
         if self._categories_adopted:
-            # The notes were right and settings.json had lost track: say
-            # which categories came back, because their colours are now
-            # the default palette's, and a change nobody explains looks
-            # like the app forgetting things.
+            # settings.json had lost track of the notes' categories: said, as
+            # their colours are now the defaults.
             count = len(self._categories_adopted)
             shown = self._categories_adopted[:8]
             listed = "\n".join(f"  • {name}" for name in shown)
@@ -1890,10 +1829,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "note and attachment in it already existed in your notes folder."
             )
 
-        # Only speak if the pass actually DID something. On a fresh
-        # install it runs against an empty notebook and used to announce
-        # itself anyway — the literal first screen of the product was a
-        # blocking modal reading "0 note(s) remain, IDs renumbered 1–0".
+        # Said only when the pass DID something: a fresh install's first
+        # screen read "0 note(s) remain, IDs renumbered 1–0".
         if self._cleanup_report and (
                 self._cleanup_report[0].get("empty_removed")
                 or self._cleanup_report[0].get("duplicates_removed")):

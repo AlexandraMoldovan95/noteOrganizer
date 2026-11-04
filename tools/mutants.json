@@ -4071,8 +4071,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        # picked for one day seemed to do nothing (field report, 2026-10-12).\n        try:\n            st, body_read = self._capture_and_read()",
-        "replace": "        # picked for one day seemed to do nothing (field report, 2026-10-12).\n        if self.current_occurrence_date:\n            return\n        try:\n            st, body_read = self._capture_and_read()"
+        "find": "        # one day seemed to do nothing (field report).\n        try:\n            st, body_read = self._capture_and_read()",
+        "replace": "        # one day seemed to do nothing (field report).\n        if self.current_occurrence_date:\n            return\n        try:\n            st, body_read = self._capture_and_read()"
       }
     ],
     "must_fail": ["a category picked for one day is saved to that day, asking nothing"],
