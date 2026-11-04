@@ -12028,7 +12028,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                             "— ↩ Restore previous undoes each one" if updated
                             else "Everything in this code is already here, unchanged")
             return
-        next_id = max([n["id"] for n in self.notes], default=0) + 1
         # Check each incoming note against what's already here — same
         # matching rule as "Find duplicates" — before blindly appending
         # everything. Importing the same share code twice (or a code that
@@ -12059,6 +12058,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 to_import = fresh
         # Every question is answered: only now do the updates happen.
         updated = self._apply_known_updates(updates, "code")
+        # Counted once the questions are answered: a note saved while one
+        # waited -- a new one's autosave -- took the id counted before it.
+        next_id = max([n["id"] for n in self.notes], default=0) + 1
         added = 0
         arrived = []
         for sn in list(to_import) + copies:
@@ -13071,7 +13073,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.export_progress_lbl.config(
                 text=f"Importing… {state['current']} / {state['total']} attachments")
 
-        if not state["done"]:
+        # Its merge waits for a question already open: run inside a share
+        # code's, the backup's notes took the ids that import had counted
+        # before it asked, and the two wore one id (wave 2, round 11).
+        if not state["done"] or self._a_dialog_is_asking():
             self._export_poll_job = self.after(100, self._poll_import_progress)
             return
 

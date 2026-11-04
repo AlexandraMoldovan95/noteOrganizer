@@ -616,6 +616,55 @@ check(f"an Update agreed to, then look-alikes skipped: the Update still happens 
 app.notes = [n for n in app.notes if n.get('id') not in (9601, 9602)]
 app.save_notes()
 
+# A note saved while the code's question waited -- a backup's merge, a new
+# note's autosave -- took the id the import had counted before it asked, and
+# two notes wore one id: opening one wrote over the other (wave 2, round 11).
+_ni_keep = list(app.notes)
+app.notes = [NO.normalize_note({'id': 9701, 'title': 'Here already', 'body': 'same words'})]
+app.save_notes()
+
+
+def _ni_answer(*a, **k):
+    labels = [label for label, _v in k.get('buttons') or []]
+    if any(label.startswith('Skip') for label in labels):
+        app.notes.append(NO.normalize_note({'id': max(n['id'] for n in app.notes) + 1,
+                                            'title': 'Saved meanwhile', 'body': 'x'}))
+        return 'skip'
+    return 'cancel'
+
+
+app._themed_dialog = _ni_answer
+app.import_box.delete('1.0', 'end')
+app.import_box.insert('1.0', NO.encode_share_code([
+    {'title': 'Here already', 'body': 'same words'}, {'title': 'Arrived', 'body': 'fresh'}]))
+app._do_inline_import()
+app.update()
+app._themed_dialog = _real_dlg_id
+_ni_ids = [n['id'] for n in app.notes]
+check(f"a note saved while a code's question waits keeps its own id ({_ni_ids})",
+      len(_ni_ids) == 3 and len(set(_ni_ids)) == 3)
+# ...and a backup's merge waits for a question already open, rather than
+# running inside it.
+_pi_merged = []
+app._merge_finished_import = lambda state: _pi_merged.append(state)
+try:
+    app._import_state = {'phase': 'copying', 'total': 1, 'current': 1, 'done': True}
+    app._modal_depth = 1
+    app._poll_import_progress()
+    _pi_waited = not _pi_merged and app._import_state is not None
+    app._modal_depth = 0
+    if _pi_waited:   # the wait re-armed the poll; merged at once, nothing was
+        app.after_cancel(app._export_poll_job)
+    app._poll_import_progress()
+finally:
+    app.__dict__.pop('_merge_finished_import', None)
+    app._modal_depth = 0
+    app._import_state = None
+check(f"a backup's merge waits while a question is open, then runs ({_pi_waited}, {len(_pi_merged)})",
+      _pi_waited and len(_pi_merged) == 1)
+app.notes = _ni_keep
+app.save_notes()
+
 # The other answer. "Add as a new note" must land a SECOND note -- and
 # strip the identity on the way, or the two would be one note wearing two
 # ids, which is the collision the whole field exists to prevent.

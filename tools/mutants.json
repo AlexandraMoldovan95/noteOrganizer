@@ -16357,5 +16357,46 @@
       "qa3"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "WS78",
+    "about": "A backup's merge runs inside a question already open: the code's notes there take the backup notes' ids",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if not state[\"done\"] or self._a_dialog_is_asking():\n",
+        "replace": "        if not state[\"done\"]:\n"
+      }
+    ],
+    "must_fail": [
+      "a backup's merge waits while a question is open, then runs"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS79",
+    "about": "A code's import counts its ids before its questions: a note saved while one waited wears the same id as a note it adds",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        existing_keys = self._dup_keys_after(updates)\n        fresh = [sn for sn in valid if",
+        "replace": "        next_id = max([n[\"id\"] for n in self.notes], default=0) + 1\n        existing_keys = self._dup_keys_after(updates)\n        fresh = [sn for sn in valid if"
+      },
+      {
+        "file": "note_organizer.py",
+        "find": "        # waited -- a new one's autosave -- took the id counted before it.\n        next_id = max([n[\"id\"] for n in self.notes], default=0) + 1\n",
+        "replace": "        # waited -- a new one's autosave -- took the id counted before it.\n"
+      }
+    ],
+    "must_fail": [
+      "a note saved while a code's question waits keeps its own id"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
   }
 ]
