@@ -7375,33 +7375,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._grid_paste_cells(sel["info"],
                                        sel["box"][0], sel["box"][1])
                 return "break"
-        # A paste moves the caret and the lines under it, by every route
-        # below and by Tk's own: the release of its key is not the person
-        # leaving a table (as for _paste_tsv_as_table and _body_undo_redo).
-        # Read as one, it padded the pasted rows -- or the table they had
-        # pushed down -- as an edit outside the paste's undo unit, and the
-        # first Ctrl+Z changed nothing on screen. A table being typed that
-        # the paste really leaves is tidied by the paste, inside its unit.
+        # A paste's key release is not the person leaving a table: read as one,
+        # it padded tables outside the paste's unit, and the first Ctrl+Z did
+        # nothing. A table the paste leaves is tidied inside it.
         self._last_caret_line = None
         self._paste_from_table = self._note_raw_table_at_caret()
-        # Our own cell copy puts an HTML table on the clipboard for Word's
-        # sake, and on Windows the rich-paste route saw it FIRST -- so
-        # pasting a copied table back into a note took the generic HTML
-        # road: no set widths, no placement, and the first row glued onto
-        # the caret's line ("Source: | fff |..." in the field report). The
-        # TSV route carries everything the copy knew, so our own copies go
-        # there; the rich route is for content from OTHER applications.
-        # Detection reads the system clipboard directly, no Tk fallback:
-        # our copy always writes the plain text alongside the HTML, and
-        # when the clipboard is momentarily locked the HTML is unreadable
-        # too, so the paste falls through to the TSV route anyway.
+        # Our own cell copy goes the TSV route, which carries all it knew: by
+        # its HTML (for Word) it lost widths and glued a row ("Source: | fff
+        # |..."). Read off the system clipboard, which also holds the plain text.
         own = getattr(self, "_grid_cell_clip_text", None)
         own_copy = bool(own) and clipboard.read_text() == own
-        # The run of Tk's own deletes opened for this paste (it replaces a
-        # styled selection: _note_styled_delete). Each route tried below is
-        # an undo unit of its own, and opening one ends any run -- here
-        # before Tk had deleted anything, so the run ended empty, and the
-        # selection Tk's paste then replaced came back plain on Ctrl+Z.
+        # The delete run opened for this paste over a styled selection: each
+        # route's own unit ended it empty, and Ctrl+Z gave the selection plain.
         run = getattr(self, "_styled_delete_run", None)
         if own_copy:
             if self._paste_tsv_as_table():
@@ -7452,15 +7437,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     @_undo_atom
     def _paste_pipe_text_on_own_lines(self):
         """Plain text whose edge lines are table rows lands on its own
-        lines, never glued into the caret's line.
-
-        Copying half a table plus its caption as ordinary body text and
-        pasting it mid-line spliced the first pipe row onto the caret's
-        line -- '|   | [x] |fig2...' in the field report -- and the
-        caption onto the last one. Tk's default paste is right for
-        prose; pipe rows only mean something at a line start, so they
-        get the newlines that keep them rows -- and a blank line from a
-        table they would touch (_rows_gap).
+        lines, never glued into the caret's ('|   | [x] |fig2...', field
+        report), with a blank line from a table it would touch (_rows_gap).
         """
         raw, cut = self._clipboard_text(self.body_text)
         if raw is None:
@@ -7514,13 +7492,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     @_undo_atom
     def _paste_text_forgetting_widths(self):
-        """Plain text with a table in it whose separator spells widths,
-        pasted by the app instead of by Tk, so the separator goes in at
-        markdown's minimum (_foreign_plain) inside the paste's own unit --
-        a table in the middle of the text, which no route above takes.
-        Anything _foreign_plain leaves as it came stays Tk's to paste --
-        unless the ceiling cut it (_clipboard_text): Tk would paste all of
-        it, so the app pastes what it keeps."""
+        """Plain text with a mid-text table whose separator spells widths,
+        pasted by the app so the separator goes in at the minimum
+        (_foreign_plain), in the paste's unit. Anything else stays Tk's --
+        unless the ceiling cut it, when the app pastes what it keeps."""
         raw, cut = self._clipboard_text(self.body_text)
         if not raw:
             return False
@@ -7573,25 +7548,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         b.mark_set(self._PASTE_FROM_TABLE, f"{block[0]}.0")
         b.mark_gravity(self._PASTE_FROM_TABLE, "right")
         self._paste_caret_line = here
-        # What the paste writes into that table is recorded with no window
-        # on its first line, and the table is drawn later: replayed with the
-        # window there, Ctrl+Z took letters out of the header. Ctrl+Shift+V
-        # calls this inside its own unit, which is marked so; the routes of
-        # _on_body_paste take the tables down before they write.
+        # Recorded with no window on the table's line, drawn later: replayed
+        # with it, Ctrl+Z took letters out of the header. Marked so.
         self._mark_unit_window_free()
         return self._PASTE_FROM_TABLE
 
     def _tidy_table_paste_left(self):
         """Tidy the table being typed that a paste took the caret out of,
-        inside the paste's own undo unit, as leaving it by any key tidies it
-        (_align_table_on_leaving). A paste's release no longer reads as
-        leaving a table -- that padded tables the caret was never in, as an
-        edit of its own -- so a table a paste did leave was drawn and never
-        tidied, its saved pipe text left with ragged columns.
-
-        Returns the line of the table still being typed that the paste left
-        the caret on, for the drawing that follows to leave alone (see
-        _render_table_grids), or None."""
+        inside the paste's unit, as leaving by a key tidies it -- or it was
+        saved with ragged columns. Returns the line of a table still being
+        typed that the paste left the caret on, for the drawing to leave
+        alone (_render_table_grids), or None."""
         mark = getattr(self, "_paste_from_table", None)
         self._paste_from_table = None
         if not mark:
@@ -7604,12 +7571,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except (tk.TclError, ValueError):
             return None
         if here == getattr(self, "_paste_caret_line", None):
-            # Still on the line it was pasted on, as after a letter typed
-            # there: the table is tidied, and drawn, once the caret leaves
-            # that line -- which is the caret's line now, as a letter typed
-            # there leaves it. Left unknown, a paste from the menu, which has
-            # no key whose release would name it, was never tidied or drawn
-            # when the caret left by the mouse or an arrow.
+            # Still on its line, as after a letter typed there: tidied and drawn
+            # once the caret leaves -- unnamed, a menu paste never was.
             self._last_caret_line = here
             return here
         block = self._table_block_at(first)
@@ -7646,19 +7609,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     @_undo_atom
     def _paste_tsv_as_table(self, raw=None, plain=False):
-        """Tab-separated clipboard text pasted into the body becomes a
-        real table.
-
-        This is what makes duplicating a table WORK: copying cells puts
-        tab-separated lines on the clipboard (what a spreadsheet reads),
-        and pasting that below the table used to fall through to the
-        plain-text path -- raw tabs on one line, stored <br> markers
-        showing as text, "nothing happens or <br> <br> appears" in the
-        field report. Same shape arrives from a spreadsheet copied as
-        plain text, so both now land as a grid. Single cells (no tab)
-        keep pasting as ordinary text. *plain* (Ctrl+Shift+V): the table
-        comes back without the copied cells' styles or its place on the page.
-        A *raw* given was read by the caller (_paste_plain), ceiling and all.
+        """Tab-separated clipboard text pasted into the body becomes a real
+        table -- copied cells, or a spreadsheet's ("<br> <br> appears", field
+        report); a single cell stays text. *plain* (Ctrl+Shift+V): without
+        the cells' styles or the table's place. A *raw* given was read by
+        the caller (_paste_plain), ceiling and all.
         """
         cut = False
         if raw is None:
@@ -7671,11 +7626,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         b = self.body_text
         try:
             selected = b.index("sel.first")
-            # A selection that ends where a table begins holds that
-            # table's own line break (Shift+Down from the line above). The
-            # break stays: deleted with the rest, it left the caret on the
-            # table's first row, and the new rows went in under that row,
-            # cutting the old table's header from its body.
+            # A selection ending where a table begins keeps that table's line
+            # break: deleted, the rows went under its header, cutting it off.
             last = b.index("sel.last")
             if (b.compare(last, "==", f"{last} linestart")
                     and b.compare(selected, "<", last)
@@ -7691,10 +7643,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         try:
             here = b.get(f"{selected or 'insert'} linestart",
                          f"{selected or 'insert'} lineend")
-            # Over a selection, the paste lands on what is left of its
-            # lines once the selection is gone. Read off the first line
-            # alone, Ctrl+A in a note that starts with a table read as
-            # "inside a table", and the cells went in as raw tabs.
+            # Over a selection, on what is left of its lines: off the first
+            # line alone, Ctrl+A read as "inside a table", raw tabs going in.
             remains = (here if selected is None else
                        b.get("sel.first linestart", "sel.first")
                        + b.get("sel.last", "sel.last lineend"))
@@ -7718,13 +7668,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             while len(clip_widths) < ncols:
                 clip_widths.append({"width": None, "align": None,
                                     "hidden": False})
-        # The separator is laid out with the rows, as the tidy lays it out
-        # (_align_table_block): built narrower, it was padded by the tidy --
-        # at the key's release, or once the caret had been in the table and
-        # left -- a recorded edit of its own, and the first Ctrl+Z after
-        # the paste changed nothing on screen. Its dashes are its own all
-        # the same: they carry each column's set width, and the padding
-        # beside them is spaces.
+        # The separator laid out as the tidy would (_align_table_block), its
+        # dashes the set widths, padded with spaces: narrower, the tidy padded
+        # it later, an edit the first Ctrl+Z spent.
         separator = (core_tables.make_separator(clip_widths) if clip_widths
                      else ["---"] * ncols)
         # Our own copy keeps each cell's alignment; anything else is left.
@@ -7734,11 +7680,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         aligns = [row[:ncols] for row in aligns]
         rows = [rows[0], separator] + rows[1:]
         aligns = [aligns[0], [core_tables.ALIGN_LEFT] * ncols] + aligns[1:]
-        # The ceiling holds on the table as it goes in, padding included:
-        # rows under one wide cell were each padded to it, and 16 KB on the
-        # clipboard became two million characters. Rows past it are left
-        # out before any is laid out; not even the header fitting, the text
-        # goes in as text.
+        # The ceiling holds padding included (16 KB became two million
+        # characters): rows past it left out first; no header fitting, text.
         def laid_out(kept):
             return core_tables.table_length(rows[:kept + 1], aligns[:kept + 1])
         source_rows = len(rows) - 1
@@ -7750,16 +7693,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             rows, aligns, cut = rows[:kept + 1], aligns[:kept + 1], True
         lines = core_tables.format_table(rows, aligns)
         clip_place = getattr(self, "_grid_cell_clip_place", None) if own and not plain else None
-        # The grids come down before anything is written, selection or not:
-        # torn down by the drawing at the end, inside this unit, they split
-        # it -- the paste one step, where the windows sit another on top --
-        # and the first Ctrl+Z changed nothing on screen.
+        # The grids come down before anything is written: torn down at the
+        # end, they split the unit, and the first Ctrl+Z did nothing.
         self._teardown_table_grids()
         if selected is not None:
-            # Pasted over a selection, the table takes its place, as every
-            # other paste here does: the selected text used to stay, the
-            # table landing under its line. Within this undo unit, so one
-            # Ctrl+Z brings the selection back with its styles.
+            # Over a selection, the table takes its place, in this unit, so one
+            # Ctrl+Z brings it back styled (it stayed, the table under it).
             try:
                 start = b.index("sel.first")
                 b.delete("sel.first", "sel.last")
@@ -7793,11 +7732,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._resync_list_tags()
         self._render_table_grids(keep_typed=kept)
         self._schedule_autosave()
-        # The paste moved the caret and the lines under it; the release of
-        # its own key is not the person leaving a table (see
-        # _body_undo_redo), and read as one it tidied a table as a recorded
-        # edit outside this unit. A row it left the caret on stays the
-        # caret's line (_tidy_table_paste_left).
+        # The paste's key release is not a leaving (see _body_undo_redo); a row
+        # it left the caret on stays the caret's line (_tidy_table_paste_left).
         self._last_caret_line = kept
         if cut:
             self._say_if_paste_was_cut({"text_cut": True}, in_body=True)
@@ -7818,13 +7754,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     @_undo_atom
     def _paste_plain(self, event=None):
-        """Paste the clipboard's text with none of its formatting.
-
-        The escape hatch for pasting from a web page into a note without
-        dragging its styling along. One undo unit, as every other paste
-        is: it deletes the selection by hand, and outside a unit Ctrl+Z
-        took the paste back in two steps and returned the selection with
-        none of the formatting it had.
+        """Paste the clipboard's text with none of its formatting, a web
+        page's styling left behind -- in one undo unit, or Ctrl+Z took two
+        steps and gave the selection back plain.
         """
         # The formatted paste's ceiling, here too: one line of 600,000
         # characters took ten seconds to lay out at every key (ISSUES_LOG:
@@ -7840,13 +7772,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 and text.replace("\r\n", "\n").replace("\r", "\n") == own_cells
                 and self._paste_tsv_as_table(raw=text, plain=True)):
             return "break"
-        # Plenty of sources write their own bullets into the plain text they
-        # offer, and a marker in the text is what makes a line a list line
-        # here -- so pasting it verbatim produced the very formatting this
-        # was meant to leave behind.
-        # A PDF's line breaks are where its column ended, not where the
-        # writer did. Rejoined before the markers are stripped, because that
-        # decision reads the line structure and refuses to touch a list.
+        # A source's own bullets are stripped, or the list came back; a PDF's
+        # column breaks are rejoined first, as that reads the lines and
+        # leaves a list alone.
         self._paste_from_table = self._note_raw_table_at_caret()
         self._replace_selection_with(
             strip_list_markers(reflow_wrapped(self._foreign_plain(text))))
@@ -7878,12 +7806,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _clipboard_text(self, widget):
         """The clipboard's text as a paste puts it in, and whether it was
-        cut (_cap_paste).
-
-        Ctrl+V of plain text, the menu's Paste, the comments box and a
-        template's fields each pasted all of it: one line of 600,000
-        characters, then more than a second at every key (ISSUES_LOG:
-        "Limits that held at the door but not after it").
+        cut (_cap_paste) -- every route pasted all of it, a second a key
+        after (ISSUES_LOG: "Limits that held at the door but not after it").
 
         Returns:
             ``(text, cut)``, or ``(None, False)`` when the clipboard holds
@@ -7949,18 +7873,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._renumber_lists()
 
     def _rows_gap(self, text):
-        """What *text*, about to go in at the caret, needs before and after
-        it so table rows at its edges stay a table of their own: lines of
-        their own, and a blank line between them and a table on the next or
-        the previous line.
-
-        Pasted onto the line above a drawn table, or the empty line between,
-        rows joined that table -- its header read as a data row and its
-        separator as a row of dashes, the grid one misshapen table. Pasted
-        after a caption (Ctrl+Shift+V, or a table from another program),
-        the first row was glued onto the caption's line and stopped being a
-        row. Only Ctrl+V's own route and the spreadsheet paste kept either
-        rule; every paste route asks here now."""
+        """What *text*, going in at the caret, needs before and after so
+        table rows at its edges stay a table of their own: lines of their
+        own, a blank line from a table beside -- or they joined it, its
+        header read as data, or glued onto a caption. Every paste asks."""
         b = self.body_text
         lines = text.split("\n")
         lead = trail = ""
@@ -8008,12 +7924,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     paragraphs.append(p)
         if not text:
             return False
-        # Only when the source offered no formatting of its own, which is the
-        # case a PDF presents: bare lines broken by a column. Reflowing moves
-        # every character after each join, and the spans are offsets into this
-        # same text -- so a source that did send formatting keeps its line
-        # breaks rather than have its bold slide out of place. Such a source
-        # sent real block tags anyway, which means real paragraphs already.
+        # Only a source with no formatting, as a PDF's: reflowing moves every
+        # offset, and a formatted source's bold would slide (it sent real
+        # paragraphs anyway).
         if not spans and not paragraphs and not own:
             text = reflow_wrapped(text)
 
@@ -8056,10 +7969,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # it continue whatever it was dropped into.
         self._renumber_lists()
         kept = self._tidy_table_paste_left()
-        # A whole-body pass, which this is the case the cheap per-line one
-        # is not for: a paste can bring in many lines at once, and the tags
-        # derived from what those lines say -- a list's margin, a table's
-        # monospace face -- are not carried by the text itself.
+        # A whole-body pass: a paste brings many lines, whose derived tags
+        # (margins, a table's face) the text does not carry.
         self._body_follow_caret = True
         self._resync_list_tags()
         self._render_table_grids(keep_typed=kept)
