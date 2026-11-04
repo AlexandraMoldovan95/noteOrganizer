@@ -19776,7 +19776,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # template editor -- asks first, and choosing to keep editing keeps
         # this note from opening: a card clicked beside a half-written
         # template closed it without the question, the typing gone.
-        if not self._dismiss_mini_popup_asking():
+        # A reload after a change made from outside (flush=False) is no
+        # person's open, and is not asked: Cancel there kept the stale editor,
+        # which saved over the change (round 12). The popup stays open.
+        if flush and not self._dismiss_mini_popup_asking():
             return False
         # Navigating to a different note means we're no longer mid-creation of
         # the calendar-originated one — clear this BEFORE the flush below, so
@@ -23388,13 +23391,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "close Note Organizer, open it again, and restore %s then."
                 % ("They stay" if many else "It stays", "them" if many else "it"))
             return None
-        kept_count, kept_trash = len(self.notes), self.trash
+        kept_trash = self.trash
         self.notes, self.trash, restored = core_restore_many_from_trash(
             self.notes, self.trash, entries)
         if not restored:
             return restored
         if not self.save_notes():
-            del self.notes[kept_count:]
+            # Taken back by identity: a new note's autosave inside the error's
+            # wait was appended after them, and a cut by count took it too (round 12).
+            back = {id(n) for n in restored}
+            self.notes[:] = [n for n in self.notes if id(n) not in back]
             self.trash = kept_trash
             self.set_status("Not restored — the notes could not be saved; "
                             "it stays in Recently deleted")

@@ -662,6 +662,24 @@ finally:
     app._import_state = None
 check(f"a backup's merge waits while a question is open, then runs ({_pi_waited}, {len(_pi_merged)})",
       _pi_waited and len(_pi_merged) == 1)
+# A restore whose save fails takes back exactly the notes it brought: a new
+# note's autosave inside the error's wait came after them, and a cut by count
+# threw it away (round 12).
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Kept here', 'body': 'k'}),
+             NO.normalize_note({'id': 2, 'title': 'Sent away', 'body': 's'})]
+app.trash = []
+app.save_notes(); NO.save_trash(app.trash)
+app._delete_note(app.find_note(2), None); app.update()   # asked yes: line 26
+_rb_new = NO.normalize_note({'id': 9, 'title': 'Typed meanwhile', 'body': 'x'})
+app.save_notes = lambda *a, **k: (app.notes.append(_rb_new), False)[1]
+try:
+    _rb_back = app._restore_trash_entries(list(app.trash))
+finally:
+    app.__dict__.pop('save_notes', None)
+check(f"a restore whose save fails keeps a note saved meanwhile "
+      f"({_rb_back}, {[n.get('title') for n in app.notes]})",
+      _rb_back is None and any(n is _rb_new for n in app.notes)
+      and not any(n.get('title') == 'Sent away' for n in app.notes))
 app.notes = _ni_keep
 app.save_notes()
 

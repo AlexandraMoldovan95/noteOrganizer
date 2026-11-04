@@ -10024,7 +10024,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            del self.notes[kept_count:]\n            self.trash = kept_trash\n",
+        "find": "            self.notes[:] = [n for n in self.notes if id(n) not in back]\n            self.trash = kept_trash\n",
         "replace": ""
       }
     ],
@@ -16393,6 +16393,42 @@
     ],
     "must_fail": [
       "a note saved while a code's question waits keeps its own id"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS80",
+    "about": "A reload after a change made from outside asks the template editor first, and its Cancel keeps the stale editor",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if flush and not self._dismiss_mini_popup_asking():\n            return False\n        # Navigating",
+        "replace": "        if not self._dismiss_mini_popup_asking():\n            return False\n        # Navigating"
+      }
+    ],
+    "must_fail": [
+      "a change made from outside reloads the open note without asking the template editor"
+    ],
+    "suites": [
+      "qa9"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS81",
+    "about": "A restore whose save fails is taken back by count, and a note saved meanwhile goes with it",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self.notes[:] = [n for n in self.notes if id(n) not in back]\n",
+        "replace": "            del self.notes[-(len(back) + 1):]\n"
+      }
+    ],
+    "must_fail": [
+      "a restore whose save fails keeps a note saved meanwhile"
     ],
     "suites": [
       "qa3"

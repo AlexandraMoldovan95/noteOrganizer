@@ -2553,6 +2553,30 @@ check("the template editor's ✕ asks before a half-written template goes, and "
       "Cancel keeps it (%s)" % _cx_asked,
       _cx_asked == ['Save changes?'] and app._mini_popup is _cs_pop
       and 'fourth line' in _cs_body.get('1.0', 'end'))
+# A change made from outside -- a backup's Update -- reloads the open note
+# without asking the template editor: its Cancel kept the stale editor, which
+# saved over the change (wave 2, round 12). The editor stays open.
+app._dismiss_mini_popup(); app.update()
+app.hide_settings_page(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Outside', 'body': 'before'})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.show_settings_page(); app.update()
+app.toggle_settings_panel('templates'); app.update()
+app._edit_template(app.templates[0], redraw=lambda: None); app.update()
+_xo_pop = app._mini_popup
+[w for w in _walk9(_xo_pop) if isinstance(w, tk.Text)][0].insert('end', '\nunsaved line')
+_xo_asked = []
+try:
+    app.ask_yes_no_cancel = lambda *a, **k: (_xo_asked.append(a[0]), None)[1]
+    app.find_note(1)['body'] = 'after'
+    app._editor_follows_external_change({1}); app.update()
+finally:
+    app.__dict__.pop('ask_yes_no_cancel', None)
+_xo_shown = app.body_text.get('1.0', 'end-1c')
+check("a change made from outside reloads the open note without asking the "
+      "template editor (%s, %r)" % (_xo_asked, _xo_shown),
+      not _xo_asked and _xo_shown == 'after' and app._mini_popup is _xo_pop)
 app._dismiss_mini_popup(); app.update()
 
 # ============================================================
