@@ -3324,14 +3324,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._grid_reassert_cell_highlight(info, r, c)
 
     def _grid_reassert_cell_highlight(self, info, r, c):
-        """A CELL-level highlight lives pipe-to-pipe; keep it whole.
-
-        The style re-lay above clears the value range and re-applies what
-        the editor sampled -- which, for text typed into an empty
-        highlighted cell, is nothing. The pads still carry the cell's
-        highlight; re-dress the full region so the new text sits inside
-        it instead of punching a hole that surfaces at the next rebuild
-        ("type in a coloured cell, drag the column, colour gone")."""
+        """A CELL-level highlight lives pipe-to-pipe; keep it whole. Text
+        typed into an empty highlighted cell sampled nothing, and punched a
+        hole the next rebuild showed ("type in a coloured cell, drag the
+        column, colour gone"): the whole region is dressed again."""
         span = self._grid_cell_text_range(info, r, c, pad_ok=True, full=True)
         if not span:
             return
@@ -3512,13 +3508,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pass
 
     def _editor_key_press(self, event=None):
-        """BEFORE the class binding inserts the typed character: paint
-        anything the previous keystroke left undressed, then remember
-        where this one will land and what it should wear. Tk only
-        inherits a tag when both neighbours carry it, so a character
-        typed at the END of a coloured run -- or over a replaced
-        selection -- arrived plain and the cell read as 'reset to
-        black'."""
+        """BEFORE the class binding inserts the typed character: dress what
+        the last keystroke left plain, and note where this one lands and
+        what it wears -- Tk inherits a tag only between two carriers, and a
+        letter at a coloured run's END arrived plain."""
         editor = getattr(self, "_cell_editor", None)
         if not editor:
             return
@@ -3625,10 +3618,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """One floating Entry over one cell -- the only live widget a table
         ever has. Everything else is drawn, which is what lets a table of
         hundreds of rows scroll without dragging the editor down."""
-        # Committing the previous editor can rebuild the grids (a widened
-        # column goes stale at close), which destroys the very canvas the
-        # caller's info points at. Anchor the table by line first and pick
-        # up the fresh grid after -- the same dance _editor_step does.
+        # Committing the previous editor can rebuild the grids, destroying the
+        # canvas `info` names: anchored by line first, as _editor_step does.
         anchor_line = self._grid_first_line(info)
         self._commit_cell_editor()
         if anchor_line is not None:
@@ -3643,16 +3634,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         header_font, cell_font = self._grid_fonts()
         base_font = header_font if r == 0 else cell_font
-        # A Text, not an Entry: a cell can hold line breaks now (stored
-        # as markdown's own <br>), and a Text can also SHOW the cell's
-        # colours and styles while it is being edited -- the Entry went
-        # plain black until commit.
-        # The editor wears the cell's own background, the same blend the
-        # drawing uses. Left at the theme surface, an empty highlighted
-        # cell went bare the moment typing started, and a filled one
-        # kept its colour only where text lines carried highlight tags
-        # -- the editor's empty area below them showed the theme
-        # through, "half the cell's colour gone" in the field report.
+        # A Text, not an Entry: a cell holds line breaks (<br>) and shows its
+        # styles while edited. It wears the cell's own background, or "half
+        # the cell's colour" was gone while typing (field report).
         paint = self._grid_cell_paint(info, r, c)
         surface = (inset_surface(self.colors) if r == 0
                    else self.colors["card"])
@@ -3704,28 +3688,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                              "styles_in": [dict(s) for s in raw_styles]}
         entry.focus_set()
         self._refresh_list_buttons()
-        # Destroying the previous editor hands focus to the root a moment
-        # later, clobbering the focus_set above. Re-asserting after the
-        # queue settles keeps the keyboard where the user is looking --
-        # and synthetic key events, which follow focus, reach the entry.
+        # The old editor's destroy hands focus to the root a moment later:
+        # asked again once the queue settles.
         self.after_idle(lambda e=entry: e.focus_set()
                         if e.winfo_exists() else None)
-        # The record dies with the widget, on every route that can kill it.
-        # Opening another note tears the grids down and this Text with them,
-        # and nothing cleared the record -- so the toolbar kept aiming at a
-        # dead widget: Bold, Italic and the colours did nothing on the next
-        # note except raise "Something went wrong". A <Destroy> binding
-        # cannot be missed by a route nobody thought to list; the identity
-        # test keeps an old editor's death from clearing a new one's record.
+        # The record dies with the widget, by any route (<Destroy>): kept, the
+        # toolbar aimed at a dead editor on the next note. The identity test
+        # spares a new editor's record.
         entry.bind("<Destroy>",
                    lambda _e, this=entry: self._forget_dead_cell_editor(this),
                    add="+")
         entry.bind("<Tab>", lambda e: self._editor_step(+1, e))
         entry.bind("<Shift-Tab>", lambda e: self._editor_step(-1, e))
-        # X11 reports Shift+Tab as its own keysym rather than a modified
-        # Tab -- the body text learned this long ago; the cell editor
-        # walked into the same wall on the CI. Unknown keysyms are an
-        # error on Windows, so the binding is allowed to fail there.
+        # X11's Shift+Tab is its own keysym, unknown on Windows, where the
+        # binding may fail.
         try:
             entry.bind("<ISO_Left_Tab>",
                        lambda e: self._editor_step(-1, e))
@@ -3745,11 +3721,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 entry.bind(seq, lambda _e, i=info: self._grid_menu_from_keys(i))
             except tk.TclError:
                 pass
-        # Escape LEAVES the cell and keeps what was typed, exactly as Tab
-        # and a click elsewhere do -- what the User Guide promises. It
-        # used to close the editor without a commit, and the keystrokes
-        # only ever reach the text through one, so a quick Escape threw
-        # the cell's typing away.
+        # Escape LEAVES the cell keeping the typing, as Tab and a click do: it
+        # closed without a commit, and threw the typing away.
         entry.bind("<Escape>", lambda _e: self._editor_escape())
         entry.bind("<FocusOut>",
                    lambda _e, this=entry: self.after_idle(
@@ -3857,14 +3830,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._cell_editor = None
 
     def _maybe_close_cell_editor(self, source=None):
-        """FocusOut closes the editor -- except while the emoji picker is
-        up, which holds the click without holding the focus, and the chosen
-        emoji still needs somewhere to land.
-
-        *source* is the entry whose FocusOut scheduled this. A destroyed
-        editor fires FocusOut too, and by the time the callback runs a NEW
-        editor may be open -- the stale callback must not close it, which
-        it did: stepping through cells worked once and then died.
+        """FocusOut closes the editor -- except under the emoji picker, whose
+        emoji still needs somewhere to land. *source* is the entry whose
+        FocusOut scheduled this: a destroyed one's must not close the NEW
+        editor (stepping through cells died after one).
         """
         editor = getattr(self, "_cell_editor", None)
         if not editor:
@@ -3878,12 +3847,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if focus is editor["entry"]:
             return
         if focus is None or focus is self:
-            # Mid-transfer. Destroying the old editor hands focus to the
-            # root window before the new editor's focus_set settles, so at
-            # this moment focus reads as the app itself -- and closing here
-            # is what killed the second cell of every step-through. A real
-            # click elsewhere always names a specific widget, never the
-            # root.
+            # Mid-transfer, the focus reads as the root: closing here killed
+            # every step-through's second cell. A click names a widget.
             return
         popup = getattr(self, "_mini_popup", None)
         try:
@@ -3956,10 +3921,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     if widths != info["widths_chars"]:
                         info["stale"] = True
             if changed_text or styles_changed:
-                # The editor's styles ARE the cell's styles now: what was
-                # bolded or coloured while typing reaches the body tags,
-                # then the drawing -- redrawn as runs, so the face, the
-                # colours, and the line breaks all follow immediately.
+                # The editor's styles ARE the cell's: to the body tags, then
+                # the drawing, redrawn as runs.
                 self._apply_styles_to_cell(info, r, c, value, raw_styles)
                 self._grid_redraw_cell_text(info, r, c)
                 editor["styles_in"] = [dict(s) for s in raw_styles]
@@ -3994,11 +3957,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         start, end = bounds[c]
         old = line[start:end]
         if old != value:
-            # Edit only the differing middle. A whole-range delete took
-            # every tag on the cell with it -- a styled cell being padded
-            # with trailing <br>s by a row-height drag came back plain.
-            # The untouched prefix/suffix keep their tags; the markers a
-            # pad appends arrive unstyled, which is what they should be.
+            # Only the differing middle: a whole delete took every tag, and a
+            # styled cell padded by a row-height drag came back plain.
             p = 0
             while p < len(old) and p < len(value) and old[p] == value[p]:
                 p += 1
@@ -4050,13 +4010,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return "break"
 
     def _editor_newline(self):
-        """Enter (and Shift+Enter) start a new line INSIDE the cell --
-        stored as markdown's own <br>. The ROW grows right now, not at
-        the eventual commit: the taller floating overlay used to hang
-        over the row below and hide it. Commit, rebuild, and reopen the
-        editor inside the properly sized cell, caret where it was.
-        Leaving the cell stays what it always was elsewhere: Tab,
-        Escape, or a click anywhere else."""
+        """Enter (and Shift+Enter) start a new line INSIDE the cell, stored
+        as <br>; the ROW grows now -- the taller editor hid the row below --
+        by commit, rebuild, reopen, caret where it was. Tab, Escape or a
+        click leave the cell."""
         editor = getattr(self, "_cell_editor", None)
         if not editor:
             return "break"
@@ -4197,15 +4154,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return step
 
     def _text_wheel_scroll(self, text_widget, event, fallback_canvas=None):
-        """One wheel step over a text box, in PIXELS. THE handler for
-        every real wheel event over the body -- the box's own binding and
-        the grids' forwarding both land here, so there is exactly one
-        place deciding how a note scrolls. (A first pixel version lived
-        on a direct body binding that _bind_text_wheel then silently
-        REPLACED -- bind() without add overwrites -- so real wheels kept
-        leaping table to table while the tests, calling the method
-        directly, stayed green.) If the box's content fits, the page
-        scrolls instead, so the buttons below stay reachable."""
+        """One wheel step over a text box, in PIXELS: THE handler for the
+        body's wheel, its own and the grids' forwarded (an earlier one was
+        overwritten by bind() without add, the tests green). A box whose
+        content fits scrolls the page instead."""
         # A deliberate wheel move beats a grid rebuild's pending
         # view restore -- the user outranks the machinery here just
         # as on the note list.
@@ -4243,9 +4195,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pass
         return "break"
 
-    # A table past either is left as its text. Drawn, every cell is made at
-    # once: a 300x300 table froze the app for 40 s, and a 1,000-row one
-    # passed the 32,767-pixel canvas and killed it (ISSUES_LOG: "The table
+    # A table past either stays text: drawn whole, 300x300 froze the app 40 s
+    # and 1,000 rows passed the 32,767-px canvas (ISSUES_LOG: "The table
     # drawn whole"). 400 rows stay under it at 225%.
     MAX_DRAWN_TABLE_ROWS = 400
     MAX_DRAWN_TABLE_CELLS = 3000
@@ -4312,13 +4263,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 col_w[c] = self.px(14)
                 continue
             if column and column.get("width"):
-                # The dash count is the display width, exactly -- narrower
-                # than the content clips to an ellipsis, deliberately (a
-                # hand-narrowed column). Pasted markdown never reaches here:
-                # parse_separator reads a minimum-width separator as "no
-                # width opinion", and a paste from elsewhere spells every
-                # separator at that minimum (_foreign_plain) -- "---:" and
-                # "|------|" included.
+                # The dash count is the width exactly, narrower clipping to an
+                # ellipsis; a paste's separators are spelled at the minimum,
+                # "no width opinion" (_foreign_plain), and never reach here.
                 col_w[c] = char_px * column["width"] + 2 * pad_x
                 continue
             for r, row in enumerate(rows):
@@ -4381,11 +4328,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     bg = "#" + t[len("highlight_"):]
             return bg
 
-        # Each cell is drawn ONCE, with its own styles. The build used to
-        # draw every cell plain and then _grid_restyle drew every one
-        # again, reading all its tags a second time -- half of opening a
-        # big table. The rectangles go down first and the text after
-        # them, the stacking that second pass left behind.
+        # Each cell drawn ONCE, with its styles (a second pass was half of
+        # opening a big table): rectangles first, then text.
         texts = []
         for r, row in enumerate(rows):
             for c in range(len(widths)):
