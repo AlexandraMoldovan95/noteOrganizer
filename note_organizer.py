@@ -4401,10 +4401,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         b.window_create(f"{first}.0", window=host, padx=1, pady=6,
                         align="bottom")
         b.tag_add(self.TABLE_HIDE_TAG, f"{first}.1", f"{last}.end")
-        # Tk justifies a display line by its FIRST character's tags, and
-        # the window character just landed untagged at column 0 -- a
-        # centred table snapped back left on every rebuild until the
-        # window itself carried the position.
+        # Tk justifies a line by its FIRST character's tags: the window, at
+        # column 0, carries the place, or a centred table snapped left.
         table_align = self._grid_table_align_of(first)
         if table_align in ("center", "right"):
             b.tag_add(f"align_{table_align}", f"{first}.0", f"{first}.1")
@@ -4474,20 +4472,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         press_x = info["canvas"].canvasx(event.x)
         press_y = info["canvas"].canvasy(event.y)
         if getattr(self, "_cell_editor", None) is not None:
-            # The press takes the keyboard back from the open editor --
-            # otherwise Ctrl+C/V keep talking to the entry (whose text
-            # opens selected) while the user is looking at the cells they
-            # just selected: copying two cells pasted the entry's word
-            # into the entry's own cell instead.
+            # The press takes the keyboard back from the open editor, or Ctrl+C
+            # copied the editor's word, not the cells selected.
             anchor_line = self._grid_first_line(info)
             self._commit_cell_editor()
             self.body_text.focus_set()
             if not int(info["canvas"].winfo_exists()):
-                # The commit's rebuild took this canvas with it, and the
-                # implicit grab means no drag or release will follow. The
-                # cell the user aimed at is known from the geometry they
-                # were LOOKING at, so the click still lands: the editor
-                # opens there on the fresh grid, at press time.
+                # The commit's rebuild took this canvas, so no release follows:
+                # the cell aimed at, by the geometry seen, opens at the press.
                 self._grid_pressed = None
                 hit = self._grid_cell_at_xy(info, press_x, press_y)
                 fresh = (self._grid_at_line(anchor_line)
@@ -4636,10 +4628,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if pressed is None or pressed[0] is not info:
             return "break"
         if getattr(self, "_grid_sel", None) is None and pressed[1]:
-            # A real drag that never left its cell selects THAT cell
-            # whole -- there was no way to select a single cell before
-            # (the drag had to reach a neighbour), so grabbing one cell
-            # meant grabbing two. A short click still opens the editor.
+            # A drag inside one cell selects THAT cell whole (one took two); a
+            # short click still opens the editor.
             canvas = info["canvas"]
             moved = max(abs(canvas.canvasx(event.x) - pressed[2]),
                         abs(canvas.canvasy(event.y) - pressed[3]))
@@ -4660,14 +4650,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     @staticmethod
     def _tk_units(text):
-        """How many index steps *text* is wide in a Tk Entry.
-
-        Tk counts UTF-16 units, so an astral character -- every emoji past
-        the basic plane -- is two steps, and advancing by Python's len()
-        parks the caret inside the character just inserted. Counted by
-        the codec rather than character by character (the same answer,
-        a lone surrogate half counting one): opening a 60-row table
-        walked 131,000 characters through a generator here.
+        """How many index steps *text* is wide in a Tk Entry: UTF-16 units,
+        an emoji two, or the caret parked inside it. By the codec, not
+        character by character (131,000 walked to open a 60-row table).
         """
         return len(text.encode("utf-16-le", "surrogatepass")) // 2
 
@@ -4714,14 +4699,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return None, None
 
     def _entry_backspace_astral(self, event):
-        """BackSpace in a tk.Entry deletes exactly one UTF-16 unit — half
-        an astral emoji. The torn remnant renders as a box, and the save's
-        surrogate mend then faithfully turns its bytes into replacement
-        characters (field report: emoji in the title -> box -> question
-        marks after a restart). Delete the whole character instead; stand
-        down (return None) everywhere else so stock behavior is untouched.
-        The body is a tk.Text, which deletes whole characters on its own —
-        only the Entry family needs this."""
+        """BackSpace in a tk.Entry deletes one UTF-16 unit, half an emoji,
+        which saved as question marks (field report): the whole character
+        goes instead; elsewhere None, stock behaviour. A tk.Text deletes
+        whole characters itself."""
         w = event.widget
         try:
             if w.select_present():
@@ -4766,11 +4747,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pass
 
     def _restore_views_idle(self, page, body, explicit=False):
-        # After a paste the right view is wherever the caret ended up --
-        # the end of what was just pasted -- not the fraction captured
-        # before the note grew. A plain see() from the paste handler ran
-        # BEFORE this restore and was silently undone by it, which is why
-        # the flag is honoured here, at the moment the restore happens.
+        # After a paste the view follows the caret, honoured here: a see() in
+        # the paste handler ran before this restore, which undid it.
         follow = getattr(self, "_body_follow_caret", False)
         self._body_follow_caret = False
         if follow:
@@ -4787,19 +4765,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     pass
             if page is not None:
                 self._restore_editor_view(page)
-            # One idle-time application is not enough for the ops that
-            # PROMISE the view stays put (the op-context family and the
-            # editor's commit -- the ones that capture the view
-            # explicitly before tearing grids down): the fresh grid
-            # windows can map AFTER this runs, the Text's estimates
-            # settle late, and the fraction lands at the top of the
-            # table once they do -- "double-click near the table and
-            # the scroll jumps to its start". Same cure as the note
-            # list: the target stays in force briefly, on timers.
-            # AMBIENT renders (a push-down, an inserted table) keep the
-            # single application: their content legitimately moves, and
-            # re-pinning a stale fraction is exactly the yank the
-            # push-down fix removed.
+            # An op that PROMISES the view stays (explicit capture) holds it
+            # briefly on timers, as the windows map late ("the scroll jumps to
+            # the table's start"); an ambient render applies it once.
             if explicit:
                 self._grid_view_restore = {
                     "page": page, "body": body,
@@ -4842,23 +4810,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._restore_editor_view(pend["page"])
 
     def _flush_table_grids(self):
-        """Anything still sitting in the open cell editor reaches the text.
-
-        Every other value is in the text already -- each commit wrote it --
-        so capture, autosave and the dirty poll only need the one editor
-        flushed, without closing it under the user's typing.
-
-        With no cell open there is nothing to flush, and the commit's undo
-        unit -- which notes the note's formatting (_undo_atom_begin) -- is
-        not worth opening on every autosave and every dirty poll. The one
-        thing it always left behind stays: an undo boundary, which is what
-        makes Ctrl+Z take typing back one pause at a time.
+        """Anything still in the open cell editor reaches the text, the
+        editor left open. With none open there is nothing to flush and no
+        undo unit is opened -- only the undo boundary it always left, which
+        makes Ctrl+Z take typing back a pause at a time.
         """
         if not getattr(self, "_cell_editor", None):
-            # A run of Tk's own deletes of styled text ends at this
-            # boundary too: the separator would split Tk's unit under the
-            # run's one journal step, and after a pause in the middle of
-            # BackSpacing through a bold word, Ctrl+Z gave it back plain.
+            # A run of deletes of styled text ends here too, or Ctrl+Z after a
+            # pause mid-BackSpace gave a bold word back plain.
             self._close_styled_delete_run()
             try:
                 self.body_text.edit_separator()
@@ -4899,15 +4858,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return "break"
 
     def _extend_word_styles_on_typing(self, event=None):
-        """Letters glued onto a styled word wear the word's styles.
-
-        Tk extends a tag over an inserted character only when BOTH its
-        neighbours carry it -- so typing at the END of a coloured word
-        produced bare letters ("the new letters don't get the colour").
-        The rule follows the word boundary the field report asked for:
-        a non-space character typed directly after a styled non-space
-        character inherits that character's colour, highlight and font
-        styles; type a space first and the styles stay behind.
+        """Letters glued onto a styled word wear the word's styles: Tk extends
+        a tag only between two carriers ("the new letters don't get the
+        colour"). A space typed first leaves them behind, as the field report
+        asked.
         """
         self._spread_typed_run()
 
@@ -4917,32 +4871,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     _TYPED_TO = "typedTo"
 
     def _note_key_down(self, _event=None):
-        """Any key going down in the body, noted first -- by the bindtag
-        ahead of the body's own, and for Cut, Clear and Paste by their
-        virtual events as well, which outrank its <KeyPress> (Tk runs one
-        binding per tag, the most specific). What the key before typed is
-        settled now, before this one acts: a paste pressed after its Ctrl
-        -- which reads as a key that may type -- must not land in the run
-        that Ctrl opened, and a letter pressed before the last one was
-        released (fast typing, a held key) goes on from the style its
-        predecessor has just been given."""
+        """Any key going down in the body, noted first (a bindtag ahead of
+        the body's; Cut, Clear and Paste by their virtual events, which
+        outrank <KeyPress>): what the key before typed is settled now, so a
+        paste stays out of its Ctrl's run, and fast typing goes on from the
+        style just given."""
         self._spread_typed_run()
 
     def _note_typing_key(self, event=None):
-        """A key with no binding of its own in the body -- every key that
-        types -- going down: two marks at the caret, the first staying put,
-        the second carried along by whatever goes in there. What the key
-        types lands between them, after the selection it replaces is gone.
-        Tk runs one binding per tag, the most specific, so this never runs
-        for a key with a binding of its own (Delete, BackSpace, Ctrl+B,
-        Ctrl+Z, a paste). The run is settled at the key's release, or at
-        the next key's press, whichever comes first (_spread_typed_run).
-
-        A key with Control held, and no Alt, types nothing: Text's own
-        <Control-Key> does nothing, and Tk's Ctrl+T swaps the two letters at
-        the caret and Ctrl+O puts a line break there -- the swapped letters
-        took the word's style. Control with Alt is AltGr on Windows, which
-        types. Insert pastes the selection: a paste, never typing."""
+        """A key that types, going down (one with a binding of its own never
+        gets here): two marks at the caret, between which what it types
+        lands, settled at its release or the next press (_spread_typed_run).
+        Control without Alt types nothing (Ctrl+T's swap took the style);
+        Control with Alt is AltGr, which types; Insert is a paste."""
         state = getattr(event, "state", 0)
         if ((state & 0x4 and not state & 0x20000)
                 or getattr(event, "keysym", "") == "Insert"):
@@ -4959,21 +4900,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _spread_typed_run(self):
         """Settle what the last typing key put in: letters glued onto a
-        styled character wear its styles, up to a space typed with them.
-
-        Only letters that went in between the marks count, styled from the
-        character just before them. Every release used to count, reading
-        the two characters left of the caret: an arrow key, or the caret
-        guard's stop at a table under "Prices:", turned a plain ":" after a
-        bold word bold with nothing typed, and so did Delete, BackSpace,
-        Ctrl+B, Ctrl+Z and a paste. Asked "did the text grow?" by where the
-        text ENDED, typing spread nothing on any line but the last. And
-        read at the caret, what else lands between the marks -- the spaces
-        the tidy of a table the key left pads its cells with, the line
-        break Tk's own Ctrl+O puts there with the caret before it -- gave
-        the character before the caret, elsewhere, the style. The
-        characters come from the buffer, never the event: a synthetic key
-        carries none."""
+        styled character wear its styles, up to a space typed with them --
+        only what went in between the marks, from the buffer, not the event
+        (a synthetic key carries none). Read at the caret, an arrow key made
+        a plain ":" bold, and a table's padding passed styles on."""
         if not getattr(self, "_typed_run_open", False):
             return
         self._typed_run_open = False
@@ -5005,17 +4935,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pass
 
     def _take_run_between(self, start, end):
-        """Text put between two pieces of one size or font that differ only
-        in weight -- right after or before a bold word inside a bigger
-        heading -- takes the run's size and font, with its own weight. True
-        when it did.
-
-        It wore neither piece's composite (Tk passes on only what both sides
-        wear) and came out at the base size, saved so -- splitting the
-        heading's size in two around it. Typed, pasted with or without its
-        formatting, pasted by Tk's own Ctrl+V, or put in by the emoji picker
-        or the calculator: every road in asks here. Typing alone did once,
-        and the other roads went on splitting the run."""
+        """Text put between two pieces of one size or font differing only in
+        weight (by a bold word in a bigger heading) takes the run's size and
+        font with its own weight -- it came out at the base size, splitting
+        the heading. Every road in asks: typed, pasted, the emoji picker,
+        the calculator. True when it did."""
         b = self.body_text
         try:
             if not b.compare(start, ">", "1.0"):
@@ -5048,27 +4972,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._take_run_between(start, end)
 
     def _reassert_line_alignment(self, _event=None):
-        """Keep the caret's line wearing its own alignment while it is
-        typed into.
-
-        Tk justifies a line by the tag on its FIRST character, and a
-        typed character lands untagged -- so typing at the start of a
-        centred line yanked the whole line left, and the first
-        character typed into an EMPTY centred line lost the centring
-        outright. The line's newline keeps the tag through all of it
-        (which is why deleting the text snapped the cursor back to the
-        middle -- the report that exposed this). Re-dress the whole
-        line in whatever alignment its surviving characters remember.
+        """Keep the caret's line wearing its own alignment while typed into:
+        Tk justifies by the FIRST character's tag, and a letter typed at a
+        centred line's start lands untagged and yanked it left. The whole
+        line is dressed in what its characters, its newline among them, keep.
         """
         b = self.body_text
         try:
             ln = int(b.index("insert").split(".")[0])
             for align in ("center", "right"):
                 tag = f"align_{align}"
-                # Anywhere on the line counts, the newline included --
-                # typing at the START leaves the tag alive only on the
-                # middle of the line, and an empty centred line keeps
-                # it only on its newline.
+                # Anywhere on the line counts, the newline included: an empty
+                # centred line keeps it only there.
                 if b.tag_nextrange(tag, f"{ln}.0", f"{ln}.end+1c"):
                     b.tag_add(tag, f"{ln}.0", f"{ln}.end")
                     break
@@ -5076,27 +4991,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pass
 
     def _selection_end_at_table(self, first, nrows, event):
-        """The moving end of a selection has landed on a drawn table's lines:
-        keep the caret with it, at the table's near edge, and on the next
-        press at that edge carry both past the table. True when the caret
-        was placed here; False leaves the caret guard to walk it under the
-        table as for a plain caret.
-
-        Walked under the table alone, the caret left the selection's end
-        behind. Shift+Down on the line above a table selected that line and
-        the table's own line break, with the caret below the table: a letter
-        typed then went in under the table with the line still selected; a
-        paste deleted the line and put its text under the table, glued to
-        the next line; cells pasted there went INTO the table. Shift+Up from
-        under a table selected every row of it, invisibly -- a grid shows no
-        selection -- and the caret, walked back under it, could not go
-        further up: the next letter typed deleted the whole table.
-
-        A first press stops at the edge, so a selection never takes a table
-        in without a second press saying so; that second press crosses it,
-        as before, so the keyboard can still select across a table. The
-        mouse has no second press: a drag ending on a table stops at the
-        edge it came from."""
+        """The moving end of a selection landed on a drawn table: the caret
+        stays with it at the table's near edge, a next press carrying both
+        past it -- a table is never taken in without a second press, and a
+        drag stops at the edge it came from. Walked under alone, the caret
+        left the selection behind, and the next letter deleted the table.
+        True when placed here; False leaves it to the caret guard."""
         b = self.body_text
         try:
             sel_first, sel_last = b.index("sel.first"), b.index("sel.last")
@@ -5108,11 +5008,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if (getattr(self, "_sel_crossed_table", None) == (first, "up")
                 and b.compare(sel_first, "<=", top)
                 and b.compare(sel_last, ">=", below)):
-            # An upward crossing of a table on the note's first line, just
-            # made: there is no line above it, so the caret is left on it.
-            # Left as it is -- read as a first press, it dropped the table
-            # out of what the next key acts on, so a letter kept the table
-            # while Delete took it.
+            # Just crossed up over a table on the first line, the caret stays;
+            # read as a first press, a letter kept the table and Delete took it.
             return True
         # Which end moved is read off the selection's ends against the
         # table, never off an exact match with the caret: leaving one table
