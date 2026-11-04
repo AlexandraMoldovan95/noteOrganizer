@@ -690,13 +690,9 @@ def _holds_repeat_off(method):
 
 def _checklist_rows_current(drawn, items, theme):
     """True when the checklist rows on screen were drawn from exactly this
-    list -- the same item objects, in this order, still saying what each
-    item says -- and in this theme.
-
-    Only then may a change touch one row instead of redrawing them all:
-    every row's tick box and bin close over its own item, so a row left
-    standing beside a DIFFERENT item would tick or remove the wrong one.
-    *drawn* is the record _render_checklist_items keeps, or None.
+    list -- the same items, in this order, saying the same -- and in this
+    theme: only then may a change touch one row, as each row's tick box and
+    bin close over its own item. *drawn* is _render_checklist_items' record.
     """
     return (drawn is not None and drawn["items"] is items
             and drawn["theme"] == theme
@@ -719,14 +715,10 @@ def _selection_holds_caret(text_widget):
 
 
 def _table_edge_holds(app, index):
-    """Does a drawn table's edge hold the body character at *index*?
-
-    The edge is the line break just above the table, everything in it,
-    and the line break just below it: moving or removing any of those
-    glues prose onto a row, which then reads as prose, falls out of the
-    grid and is saved that way. The one place this boundary is written
-    down -- the deletion keys (_deletion_joins_table) and Tk's Ctrl+T both
-    ask it. May raise tk.TclError for a bad index; callers catch it.
+    """Does a drawn table's edge -- the line break above it, all of it, the
+    break below -- hold the body character at *index*? Moved or removed,
+    those glue prose onto a row. The one place the boundary is written,
+    for the deletion keys and Ctrl+T. May raise tk.TclError.
     """
     b = app.body_text
     for info in getattr(app, "_table_grids", []):
@@ -750,31 +742,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # call repeatedly; _main() calls it too.
         initialise()
         super().__init__()
-        # How much bigger than 100% this screen draws, for the sizes this
-        # file gives in pixels (see px). Fonts are in points and grow by
-        # themselves; a width in pixels does not, so on a screen scaled to
-        # 150% a 240-pixel menu held text half as big again and cut it off.
-        # Snapped to Windows' own steps of a quarter: the Linux CI's virtual
-        # display reports 100 dots per inch, not 96, and an unsnapped 1.04
-        # moved every pixel the suite measures. Never below 1, so a screen
-        # that reports fewer dots than 96 keeps the sizes it always had.
+        # This screen's scale, for the sizes given in pixels (px): fonts grow,
+        # pixels do not. Snapped to quarters (CI's display says 100 dpi, and
+        # 1.04 moved every pixel), never below 1.
         self._ui_scale = max(1.0, round(self.winfo_fpixels("1i") / 96 * 4) / 4)
         for name in self._SIZES_AT_100:
             setattr(self, name, self.px(getattr(type(self), name)))
         self.title("Note Organizer")
-        # Armed from day one, for EVERY popup path -- and for every WINDOW:
-        # typing in a popup makes the popup the active window, so its
-        # deactivation lands on the popup's own toplevel and a binding on
-        # the root alone never hears it.
-        #
-        # On the two window classes rather than with bind_all. Tk sends
-        # Activate and Deactivate to every widget INSIDE a window, not only
-        # to the window, so bind_all ran these handlers once per widget on
-        # every Alt+Tab -- 2,132 calls for a list of 300 notes, counted by
-        # delivering the event the way Tk does, each returning at its first
-        # line because the widget was not a window. Only windows carry these
-        # class tags, so the question the handlers ask first is now answered
-        # before Python is ever called.
+        # For every window, a popup's too (typed in, it is the active one); on
+        # the two window classes, not bind_all, which ran per widget -- 2,132
+        # calls an Alt+Tab with 300 notes.
         for window_class in (self.winfo_class(), "Toplevel"):
             self.bind_class(window_class, "<Deactivate>",
                             self._on_app_deactivated, add="+")
@@ -784,45 +761,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # ...and the heartbeat, because a popup holding the activation
         # receives neither event when the user switches away.
         self.after(300, self._popup_foreground_watch)
-        # Let core say "that write FAILED" to the screen: trash, templates
-        # and settings save through routes nobody checks the return of, and
-        # a failed write used to be completely invisible. core also logs
-        # every failure to crash_log.txt, callback or not.
+        # core says "that write FAILED" on screen (routes nobody checked hid
+        # it), and logs every failure to crash_log.txt.
         from noteorganizer.core import storage as _core_storage
         _core_storage.on_write_failure = self._on_data_write_failure
         # And what a crash log says about the running app (core/diagnostics):
         # how it draws here, how big the notebook is.
         _core_diagnostics.app_details = self._technical_details
         self.geometry("%dx%d" % self._fit_to_screen(900, 600))
-        # The smallest window that still looks like the app, measured and
-        # photographed rather than guessed. The sidebar's fixed parts -- the
-        # heading, search, sort and select row above the list, New Note,
-        # Import, Share and Settings below it -- take about 496 pixels of
-        # height, so at the old 500x400 the list had NO room at all: an app
-        # with no notes in it, which is what a person who drags the window
-        # small or snaps it to a corner saw. At 600 the list holds a whole
-        # card. The width stays small enough for a half-screen snap on a
-        # 1280-wide (150%-scaled) laptop; below 900 the page scrolls
-        # sideways, which is the design choice the main canvas already makes.
-        # Both sizes are as drawn at 100%: on a scaled screen they grow with
-        # the text, but never past what the screen can show -- a 1920x1080
-        # laptop at 175% has about 1,000 pixels of height under its taskbar.
+        # The smallest window that still looks like the app, measured: at
+        # 500x400 the sidebar's fixed parts left the list no room. As at 100%,
+        # grown with the scale but never past the screen.
         self.minsize(*self._fit_to_screen(640, 600))
-        # On <Map>, not on after_idle. Measured: before the window is
-        # mapped, wm_frame() names a DIFFERENT window from the one it
-        # names afterwards -- and the compositor accepts a paint on that
-        # first handle, reports success, and then Windows throws the
-        # window away. That is why a fresh launch kept the system colours
-        # until a theme was switched: the switch was simply the first
-        # paint that happened after mapping.
-        #
-        # Bound to the window ITSELF, not with self.bind. A binding on the
-        # main window is also a binding on every widget inside it (each one
-        # carries its window's tag), so this used to repaint the title bar
-        # once per widget whenever a page was shown -- 1,939 paints for a
-        # rebuild of 300 notes, and as many again for every switch back to
-        # the list. One paint costs next to nothing; two thousand of them
-        # did not. See _bind_window_only.
+        # On <Map>: before it, wm_frame() names a window Windows throws away,
+        # and a fresh launch kept the system colours. On the window ITSELF
+        # (_bind_window_only), not once per widget -- 1,939 paints a rebuild.
         self._bind_window_only("<Map>", lambda _e: self._paint_title_bar())
         # On <Map> for the same reason: before the window is mapped,
         # wm_frame() names a different window. See _stop_whole_repaints.
@@ -830,13 +783,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         self.theme_name = self.load_theme_setting()
         self.colors = THEMES[self.theme_name]
-        # Not before this line: the icon is chosen by the theme's accent,
-        # so asking for it in the constructor's first breath raised on a
-        # self.colors that did not exist yet. The raise was swallowed --
-        # correctly, an icon is never worth failing to open over -- and
-        # the window simply wore the toolkit's feather. It only looked
-        # fine in testing because switching a theme re-runs this, which
-        # is exactly how the title bar's own startup bug hid too.
+        # Not before this line: the icon follows the accent, and asked for
+        # earlier, the window wore Tk's feather until a theme switch.
         self._set_window_icon()
         # Read before the editor is built, so the body text is created in the
         # right font rather than being restyled a moment after it appears.
@@ -854,10 +802,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._categories_adopted = []  # names load_notes brought back from the notes
         self._version_backup_path = None  # filled in by load_notes on a version upgrade
         self._corrupt_notes_report = None  # (flag, preserved-copy path) if the notes file was unreadable
-        # A note's uid -> the words its full checklist's Add box could not
-        # take on the way out, given back to the box when it opens again --
-        # and the words already said to wait, by "Checklist full" or by the
-        # close's question, so they are said once (until they are added).
+        # A note's uid -> words its full checklist's Add box could not take on
+        # the way out, given back when it opens -- said once, until added.
         self._add_box_waiting = {}
         self._waiting_said = {}
         self.notes = self.load_notes()
@@ -912,12 +858,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._last_active_dirty = None
         self.after(600, self._poll_active_dirty)
 
-    # The desktop compositor's attribute numbers, from the DWM docs. Only
-    # these four matter here: the caption's fill, its text, the window's
-    # border, and whether Windows draws its own minimise/maximise/close
-    # glyphs light or dark. That last one is not optional -- a dark
-    # caption with the light-theme glyphs leaves a close button nobody
-    # can see.
+    # The compositor's attribute numbers (DWM docs): the caption's fill and
+    # text, the border, and the glyphs' light or dark -- needed, or a dark
+    # caption's close button cannot be seen.
     _DWMWA_USE_IMMERSIVE_DARK_MODE = 20
     _DWMWA_BORDER_COLOR = 34
     _DWMWA_CAPTION_COLOR = 35
@@ -960,37 +903,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._set_tab_ring(True)
 
     def _bind_window_only(self, sequence, func):
-        """Bind `func` to `sequence` on the main window itself -- never on
-        the widgets inside it.
-
-        `self.bind` cannot say that. Every widget carries its window's tag
-        among its own, which is what lets a key pressed anywhere reach a
-        window-level shortcut -- and it means a <Map> or <Configure> bound
-        on the window also runs for every widget that is mapped or laid
-        out. A list rebuild of 300 notes repainted the title bar 1,939
-        times that way, for a handler that only ever cared about the
-        window. (The calendar's width step was the other one; it listens to
-        its own grid now, which is the event it really wanted.)
-
-        So the window gets a tag of its own, placed right after its own
-        name, and window-level handlers live on that. Nothing else
-        carries it.
-
-        Before moving a handler here, ask what the storm was doing for it:
-        the calendar's step had been riding on its descendants' events to
-        notice a resize made while it was hidden, and a window-only
-        binding silently took that away.
+        """Bind `func` to `sequence` on the main window itself, never on the
+        widgets inside it, through a tag of its own: every widget carries
+        the window's tag, and a <Map> bound there repainted the title bar
+        1,939 times a rebuild. Before moving a handler here, ask what the
+        storm was doing for it -- the calendar's step rode on it.
         """
         tags = self.bindtags()
         if self._WINDOW_ONLY_TAG not in tags:
             self.bindtags((tags[0], self._WINDOW_ONLY_TAG) + tuple(tags[1:]))
         return self.bind_class(self._WINDOW_ONLY_TAG, sequence, func, add="+")
 
-    # Class-level sizes in pixels as drawn at 100%, each holding text or a
-    # drawn mark. __init__ sets every one again on the app at this screen's
-    # scale, so the code reading self.LIST_DRAW_WIDTH gets the size the
-    # screen needs without each of its dozen readers having to remember to
-    # ask. A size given as a literal where it is used goes through px().
+    # Class-level sizes as at 100%, holding text or a drawn mark, set again
+    # by __init__ at this screen's scale for their readers; a literal size
+    # where it is used goes through px().
     _SIZES_AT_100 = (
         "LIST_DRAW_WIDTH", "HEADER_HEIGHT", "CARD_CHECK",          # note list
         "SETTINGS_NAV_WIDTH", "SETTINGS_CONTENT_MAX",              # Settings
@@ -1000,14 +926,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     )
 
     def px(self, n):
-        """*n* pixels as drawn at 100%, in this screen's pixels.
-
-        For the sizes that hold text or a drawn mark -- a column's width, a
-        line's wrap, an icon's box. Padding is left as it is: a gap a little
-        tighter on a scaled screen reads fine, a word cut in half does not.
-        At 100% this is *n* exactly, which is what lets every check written
-        before the app drew sharp on scaled screens stand as the proof that
-        nothing moved there."""
+        """*n* pixels as drawn at 100%, in this screen's pixels -- for sizes
+        holding text or a drawn mark, not padding (a tighter gap reads fine,
+        a cut word does not). At 100% exactly *n*, so the older checks
+        still prove nothing moved there."""
         return int(round(n * self._ui_scale))
 
     def _scale_drawing(self, canvas, tag="all"):
@@ -1060,24 +982,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     _CS_WHOLE_REPAINT = 0x0001 | 0x0002         # CS_VREDRAW | CS_HREDRAW
 
     def _stop_whole_repaints(self):
-        """Stop Windows repainting every window whole on each size change.
-
-        Tk registers its window classes with CS_HREDRAW and CS_VREDRAW, so
-        every change of size -- each step of a drag of the window's edge --
-        invalidated the main window whole, and everything on screen was
-        painted again: measured, 72 ms a step on the Calendar with its
-        content not even being laid out. Tk does not need it. Its widgets
-        redraw themselves when their own size changes (every one handles
-        ConfigureNotify), so the class styles only paid for the same paint
-        twice. Taken off both classes, a held step measured 10 ms, a step
-        laid out live 120 instead of 264, the editor 65 instead of 145 --
-        and the window photographed before and after, mid-drag and at a new
-        size, was the same to the pixel.
-
-        On <Map>, because before the window is mapped wm_frame() names a
-        different window (see _paint_title_bar). Only Tk's own two classes
-        are touched, asked by name. Windows only; anywhere else, or if the
-        question fails, nothing changes and the window paints as it did.
+        """Stop Windows repainting every window whole on each size change:
+        Tk's classes carry CS_HREDRAW/CS_VREDRAW, and each step of a resize
+        cost 72 ms, while its widgets redraw themselves anyway (10 ms
+        without, the photographs identical). On <Map> (see _paint_title_bar);
+        Windows only, and a failed question changes nothing.
         """
         if not sys.platform.startswith("win"):
             return
@@ -1105,21 +1014,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._log_swallowed("window class repaint styles")
 
     def _paint_title_bar(self):
-        """Ask Windows to draw the title bar in the current theme.
-
-        The alternative was a hand-drawn borderless caption, and it costs
-        far more than it looks: snapping to screen edges, dragging,
-        double-click to maximise, the system menu, Alt+Space, Aero shake,
-        the taskbar's own behaviours and every accessibility affordance
-        are all things Windows does for a real caption and nothing does
-        for a `Frame` with a label in it. This keeps the native title bar
-        and only changes its colours, which is the whole of what was
-        wrong with it.
-
-        Windows 11 (build 22000+) only, and silently nothing anywhere
-        else -- including the Linux CI, where there is no compositor to
-        ask. A title bar is decoration: no failure here is a reason for
-        the app not to open.
+        """Ask Windows to draw the title bar in the current theme -- the
+        native caption kept, with its snapping, system menu and accessibility,
+        which a hand-drawn one would lose; only its colours change. Windows
+        11 only, silently nothing elsewhere; never a reason not to open.
         """
         if not sys.platform.startswith("win"):
             return
@@ -1155,20 +1053,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._log_swallowed("title bar colours")
 
     def _icon_files(self):
-        """The icon files for the current theme, best first.
-
-        Named after the accent colour rather than after the theme --
-        `icon_d97a2b.ico` -- which is why there is no table here mapping
-        one to the other. A table would be a second place to keep in
-        step, and a theme added later would quietly get the wrong icon.
-        The colour is already in hand, so the filename is computed from
-        it, and the plain `icon.ico` is the fallback when a colour has no
-        drawing of its own yet.
+        """The icon files for the current theme, best first: named after the
+        accent (`icon_d97a2b.ico`), not the theme, so no table can drift;
+        the plain `icon.ico` when a colour has none.
         """
-        # getattr, not self.colors: this is called from the constructor
-        # and from the theme switch, and the constructor once called it
-        # before the colours existed. Degrading to the default icon is a
-        # better answer than degrading to none.
+        # getattr: called once before the colours existed; the default icon
+        # beats none.
         colors = self.colors or {}
         accent = (colors.get("accent") or "").lstrip("#").lower()
         stems = ([("icon_%s.ico" % accent, "icon_%s.png" % accent)]
@@ -1177,23 +1067,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return stems
 
     def _set_window_icon(self):
-        """Put the app's icon on the window, in the theme's colour.
-
-        Wrapped end to end because an icon is decoration: a missing file,
-        an X server that will not take an .ico, an odd Tk build -- none
-        of those is a reason for the app not to open. The failure goes to
-        the crash log, not to the user.
-
-        Two formats on purpose. Windows takes the .ico and picks the size
-        it needs from inside it -- 16px for the title bar, larger ones for
-        the task switcher. X11 has no notion of .ico at all and wants a
-        PhotoImage, so the PNG is a real second path rather than an
-        afterthought.
-
-        Set twice on Windows, which is not belt and braces: `default=`
-        governs windows made LATER, and the plain form repaints the one
-        already on screen. Only doing the first leaves the open window
-        wearing the previous theme's colour until it is reopened.
+        """Put the app's icon on the window, in the theme's colour; wrapped
+        end to end, a failure going to the crash log. The .ico for Windows,
+        a PNG for X11, which takes no .ico. Set twice on Windows: `default=`
+        is for windows made later, the plain form repaints this one.
         """
         try:
             for ico_name, png_name in self._icon_files():
@@ -1215,14 +1092,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except Exception:                             # noqa: BLE001
             self._log_swallowed("window icon")
 
-    # A title longer than this cannot be typed or pasted in. The limit is
-    # not about storage or layout -- the note list already truncates to 60
-    # characters for display -- but about tk.Entry, which slows roughly with
-    # the square of what it holds: measured, one keystroke costs 0.5ms at 30
-    # characters, 38ms at 10,000, and 3.5 seconds at 100,000. Someone who
-    # pastes a document into the title by accident would find the field
-    # frozen and no way to edit it back. 200 is far past any real title and
-    # far short of where the widget struggles.
+    # The longest title typed or pasted in: tk.Entry slows with the square
+    # of what it holds (a keystroke 38 ms at 10,000 characters, 3.5 s at
+    # 100,000), and a document pasted by accident froze the field.
     TITLE_MAX_LEN = 200
 
     def _title_within_limit(self, proposed, current=""):
