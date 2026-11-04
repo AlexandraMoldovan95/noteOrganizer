@@ -52,8 +52,10 @@ BRIEF = [
     "noteorganizer/core/clipboard.py",
     "noteorganizer/core/diagnostics.py",
     "noteorganizer/core/model.py",
+    "noteorganizer/core/paths.py",
     "noteorganizer/core/sharing.py",
     "noteorganizer/core/single_instance.py",
+    "noteorganizer/core/spelling.py",
     "noteorganizer/core/storage.py",
     "noteorganizer/core/tables.py",
     "noteorganizer/core/themes.py",
@@ -62,6 +64,7 @@ BRIEF = [
     "noteorganizer/ui/__init__.py",
     "noteorganizer/ui/calculator_panel.py",
     "noteorganizer/ui/note_list.py",
+    "noteorganizer/ui/spelling.py",
 ]
 
 MAX_COMMENT_LINES = 3

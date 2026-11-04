@@ -1,25 +1,12 @@
-"""Spelling: misspelled words underlined in the note and its comments.
-
-Mixed into the app class (see note_organizer.NoteOrganizer). The words are
-judged by Windows' own checker (core/winspell.py); which of its answers are
-shown is core/spelling.py; this module is the editor's side -- when to
-look, where to underline, and the right-click menu's suggestions.
-
-WHAT IT NEVER DOES
-------------------
-The underline is a tag of its own, which the editor's save, copy, export
-and undo journal do not read: they read character formatting from a closed
-list of tags (is_format_tag), and this is not one of them. Nothing about
-spelling is ever stored in a note. Nothing is corrected without the person
-choosing it.
-
-WHEN IT LOOKS
--------------
-A pause in typing, a click elsewhere, leaving the box, a paste, and opening
-a note. Each line's answer is kept by its text, so a pause rereads only the
-line that changed; a note opening for the first time is read in slices, so a
-long one never holds the editor up. The word still being typed is not
-underlined until the caret leaves it.
+"""Spelling: misspelled words underlined in the note and its comments -- the
+editor's side (when to look, where to underline, the right-click
+suggestions) of Windows' checker (core/winspell.py) and its rules
+(core/spelling.py). The underline is a tag of its own, outside the closed
+list save, copy, export and the undo journal read (is_format_tag): nothing
+about spelling is stored, nothing corrected unasked. It looks at a pause, a
+click, leaving the box, a paste and a note opening; each line's answer is
+kept by its text, a new note read in slices, and the word being typed waits
+until the caret leaves it.
 """
 
 import tkinter as tk
@@ -77,11 +64,9 @@ class SpellingMixin:
 
     # ---- the boxes it looks at ----
 
-    # The moments a box is looked at are bound on a tag of their own, put
-    # first among the box's tags: a binding on the box itself made later --
-    # the comments box's autosave was one, bound with no add="+" -- would
-    # replace them, and one that answers "break" would stop them, in
-    # silence. Nothing bound here answers "break"; it only schedules a look.
+    # Bound on a tag of their own, first among the box's tags: a later binding
+    # on the box with no add="+" replaced them, and a "break" would stop them.
+    # Nothing here answers "break"; it only schedules a look.
     _SPELL_BINDTAG = "NoteSpelling"
 
     def _spell_setup(self, widget):
@@ -170,9 +155,8 @@ class SpellingMixin:
             widget.tag_remove(self.SPELL_TAG, "1.0", "end")
             return
         lines = widget.get("1.0", "end-1c").split("\n")
-        # A line holding a drawn table's window or an image counts that as
-        # a character in Tk's columns but not in the text read back, so
-        # every position after it would be one off: such lines, like a
+        # A drawn table or an image is a column in Tk but no character read
+        # back, so every position after it was one off: such lines, like a
         # table's own rows, are not looked at.
         skip = set()
         try:

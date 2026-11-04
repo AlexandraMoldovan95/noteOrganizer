@@ -1,38 +1,12 @@
-"""Which misspellings to show, and which to leave alone.
-
-WHAT THIS MODULE IS FOR
------------------------
-The words themselves are judged by Windows' own spell checker
-(core/winspell.py). This module decides what the editor does with its
-answers, and it is plain strings and numbers in and out, so all of it is
-tested without Windows and without a window.
-
-A spell checker that underlines everything it does not know is worse than
-none: a note written in a language the computer has no dictionary for
-comes out red from end to end. So the rules here are about staying quiet:
-
-* **Another language is left alone.** When most of a sentence's words are
-  unknown, the sentence is in a language this computer cannot check, and
-  nothing in it is underlined -- while an English sentence beside it, in
-  the same paragraph, keeps its own underlines. A sentence too short to
-  tell ("Yes.") takes its paragraph's verdict, and the note as a whole is
-  asked too, so a note of short lines -- a shopping list in Romanian -- is
-  judged by all of its words, not by two at a time. A Romanian paragraph
-  read as English had 17 of its 21 words flagged; an English one with three
-  typos, 3 of 15. Within one sentence nothing finer can be done without
-  that language's own dictionary: its words are simply unknown.
-* **Every installed language counts.** A word is wrong only if every
-  dictionary Windows has calls it wrong (line_errors), one dictionary per
-  language (pick_languages): Windows offers nineteen kinds of English, and
-  asking all nineteen would only be slower.
-* **Not everything is a word.** A link, an address, a file name, a word
-  with digits in it, and an abbreviation written in capitals ("PDF") are
-  never underlined (worth_flagging); nor is a word its owner chose to
-  ignore.
-
-Positions are in UTF-16 units throughout, which is what Windows reports and
-what a Tk Text widget's columns count -- not Python characters, which differ
-by one for every emoji before the word.
+"""Which misspellings to show, and which to leave alone: Windows judges the
+words (core/winspell.py), this decides what the editor does with them --
+plain strings and numbers, tested without Windows or a window. It keeps
+quiet: a sentence mostly unknown is in a language with no dictionary here and
+shows nothing (a short one takes its paragraph's verdict, then the note's);
+a word is wrong only if every installed language says so, one dictionary per
+language; links, addresses, file names, words with digits and capitals
+("PDF") never are. Positions are UTF-16 units, as Windows and Tk's columns
+count them -- one apart from Python's for every emoji before the word.
 """
 
 import re
@@ -188,21 +162,12 @@ def is_foreign(words, errors):
 
 
 def visible_errors(lines, results, ignored=()):
-    """What to underline, line by line.
-
-    *lines* are the texts that were checked; *results* holds, for each, the
-    ranges every dictionary called wrong (line_errors), or None for a line
-    that is not checked at all (a table row). Returns {line index: [(start,
-    length), ...]} in UTF-16 units, after the rules this module is for: a
-    sentence that reads as another language shows nothing, and neither does
-    anything worth_flagging turns down.
-
-    Each verdict is asked of the smallest text long enough to give one. A
-    sentence of MIN_WORDS_TO_JUDGE words or more is judged on its own, so an
-    English sentence beside one in another language keeps its underlines. A
-    shorter sentence ("Yes.") takes its paragraph's verdict, and a paragraph
-    too short to judge takes the whole note's: a shopping list of one word a
-    line is judged by all of its words, not by one at a time."""
+    """What to underline, line by line: {line index: [(start, length), ...]}
+    in UTF-16 units, from *results* (each line's ranges every dictionary
+    called wrong, None for a line not checked, a table row), less what reads
+    as another language and what worth_flagging turns down. Each verdict is
+    asked of the smallest text long enough to give one: a sentence of
+    MIN_WORDS_TO_JUDGE words, else its paragraph, else the whole note."""
     words = errors = 0
     counted = []
     for text, ranges in zip(lines, results):
@@ -307,14 +272,11 @@ def nearest_underlines(shown, line, column, per_line=MAX_UNDERLINES_PER_LINE,
 
 
 def pick_languages(supported, preferred=()):
-    """One dictionary per language, the person's own languages first.
-
-    Windows lists a dictionary for every region of a language -- nineteen
-    for English on an ordinary English machine -- and asking each of them
-    gives the same answer slower. For each language the tag chosen is the
-    one the person uses (*preferred*: their Windows display and format
-    languages, best first), else that language's own country (de-DE,
-    ro-RO), else en-US for English, else the first Windows lists."""
+    """One dictionary per language, the person's own languages first:
+    Windows lists one per region (nineteen for English), and asking each
+    gives the same answer slower. The tag kept is the person's (*preferred*:
+    display and format languages, best first), else the language's own
+    country (de-DE, ro-RO), else en-US for English, else the first listed."""
     by_base = {}
     for tag in supported:
         if isinstance(tag, str) and tag:
