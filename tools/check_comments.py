@@ -51,6 +51,7 @@ BRIEF = [
     "noteorganizer/core/categories.py",
     "noteorganizer/core/clipboard.py",
     "noteorganizer/core/diagnostics.py",
+    "noteorganizer/core/duplicates.py",
     "noteorganizer/core/formatting.py",
     "noteorganizer/core/model.py",
     "noteorganizer/core/paths.py",
