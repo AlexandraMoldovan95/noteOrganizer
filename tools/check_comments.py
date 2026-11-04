@@ -71,6 +71,7 @@ BRIEF = [
     "noteorganizer/ui/calendar_view.py",
     "noteorganizer/ui/dialogs.py",
     "noteorganizer/ui/note_list.py",
+    "noteorganizer/ui/settings_page.py",
     "noteorganizer/ui/spelling.py",
 ]
 

@@ -1,32 +1,11 @@
-"""The Settings page and the panels on it.
+"""The Settings page and the panels on it: categories, templates, Trash,
+duplicates, statistics, the theme picker and About, with the rows and the
+template editor they are built from. Each ``_build_settings_*_panel`` draws
+one section; :meth:`build_settings_tab` lays them beside a navigation column.
 
-WHAT IS HERE
-------------
-The Settings page itself, and each panel it shows: categories, templates,
-trash, duplicates, statistics, the theme picker, and the About section.
-Also the small pieces those panels are built from — a category row, a
-template row, the template editor.
-
-WHAT IS DELIBERATELY NOT HERE
------------------------------
-Several things match the word "settings" or "theme" but belong to the app
-as a whole, so they stay on :class:`NoteOrganizer`:
-
-* ``apply_theme``, ``set_theme``, ``toggle_theme``, ``track_theme`` — the
-  theming engine. The *whole app* themes itself; the Settings page is just
-  one place that triggers it.
-* ``_themed_dialog``, ``_build_themed_dropdown`` — shared widgets used all
-  over the app.
-* category *operations* (``rename_category_everywhere``,
-  ``_bulk_change_category``) as opposed to the category management *UI*,
-  which is here.
-
-Panels here still call those freely through ``self`` — mixins share one
-object, so nothing had to change to keep that working.
-
-Each ``_build_settings_*_panel`` renders one section and does not care how
-it is reached; :meth:`build_settings_tab` lays them out as a navigation
-column beside a content pane.
+The theming engine, the shared dialogs and dropdowns, and the category
+*operations* belong to the whole app and stay on :class:`NoteOrganizer`;
+panels call them through ``self``, as mixins share one object.
 """
 
 import os
@@ -43,10 +22,8 @@ from ..core.categories import (CATEGORY_COLORS, category_name_refusal,
 from ..core.formatting import FONT_FAMILIES, FONT_SIZES
 from ..core.spelling import SPELLING_SETTING
 from ..core.duplicates import SAME_AS, find_duplicate_groups
-# The Trash is the one list in the app where deleting cannot be undone,
-# and it is the one that never said which of its rows is a whole
-# repeating series. Both of these read a note's own recurrence field, so
-# a trash entry -- which is a copy of the note -- answers them too.
+# The Trash says which rows are whole repeating series: a Trash entry is a
+# copy of the note, and answers these as the note would.
 from ..core.recurrence import describe_recurrence, is_recurring, show_date
 # Shortens with an ellipsis rather than by slicing: a title cut at N
 # characters with nothing to show for it is the same defect as a
@@ -59,10 +36,8 @@ from ..core.storage import (
     trash_retention_days,
     trash_window_words,
     choose_trash_window,
-    # Asks which entries a window has already outlived, without deleting
-    # any of them: the same answer the startup purge acts on, so the
-    # confirmation below cannot promise a different number from the one
-    # that will actually go.
+    # The entries a window outlived, deleting none: the purge's own answer,
+    # so the confirmation cannot promise another number.
     trash_entries_past_window,
     _delete_attachment_files,
     attachment_names_in,
@@ -92,35 +67,20 @@ from .dialogs import one_line
 
 
 def _host():
-    """The entry-point module, imported only when actually needed.
-
-    ``note_organizer`` imports this file to build the app class, so importing
-    it back at module level would be circular. A local import breaks the
-    cycle.
-
-    Use this **only for values that are module-level constants**, such as
-    ``APP_VERSION``. Anything ``initialise()`` fills in must not be read
-    through here, because there can be two copies of this module at once:
-    running the app as ``py note_organizer.py`` makes the running copy
-    ``__main__``, and ``import note_organizer`` below then loads a *second*,
-    separate copy whose ``initialise()`` has never run — so every value it
-    assigns is still ``None``. That is not hypothetical; it blanked the
-    storage path in About and printed "since None" in Statistics. Those two
-    now read from the core layer instead, which is only ever imported by
-    name and so can never be duplicated this way.
+    """The entry-point module, imported here, as at the top it is circular.
+    ONLY for constants such as ``APP_VERSION``: run as a script, the app is
+    ``__main__``, and this import loads a second copy whose ``initialise()``
+    never ran -- About's storage path came out blank. What initialise()
+    fills in is read from the core layer instead.
     """
     import note_organizer
     return note_organizer
 
 
 def _trash_tick_key(entry):
-    """Which trash entry a tick in Settings -> Recently deleted belongs to.
-
-    Not the id alone: a note's id is only its place in notes_data.json, and
-    it is handed out again once the note is deleted -- so two entries could
-    share one, and ticking either row ticked both and restored both. When
-    the note was deleted tells them apart, as it does for the toast's Undo;
-    its uid as well, for two deletes inside one second.
+    """Which Trash entry a tick in Settings -> Recently deleted belongs to:
+    an id is handed out again after a delete, and one tick ticked two rows.
+    When it was deleted tells them apart, and the uid within one second.
     """
     key = (entry.get("id"), entry.get("deleted_at"), entry.get("uid"))
     try:
@@ -140,13 +100,9 @@ class SettingsPageMixin:
     """
 
     def toggle_settings_panel(self, which):
-        """Show one Settings section, hiding whichever was showing.
-
-        Kept under its original name because it is how the rest of the app --
-        and the QA suite, in 8 places -- asks for a Settings section. What
-        changed is the meaning: there used to be an accordion where a section
-        could be open or closed, and now exactly one is always showing, so this
-        selects rather than toggles.
+        """Show one Settings section, hiding whichever was showing. Named
+        "toggle" from the old accordion, as the app and the qa suite ask for
+        sections by it; one is always showing now, so this selects.
         """
         sections = {key: (getattr(self, "settings_%s_panel" % key, None), builder, eager)
                     for key, _label, builder, eager in self.SETTINGS_SECTIONS}
@@ -154,10 +110,8 @@ class SettingsPageMixin:
         if target is None:
             return
 
-        # Leaving a section -- or rebuilding the one on screen -- takes a
-        # popup holding typed work with it (the template editor lives in
-        # Templates). It has its say first, as it does on a click outside
-        # it. Returns False when the person stays on it.
+        # Leaving or rebuilding a section takes the template editor with it:
+        # it asks first, as on a click outside; False when the person stays.
         if not self._dismiss_mini_popup_asking(holding_work_only=True):
             return False
 
@@ -176,11 +130,8 @@ class SettingsPageMixin:
             self._settings_section_heading(target, label)
             builder_fn = getattr(self, builder)
             builder_fn(target)
-            # Builders can't create their own resize handle: the handle has to
-            # overlay the panel's bottom edge, so it can only be added once the
-            # canvas above it exists. They record (frame, min, max) instead and
-            # it gets built here, lifted above its siblings so dragging it
-            # doesn't repack them.
+            # A resize handle overlays a panel's bottom edge, so it is built
+            # here from what the builders recorded, lifted above its siblings.
             for tgt, mn, mx in getattr(self, "_resize_handles_pending", []):
                 h = self._add_resize_handle(tgt, min_h=mn, max_h=mx, host=target)
                 h.pack(fill="x", padx=12, pady=(2, 8))
@@ -239,13 +190,8 @@ class SettingsPageMixin:
         if panel_canvas is not None:
             try:
                 first, last = panel_canvas.yview()
-                # Small tolerance instead of exact 0.0/1.0: yview() can come
-                # back as e.g. 0.0/0.997 rather than a clean 0.0/1.0 depending
-                # on how the platform rounds the scroll fraction, which would
-                # make an already-fully-visible panel (like an empty trash
-                # list) look like it still has more to scroll — trapping the
-                # wheel on a tiny, already-fully-shown panel instead of
-                # falling through to the page underneath it.
+                # A tolerance: yview() can say 0.997 for a panel shown whole,
+                # which then trapped the wheel instead of passing it on.
                 if not (first <= 0.001 and last >= 0.999):
                     panel_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
                     return "break"
@@ -282,29 +228,11 @@ class SettingsPageMixin:
         return "break"
 
     def _wrap_to_own_width(self, label, inset=4):
-        """Wrap where the label ends, not where somebody guessed it ends.
-
-        A Label breaks its text at `wraplength` pixels and then draws
-        those lines inside whatever width the geometry manager gave it.
-        When the two disagree, the ends of the lines are simply not
-        drawn -- a sentence that stops mid-word with nothing to say it
-        was cut. Three labels in this page did exactly that, by 51, 57
-        and up to 69 pixels.
-
-        Each of their wraplengths was SETTINGS_CONTENT_MAX minus a
-        hand-picked number, and each of those numbers was a guess at the
-        padding between the pane and the label. The padding is 48 a side
-        on the panel alone, so every guess was short. A number that has
-        to agree with a layout it cannot see is wrong the first time the
-        layout changes -- and it had been.
-
-        So the width is taken from the label itself, once it has one.
-        Only for labels the parent stretches (fill="x"): a label that
-        sizes itself to its text would shrink, re-wrap, and shrink again.
-
-        `inset` covers the label's own border and padding, which Tk adds
-        to the wrapped text when it asks for room -- measured at three
-        pixels, so four is asked for and one is spare.
+        """Wrap where the label ends, taken from the label once it has a
+        width -- guessed wraplengths cut three labels' lines mid-word, by up
+        to 69 px. Only for labels the parent stretches (fill="x"), or it
+        shrinks and re-wraps for ever. `inset` is the label's own border and
+        padding, measured at three pixels.
         """
         def fit(event):
             want = max(self.px(160), event.width - inset)
@@ -314,13 +242,8 @@ class SettingsPageMixin:
         return label
 
     def _settings_subtitle(self, parent, text):
-        """The explanatory line under a section title.
-
-        This replaced a header that drew the title itself plus a close ✕.
-        Both stopped making sense once the nav took over naming sections and
-        one section is always showing: the title appeared twice, and the ✕
-        had nothing left to close -- it re-selected the section it was
-        already on.
+        """The explanatory line under a section title -- the navigation
+        names the section, and one always shows, so there is no title or ✕.
         """
         lbl = tk.Label(parent, text=text, font=("Segoe UI", 10), anchor="w",
                        justify="left",
@@ -329,39 +252,12 @@ class SettingsPageMixin:
         return self._wrap_to_own_width(lbl)
 
     def _render_statistics(self):
-        """Compute and draw a compact, read-only snapshot: total notes; a
-        week/month/year/older breakdown of when notes were added and last
-        updated; standalone counts of templates, notes with a checklist,
-        and notes currently in Trash; the date this install was first
-        used; and per-category counts as plain lines (no box, not
-        clickable — this is a snapshot, not another way to filter notes).
-        Recomputed on every note-list refresh (not just when the Settings
-        tab is opened), so category renames/deletes, new notes, and any
-        other change stay reflected live while Settings happens to be
-        open — not just after leaving and coming back. Deliberately does
-        NOT gate on the Settings page's winfo_ismapped() state — that
-        looked like the right optimization (skip the work when Settings
-        isn't visible), but pack()/pack_forget() don't always update
-        ismapped() synchronously, so that check could skip a real update
-        and leave stale data on screen.
-
-        It gates on ``_settings_open`` instead, which is set by the two
-        methods that own the swap and is therefore right the instant they
-        run — the objection above was to the unreliable *question*, not
-        to skipping the work. Both halves of the promise still hold:
-        while Settings is open the flag is True and this redraws on every
-        list refresh, exactly as before; and opening Settings renders it
-        on the way in, so it is never arrived at stale.
-
-        The cost was worth going back for. "At most a couple dozen small
-        widgets" measured as 49 widgets and 12ms — negligible next to the
-        150-widget card rebuild it used to sit inside, but that rebuild
-        is gone from the delete path (see _remove_note_cards), and this
-        was then 49 of the 52 widgets a delete still touched.
-
-        Every field is read defensively — a note with a missing/odd
-        timestamp or category just gets skipped from that specific count
-        instead of crashing the whole panel."""
+        """Draw a read-only snapshot: totals, when notes were added and
+        updated, templates, checklists, the Trash, the first-use date, and
+        per category (not clickable: no other way to filter). Redrawn at
+        every list refresh while Settings is open -- ``_settings_open``, set
+        by the swap itself, not winfo_ismapped(), which lags -- and on the
+        way in. An odd field is skipped from its count, never fatal."""
         if not hasattr(self, "stats_frame"):
             return
         if not getattr(self, "_settings_open", False):
@@ -381,13 +277,9 @@ class SettingsPageMixin:
         real_days = {}
 
         def _day(raw):
-            # Every stamp went through strptime, twice per note on every
-            # render: 10,212 calls at 5,000 notes, most of a render's 200 ms.
-            # The app writes one shape, "YYYY-MM-DD HH:MM", and that shape
-            # is read as text now -- its date checked once per distinct day
-            # and its time against the same ranges strptime allows. Any
-            # other shape still goes through strptime, so exactly the same
-            # stamps count, and the same odd ones are skipped.
+            # The app's own "YYYY-MM-DD HH:MM" is read as text, each day once;
+            # strptime on every stamp was most of a 200 ms render. Any other
+            # shape still goes through strptime, so the same stamps count.
             if not isinstance(raw, str) or not raw:
                 return None
             head = raw[:16]
@@ -434,27 +326,15 @@ class SettingsPageMixin:
         added_week, added_month, added_year, added_older = _bucket_counts("created")
         updated_week, updated_month, updated_year, updated_older = _bucket_counts("updated")
 
-        # --- Presentation. The figures above are the same as they always
-        # were; what changed is that they are shown as figures rather than
-        # as sentences. This used to render "Added: 0 this week 0 this
-        # month 5 this year 0 older" as one run of same-size text, so the
-        # number and the word carried identical weight and nothing could be
-        # read at a glance -- which is the whole point of a snapshot.
-        #
-        # Now: three tiles for the standalone counts, then a small table
-        # with a real header row for the time breakdown, then the category
-        # split. Numbers lead, captions follow quietly. ---
-        # Tallied up here because the tiles below report the category count as
-        # well as the split further down.
+        # --- Shown as figures, not sentences: tiles, a table with a header,
+        # then the categories -- numbers lead, captions follow. Tallied here,
+        # as the tiles count the categories too. ---
         counts = {}
         for n in notes:
             cat = n.get("category") or PROTECTED_CATEGORY
             counts[cat] = counts.get(cat, 0) + 1
-        # Templates and checklists are their own things -- a template can be
-        # reused across many notes, a checklist only ever lives inside the one
-        # note it is on -- so these count the things themselves, not how many
-        # notes reference them. "In trash" is what is there right now, not an
-        # all-time total, so it drops back after Trash is emptied or purges.
+        # The things themselves, not the notes naming them; "In trash" is what
+        # is there now, not an all-time total.
         templates_count = len(self.templates)
         checklists_count = sum(1 for n in notes if n.get("checklist"))
         deleted_count = len(self.trash)
@@ -462,24 +342,16 @@ class SettingsPageMixin:
                        checklists_count, deleted_count)
         table_values = ((added_week, added_month, added_year, added_older),
                         (updated_week, updated_month, updated_year, updated_older))
-        # --- Per-category split. Known categories first (Manage-categories
-        # order), then any leftover/stale names so nothing is silently
-        # dropped. Deliberately not clickable: this is a snapshot, not
-        # another way to filter notes -- see docs/ISSUES_LOG.md. ---
+        # --- Per category: the known ones in their order, then any stale
+        # name, so nothing is dropped. ---
         ordered_cats = [c for c in CATEGORY_COLORS.keys() if c in counts]
         ordered_cats += [c for c in counts.keys() if c not in ordered_cats]
-        # Read the stamp back from settings rather than the entry module's
-        # FIRST_LAUNCH_DATE -- see _host()'s docstring for why that global
-        # can be None here. Purely a read: the stamp is written once, at
-        # startup, by get_first_launch_date().
+        # From settings, not the entry module's global, which can be None
+        # here (_host); written once, at start, by get_first_launch_date().
         since = show_date(load_settings().get("first_launch_date")) or "\u2014"
 
-        # Same wheel-forwarding pattern used elsewhere in Settings (theme
-        # picker, inline panels) — without it, scrolling with the cursor
-        # over the summary text or a category chip does nothing, since
-        # those widgets have no scroll behavior of their own to fall back
-        # to. Bound on the frame once: re-binding it on every render left
-        # one more Tcl command behind each time, for good.
+        # The wheel passed on, as elsewhere in Settings; bound on the frame
+        # once -- at every render, it left a Tcl command behind each time.
         def _stats_wheel(event):
             try:
                 self.settings_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
@@ -490,10 +362,8 @@ class SettingsPageMixin:
             self.stats_frame._wheel_bound = True
             self.stats_frame.bind("<MouseWheel>", _stats_wheel)
 
-        # The widgets stay; their figures change. This destroyed and rebuilt
-        # all of them on every render -- every list refresh while Settings
-        # is open. It builds again only when what is DRAWN changes: another
-        # palette, or another set of categories to split by.
+        # The widgets stay and their figures change, built again only when
+        # what is DRAWN changes: the palette, or the categories.
         shape = tuple((c, CATEGORY_COLORS.get(c)) for c in ordered_cats)
         view = getattr(self, "_stats_view", None)
         try:
@@ -523,11 +393,8 @@ class SettingsPageMixin:
         tiles.pack(fill="x", pady=(0, 22))
         for i in range(3):
             tiles.grid_columnconfigure(i, weight=1, uniform="stat")
-        # Three across, as in the reference design -- but six figures rather
-        # than three, wrapping to a second row. The reference was a sketch
-        # with three; dropping to match it exactly would have deleted the
-        # template, checklist and trash counts, which are real figures this
-        # panel has always shown and has regression tests for.
+        # Three across, as designed, but six figures on two rows: matching the
+        # sketch's three would have dropped real, tested counts.
         for i, (value, caption) in enumerate(zip(tile_values, (
                 "Total notes", "Added this week", "Categories", "Templates",
                 "With a checklist", "In trash"))):
@@ -545,10 +412,8 @@ class SettingsPageMixin:
                      bg=self._surface(), fg=self.colors["subtext"], anchor="w"
                      ).pack(fill="x", padx=18, pady=(3, 16))
 
-        # --- The time breakdown, as a table with a header rather than a
-        # sentence. Counts are right-aligned so digits line up down each
-        # column, and the header says once what the old version repeated on
-        # every single cell ("this week" appeared four times). ---
+        # --- The time breakdown as a table: digits right-aligned, the header
+        # saying once what each cell repeated. ---
         SEGMENTS = ("this week", "this month", "this year", "older")
         table = tk.Frame(self.stats_frame, bg=self.colors["bg"])
         table.pack(fill="x", pady=(0, 4))
@@ -644,10 +509,8 @@ class SettingsPageMixin:
         canvas.pack(side="left", fill="both", expand=True)
         self._active_panel_canvas = canvas
 
-        # The frame outlives every redraw: it gets the wheel once, here, and
-        # each redraw gives it only to the rows it builds. Re-binding the
-        # frame itself left a Tcl command behind per rename, recolour and
-        # delete (see the Trash panel).
+        # The frame gets the wheel once; each redraw binds only its new rows
+        # (re-bound, the frame kept a Tcl command per rename).
         wheel = lambda e: self._panel_or_page_wheel(canvas, e)  # noqa: E731
         rows_frame.bind("<MouseWheel>", wheel)
 
@@ -771,21 +634,15 @@ class SettingsPageMixin:
         shown = one_line(name, 200)
 
         def delete():
-            # The window's click-outside used to answer this press too,
-            # after the delete: the editor's "Save changes?" came second,
-            # and its Yes wrote back the very template just deleted "for
-            # good". Now the press is answered here alone. This template
-            # open in the editor: the delete question covers its unsaved
-            # edit, and is the only one. Another template's editor has its
-            # say first, as the pencil beside this bin lets it.
+            # Answered here alone: click-outside's "Save changes?" after it
+            # wrote back the template just deleted. Its own open editor is
+            # covered by the delete question; another's asks first.
             pop = getattr(self, "_mini_popup", None)
             own = pop is not None and getattr(pop, "edited_template", None) is tpl
             if not own and not self._dismiss_mini_popup_asking():
                 return "break"
-            # The editor's save can have replaced this very template -- its
-            # name taken, "Replace" answered Yes. There is nothing left for
-            # this bin to delete: asked anyway, Yes deleted nothing and the
-            # template saved under that name stayed.
+            # The editor's save may have replaced this very template ("Replace"):
+            # nothing is left for this bin to delete.
             if not any(t is tpl for t in self.templates):
                 self.set_status(f"“{shown}” was replaced by the template "
                                 "you saved")
@@ -824,13 +681,10 @@ class SettingsPageMixin:
         name_lbl.pack(side="left", fill="x", expand=True, padx=6, pady=8)
 
     def _draw_template_table_preview(self, canvas, body_text):
-        """A read-only rendering of the body's tables, for the template
-        dialog: the editor's visual language (bold header on its own
-        surface, hairline rules, separator-aware widths, hidden columns
-        as slivers, merges as spanned cells) without its machinery.
-        Every table and every row is drawn -- the canvas scrolls when it
-        grows past the dialog's budget. Returns the table blocks, empty
-        when there is nothing to draw."""
+        """A read-only drawing of the body's tables for the template dialog,
+        in the editor's look without its machinery; every row drawn, the
+        canvas scrolling past the dialog's budget. Returns the table
+        blocks, empty when there is nothing to draw."""
         from noteorganizer.core import tables as core_tables
         from noteorganizer.core.themes import hairline, inset_surface
         text = body_text.get("1.0", "end-1c")
@@ -947,10 +801,8 @@ class SettingsPageMixin:
         is_new = tpl is None
         data = normalize_template(tpl or {})
 
-        # The editor already open -- another template's -- has its say
-        # first. A pencil acts on its own press, before the window's
-        # click-outside ever runs, so it used to close that editor without
-        # the question and the half-written template was simply gone.
+        # Another template's open editor asks first: the pencil acts before
+        # click-outside, and closed it unasked, half-written.
         if not self._dismiss_mini_popup_asking():
             return False
         pop = tk.Toplevel(self)
@@ -1036,12 +888,8 @@ class SettingsPageMixin:
         # text, they landed on other words after any edit before them.
         self._apply_formatting(body_txt, data.get("formatting", []))
         self._apply_paragraphs(body_txt, data.get("paragraphs", []))
-        # Tables in the body show AS tables, right here -- the same
-        # visual language as the editor, in preview form. Hidden until
-        # the body actually holds one.
-        # The holder is packed NOW, right under the body box, so the
-        # preview appears here rather than at the frame's tail when it
-        # first shows up.
+        # The body's tables show AS tables here, once it holds one -- packed
+        # NOW, under the body box, not at the frame's tail.
         preview_holder = tk.Frame(fields.add(), bg=self.colors["card"])
         preview_holder.pack(fill="x")
         preview_lbl = tk.Label(preview_holder, text="Table preview",
@@ -1070,15 +918,11 @@ class SettingsPageMixin:
                 # failure escaping here left an empty preview and stale
                 # hiding for the rest of the dialog's life.
                 return
-            # The body box shows only the NON-table text: the preview is
-            # where tables are seen, and raw pipe rows with merge markers
-            # read as noise. The box still HOLDS the full body -- elide
-            # hides the lines without touching the stored text.
+            # The box shows only the NON-table text, still HOLDING all of it:
+            # elide hides the pipe rows the preview draws.
             body_txt.tag_remove("tblhide", "1.0", "end")
-            # Blank lines glued to a hidden table hide with it -- they
-            # exist to separate blocks in the STORED text, and keeping
-            # them visible left the remaining text full of gaps. A blank
-            # line between two runs of text is left alone.
+            # Blank lines glued to a hidden table hide with it, or the text
+            # was full of gaps; one between two runs of text stays.
             all_lines = body_txt.get("1.0", "end-1c").split("\n")
             for first, last in blocks:
                 a, z = first, last
@@ -1094,11 +938,8 @@ class SettingsPageMixin:
                     hide_end = "end-1c"
                 body_txt.tag_add("tblhide", f"{a + 1}.0", hide_end)
             if blocks:
-                # A caret inside hidden text would edit a table row
-                # invisibly; park it at the end, after a visible newline.
-                # ONLY when it actually sits in hidden text: parking it
-                # unconditionally yanked the caret to the end after every
-                # keystroke, scattering mid-text edits to the tail.
+                # A caret in hidden text is parked at the end -- ONLY then,
+                # or every keystroke threw it to the tail.
                 last_line = body_txt.get("end-1c linestart", "end-1c")
                 from noteorganizer.core import tables as core_tables
                 if core_tables.is_table_row(last_line):
@@ -1126,20 +967,14 @@ class SettingsPageMixin:
             stack.remeasure()
 
         def paste_and_preview(_e=None):
-            # One combined handler: the table-aware paste returns "break"
-            # (stopping every later binding), so the preview refresh is
-            # scheduled FIRST -- after_idle runs it once the pasted text
-            # has actually landed, whichever path handled it.
+            # The refresh is scheduled FIRST, as the table paste returns
+            # "break"; after_idle runs it once the text has landed.
             pop.after_idle(refresh_preview)
             return self._paste_table_aware(body_txt)
 
-        # A click in the box can land the caret INSIDE the elided table
-        # text (a table-only body looks empty, so anywhere the user
-        # clicks resolves into hidden rows). Typing there glued letters
-        # onto an invisible pipe row: the row stopped being a table row,
-        # the block broke, and its leftover rows surfaced in the box as
-        # bare pipe lines. The caret is herded to visible text BEFORE a
-        # character lands, and deletions refuse to eat hidden text.
+        # A click can land the caret INSIDE the hidden rows, where typing
+        # broke the table: it goes to visible text BEFORE a character lands,
+        # and deletions refuse hidden text.
         def caret_to_visible(_e=None):
             try:
                 if "tblhide" in body_txt.tag_names("insert"):
@@ -1148,10 +983,8 @@ class SettingsPageMixin:
                 pass
 
         def guard_backspace(_e=None):
-            # Deleting the newline that parts visible text from a hidden
-            # block glues the text onto an invisible pipe row -- the
-            # newline itself sits OUTSIDE the tag, so the char behind it
-            # is what gives the danger away.
+            # The newline before a hidden block is outside its tag: the
+            # character behind it gives the danger away.
             try:
                 if ("tblhide" in body_txt.tag_names("insert - 1c")
                         or "tblhide" in body_txt.tag_names("insert")
@@ -1257,10 +1090,8 @@ class SettingsPageMixin:
                         pass
                     render_tpl_checklist()
 
-                # The drawn glyph every other delete in Settings uses, faint
-                # at rest; the same bg_key as its row, and no track_theme,
-                # because render_tpl_checklist() rebuilds these rows. Packed
-                # before the text, so a long item cannot squeeze it out.
+                # Settings' drawn bin, no track_theme (these rows are rebuilt),
+                # packed before the text so a long item cannot squeeze it.
                 self._icon_button(row, "trash", do_del, danger=True,
                                   bg_key="sidebar", removes_row=True
                                   ).pack(side="right")
@@ -1319,10 +1150,8 @@ class SettingsPageMixin:
         cat_menu.pack(fill="x", pady=(0, 6))
 
         def collect():
-            # An item typed in the Add box and not yet added is part of the
-            # template, as it is of a note left (_take_pending_checklist_item):
-            # Save, the question on closing and the quiet save at a session
-            # end all read this.
+            # An item typed and not yet added is part of the template, as of
+            # a note (_take_pending_checklist_item); every save reads this.
             pending = cl_add_var.get().strip()[:MAX_CHECKLIST_ITEM_CHARS]
             return normalize_template({
                 "name": name_var.get(),
@@ -1340,10 +1169,8 @@ class SettingsPageMixin:
             })
 
         def save():
-            # Checked on the RAW field: normalize defaults an empty name
-            # to "Untitled template", so checking after it made this
-            # guard unreachable -- the junk rows named exactly that in
-            # the templates list were its silent proof.
+            # The RAW field: normalized, an empty name is "Untitled template",
+            # and the guard never fired.
             if not name_var.get().strip():
                 self.show_warning("Name needed", "Give the template a name.")
                 return
@@ -1386,10 +1213,8 @@ class SettingsPageMixin:
             if get_setting("template_not_kept", None, expect=str):
                 save_setting("template_not_kept", None)
             self._dismiss_mini_popup()
-            # The list as the page shows it NOW, looked up at this moment.
-            # The section can be rebuilt while this editor is open, and the
-            # rows `redraw` was handed are then gone: redrawing them raised,
-            # and a template that WAS saved reported "Something went wrong".
+            # The list as the page shows it NOW: rebuilt under the editor, the
+            # rows handed over were gone, and a saved template said it failed.
             live = getattr(self, "_refresh_templates_panel", None) or redraw
             live()
             self._render_statistics()
@@ -1404,10 +1229,8 @@ class SettingsPageMixin:
                   cursor="hand2", bg=self.colors["sidebar"], fg=self.colors["text"],
                   font=("Segoe UI", 9)).pack(side="left", padx=(6, 0), ipadx=10, ipady=3)
 
-        # A click elsewhere closes the editor like any dropdown -- but
-        # never at the price of typed work: when something was changed, a
-        # small ask decides whether the change is saved first. Unchanged
-        # dialogs just close, no ceremony.
+        # A click elsewhere closes the editor as any dropdown -- asking first
+        # when something changed.
         confirm_state = {"asking": False}
         # Dirty is measured against what the very same collector reads at
         # open time -- comparing against the raw template tripped on
@@ -1496,14 +1319,8 @@ class SettingsPageMixin:
                        highlightcolor=self.colors["card"])
         row.pack(fill="x", pady=3)
 
-        # A tick box, so recovering yesterday's forty deleted notes is not
-        # forty clicks while destroying all of them stays one. The only
-        # bulk gesture this screen had was the irreversible one.
-        #
-        # The var is kept in a dict on the app rather than in the row,
-        # because redraw() destroys every row -- paging, restoring or
-        # deleting anything would otherwise clear what you had ticked. The
-        # Duplicates panel below does the same thing with its own list.
+        # A tick box, so restoring forty notes is not forty clicks; kept on
+        # the app, not the row, which redraw() destroys (as Duplicates does).
         key = _trash_tick_key(entry)
         var = self._trash_sel.get(key)
         if var is None:
@@ -1516,23 +1333,15 @@ class SettingsPageMixin:
         tick.pack(side="left", padx=(7, 0))
         tick.bindtags(("TrashTickBox",) + tick.bindtags())
 
-        # Built now, packed LAST -- see the buttons below. The packer
-        # hands out the cavity in pack order, so whatever is packed first
-        # gets what it asks for and whatever is packed last lives on the
-        # remainder. This frame expands, so packing it first let a long
-        # title or a long "repeats ..." line take the room the Restore
-        # and Delete buttons needed, and those are the only things in the
-        # row a person has to be able to hit.
+        # Built now, packed LAST: pack gives the rest to what comes last, and
+        # packed first, a long title squeezed Restore and Delete to slivers.
         left = tk.Frame(row, bg=self.colors["card"])
         # The entry is as the file held it; what the row shows is read from
         # a shaped copy, or a title of 7 kept the whole panel from opening.
         shown = normalize_note(dict(entry))
         title = shown["title"].strip() or "(untitled)"
-        # A repeating series is one row here, exactly like a one-off note,
-        # and the Delete button beside it destroys every occurrence it
-        # has. Every other list in the app marks a series -- the note
-        # cards, the calendar day panel -- and this one, the only list
-        # where deleting cannot be undone, did not.
+        # A series is marked, as every list marks one: its Delete destroys
+        # every day, and cannot be undone.
         repeats = is_recurring(shown)
         tk.Label(left, text=("🔁 " if repeats else "") + _truncate(title, 42),
                  bg=self.colors["card"], fg=self.colors["text"],
@@ -1554,25 +1363,16 @@ class SettingsPageMixin:
                            fg=self.colors["subtext"], font=("Segoe UI", 8),
                            anchor="w", justify="left")
         sub_lbl.pack(fill="x")
-        # A series' line is long -- "deleted 2026-09-09 · 84 day(s) left ·
-        # repeats every week on mon, 10 times" -- and reserving the
-        # buttons' width left it too little room, so it was drawn cut
-        # mid-word with nothing to say it had been. Reported the same
-        # hour the buttons were fixed: one clipping traded for another.
-        # Wrapped at the label's OWN width instead, which is the only
-        # number that cannot disagree with the layout.
+        # A series' line is long, and was cut mid-word: wrapped at the label's
+        # OWN width, the one number that cannot disagree with the layout.
         self._wrap_to_own_width(sub_lbl)
 
-        # Two notes both called "Notes", deleted the same day, are told apart
-        # by nothing this row shows. The Duplicates panel already answers
-        # exactly that question the same way, and a trash entry is a note, so
-        # the same helper reads it without any adapting.
+        # Two "Notes" deleted the same day are told apart by a preview, as in
+        # Duplicates: a Trash entry is a note.
         self._attach_dup_preview(left, entry)
 
-        # The row holds the entry it was drawn for, and the toast's Undo
-        # can take that entry out of the Trash while the row is still on
-        # screen. Acted on anyway, Restore put back a second copy of a note
-        # already back, and Delete destroyed the file that note showed.
+        # The toast's Undo can take this entry out under the row: Restore made
+        # a second copy, Delete destroyed the restored note's file.
         def still_in_trash():
             return any(e is entry for e in self.trash)
 
@@ -1631,10 +1431,8 @@ class SettingsPageMixin:
             "<ButtonPress-1>",
             lambda e: "break" if self._second_press_of_double_click(e) else None,
             add="+")
-        # The text last, on what the buttons left. Reported from the
-        # field once a series row grew a "repeats ..." line: the buttons
-        # were squeezed to slivers. A row can afford a shortened title;
-        # it cannot afford an unclickable Restore.
+        # The text last, on what the buttons left: a shortened title, never
+        # an unclickable Restore (field report).
         left.pack(side="left", fill="x", expand=True, padx=10, pady=7)
 
     @staticmethod
@@ -1665,13 +1463,9 @@ class SettingsPageMixin:
             self._bring_into_sight(target)
 
     def _retention_loss_warning(self, doomed, days, current):
-        """What shortening the window to `days` is about to cost, in words.
-
-        `doomed` comes from trash_entries_past_window — the same answer the
-        startup purge acts on — so this cannot name a number the purge will
-        not deliver. The attached files are named because the purge deletes
-        them from disk too, which is the part of the damage nothing on this
-        screen has ever mentioned.
+        """What shortening the window to `days` is about to cost, in words:
+        `doomed` is the purge's own answer (trash_entries_past_window), and
+        the attached files are named, as the purge deletes them too.
         """
         count = len(doomed)
         noun = "note" if count == 1 else "notes"
@@ -1729,32 +1523,25 @@ class SettingsPageMixin:
             except (ValueError, IndexError):
                 return
             current = trash_retention_days()
-            # Only a SHORTER window can destroy anything, and only the
-            # entries it has already outlived. Lengthening is silent, and
-            # so is shortening with nothing old enough to lose -- a
-            # question nobody needs teaches people to dismiss questions.
-            # A window not known removed nothing, so any choice is shorter.
+            # Only a SHORTER window with something old enough to lose asks: a
+            # needless question teaches dismissing them. One not known is
+            # longer than any.
             if current is None or days < current:
                 doomed = trash_entries_past_window(self.trash, days)
                 if doomed and not self.ask_yes_no(
                         "Keep deleted notes for less time",
                         self._retention_loss_warning(doomed, days, current),
                         icon="warning", default="no"):
-                    # The dropdown already shows the new label -- it is set
-                    # before this callback runs -- so backing out has to
-                    # put the old one back, or the screen says 7 days while
-                    # the setting says 30.
+                    # The dropdown already shows the new label: backing out
+                    # puts the old one back.
                     try:
                         self.trash_retention_var.set(shown(current))
                     except tk.TclError:
                         pass
                     return
             choose_trash_window(days)
-            # The subtitle above quotes the window -- keep it honest
-            # without rebuilding the panel under the dropdown's feet. Every
-            # row quotes it too, its "days left" worked out as it is drawn:
-            # the rows alone are drawn again, or they went on counting the
-            # old window until the panel was opened again (2026-10-26).
+            # The subtitle and every row's "days left" quote the window: the
+            # rows alone are redrawn, not the panel under the dropdown.
             try:
                 self._trash_subtitle_lbl.config(text=self._trash_window_line())
             except (tk.TclError, AttributeError):
@@ -1766,17 +1553,8 @@ class SettingsPageMixin:
             ["7 days", "14 days", "30 days", "60 days", "90 days"],
             set_retention, width_chars=10
         ).pack(side="right")
-        # 240 showed about three rows and a lot of scrollbar. This is a
-        # list you come to in order to find one note among several, and
-        # its rows now carry a line more when the note is a repeating
-        # series. The Expand toggle below still takes it taller for anyone
-        # who wants more rows at once -- to 680, which is what
-        # _add_resize_handle works out from this height and the 800 ceiling
-        # passed to it (max(340+260, 340*2), capped). It is a two-state
-        # toggle and not a drag: this comment used to say "the drag handle
-        # below still takes it anywhere from 100 to 800", which was wrong
-        # about the gesture and about the range, and the helper's own
-        # docstring has said "no dragging" the whole time.
+        # Tall enough to find one note among several (240 showed three rows);
+        # Expand, a two-state toggle, takes it to 680 (_add_resize_handle).
         wrap = tk.Frame(parent, bg=self.colors["card"], height=self.px(340))
         wrap.pack(fill="x", padx=12, pady=(0, 0))
         wrap.pack_propagate(False)
@@ -1791,20 +1569,8 @@ class SettingsPageMixin:
         # frame can scroll through (RowStack).
         rows = self._row_stack(canvas, scrolled=sb.set).group(every=16)
 
-        # Paginated: rendering all 600+ rows (and recursively binding the
-        # mousewheel across every one of them) at once was measurably slow —
-        # over a second and a half with 600 entries, and this only grows over
-        # time since trash accumulates. Showing the most recent batch first,
-        # with a button to reveal more, keeps opening the panel fast
-        # regardless of how large the trash gets.
-        #
-        # 25 rather than 50 since Settings started showing one section at a
-        # time. A page of 50 costs about 585ms to open with a full trash, and
-        # profiling puts ~95% of that in Tk laying the widgets out, not in any
-        # code here — so the only real lever is how many rows get painted up
-        # front. 25 halves it to about 405ms. This used to be hidden: the old
-        # accordion re-opened the panel on every other click, so half the
-        # time it was cheaply closing rather than rebuilding.
+        # Paged, newest first: 600 rows at once took over 1.5 s. 25 a page,
+        # as 95% of the cost is Tk laying rows out (50: 585 ms, 25: 405 ms).
         PAGE_SIZE = self.TRASH_PAGE_SIZE
         shown_count = {"n": PAGE_SIZE}
         # Rebuilt each time the panel is opened, so ticks do not survive
@@ -1902,11 +1668,8 @@ class SettingsPageMixin:
             picked = ticked_entries()
             if not picked:
                 return
-            # No confirmation: this is the recovering direction. The app asks
-            # in proportion to how recoverable an action is, and putting a
-            # note back is undone by deleting it again -- which is the button
-            # right beside it. One batch: note by note, each restore wrote
-            # both files and rebuilt the list and the statistics again.
+            # No question: restoring is undone by the Delete beside it. One
+            # batch -- note by note, each wrote both files and rebuilt the list.
             if self._restore_trash_entries(picked) is None:
                 return  # could not be kept, and said so; still ticked
             for entry in picked:
@@ -2007,16 +1770,9 @@ class SettingsPageMixin:
                 shown_count["n"] = PAGE_SIZE
                 redraw()
 
-        # Built before the two buttons below so `before=empty_holder` has
-        # something to aim at, and shown only while something is ticked: a
-        # permanently visible "Restore 0 selected" is noise on the screen
-        # people come to when they are already worried.
-        #
-        # Quieter than Empty trash on purpose. C-6 taught the inverse of this
-        # -- the sweeping action must not look smaller than the narrow one --
-        # and here the sweeping action IS the destructive one, so the weights
-        # are right this way round: the recovering button is an ordinary
-        # control, the irreversible one wears `danger`.
+        # Built first, for `before=empty_holder`; shown only while something is
+        # ticked. Quieter than Empty trash on purpose: here the sweeping action
+        # IS the irreversible one, and wears `danger`.
         restore_btn = tk.Button(
             parent, text="↩ Restore selected", command=restore_selected,
             relief="flat", cursor="hand2", font=("Segoe UI", 9, "bold"),
@@ -2036,11 +1792,8 @@ class SettingsPageMixin:
         empty_holder = self._settings_big_button(
             parent, "Empty trash", empty_trash, kind="danger")
         empty_holder.pack(fill="x", padx=12, pady=(4, 10), ipady=5)
-        # How a change made outside this panel -- the toast's Undo -- gets
-        # its rows redrawn while the panel is on screen (see
-        # _refresh_open_trash_panel). The rows were rebuilt only when the
-        # section was opened, so they went on offering entries that had
-        # already left the Trash.
+        # A change from outside -- the toast's Undo -- redraws the rows while
+        # the panel shows (_refresh_open_trash_panel), or they offered entries gone.
         self._trash_panel_redraw = redraw
         redraw()
 
@@ -2156,11 +1909,8 @@ class SettingsPageMixin:
             for chunk in box.chunks:
                 self._bind_wheel_tree(chunk, wheel)
 
-        # A page of groups at a time. Every group was drawn at once --
-        # 676 widgets for the hundred groups of a 5,000-note notebook, most of
-        # a visit's 900 ms -- and the list shows a handful at a time anyway.
-        # "Show more" draws the next page from the groups already found:
-        # nothing is looked for again until the section is built again.
+        # A page of groups at a time (all at once, 900 ms at 5,000 notes);
+        # "Show more" draws the next from the groups already found.
         DUP_PAGE_SIZE = 20
         drawn = {"n": 0, "more": None}
 
@@ -2211,24 +1961,9 @@ class SettingsPageMixin:
                   ).pack(fill="x", padx=12, pady=(4, 4 if sweeping else 10), ipady=6)
 
         if sweeping:
-            # Painted as the bigger action, because it is. This button was
-            # the quietest thing on the panel -- the sidebar fill, the
-            # theme's ordinary text colour, a smaller font and less padding
-            # than the button beside it, which only acts on what you ticked.
-            # Visual weight is how a reader works out which action is the
-            # broad one, and it said the opposite (finding C-6).
-            #
-            # Outlined, in the warning's words, as Empty trash is: in this app
-            # the dark red FILL is kept for what cannot be undone, and both
-            # buttons here only move notes to the Trash. The border keeps it
-            # a button (the sidebar fill had let it blend away); accent stays
-            # on the precise action, so the eye is warned by the sweeping one
-            # rather than drawn to it.
-            #
-            # Colours passed in the constructor, not track_theme: this panel
-            # is destroyed and rebuilt by _reopen_dup_panel, so it picks up
-            # the current palette on every build (see ARCHITECTURE on the
-            # two theming patterns).
+            # Painted as the bigger action it is (finding C-6), outlined in
+            # the warning's colour -- the red FILL is kept for what cannot be
+            # undone. Plain colours: _reopen_dup_panel rebuilds it.
             tk.Button(parent, text=f"🧹✨  Clean up ALL {len(groups)} groups (keep first in each)",
                       command=clean_up_everything, relief="solid", bd=1,
                       font=("Segoe UI", 10, "bold"), cursor="hand2",
@@ -2248,13 +1983,9 @@ class SettingsPageMixin:
         self.toggle_settings_panel("duplicates")
 
     def _build_theme_picker(self, parent):
-        """The theme swatches, dark and light together, as in the reference
-        design.
-
-        Four across, each a bordered tile holding a small preview of that
-        theme -- its own sidebar strip and three text lines painted in its own
-        colours -- with the name beneath and a tick badge on the selected one.
-        Both sets are always shown, so a theme of the other mode is one click.
+        """The theme swatches, dark and light together, four across: each a
+        tile previewing the theme in its own colours, its name beneath, a
+        tick on the selected one -- the other mode one click away.
         """
         for w in parent.winfo_children():
             w.destroy()
@@ -2348,10 +2079,7 @@ class SettingsPageMixin:
             edge.bind("<FocusIn>", lambda e, w=edge: w.configure(bg=self._focus_ring()))
             edge.bind("<FocusOut>", lambda e, w=edge, c=edge_col: w.configure(bg=c))
 
-        # Each preview canvas otherwise swallows the mouse wheel itself (a
-        # plain Tk quirk: Canvas has a built-in default scroll binding, so it
-        # never lets the event reach the Settings page underneath) -- forward
-        # it to the page's own scroll instead, the same pattern used for
+        # A Canvas keeps the wheel for itself: passed on to the page, as in
         # every other Settings panel.
         def _theme_picker_wheel(event):
             try:
@@ -2369,10 +2097,8 @@ class SettingsPageMixin:
             if balanced != getattr(self, "_theme_picker_cols", None):
                 self._build_theme_picker(parent)
 
-        # The column outlives every rebuild, so its own two handlers are
-        # bound once: binding them again on each rebuild -- every theme
-        # switch -- left two more Tcl commands behind each time, for good.
-        # What each rebuild creates gets the wheel afresh.
+        # The column's own handlers are bound once (at every theme switch they
+        # left Tcl commands behind); what each rebuild makes gets them afresh.
         if not getattr(parent, "_picker_bound", False):
             parent._picker_bound = True
             parent.bind("<MouseWheel>", _theme_picker_wheel)
@@ -2392,10 +2118,8 @@ class SettingsPageMixin:
         if not self._dismiss_mini_popup_asking():
             return
         self._catch_up_deferred_refresh()
-        # Read before anything below moves it: the find bar put away parks
-        # the keyboard on the window, and a table cell's editor closes as
-        # the keyboard leaves it. Both came back to the note's body, not to
-        # the note list or to nothing.
+        # Read before anything below moves it (the find bar, a cell's editor),
+        # so the keyboard comes back to the note's body.
         held = self._keyboard_inside(self.notebook)
         if held is not None and any(
                 str(held).startswith(str(part) + ".")
@@ -2405,23 +2129,13 @@ class SettingsPageMixin:
         # The find bar belongs to the note being left (her re-test, 600).
         self._hide_find()
         self.notebook.pack_forget()
-        # Stated, not inferred. Whether the notebook is on screen is
-        # asked by _calendar_is_showing(), which decides whether a
-        # rebuild can be deferred -- and pack_forget() below does not
-        # update winfo_ismapped() until Tk next goes idle, so a reader
-        # a moment later gets the previous answer. The flag is set by
-        # the two methods that own the swap, which are the only two that
-        # ever hide or show the notebook.
+        # Stated, not inferred: winfo_ismapped() lags pack_forget() until Tk is
+        # idle, and _calendar_is_showing() decides on it. Set only by the two
+        # methods that swap the page and the notebook.
         self._settings_open = True
         self.settings_page.pack(fill="both", expand=True)
-        # The page comes back showing whatever section it was left on --
-        # built then, not now. Field-reported on Recently deleted: notes
-        # deleted since the last visit were simply missing, and appeared
-        # only after clicking the nav entry again. The same staleness is
-        # there for Categories, Templates and Duplicates, which are lists
-        # of things the rest of the app changes; toggle_settings_panel
-        # already promises those four "rebuild on each visit so they
-        # reflect the current notes", and arriving at the page IS a visit.
+        # The section the page was left on is rebuilt on arrival, which is a
+        # visit: Recently deleted lacked the notes deleted since (field report).
         showing = getattr(self, "_settings_selected_section", None)
         if showing:
             self.toggle_settings_panel(showing)
@@ -2444,20 +2158,9 @@ class SettingsPageMixin:
         self.settings_page.pack_forget()
         self.notebook.pack(fill="both", expand=True)
         self._settings_open = False
-        # The one way back to the calendar that does NOT change the
-        # notebook's selected tab, and so never fires the tab-changed
-        # handler that normally catches up a deferred rebuild. Restoring
-        # a note, emptying the Trash and renaming a category all happen
-        # in here, with the Calendar tab still selected underneath --
-        # without this the user comes back to a grid built before any of
-        # it happened.
-        #
-        # Synchronous, and only because the line above made it safe to
-        # be: the catch-up asks whether the calendar is showing, and
-        # that used to be answered from winfo_ismapped(). An attempt to
-        # dodge the timing with after_idle was measured still answering
-        # "not showing", deferring again and leaving exactly the
-        # staleness this was added to prevent.
+        # The one way back to the calendar that fires no tab change, so the
+        # deferred rebuild catches up here -- synchronously, as the flag above
+        # answers at once (after_idle still read "not showing").
         self._catch_up_deferred_refresh()
         before = getattr(self, "_keyboard_before_settings", None)
         self._keyboard_before_settings = None
@@ -2470,19 +2173,9 @@ class SettingsPageMixin:
             self._keyboard_to(before)
         return True
 
-    # ---------- Settings tab ----------
-    # One row per section: nav order, the builder that fills the pane, and
-    # whether it is cheap enough to build up front. This list is the single
-    # source of truth for the navigation — adding a section means adding a row.
-    #
-    # The four that used to hide behind an "expand" button (categories,
-    # templates, trash, duplicates) are ordinary sections now. That removes a
-    # whole interaction layer: previously you scrolled to a section, clicked to
-    # expand its panel, then closed it again.
-    # The keys are an API: the QA suite selects sections by them and reads
-    # ``settings_<key>_panel`` attributes, so they stay put even when a label
-    # changes. "name" is now shown as "General" because it carries the
-    # greeting settings rather than only a name field.
+    # ---------- Settings tab: one row per section, the navigation's one source
+    # (key, label, builder, cheap to build up front). The keys are an API the
+    # qa suite selects by ("name" is labelled General); a label may change.
     SETTINGS_SECTIONS = (
         ("name",       "General",          "_build_settings_name_panel",       True),
         ("appearance", "Appearance",       "_build_settings_appearance_panel", True),
@@ -2496,11 +2189,8 @@ class SettingsPageMixin:
         ("about",      "About",            "_build_settings_about_panel",      True),
     )
 
-    # Nine entries in one flat run mixed four different kinds of thing:
-    # preferences, managers for content you made, tools that delete things,
-    # and read-only information. Grouping is kept separate from the tuple
-    # above so section keys and their order stay independent of how the nav
-    # happens to be arranged.
+    # The sections grouped by kind -- preferences, your content, tools that
+    # delete, information -- apart from the tuple above, which keeps its order.
     SETTINGS_GROUPS = (
         ("General", ("name", "appearance")),
         ("Content", ("categories", "templates")),
@@ -2508,13 +2198,9 @@ class SettingsPageMixin:
         ("More",    ("statistics", "shortcuts", "about")),
     )
 
-    # The nav is a fixed width. It does not need a narrow breakpoint: the app
-    # holds its whole content area to at least SIDEBAR_WIDTH + EDITOR_MIN_WIDTH
-    # (900px at 100%) and scrolls horizontally below that rather than
-    # reflowing -- see _on_main_canvas_configure in note_organizer.py -- and
-    # Settings sits inside that same canvas, so its pane never gets narrower
-    # than ~890px. Both widths here are as at 100%; on a scaled screen the app
-    # sets them again at its scale (NoteOrganizer._SIZES_AT_100).
+    # A fixed width, no narrow breakpoint: the app scrolls below 900px rather
+    # than reflow (_on_main_canvas_configure). As at 100%, scaled by
+    # NoteOrganizer._SIZES_AT_100.
     SETTINGS_NAV_WIDTH = 240
     # How many trash rows are painted before "Show more". A tuning knob, not
     # a feature: see the note in _build_settings_trash_panel for the numbers.
@@ -2524,15 +2210,9 @@ class SettingsPageMixin:
     SETTINGS_CONTENT_MAX = 640
 
     def build_settings_tab(self, parent):
-        """Settings as a navigation column plus a content pane.
-
-        Sections used to be stacked in one long scrolling column, four of them
-        hiding an expandable panel behind a button. Everything competed for the
-        same vertical space, and section titles sat left while their buttons sat
-        centred, so reading the page meant zig-zagging.
-
-        Now one section shows at a time, picked from the list on the left, and
-        everything inside it lines up against the same left edge.
+        """Settings as a navigation column plus a content pane: one section
+        at a time, everything in it on one left edge -- stacked in one long
+        column, reading the page meant zig-zagging.
         """
         outer = tk.Frame(parent)
         self.track_theme(outer, bg="bg")
@@ -2571,13 +2251,9 @@ class SettingsPageMixin:
                  bg=self.colors["sidebar"], fg=self.colors["subtext"]
                  ).pack(fill="x")
 
-        # --- Back to Notes, in the rail rather than in its own bar above ---
-        # It used to sit in a strip across the top of the whole page, which
-        # spent a band of vertical space on every section to hold one control.
-        # The foot is claimed before the scrolling area, so it reserves its
-        # height rather than being pushed off the bottom by a list that
-        # expands -- the same ordering the note sidebar uses for its own
-        # bottom zone.
+        # --- Back to Notes, at the rail's foot, claimed before the scrolling
+        # area so a list that grows cannot push it off, as in the note
+        # sidebar ---
         self._settings_theme_toggle()
 
         # Everything between the brand and that foot scrolls. Nine entries in
@@ -2648,11 +2324,8 @@ class SettingsPageMixin:
             w.bind("<Leave>", lambda _e: _back_hover(False))
 
 
-        # Each entry is a rail plus a button, not just a button: a tk.Button
-        # cannot draw a border on one side only, and the selected state reads
-        # far more quietly as a thin accent bar beside a tinted row than as a
-        # fully saturated block. The rail is a 3px Frame that is simply the
-        # same colour as the sidebar when the entry isn't selected.
+        # Each entry is a rail and a button: the selected one reads quietly as
+        # a thin accent bar by a tinted row, which a tk.Button cannot draw.
         self._settings_nav_buttons = {}
         self._settings_nav_rails = {}
         self._settings_nav_icons = {}
@@ -2666,10 +2339,8 @@ class SettingsPageMixin:
                 label = labels[key]
                 self._build_nav_entry(key, label)
 
-        # The wheel has to work over the entries themselves, not only over
-        # the canvas behind them, since the entries cover it completely.
-        # _bind_wheel_tree_if_unbound skips anything with a binding of its
-        # own, so nothing that already scrolls loses its handler.
+        # The wheel over the entries too, which cover the canvas; anything
+        # with a binding of its own keeps it (_bind_wheel_tree_if_unbound).
         def _nav_wheel(event):
             try:
                 if nav_scroll.bbox("all") and \
@@ -2734,11 +2405,8 @@ class SettingsPageMixin:
                 focused = self.focus_get()
             except (tk.TclError, KeyError):
                 return
-            # event.widget can arrive as a bare STRING: Tk hands the path
-            # name when the clicked widget was destroyed and rebuilt (a
-            # theme switch does exactly that) before the event got here.
-            # Calling focus_set() on that string was the intermittent
-            # "something went wrong" while flipping themes.
+            # event.widget can be a bare STRING, the widget rebuilt by a theme
+            # switch before the event came: focus_set() on it raised.
             target = event.widget
             if not hasattr(target, "focus_set"):
                 return
@@ -2749,11 +2417,8 @@ class SettingsPageMixin:
                     pass
         self.bind("<Button-1>", _clear_settings_field_focus, add="+")
 
-        # A frame per section, all created now so callers can reach them (the
-        # QA suite reads self.stats_frame straight after opening Settings). The
-        # light ones are filled immediately; the four heavy panels build their
-        # contents when first selected, as they always have -- the trash list
-        # alone can run to hundreds of rows.
+        # A frame per section, made now for callers to reach (the qa suite reads
+        # stats_frame at once); the four heavy ones fill when first selected.
         for key, label, builder, eager in self.SETTINGS_SECTIONS:
             # On the page ground, so the cards inside read as raised surfaces.
             # The whole panel used to be card-coloured, which flattened every
@@ -2775,10 +2440,8 @@ class SettingsPageMixin:
         self.track_theme(row, bg="sidebar")
         row.pack(fill="x", padx=0, pady=1)
 
-        # The reference marks the selected entry with a short bar beside it --
-        # 3px wide, 16px tall, vertically centred -- not a rule running the
-        # full height of the row. A canvas gives that without a nest of
-        # spacer frames, and lets the ends be rounded on the outer edge.
+        # The selected entry's short bar, 3 by 16 px and centred, drawn on a
+        # canvas so its outer ends can be rounded.
         rail = tk.Canvas(row, width=self.px(3), height=self.px(34),
                          highlightthickness=0, bd=0, bg=self.colors["sidebar"])
         rail.pack(side="left", fill="y")
@@ -2788,10 +2451,8 @@ class SettingsPageMixin:
                          highlightthickness=0, bd=0, bg=self.colors["sidebar"],
                          cursor="hand2")
         icon.pack(side="left", padx=(9, 0))
-        # The glyph is decoration; the button beside it is the control, so
-        # clicking the glyph has to reach the same place. "break" when the
-        # person stayed with a half-written template, so the same click's
-        # window-level click-outside does not ask them again.
+        # The glyph clicks as its button does; "break" when the person stayed
+        # with a half-written template, or click-outside asks again.
         icon.bind("<Button-1>",
                   lambda _e, k=key: (None if self.toggle_settings_panel(k)
                                      is not False else "break"))
@@ -2830,11 +2491,8 @@ class SettingsPageMixin:
         self._settings_nav_icons[key] = icon
         icon._key_route = btn       # the keyboard's way to what it does
 
-    # Each glyph is drawn as plain geometry in a 16x16 box rather than set as
-    # a character or loaded as an image. That is what lets it take the theme's
-    # colour: emoji are fixed-colour bitmaps and would stay the same on all
-    # eight themes, and a PNG would need one copy per theme or a tinting pass.
-    # Shapes just get redrawn in whatever colour is current.
+    # Each glyph is geometry in a 16x16 box, so it takes the theme's colour --
+    # an emoji is a fixed-colour bitmap, a PNG one copy per theme.
     NAV_ICON_SIZE = 17
 
     def _draw_icon(self, canvas, kind, color, size=None):
@@ -2915,22 +2573,14 @@ class SettingsPageMixin:
             canvas.scale("glyph", 0, 0, size / 16.0, size / 16.0)
         self._scale_drawing(canvas, "glyph")
 
-    # ---- the small design system the panels are built from --------------
-    #
-    # Three surface steps and one border colour, all derived from the theme
-    # rather than hardcoded, so every one of the eight themes gets a
-    # consistent set. "surface" is the card, "inset" is a well *inside* a
-    # card (inputs, preview strips), and the border is what gives a card an
-    # edge now that corners stay square.
+    # ---- the small design system the panels are built from: three surface
+    # steps and a border, derived from each theme -- the card, a well inside
+    # it, and the edge a square card needs ----
     def _surface(self, kind="card"):
-        """One of the reference design's three surface steps.
-
-        The order matters and is the same in both modes: the page ground is
-        furthest from the text colour, a card sits one step toward it, and a
-        well *inside* a card sits one step further again. On a dark theme
-        that reads as progressively lighter, on a light theme progressively
-        darker -- which is why this blends toward ``text`` rather than
-        hardcoding a direction.
+        """One of the three surface steps: the page furthest from the text
+        colour, a card a step toward it, a well inside a card a step more --
+        lighter on a dark theme, darker on a light one, as it blends toward
+        ``text``.
         """
         if kind == "page":
             return self.colors["bg"]
@@ -2985,11 +2635,8 @@ class SettingsPageMixin:
             note.pack(fill="x", pady=(2, 0))
             self._wrap_to_own_width(note)
         control = tk.Frame(row, bg=self._surface())
-        # First in the packing order, though built second: the packer gives
-        # each its width in that order, and the words first took theirs
-        # unwrapped -- their hint wraps only to the width it is given -- and
-        # left the control the rest: a dropdown 18 px of its 74, its arrow
-        # gone, under CI's fonts. The words have the rest now, and wrap.
+        # Packed first, built second: packed after its words, which took their
+        # width unwrapped, a dropdown kept 18 px of its 74 under CI's fonts.
         control.pack(side="right", padx=(16, 0), before=text_col)
         return control
 
@@ -3026,10 +2673,8 @@ class SettingsPageMixin:
                       font=("Segoe UI", 9, "bold"), cursor="hand2",
                       fg=fg, bg=bg, activeforeground=fg, activebackground=hover,
                       highlightbackground=border, padx=14, pady=6)
-        # These buttons live on the eager, built-once Settings panels, so
-        # the palette-KEYED options must be tracked too (bg and the normal
-        # kind's derived ring are the straggler net's job). The derived
-        # activebackground is refreshed live in the hover binds below.
+        # On built-once panels, so the palette-KEYED options are tracked; the
+        # derived ones are the straggler net's, or refreshed on hover below.
         if kind == "danger":
             self.track_theme(b, fg="danger_text", activeforeground="danger_text",
                              highlightbackground="danger_text")
@@ -3064,16 +2709,9 @@ class SettingsPageMixin:
 
     ROW_ICON_SIZE = 15
 
-    # What each wordless row icon does, in words. Settings is the screen where
-    # the buttons are silent AND the actions are permanent -- a pencil and a
-    # bin side by side, nothing written on either -- while the formatting
-    # toolbar in the editor has explained every one of its buttons on hover
-    # for a long time. The app taught the lesson in one place and broke it in
-    # the other.
-    #
-    # Keyed by glyph rather than passed in at each call site, so every icon
-    # button gets one, including the next one added. Where a row needs to say
-    # something more specific than the glyph, `tip=` overrides.
+    # What each wordless row icon does, in words, as the toolbar's buttons
+    # say on hover -- here the actions are permanent. Keyed by glyph, so the
+    # next icon gets one too; `tip=` says more where a row needs it.
     ICON_TIPS = {
         "pencil":     ("Rename", "Change what this is called."),
         "trash":      ("Delete", "Removes this one. Categories and templates "
@@ -3089,25 +2727,12 @@ class SettingsPageMixin:
     def _icon_button(self, parent, kind, command=None, danger=False,
                      bg_key="card", tip=None, removes_row=False,
                      takes_event=False, keys=None):
-        """A small drawn-glyph button for a list row.
-
-        ``removes_row`` is for a button that takes its own row away, or
-        moves it, with no question in between: another row slides in under
-        the pointer, so the second press of a double-click would act on that
-        one too. It is ignored, by the rule the checklist bin follows
+        """A small drawn-glyph button for a list row, in the theme's colour.
+        ``removes_row``: it takes its row away unasked, so a double-click's
+        second press, landing on the next row, is ignored
         (_second_press_of_double_click). ``takes_event`` hands the press to
-        ``command``, for a glyph whose halves do different things.
-
-        Replaces the emoji these rows used to use. Emoji are fixed-colour
-        bitmaps, so a red wastebasket stayed the same shade of red on all
-        eight themes and read as clipart against a flat interface; the
-        pencil beside it was a monochrome dingbat that *did* recolour, so
-        the two never matched. Drawn shapes give one consistent set that
-        follows whatever theme is on.
-
-        Passing no ``command`` makes it a plain indicator (the padlock on a
-        protected category), not something clickable -- unless ``keys``, the
-        keyboard's press for an icon whose click the caller binds itself.
+        ``command``. No ``command``: an indicator (a padlock), unless
+        ``keys``, the keyboard's press for a click the caller binds itself.
         """
         size = self.ROW_ICON_SIZE
         # Faint at rest even for destructive actions: the reference colours
@@ -3162,22 +2787,15 @@ class SettingsPageMixin:
             c.bind("<Leave>", _off)
         if keys:
             self._pressable(c, keys)
-        # After the hover bindings above, and with add="+" inside the helper,
-        # so the glyph still lights up while the words appear. The padlock
-        # gets one too although it takes no command: "why can't I rename this
-        # one" is exactly the question a silent indicator raises.
+        # After the hover bindings (add="+"), so the glyph still lights up; the
+        # padlock too, for "why can't I rename this one".
         words = tip if tip is not None else self.ICON_TIPS.get(kind)
         if words:
             title, detail = words if isinstance(words, tuple) else (words, "")
             self._attach_tooltip(c, title, detail)
-            # Recorded the same way and for the same reason as _icon_kind
-            # above: a canvas has no text to search. Without it a check can
-            # only ask whether <Enter> is bound, and a clickable icon binds
-            # that anyway for its hover colour -- so "it explains itself"
-            # and "it lights up" become the same question, and the first one
-            # passes whenever the second is true. Found by a mutant that
-            # removed every tooltip and was noticed only by the padlock,
-            # which is the one icon with no command and so no hover binding.
+            # Recorded, as _icon_kind is, for a check to read: <Enter> is bound
+            # for the hover colour anyway, and a mutant removing every tooltip
+            # was seen only by the padlock.
             c._icon_tip = title
         return c
 
@@ -3337,13 +2955,10 @@ class SettingsPageMixin:
                  ).pack(fill="x", pady=(0, 6))
 
     def _settings_big_button(self, parent_frame, text, command, kind="normal"):
-        """A full-width action button, left-aligned like its section.
-
-        Three kinds. ``accent`` is the one primary action a section may have;
-        ``normal`` is everything else; ``danger`` is outlined rather than
-        filled -- it keeps the warning colour, which is reserved for exactly
-        this, but stops a destructive action from being the heaviest thing on
-        the page. Emptying the trash should be findable, not inviting.
+        """A full-width action button, left-aligned like its section:
+        ``accent`` for a section's one primary action, ``normal`` for the
+        rest, ``danger`` outlined in the warning colour rather than filled --
+        emptying the Trash should be findable, not inviting.
         """
         if kind == "danger":
             b = tk.Button(parent_frame, text=text, command=command,
@@ -3366,10 +2981,8 @@ class SettingsPageMixin:
             else:
                 self.track_theme(b, bg="sidebar")
 
-        # Same hover convention as the rest of the app — but the colours
-        # are computed at EVENT time from the live palette. The old
-        # closures captured them at build, so a tracked button hovered in
-        # whatever theme it was built under (audit Z07-F04).
+        # Hover colours worked out at EVENT time: taken at build, a button
+        # hovered in the theme it was built under (audit Z07-F04).
         def _rest_bg():
             if kind == "danger":
                 return self.colors["card"]
@@ -3486,26 +3099,17 @@ class SettingsPageMixin:
             self.refresh_category_widgets()
             return
 
-        # Notes exist. What the editor holds is saved first, as every delete
-        # route does: the note on screen may be about to go to the Trash,
-        # and its unsaved typing belongs in the Trash copy, not in an
-        # editor about to be cleared. Going back stops here: the question
-        # about a date the save could not store is asked only
-        # when the note on screen is filed here -- the one case where the
-        # editor may be cleared; any other note stays open, date and all.
-        # A repeat's turn-off waiting there is held back for the question:
-        # a No made it all the same (see _context_delete_note).
+        # Saved first, as every delete route: its typing belongs in the Trash
+        # copy. The unstorable date is asked only when the note on screen is
+        # filed here; a pending repeat turn-off waits (_context_delete_note).
         shown = (self.find_note(self.selected_note_id)
                  if self.selected_note_id is not None else None)
         leaving = (self.category_var.get() == name
                    or (shown is not None and shown.get("category") == name))
         if self._flush_autosave(leaving=leaving, hold_repeat_off=True) is False:
             return
-        # Ask what happens to them. Only a note FILED here can go to the
-        # Trash; a repeating note with just a day filed here is counted
-        # apart, because that day moves to General whatever the answer.
-        # Both counted now, after the save above: it can have just filed
-        # the note on screen here, or taken it out.
+        # Counted after the save, which may have filed the open note here or
+        # out: only a note FILED here can go; a series' day here moves to General.
         count = self.count_notes_in_category(name)
         named = {n["id"] for n in self.notes if n.get("category") == name}
         choice = self._ask_category_deletion(name, len(named),
@@ -3515,26 +3119,17 @@ class SettingsPageMixin:
         if choice == "move":
             self.reassign_category_everywhere(name, PROTECTED_CATEGORY)
         elif choice == "delete_notes":
-            # Move the affected notes to trash rather than destroying them.
-            # Only the notes the question counted, and only while they are
-            # still filed here. Read after the answer, a note filed here
-            # while the question waited (a timer's question took its grab,
-            # and a click went through) went to the Trash too -- one more
-            # than the question said. It goes to General now, with the
-            # rest of the category's traces below.
+            # To the Trash: only the notes the question counted, still filed
+            # here; one filed while it waited goes to General with the rest.
             doomed = [n for n in self.notes
                       if n["id"] in named and n.get("category") == name]
             gone = {n["id"] for n in doomed}
             if self._move_notes_to_trash(doomed) is None:
                 return   # trash.json refused them: the category and its notes stay
             self.notes = [n for n in self.notes if n["id"] not in gone]
-            # A day of a series that stays, filed here on its own, is
-            # re-filed under General by the call below -- never deleted.
-            # It used to be deleted outright: the day's own title and text
-            # were in neither file, under a button promising "restorable".
-            # The notes just trashed, the templates and a folded group
-            # still hold the name too; restoring one of those notes would
-            # bring the category back.
+            # A series' day filed here is re-filed under General, never
+            # deleted (it was, under "restorable"); so are the templates and
+            # a folded group. A trashed note restored brings the name back.
             self.reassign_category_everywhere(name, PROTECTED_CATEGORY)
 
         CATEGORY_COLORS.pop(name, None)
@@ -3548,14 +3143,10 @@ class SettingsPageMixin:
             self.new_note()
 
     def _ask_category_deletion(self, name, count, days_only=0):
-        """Returns 'move', 'delete_notes', or None (cancel). Uses the in-app
-        themed dialog overlay (not a separate window).
-
-        `count` notes are filed under the category; `days_only` more are
-        repeating notes with only a day of theirs filed there. Those days
-        move to General whichever way this is answered -- a series never
-        goes to the Trash for one of its days -- so the question names
-        them apart rather than counting them among the notes it trashes."""
+        """Returns 'move', 'delete_notes', or None (cancel), asked in the
+        app's own dialog. `count` notes are filed under the category;
+        `days_only` repeating notes have only a day there, which moves to
+        General either way, and are named apart."""
         days = ""
         if days_only:
             days = (f"{days_only} repeating note(s) have a day filed under "
@@ -3577,12 +3168,8 @@ class SettingsPageMixin:
             f"“{name}” has {count} note(s). What should happen to them?"
             + (f"\n\n{days}" if days else ""),
             kind="warning",
-            # "delete_notes" does NOT destroy anything -- it calls
-            # _move_notes_to_trash, so the notes are restorable for the full
-            # retention window like any other delete. The label used to say
-            # "(permanent)", which was simply untrue and frightened people off
-            # a safe choice -- or worse, convinced them notes were gone when
-            # they were sitting in Trash.
+            # "delete_notes" moves to the Trash, restorable like any delete: a
+            # "(permanent)" label was untrue and frightened people off it.
             buttons=[("Cancel", None),
                      (f"Delete the notes too (restorable"
                       f"{trash_window_words('for')})", "delete_notes", "danger"),
@@ -3621,13 +3208,9 @@ class SettingsPageMixin:
                 "Nothing selected",
                 "Tick the duplicates you want to remove first.")
             return
-        # What the editor holds is saved first, as every delete route does:
-        # the note on screen may be one of these copies, and its unsaved
-        # typing belongs in the Trash copy, not in an editor about to be
-        # cleared. Going back stops here: a date the save could not store
-        # is asked about only when the editor is about to
-        # be cleared or reloaded -- a copy going, or a kept copy gaining
-        # files (see the end); any other note stays open, date and all.
+        # Saved first, as every delete route: its typing belongs in the Trash
+        # copy. The unstorable date is asked only when the editor is about to
+        # be cleared or reloaded (see the end).
         affected = ({n.get("id") for n in to_trash}
                     | {kept.get("id") for kept, _remove in plan
                        if kept is not None})
@@ -3657,21 +3240,15 @@ class SettingsPageMixin:
         for kept, remove in plan:
             if kept is None:
                 continue
-            # Merge removed notes' attachments into the first survivor.
-            # The removed note keeps its own references and goes to the
-            # trash, whose later purge deletes its files — so the
-            # survivor must get its OWN copy of each merged file, not a
-            # reference to the same one on disk (otherwise the one
-            # attachment the merge exists to preserve is exactly what
-            # the purge destroys). Same fix as duplicate_note.
+            # The survivor gets its OWN copy of each merged file: the copy
+            # going to the Trash keeps its references, and the purge deletes
+            # them (as duplicate_note does).
             merged_attach = list(kept.get("attachments", []))
             seen_attach = {a.get("stored_as") for a in merged_attach}
             for note in remove:
                 for a in note.get("attachments", []):
-                    # A note holds MAX_ATTACHMENTS files, as the backup
-                    # import's merge stops: past them, normalize_note cut
-                    # the list and the purge took the files no note named.
-                    # The rest stay with their copy, restorable from the Trash.
+                    # At MAX_ATTACHMENTS, as the backup's merge stops: the rest
+                    # stay with their copy, restorable from the Trash.
                     if len(merged_attach) >= MAX_ATTACHMENTS:
                         break
                     if a.get("stored_as") in seen_attach:
@@ -3693,11 +3270,8 @@ class SettingsPageMixin:
                 grew.add(kept.get("id"))
         self.notes = [n for n in self.notes if id(n) not in trash_ids]
         self.save_notes()
-        # The editor is told, as after every change made behind it: a copy
-        # it held went to the Trash (it starts fresh, as every delete route
-        # does), or a kept copy it holds gained files (it moves onto that
-        # version -- its next save used to write the old list back, and the
-        # merged file was left belonging to nobody).
+        # The editor is told: its copy went (it starts fresh), or its kept copy
+        # gained files (it moves onto that version, or saved the old list back).
         if (self.selected_note_id is not None
                 and self.find_note(self.selected_note_id) is None):
             self.new_note()
@@ -3791,10 +3365,8 @@ class SettingsPageMixin:
                 self._username_save_job = None
             if not self._still_alive():
                 return
-            # Hard safety net: the key-by-key length check above can miss very
-            # fast/held-down typing (a known Tk reliability gap under rapid
-            # keystrokes), so enforce the limit again here, at the moment of
-            # actually saving, regardless of how the field got too long.
+            # The limit again at saving: the key-by-key check can miss typing
+            # held down (a Tk gap under rapid keystrokes).
             current = self.username_var.get()
             if len(current) > USERNAME_MAX_LEN:
                 current = current[:USERNAME_MAX_LEN]
@@ -3811,12 +3383,8 @@ class SettingsPageMixin:
                 pass
 
         def schedule_name_save(event=None):
-            # Real-time correction: the per-keystroke block above can miss
-            # very fast/held-down typing, so check again on every key
-            # release (a plain event binding, not the special validate hook
-            # that has the reliability gap) and snap back immediately if it
-            # slipped past 30 -- rather than letting it grow freely and only
-            # fixing it later when the name is actually saved.
+            # And at every key release, a plain binding without validate's gap:
+            # past 30, snapped back at once rather than at the save.
             current = self.username_var.get()
             if len(current) > USERNAME_MAX_LEN:
                 self.username_var.set(current[:USERNAME_MAX_LEN])
@@ -3836,10 +3404,8 @@ class SettingsPageMixin:
         # (_enter_repeats).
         name_entry.bind("<Return>", lambda e: (
             None if self._enter_repeats(e) else save_name()))
-        # No separate Save button -- the field already autosaves shortly
-        # after typing stops, and immediately on Enter or clicking away.
-        # No separate Save button — the field already autosaves shortly
-        # after typing stops, and immediately on Enter or clicking away.
+        # No Save button: the field saves shortly after typing stops, and at
+        # once on Enter or clicking away.
 
     def _build_settings_appearance_panel(self, parent):
         """Light/dark toggle and the theme picker.
@@ -3857,17 +3423,13 @@ class SettingsPageMixin:
         # Theme picker — pick any color scheme, grouped Dark / Light.
         self.theme_picker_frame = tk.Frame(appearance, bg=self.colors["bg"])
         self.track_theme(self.theme_picker_frame, bg="bg")
-        # Bottom padding here rather than top padding on the card below:
-        # _settings_card deliberately has none, because everywhere else a
-        # card follows a subtitle. This is the one place one follows a grid
-        # of swatches, which would otherwise sit right against it.
+        # Padding here, not on the card below: a card has none, as it follows a
+        # subtitle everywhere but here, after the swatches.
         self.theme_picker_frame.pack(fill="x", pady=(0, 20))
         self._build_theme_picker(self.theme_picker_frame)
 
-        # The editor's own font. This is the baseline every note starts
-        # from; the toolbar's Font group overrides it for a selection. Kept
-        # here rather than per note deliberately -- "I want my notes bigger"
-        # is a statement about reading, not about one note.
+        # The editor's own font, every note's baseline (the toolbar overrides a
+        # selection): "my notes bigger" is about reading, not one note.
         card = self._settings_card(appearance)
         row = self._card_row(
             card, "Editor font",
@@ -3889,10 +3451,8 @@ class SettingsPageMixin:
             lambda v: self._set_editor_font(size=int(v)), width_chars=8
         ).pack(side="right")
 
-        # Only Windows draws a program as a stretched picture when it does
-        # not say otherwise, so only there is there anything to choose. The
-        # words are for someone who has never heard of DPI: what they will
-        # see, when it is worth turning off, and when a change shows.
+        # Only Windows stretches a program as a picture, so only there is a
+        # choice -- in words for someone who never heard of DPI.
         if sys.platform.startswith("win"):
             row = self._card_row(
                 card, "Sharp text",
@@ -3989,17 +3549,9 @@ class SettingsPageMixin:
         self.stats_frame.pack(fill="x")
         self._render_statistics()
 
-    # Every combo listed here is verified against a real binding -- the
-    # groups below name the widget the binding lives on, and the calendar
-    # keys only act while that tab is showing (see _calendar_key's guard).
-    #
-    # The other direction is the one that failed: every real binding has
-    # to BE here. The note list's keys once shipped without their rows,
-    # so this page went on saying it holds everything the keyboard
-    # can do while the newest way to use the keyboard was missing from
-    # it -- and the user guide repeated the claim, because it had no
-    # reason to doubt it. Anything bound from here on gets its row in the
-    # same change that binds it.
+    # Every combo here is a real binding, and every real binding is here --
+    # the list's keys once shipped without their rows: a key bound gets its
+    # row in the same change. The calendar's act only while it shows.
     SHORTCUT_GROUPS = (
         ("App", (
             ("Ctrl+N", "New note (switches to the Notes tab first)."),
