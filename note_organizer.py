@@ -6595,20 +6595,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         drift away from it again."""
         outer = tk.Frame(popup, bg=self.colors["card"], padx=1, pady=1)
         outer.pack()
-        # The same header the text-colour popup beside it has carried all
-        # along. It lived at that popup's own call site, inside the branch
-        # `kind == "highlight"` never takes, so the highlight palette drew
-        # none -- on either route here. Putting it in the shared function
-        # rather than at a call site is what gives the toolbar popup and
-        # the table cell's popup the same one.
+        # The header the text-colour popup carries, here in the shared function
+        # (at a call site, the highlight palette drew none) for both routes.
         header = tk.Label(outer, text="Pick a highlight color",
                           font=("Segoe UI", 10, "bold"),
                           bg=self.colors["card"], fg=self.colors["text"])
         header.pack(padx=15, pady=(12, 8))
-        # The hairline is the COLUMN's background peeking through the
-        # one-pixel gaps between swatches: the theme's accent softened
-        # toward the card, so a purple theme parts them with a paler
-        # purple, dark or light alike.
+        # The hairline between swatches is the column's background: the accent
+        # softened toward the card, in every theme.
         column = tk.Frame(outer, bg=self._blend_hex(
             self.colors["accent"], self.colors["card"], 0.35))
         column.pack(padx=8, pady=8)
@@ -6662,21 +6656,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return aligns[c] if c < len(aligns) else core_tables.ALIGN_LEFT
 
     def _grid_cell_text_range(self, info, r, c, pad_ok=False, full=False):
-        """The body-text indices of one cell's content, or None when the
-        cell is empty -- padding never carries formatting, EXCEPT that a
-        highlight (pad_ok) may sit on an empty cell's padding: it is the
-        only style with something to show on nothing, and text typed into
-        the cell later lands inside the tagged region and inherits it.
-
-        ``full`` widens the range to the whole pipe-to-pipe region even
-        when the cell HOLDS text. A cell-level highlight lives there so
-        that everything later inserted inside the cell -- typed text on
-        commit, the pad spaces a re-align shuffles, a checkbox marker --
-        lands strictly INSIDE the tagged region and inherits it. Applied
-        to the text alone, the highlight died the moment a commit wrote
-        new characters beside it (logically at once, visibly at the next
-        rebuild -- 'drag the column and the colour is gone' in the field
-        report)."""
+        """The body-text indices of one cell's content, or None when empty --
+        padding carries no formatting, except a highlight (*pad_ok*) on an
+        empty cell's. *full* takes the whole pipe-to-pipe region, where a
+        cell-level highlight lives so whatever goes in later inherits it: on
+        the text alone, 'drag the column and the colour is gone'."""
         line_no = self._grid_line_of_row(info, r)
         first = self._grid_first_line(info)
         if line_no is None or first is None:
@@ -6713,13 +6697,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     @_undo_atom(tags_only=True)
     def _grid_apply_style(self, info, box, kind, value=None, through_editor=True):
-        """One toolbar action, over every selected cell's text.
-
-        The toggle decision is made once across all the cells -- a mixed
-        selection turns the style ON everywhere, the way the body's own
-        selection behaves -- and the drawn grid repaints in place.
-        `through_editor=False` styles the body even under an open editor:
-        its commit lays the cell's own highlight that way.
+        """One toolbar action over every selected cell's text, decided once
+        (a mixed selection turns it ON, as the body's does), the grid
+        repainted in place. `through_editor=False` styles the body under an
+        open editor, as its commit lays a cell's highlight.
         """
         r0, c0, r1, c1 = box
         editor = getattr(self, "_cell_editor", None)
@@ -6811,14 +6792,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._grid_redraw_cell_text(info, r, c)
 
     def _recolor_table_grids(self):
-        """Repaint every drawn table in the current palette, in place.
-
-        A theme switch rebuilt them all, and each new grid is a new window
-        that maps a moment late: the switch flickered on a note with
-        tables and not on one without. Their colours live in canvas items
-        -- the cells, a hidden column's slivers, the selection -- so those
-        are repainted. False, with nothing painted, when a grid is gone or
-        stale: only a rebuild will do then."""
+        """Repaint every drawn table in the current palette, in place -- a
+        rebuild's new windows map late, and a theme switch flickered. Their
+        colours are canvas items. False, nothing painted, when a grid is
+        gone or stale: only a rebuild will do."""
         grids = list(getattr(self, "_table_grids", []))
         if any(info.get("stale") or self._grid_first_line(info) is None
                for info in grids):
@@ -6985,11 +6962,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             command=lambda xr=event.x_root, yr=event.y_root:
                 self._grid_highlight_popup(info, (r, c, r, c), xr, yr))
         menu.add_separator()
-        # Grouped: the flat run had grown past fifteen entries and
-        # "finding the one you need takes minutes" (field report). The
-        # everyday cell actions stay on top; everything about rows,
-        # columns, merging, or the table as a whole lives one hover
-        # away, under the word you would look for.
+        # Grouped ("finding the one you need takes minutes", field report): the
+        # everyday cell actions on top, the rest a hover away under its word.
 
         def _sub():
             m = tk.Menu(menu, tearoff=0, bg=self.colors["card"],
@@ -7080,13 +7054,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
 
     def _configure_table_tag(self, text_widget):
-        """Draw table rows in a monospace face, at the editor's own size.
-
-        Derived from the text rather than stored with the note, exactly like
-        the list margins: what makes a line a table row is the pipes in it,
-        and this tag is only how that is shown. Nothing about it reaches
-        ``formatting``, so a table exported, shared as a code, or pasted
-        into another application carries no font of its own.
+        """Draw table rows in a monospace face, at the editor's own size --
+        derived from the pipes, as the list margins are, never in
+        ``formatting``, so a table exported or shared carries no font.
         """
         available = set(tkfont.families())
         family = next((f for f in MONOSPACE_FAMILIES if f in available),
@@ -7233,21 +7203,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.body_text.tag_remove(f"align_{name}",
                                           f"{line_no}.0", f"{line_no}.end+1c")
             if align != "left":
-                # Includes the newline, unlike the list tags: justify applies
-                # to the whole display line, and a range stopping at .end
-                # leaves an empty line unaligned, so the caret jumps back to
-                # the left the moment you press Enter on a centred line.
+                # The newline too: stopping at .end, an empty centred line's
+                # caret jumped left at Enter.
                 self.body_text.tag_add(f"align_{align}",
                                        f"{line_no}.0", f"{line_no}.end+1c")
 
     def _list_kind_of(self, text_widget, line_no, line=None):
-        """Which kind of list line this is, or None if it is not one.
-
-        Decided by the marker in the text, not by the tag. The marker is the
-        thing that is actually saved, and the tag is only the hanging indent
-        drawn over it -- and Tk hands a tag on to text inserted beside it, so
-        reading the tag once let a pasted line come back as a bullet that had
-        no bullet in it. *line* is the line's text when its caller has it.
+        """Which kind of list line this is, or None -- by the saved marker,
+        not the tag, which Tk passes on (a pasted line came back a bullet
+        without one). *line* is the line's text when its caller has it.
         """
         if line is None:
             line = text_widget.get(f"{line_no}.0", f"{line_no}.end")
@@ -7286,13 +7250,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return found
 
     def _extract_paragraphs(self, text_widget, text=None):
-        """Read the list tags back out as plain data, for saving.
-
-        Line numbers rather than character offsets: a list applies to a whole
-        line, and a line index survives being reloaded into a window of a
-        different width, which is the same reason formatting uses offsets
-        rather than Tk's own line.column indices. *text* is the widget's
-        text as its caller read it; each line's tags are asked once a tag.
+        """Read the list tags back out as plain data, for saving, by line
+        number: a list applies to a whole line, which survives a different
+        width. *text* is the widget's text as its caller read it.
         """
         paragraphs = []
         if text is None:
@@ -7328,20 +7288,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return paragraphs
 
     def _resync_list_tags(self, line_no=None, line=None):
-        """Redraw the indent tags from the markers actually in the text.
-
-        Tk only passes a tag on to text inserted between two characters that
-        both carry it, so anything typed at the *end* of an item arrives
-        untagged -- and a wrap point in untagged text loses the hanging
-        indent, so a long item's second line slides back under its marker.
-        Re-tagging from the markers keeps the two in step.
-
-        Defaults to the cursor's line only. Typing happens one line at a
-        time, and rebuilding every line on every keystroke is exactly the
-        kind of refresh work that has cost this app real responsiveness
-        before (see docs/ISSUES_LOG.md). The whole-body pass is for paste,
-        which is rare and can change many lines at once. *line* is line
-        *line_no*'s text when its caller has read it already.
+        """Redraw the indent tags from the markers in the text: typed at an
+        item's end, text arrives untagged and its wrap lost the hanging
+        indent. The caret's line only by default, as typing is one line at a
+        time; the whole body for a paste. *line* is line *line_no*'s text
+        when its caller has read it already.
         """
         # Each line read once, the note in one get: three readers asked Tk
         # for the same line, and Tk's cost for each is about the square of
@@ -7354,21 +7305,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
             lines, first = [line], line_no
         for n, line in enumerate(lines, start=first):
-            # A table row is drawn in a monospace face for the same reason
-            # its pipes live in the text: the columns cannot line up
-            # otherwise. Done here because it is the same question as the
-            # list margins -- what does this line say it is -- asked at the
-            # same moments. Removing it covers the newline as well, so a
-            # row that stops being one does not pass the face on to what is
-            # typed after it.
+            # A table row's monospace face, asked with the list margins; taken
+            # off with its newline, so it is not passed on.
             if is_table_row(line):
                 self.body_text.tag_add(self.TABLE_TAG, f"{n}.0", f"{n}.end")
-                # An alignment tag on a table's line positions the embedded
-                # window -- since "Center table on page" that is a feature,
-                # not a stray. The accidental path (pasted centred content)
-                # is scrubbed where it enters, in _apply_paragraphs. Only
-                # the tag's spill over the newline is trimmed here, so a
-                # line typed under the table does not inherit the position.
+                # An alignment tag places the table's window, on purpose (a
+                # paste's is scrubbed in _apply_paragraphs); only its spill over
+                # the newline is trimmed, so a line under it does not inherit.
                 for tag in ("align_center", "align_right"):
                     self.body_text.tag_remove(tag, f"{n}.end", f"{n}.end+1c")
             else:
@@ -7384,16 +7327,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.body_text.tag_add(wanted, f"{n}.0", f"{n}.end")
 
     def _on_comments_paste(self, event=None):
-        """Keep tables OUT of the comments box.
-
-        Comments are drawn as plain text -- there is no grid renderer for
-        them the way there is for the body -- so a pasted table only ever
-        showed as raw pipe rows ("| a | b |"), never a real table. Rather
-        than let that broken-looking soup in, a paste that carries table
-        rows has them stripped and the prose kept, with a quiet note that
-        it happened. A paste with no table rows falls through to Tk's own
-        paste untouched (return None) -- unless the ceiling every paste
-        keeps cut it (_clipboard_text): then what is kept is pasted here."""
+        """Keep tables OUT of the comments box, plain text with no grids: a
+        paste's table rows are stripped, the prose kept and a note said. One
+        with none falls through to Tk (None) -- unless the paste ceiling cut
+        it (_clipboard_text), when what is kept is pasted here."""
         raw, cut = self._clipboard_text(self.comments_text)
         if not raw:
             return None
