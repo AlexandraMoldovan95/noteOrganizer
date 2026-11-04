@@ -1,25 +1,12 @@
-"""The in-note calculator panel.
+"""The in-note calculator panel: its buttons, display, history and "insert
+into note", the interface only -- the arithmetic is
+:mod:`noteorganizer.core.calculator`, tested without a window.
 
-The collapsible calculator that sits beside the checklist in the note
-editor: its buttons, display, history, and the "insert into note" action.
-
-This is the *interface* only. The arithmetic itself lives in
-:mod:`noteorganizer.core.calculator`, which knows nothing about windows and
-is tested without one — this module turns button presses into calls on it
-and puts the answer on screen.
-
-Worth knowing while reading:
-
-* ``_calc_press`` handles every button through one path, so a digit, an
-  operator and "=" all go through the same validation.
-* The display is editable, so an expression can be typed or pasted in as
-  well as built by tapping. Both end up as plain text handed to
-  ``evaluate_calculator_expression``, which is why there is no separate
-  "typed input" path to keep in sync.
-* ``insert into note`` writes the whole formula, not just the answer, and
-  each insertion lands on its own line — see ``_calc_insert_into_note``.
-* ``_sync_calculator_open_state`` is called whenever the open note changes,
-  so the panel resets rather than carrying one note's working into another.
+Every button goes through ``_calc_press``; the display can be typed or
+pasted into too, and both reach ``evaluate_calculator_expression`` as plain
+text, so there is no second path to keep in step. An insertion writes the
+whole formula on its own line (``_calc_insert_into_note``), and
+``_sync_calculator_open_state`` resets the panel when the open note changes.
 """
 
 import tkinter as tk
@@ -57,13 +44,10 @@ class CalculatorPanelMixin:
 
     def _build_calculator_section(self):
         """Build the (initially hidden) in-note calculator: an editable
-        expression display (buttons, typing, or pasting all feed the same
-        field) plus a compact keypad, an optional row of extra functions,
-        and a collapsible history of this session's calculations. Purely
-        a computation tool — nothing here is persisted on the note (no
-        new note field, no share-code/export changes); it starts empty
-        every time it's opened. Built once per editor (like the checklist
-        section above), not rebuilt on every note switch."""
+        display, a compact keypad, a row of extra functions and a folding
+        history of this session's calculations. Nothing here is kept on the
+        note, and it starts empty each time it opens. Built once per editor,
+        like the checklist section, not again at every note switch."""
         sec = self.calculator_section
         # No in-panel Close button: the "🧮 Calculator ▲" bar above the panel
         # already toggles it shut, so a second control said the same thing.
@@ -122,10 +106,8 @@ class CalculatorPanelMixin:
                     self.track_theme(btn, bg="sidebar", fg="text")
                 btn.grid(row=r, column=c, sticky="nsew", padx=1, pady=1, ipady=3)
 
-        # --- Extra functions: extra bracket styles, √, a general power
-        # operator '^' (e.g. "3^4" for 3 to the 4th, not just a fixed
-        # square), and % — collapsed by default so the everyday keypad
-        # above stays the main focus. ---
+        # --- Extra functions: the other brackets, √, '^' and % -- folded by
+        # default, so the everyday keypad above stays the main thing. ---
         self._calc_more_open = False
         self.calculator_more_btn = tk.Button(
             sec, text="More functions  ▾", command=self._toggle_calc_more,
@@ -158,15 +140,9 @@ class CalculatorPanelMixin:
                          disabledforeground="subtext")
         self.calculator_insert_btn.pack(fill="x", padx=10, pady=(2, 8), ipady=4)
 
-        # --- History: this session's past calculations, newest first.
-        # Collapsed by default, like the extra-functions row — a toggle
-        # button reveals it rather than it always taking up space. Not
-        # persisted anywhere — clears with the rest of the calculator on
-        # note switch, same as the expression itself. Each entry is
-        # clickable to insert that specific formula into the note (the
-        # same "own line, right after the last insertion" placement the
-        # main Insert button uses), so an earlier result is still one
-        # click away without having to recompute it. ---
+        # --- History: this session's calculations, newest first, folded by
+        # default and cleared at a note switch. A row clicked is inserted as
+        # the Insert button inserts, so an earlier result is one click away. ---
         self._calc_history_open = False
         self.calculator_history_head = hist_head = tk.Frame(sec, bg=self.colors["card"])
         hist_head.pack(fill="x", padx=10, pady=(0, 0))
@@ -313,10 +289,8 @@ class CalculatorPanelMixin:
             current += token
         self._calc_display_var.set(current)
         self._calc_display_was = current
-        # Button presses set the StringVar programmatically, which doesn't
-        # move the Entry's own cursor the way normal typing would — without
-        # this, the cursor can end up stuck mid-text instead of following
-        # what was just "typed" via the button.
+        # Set through the StringVar, the Entry's cursor does not follow as
+        # typing's would, and stayed stuck mid-text.
         self.calculator_display.icursor(tk.END)
         self._calc_refresh_insert_state()
 
@@ -340,14 +314,9 @@ class CalculatorPanelMixin:
                      bg=self.colors["card"], fg=self.colors["subtext"],
                      font=("Segoe UI", 8), anchor="w").pack(fill="x", padx=6, pady=4)
             return
-        # What these rows do, said once. Clicking one types it into the note,
-        # and nothing on screen admitted that: a row of text with no button
-        # and no wording, so a stray click read as the app typing on its own,
-        # while someone who wanted a calculation back retyped it. The panel
-        # has already taught that inserting is something a button does --
-        # "⬇ Insert into note" is a few centimetres above. Same shape as the
-        # line the attachment rows carry ("Opens in your default app for this
-        # file type"), and only drawn when there is something to click.
+        # What these rows do, said once, only when there is one: unsaid, a
+        # stray click read as the app typing on its own, and a calculation
+        # wanted back was typed again. As the attachment rows' line says theirs.
         tk.Label(rows.add(),
                  text="Click a line to insert it into the note",
                  bg=self.colors["card"], fg=self.colors["subtext"],

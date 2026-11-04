@@ -465,9 +465,23 @@ role, and how they were chosen, is in
 
 Nothing in the app ever asks *"which theme is this?"* before picking a
 colour. It asks for `colors["card"]` and gets whatever that means right
-now. Adding a ninth theme takes more than one dict -- a list, a label,
-an icon, a table and the phone's copy; the recipe is in the module's own
-docstring, its one home.
+now. Adding a ninth theme takes more than one dict:
+
+1. the palette, one dict in `THEMES`, with every key the others have;
+2. its name in `DARK_THEMES` or `LIGHT_THEMES`, which the Settings picker,
+   the title bar and `tools/check_contrast.py` read, and its label in
+   `THEME_LABELS`;
+3. `py tools/make_icon.py --all` if its accent is new (the window icon is
+   named by the accent), and `py tools/check_contrast.py --markdown` pasted
+   over [ARCHITECTURE's contrast table](ARCHITECTURE.md#contrast-measured):
+   the gate fails until both are done;
+4. the same theme in the phone's `Themes.kt` (its `THEMES`, its dark or light
+   list and its label), which the phone's `tools/check_palettes.py` holds to
+   this file.
+
+No gate counts the themes in prose: the "eight" in the README, in
+ARCHITECTURE and in the phone's documents, and the theme-picker screenshots,
+are changed by hand.
 
 That uniformity also enables the theme-switch safety net: because every
 palette is known, the app can spot a widget still holding a colour from a

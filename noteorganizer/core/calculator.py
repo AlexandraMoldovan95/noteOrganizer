@@ -1,66 +1,12 @@
-"""The in-note calculator's expression evaluator.
+"""The in-note calculator's expression evaluator: a string such as
+``"(5+3)×2"``, built with the panel's buttons or typed and pasted into its
+display, turned into a number (:func:`evaluate_calculator_expression`), and
+a number into a tidy display string (:func:`format_calculator_result`).
 
-WHAT THIS MODULE IS FOR
------------------------
-The note editor has a small calculator panel. Whatever the user builds
-there — by tapping buttons, or by typing/pasting straight into the
-display — arrives here as an ordinary string like ``"(5+3)×2"``. This
-module turns that string into a number.
-
-Three things are exported:
-
-* :func:`evaluate_calculator_expression` — string in, number out (or
-  ``None`` if the string doesn't make sense).
-* :func:`format_calculator_result` — number in, tidy display string out.
-* :class:`CalcError` — raised internally while parsing; callers outside
-  this module never see it.
-
-WHY IT'S HAND-WRITTEN INSTEAD OF USING eval()
----------------------------------------------
-Python has a built-in ``eval()`` that would run ``"(5+3)*2"`` in one
-line. It is not used here on purpose: ``eval()`` runs *any* Python code
-it is given, so a pasted string could do far more than arithmetic. A
-parser this small costs little to write and removes that risk entirely,
-rather than depending on the input always staying well behaved.
-
-HOW THE PARSING WORKS (the part worth learning)
------------------------------------------------
-It happens in two stages, which is how most real language parsers are
-built:
-
-1. **Tokenising** (:func:`_tokenize_calc_expression`) — chop the raw text
-   into a flat list of meaningful pieces. ``"12+3"`` becomes
-   ``[12.0, "+", 3.0]``. Numbers become real floats here; everything else
-   stays a one-character string.
-
-2. **Parsing** — walk that list and compute the answer, using one small
-   function per precedence level. They call each other in a chain, and
-   that chain *is* the precedence rule:
-
-   ``parse_expression`` (+ −) → ``parse_term`` (× ÷) → ``parse_percent``
-   (%) → ``parse_power`` (^ and unary sign) → ``parse_unary`` (√,
-   brackets, plain numbers)
-
-   Because ``parse_expression`` asks ``parse_term`` for its operands, and
-   ``parse_term`` binds more tightly, ``2+3×4`` correctly gives 14 rather
-   than 20. Nothing else enforces that — the call order does.
-
-   The innermost level, ``parse_unary``, handles brackets by calling
-   ``parse_expression`` again on what's inside them. A function that
-   (indirectly) calls itself like this is *recursion*, and it's what lets
-   brackets nest to any depth without extra code.
-
-Two small implementation details that are easy to miss:
-
-* ``pos = [0]`` is a one-item list, not a plain number, because the inner
-  functions need to *change* how far through the token list we are.
-  Reassigning a plain ``pos`` inside a nested function would create a new
-  local variable instead of updating the outer one; mutating a list
-  avoids that. (``nonlocal`` would also work.)
-* Anything malformed raises :class:`CalcError`, which is caught once at
-  the bottom and turned into ``None``. That keeps every failure path —
-  bad characters, unbalanced brackets, division by zero — in one place,
-  so a bad expression can never crash the app.
+Hand-written rather than ``eval()``, which runs any Python it is given: a
+tokeniser, then one function per precedence level, each calling the next,
+the call order being the precedence rule (``docs/CODE_TOUR.md`` walks it).
+Anything malformed raises :class:`CalcError`, caught once and given as None.
 """
 
 import math
@@ -81,10 +27,9 @@ class CalcError(Exception):
     """
 
 
-# The three bracket styles are interchangeable and purely visual — '(', '{'
-# and '[' all mean "start a group". They are NOT treated as distinct types,
-# so a mismatched pair like "(5+3]" still evaluates rather than being
-# rejected for a difference the user almost certainly didn't intend.
+# The three bracket styles are one and the same group, purely visual: a
+# mismatched "(5+3]" still evaluates, rather than being refused for a
+# difference the person almost certainly did not mean.
 _CALC_OPEN_BRACKETS = "({["
 _CALC_CLOSE_BRACKETS = ")}]"
 
@@ -137,13 +82,9 @@ def _tokenize_calc_expression(expr):
             tokens.append(ch)
             i += 1
             continue
-        # isdecimal(), not isdigit(): str.isdigit() is True for superscript/
-        # other non-ASCII digit-like characters too (they have a defined
-        # digit value even though they aren't plain 0-9) — isdecimal() is
-        # the one that actually means "a real decimal digit," so pasted
-        # text with a lookalike character correctly falls through to the
-        # "unexpected character" error instead of silently merging into a
-        # nearby number literal.
+        # isdecimal(), not isdigit(), which is True for superscripts and
+        # other digit-like characters too: a pasted lookalike is "unexpected",
+        # rather than merged into the number beside it.
         if ch.isdecimal() or ch == ".":
             j = i
             seen_dot = False
@@ -167,26 +108,12 @@ def _tokenize_calc_expression(expr):
 
 
 def evaluate_calculator_expression(expr):
-    """Evaluate a calculator expression like '(5+3)×2' or '√{4+5}^2', with
-    standard +/−/×/÷ precedence, three interchangeable bracket styles
-    (`()`, `{}`, `[]` — purely visual grouping, not distinct types, so
-    mismatched pairs like '(5+3]' still evaluate), a prefix square-root
-    '√', a power operator '^' (right-associative, e.g. '2^3^2' is
-    '2^(3^2)', not '(2^3)^2' — the usual math convention), and a postfix
-    percent '%'. Returns the numeric result, or None if the expression is
-    empty, malformed (unbalanced brackets, trailing operator, stray
-    characters, a square root of a negative number, a power with no real
-    result like a fractional power of a negative base...), or divides by
-    zero — the caller shows "Error" for None rather than ever letting a
-    bad expression crash the app. Input can come from the calculator's
-    own buttons OR from directly typing/pasting into the display field —
-    both are just plain text by the time they reach here, so both go
-    through the exact same validation with nothing assumed about where
-    the string came from.
-
-    Deliberately hand-rolled instead of eval(): a parser this small costs
-    little and removes the risk entirely, rather than relying on the
-    input always staying constrained to safe characters.
+    """Evaluate a calculator expression like '(5+3)×2' or '√{4+5}^2':
+    +/−/×/÷ with their usual precedence, three interchangeable bracket
+    styles, a prefix '√', a right-associative '^' ('2^3^2' is '2^(3^2)')
+    and a postfix '%'. Buttons and typing alike arrive as plain text, and
+    go through the same checks; the caller shows "Error" for None, so a bad
+    expression never crashes the app.
 
     Args:
         expr: The expression text. Anything that isn't a non-empty
@@ -253,12 +180,9 @@ def evaluate_calculator_expression(expr):
         return value
 
     def parse_power():
-        # Unary +/− live HERE, not in parse_unary below, so a leading sign
-        # applies to the whole power expression that follows — "-2^2" is
-        # "-(2^2)" = -4 (matching Python's own ** operator and standard
-        # convention), not "(-2)^2" = 4. Right-associative: "2^3^2" is
-        # "2^(3^2)" = 512, not "(2^3)^2" = 64 — which is what calling
-        # parse_power() again for the exponent (rather than looping) does.
+        # Unary +/− here, not in parse_unary, so a sign takes the whole power:
+        # "-2^2" is -4, as Python's ** does. The exponent is parse_power()
+        # again, not a loop: right-associative, "2^3^2" is 512.
         if peek() == "−":
             advance()
             return -parse_power()

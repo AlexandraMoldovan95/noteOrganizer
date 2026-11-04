@@ -1,69 +1,13 @@
-"""Colour palettes, themes, and the fixed layout numbers.
+"""Colour palettes, themes, and the fixed layout numbers: data, and the
+arithmetic of colour it is judged by (blends, contrast) -- no file access,
+nothing that can fail.
 
-WHAT THIS MODULE IS FOR
------------------------
-Data, and the arithmetic of colour it is judged by (blends, contrast): no
-file access, nothing that can fail. Everything the app needs to know about
-how it should *look*, in one place.
-
-* :data:`THEMES` — eight palettes (four dark, four light). Each maps the
-  same set of role names (``bg``, ``card``, ``text``, ``accent``...) to a
-  hex colour, which is what lets a theme switch be a straight swap.
-* :data:`DARK_THEMES` / :data:`LIGHT_THEMES` — which names belong to which
-  mode, so "switch to light" knows where to go.
-* :data:`THEME_LABELS` — the friendly names shown in Settings.
-* :data:`DEFAULT_CATEGORY_COLORS`, :data:`PROTECTED_CATEGORY` — the
-  starting categories, and the one that can never be deleted.
-* :data:`PALETTE_COLORS`, :data:`PRESET_NOTE_COLORS`,
-  :data:`HIGHLIGHT_COLOR_PALETTE` — swatches the user picks from.
-* :data:`SIDEBAR_WIDTH`, :data:`EDITOR_MIN_WIDTH` — fixed layout sizes, in
-  pixels as drawn at 100%; the UI multiplies them by the screen's scale.
-* :data:`SHARP_TEXT_SETTING` — the settings key that decides whether the
-  app draws itself at a scaled screen's own size.
-
-WHY THEMES ARE SHAPED THIS WAY
-------------------------------
-Every theme defines exactly the same keys. Nothing in the app asks "which
-theme is this?" before choosing a colour — it asks for ``colors["card"]``
-and gets whatever that means in the current theme. Adding a ninth theme,
-the one recipe (CODE_TOUR points here): one dict in THEMES; its name in
-DARK_THEMES or LIGHT_THEMES, which the Settings picker, the title bar and
-tools/check_contrast.py read; its label in THEME_LABELS; then
-``py tools/make_icon.py --all`` if its accent is new (the window icon is
-named by the accent), and ``py tools/check_contrast.py --markdown`` pasted
-over ARCHITECTURE's contrast table -- the gate fails until both are done;
-and the same theme in the phone's Themes.kt (its THEMES, dark or light
-list and label), which the phone's tools/check_palettes.py holds to this
-file. No gate counts the themes in prose: the "eight" in README, in
-ARCHITECTURE and in the phone's documents, and the theme-picker
-screenshots, are changed by hand.
-
-That uniformity is also what makes the theme-switch safety net possible:
-because the palettes are known, the app can spot a widget still holding a
-colour from a *different* theme and remap it. See ``_recolor_stragglers``
-in the UI, and `docs/ISSUES_LOG.md` on the theme-switch flicker.
-
-FILL AND TEXT
--------------
-``accent``, ``danger`` and ``success`` are FILLS: the colour of a button,
-a banner, a selected tab. Each has a twin for words on an ordinary
-surface -- ``accent_text``, ``danger_text``, ``success_text`` -- because
-no single shade can be both on a dark theme: words on a dark surface want
-a lighter one, a fill under its own words a darker one. The words ON a
-fill are not written down at all: :func:`letters_on` picks white or
-near-black by measured contrast, and the names ``on_accent``,
-``on_danger``, ``on_success`` ask for them (:func:`palette_value`).
-Delete is the dark fill with white words in every theme and Save a light
-one with dark words, so the two differ in lightness as well as hue: a
-reader who cannot tell red from green still tells them apart.
-``tools/check_contrast.py`` measures every pair; see "Contrast, measured"
-in `docs/ARCHITECTURE.md`.
-
-NOTE ON WHAT IS *NOT* HERE
---------------------------
-The live, mutable category map (``CATEGORY_COLORS``) and the functions
-that load and save it are in ``core/categories.py``. Only the immutable
-defaults live here.
+Every theme in :data:`THEMES` defines the same role names, so a switch is a
+straight swap and nothing asks which theme it is. ``accent``, ``danger`` and
+``success`` are fills, each with a ``_text`` twin for words on a surface; the
+words on a fill are :func:`letters_on`'s measured white or near-black. A new
+theme's recipe is in ``docs/CODE_TOUR.md``; the live category map is
+``core/categories.py``, and only its defaults live here.
 """
 
 import colorsys
@@ -276,22 +220,18 @@ PALETTE_COLORS = [
 PROTECTED_CATEGORY = "General"
 
 
-# Quick-pick palette offered when choosing a custom note color, and (below)
-# for text color. Swatches only, deliberately — no hex-code entry, since
-# most users don't think in hex; the palette is sized generously instead so
-# picking a swatch stays a real choice, not just the ten "obvious" colors.
+# The swatches for a note's own colour and for text colour: no hex entry,
+# as few people think in hex, so the palette is generous enough for a
+# swatch to stay a real choice.
 PRESET_NOTE_COLORS = [
     "#7c5cff", "#4cc9f0", "#f9c74f", "#f77f00", "#ff5c7c",
     "#4cd9a3", "#ff8fa3", "#a3a3ff", "#ffd166", "#06d6a0",
     "#e63946", "#3a86ff", "#c77dff", "#8ac926", "#6c757d",
 ]
 
-# Note body TEXT color reuses PRESET_NOTE_COLORS above, for visual
-# consistency with the rest of the app. HIGHLIGHT (background) color gets
-# its own, separate palette: deliberately soft/pastel, the way a real
-# highlighter marker is, so text drawn on top of it stays readable —
-# PRESET_NOTE_COLORS' vivid, saturated tones work fine as a small accent
-# dot but would be too strong as a block of background behind text.
+# Highlights have their own pastel palette, as a highlighter marker is, so
+# the words on them stay readable: the vivid swatches above work as a dot
+# but would be too strong as a block behind text.
 HIGHLIGHT_COLOR_PALETTE = [
     "#fff3b0",  # soft yellow
     "#c8f4d9",  # soft green
@@ -314,11 +254,8 @@ EDITOR_MIN_WIDTH = 620
 SHARP_TEXT_SETTING = "sharp_text"
 
 
-# ---- Colour arithmetic ----
-#
-# Both were staticmethods on the app class. They are pure colour maths and
-# get used from several places, so they belong beside the palettes rather
-# than on whatever happens to draw next.
+# ---- Colour arithmetic: pure maths used from many places, so it sits
+# beside the palettes rather than on whatever happens to draw next. ----
 
 def blend(hex_a, hex_b, t):
     """Mix two ``#rrggbb`` colours. ``t=0`` gives *hex_a*, ``t=1`` gives *hex_b*."""
@@ -346,15 +283,10 @@ def hairline(palette):
 def miss_surface(palette):
     """The ground of a search box whose words were not found: a tint of the
     theme's warning red over white on a light theme, over near-black on a
-    dark one. Mixed into the theme's own surface instead, the red went grey
-    on the blue and green themes; one fixed dark red, before that, put dark
-    words on dark on the light ones (1.2:1). The strengths, and the light
-    themes' truer red, are her choices from photographed boards.
-
-    Written into each palette as ``find_miss`` rather than mixed here: the
-    tints were mixed from the warning reds of the time, and those reds have
-    since darkened for contrast, which would have moved a shade chosen by
-    eye."""
+    dark one (mixed into the theme's own surface, the red went grey). The
+    strengths are the owner's, from photographed boards, so each palette
+    holds its shade as ``find_miss``: mixed here from today's darker reds,
+    a shade chosen by eye would move."""
     return palette["find_miss"]
 
 
@@ -408,13 +340,11 @@ def letters_on(fill):
 @functools.lru_cache(maxsize=512)
 def legible_on(colour, ground, ink, minimum=4.6):
     """*colour* as words on *ground*: itself when it reads there at
-    *minimum*, else the nearest shade of it that does. For a colour the
-    person picked -- a category's, a note's own -- shown as words; the stripe
-    beside it keeps it whole. On a light ground the shade is darker in the
-    same hue, a little richer (mixed toward the theme's bluish text, the
-    Personal yellow went khaki); on a dark ground it is mixed toward *ink*,
-    the theme's light text. *minimum* is a step over AA, for canvas text at
-    8-9 pt. Unreadable input gets *ink*."""
+    *minimum* (a step over AA, for 8-9 pt canvas text), else its nearest
+    shade that does -- darker and a little richer on a light ground, mixed
+    toward *ink*, the theme's light text, on a dark one. For a colour the
+    person picked shown as words; the stripe beside it keeps it whole.
+    Unreadable input gets *ink*."""
     try:
         if contrast_ratio(colour, ground) >= minimum:
             return colour
@@ -437,9 +367,8 @@ def legible_on(colour, ground, ink, minimum=4.6):
     return ink
 
 
-# Palette names worked out from another of its colours rather than written
-# down: the shade a filled Save takes while it is held, so a press shows;
-# the ring round whatever holds the keyboard, which must read on every
+# Palette names worked out from another of its colours: the shade a held
+# Save takes, so a press shows; the keyboard's ring, which must read on every
 # surface (the accent does not, on the light green and cream themes).
 DERIVED_KEYS = {
     "success_pressed": lambda palette: blend(palette["success"], "#000000", 0.12),
@@ -460,15 +389,8 @@ def palette_value(palette, key):
 def contrasting_fg(hex_color):
     """Black or near-white, whichever reads better against *hex_color*:
     the letters for a colour the person picked -- a painted calendar day,
-    the text-colour and highlight buttons' own swatch.
-
-    It is letters_on, by name. It once had a formula of its own, a
-    threshold of perceived brightness, and put white on 9 of the 20 colours
-    a day can be painted (2.2:1 on #00bbf9). Two answers to one question
-    disagree somewhere; this one now has a single answer.
-
-    A colour it cannot read gets white, the answer every painted calendar
-    day had before it learned contrast: raising here, in the middle of the
-    month's drawing, left the month half drawn and unclickable.
-    """
+    the text-colour and highlight buttons' own swatch. It is letters_on by
+    name, one answer to one question (a formula of its own once put white
+    on 9 of the 20 day colours). A colour it cannot read gets white: raising
+    mid-month left the month half drawn and unclickable."""
     return letters_on(hex_color)

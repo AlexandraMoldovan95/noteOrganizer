@@ -47,13 +47,18 @@ ISSUES_LOG = os.path.join(ROOT, "docs", "ISSUES_LOG.md")
 BRIEF = [
     "noteorganizer/__init__.py",
     "noteorganizer/core/__init__.py",
+    "noteorganizer/core/calculator.py",
+    "noteorganizer/core/categories.py",
     "noteorganizer/core/clipboard.py",
     "noteorganizer/core/diagnostics.py",
     "noteorganizer/core/model.py",
+    "noteorganizer/core/single_instance.py",
     "noteorganizer/core/storage.py",
+    "noteorganizer/core/themes.py",
     "noteorganizer/core/welcome.py",
     "noteorganizer/core/winspell.py",
     "noteorganizer/ui/__init__.py",
+    "noteorganizer/ui/calculator_panel.py",
     "noteorganizer/ui/note_list.py",
 ]
 
