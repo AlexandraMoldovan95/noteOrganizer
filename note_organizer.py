@@ -40,14 +40,9 @@ except ImportError:
     sys.exit(1)
 
 
-# ---- Version ----
-# Single source of truth. Bump this by hand at every release (see
-# docs/ROADMAP.md's "Versioning" section for the exact policy and how the
-# numbers are calculated — summary: MAJOR stays 0 until a real public
-# launch; until then, MINOR/PATCH are cumulative all-time totals of
-# Added/Fixed CHANGELOG.md entries, not per-release counts). The running
-# app records this into settings, so the next time a newer build opens
-# over older data it can tell the user what changed version-wise.
+# ---- Version: the one source, bumped by hand at each release by the policy in
+# docs/ROADMAP.md ("Versioning"); recorded in settings, so a newer build can
+# say it was updated ----
 APP_VERSION = "0.97.405"
 
 
@@ -63,12 +58,8 @@ def parse_version(v):
         return (0, 0, 0)
 
 
-# ---- Storage location ----
-# Picking the data folder, migrating from older locations and cleaning up
-# leftovers now live in noteorganizer/core/paths.py. That module has NO
-# import-time side effects - the calls below are still what actually runs
-# them, unchanged for now. Re-exported so callers and the QA scripts are
-# unaffected.
+# ---- Storage location: in noteorganizer/core/paths.py, which does nothing at
+# import; the calls below run it. Re-exported for callers and the qa suite ----
 from noteorganizer.core import paths as _core_paths
 from noteorganizer.core import single_instance
 from noteorganizer.core import diagnostics as _core_diagnostics
@@ -97,17 +88,9 @@ from noteorganizer.core.paths import (
 )
 
 
-# ---- Startup state, filled in by initialise() ----
-#
-# These stay None until initialise() runs. NOTHING here happens at import
-# time any more, and that is the entire point: importing this module used
-# to resolve a data folder, migrate notes into it, DELETE files it judged
-# stale, and write settings.json — so merely importing the app could
-# destroy a notebook. It did, once (see docs/ISSUES_LOG.md, "The cleanup
-# that deleted the real notebook"), and it is why every test in this
-# project has to be run from a throwaway directory.
-#
-# Now an import is inert and the work happens when someone asks for it.
+# ---- Startup state, None until initialise() runs: NOTHING happens at import,
+# which once destroyed a notebook (ISSUES_LOG: "The cleanup that deleted the
+# real notebook") ----
 APP_DIR = None
 STORAGE_WARNING = None
 MIGRATION_INFO = None
@@ -124,18 +107,11 @@ _initialised = False
 
 
 def initialise(app_dir=None, resolved=None):
-    """Work out where the data lives, bring it up to date, and open it.
-
-    Does, in order: resolve the data folder, migrate anything left in an
-    older location, purge genuinely stale copies, point core.paths at the
-    result, then record the app version and first-launch date.
-
-    Called by NoteOrganizer.__init__ and by _main(), so ordinary use needs
-    no change. Anything that wants the data layer WITHOUT building a
-    window — test_data_safety.py, say — must call this explicitly.
-
-    Idempotent: calling it again is a no-op, so it does not matter whether
-    the app or the entry point gets there first.
+    """Work out where the data lives, bring it up to date, and open it:
+    resolve the folder, migrate an older location, purge stale copies,
+    point core.paths at it, record the version and first-launch date.
+    Called by NoteOrganizer.__init__ and _main(); anything wanting the data
+    layer WITHOUT a window (test_data_safety.py) calls it. Idempotent.
 
     Args:
         app_dir: For tests: the folder to start from in place of this
@@ -156,11 +132,8 @@ def initialise(app_dir=None, resolved=None):
     if _initialised:
         return APP_DIR
 
-    # The data folder is resolved relative to THIS file, the entry
-    # point. resolve_data_dir() takes it as an argument rather than
-    # deriving it from its own location: once that code moved into
-    # noteorganizer/core/, its __file__ pointed there instead, and the
-    # app silently picked a data folder two levels below the right one.
+    # Relative to THIS file, passed in: from its own __file__ in core/, the
+    # resolver picked a folder two levels below the right one.
     base = app_dir or os.path.dirname(os.path.abspath(__file__))
     if resolved is not None:
         APP_DIR, STORAGE_WARNING = resolved
@@ -176,11 +149,8 @@ def initialise(app_dir=None, resolved=None):
         MIGRATION_INFO = run_migrations(APP_DIR)
         PURGED_DIRS = purge_stale_copies(APP_DIR)
 
-    # Hand the resolved folder to core.paths, which works out the individual
-    # file locations and creates the attachments folder. Everything in
-    # core.storage reads them from there, so this has to happen before any
-    # load/save call. Mirrored onto this module so existing callers and the
-    # QA scripts still find note_organizer.DATA_FILE and friends.
+    # core.paths works out each file's place, before any load or save; mirrored
+    # here for note_organizer.DATA_FILE's callers and the qa suite.
     _core_paths.configure(APP_DIR)
     DATA_FILE = _core_paths.DATA_FILE
     SETTINGS_FILE = _core_paths.SETTINGS_FILE
@@ -197,10 +167,8 @@ def initialise(app_dir=None, resolved=None):
     return APP_DIR
 
 
-# Reading/writing settings, templates and trash, plus the pre-flight
-# notes backup, now live in noteorganizer/core/storage.py. They read the
-# file locations from core.paths, which configure() filled in above.
-# Duplicate detection lives in noteorganizer/core/duplicates.py.
+# Settings, templates, the Trash and the notes' backup: core/storage.py, from
+# the places configure() set; duplicates: core/duplicates.py.
 from noteorganizer.core.duplicates import (
     SAME_AS,
     find_duplicate_groups,
@@ -294,13 +262,9 @@ from noteorganizer.core.storage import (
 
 
 def detect_version_change():
-    """Compare the version recorded in settings against the running app, then
-    record the current version. Returns one of:
-        None            -> same version, or first run (nothing to announce)
-        ('up', old,new) -> app is newer than the data (an update happened)
-        ('down',old,new)-> app is OLDER than the data (user ran an old build)
-    First run records the version silently — there's no prior version to have
-    'updated from', so claiming one would be a lie."""
+    """Compare the version in settings with the running app's, and record
+    the running one. None for the same or a first run (recorded silently);
+    ('up', old, new) after an update; ('down', old, new) for an older build."""
     settings = load_settings()
     stored = settings.get("app_version")
 
@@ -310,11 +274,8 @@ def detect_version_change():
         if new > old:
             result = ("up", stored, APP_VERSION)
         elif new < old:
-            # A lower running version than what's on record. Before launch this
-            # is just us re-baselining the version number (e.g. an early build
-            # briefly recorded a higher number), NOT a real downgrade — so stay
-            # silent and quietly adopt the current version. Once the app is
-            # public, real downgrades are rare and this stays conservative.
+            # Lower than recorded: before launch a re-baselined number, not a
+            # real downgrade -- adopted silently.
             result = None
 
     # Always record the current version (unless it's already identical).
@@ -355,10 +316,8 @@ from noteorganizer.ui.note_list import NoteListMixin
 from noteorganizer.ui.spelling import SpellingMixin
 
 
-# ---- Note schema + one-time cleanup ----
-# The note model moved to noteorganizer/core/model.py; the live category
-# map and its load/save moved to noteorganizer/core/categories.py.
-# Re-exported so existing callers and the QA scripts are unaffected.
+# ---- Note schema: core/model.py; the categories: core/categories.py.
+# Re-exported for callers and the qa suite ----
 from noteorganizer.core.categories import (
     CATEGORY_COLORS,
     load_categories,
@@ -421,12 +380,8 @@ from noteorganizer.core.model import (
 )
 
 
-# ---- Recurrence engine ----
-#
-# Moved to noteorganizer/core/recurrence.py — a recurring note is stored
-# ONCE and its occurrences are computed on demand; see that module (and
-# docs/CODE_TOUR.md) for how and why. Re-exported here so existing
-# callers and the QA scripts keep working unchanged.
+# ---- Recurrence engine: core/recurrence.py (stored once, its days computed;
+# CODE_TOUR). Re-exported for callers and the qa suite ----
 from noteorganizer.core.recurrence import (
     WEEKDAY_NAMES,
     FREQ_LABELS,
@@ -456,11 +411,8 @@ from noteorganizer.core.recurrence import (
 )
 
 
-# The calculator's expression parser now lives in its own module — see
-# noteorganizer/core/calculator.py. Re-exported here so existing callers
-# (and the QA scripts, which reach for `note_organizer.<name>`) keep
-# working unchanged; _CalcError keeps its old private name for the same
-# reason.
+# The calculator's parser: core/calculator.py, re-exported (with _CalcError's
+# old private name) for callers and the qa suite.
 from noteorganizer.core.calculator import (
     CalcError as _CalcError,
     evaluate_calculator_expression,
@@ -492,10 +444,8 @@ from noteorganizer.core.sharing import (
 
 
 
-# ---- Themes ----
-# Palettes, theme names/labels, the default categories and the swatch
-# lists all moved to noteorganizer/core/themes.py — pure data, no logic.
-# Re-exported so existing callers and the QA scripts are unaffected.
+# ---- Themes: palettes, names, the default categories and swatches, pure
+# data in core/themes.py. Re-exported for callers and the qa suite ----
 from noteorganizer.core.themes import (
     blend as core_blend,
     contrasting_fg as core_contrasting_fg,
@@ -524,24 +474,11 @@ from noteorganizer.core.themes import (
 
 
 def _undo_atom(method=None, *, tags_only=False, only_if=None):
-    """One table operation = ONE undo unit.
-
-    A commit, a resize, a fill are each a burst of small inserts and
-    deletes, and Tk's autoseparators made every one its own Ctrl+Z step:
-    undoing a cell edit could stop halfway -- the old value gone, the
-    padding collapsed. The wrapper opens a unit, runs the operation,
-    closes the unit; nested wrapped calls keep the outermost unit.
-
-    *tags_only* is for an action that lays tags and inserts or deletes no
-    text -- a bold, a colour, an alignment. Its unit leaves Tk's
-    autoseparators alone: turning them off and on is a configure, and
-    Tk re-lays out every line of the note on any configure (measured at
-    150-200 ms on a long note) -- for an action that puts nothing on Tk's
-    stack to group. Should it reach a text edit after all (an open cell
-    committed first), that inner unit turns them off there.
-
-    *only_if* opens the unit only when it answers true for the instance;
-    otherwise the method runs bare -- for a call that is often a no-op.
+    """One table operation = ONE undo unit: Tk made each insert of a commit
+    its own Ctrl+Z step, and an Undo stopped halfway. Nested calls keep the
+    outermost unit. *tags_only*, for an action laying tags only, leaves the
+    autoseparators alone (a configure re-lays out the note, 150-200 ms).
+    *only_if* opens the unit only when it answers true for the instance.
     """
     if method is None:
         return lambda m: _undo_atom(m, tags_only=tags_only, only_if=only_if)
@@ -634,15 +571,9 @@ def _fmt_pairs(ranges):
 
 def _fmt_move_ranges(ranges, src, dst):
     """*ranges*, read with embedded windows at *src*, as they read with the
-    windows at *dst* instead.
-
-    A drawn table's window is a character to Tk's indices: every column
-    after it on its line counts one more than in the text without it. Tk's
-    undo puts a table's text back without its window, so a snapshot taken
-    with the grids drawn is moved to wherever the windows are now (none,
-    or a stale one) before it is compared or laid. Each index is taken to
-    its column in the text without windows, then past the windows of
-    *dst* on its line.
+    windows at *dst* instead: a drawn table's window is a character to Tk,
+    and its undo puts the text back without it. Each index is taken to its
+    column without windows, then past *dst*'s windows on its line.
     """
     def by_line(windows):
         out = {}
@@ -669,19 +600,11 @@ def _fmt_move_ranges(ranges, src, dst):
 
 
 def _fmt_window_free(state):
-    """A snapshot's formatting as it reads in the text WITHOUT the drawn
-    tables' windows: {tag: ((line, col), (line, col)) pairs}, each index
-    taken to its column with the windows before it on its line not counted,
-    ranges that meet joined, and tags left with nothing dropped.
-
-    For telling whether two sides of a part differ by anything but where the
-    tables are drawn. Moving one side into the other's windows
-    (_fmt_move_ranges) puts an index at a window's column past the window,
-    and Tk does not always: a range that ends there stays before it (a
-    centred line directly above a table runs through its line break), and a
-    placed table's window carries its line's alignment from the drawing
-    (_build_table_grid). Here a window's own character drops out of both
-    sides alike -- what it carries is its line's, which is compared."""
+    """A snapshot's formatting as it reads WITHOUT the drawn tables'
+    windows -- {tag: ((line, col), (line, col)) pairs}, ranges that meet
+    joined -- to tell whether two sides differ by more than where tables
+    are drawn. Moved into the other's windows, Tk did not always put an
+    index past a window; here its character drops out of both sides."""
     _sig, windows, ranges = state
     cols = {}
     for w in windows:
