@@ -15809,19 +15809,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return changed
 
     def _watch_date_field(self, entry):
-        """Wire what finishing with a date field means to *entry*: leaving
-        it, pressing Enter in it -- and a click anywhere else in the window.
-
-        The last is the one Tk does not give for free. A click on a label,
-        a frame or an empty stretch of the window moves the keyboard
-        nowhere, so the caret stays in the field and no <FocusOut> comes:
-        17.10 typed and a click beside it was read as still being typed and
-        left out, and only a click into another box saved it (a field
-        report). Which field holds the keyboard is noted on its own
-        <FocusIn> and <FocusOut>, so the click needs no focus_get(); the
-        click's own work goes on (_settle_dates_on_click_elsewhere never
-        breaks it). add="+" throughout: add_placeholder's handlers on the
-        field, which put the form back in an emptied one, run first."""
+        """Wire finishing with a date field to *entry*: leaving it, Enter --
+        and a click anywhere else, which moves no focus, so 17.10 was left
+        unsaved (field report). The field's own focus events note it; the
+        click's work goes on. add="+": the placeholder's handlers run first.
+        """
         def arrived(_event):
             self._date_field_in_use = entry
 
@@ -15852,15 +15844,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def open_date_picker(self, target_entry=None, anchor_widget=None,
                          on_pick=None, marked=None):
-        """Small calendar dropdown for picking a date, anchored to whichever
-        button opened it — not a separate window. Reusable: pass a different
-        target_entry/anchor_widget to use this for any date field (e.g. the
-        recurrence 'Ends: On date' field), or call with no args for the main
-        note Date field.
-
-        With *on_pick* the date goes to that callback, as 'YYYY-MM-DD', once
-        the picker has closed, and no field is written; *marked* is the day
-        it opens on and marks (one day's "Move this day")."""
+        """A calendar dropdown anchored to the button that opened it, for any
+        date field (target_entry/anchor_widget; none: the note's Date). With
+        *on_pick* the 'YYYY-MM-DD' goes there once it closes, no field
+        written; *marked* is the day it opens on ("Move this day")."""
         target_entry = target_entry or self.date_entry
         anchor_widget = anchor_widget or self.pick_date_btn
 
@@ -15986,10 +15973,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         freq_menu = self._build_themed_dropdown(
             freq_row, self.rec_freq_var,
             [FREQ_LABELS[k] for k in ("", "daily", "weekly", "monthly", "yearly")],
-            # A frequency picked is an edit, saved like any other. The
-            # summary asks for the save when there is a repeat to describe;
-            # "Does not repeat" draws none, so it asked for nothing, and
-            # turning a repeat off waited for the note to be left.
+            # A frequency picked is saved: "Does not repeat" draws no summary,
+            # whose redraw asked the save, so turning off waited.
             on_change=lambda v: (self.on_recurrence_changed(),
                                  self._schedule_autosave(skip_word_count=True)),
             width_chars=14)
@@ -16011,12 +15996,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.track_theme(self.day_repeat_lbl, bg="bg", fg="text")
 
         def _wrap_summary(_event=None):
-            # The summary wraps inside what its row leaves it rather than
-            # running out of the row: a long rule, or the warning naming the
-            # boxes not understood, was cut off at its end. Counted from the
-            # widths the row's other widgets ask for, which are known before
-            # the packer has placed anything, less the label's own padding
-            # (the wrap is the text's width, not the label's).
+            # The summary wraps in what the row leaves (a long rule was cut),
+            # counted from the others' asked widths less its own padding.
             lbl = self.rec_summary_lbl
             try:
                 inner = 2 * sum(int(str(lbl.cget(o))) for o in
@@ -16033,13 +16014,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 pass
         freq_row.bind("<Configure>", _wrap_summary, add="+")
 
-        # --- Everything below is hidden unless a frequency is chosen ---
-        # The frame is packed once, here, so it always keeps its slot in the
-        # editor. Showing/hiding is done by packing its CHILDREN, otherwise
-        # re-showing it would drop it at the bottom of the panel.
-        # The details frame is packed ONLY when a frequency is chosen (see
-        # on_recurrence_changed). Leaving it packed while empty is what used to
-        # reserve a blank gap between Repeat and the Note body section.
+        # --- Below: only with a frequency chosen (on_recurrence_changed).
+        # Its CHILDREN are packed and unpacked, so it keeps its slot; packed
+        # empty, it left a gap above the body. ---
         self.rec_details = tk.Frame(parent)
         self.track_theme(self.rec_details, bg="bg")
 
@@ -16060,15 +16037,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         )
         self.track_theme(interval_entry, bg="card", fg="text", insertbackground="text")
         interval_entry.pack(side="left", padx=6, ipady=2)
-        # Every box in the Repeat panel gets the paste menu, not just the two
-        # that obviously invite it. The register's row waved these away as
-        # "single digits, reasonable to leave" -- true for this one and the
-        # count, and false for the end-date (a date, the same shape as the
-        # note's own) and the day list ("1,15"). And they are free: each of
-        # these vars traces to update_recurrence_summary, which schedules the
-        # autosave, so a paste here saves without a binding of its own --
-        # unlike the date field above. Leaving two of four would be the same
-        # patchwork the row is about.
+        # Every Repeat box gets the paste menu (the end date and "1,15"
+        # invite one); their traces schedule the autosave, so a paste saves
+        # with no binding of its own.
         self._add_paste_menu(interval_entry)
         self.rec_interval_var.trace_add("write", lambda *a: self.update_recurrence_summary())
 
@@ -16148,14 +16119,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.rec_end_mode_var = tk.StringVar(value="never")
 
         def _end_radio(value, text):
-            # The well is the CARD colour, which is the opposite of what the
-            # tick boxes need -- measured, not assumed. Tk on Windows paints
-            # a selected radio's dot in the button's own foreground colour
-            # (a tick box's mark too, hence _drawn_tick_box), and the
-            # foreground is the text colour, light on every dark theme. On
-            # the light check_well that dot was invisible: whichever of the
-            # three was chosen, all three looked unchosen. card stands well
-            # apart from the text colour on every theme, light or dark.
+            # The well is CARD: Windows paints the dot in the text colour,
+            # invisible on the light check_well (all three looked unchosen);
+            # card stands apart from the text on every theme.
             rb = tk.Radiobutton(
                 end_row, text=text, value=value, variable=self.rec_end_mode_var,
                 font=("Segoe UI", 9), relief="flat", cursor="hand2",
@@ -16267,10 +16233,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         are re-packed in a fixed order so nothing drifts to the bottom."""
         freq = self.selected_freq_key()
         if freq:
-            # A repeat picked again ends the wait of its turn-off: a rescue
-            # copy a held save made meanwhile is a delete's own copy from now
-            # on, and a later turn-off's copy is the note as it stands
-            # (_turn_off_rescue_copy).
+            # A repeat picked again ends its turn-off's wait: a later turn-off
+            # copies the note as it stands (_turn_off_rescue_copy).
             self._held_text_rescue = None
 
         rows = (self.rec_interval_row, self.rec_weekday_row, self.rec_monthday_row,
@@ -16390,10 +16354,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         kept_date = ""
         kept_repeat = True
         if problems or not read_date(anchor):
-            # What the save would keep, never what the boxes read as: an
-            # unreadable "Every" or "After … times" read as 1, and an
-            # unreadable end date as none, previewed a rule neither typed
-            # nor stored.
+            # What the save would keep: read from the boxes, unreadable ones
+            # previewed a rule neither typed nor stored.
             kept_date, kept, _left_out = self._date_and_repeat_to_store()
             # With no start date to hang it on, the save keeps no repeat.
             kept_repeat = bool(kept["freq"])
@@ -16434,25 +16396,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         preview = "   ".join(([preview] if preview else [])
                              + ["⚠ " + w for w in warnings])
         self.rec_summary_lbl.config(text=preview)
-        # Recurrence settings (frequency, weekdays, interval, end condition)
-        # didn't autosave before — this is the single choke point every one of
-        # those changes passes through, so hooking it here covers them all.
-        # None of them changes a word of the body, so the count is not read
-        # again: every key in the date field redraws this summary, beside its
-        # own autosave, and each key read the whole body twice (loading a
-        # note counts its words itself).
+        # Every repeat change passes here, so here it autosaves -- without the
+        # word count: none changes the body, and each date key read it twice.
         self._schedule_autosave(skip_word_count=True)
 
     # ---------- Occurrence scope prompt ----------
     def ask_occurrence_scope(self, action_word, occurrence_date):
-        """Google-Calendar-style prompt. Returns 'occurrence', 'series' or None.
-        Uses the in-app themed dialog overlay (not a separate window).
-
-        Asked by Delete alone. A save once asked it too, on the way out of a
-        day; a day opened on its own now saves to that day without asking
-        (save_current_note). A delete keeps the question: it destroys, and
-        the question is the moment to choose how much. Its words are the
-        day strip's -- "day", not "occurrence"."""
+        """This day or the series? Returns 'occurrence', 'series' or None, in
+        the themed dialog. Asked by Delete alone -- it destroys; a day saves
+        to itself unasked (save_current_note). Worded as the day strip is."""
         return self._themed_dialog(
             f"{action_word} repeating note",
             f"This note repeats. What should '{action_word}' apply to?\n"
@@ -16482,27 +16434,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # loaded now: there is no step left that could replay around it.
         self._undo_tail = None
 
-    # How many steps back the formatting journal reaches. Each step holds
-    # two snapshots, which share every tag's string with the snapshot
-    # before them where it did not change (see _fmt_state) -- so a step
-    # costs about what it changed; the cap keeps a long session from
-    # growing without bound anyway. Past it, Ctrl+Z still walks Tk's own
-    # text stack.
+    # The formatting journal's reach: a step costs about what it changed
+    # (_fmt_state shares the rest), and past it Ctrl+Z walks Tk's stack.
     _FMT_JOURNAL_DEPTH = 100
 
     def _trim_fmt_journal(self, journal):
         """Keep *journal* to _FMT_JOURNAL_DEPTH full steps. A text step past
-        it is not dropped but kept as a stub -- its text's signature on each
-        side and whether it was recorded with the grids down: Ctrl+Z still
-        has to know it was one of the app's units and how its edits were
-        recorded. Dropped, it read as a step no unit noted -- typing -- and
-        was replayed with the tables down: a header cell written 100 steps
-        back came back a column off, and Ctrl+Y doubled a letter. A stub's
-        formatting is not laid back; a formatting step past the cap goes, as
-        before (Tk's stack never held it). Stubs are not capped: a stub
-        stands for a step of Tk's own stack, which is not capped either
-        (maxundo=-1) and holds far more for every step -- cut short, the
-        step it stood for came back as typing."""
+        it stays as a stub (its signatures, and whether recorded with the
+        grids down) -- dropped, it replayed as typing, a column off -- and
+        stubs are uncapped, as Tk's stack is. A formatting step past it goes.
+        """
         full = [i for i, s in enumerate(journal) if not s.get("stub")]
         over = len(full) - self._FMT_JOURNAL_DEPTH
         if over > 0:
@@ -16522,18 +16463,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "before": (step["before"][0],), "after": (step["after"][0],)}
 
     def _fmt_state(self):
-        """The body as far as undo has to know it: the text's signature,
-        where the embedded windows sit, and the ranges of every formatting
-        and paragraph tag -- the things Tk's undo stack never records.
-
-        Taken as Tk reports it, one string of line.col ranges per tag:
-        no character offsets to work out, which is what made the span list
-        cost 64 ms a snapshot at 8,000 styled words (measured: 5.7 ms this
-        way). A string equal to the last snapshot's for the same tag is
-        that string object, and an unchanged snapshot is the last one, so
-        the steps of a long session share what they did not change -- a
-        step held two full copies of the note's formatting, and 100 cell
-        edits on a heavily styled note grew the app by 60 MB."""
+        """The body as undo must know it: the text's signature, the windows'
+        places, every tag's ranges -- what Tk's stack never records. One
+        line.col string per tag (5.7 ms, not 64, at 8,000 styled words), an
+        unchanged one shared with the last snapshot: full copies grew the app
+        60 MB over 100 cell edits."""
         b = self.body_text
         text = b.get("1.0", "end-1c")
         sig = (len(text), hash(text))
@@ -16566,20 +16500,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return state
 
     def _fmt_restore(self, state, current=None):
-        """Lay a snapshot's formatting back on the text it was taken from
-        -- the caller has matched the text's signature. Tags only; the
-        text is never touched.
-
-        Only what differs is touched: tag by tag, the ranges the body has
-        and the snapshot does not are removed, and the ones the snapshot
-        has and the body does not are added. Taking back one bold used to
-        tear the grids down, strip every tag in the note and lay every
-        span again -- seconds on a heavily styled note, for one word.
-        Where the drawn tables' windows sit elsewhere than when the
-        snapshot was taken (Tk's undo put a table's text back without
-        one), its ranges are moved to them first (_fmt_move_ranges).
-        Returns the (start, end) pairs it touched -- empty when nothing
-        differed."""
+        """Lay a snapshot's formatting back on its text (the caller matched
+        the signature): tags only, and only the ranges that differ -- all of
+        them took seconds for one bold. Ranges move first where the windows
+        moved (_fmt_move_ranges). Returns the (start, end) pairs touched."""
         if current is None:
             current = self._fmt_state()
         _sig, windows, ranges = state
@@ -16635,13 +16559,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not hasattr(self, "body_text"):
             return
         if depth == 0:
-            # What this unit records is recorded with the tables drawn,
-            # until it takes them down (_undo_atom_grids_coming_down) -- or
-            # with none to take down: then nothing it records can sit beside
-            # a window, and it is replayed with the tables down from the
-            # start. A paste on the first line of a table not yet drawn, in
-            # a note with no drawn table, drew the table at its end and was
-            # replayed with that window in place: Ctrl+Z lost letters.
+            # Recorded with the tables drawn until it takes them down
+            # (_undo_atom_grids_coming_down); with none drawn, down from the
+            # start -- a table drawn at its end cost Ctrl+Z letters.
             self._atom_part_grids_down = not any(
                 self._grid_first_line(info) is not None
                 for info in getattr(self, "_table_grids", []))
@@ -16662,10 +16582,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     self._fmt_atom_before = self._fmt_state()
             except (tk.TclError, ValueError):
                 pass
-        # Grouping Tk's edits into one step costs a configure, which
-        # re-lays out the whole note: paid once per unit, and only by a
-        # unit that may edit text -- a tags-only unit pays it only when a
-        # text unit opens inside it.
+        # Grouping costs a configure (the whole note re-laid out): once per
+        # unit, and a tags-only unit only when text opens inside it.
         if not tags_only and not getattr(self, "_undo_atom_grouping", False):
             try:
                 self.body_text.configure(autoseparators=False)
@@ -16703,21 +16621,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._push_atom_step(before, after)
 
     def _push_atom_step(self, before, after):
-        """One journal step for (the part of) a unit that ran from
-        *before* to *after*, marked with whether its text edits were
-        recorded with the tables taken down.
-
-        A part in which only the drawn tables moved -- the same text, the
-        same formatting once the windows are accounted for -- is no step:
-        a unit that rewrites the body (a list renumbered) or inserts a
-        table beside a drawn one is split where the tables come down, and
-        its drawing again was left as a step of its own, which the first
-        Ctrl+Z took back with nothing changing on screen (and the last
-        Ctrl+Y). Tk holds no step for it either: no text changed. The two
-        sides are compared without the windows (_fmt_window_free): moved
-        into each other's, a centred line right above a table, or a table
-        placed centre or right, still read as a change -- and each such
-        empty step took one of the journal's 100 (_trim_fmt_journal)."""
+        """One journal step for (the part of) a unit from *before* to
+        *after*, marked with whether recorded with the tables down. A part
+        where only the tables moved is none (Ctrl+Z changed nothing on it):
+        compared without the windows (_fmt_window_free), as a moved centred
+        line still read as a change, each costing one of the 100."""
         journal = getattr(self, "_fmt_undo", None)
         if journal is None:
             journal = self._fmt_undo = []
@@ -16730,41 +16638,27 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         "before": before, "after": after,
                         "grids_down": getattr(self, "_atom_part_grids_down", False)})
         self._trim_fmt_journal(journal)
-        # A step that changed text is on Tk's stack, and Tk's redo stack
-        # empties with it. One that changed formatting only put nothing
-        # there: Tk can still redo every text step undone before it, so they
-        # stay -- as stubs, how each was recorded, their formatting stale
-        # under the new one. Emptied, Ctrl+Y read a header cell's edit as
-        # typing, replayed it with the tables down, a column off.
+        # A text step empties Tk's redo, so this one; a formatting-only step
+        # leaves Tk's, so the redo stays as stubs -- emptied, Ctrl+Y replayed
+        # a header cell's edit as typing, a column off.
         self._fmt_redo = ([] if text else
                           [self._fmt_stub(s)
                            for s in getattr(self, "_fmt_redo", None) or []
                            if s["text"]])
 
     def _undo_atom_grids_coming_down(self):
-        """An open unit is about to take the drawn tables down.
-
-        Tk records every edit by its index, and a drawn table's first line
-        holds the grid's window at column 0: an edit recorded with the
-        grids down landed one column off when Ctrl+Z replayed it with them
-        drawn -- centring a cell, inserting a row below or autofitting a
-        column, then Ctrl+Z, gave the header back as "| Ite  | Qt  |".
-        _body_undo_redo takes the grids down first for a step marked so.
-
-        A unit that already edited the text with the grids drawn -- a cell
-        committed before a table operation -- would hold both kinds of edit
-        in one step, right in neither state. What it did so far becomes a
-        step of its own, ended on Tk's stack by a separator, and the part
-        that follows is the part marked as recorded with the grids down."""
+        """An open unit is about to take the drawn tables down. A grid's
+        window is column 0 of its first line, so an edit recorded without it
+        replayed a column off ("| Ite  | Qt  |"); _body_undo_redo takes them
+        down first for a step marked so. What the unit did with them drawn
+        becomes its own step, ended by a separator."""
         if getattr(self, "_fmt_atom_before", None) is not None:
             try:
                 now = self._fmt_state()
             except (tk.TclError, ValueError):
                 now = None
-            # Read after the snapshot, which counts a line the drawing held
-            # into it (_settle_undo_tail): read before, the step's first side
-            # named the text without that line, Ctrl+Z matched nothing, and
-            # the formatting it should have laid back was lost.
+            # Read after the snapshot counts the drawing's held line
+            # (_settle_undo_tail); before, Ctrl+Z matched nothing.
             before = self._fmt_atom_before
             if now is not None and now[0] != before[0]:
                 self._push_atom_step(before, now)
@@ -16777,17 +16671,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._atom_edited_with_window = False
 
     def _mark_unit_window_free(self):
-        """The open unit is about to edit a table that is not drawn -- one
-        typed by hand, tidied as the caret leaves it or as a paste does.
-        Its edits are recorded with no window on the table's first line,
-        and the drawing that follows puts one there: replayed with it drawn,
-        Ctrl+Z took back the padding a column off and the header lost a
-        letter ("| Item name | Qt  |"). Marked as recorded with the grids
-        down, so _body_undo_redo takes them down first. A unit that has
-        already edited a drawn table's first line with its window there (a
-        cell written, a drawn table aligned) is split there, as
-        _undo_atom_grids_coming_down does; any other edit lands the same
-        with the grids down or up, and the unit is marked whole, unsplit."""
+        """The open unit is about to edit a table not drawn (typed, tidied):
+        recorded with no window, replayed with one, the header lost a letter
+        -- so it is marked grids-down. A unit that edited a drawn first line
+        is split, as _undo_atom_grids_coming_down does; else marked whole."""
         if getattr(self, "_undo_atom_depth", 0) <= 0:
             return
         if getattr(self, "_atom_part_grids_down", False):
@@ -16829,33 +16716,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     _STYLED_DELETE_TAG = "NoteBodyStyledDelete"
 
     def _note_styled_delete(self, event, virtual=False):
-        """Note the formatting before Tk deletes styled text by its own hand.
-
-        Delete, BackSpace, typing over a selection and Cut are Tk's own
-        bindings; no undo unit of the app's wraps them, so nothing noted
-        the bold, colours and paragraph formatting they took, and Ctrl+Z
-        brought the text back plain. Before such a delete reaches text that
-        carries formatting, this notes the body's formatting and starts a
-        step of its own on Tk's stack; the step becomes a journal entry
-        (_close_styled_delete_run) once something other than the same
-        delete comes along, and _body_undo_redo lays it back on the text
-        Tk restores.
-
-        A run of BackSpaces (or Deletes) stays ONE step, because Tk merges
-        contiguous deletes into one unit: undo granularity is Tk's, as it
-        always was. Measured before this was written: typing over a
-        selection, Cut and Paste are one unit each, five BackSpaces are
-        one, and a separator from a tag ahead of the Text class splits
-        them where it is put. Text with no formatting is left entirely to
-        Tk -- not even a separator.
+        """Note the formatting before Tk's own deletes (Delete, BackSpace,
+        typing over, Cut), which Ctrl+Z gave back plain: a step of its own,
+        journalled at the next other key (_close_styled_delete_run). A run
+        of BackSpaces stays ONE step, as Tk merges them; unformatted text is
+        left to Tk.
         """
         b = self.body_text
         if (not virtual and getattr(event, "keysym", "") == "Insert"
                 and not (getattr(event, "state", 0) & 0x5)):
-            # Tk's own Insert pastes the selection over itself, and the
-            # selection's text leaves out a drawn table's hidden rows: over
-            # a selection holding a table, the table went. Insert does
-            # nothing there.
+            # Tk's Insert pastes the selection over itself, less a table's
+            # hidden rows: over a table it does nothing.
             try:
                 if (_selection_holds_caret(b)
                         and b.tag_nextrange(self.TABLE_HIDE_TAG,
@@ -16908,10 +16779,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         control, alt = bool(state & 0x4), bool(state & 0x20000)
         try:
             if control and not alt and keysym in ("h", "k", "t"):
-                # Tk's own Ctrl+H (one character back), Ctrl+K (to the
-                # line's end, or its line break) and Ctrl+T (swap the two
-                # characters at the caret), which read a selection as
-                # nothing. Their bold came back plain on Ctrl+Z.
+                # Tk's Ctrl+H, Ctrl+K and Ctrl+T ignore a selection, and
+                # their bold came back plain.
                 return self._tk_control_delete_range(keysym)
             if keysym == "BackSpace":
                 if sel:
