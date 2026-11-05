@@ -11611,14 +11611,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                 state[key] = loaded
                         except (*_core_paths.JSON_UNREADABLE, IOError, OSError):
                             pass
-                # The backup's settings.json has always been IN the zip and
-                # was never read back, so every imported note whose category
-                # did not exist on this device was silently re-filed under
-                # "General" by normalize_note -- the whole filing system of
-                # a restored notebook, gone, with "Import complete" as the
-                # only feedback. The categories, the calendar's markings and
-                # the Trash window are taken; the rest of the file is this
-                # device's own business (USER_GUIDE's "Full backup: import").
+                # The backup's settings.json, never read back, re-filed every
+                # unknown category under General. Its categories, calendar
+                # marks and Trash window are taken; the rest is this device's.
                 settings_path = os.path.join(temp_dir, "settings.json")
                 if os.path.exists(settings_path):
                     try:
@@ -11627,13 +11622,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         cats = loaded.get("categories") if isinstance(loaded, dict) else None
                         if isinstance(cats, dict):
                             state["imported_categories"] = cats
-                        # The calendar's day colours and emoji markers are
-                        # user data the backup carries for the same reason
-                        # categories are — dropped on restore, a decorated
-                        # calendar came back bare with no word about it.
-                        # Raw dicts only here (worker thread, no widgets);
-                        # validation happens at the merge on the main
-                        # thread.
+                        # The day colours and markers came back bare, too.
+                        # Raw dicts here (worker thread); the merge on the
+                        # main thread validates them.
                         if isinstance(loaded, dict):
                             for decor_key in ("day_colors", "day_emoji"):
                                 decor = loaded.get(decor_key)
@@ -11658,11 +11649,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     for i, filename in enumerate(files, start=1):
                         dest = os.path.join(ATTACHMENTS_DIR, filename)
                         if not os.path.exists(dest):
-                            # Copy beside, replace whole: the process dying
-                            # mid-copy used to leave a TRUNCATED attachment
-                            # here — and this very exists-guard then made
-                            # every re-import skip it, turning transient
-                            # damage permanent.
+                            # Copy beside, replace whole: a copy cut short
+                            # left a truncated file this guard then kept.
                             part = dest + ".part"
                             try:
                                 copy_file_until_stopped(
@@ -11681,14 +11669,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                 # non-critical — the note metadata still gets imported
                         state["current"] = i
             except Exception as e:
-                # Last-resort catch-all, outside every specific handler above.
-                # This runs in a background thread — an uncaught exception of
-                # ANY kind kills the thread silently (Python's default thread
-                # behavior) without ever reaching state["done"] = True, leaving
-                # the progress bar polling forever against a dict that will
-                # never say it's finished, with no error shown. The specific
-                # handlers above still give a precise message for the cases
-                # they know about; this only catches whatever isn't one of them.
+                # Last resort: an uncaught error kills the thread silently and
+                # the bar polls forever for a "done" that never comes.
                 state["error"] = f"Import failed unexpectedly:\n{e}"
             state["done"] = True
 
@@ -11756,29 +11738,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
 
         imported_notes = state["imported_notes"]
-        # Merge notes in with new local IDs, so they never collide with
-        # notes already on this device. Same duplicate check as "Import code":
-        # a zip full of notes you already have used to get silently merged in
-        # with no warning.
+        # Merged with new local ids, after the duplicate check "Import code"
+        # makes: notes already here were merged in again unasked.
         valid_notes = [n for n in imported_notes if isinstance(n, dict)]
 
-        # Bring the backup's categories in FIRST — before the duplicate
-        # scan below, not merely before the final merge loop: the scan
-        # normalizes every incoming note, and normalize_note re-files a
-        # note whose category is still unknown to General. Scanned in
-        # that state, a distinct note could read as a duplicate of a
-        # local General note and be silently skipped, while this dialog
-        # claimed its category matched. Additive — a name this device
-        # already uses keeps its own colour — and each colour passes
-        # sanitize_color, because a backup's settings.json is as
-        # untrusted as any other imported file and a garbage colour
-        # reaches a Tk configure in whatever render touches it.
-        # In MEMORY only, for now. The scan below needs them, but the user
-        # has not agreed to anything yet -- persisting here meant that
-        # answering "Cancel" at the duplicate dialog still left a
-        # stranger's categories installed in the sidebar, saved to disk,
-        # with no note to explain them. What is written is decided after
-        # the dialog; this list is what gets rolled back if it is not.
+        # The backup's categories come in before the duplicate scan, which
+        # normalizes -- re-filed under General, a note read as a duplicate of
+        # a local one. Additive, colours through sanitize_color, and in
+        # MEMORY only until the dialog is answered: this list is rolled back
+        # on Cancel, which left a stranger's categories saved.
         added_names = []
         refused_categories = 0
         for name, color in list(
@@ -11787,12 +11755,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             name = name.strip() if isinstance(name, str) else ""
             if not (name and color) or name in CATEGORY_COLORS:
                 continue
-            # Skipped whole, never cut short. Cutting a name to the limit
-            # was the very mistake load_categories records: the notes
-            # filed under the full name then match nothing, and go to
-            # General. Past the 200th category the next launch would drop
-            # it anyway, with the same result, so the door refuses what
-            # the loader will not keep -- and the dialog says so.
+            # Skipped whole, never cut short (its notes would match nothing,
+            # as load_categories records): the door refuses what the loader
+            # will not keep, and the dialog says so.
             if category_name_refusal(name) is not None:
                 refused_categories += 1
                 continue
@@ -11814,10 +11779,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         other = " other" if len(valid_notes) < arrived else ""
         if not proceed:
             _undo_category_merge()
-            # The extracted backup goes with it, as it does when the
-            # duplicate question below is cancelled; this exit left the
-            # whole unpacked zip in the temp folder. The files the worker
-            # copied go too: nothing was imported to own them.
+            # The unpacked backup goes, as on Cancel below (it stayed in the
+            # temp folder), and the files copied: no note owns them.
             shutil.rmtree(temp_dir, ignore_errors=True)
             self._drop_unclaimed_import_files(state)
             self._say_import_cancelled()
@@ -11850,10 +11813,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if choice == "skip":
                 to_import = fresh
 
-        # Agreed to: only now does the category merge reach disk and the
-        # sidebar. (It happened in memory above, because the duplicate
-        # scan had to see it -- normalize_note re-files a note whose
-        # category is still unknown.)
+        # Agreed to: only now do the categories reach disk and the sidebar.
         if added_categories:
             persist_categories()
             self.refresh_category_widgets()
@@ -11867,11 +11827,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             and self._files_to_adopt(mine, theirs))
         updated = self._apply_known_updates(updates, "backup") - files_only
 
-        # Calendar day colours and emoji markers ride the backup's
-        # settings.json exactly like categories do, and used to be dropped
-        # the same way. Additive — a day this device already decorated
-        # keeps its own decoration — and validated on the way in, as the
-        # start validates this device's own (_take_day_decorations).
+        # Day colours and markers, additive (a day decorated here keeps its
+        # own) and validated as the start's are (_take_day_decorations).
         restored_decor = self._take_day_decorations(
             state.get("imported_day_colors"), state.get("imported_day_emoji"))
         if restored_decor:
@@ -11892,18 +11849,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 and not get_setting(TRASH_WINDOW_UNKNOWN)):
             choose_trash_window(window)
 
-        # Files already spoken for — by a note we're keeping (re-importing
-        # your own backup lands here) or by an earlier note in this same
-        # import. An imported note that references one of these would share
-        # the physical file, so deleting either note would delete the
-        # other's file. Give the import its own copy instead. Same fix as
-        # duplicate_note; the copy source is the file the copy-loop above
-        # already placed in the attachments folder.
-        # The trash's files count as claimed too: re-importing your own
-        # backup used to append a twin trash entry sharing the original's
-        # physical file, and delete-forever on either destroyed the
-        # other's attachment. Read through attachments_of: a Trash entry's
-        # field as the file held it (a 7) stopped the merge here.
+        # A file spoken for -- by a note kept, a Trash entry, or an earlier
+        # note of this import -- gets its own copy, as in duplicate_note:
+        # shared, deleting either note took the other's. Read through
+        # attachments_of: a field held as a 7 stopped the merge.
         claimed = attachment_names_in(self.notes + self.trash)
         next_id = max([n["id"] for n in self.notes], default=0) + 1
         # With the copies asked for of notes already here, past the
@@ -11927,12 +11876,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.notes.append(note)
             arrived.append(note)
 
-        # Templates and trash from the backup merge ADDITIVELY — nothing
-        # local is replaced or removed (Z05-F07: both used to be left out
-        # of the backup entirely, lost on every device move).
-        # Names looked up in a set, and no more than MAX_TEMPLATES in all:
-        # 20,000 in a 49 KB backup, each checked against every one before
-        # it, took fourteen seconds, and the picker five to open.
+        # Templates and Trash merge ADDITIVELY. Names in a set, MAX_TEMPLATES
+        # in all: 20,000 checked pairwise took fourteen seconds.
         added_templates = 0
         template_names = {t.get("name") for t in self.templates}
         for tpl in (state.get("imported_templates") or []):
@@ -11948,23 +11893,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if added_templates:
             save_templates(self.templates)
         added_trash = 0
-        # Skipped with nobody asked, so the question is identity of
-        # content, not resemblance: _dup_key ignores the date, the
-        # attachments and the per-day edits, and a backup's trashed note
-        # differing from a local one in exactly those was dropped -- the
-        # only copy of it gone, on a route that says it adds and never
-        # removes. content_signature is the strict answer every automatic
-        # removal in the app asks.
+        # Skipped unasked, so the test is identity (content_signature), not
+        # _dup_key's resemblance: a trashed note differing only in its date
+        # or files was dropped, its only copy.
         existing_trash_keys = {content_signature(normalize_note(e))
                                for e in self.trash if isinstance(e, dict)}
         for entry in (state.get("imported_trash") or []):
             if not isinstance(entry, dict):
                 continue
             raw_deleted = entry.get("deleted_at")
-            # Whitelist through normalize_note like every other imported
-            # dict: a foreign trash.json carrying deleted_at=5 used to
-            # reach the Trash panel raw and crash its sort. deleted_at is
-            # re-attached afterwards (normalize drops it), as a str only.
+            # Through normalize_note (a deleted_at=5 crashed the Trash's
+            # sort); deleted_at, which it drops, comes back as a str only.
             entry = normalize_note(entry)
             entry["deleted_at"] = (raw_deleted
                                    if isinstance(raw_deleted, str) else "")
@@ -12076,18 +12015,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _second_press_of_double_click(self, event):
         """True when *event*, a press on a button that removes or moves its
-        own row, is the second half of a double-click.
-
-        Many people double-click every button. The first click removes the
-        row and the row below slides up into its place, so the second press
-        lands on a DIFFERENT button -- the next row's -- and removed that
-        one too, while the toast's single Undo offered back only the second
-        (the first was gone for good). Tk cannot tell: it makes a
-        double-click of two presses on one widget only. So the pairing is
-        done here, by Tk's own rule, across every such button: a press
-        within 500 ms and 5 px of the previous one is the echo of the same
-        gesture. Every call records its press. Bind it to the press, so
-        the second one never arms the button::
+        own row, is the second half of a double-click: the row below slid
+        up, the echo removed it too, and Undo gave back one. Tk pairs
+        presses on one widget only, so here, by Tk's rule (500 ms, 5 px)
+        across them all. Bind it to the press::
 
             button.bind("<ButtonPress-1>", lambda e: "break"
                         if self._second_press_of_double_click(e) else None,
@@ -12118,11 +12049,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # it is the whole series'.
             self._update_checklist_progress()
         else:
-            # Pack right after the checklist button. No padx here — the
-            # button and section both live inside a column Frame (see
-            # build_notes_tab) that already carries the outer margin, now
-            # that Checklist and Calculator sit side by side.
-            # Size the list to match the calculator before showing it.
+            # After the button, no padx: its column (build_notes_tab) holds
+            # the margin. Sized to the calculator before it shows.
             self._match_checklist_to_calculator()
             self.checklist_section.pack(fill="x", pady=(0, 8),
                                         after=self.checklist_btn)
@@ -12136,21 +12064,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._render_checklist_items()
 
     def _match_checklist_to_calculator(self):
-        """Size the checklist list area so the whole box matches the
-        calculator beside it -- computed at RUNTIME from the calculator's
-        own requested height, not a fixed number.
-
-        The calculator's height is platform-dependent (font metrics differ
-        between machines), so a value tuned on one machine left the
-        checklist 14px short on the CI runner. winfo_reqheight reports each
-        section's wanted height without either panel having to be open, so
-        the two can be made genuinely equal wherever the app runs:
-
-            list_compact  = calc height (history closed)  - the checklist's
-                            non-list parts
-            list_expanded = list_compact + the calculator's history block
-
-        so the boxes match closed-to-closed AND open-to-open."""
+        """Size the checklist's list so the box matches the calculator beside
+        it, measured at RUNTIME (winfo_reqheight): fonts differ, and a tuned
+        number was 14px short on CI. Compact = the calculator closed less
+        the checklist's other parts; expanded adds the calculator's history.
+        """
         try:
             self.update_idletasks()
             calc_h = self.calculator_section.winfo_reqheight()
@@ -12181,11 +12099,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.checklist_expand_btn.config(
             text="Collapse ⌃" if self._checklist_expanded else "Expand ⌄")
 
-    # Fallback sizes, used only until _match_checklist_to_calculator has
-    # measured the real ones at runtime (see there for why a fixed number
-    # cannot stay equal to the calculator across platforms). These are the
-    # values measured on the development machine (calculator 359px closed,
-    # 459px open; ~94px of non-list parts).
+    # Until _match_checklist_to_calculator measures: the development
+    # machine's (calculator 359px closed, 459px open; ~94px of other parts).
     CHECKLIST_LIST_COMPACT = 265
     CHECKLIST_LIST_EXPANDED = 365
 
@@ -12301,14 +12216,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return self._working_checklist
 
     def _render_checklist_items(self):
-        """Redraw the checklist rows from the working list -- while the
-        section is OPEN. Closed, no row is built: a note switch collapses
-        the section anyway, and each row is five widgets (a frame, its
-        arrows, a tick box, a label, a bin), so building them for a closed
-        section was pure cost -- a 50-item note paid ~250 on every open.
-        toggle_checklist_section builds them the moment it opens. The
-        rows drawn are recorded (see _checklist_rows_current), so a
-        change can touch the one row it concerns instead of all of them.
+        """Redraw the checklist rows -- only while the section is OPEN (five
+        widgets a row: a 50-item note paid ~250 at every open);
+        toggle_checklist_section builds them. The rows drawn are recorded
+        (_checklist_rows_current), so a change touches its own row.
         """
         if not hasattr(self, "_checklist_rows"):
             return
@@ -12376,13 +12287,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         def delete():
             items = self._get_checklist()
-            # The index is read from the list now rather than taken from
-            # the idx this row was built with: the pair handed to the undo
-            # has to be a position IN THIS LIST. Found by IDENTITY --
-            # list.index() finds the first EQUAL item, and two items reading
-            # the same are two items; now that a delete takes away only its
-            # own row, the wrong one would leave this row standing, tied to
-            # an item no longer in the list.
+            # Its place IN THIS LIST now, for the undo, found by IDENTITY:
+            # index() finds the first equal item, and two alike are two.
             index = next((i for i, it in enumerate(items) if it is item),
                          None)
             if index is None:
