@@ -16022,8 +16022,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                    # Restore previous -- become a note of their own (round 5).\n                    self._keep_text_aside(note, comments_only=comments_alone)\n",
-        "replace": "                    # Restore previous -- become a note of their own (round 5).\n                    pass\n"
+        "find": "                    # and the words this save takes become their own note.\n                    self._keep_text_aside(note, comments_only=comments_alone)\n",
+        "replace": "                    # and the words this save takes become their own note.\n                    pass\n"
       }
     ],
     "must_fail": [
