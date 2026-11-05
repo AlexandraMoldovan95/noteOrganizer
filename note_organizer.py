@@ -14801,16 +14801,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._spell_setup(self.body_text)
         self.update_word_count()
 
-        # How tall the writing area should be is a property of the note, not
-        # of the app: twelve rows suits most notes and is cramped for a long
-        # one. This box remembers the choice -- someone who writes long notes
-        # wants the taller box every time, not once per launch. (It used to
-        # say "unlike the comments box below", which was the only thing
-        # written down about that asymmetry: a statement of it, never a reason
-        # for it. The comments box remembers too now, by the same argument.)
-        # Nothing else has to change for the taller box to work: the editor
-        # already scrolls, so the page simply gets longer and the buttons
-        # underneath stay reachable.
+        # The writing area's height is remembered, as the comments' is: a
+        # long-note writer wants it every launch. The editor scrolls, so the
+        # buttons below stay reachable.
         self.body_resize_btn = self._add_text_resize_toggle(
             self.editor, self.body_text, compact=12, expanded=26,
             pack_kwargs={"padx": 30, "pady": (0, 8)},
@@ -14819,15 +14812,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _build_editor_tools(self):
         """The checklist and the calculator side by side, the comments and
         the attached files."""
-        # --- Checklist and Calculator, side by side — each still its own
-        # independent collapsible section, just sharing a row instead of
-        # each taking the full editor width stacked one above the other.
-        # Uses grid() with a shared uniform group, not pack(expand=True):
-        # pack only hands out *leftover* space evenly, so two columns with
-        # different natural content widths (the calculator's keypad is
-        # naturally wider than the checklist) would still end up visibly
-        # unequal sizes. grid's uniform option forces them to genuinely
-        # equal widths regardless of what's inside each one. ---
+        # --- Checklist and Calculator side by side, each its own section, in
+        # a uniform grid: pack shares only the leftover space, and the wider
+        # keypad left the columns unequal. ---
         tools_row = tk.Frame(self.editor)
         self.track_theme(tools_row, bg="bg")
         tools_row.pack(fill="x", padx=30, pady=(4, 2))
@@ -14902,36 +14889,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                 self._paste_selection_capped, add="+")
         self.comments_text.bind("<KeyRelease>", self._schedule_autosave)
         self._after_edits_without_a_key(self.comments_text, self._schedule_autosave)
-        # Expand/Collapse toggle for the comments box (compact 4 rows <-> 12).
-        # Remembered, like the body's identical toggle above. The helper's own
-        # docstring draws the line at "a box whose size is incidental" versus
-        # "one someone chose", and a box someone reached down and expanded is
-        # the second kind whichever box it is.
+        # The comments box's toggle (4 rows <-> 12), remembered as the body's
+        # is: a box someone expanded is a size they chose.
         self._add_text_resize_toggle(self.editor, self.comments_text,
                                      compact=4, expanded=12,
                                      pack_kwargs={"padx": 30, "pady": (0, 8)},
                                      remember_key="editor_comments_expanded")
 
-        # Reliable undo/redo on both editors (Ctrl+Z / Ctrl+Y and
-        # Ctrl+Shift+Z). The body goes through _body_undo_redo, which also
-        # redraws the tables the undone text describes; the comments box
-        # has no tables and keeps the plain stack walk.
+        # Undo/redo on both boxes; the body's (_body_undo_redo) also redraws
+        # its tables, the comments' walks the plain stack.
         self.body_text.bind("<Control-z>",
                             lambda e: self._body_undo_redo("undo", e))
         self.body_text.bind("<Control-y>",
                             lambda e: self._body_undo_redo("redo"))
         self.body_text.bind("<Control-Shift-Z>",
                             lambda e: self._body_undo_redo("redo"))
-        # Caps Lock turns the letter over: Tk reads Ctrl+Z as an upper-case
-        # Z and Ctrl+Shift+Z as a lower-case z. No letter above matched the
-        # first, so Tk's own <<Undo>> walked its stack behind the journal's
-        # back -- the bold went with the last typing, a table came back
-        # with no grid -- and the second ran as an undo. The body answers
-        # the virtual events as well, in every spelling Tk maps to them
-        # (Caps Lock included); the letters stay for the ones the virtual
-        # events lack (Ctrl+Shift+Z on Windows, Ctrl+Y on X11). Tk runs one
-        # binding per tag, the most specific, so a key matching a letter
-        # and a virtual event at once still undoes once.
+        # Caps Lock turns the letter over, and Tk's own <<Undo>> ran behind
+        # the journal's back: the body answers the virtual events too, the
+        # letters where they lack one. One binding a tag runs, so once.
         self.body_text.bind("<Control-Shift-z>",
                             lambda e: self._body_undo_redo("redo"))
         self.body_text.bind("<<Undo>>",
@@ -14999,10 +14974,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.track_theme(share_btn, bg="sidebar", fg="text",
                          activebackground="card", activeforeground="text")
 
-        # Quiet, with the warning colour in its words: the note goes to the
-        # Trash, so it need not shout, and on a light theme a filled dark red
-        # was the loudest thing on screen. Save is the one filled button,
-        # and Generate code stands between them.
+        # Quiet, the warning colour in its words: it goes to the Trash, and
+        # filled red was the loudest thing on a light theme.
         delete_btn = tk.Button(
             action_row, text="🗑 Delete", command=self.delete_current_note,
             relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2"
@@ -15034,14 +15007,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                          activebackground="card", activeforeground="text")
         self.use_template_btn = use_template_btn
 
-        # Two rows of three in a neat grid. Columns share equal width and the
-        # buttons fill their cell, so the two rows line up cleanly regardless of
-        # each button's text length. Built in this order, so Tab walks them
-        # as they read. Equal columns are as wide as the widest button, so a
-        # row with no room for three narrows all three and the widest loses
-        # its words at both ends ("Save as template", 168 px of 177 under
-        # CI's fonts): then it is three rows of two, or one column
-        # (_reflow_action_buttons).
+        # Two rows of three, equal columns, built in Tab's order. With no room
+        # for three ("Save as template" lost its ends), three rows of two or
+        # one column (_reflow_action_buttons).
         grid_buttons = [save_btn, share_btn, delete_btn,
                         duplicate_btn, template_btn, use_template_btn]
         self._action_row = action_row
@@ -15139,11 +15107,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         def _go(event=None):
             raw = year_var.get().strip()
-            # isdecimal(), not isdigit(): isdigit() also passes "2026²",
-            # which int() then refuses with a ValueError instead of this
-            # message. isdecimal() is exactly what int() reads -- so
-            # "٢٠٢٦" and a full-width "２０２６" still work (the
-            # calculator learned this first, core/calculator.py).
+            # isdecimal() is what int() reads ("٢٠٢٦" too); isdigit() passed
+            # "2026²", which int() refused (as core/calculator.py learned).
             if not raw.isdecimal() or not 1 <= int(raw) <= 9999:
                 error_lbl.config(text="Enter a year between 1 and 9999")
                 return
@@ -15240,10 +15205,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def refresh_day_panel(self):
         """Re-render whatever the panel is currently showing (after edits/deletes)."""
-        # Off screen it waits, as render_calendar does, and for the same
-        # reason: every autosave with a day left open rebuilt its list,
-        # walking every note, on a tab nobody was looking at. The month's
-        # catch-up on the way back redraws the open day (_redraw_open_day).
+        # Off screen it waits, as render_calendar does (each autosave walked
+        # every note); the way back redraws it (_redraw_open_day).
         if not self._calendar_is_showing():
             self._calendar_needs_render = True
             return
@@ -15262,25 +15225,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # from the store, which still held the OLD content: the edit
         # looked lost.
         self._flush_autosave()
-        # If the editor is STILL dirty, the flush did not finish — the
-        # person went back to fix a date the save could not store, or the
-        # date field is mid-edit. Navigating anyway would land them on a
-        # day panel showing the old content while their edit sits only in
-        # the editor (and the panel's way to the editor would then load
-        # disk content over it). Stay put instead; the way back stays armed.
+        # STILL dirty, the flush did not finish (a date to fix): the day panel
+        # would show the old content, and load it over the edit. Stay put;
+        # the way back stays armed.
         try:
             st = self.capture_editor_state()
-            # An emptied SAVED note whose flush was cancelled counts as
-            # dirty here too — without the exemption this guard waved the
-            # navigation through and the day panel showed the old content
-            # over the user's unsaved emptying.
-            #
-            # But only block for something the flush could actually have
-            # saved. A brand-new calendar note holding ONLY a repeat rule
-            # is refused by every automatic route (the junk guard), so
-            # this guard blocked forever on an edit nothing would ever
-            # persist, telling the user to answer a question that was
-            # never asked — a dead Back button with no way out.
+            # An emptied SAVED note counts as dirty, but only what a flush
+            # could save blocks: a new note holding only a repeat rule (the
+            # junk guard refuses it) left Back dead forever.
             _blockable = (self._editing_saved_note()
                           or self._editor_state_has_content(
                               {k: v for k, v in st.items()
@@ -15324,19 +15276,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # The day strip says which day (_show_day_mode, below).
             pass
         elif self.selected_note_id is not None:
-            # The series view of a repeating note gets its own line: edits
-            # here reach every day — EXCEPT days that were edited with
-            # "only this occurrence", which keep their own content and
-            # would otherwise look like the edit silently failed (a field
-            # report: one day out of three "didn't take" a series edit).
+            # The series' line names the days that keep their own edits: a
+            # series edit there looked failed (field report).
             note = self.find_note(self.selected_note_id)
             if note is not None and is_recurring(note):
                 text = (f"🔁 This note repeats ({describe_recurrence(note)}) "
                         "— edits here apply to every day")
-                # A day the schedule no longer reaches is counted apart, and
-                # shown with its own way in below: counted here as a day that
-                # keeps its edits, it was a day no calendar could show. Not
-                # while a turn-off of the repeat waits: every day goes then.
+                # A day off the schedule is counted apart, with its way in
+                # below; not while turning the repeat off waits.
                 if not self._repeat_off_waits():
                     off = off_schedule_days(note)
                 n_over = len(note.get("overrides") or {}) - len(off)
@@ -15344,10 +15291,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     text += " · 1 day keeps its own edits (✎)"
                 elif n_over > 1:
                     text += f" · {n_over} days keep their own edits (✎)"
-                # Days held on another date, where the calendar draws them --
-                # all of them judged at once: asked of the calendar one day
-                # at a time, 5,000 moved days took a minute and a half to
-                # open, at every launch while it was the note last open.
+                # Moved days, judged at once: one at a time, 5,000 took a
+                # minute and a half to open.
                 n_moved = len(drawn_moves(note))
                 if n_moved == 1:
                     text += " · 1 day moved (↷)"
@@ -15388,16 +15333,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return " · whole series" if self._day_mode() else ""
 
     def _show_day_mode(self):
-        """Lay the editor out for one day of a series (_day_mode), or back.
-
-        A day shows its own date as words, its repeat as a line, a strip
-        saying that what changes here stays on this day -- with the one way
-        to the whole series -- and "This day:" beside its category. The
-        date field and the repeat's boxes stay filled with the series' own
-        values, out of sight: the save reads them and finds nothing changed,
-        so a day can never move the series or stop it. Called wherever the
-        editor's day changes, through _update_occurrence_banner; every step
-        is idempotent, so it costs nothing called again."""
+        """Lay the editor out for one day of a series (_day_mode), or back:
+        its date in words, its repeat as a line, the strip, "This day:". The
+        series' date and repeat stay filled, hidden, so a day's save cannot
+        move or stop the series. Idempotent, called through
+        _update_occurrence_banner."""
         on = self._day_mode()
         note = self.find_note(self.selected_note_id) if on else None
         day = self.current_occurrence_date if on else None
@@ -15415,10 +15355,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                     before=self.editor_top_row)
             for widget, _packing in self._date_field_packing:
                 widget.pack_forget()
-            # The date alone: that it is this day only, and where a moved day
-            # came from, are the strip's to say. Written here as well, the
-            # row ran past the editor's width beside its two buttons, and the
-            # colour was cut off (measured: 690 px asked of 527).
+            # The date alone; the rest is the strip's (here too, the row
+            # asked 690 px of 527).
             self.day_date_lbl.config(text=show_date(day))
             if not self._is_placed(self.day_date_lbl):
                 self.day_date_lbl.pack(side="left", padx=(6, 8),
@@ -15481,14 +15419,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._update_calendar_return_button()
 
     def _place_day_buttons(self, event=None):
-        """Day mode's Move and Reset (day_btns): beside the day's date while
-        the row has room for them, on a line of their own under it when it
-        has not. A packed row given less than it asks for drops what was
-        packed last -- here the colour's swatch, gone at the smallest window
-        under the fonts CI has. Counted from the widths the row's labels and
-        buttons ask for, which are known at once and do not change with where
-        the buttons go, so moving them cannot undo what moved them. Called
-        by _show_day_mode, and by the row's <Configure> while they are on it."""
+        """Day mode's Move and Reset (day_btns): beside the date with room,
+        under it without (a short row dropped the swatch). Counted from the
+        widths asked, which do not change with where they go, so moving them
+        cannot undo itself. From _show_day_mode and the row's <Configure>."""
         if event is not None and self._day_btns_wrapped is None:
             return
 
@@ -15537,13 +15471,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _day_is_free(self, note, day, to):
         """Whether *note*'s day now on *day* may be held on *to*: a date no
-        other day of the series is on -- two days on one date would be one
-        -- and none it keeps an edit for that it draws no day on, a day off
-        its schedule or deleted with its edit kept: the move wrote over its
-        words, and an Undo took the day back without them (the final
-        audit's eleventh round). Its own date is no exception: while a day
-        is away another can be moved there, and its return hid that one and
-        wrote over its edit -- the phone refused it, as this now does."""
+        other day is on, nor one it keeps an edit for and draws no day on --
+        the move wrote over its words. Its own date too: another day may
+        have moved there meanwhile (the phone refused it as well)."""
         target = parse_date(to)
         return target is not None and (to == day or (
             expand_occurrences(note, target, target) != [to]
@@ -15639,14 +15569,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.set_status(f"Moved back to {show_day(parse_date(back_to))}")
 
     def _show_off_schedule_days(self, note=None):
-        """Walk the days a repeating note keeps its own edits for that its
-        schedule no longer reaches (off_schedule_days), one question each:
-        make the day a note of its own, move it to the Trash, or leave it.
-
-        One day at a time, in the app's own question box: its keyboard, its
-        theme and its Escape-gives-the-safe-answer are why it exists, and a
-        list window would have had to earn all three again. Leaving a day
-        changes nothing; it stays where it was, and so does the way in."""
+        """Walk a series' edited days off its schedule (off_schedule_days),
+        one question each in the app's question box (its keyboard, theme and
+        safe Escape): a note of its own, the Trash, or leave it -- which
+        changes nothing."""
         if note is None:
             note = self.find_note(self.selected_note_id)
         if note is None:
@@ -15722,13 +15648,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _settle_off_schedule_day(self, note, day, how):
         """One day off *note*'s schedule made a note of its own (*how* is
-        "note") or moved to the Trash as one ("trash"), and taken out of the
-        series. The new note holds what that day showed: its title, text,
-        comments, category and colour, on its date. The series' formatting
-        comes along only where the day's text is the series' own -- the day
-        view applies it on no other text, its offsets would land on the
-        wrong characters. The checklist and the files stay with the series:
-        they were never the day's."""
+        "note") or put in the Trash as one ("trash"), out of the series,
+        holding what the day showed. The formatting comes only on the
+        series' own text (its offsets fit no other); checklist and files
+        stay with the series."""
         shown = effective_note(note, day)
         same_body = shown.get("body") == note.get("body")
         stamp = now_stamp()
@@ -15762,12 +15685,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
 
 
-    # The kinds of file that open with the stronger warning. The list lives in
-    # core/model.py beside the short list of kinds that open unasked: it only
-    # chooses the warning's words now, since every kind not on that short list
-    # asks before it opens (how_to_open; ISSUES_LOG: "The photo that was a
-    # remote connection"). A .lnk carries a command line behind an innocent
-    # name, a disk image mounts on a double click, an .rdp connects out.
+    # Kinds that open with the stronger warning (core/model.py); every kind
+    # off the short unasked list asks first (how_to_open; ISSUES_LOG: "The
+    # photo that was a remote connection").
     DANGEROUS_EXTENSIONS = DANGEROUS_EXTENSIONS
 
 
@@ -15865,20 +15785,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return "" if typed == DATE_FORM else typed
 
     def _settle_date_fields(self, redraw=False):
-        """What finishing with the date fields does: a date typed in a way
-        the app reads is written back in the form it shows -- 2026-10-17
-        and "17 octombrie 2026" as 17.10.2026 -- and a short or a missing
-        year is completed, 17.10.26 and 17.10 becoming 17.10.2026
-        (read_date, settled). Text the app cannot read is left as typed, for
-        the save to name.
-
-        Run when the person has finished: on leaving either field (*redraw*:
-        the repeat's summary is redrawn, which schedules the save), and
-        first on every save made on purpose or on the way out of the note,
-        which then read the settled text. Never while typing: a year read
-        before it is whole is a wrong year saved.
-
-        Returns whether either field changed."""
+        """Finishing with the date fields: a readable date is written in the
+        form shown, its year completed (17.10 -> 17.10.2026; read_date,
+        settled); the unreadable stays, for the save to name. Run on leaving
+        a field (*redraw* redraws the repeat's summary) and before a chosen
+        save -- never mid-typing, a wrong year. Returns whether one changed."""
         changed = False
         typed = self._typed_date()
         if typed:
