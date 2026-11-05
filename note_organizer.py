@@ -8004,14 +8004,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.after_idle(lambda: self.show_info("Pasted in part", msg))
 
     def _copy_formatted(self, event=None):
-        """Copy the selection so it arrives elsewhere still formatted.
-
-        The plain text goes on the clipboard too, so pasting into something
-        that cannot read markup still gives words rather than tags.
-
-        With table cells selected, Ctrl+C means those cells: it used to
-        copy the (empty) text selection instead, which left the OLD
-        clipboard in place -- pasting then produced last week's copy.
+        """Copy the selection so it arrives elsewhere still formatted, the
+        plain text alongside for what cannot read markup. With cells
+        selected, Ctrl+C means the cells -- the empty text selection left
+        last week's copy on the clipboard.
         """
         sel = getattr(self, "_grid_sel", None)
         if sel is not None:
@@ -8037,11 +8033,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             lo, hi = max(span["start"], first), min(span["end"], last)
             if hi > lo:
                 clipped.append(dict(span, start=lo - first, end=hi - first))
-        # Once, not once per paragraph. A line's looks travel with its start:
-        # a copy ending in a line break holds none of the next line's, one
-        # begun after a line's start none of that line's -- a word copied out
-        # of a nested item set the level of the item it was pasted into
-        # (the lows wave's verification, rounds 5, 6 and 10).
+        # A line's looks travel with its start: a word copied out of a nested
+        # item set the level of the item it was pasted into (lows wave).
         line_count = text.count("\n") + (0 if text.endswith("\n") else 1)
         skipped = 1 if int(start.split(".")[1]) > 0 else 0
         paragraphs = [
@@ -8049,10 +8042,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             for p in self._extract_paragraphs(self.body_text, whole)
             if skipped <= p["line"] - first_line < line_count]
 
-        # inline_tables: a clipboard fragment travels without the file
-        # export's stylesheet, and Word shows a bare HTML table with no
-        # borders at all -- a selectable phantom (the round-8 field
-        # report, with screenshots of the invisible table).
+        # inline_tables: a fragment has no stylesheet, and Word drew a bare
+        # table borderless, a phantom (round-8 field report).
         html = note_to_html(text, clipped, paragraphs, inline_tables=True)
         if not clipboard.write(text, html):
             return None                      # nothing written; Tk's copy runs
@@ -8089,13 +8080,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return "break"
 
     def _refresh_list_buttons(self, line=None):
-        """Show the bullet/number button as pressed when the cursor sits in
-        a list of that kind, matching how the four style buttons behave.
-
-        Deliberately reads the line the cursor is on rather than the whole
-        selection: dragging across a plain line and a bullet line should not
-        make the button claim the selection is a list. *line* is that line's
-        text when its caller has just read it.
+        """Show the bullet/number button pressed when the cursor's line --
+        not the whole selection, part plain -- is a list of that kind, as
+        the style buttons do. *line* is that line's text when its caller
+        has just read it.
         """
         if not self._list_buttons:
             return
@@ -8121,13 +8109,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     lambda e, w=widget: self._schedule_tooltip(w, title, detail),
                     add="+")
         widget.bind("<Leave>", lambda e: self._hide_tooltip(), add="+")
-        # Clicking should get on with the job, not leave a label hanging over
-        # the result of it. Through ONE command registered on the window,
-        # not a lambda of the widget's own: Tk expands every script bound to
-        # a click before running any, and a click whose own handler destroys
-        # the widget -- a bin that redraws its row -- deleted this one while
-        # it was still queued. "invalid command name", in silence, on every
-        # such click (the popups' bind lines had the same lesson).
+        # A click hides the tip, through ONE command on the window: a widget's
+        # own lambda died with a bin that redrew its row, still queued
+        # ("invalid command name").
         hide = getattr(self, "_hide_tooltip_command", None)
         if hide is None:
             hide = self._hide_tooltip_command = self.register(self._hide_tooltip)
@@ -8186,10 +8170,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                      fg=self.colors["subtext"], font=("Segoe UI", 8),
                      justify="left").pack(anchor="w", pady=(2, 0))
 
-        # Positioned under the button and measured against the app window,
-        # never the screen -- the whole virtual desktop spans every monitor,
-        # and measuring against that has put a popup on a display the app was
-        # not on before (see docs/ISSUES_LOG.md).
+        # Under the button, measured against the app window, never the screen
+        # (ISSUES_LOG: "The dropdown that opened on the wrong monitor").
         tip.update_idletasks()
         x = widget.winfo_rootx()
         y = widget.winfo_rooty() + widget.winfo_height() + 6
@@ -8218,13 +8200,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._reflow_format_bar(event.width)
 
     def _reflow_format_bar(self, available=None):
-        """Deal the controls into rows, breaking when one would not fit.
-
-        Everything fits a single row at the sizes this app is used at. The
-        second row is for the cases a fixed pixel budget cannot cover: a
-        narrow window, a display at a different scaling, or a machine
-        without the font this was measured on -- CI is all three, and the
-        same bar that needs 577px here needs 827px there.
+        """Deal the controls into rows, breaking when one would not fit: one
+        row at the usual sizes, a second for a narrow window, another scale
+        or another font -- 577 px here, 827 on CI.
         """
         if not self._fmt_bar_items:
             return
@@ -8242,12 +8220,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 for row in split_toolbar_rows(measured, available,
                                               len(self._fmt_bar_rows))]
 
-        # The rows' packed/unpacked state is tracked here rather than
-        # read back from winfo_ismapped(): mapping is asynchronous, so a
-        # row packed a moment ago can still answer "not mapped" -- under
-        # Xvfb the reflow then declined to fold an empty row away and the
-        # bar kept two rows with room for one. Same lesson the calendar's
-        # deferred rebuild records: reliable state, not winfo_ismapped().
+        # The rows' packing tracked here, not read from winfo_ismapped(), which
+        # lags: under Xvfb an empty row was kept.
         used = getattr(self, "_fmt_rows_used",
                        [False] * len(self._fmt_bar_rows))
         for widget, _padx, _ipady, _fill, _pady in self._fmt_bar_items:
@@ -8320,17 +8294,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _apply_paragraphs(self, text_widget, paragraphs,
                           scrub_table_align=False):
-        """Re-apply saved list lines as live tags, for loading.
-
-        A stored entry only earns an indent if the line still starts with a
-        marker of that kind. Otherwise a note edited outside the app, or one
-        whose body was rewritten while its paragraphs were not, would come back
-        with a plain line indented as though it were an item.
-
-        *scrub_table_align* is the paste path: alignment a SOURCE document
-        carried on its table rows is not a decision the user made here, and
-        honouring it re-centred pasted tables "for no reason". A saved note
-        loads with False, so a deliberately placed table keeps its place.
+        """Re-apply saved list lines as live tags, for loading -- only where
+        the line still starts with a marker of that kind. *scrub_table_align*
+        is the paste's: a source's alignment on its table rows re-centred
+        pasted tables "for no reason"; a saved note keeps its placement.
         """
         if not paragraphs:
             return
@@ -8347,10 +8314,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     and is_table_row(line_text)):
                 align = "left"
             if align != "left":
-                # On a table row the tag stops at the text: covering the
-                # newline let the writable line the renderer keeps under a
-                # table be born inside the tag -- a phantom centred empty
-                # line that kept the note reading as dirty forever.
+                # On a table row, not over the newline: the line kept under a
+                # table was born centred, and the note read as unsaved for ever.
                 end_index = (f"{line_no}.end" if is_table_row(line_text)
                              else f"{line_no}.end+1c")
                 text_widget.tag_add(f"align_{align}",
@@ -8395,13 +8360,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     @_undo_atom
     def _change_paragraph_indent(self, delta):
-        """Push the selected lines one step deeper, or pull them back out.
-
-        Applies to any paragraph, not only list items: indenting a plain
-        block of text is the other half of what people reach for here. Lines
-        move as a group and each is clamped on its own, so a selection that
-        already has one line at the left margin still indents the rest
-        instead of refusing.
+        """Push the selected lines one step deeper, or pull them back out --
+        any paragraph, not only items; each clamped on its own, so one line
+        at the margin does not stop the rest.
         """
         first, last = self._selected_line_range()
         # The lines read once: each pass changes its own line alone.
@@ -8465,13 +8426,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return True
 
     def _tab_in_table(self, delta):
-        """Move to the next or previous cell. True if that happened.
-
-        At the end of the last row a new one is added rather than the caret
-        leaving: it is what lets a whole table be typed without reaching for
-        the mouse, and it is what every word processor does. Backwards out of
-        the first cell does nothing -- there is nowhere sensible to go, and
-        silently leaving the table would be worse than staying.
+        """Move to the next or previous cell; True if that happened. Past the
+        last row a new one is added, as word processors do; backwards from
+        the first cell nothing happens rather than leaving the table.
         """
         line_no = int(self.body_text.index("insert").split(".")[0])
         column = int(self.body_text.index("insert").split(".")[1])
@@ -8532,10 +8489,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         columns = max(2, min(self.TABLE_GRID_COLUMNS, int(columns)))
         line_no = int(self.body_text.index("insert").split(".")[0])
         line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
-        # Two adjacent runs of pipe rows read as ONE block, so a table
-        # created right under another fused with it -- mismatched column
-        # counts and all. An empty line above (and below, when the next
-        # line is also a table) keeps every table a block of its own.
+        # Adjacent pipe rows read as ONE block: an empty line above (and below,
+        # by a table) keeps a new table from fusing with its neighbour.
         above = (self.body_text.get(f"{line_no - 1}.0", f"{line_no - 1}.end")
                  if line_no > 1 else "")
         below = self.body_text.get(f"{line_no + 1}.0", f"{line_no + 1}.end")
@@ -8623,14 +8578,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return popup
 
     def _on_body_tab(self, event, delta):
-        """Tab and Shift+Tab move between table cells, or change list depth.
-
-        Only inside one or the other: in ordinary prose Tab should still type
-        a tab, which is what returning None leaves Tk to do. Shift+Tab always
-        stops here, since its default is to move focus out of the editor
-        mid-sentence. Ctrl+Tab and Ctrl+Shift+Tab leave the note, as the
-        shortcuts page says: Tk matches them to these Tab bindings before
-        its own, so they are answered here, in a list or a table too.
+        """Tab and Shift+Tab move between table cells, or change list depth;
+        in prose Tab types a tab (None, to Tk), and Shift+Tab stops here
+        rather than leave the editor. Ctrl+Tab and Ctrl+Shift+Tab, matched
+        to these bindings first, leave the note as the shortcuts page says.
         """
         if getattr(event, "state", 0) & 0x4:      # Control held
             return self._leave_note_by_keys(delta)
@@ -8670,10 +8621,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         Toggling off is deliberate: pressing the same button twice should undo
         itself rather than stack a second marker onto the line.
         """
-        # A table is not a list. A marker in front of a pipe row broke the
-        # row's shape and dissolved the whole grid back into bare lines --
-        # with cells selected the buttons simply decline, and table lines
-        # inside a text selection are left out of the walk below.
+        # A table is not a list (a marker dissolved the grid): with cells
+        # selected the buttons decline, and table lines are left out below.
         if getattr(self, "_grid_sel", None) is not None:
             self.set_status("A table cannot be a list")
             return
@@ -8687,11 +8636,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return (core_tables.is_table_row(line)
                     or not parse_list_marker(line)[2].strip())
 
-        # An empty line is not a list item. Numbering a selection that had
-        # blank lines between its items put a number on those too, so the
-        # list read 1, 3, 5 with the even numbers sitting on nothing.
-        # Blank lines are still visited when turning a list off, because one
-        # of them may be carrying a marker put there before this.
+        # An empty line is no item (a list read 1, 3, 5); still visited when
+        # turning a list off, as one may carry an older marker.
         items = [n for n in range(first, last + 1) if not blank(n)]
         if not items:
             if first != last or core_tables.is_table_row(texts[0]):
@@ -8732,14 +8678,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.update_word_count()
 
     def _renumber_lists(self):
-        """Make every numbered run read 1, 2, 3 again after any change.
-
-        The arithmetic is in core/formatting.py; this writes only the
-        characters of each marker that changed, so every style, the view and
-        every drawn table stay exactly where they were. It used to rewrite
-        the whole body, which threw the view to the note's first line on
-        every Enter in a numbered list and tore down every table to redraw
-        it (ISSUES_LOG: "The list that rewrote the whole note").
+        """Make every numbered run read 1, 2, 3 again after any change,
+        writing only the markers' changed characters (the arithmetic is in
+        core/formatting.py), so styles, view and tables stay put (ISSUES_LOG:
+        "The list that rewrote the whole note").
         """
         b = self.body_text
         body = b.get("1.0", "end-1c")
@@ -8785,10 +8727,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # text and surface the caret at the table's right edge.
         self._caret_out_of_hidden()
         line_no = int(self.body_text.index("insert").split(".")[0])
-        # A note that BEGINS with a table has nowhere to type above it.
-        # Clicking beside the table parks the caret at the start of the
-        # line below (the guard's doing); Enter there pushes the table
-        # down a line instead, and the caret takes the fresh first line.
+        # A note BEGINNING with a table: Enter at the start of the line below
+        # it pushes the table down, the caret on the fresh first line.
         first_block = (self._table_block_at(1)
                        if is_table_row(self.body_text.get("1.0", "1.end"))
                        else None)
@@ -8800,12 +8740,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # as it always did.
                 and not is_table_row(self.body_text.get(
                     f"{line_no + 1}.0", f"{line_no + 1}.end"))):
-            # No snapshot here, deliberately: the edit happens at line 1,
-            # far above wherever the user is scrolled, so the Text keeps
-            # the view on the same content by itself -- and a snapshot
-            # restored against the fresh grids' estimated heights was
-            # MEASURED yanking a mid-note view nine lines up (0.30 to
-            # 0.14). Render's own late capture still guards the page.
+            # No snapshot: at line 1 the Text keeps the view itself, and one
+            # restored on guessed grid heights yanked it nine lines up.
             self._teardown_table_grids()
             self.body_text.insert("1.0", "\n")
             self.body_text.mark_set("insert", "1.0")
@@ -8825,13 +8761,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return self._continue_list(line_no, kind)
 
     def _list_return_over_selection(self):
-        """Enter with words selected, the caret in them, on a list line.
-
-        Tk's own Enter deletes the selection first; the list's Enter takes
-        over from it and did not, so the new item was cut into the middle
-        of what was selected. Deleted here, then the list goes on from
-        where the words were, as one Ctrl+Z. All of an item's words
-        selected keeps its marker -- an empty item, the new one under it.
+        """Enter with words selected on a list line: the selection deleted
+        first, as Tk's Enter would (the new item was cut into it), then the
+        list goes on, one Ctrl+Z. All an item's words selected keeps its
+        marker, the new item under it.
         """
         b = self.body_text
         line_no = int(b.index("sel.first").split(".")[0])
@@ -8864,10 +8797,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         _, marker, rest = parse_list_marker(line)
         indent = self._paragraph_indent_of(self.body_text, line_no)
         if leave_if_empty and not rest.strip():
-            # An empty nested item steps out one level first. Pressing Enter
-            # twice to leave a list is muscle memory, but from three levels
-            # deep it should climb out rather than drop straight to a plain
-            # paragraph -- which is what every other editor does.
+            # An empty nested item steps out one level first, climbing out as
+            # other editors do rather than dropping to a paragraph.
             if indent:
                 self._set_paragraph_indent(line_no, indent - 1)
                 self._renumber_lists()
@@ -8894,14 +8825,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return "break"
 
     def _on_body_delete_key(self, event=None):
-        """Delete (and Backspace) with cells selected clears them, the way
-        a spreadsheet does -- the table's text is hidden, so Tk's own
-        deletion has nothing sensible to do there anyway.
-
-        Without cells selected, Delete at the end of the line above a
-        drawn table does nothing (see _deletion_joins_table). BackSpace
-        comes through here for the cells only and asks about its own
-        direction in _on_body_backspace."""
+        """Delete (and BackSpace) with cells selected clears them, as a
+        spreadsheet does. Without, Delete at the end of the line above a
+        drawn table does nothing (_deletion_joins_table); BackSpace asks
+        about its own direction in _on_body_backspace."""
         sel = getattr(self, "_grid_sel", None)
         if sel is not None and self._grid_first_line(sel["info"]) is not None:
             self._grid_fill_selection(sel, "")
