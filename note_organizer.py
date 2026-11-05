@@ -16871,10 +16871,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._styled_delete_run = None
             return
         self._styled_delete_run = None
-        # Nothing changed at all: no step. The same text put back bare --
-        # Insert over the selection it pastes, a paste of the very words it
-        # replaced -- changed their formatting only, and is a step: dropped,
-        # Ctrl+Z gave the words back without their style.
+        # Nothing changed: no step. The same words put back bare (a paste of
+        # themselves) changed formatting, and are one.
         if after == run["before"]:
             return
         journal = getattr(self, "_fmt_undo", None)
@@ -16888,37 +16886,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._fmt_redo = []
 
     def _body_undo_redo(self, action, event=None):
-        """Ctrl+Z / Ctrl+Y on the note body (*event*, the key's, when a key
-        asked).
+        """Ctrl+Z / Ctrl+Y on the note body (*event*, the key's, if one).
+        Tk walks its stack, then the grids are redrawn from the text.
 
-        Tk walks its stack; what Tk cannot know is that the text it just
-        put back may hold tables -- the drawn grids would keep showing
-        the OLD cells over the new text (the drawing itself is kept off
-        the stack by _undo_hidden). So every step resyncs the line tags
-        and redraws the grids from the text that undo produced.
-
-        And Tk's stack holds TEXT, never a tag. Making a word bold left
-        nothing on it, so Ctrl+Z skipped the bold and took back the last
-        burst of typing instead; and text Tk puts back comes back bare,
-        so undoing a table operation returned the cells without their
-        bold and colours. A formatting journal beside Tk's stack fills
-        both gaps: every undo unit (_undo_atom) notes the formatting
-        before and after it. A step that changed formatting only is taken
-        back here, without Tk, when the text is exactly what it was then;
-        a step Tk takes back gets its formatting laid again once Tk lands
-        on the text the step started from. Matching on the text itself,
-        never on a count of steps, is what keeps the two stacks in step:
-        a snapshot is only ever laid on the very text it was taken from.
-        A unit nothing noted (typing) is noted on its way back, so Ctrl+Y
-        returns its styles too.
+        Tk's stack holds TEXT, never a tag: a journal beside it (each
+        _undo_atom notes the formatting before and after) takes back a
+        formatting-only step itself and lays a text step's formatting once
+        Tk lands on its text -- matched on the text, never a step count.
+        Typing is noted on its way back, so Ctrl+Y returns its styles.
         """
         b = self.body_text
-        # A table is tidied when the caret leaves it (_align_table_on_
-        # leaving), and undo moves the caret without the person moving it.
-        # The release of this very key, or of the next Ctrl+Z, found the
-        # caret "leaving" a table the undo had put it in, and padded its
-        # narrow columns as a new recorded edit -- which wipes the redo
-        # history: Ctrl+Y could no longer bring back what was undone.
+        # The caret undo moves is not "leaving" a table: tidied as a new
+        # edit (_align_table_on_leaving), it wiped Ctrl+Y's history.
         self._last_caret_line = None
         # A still-open cell editor holds uncommitted text; commit it so
         # the undo works against what the note actually says.
@@ -16968,21 +16947,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 return (self._toast_undo_key(event) if undo and event is not None
                         else None) or "break"
             came, went = ("after", "before") if undo else ("before", "after")
-            # Tk replays a step in the state it was recorded in: a step
-            # recorded with the tables taken down is replayed with them
-            # down (see _undo_atom_grids_coming_down). They are drawn again
-            # below, as after every step.
+            # A step is replayed as recorded: tables down if so
+            # (_undo_atom_grids_coming_down), redrawn below.
             pending = next((s for s in reversed(mine) if s["text"]
                             and self._undo_sig_is(s[came][0], now[0],
                                                   now_text)), None)
-            # A step no unit of the app's noted -- typing, Tk's own deletes
-            # and paste -- never touches a drawn table's line (the caret
-            # guard keeps the caret off them), so the only windows that
-            # matter to its replay are those of tables drawn SINCE it was
-            # recorded: a table typed by hand, then left. Its rows were typed
-            # with no window on the table's first line, and replayed with one
-            # there they landed a column off ("| Item name | Qt  |"). Such a
-            # step is replayed with the tables down, like a unit marked so.
+            # Typing never touches a drawn table, but a table typed then
+            # drawn SINCE replayed a column off: such a step is replayed
+            # with the tables down.
             if pending is None or pending.get("grids_down"):
                 self._teardown_table_grids()
             # Tk replays on the text it recorded: a line the drawing put under
@@ -17031,13 +17003,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return "break"
 
     def _bind_text_wheel(self, text_widget, fallback_canvas=None):
-        """Mousewheel behavior over a text box:
-        - if the box has more text than fits, scroll the box's own
-          content -- in pixels, see _text_wheel_scroll;
-        - if everything fits, forward the scroll to the editor page instead, so
-          the user can still reach the buttons below.
-        We must return "break" in BOTH cases, otherwise tkinter's built-in Text
-        wheel handling fires too and swallows the event."""
+        """The wheel over a text box scrolls its content when it overflows
+        (in pixels, _text_wheel_scroll), else the editor page; "break" both
+        ways, or Tk's own Text handling swallows it."""
         text_widget.bind(
             "<MouseWheel>",
             lambda e: self._text_wheel_scroll(text_widget, e,
@@ -17095,20 +17063,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             clear_if_placeholder()
 
         def on_paste(e):
-            # A paste is not a keystroke, so on_key above never sees it and
-            # the pasted text used to land glued to the placeholder --
-            # "Note title...My pasted title", measured on the real app.
-            # Two routes reach here and BOTH were affected:
-            #
-            #   * the right-click Paste, which _add_paste_menu performs with
-            #     event_generate("<<Paste>>") — no key is pressed at all;
-            #   * Ctrl+V on a field that binds <<Paste>> itself (the title
-            #     does, for its length cap), because Tk fires one binding
-            #     per bindtag and a VIRTUAL event outranks a physical one in
-            #     the same tag, so <<Paste>> wins and <KeyPress> never runs.
-            #
-            # Fixing it here rather than at the two call sites is what makes
-            # every placeholder field safe, including the next one added.
+            # A paste is no keystroke (the menu's, or Ctrl+V outranked by a
+            # field's own <<Paste>>), and landed glued to the placeholder:
+            # cleared here, for every placeholder field.
             clear_if_placeholder()
 
         def on_paste_selection(e):
@@ -17133,20 +17090,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _series_warning(self, notes):
         """One sentence saying how many of `notes` are whole repeating
-        series, or "" when none are.
-
-        A confirmation that counts notes is telling the truth and still
-        hiding the consequence: a repeating series is ONE note in every
-        list and every count, and deleting it takes every occurrence it
-        has. The single-note delete has always asked "Delete this entire
-        repeating series?"; none of the routes that act on a selection
-        said anything at all -- neither the bulk move to trash, nor
-        either of the two permanent deletes in the Trash, where there is
-        no way back at all.
-
-        Written once, here, because four copies of a sentence is four
-        chances for them to stop agreeing. Field-reported: "it doesn't
-        tell me one of them is a series".
+        series, or "" when none are: a series counts as ONE note and takes
+        every day with it, and no route acting on a selection said so
+        (field report). Written once, for all four.
         """
         count = sum(1 for n in notes if isinstance(n, dict) and is_recurring(n))
         if not count:
@@ -17161,15 +17107,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "goes with them.")
 
     def _category_override_warning(self, notes):
-        """Name the notes a category change will not reach all the way into.
-
-        `category` is in OVERRIDABLE_FIELDS, so a repeating note can carry
-        a per-day patch giving one occurrence its own category. A bulk
-        change writes the series' own category and leaves those days
-        alone, which is the right answer — a day filed by hand was filed
-        deliberately — but it makes "this replaces the category on each of
-        them" not quite true. Said out loud rather than promised away,
-        the same way the trash confirmation names attached files.
+        """Name the notes a category change will not reach all the way into:
+        a series' days filed by hand keep their own (OVERRIDABLE_FIELDS), as
+        they should -- said out loud, as the Trash's question names files.
         """
         count = 0
         for note in notes:
@@ -17193,13 +17133,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not self.selected_note_ids:
             self.show_info("Nothing selected", "Tick one or more notes first.")
             return
-        # Save what the editor holds first, as the single delete from a
-        # note's menu does: the note on screen may be one of the ticked
-        # ones, and its unsaved typing belongs in the Trash copy (and in
-        # what Undo brings back), not in an editor about to be cleared.
-        # Going back to fix a date the save could not store stops the delete
-        # here. A repeat's turn-off is held back for the question (see
-        # _context_delete_note).
+        # Saved first, as a single delete is: the open note's typing belongs
+        # in its Trash copy. Going back to a date stops here; a repeat's
+        # turn-off waits for the question (_context_delete_note).
         if self._flush_autosave(
                 leaving=self.selected_note_id in self.selected_note_ids,
                 hold_repeat_off=True) is False:
@@ -17225,12 +17161,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             icon="question", default="no"
         ):
             return
-        # Yes acts on exactly the notes the question named, and the ticks
-        # are not read again. Read after the answer, a tick added while the
-        # question waited (a timer's question over it took its grab, and a
-        # click went through) was removed from the notebook with no Trash
-        # copy, and a tick taken away was trashed and kept. A named note
-        # that left the notebook meanwhile is not trashed a second time.
+        # Yes acts on the notes the question named: ticks read after it lost
+        # a note with no Trash copy. One gone meanwhile is not trashed twice.
         named = {n["id"] for n in to_trash}
         to_trash = [n for n in self.notes if n["id"] in named]
         count = len(to_trash)
@@ -17240,13 +17172,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         marks = [(e.get("id"), e.get("deleted_at")) for e in moved]
         self.notes = [n for n in self.notes if n["id"] not in named]
         self.save_notes()
-        # If the note currently open in the editor was among the ones just
-        # trashed, the editor (and any tab pointing at it) is now referring
-        # to a note that no longer exists — without this, the very next
-        # autosave flush (e.g. triggered by clicking a DIFFERENT, perfectly
-        # fine note right after) would fail with "Note missing", since it's
-        # still trying to save changes against the now-gone note. Same
-        # cleanup delete_current_note() already does for a single delete.
+        # An open note trashed leaves the editor and tabs pointing at nothing
+        # ("Note missing" at the next save): cleaned as delete_current_note.
         self.open_tabs = [t for t in self.open_tabs
                           if t["state"]["selected_note_id"] not in named]
         if not self.open_tabs:
@@ -17283,26 +17210,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                  font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=7, pady=(4, 2))
 
         def apply_category(cat):
-            # The popup goes first, ahead of anything modal: it is an
-            # overrideredirect Toplevel that never takes focus, so a
-            # dialog raised while it is still up leaves it floating over
-            # the question being asked.
+            # The popup first: never focused, it floated over the question.
             self._dismiss_mini_popup()
-            # The editor may be holding one of these notes, with its own
-            # category dropdown still showing the old value -- and the
-            # editor's next save writes that dropdown back, undoing the
-            # change with nothing on screen to say so. Found by an audit
-            # walking a bulk action followed by ordinary typing; the same
-            # shape as the import route's, fixed the day before.
-            #
-            # Flush FIRST so anything typed is saved under the old
-            # category rather than dropped, then change, then bring the
-            # editor onto the result. It also has to happen before the
-            # question rather than only before the write: that dropdown
-            # may name a category the note is already leaving, and a
-            # dialog counting the categories ahead of the flush would be
-            # describing a state that no longer exists by the time the
-            # user answers.
+            # The editor's dropdown would save the old category back: flushed
+            # FIRST, before the question counts categories, then changed, then
+            # the editor brought onto the result.
             touched = set(self.selected_note_ids)
             # Leaving only if the note on screen is one of those moving.
             if self._flush_autosave(
@@ -17328,12 +17240,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 icon="question"
             ):
                 return
-            # One mark per note, recording what THAT note is being moved
-            # out of. A single remembered "old category" for the batch
-            # would file every note back under whichever one happened to
-            # be read first -- and a mixed selection is precisely what a
-            # bulk change is for, so it is also what an undo has to
-            # survive.
+            # A mark per note: one old category for the batch would undo a
+            # mixed selection all into the first.
             marks = [(n["id"], n.get("category"), n.get("updated"),
                       n.get("uid")) for n in to_move]
             stamp = now_stamp()
@@ -17347,10 +17255,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # category's -- its dots, and an open day's stripes.
             self.render_calendar()
             self.set_status(f"Moved {count} note(s) to \u201c{cat}\u201d")
-            # This was the one action in the bar that changed stored data
-            # with neither a question nor a way back, while the button
-            # beside it had both -- and the categories it overwrote were
-            # gone from the file the moment it ran.
+            # A way back: it had neither question nor Undo.
             self._offer_category_undo({"marks": marks, "applied": cat})
 
         for cat in CATEGORY_COLORS.keys():
@@ -17372,10 +17277,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 w.bind("<Button-1>",
                        lambda e, c=cat: (apply_category(c), "break")[1])
 
-        # A way out that says so. Every row here refiles every ticked note,
-        # and until now the only way to leave without picking one was to
-        # click empty space and hope -- no Cancel, no close glyph, and
-        # Escape went to the app window, which had no binding for it.
+        # A way out that says so: every row refiles every ticked note.
         self._bulk_popup_cancel(frame)
         self._place_dropdown_popup(pop, self._bulk_category_btn)
 
@@ -17418,13 +17320,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._place_dropdown_popup(pop, self._bulk_export_btn)
 
     def _bulk_popup_cancel(self, frame):
-        """A worded way out of a bulk popup whose every other row acts.
-
-        The Import and Share panels have carried a "Close" for a long time;
-        these two had nothing, so leaving meant clicking empty space and
-        trusting that it counted. Escape now works as well, but a keystroke
-        is not a visible affordance -- the survey's point was that the way
-        out has to be on the screen.
+        """A worded way out of a bulk popup whose every other row acts, as
+        Import and Share have: Escape works too, but is not on the screen.
         """
         tk.Button(frame, text="Cancel", command=self._dismiss_mini_popup,
                   relief="flat", cursor="hand2", bd=0,
@@ -17581,30 +17478,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._find_on_context_switch()
         self._share_code_on_context_switch()
         self._update_occurrence_banner()
-        # A tab snapshot never carries a calendar trip — restoring one
-        # means the editor's context changed, so any pending return is
-        # over (a stale one made a later Save yank the user onto an
-        # unrelated calendar day; see the delete cleanup's switch path).
+        # A tab carries no calendar trip: a stale return made a later Save
+        # jump to an unrelated day.
         self._pending_calendar_return = None
         self._update_calendar_return_button()
 
     def _editor_state_has_content(self, st):
-        """The ONE answer to "does the editor hold anything worth keeping?".
-
-        Six gates used to hand-roll this test with six slightly different
-        field lists, and the drift was a real data-loss bug twice over: a
-        comments-only note was silently discarded on every route, and the
-        emptying of a saved note was thrown away by the automatic gates
-        even after the explicit-Save path learned to accept it. Every gate
-        asks here now, so the next field a note grows gets counted once,
-        in one place, or visibly not at all.
-
-        The date is deliberately NOT counted: the calendar's
-        new-note-for-a-day flow prefills the date field, so an abandoned
-        empty editor would otherwise auto-save as a junk date-only note on
-        every switch-away. The explicit Save path adds the date check
-        itself — pressing Save is what makes a bare dated reminder
-        deliberate."""
+        """The ONE answer to "does the editor hold anything worth keeping?":
+        six gates' own field lists lost a comments-only note. The date does
+        NOT count (the calendar prefills it, and an abandoned editor saved
+        junk); Save adds it, as pressing Save makes a dated reminder meant."""
         recurrence = st.get("recurrence") or {}
         freq = recurrence.get("freq") if isinstance(recurrence, dict) else ""
         return bool((st.get("title") or "").strip()
@@ -17636,11 +17519,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         the moment it has any content."""
         note_id = st["selected_note_id"]
         if note_id is None:
-            # New, never-saved note: "clean" only if completely empty.
-            # The date DOES count here, unlike in the shared content test:
-            # a prefilled date must read as "differs from pristine" so the
-            # dirty machinery sees it, while the autosave gates still
-            # refuse to persist a date-only editor.
+            # A new note is clean only if empty -- its date counts here, for
+            # the dirty machinery; the gates still refuse a date alone.
             return not (self._editor_state_has_content(st)
                         or (st.get("date") or "").strip())
         note = self.find_note(note_id)
@@ -17650,25 +17530,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Compare against the effective (occurrence-aware) content.
         occ = st.get("occurrence_date")
         if occ and is_recurring(note):
-            # An occurrence override carries ONLY the overridable fields
-            # (title/body/comments/category/color) — it is plain text by
-            # design, never its own formatting, paragraphs, checklist,
-            # attachments, date or recurrence: those stay the series'.
-            # Comparing the series-owned fields here made a just-saved
-            # occurrence read as dirty FOREVER (its body differs from
-            # the base's, so the base formatting spans never matched) —
-            # which made Back to Calendar's cancel guard believe the
-            # scope prompt was cancelled and refuse to navigate, asking
-            # again on every click (field report).
+            # A day's override holds ONLY the overridable fields, plain text:
+            # compared with the series' formatting it read dirty FOREVER, and
+            # Back to Calendar refused to go (field report).
             shown = effective_note(note, occ)
-            # The BODY compares unstripped, matching what the save stores:
-            # T0-4 made leading/trailing whitespace part of the note, and a
-            # stripped comparison here made every whitespace-only edit read
-            # as "no change" — so the autosave, the flush and the dirty dot
-            # all ignored exactly the characters the save had just learned
-            # to keep. The comments now follow the body's rule, stored as
-            # typed, so they compare unstripped too. Titles are STORED
-            # stripped, so their stripped comparison is the honest one.
+            # Body and comments compare unstripped, as stored (stripped, a
+            # whitespace edit read as none); titles are stored stripped.
             if not (st["title"].strip() == shown["title"].strip()
                     and st["body"] == shown["body"]
                     and st["comments"] == (shown.get("comments") or "")
@@ -17679,25 +17546,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     and list_lines(st.get("paragraphs"), st["body"])
                     == list_lines(day_paragraphs_shown(note, occ), shown["body"])):
                 return False
-            # ...and the SERIES-owned fields against the BASE note, which
-            # is where the editor loaded them from: load_note reads
-            # checklist, attachments and date off `note`, never off
-            # `shown`, even in occurrence view. So they match on load (a
-            # clean occurrence stays clean) and an edit to one of them
-            # here is an edit to the series -- which has to be visible,
-            # or it is silently thrown away. Left out, a checklist item
-            # ticked while looking at one day was invisible to every save
-            # gate: the editor asked for the save and the comparator
-            # vetoed it, and the tick never reached disk.
-            #
-            # Formatting and paragraphs stay OUT, for the reason above:
-            # an override is plain text and its own list lines (compared
-            # just above, by list_lines), so load_note only re-applies the
-            # base's spans when the shown body equals the base's, and
-            # comparing them made an overridden occurrence read as dirty
-            # forever.
-            # The date by the day it names (same_date): the field shows
-            # 17.10.2026 where the note stores 2026-10-17.
+            # ...and the SERIES' fields against the base, where load_note read
+            # them (left out, a tick on a day never saved); formatting stays
+            # OUT, as above. The date by its day (same_date).
             return (st.get("checklist", []) == note.get("checklist", [])
                     and st.get("attachments", []) == note.get("attachments", [])
                     and same_date(st["date"], note.get("date", ""))
@@ -17707,20 +17558,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if (st["title"].strip() != shown["title"].strip()
                 or st["body"] != shown["body"]
                 or st.get("formatting", []) != note.get("formatting", [])
-                # Paragraphs carry what tags alone hold: list indents, line
-                # alignment, and a table's place on the page. Left out of
-                # this comparison, a tag-only change read as "nothing new"
-                # and the autosave quietly skipped it.
+                # Paragraphs (indents, alignment, a table's place): left out,
+                # a tag-only change was skipped.
                 or st.get("paragraphs", []) != note.get("paragraphs", [])
                 or st["comments"] != (shown.get("comments") or "")
                 or st["category"] != shown["category"]
                 or st["color"] != shown.get("color", "")
                 or st.get("checklist", []) != note.get("checklist", [])):
             return False
-        # Date / recurrence belong to the series (compare against base note).
-        # The date by the day it names, not its text: the field shows
-        # 17.10.2026 where the note stores 2026-10-17, and compared as text
-        # every dated note read as unsaved the moment it opened.
+        # Date and repeat are the series'. The date by its day: as text,
+        # 17.10.2026 against 2026-10-17 read every dated note unsaved.
         if not same_date(st["date"], note.get("date", "")):
             return False
         if st["recurrence"] != normalize_recurrence(note.get("recurrence")):
@@ -17755,21 +17602,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.render_calendar()
 
     def _update_open_highlight(self):
-        """Move the 'currently open' ring directly to whichever card needs
-        it, without rebuilding the list -- only the cards that changed.
-
-        Every place that says which note is open asks _card_ring_color,
-        which also knows where the keyboard is: the colour carries the
-        meaning (the thickness is on every card), and a card that is both
-        open and holding the keyboard shows the keyboard's ring.
-
-        It used to repaint the one card it had last outlined itself, and a
-        card could be outlined behind its back: a new note's first save
-        draws its card as the open one, and the next note opened left that
-        card outlined too -- two "open" notes on the list, until a full
-        rebuild. So it asks the paint itself (_ring_to_paint), which notes
-        every card painted as open, and takes the outline off all of them
-        but the note that is open now."""
+        """Move the 'open' ring to the cards that changed, no rebuild; its
+        colour from _card_ring_color (the keyboard's ring wins). Every card
+        painted as open is unringed but this one (_ring_to_paint): one
+        outlined by a first save stayed, two "open" notes."""
         current = self.selected_note_id
         painted = getattr(self, "_open_ring_ids", None) or set()
         for note_id in [n for n in painted if n != current]:
@@ -17778,41 +17614,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._paint_ring(current)
 
     def open_note_in_tab(self, note, occurrence_date=None, flush=True):
-        """Open a saved note in the editor. Only one note is open at a time — any
-        unsaved work in the current note is auto-saved first, then this note
-        loads in its place.
-
-        ``flush=False`` is for the one case where that is backwards: the
-        note has just been rewritten on purpose from outside the editor,
-        which is still showing the version from before. Saving that first
-        writes the old version straight back over the new one. Callers
-        that pass False flush themselves, BEFORE making their change, so
-        the user's own unsaved work is kept rather than skipped.
+        """Open a saved note in the editor, the current one saved first.
+        ``flush=False`` when the note was just rewritten from outside: the
+        editor's old version would save over it, so such callers flush
+        BEFORE their change.
         """
-        # Close any open popup (e.g. an emoji picker) FIRST, before flushing
-        # autosave below — otherwise the autosave that follows would see a
-        # popup still open and skip refreshing the note list, leaving it
-        # stale even after switching notes. One holding typed work -- the
-        # template editor -- asks first, and choosing to keep editing keeps
-        # this note from opening: a card clicked beside a half-written
-        # template closed it without the question, the typing gone.
-        # A reload after a change made from outside (flush=False) is no
-        # person's open, and is not asked: Cancel there kept the stale editor,
-        # which saved over the change (round 12). The popup stays open.
+        # Popups close FIRST (one left open kept the list stale); the
+        # template editor asks, and keeping it keeps this note shut. A
+        # reload (flush=False) is not asked: Cancel saved the stale editor.
         if flush and not self._dismiss_mini_popup_asking():
             return False
-        # Navigating to a different note means we're no longer mid-creation of
-        # the calendar-originated one — clear this BEFORE the flush below, so
-        # that flush's save can't accidentally trigger an unwanted jump back
-        # to the calendar out from under the note the user is trying to open.
+        # Cleared BEFORE the flush, whose save would jump to the calendar.
         pending_return = getattr(self, "_pending_calendar_return", None)
         self._pending_calendar_return = None
         self._update_calendar_return_button()
         self._catch_up_deferred_refresh()
-        # Save whatever is currently in the editor before switching away.
-        # Going back to fix a date the save could not store means stay: the
-        # note remains in the editor, and the way back to the calendar is
-        # armed again as it was.
+        # Saved before switching; going back to a date stays, the calendar's
+        # way back armed again.
         if flush and self._flush_autosave() is False:
             self._pending_calendar_return = pending_return
             self._update_calendar_return_button()
@@ -17835,11 +17653,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._tab_counter += 1
         self.open_tabs = [{"key": self._tab_counter, "state": self.capture_editor_state()}]
         self.active_tab_index = 0
-        # Moves the highlighted-card border to this note, without rebuilding
-        # the whole list — switching notes happens constantly during normal
-        # use, and a full refresh_note_list() here just to move a border was
-        # a much more noticeable flicker than the same cost is for genuinely
-        # rare actions like saving or searching.
+        # The ring moves without a rebuild: switching is constant, and a
+        # refresh here flickered.
         self._update_open_highlight()
         return True
 
@@ -17864,14 +17679,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 else None)
 
     def open_blank_tab(self):
-        """Start a brand-new empty note, replacing whatever was open (after
-        auto-saving any unsaved work in it).
-
-        Returns False when the person chose to stay (to fix a date the save
-        could not store), True otherwise -- as open_note_in_tab does. A
-        caller that goes on to fill the editor must stop on False: the
-        import did not, and loaded a recipe into the repeating note still
-        on screen, whose next save wrote it over the whole series."""
+        """Start a new empty note, the open one saved first. False when the
+        person stayed (a date to fix): a caller filling the editor must stop
+        -- the import loaded a recipe into a series, saved over it all."""
         # A popup holding typed work asks first, as in open_note_in_tab.
         if not self._dismiss_mini_popup_asking():
             return False
@@ -17895,40 +17705,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._update_open_highlight()
 
     def _flush_autosave(self, leaving=True, hold_repeat_off=None):
-        """Cancel any pending debounced auto-save and, if the current editor has
-        real unsaved changes, save them right now. Called before switching notes
-        or closing so a late timer can't fire into the wrong note.
+        """Cancel the pending autosave and save real changes now, before a
+        switch or close, so a late timer cannot hit the wrong note.
 
-        Returns False when the person chose to go back -- "Go back and fix
-        it", asked about a date or repeat the save could not store -- and
-        True otherwise. Every caller about to replace the editor -- another
-        note, a new one, closing the window -- stops on False, because going
-        back means "take me back", in this dialog as in every other. The
-        question a repeating note's day once asked on the way out ("What
-        should Save apply to?") was the first to need it: callers carried on
-        regardless, and its Cancel quietly threw the day's edit away.
-
-        ``leaving`` says whether the caller is about to replace the editor.
-        A route that saves on its way to changing something ELSE -- deleting
-        or moving another note, an import updating notes the editor does
-        not hold -- passes False: the editor stays as it is, so a date the
-        save could not store stays on screen to be fixed, and the question
-        about it belongs to the way out of the note. Asked on those routes,
-        "Continue" reset a date in a note that stayed open, and "Go back"
-        silently cancelled the delete nobody had asked about.
-
-        Callers stop on an explicit False only (``is False``), never on
-        anything falsy: a return added later without a value, or a test
-        standing in for this method, must not turn into a window that
-        will not close.
-
-        A save that is not leaving holds a repeat's turn-off back (see
-        _date_and_repeat_to_store), and so does one a delete makes before
-        its question (*hold_repeat_off*), leaving or not: the answer may be
-        No, and the turn-off was made all the same -- or it made a series a
-        one-off before the question about deleting one of its days, which
-        then offered to delete the whole note. A note deleted takes the
-        turn-off with it; one kept keeps it waiting."""
+        False when the person went back ("Go back and fix it", a date or
+        repeat not storable): every caller replacing the editor stops, and
+        only on ``is False`` -- a bare return must not keep a window open.
+        ``leaving`` is False on a route changing something ELSE (a delete,
+        an import): the question belongs to the way out, and there it reset
+        a date or cancelled the delete. Such a save, and a delete's before
+        its question (*hold_repeat_off*), holds a repeat's turn-off back
+        (_date_and_repeat_to_store): No kept it made anyway."""
         self._cancel_pending_autosave()
         if self.selected_note_id is None and not self.open_tabs:
             # The blank editor a delete leaves, or a start with no note open,

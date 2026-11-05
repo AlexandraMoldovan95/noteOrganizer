@@ -11774,8 +11774,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        self.open_tabs = [{\"key\": self._tab_counter, \"state\": self.capture_editor_state()}]\n        self.active_tab_index = 0\n        # Moves the highlighted-card border",
-        "replace": "        self.open_tabs = [{\"key\": self._tab_counter, \"state\": self.capture_editor_state()}]\n        self.active_tab_index = 0\n        self._sync_editor_snapshot()\n        # Moves the highlighted-card border"
+        "find": "        self.open_tabs = [{\"key\": self._tab_counter, \"state\": self.capture_editor_state()}]\n        self.active_tab_index = 0\n        # The ring moves without a rebuild",
+        "replace": "        self.open_tabs = [{\"key\": self._tab_counter, \"state\": self.capture_editor_state()}]\n        self.active_tab_index = 0\n        self._sync_editor_snapshot()\n        # The ring moves without a rebuild"
       }
     ],
     "must_fail": [
@@ -16405,8 +16405,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        if flush and not self._dismiss_mini_popup_asking():\n            return False\n        # Navigating",
-        "replace": "        if not self._dismiss_mini_popup_asking():\n            return False\n        # Navigating"
+        "find": "        if flush and not self._dismiss_mini_popup_asking():\n            return False\n        # Cleared BEFORE the flush",
+        "replace": "        if not self._dismiss_mini_popup_asking():\n            return False\n        # Cleared BEFORE the flush"
       }
     ],
     "must_fail": [
