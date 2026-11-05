@@ -10204,8 +10204,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        if self.selected_note_id is not None:\n            # A saved note is left, not replaced",
-        "replace": "        if False:\n            # A saved note is left, not replaced"
+        "find": "        if self.selected_note_id is not None:\n            # A saved note is left, its last words saved",
+        "replace": "        if False:\n            # A saved note is left, its last words saved"
       }
     ],
     "must_fail": [
