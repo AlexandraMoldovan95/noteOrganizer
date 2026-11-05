@@ -12305,14 +12305,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             else:
                 self._render_checklist_items()
             self._schedule_autosave()
-            # The one thing that could be taken off a note with no way
-            # back at all: Ctrl+Z reaches the Text widgets (edit_undo),
-            # and a checklist is a list of dicts beside them, so nothing
-            # in the editor could return an item. A toast rather than a
-            # confirmation because the app's rule is that a destructive
-            # action is confirmed in proportion to how recoverable it is
-            # -- and a question in front of every tick-list tidy-up would
-            # be worse than the risk it guards.
+            # Ctrl+Z cannot reach a checklist (dicts beside the Text), so an
+            # Undo toast: a question before every tidy-up costs more than
+            # the risk, and confirmation follows how recoverable a loss is.
             label = _truncate(item.get("text", ""), 40)
             self._show_toast(
                 f"Removed “{label}”" if label else "Checklist item removed",
@@ -12531,12 +12526,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _move_checklist_item(self, item, step):
         """Move *item* one place up (step -1) or down (+1); at either end,
-        nothing. Returns whether it moved.
-
-        When the rows on screen are this list's (_checklist_rows_current),
-        only the two rows trade places, and the record of the drawn rows
-        trades with them: each row's box, bin and arrows close over their
-        own item, and the delete's Undo puts a row back by that record."""
+        nothing. Returns whether it moved. With this list's rows on screen,
+        only the two rows trade, and the record of drawn rows with them --
+        the delete's Undo puts a row back by that record."""
         items = self._get_checklist()
         at = next((i for i, it in enumerate(items) if it is item), None)
         if at is None or not 0 <= at + step < len(items):
@@ -12730,10 +12722,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         else:
             w = "word" if words == 1 else "words"
             c = "character" if chars == 1 else "characters"
-            # The reading estimate goes on its own line under the counts:
-            # it answers a different question ("have I got time for this?"
-            # rather than "how much have I written?") and reads as an aside
-            # rather than as more of the same figure.
+            # The reading time on its own line: "have I got time for this?",
+            # an aside, not more of "how much have I written?".
             line = f"{words} {w} · {chars} {c}"
             estimate = reading_time(words)
             self.word_count_lbl.config(
@@ -12764,30 +12754,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _add_text_resize_toggle(self, host, text_widget, compact, expanded,
                                 pack_kwargs=None, remember_key=None):
-        """Add an Expand/Collapse toggle under a Text box. One click switches its
-        height (in rows) between compact and expanded — same flicker-free pattern
-        as the Settings panels, no dragging. Also disables the box's expand fill
-        so the height setting actually takes effect.
-
-        Dragging a box's edge was tried for the note body and abandoned: the
-        editor sits inside a scrolling canvas that recomputes its scrollregion
-        whenever its contents resize, and a drag sends that dozens of times a
-        second. The canvas fell behind, leaving widgets drawn at stale
-        positions. One click is one resize, so it cannot happen.
-
-        Pass *remember_key* to store the chosen state in settings under that
-        name; without one the box opens compact every time, which is right for
-        a box whose size is incidental and wrong for one someone chose.
+        """Add an Expand/Collapse toggle under a Text box: one click, one
+        height in rows. Dragging the edge was abandoned -- the scrolling
+        canvas fell behind dozens of resizes a second. *remember_key* keeps
+        the choice in settings; without it the box opens compact.
         """
-        # Nothing is done to the box's packing here. There used to be a
-        # pack_configure(expand=False), meant to keep the row count in charge
-        # of the height -- but both boxes are packed with side="left", where
-        # expand hands out *horizontal* space, not vertical. It never affected
-        # the height, and it left the box at its default width of eighty
-        # characters inside a much wider frame: 752px of 1027px, with the text
-        # wrapping halfway across and no way to make it fill the rest.
-        # The height is governed by the frame around the box, which sizes
-        # itself to what the box asks for, and the row count sets that.
+        # The packing is left alone: an expand=False here, meant for the
+        # height, acts sideways with side="left" and held the box at 80
+        # characters. The row count sets the frame's height.
         text_widget.configure(height=compact)
 
         start = False
@@ -12899,12 +12873,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                   cursor="hand2", bg=self.colors["sidebar"], fg=self.colors["text"],
                   font=("Segoe UI", 8, "bold")).pack(side="left", ipadx=4, ipady=2)
 
-        # "break" on both: each can destroy the box, and Tk has already
-        # read every script of the key -- the box's own <Escape> among them
-        # (_place_dropdown_popup). Escape here called that dead command: a
-        # silent "invalid command name" on every Escape in a rename box.
-        # Pressed, not held (_enter_repeats): the box gone, a repeat pressed
-        # whatever the keyboard went back to.
+        # "break": each can destroy the box, and its own <Escape> then ran
+        # dead (_place_dropdown_popup). Pressed, not held (_enter_repeats):
+        # a repeat pressed whatever the keyboard went back to.
         entry.bind("<Return>", lambda e: (
             None if self._enter_repeats(e) else save(), "break")[1])
         entry.bind("<Escape>", lambda e: (self._dismiss_mini_popup(), "break")[1])
@@ -13086,12 +13057,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def track_theme(self, widget, **option_map):
         self.themed_widgets.append((widget, option_map))
-        # A section rebuilt on every visit registers its widgets again each
-        # time, and only a theme switch dropped the dead ones: a session
-        # that never switched theme kept every widget it ever drew (339 ->
-        # 809 entries over 175 Settings visits, measured). Pruned whenever
-        # the registry has doubled since the last prune -- a constant cost
-        # per call, averaged.
+        # Sections rebuilt per visit re-register, and only a theme switch
+        # pruned (339 -> 809 entries over 175 visits): pruned whenever it
+        # doubles, a constant cost per call, averaged.
         if len(self.themed_widgets) >= 2 * getattr(self, "_themed_pruned_at", 256):
             self._prune_themed_widgets()
         widget.configure(**{opt: palette_value(self.colors, key)
@@ -13192,18 +13160,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def apply_theme(self):
         self.configure(bg=self.colors["bg"])
-        # The window's own frame last, after the contents: the caption and
-        # the icon are the outermost things on screen, and changing them
-        # before the widgets underneath made the switch look like it
-        # happened twice (field-reported: "the top bar changes first and
-        # only then the one below it").
+        # The window's frame last: changed first, the switch looked like it
+        # happened twice (field report).
         self.after_idle(self._paint_title_bar)
         self.after_idle(self._set_window_icon)
-        # Prune dead entries first: the rebuilt Settings panels re-track
-        # their dropdowns and buttons on every visit, and the registry
-        # kept the destroyed ones forever — the note-card leak class, at
-        # the registry level (each dead entry cost a caught TclError on
-        # every switch, growing without bound).
+        # Dead entries first: each cost a caught TclError per switch.
         self._prune_themed_widgets()
         for widget, option_map in self.themed_widgets:
             try:
@@ -13215,13 +13176,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # The drawn tick boxes share two images; redrawn, every box follows.
         if getattr(self, "_tick_images", None) is not None:
             self._paint_tick_images()
-        # The drawn tables carry their colours in canvas items, repainted
-        # in place: rebuilt, each grid was a new window that mapped late,
-        # and the switch flickered. A grid gone or stale is still rebuilt.
-        # The commit first: render's contract is "never while focus is in
-        # a cell", and a theme switched mid-typing otherwise destroyed the
-        # editor's canvas under it -- the keystrokes went with it. A row
-        # being typed stays text: a new theme is no reason to leave it.
+        # Tables are repainted in place (rebuilt, they flickered); a grid gone
+        # or stale is rebuilt. The cell is committed first, or its typing
+        # went with the canvas; a row being typed stays text.
         self._commit_cell_editor()
         if not self._recolor_table_grids():
             self._render_table_grids(keep_typed=self._row_being_typed())
@@ -13241,52 +13198,27 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.refresh_weekday_buttons()
         self._paint_end_fields()
         self.style_notebook()
-        # Statistics is deliberately NOT re-rendered here: a theme switch
-        # changes no statistic -- only the palette, which
-        # _recolor_stragglers below handles, and the panel's next render
-        # rebuilds it in the new palette (it updates its figures in place
-        # otherwise). It's on the Settings page, i.e. exactly where the user
-        # is standing when they switch themes, so rebuilding it there was
-        # visible churn for no new information. Real data changes still
-        # redraw it through refresh_note_list(), which is unchanged.
-        #
-        # Same reasoning for the calendar: rebuilding every day cell is
-        # pointless while the calendar isn't even on screen. That test
-        # used to be written out here, and here only -- it now lives
-        # inside render_calendar() itself, so every caller gets it and
-        # this one simply asks for a render like all the others.
+        # Statistics is not re-rendered: a theme changes no figure, and its
+        # rebuild churned on the very page the switch is made from. The
+        # calendar skips itself when unseen (in render_calendar).
         self.render_calendar()
         # Safety net: catch any widget that slipped through the registered list
         # (e.g. built once and never rebuilt) by swapping known theme colors from
         # the OTHER theme to the current one. This guarantees a clean flip.
         self._recolor_stragglers()
-        # The Settings nav glyphs are shapes drawn onto small canvases, and
-        # nothing above reaches items drawn on a canvas -- track_theme only
-        # restores the canvas background. Repaint them explicitly, the same
-        # way the theme picker refreshes its own preview cards.
+        # The Settings nav glyphs are canvas items, which track_theme does
+        # not reach: repainted, as the theme picker's cards are.
         self._recolor_settings_nav_icons()
         # The alignment icons are canvas-drawn for the same reason and need
         # the same treatment; this repaints their bars along with restoring
         # every paragraph button's pressed state in the new palette.
         self._refresh_list_buttons()
-        # Recolour the note cards in place rather than calling
-        # refresh_note_list(), which destroys and rebuilds every card. That
-        # rebuild was ~85ms of a ~121ms theme switch and made the list
-        # visibly empty and refill -- the theme-switch flicker. Nothing here
-        # depends on the note DATA having changed (it hasn't; only the
-        # palette did), so there is nothing to re-read.
-        #
-        # Deliberately AFTER _recolor_stragglers: a card's stripe/tag colour
-        # comes from the note itself, and a custom note colour that happens
-        # to match some other theme's palette entry (e.g. #4cd9a3, which is
-        # also the dark theme's success) would otherwise be swapped out by
-        # the straggler pass and left showing the wrong colour. Running last
-        # makes the note's own data authoritative. See _recolor_note_cards.
+        # The cards recoloured in place: a rebuild was ~85ms of ~121ms and
+        # the list flickered. AFTER the stragglers, so a note's own colour
+        # that matches a palette entry (#4cd9a3) is not swapped.
         self._recolor_note_cards()
-        # Checklist rows rebuild per note load, so they are deliberately
-        # untracked — but the straggler net repaints only bg/fg, leaving a
-        # switched theme's checkbox wells (selectcolor) on the old palette
-        # while the note stays open. Same treatment as the note cards.
+        # Checklist rows are untracked, and the stragglers' bg/fg leaves the
+        # tick wells (selectcolor) old: recoloured as the cards are.
         self._recolor_checklist_boxes()
         # The find highlights are blended from the palette, so re-tint them
         # for the new theme; then re-draw the current cell flash in the new
