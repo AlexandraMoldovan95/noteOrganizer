@@ -9652,15 +9652,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     @_undo_atom(tags_only=True)
     def _toggle_body_style(self, style):
-        """Bold/Italic/Underline/Strikethrough toolbar + right-click handler.
-
-        With an active selection, toggles that style on exactly the
-        selected text (existing behavior). With NO selection, toggles a
-        "pending" style instead: it has no effect on existing text, but
-        every character typed from now on picks it up, until the same
-        style is toggled off again the same way — a manual on/off switch,
-        not "match whatever formatting is already at the cursor" the way
-        some editors infer it. See _apply_pending_style_to_typed_char."""
+        """Bold/Italic/Underline/Strikethrough, from the toolbar and the menu:
+        over a selection, toggles it there; with none, toggles a "pending"
+        style every character typed from now on wears, until toggled off
+        (_apply_pending_style_to_typed_char)."""
         target = self._grid_style_target()
         if target:
             # Cells are selected, or one is open in the editor: the button
@@ -9683,13 +9678,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._pending_styles.add(style)
                 self.set_status(f"{style.capitalize()} on — applies to what you type next")
             if self._has_any_pending_style():
-                # Left gravity: text typed AT this position pushes the
-                # cursor forward but leaves the mark itself behind, so it
-                # keeps marking "where the pending run started" rather than
-                # tracking the cursor like a normal (right-gravity) mark
-                # would. See _apply_pending_style_to_typed_char for why
-                # this range-based approach (not "just the one most-recent
-                # character") is what actually makes fast typing reliable.
+                # Left gravity: the mark stays where the pending run started as
+                # typing pushes the cursor on (_apply_pending_style_to_typed_char).
                 self.body_text.mark_set(self._PENDING_STYLE_ANCHOR, tk.INSERT)
                 self.body_text.mark_gravity(self._PENDING_STYLE_ANCHOR, "left")
                 self._pending_style_last_length = self._pending_style_text_length()
@@ -9697,12 +9687,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
 
         if style in ("bold", "italic"):
-            # Bold and italic both set the Text widget's "font" option, and
-            # Tkinter tags that set the same option don't compose — only one
-            # wins. So the two can't just be independent on/off tags the way
-            # underline/strike are; the pair is tracked as one of exactly
-            # four mutually exclusive font tags (none/bold/italic/both).
-            # On unless all of it has the style already; the other one is
+            # Bold and italic share Tk's font option, so they are one of four
+            # exclusive tags; on unless all of it has the style, the other one
             # each stretch's own (_set_weight_by_stretch).
             on = not self._selection_has_style(
                 self.body_text, {style, "bold_italic"}, start, end)
@@ -9719,18 +9705,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     @_undo_atom(tags_only=True)
     def _apply_body_color(self, kind, hex_color):
-        """Text-color/highlight-color picker handler. kind is "text_color"
-        or "highlight"; hex_color is the chosen color, or None to clear it.
-
-        Unlike Bold/Italic/Underline/Strikethrough, a color isn't a simple
-        on/off switch — it's "one of a palette, or nothing" — so this
-        isn't quite a toggle: clicking a swatch always sets that color
-        (replacing whichever color of the same kind was already on the
-        selection, if any), and a separate "Clear" entry in the picker
-        popup passes hex_color=None to remove it. With no selection, this
-        sets (or clears) the PENDING color instead, sharing the exact same
-        anchor-mark-and-length-tracking machinery _toggle_body_style uses
-        for the boolean styles — see _has_any_pending_style."""
+        """The text colour or highlight picked (*kind*), *hex_color* or None
+        to clear: a swatch sets its colour over the selection, replacing any
+        of its kind; with no selection, the PENDING colour, as
+        _toggle_body_style does for the on/off styles."""
         target = self._grid_style_target()
         if target:
             self._flush_table_grids()
@@ -9759,10 +9737,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._refresh_format_buttons()
             return
 
-        # A span only ever has one text color and one highlight color at a
-        # time -- remove whatever tag of this kind is already there before
-        # adding (or not adding) the new one, rather than layering a
-        # second tag that would just win or lose by tag priority.
+        # One colour of each kind at a time: the old tag goes before the new,
+        # not layered under it to win or lose by priority.
         for tag_name in self.body_text.tag_names():
             if tag_name.startswith(kind + "_"):
                 self.body_text.tag_remove(tag_name, start, end)
@@ -9807,12 +9783,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._refresh_format_buttons()
             return
 
-        # Size and family cannot be tagged in place the way a colour can:
-        # what a run should look like depends on the bold and italic around
-        # it too. So the spans are edited as data and the whole resolution
-        # is redone -- clip this style out of the selection, put the new
-        # value back over it, and let _apply_font_runs work out the tags.
-        # One read for the selection's place and the note's spans.
+        # Size and family depend on the bold and italic around them: edited as
+        # spans -- clipped out, the new value laid over -- and resolved again
+        # by _apply_font_runs, from one read.
         whole = self.body_text.get("1.0", "end-1c")
         where = self._char_offsets(self.body_text, [start, end], whole)
         first, last = where[str(start)], where[str(end)]
@@ -9837,13 +9810,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._schedule_autosave()
 
     def _open_color_swatch_popup(self, kind):
-        """Text-color/highlight picker popup — a grid of swatches plus a
-        Clear option, anchored to the toolbar button that opened it.
-        Closely mirrors open_color_picker() (the note's own color), reused
-        here with a different palette and a different target (the body
-        text's formatting instead of the note's color). Swatches only, no
-        hex-code entry -- most users don't think in hex, so the palette is
-        the whole picker."""
+        """The text colour or highlight popup: swatches and a Clear, anchored
+        to its toolbar button, as open_color_picker() is for the note's
+        colour. No hex entry: most people do not think in hex."""
         self._dismiss_mini_popup()
         palette = PRESET_NOTE_COLORS if kind == "text_color" else HIGHLIGHT_COLOR_PALETTE
         anchor_btn = self.text_color_btn if kind == "text_color" else self.highlight_btn
@@ -9868,11 +9837,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             body = tk.Frame(outer, bg=self.colors["card"])
             body.pack()
 
-            # Only this branch draws a header, and only text_color reaches
-            # it, so the text is written out rather than chosen here. It used
-            # to be picked above by a conditional whose highlight half was
-            # computed on every open and never displayed -- the highlight
-            # popup takes the branch above and carries its own header now.
+            # Only text_color reaches this header; the highlight's branch above
+            # carries its own.
             label = tk.Label(body, text="Pick a text color",
                              font=("Segoe UI", 10, "bold"),
                              bg=self.colors["card"], fg=self.colors["text"])
@@ -9916,52 +9882,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             or bool(self._pending_font_size) or bool(self._pending_font_family)
 
     def _apply_pending_style_to_typed_char(self, event=None):
-        """Tag whatever's accumulated since _PENDING_STYLE_ANCHOR (set when
-        a style was last toggled on with nothing selected, or resynced
-        below) up through the current cursor — not just "the one character
-        the cursor is now past". Bound to <KeyRelease>.
-
-        The first version of this tagged only a single character —
-        "whatever's immediately before the cursor right now" — on the
-        reasoning that KeyRelease always fires once per keystroke, right
-        after that keystroke's own insertion. True, but under a fast burst
-        Tk can process several KeyPress insertions before it gets around
-        to dispatching the KeyRelease callbacks for them, so a callback
-        can end up running once the cursor has already moved past MORE
-        than one new character — "the one character before the cursor" at
-        that moment silently skips whichever ones came in between. Tagging
-        the whole span from the anchor to the cursor instead means it
-        doesn't matter how many characters piled up before a callback got
-        its turn — the next one that runs covers all of them in one go,
-        since tag_add over an already-tagged sub-range is harmless and
-        adjacent same-tag ranges merge automatically.
-
-        Deciding WHETHER to extend the tag is based on whether the note's
-        total character count actually grew since the last check — not on
-        inspecting event.char/event.state the way an earlier version of
-        this did. That first version correctly matched real-world testing
-        on Windows, but failed in CI (Linux + Xvfb): a differently-behaving
-        Tk build populated (or didn't populate) event.char differently for
-        at least one of a fast burst's synthetic key events, which got
-        misread as "not a real keystroke" and silently ate a chunk of
-        already-typed, correctly-inserted text out of the tag. Character
-        count is a fact about the widget's actual content, not something
-        that depends on how a given platform's Tk build fills in event
-        details — grew means something was typed (of any burst size);
-        unchanged or shrank means nothing new to tag, just resync tracking.
-        A paste is excluded separately (see the <<Paste>> binding below),
-        not by inspecting this event either.
-
-        A version of this whole feature that hooked the Tcl level for
-        true per-insert precision was tried and reverted after three
-        separate, unpredictable app-launch crashes (Tk's own internal
-        Text-widget bookkeeping hits several "normally harmless, silently
-        tolerated" Tcl errors that turned into real, escaping Python
-        exceptions once a Python proxy sat in the call path). This
-        mark-based approach stays entirely within ordinary,
-        already-proven-safe Tkinter usage (the same kind of mark tracking
-        the calculator's insert-into-note feature already relies on).
-        See docs/ISSUES_LOG.md."""
+        """Tag everything from _PENDING_STYLE_ANCHOR to the cursor, not one
+        character -- a fast burst runs several inserts before their
+        KeyReleases -- when the note's length grew, a fact of the content,
+        not of event.char, which CI's Tk filled otherwise; a paste is left
+        out by its own binding. Bound to <KeyRelease> (ISSUES_LOG: "The
+        fast-typing fix that took three tries to land safely")."""
         if not self._has_any_pending_style():
             return
         if self._PENDING_STYLE_ANCHOR not in self.body_text.mark_names():
@@ -9975,31 +9901,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         start_idx = self.body_text.index(self._PENDING_STYLE_ANCHOR)
         end_idx = self.body_text.index(tk.INSERT)
         if self.body_text.compare(start_idx, "<", end_idx):
-            # The typing settled first, as typing is (_spread_typed_run):
-            # glued onto a styled character, or between two pieces of one
-            # run, the letters wear the run's composite before a size or font
-            # picked replaces its one property of it. Settled after, letters
-            # that wore no composite yet -- at a bold word's edge, at a run's
-            # end, after a second pick -- took the base's font (or size) with
-            # the pick, and the run's never arrived.
+            # The typing settled first (_spread_typed_run), so the letters wear
+            # the run's composite before a pick replaces one property; after,
+            # they took the base's font with the pick.
             self._spread_typed_run()
             is_bold = "bold" in self._pending_styles
             is_italic = "italic" in self._pending_styles
             tag = self._font_tag_for(is_bold, is_italic)
             if tag:
                 self.body_text.tag_add(tag, start_idx, end_idx)
-            # The plain tag above stays as the marker the toolbar reads; the
-            # composite decides how the text looks. Typed inside a run with a
-            # size or a font, the letters wear the run's composite, with its
-            # weight: refitted to theirs -- and a size or a font picked
-            # before typing takes the place of that one property, the other
-            # kept from the run. Laid beside the run's instead, Tk drew
-            # whichever composite was made later; laid in its place, the
-            # run's font went with it.
-            # A letter after the first of a run typed with a size or font
-            # picked inherits nothing (Tk passes on what BOTH sides wear,
-            # and the first letter's composite is not the run's): it goes
-            # on from the letter typed before it with the same pick.
+            # The plain tag is what the toolbar reads, the composite how it
+            # looks: refitted to the letters' weight, a pick replacing its one
+            # property; a run's later letters go on from the one before.
             size, family = self._pending_font_size, self._pending_font_family
             before = self.body_text.index(f"{start_idx} -1c")
             went = next((parse_font_tag(t)
@@ -10027,39 +9940,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._pending_style_last_length = current_length
 
     def _resync_pending_style_anchor(self, event=None):
-        """Move the pending-style anchor to the cursor's current position
-        with no tagging, and refresh the length baseline it's compared
-        against — used whenever the cursor moves without typing
-        (navigation keys, a mouse click), and right after a paste (bound
-        separately, below), so a later keystroke only ever extends the
-        tag over genuinely new typing, never a stretch of older text or a
-        pasted block it was never meant to touch."""
+        """Move the pending-style anchor to the cursor, tagging nothing, and
+        reset the length baseline -- when the cursor moves without typing,
+        and after a paste -- so only new typing is ever tagged."""
         if self._has_any_pending_style() and self._PENDING_STYLE_ANCHOR in self.body_text.mark_names():
             self.body_text.mark_set(self._PENDING_STYLE_ANCHOR, tk.INSERT)
             self._pending_style_last_length = self._pending_style_text_length()
 
     def _select_word_at_click(self, event):
-        """Replaces Tk's default double-click "select word" with a plain
-        alnum/underscore definition of "word" (see _char_class), so a
-        double-click never crosses a "." or other punctuation -- e.g.
-        double-clicking "something" in "something.else" selects only
-        "something", and double-clicking "else" selects only "else".
-
-        Also makes double-clicking an EMPTY line select nothing at all,
-        rather than Tk's default of grabbing that line's invisible newline
-        and painting a full-width selection bar over a row with no words
-        in it.
-
-        Works off event.widget, so the same handler serves the note body
-        and the comments box rather than being tied to either."""
+        """Double-click selects a word by _char_class, never across "." --
+        "something" of "something.else" -- and nothing on an EMPTY line (Tk
+        took its newline, a full-width bar). From event.widget, for the body
+        and the comments alike."""
         w = event.widget
         index = w.index(f"@{event.x},{event.y}")
         line, col = index.split(".")
         line_text = w.get(f"{line}.0", f"{line}.0 lineend")
-        # The clicked column is a Tk column (UTF-16 units); the word walk
-        # below runs on Python characters, and the selection goes back to
-        # Tk. Convert in both directions, or an emoji earlier on the line
-        # shifts which word gets selected — and where the highlight lands.
+        # Tk columns are UTF-16 units, the walk Python characters: converted
+        # both ways, or an emoji before shifted the word selected.
         col = min(self._py_col(line_text, int(col)), len(line_text) - 1)
         if col < 0:
             return "break"
@@ -10079,18 +9977,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return "break"
 
     def _select_line_no_newline(self, event):
-        """Replaces Tk's default triple-click "select line" behavior. Tk's
-        own version selects through the START of the next line, which
-        silently includes the invisible trailing newline character in the
-        selection -- same overshoot as the Select-All fix above, but harder
-        to notice here because it's triggered by mouse clicks (a
-        triple-click, or two double-clicks close enough together in time
-        that Tk counts them as one), not a menu command. Left as-is, it
-        also means copy/paste carries that extra newline along with the
-        line's real text.
-
-        Works off event.widget, so the same handler serves the note body
-        and the comments box rather than being tied to either."""
+        """Triple-click selects the line without its newline: Tk's took it,
+        and a copy carried it along. From event.widget, for the body and
+        the comments alike."""
         w = event.widget
         index = w.index(f"@{event.x},{event.y}")
         line = index.split(".")[0]
@@ -10127,13 +10016,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             text_widget.bind(key, lambda _e: "break")
 
     def _uniform_font_in_selection(self, style, start, end):
-        """The one size (or family) covering the WHOLE range, or None.
-
-        None also means "a mix", which is the honest answer for a dropdown:
-        showing the first run's size for a selection spanning two of them
-        would claim the whole selection is that size, and the next click
-        would then be understood as "leave it as it is". A character takes
-        the lowest-priority font tag it wears, as tag_names lists them.
+        """The one size (or family) covering the WHOLE range, or None -- also
+        "a mix", the honest answer for a dropdown. A character takes the
+        lowest-priority font tag it wears, as tag_names lists them.
         """
         fonts = [n for n in self.body_text.tag_names() if parse_font_tag(n)]
         wanted = None
@@ -10218,14 +10103,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         else:
             text_color = self._pending_text_color
             highlight_color = self._pending_highlight_color
-        # Both buttons show an actual swatch of the active color as
-        # their own background when one is set (matching the note's
-        # own color-swatch button elsewhere in the app — a familiar
-        # pattern, not a new visual language), falling back to the
-        # theme's normal button look when nothing is active. Either
-        # way the letter's contrast is computed from whatever
-        # background is actually showing, so it stays legible for
-        # any palette color against any app theme.
+        # Each button wears its active colour as a swatch, as the note's own
+        # does, its letter's contrast read off whatever background shows.
         tc_bg = text_color or self.colors["sidebar"]
         hl_bg = highlight_color or self.colors["sidebar"]
         self.text_color_btn.configure(
