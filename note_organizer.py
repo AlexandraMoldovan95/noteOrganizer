@@ -10116,14 +10116,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             fg=self._contrasting_fg(hl_bg) if highlight_color else self.colors["text"],
         )
 
-    # A curated set — common, broadly useful emojis grouped loosely by theme,
-    # not an exhaustive unicode picker. Keeps the popup a manageable size.
-    # Each group also gets its own chip color: Tk can't render true color
-    # emoji glyphs on Windows (a platform rendering limitation, not a font
-    # choice), so every glyph shows as a monochrome outline regardless of
-    # font. Giving each category its own colored chip background makes them
-    # look deliberately styled rather than broken, and doubles as a visual
-    # grouping cue.
+    # A curated set by theme, not all of Unicode. Each group has a chip colour:
+    # Tk draws emoji as monochrome outlines on Windows, and a coloured chip
+    # makes them look styled, not broken.
     EMOJI_GROUPS = [
         ("Faces", ["😀", "😄", "😂", "🙂", "😉", "😍", "🤔", "😅", "😢", "😮",
                   "😴", "🥳", "😎", "🙄", "😬", "🤯"], "#FFD166"),
@@ -10140,16 +10135,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     ]
 
     def _show_emoji_picker(self, text_widget, anchor=None):
-        """Small themed popup for inserting an emoji at the current cursor
-        position of whichever field opened it (title, body, comments, etc.).
-        Anchored to that field, not a separate window.
-
-        A field that lives INSIDE a popup -- the template editor, a rename
-        box -- gets the picker as a popup within that one, the way a
-        dropdown in the template editor does. Closing the host first, as
-        every other opener does, destroyed it and everything typed in it,
-        and left the picker at the screen's corner, aimed at a field that
-        no longer existed."""
+        """A small themed popup inserting an emoji at the cursor of whichever
+        field opened it, anchored to it. A field INSIDE a popup gets it as a
+        popup within that one -- closing the host first destroyed it and
+        its typing."""
         host = getattr(self, "_mini_popup", None)
         nested = host is not None and self._is_inside_popup(text_widget, host)
         if nested:
@@ -10195,13 +10184,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         def insert_emoji(emoji, from_keys=False):
             try:
-                # Skip re-focusing if this field already has focus — avoids
-                # redundant OS-level focus-change overhead on rapid clicks.
-                # focus_get raises KeyError, not TclError, while the focus
-                # sits in an override-redirect popup like this picker -- it
-                # is what made the second emoji die where the first landed.
-                # From the keyboard, the keyboard stays on the emoji, for
-                # the next one.
+                # Not refocused if focused already; focus_get raises KeyError in
+                # this popup (the second emoji died). From the keyboard, it
+                # stays on the emoji for the next one.
                 try:
                     has_focus = self.focus_get() is text_widget
                 except KeyError:
@@ -10221,17 +10206,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 else:
                     pos = text_widget.index(tk.INSERT)
                     text_widget.insert(pos, emoji)
-                    # A Tk Entry counts UTF-16 units, not characters, so an
-                    # astral emoji is TWO steps wide. Advancing by Python's
-                    # len() parked the caret between the surrogates of the
-                    # emoji just placed, and the next one speared it apart
-                    # -- which the save's mend then faithfully turned into
-                    # replacement-character diamonds.
+                    # An Entry counts UTF-16 units: by len(), the caret sat
+                    # inside the emoji and the next one split it into diamonds.
                     text_widget.icursor(pos + self._tk_units(emoji))
-                # Best-effort: nudge autosave if this field participates in it.
-                # skip_word_count avoids re-reading the whole body on every
-                # single click — that's what made rapid emoji-clicking laggy.
-                # A popup's field never does: its popup saves it.
+                # The autosave nudged, skipping the word count (fast clicks
+                # lagged); a popup's field is its popup's to save.
                 if not nested:
                     self._schedule_autosave(skip_word_count=True)
             except (tk.TclError, KeyError):
@@ -10246,10 +10225,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             grid = tk.Frame(inner, bg=self.colors["card"])
             grid.pack(fill="x")
             cols = 8
-            # Tk can't render true color emoji glyphs on Windows regardless of
-            # font — a platform rendering limitation. Giving each category its
-            # own colored chip background makes them read as deliberately
-            # styled rather than broken, and doubles as a grouping cue.
+            # The group's chip colour (see EMOJI_GROUPS).
             chip_bg = group_color
             chip_hover = _darken_hex(group_color)
             for i, em in enumerate(emojis):
@@ -10267,10 +10243,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 cell.bind("<Enter>", lambda e, w=cell, h=chip_hover: w.configure(bg=h))
                 cell.bind("<Leave>", lambda e, w=cell, b=chip_bg: w.configure(bg=b))
 
-        # Bind the wheel now that every emoji cell exists — binding earlier
-        # only reaches whatever's already in the tree at that moment, missing
-        # everything created afterward (which is all of it, since the emoji
-        # grid is built right below this).
+        # The wheel bound once every cell exists; earlier, it reached none.
         self._bind_mousewheel_recursive(inner, canvas)
 
         self._place_dropdown_popup(pop, anchor or text_widget)
@@ -10326,32 +10299,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.import_box.focus()
         self._fit_sidebar_panel()
 
-    # How far an open panel's scrolling middle gives when the window is
-    # short: (natural, comfortable, least) -- pixels of Share's list of
-    # notes, lines of Import's paste box. Share's search row is paid for
-    # out of its list (130 before it), so the panel kept its height.
+    # How far an open panel's middle gives in a short window: (natural,
+    # comfortable, least) -- Share's list in pixels (its search row taken
+    # out of it), Import's paste box in lines.
     SIDEBAR_PANEL_BODY = {"share": (105, 56, 28), "import": (4, 2, 1)}
 
     def _fit_sidebar_panel(self, _event=None):
-        """Keep the open panel's own buttons -- and a generated code -- on
-        screen in a short window.
-
-        The bottom zone is packed before the note list, so the list gives
-        up its height first. At the smallest window that is not enough:
-        the sidebar's fixed parts leave the panel about a hundred pixels,
-        Import needs 157 and Share with its code 329, and pack took the
-        difference off the bottom of the zone -- the panel's own buttons,
-        then the code itself, so "Generate code" seemed to do nothing.
-
-        Only when the room runs out, then: the panel's scrolling middle
-        gives up rows down to a comfortable few, the zone's other buttons
-        step aside while the panel is open -- Settings, then the other
-        panel's button, then New Note -- the middle goes down to one row,
-        and last the panel's own button steps aside too (its Close still
-        closes it). It is worked out from the sizes things ask for, not from
-        what is drawn, and everything comes back when the panel closes or
-        the window grows. Measured: 640x600 and 1366x690 both hold the
-        panels whole; at 1150x860 nothing changes at all."""
+        """Keep the open panel's own buttons, and a generated code, on screen
+        in a short window -- pack cut them off the zone's bottom, and
+        "Generate code" seemed to do nothing. As room runs out: the middle
+        gives rows, the zone's other buttons step aside, the middle goes to
+        one row, then the panel's own button (Close still closes). From the
+        sizes asked, all back when it closes or the window grows."""
         zone = self._sidebar_bottom
         buttons = self._sidebar_zone_buttons
         if zone is None or not buttons or getattr(self, "_fitting_sidebar", False):
@@ -10449,34 +10408,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             wrap.configure(height=body["share"])
 
     def _take_known_notes(self, incoming, source):
-        """Ask once about the notes in a batch we already have.
-
-        Returns ``(proceed, remaining, updates, unchanged, copies)``:
-        *remaining* is what the caller should go on to import as new notes,
-        *proceed* is False when the user cancelled, *updates* is what
-        "Update" agreed to, *unchanged* counts the notes that arrived
-        exactly as they are here and were skipped, and *copies* are those
-        the person chose to add again anyway (_unchanged_copies) -- added
-        as they are, past the look-alike question, which they were just
-        asked.
-
-        The updates are NOT applied here. The caller applies them with
-        _apply_known_updates once the last question of its import is
-        answered: applied here, a Cancel on the question that follows (the
-        duplicate check) left the notes already replaced in memory, with
-        nothing on screen saying so, and the next unrelated save wrote them
-        to disk.
-
-        Both bulk routes -- a share code carrying several notes and a
-        restored backup -- come through here, so the two cannot drift
-        apart. A note whose identity matches one already here is the SAME
-        note, edited elsewhere; the text-matching duplicate check below
-        answers a different question and answers it wrongly for exactly
-        this case, because an edited note reads as new.
-
-        One question for the whole batch, not one per note: a restored
-        backup can hold a hundred, and a hundred dialogs is not consent,
-        it is attrition.
+        """Ask once -- not a hundred times -- about a batch's notes we already
+        have by identity (the same note edited elsewhere, which text matching
+        reads as new); both bulk routes come here. Returns ``(proceed,
+        remaining, updates, unchanged, copies)``. The updates are applied by
+        the caller once its last question is answered (_apply_known_updates):
+        here, a Cancel after left them replaced, saved by the next save.
         """
         known, fresh = split_by_identity(self.notes, incoming)
         # A note that arrives exactly as it is here needs no update (see
@@ -10516,10 +10453,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 f"undone with \u201c\u21a9 Restore previous\u201d.\n"
                 f"Adding leaves both versions, so you can compare them."
             )
-        # "Edited elsewhere" reads as "newer", and a backup from last month
-        # is edited elsewhere too. Updating from it trades this device's
-        # newer text for older text, so the question says so. (A backup's
-        # notes carry when they were last saved; a share code does not.)
+        # A backup's older notes are said as older: updating trades newer text
+        # for them (a share code carries no saved time).
         older = 0 if source != "backup" else sum(
             1 for mine, theirs in known
             if str(theirs.get("updated") or "") < str(mine.get("updated") or ""))
@@ -10551,11 +10486,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if choice is None or choice == "cancel":
             return False, [], [], unchanged, []
         if choice == "update":
-            # Same order as the single-note route, for the same reason:
-            # the editor's unsaved work is saved before anything replaces
-            # it. Going back to fix a date the save could not store cancels
-            # the import: going on would replace the very edit the person
-            # just declined to let go of.
+            # The editor's work saved before anything replaces it; going back
+            # to fix an unstorable date cancels the import.
             if self._flush_autosave(leaving=self.selected_note_id in {
                     mine.get("id") for mine, _theirs in known}) is False:
                 return False, [], [], unchanged, []
@@ -10671,16 +10603,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 if att.get("stored_as") and att.get("stored_as") not in have]
 
     def _adopt_backup_attachments(self, mine, theirs):
-        """Add the files a backup's copy of a note has and this one lacks.
-
-        Added, never swapped: an attachment this device holds and the
-        backup does not stays where it is, so updating from a backup can
-        only ever bring files in. The backup's files are already in the
-        attachments folder by now -- the import's worker copied them --
-        and a file another note or a Trash entry already owns gets a copy
-        of its own, the same claimed-file discipline the rest of the
-        import follows, so deleting one note can never take another's
-        file with it.
+        """Add the files a backup's copy of a note has and this one lacks --
+        never swapping, so an update only brings files in; a file another
+        note or a Trash entry owns gets a copy of its own, as the import's
+        claimed files do.
         """
         have = {a.get("stored_as") for a in mine.get("attachments") or []
                 if isinstance(a, dict)}
@@ -10715,10 +10641,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.import_status.config(text="No valid notes in that code.",
                                       fg=self.colors["danger_text"])
             return
-        # Oversized notes are trimmed at normalize (the checklist,
-        # attachment and styling-span ceilings) — SAY so instead of
-        # silently dropping 19,000 items. Measured on the raw decode,
-        # the last moment the original sizes are still visible.
+        # Trimmed at normalize, and SAID (19,000 items went in silence):
+        # measured on the raw decode, the last sight of the sizes.
         def _ln(v):
             return len(v) if isinstance(v, (list, tuple)) else 0
         def _line_trimmed(sn):
@@ -10738,20 +10662,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             or _line_trimmed(sn))
         if len(valid) == 1:
             incoming = valid[0]
-            # Identity first, resemblance second. A note that carries the
-            # uid of one already here IS that note -- most likely the
-            # same note, edited somewhere else and sent back. Asking
-            # _dup_key instead would compare the text, and the text is
-            # different precisely because it was edited, so it would say
-            # "new note" and quietly leave two copies behind.
+            # Identity first: a note with a uid here IS that note, edited and
+            # sent back; by its text it read as new, two copies left.
             mine = find_by_uid(self.notes, normalize_note(incoming).get("uid"))
             asked = False
             if mine is not None and not self._known_note_differs(
                     mine, incoming, "code"):
-                # The code holds this note exactly as it is here. "The two
-                # differ" was said without comparing, and Update then
-                # replaced the rescue copy with a duplicate of the note.
-                # Nothing to update; a copy only if asked for.
+                # Exactly as it is here: nothing to update ("they differ" was
+                # said unchecked), a copy only if asked for.
                 copies = self._unchanged_copies([(mine, incoming)], 1, "code")
                 if not copies:
                     self.import_status.config(
@@ -10779,12 +10697,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 if choice is None or choice == "cancel":
                     return
                 if choice == "update":
-                    # The editor is most likely showing this very note --
-                    # it is where the code came from. Its unsaved edits
-                    # are saved FIRST, so they are what the rescue copy
-                    # holds and "↩ Restore previous" gives back; then the
-                    # incoming version replaces them. Cancel on a day's
-                    # save question stops here, with nothing replaced.
+                    # The editor's unsaved edits saved FIRST, for the rescue
+                    # copy "↩ Restore previous" gives back; Cancel on a day's
+                    # question stops here, nothing replaced.
                     if self._flush_autosave() is False:
                         return
                     apply_shared_update(mine, incoming)
@@ -10793,27 +10708,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     self.toggle_import_panel()
                     self.refresh_note_list()
                     self.render_calendar()
-                    # Without flush=False this saves what the editor still
-                    # shows -- the version just replaced -- straight back
-                    # over the update. The flush above already kept the
-                    # user's own work.
+                    # flush=False, or the editor's old version was saved back
+                    # over the update; the flush above kept the work.
                     self.open_note_in_tab(mine, flush=False)
                     self.set_status("Note updated from the code "
                                     "— ↩ Restore previous undoes it")
                     return
-                # "add" falls through to the ordinary import below, which
-                # opens the copy in a fresh editor tab and lets the user
-                # save it as a new note.
-                #
-                # Dropping the uid here is belt and braces, and honestly
-                # so: the review editor carries an arriving identity only
-                # when no note here wears it, and this one does, so the
-                # saved copy is minted a fresh identity whether or not
-                # this line runs. It stays because it puts the intent
-                # where the decision is made, instead of resting on a
-                # check two calls away. The BULK route two branches down
-                # has no second guard and is covered by a check that
-                # does bite.
+                # "add" falls through to the import below, as a new note; its
+                # uid dropped here, where the intent is (the review editor
+                # would mint a fresh one anyway).
                 incoming = dict(incoming)
                 incoming.pop("uid", None)
                 valid = [incoming]
@@ -10831,11 +10734,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 )
                 if choice is None or choice == "cancel":
                     return
-            # Passed DOWN rather than set here: _open_imported_note_in_editor
-            # ends by setting its own status, so a set_status at this point
-            # was overwritten one frame later and the user never saw that
-            # their note had been trimmed. Dead code with a ledger row
-            # claiming it shipped.
+            # Passed DOWN: _open_imported_note_in_editor sets its own status,
+            # which overwrote one set here.
             if self._open_imported_note_in_editor(
                     incoming, trimmed=bool(oversized)) is False:
                 # The person went back to the note in the editor, to fix a
@@ -10866,11 +10766,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                             "— ↩ Restore previous undoes each one" if updated
                             else "Everything in this code is already here, unchanged")
             return
-        # Check each incoming note against what's already here — same
-        # matching rule as "Find duplicates" — before blindly appending
-        # everything. Importing the same share code twice (or a code that
-        # overlaps with notes you already kept) used to silently create
-        # duplicates with no way to tell beforehand.
+        # Each note checked against what is here, by Find duplicates' rule: a
+        # code imported twice made duplicates in silence.
         existing_keys = self._dup_keys_after(updates)
         fresh = [sn for sn in valid if _dup_key(normalize_note(sn)) not in existing_keys]
         dupe_count = len(valid) - len(fresh)
