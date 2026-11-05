@@ -26,9 +26,9 @@ docs/CODE_TOUR.md.
 
 WHY A LIST
 ----------
-A module joins BRIEF once it has been condensed, and stays condensed from
-then on. Much of the code still tells its stories at length; the list says
-how far the convention has reached instead of pretending it is everywhere.
+A module joined BRIEF once it had been condensed, and stays condensed from
+then on. Since the entry file joined (2026-11-05) the list holds every
+module; a new one joins it when it is written.
 
 Run: py tools/check_comments.py
 """
@@ -45,6 +45,7 @@ ISSUES_LOG = os.path.join(ROOT, "docs", "ISSUES_LOG.md")
 
 # Modules whose comments have been condensed (paths from the repo root).
 BRIEF = [
+    "note_organizer.py",
     "noteorganizer/__init__.py",
     "noteorganizer/core/__init__.py",
     "noteorganizer/core/calculator.py",
