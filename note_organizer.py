@@ -10842,11 +10842,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                      bg=self.colors["sidebar"], fg=self.colors["subtext"]
                      ).pack(padx=6, pady=6)
             return
-        # The heading and the select-all share a row: the selection bar a few
-        # centimetres above this panel has had a "Select all" since it was
-        # built, and this list -- the one where a whole notebook means a
-        # hundred clicks, then "Show 100 more", then a hundred more -- had
-        # none. Two tick-box lists in one sidebar, one fillable in a click.
+        # The heading shares a row with "Select all", as the selection bar
+        # above has: here a whole notebook meant a hundred clicks.
         head_row = tk.Frame(p, bg=self.colors["sidebar"])
         head_row.pack(fill="x", padx=6, pady=(6, 2))
         tk.Label(head_row, text="Pick notes to share:",
@@ -10907,24 +10904,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         canvas.pack(side="left", fill="both", expand=True)
         self._share_checklist_canvas = canvas
 
-        # Direct .configure() calls, not self.track_theme(): this whole panel
-        # is destroyed and rebuilt every time "Share notes" is opened, so it
-        # always picks up the current theme fresh anyway — the same leak
-        # fixed in the note list, calendar, and attachments list. Paginated
-        # for the same reason the trash list is: one Checkbutton per note
-        # with no cap hits the same slowdown once note counts grow large.
+        # Plain colours, not track_theme(): rebuilt at every opening. Paged, as
+        # the Trash is: a tick box per note slows with the notebook.
         self._share_vars = getattr(self, "_share_vars", {}) or {}
         SHARE_PAGE_SIZE = 100
         shown = {"n": SHARE_PAGE_SIZE}
 
-        # What render_checkboxes last actually drew. "Select all" acts on
-        # what is ON SCREEN, and that is not the same as self.notes[:n]:
-        # the list is paginated, so a button that silently ticked a hundred
-        # notes nobody had seen would be the opposite of the control this
-        # asks for -- and the panel is not live, so a note deleted while it
-        # is open leaves the drawn list behind. Reading self.notes here
-        # ticked ids that had no tick box on screen, which is how the first
-        # version of this was caught.
+        # What render_checkboxes drew: "Select all" ticks what is ON SCREEN,
+        # not self.notes[:n] -- the list is paged and not live, and reading
+        # the notes ticked ids with no tick box.
         rendered = {"ids": []}
         wheeled = set()     # the chunks given the wheel
 
@@ -11158,22 +11146,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._fit_sidebar_panel()
 
     def _clear_inline_code(self, area):
-        """Take a generated share code off the panel it was drawn on.
-
-        The children are destroyed rather than the frame being
-        pack_forget()ed, because that frame is packed once when the Share
-        panel is built and is part of its layout -- the same gesture
-        _generate_inline_share makes before redrawing into it.
-
-        Deferred because the ✕ that calls this lives INSIDE the frame being
-        emptied, so a synchronous loop destroys the button whose callback is
-        still running. That is a documented Tk hazard rather than something
-        measured here: a generated click cannot press this button in the test
-        harness at all (`tk.Button` fires on release, and even a generated
-        press+release does not reach it), so the synchronous version could not
-        be shown to break. The editor's own ✕ avoids the same hazard a
-        different way, by pack_forget()ing an ancestor instead of destroying
-        itself. One idle cycle is a cheap way not to rely on luck.
+        """Take a generated share code off the panel: its children destroyed,
+        the frame kept in the layout, as _generate_inline_share does --
+        deferred, as the ✕ calling this lives inside it (a documented Tk
+        hazard, which a test could not press to show).
         """
         def clear():
             for w in area.winfo_children():
@@ -11187,10 +11163,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         noun = "note" if count == 1 else "notes"
         head = tk.Frame(parent, bg=self.colors["sidebar"])
         head.pack(fill="x", pady=(4, 2))
-        # "chars" and not "characters" on purpose: this line lives in a 250px
-        # sidebar at font 8, where the editor's roomier wording would clip.
-        # The note count is information the editor's version cannot carry,
-        # since that one is always about the open note.
+        # "chars": a 250px sidebar at font 8 clips the editor's wording; the
+        # count is this panel's own, as it shares several notes.
         tk.Label(head, text=f"Code for {count} {noun} ({len(code)} chars):",
                  font=("Segoe UI", 8, "bold"), anchor="w",
                  bg=self.colors["sidebar"], fg=self.colors["text"]
@@ -11232,19 +11206,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                   ).pack(fill="x", pady=(4, 0), ipady=3)
 
     def export_note_as_file(self, note, fmt):
-        """Write one note to a standalone file the rest of the world reads.
-
-        Two formats: HTML carries everything the note has (styles,
-        colours, tables as real tables) and is the road to PDF (open,
-        Ctrl+P) and Word (opens .html natively); plain text is the body
-        as stored. Attachments never travel with a single-note export --
-        that is what the full Backup export is for.
-
-        This said "three formats" and described a Markdown one for a long
-        time. `kinds` below has never held it and the menu has never
-        offered it, so nothing ever raised -- it was a docstring that
-        lied to the next reader rather than a crash waiting to happen,
-        which is the harder kind to notice.
+        """Write one note to a standalone file the rest of the world reads:
+        HTML with everything it has -- the road to PDF (Ctrl+P) and Word --
+        or plain text, the body as stored. Files travel only in a Backup.
         """
         title = (note.get("title") or "").strip() or "Untitled note"
         kinds = {"html": ("HTML file", ".html"),
@@ -11282,10 +11246,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.set_status(
                 "Attached files aren't part of a note export — "
                 "use Settings → Backup → Export for those.")
-        # The file itself is the only honest preview of how the note
-        # lays out -- the browser's (or Word's) fonts and wrapping,
-        # not Tk's. Offer the look right away, so adjusting the note
-        # and re-exporting is a tight loop.
+        # The file is the only honest preview, in the browser's fonts: offered
+        # at once, for a tight adjust-and-export loop.
         if self.ask_yes_no(
                 "Open it now?",
                 f"“{os.path.basename(path)}” was saved.\n\n"
@@ -11331,13 +11293,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if comments:
                 content += "\n\nComments:\n" + comments
             content += "\n"
-        # A just-typed astral emoji is a lone UTF-16 surrogate in memory
-        # (Tk hands it over that way), and the callers write this straight
-        # to a utf-8 file — which raises UnicodeEncodeError, a ValueError
-        # NOT caught by their (IOError, OSError) guards, crashing the
-        # export. Mending here (the shared choke point) keeps the emoji and
-        # covers both the single-note and bulk paths, matching the mend the
-        # share-code and disk-write boundaries already do.
+        # A just-typed emoji arrives as lone surrogates, which a utf-8 write
+        # refused with an error no guard caught: mended at this one choke
+        # point, as the code and disk writes are.
         return mend_surrogates(content)
 
     def share_current_note_as_code(self, copy=False):
@@ -11366,44 +11324,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # is settled first (17.10 -> 17.10.2026), so the code carries it.
         self._settle_date_fields()
         st = self.capture_editor_state()
-        # The shared content test, minus the one field a code cannot
-        # carry. SHAREABLE_FIELDS covers everything _editor_state_has_content
-        # counts EXCEPT attachments (which travel separately, as the
-        # had_attachments note below), so masking that one field asks
-        # exactly the right question without writing a second list.
-        #
-        # The hand-rolled two-field version refused a checklist-only or
-        # comments-only note with "Write something before copying a
-        # code" -- about a note the app itself had just saved as real
-        # content, and whose code would have carried that content fine.
+        # The shared content test less attachments, which a code cannot carry:
+        # a hand-rolled one refused a checklist-only note.
         shareable = {k: v for k, v in st.items() if k != "attachments"}
         if not self._editor_state_has_content(shareable):
             self.set_status(
                 "Nothing to share yet — a code carries a note's title, "
                 "text, comments, checklist and repeat rule.")
             return None
-        # Built from SHAREABLE_FIELDS, never a hand-rolled list: this dict
-        # once named seven fields by hand and silently dropped everything
-        # added to sharing later -- a code generated HERE lost the
-        # formatting, the paragraphs and the checklist that a code from
-        # the multi-note Share panel (which passes whole notes) carried.
+        # From SHAREABLE_FIELDS, never by hand: seven fields named here lost
+        # the formatting and checklist added later.
         note = {k: st.get(k) for k in SHAREABLE_FIELDS if st.get(k) is not None}
         # The date and repeat a save would store, not the raw field: a code
         # that carried "30.09.2026" delivered a date no save could keep,
         # and every edit to the note that arrived was lost on the far end.
         note["date"], note["recurrence"], _left_out = self._date_and_repeat_to_store()
-        # The identity is the one shareable field that is NOT editor
-        # content: it belongs to the note this editor has open, and
-        # capture_editor_state has no reason to hold it. Building the
-        # payload from the snapshot therefore dropped it silently -- the
-        # same shape as the hand-rolled list above, one field later.
-        #
-        # Without it a code says "a note with these words" instead of
-        # "this note", so the far end cannot recognise the copy it
-        # already has and adds a second one: exactly what the field was
-        # added to prevent, on the route a user is most likely to take.
-        # A note that has never been saved has no identity yet and
-        # correctly travels without one.
+        # The identity is the open note's, not the snapshot's: dropped, the far
+        # end could not recognise its copy and added a second. A note never
+        # saved has none yet.
         open_note = (self.find_note(st.get("selected_note_id"))
                      if st.get("selected_note_id") is not None else None)
         if self._day_mode():
@@ -11418,29 +11356,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return None
 
     def _editor_follows_external_change(self, changed_ids):
-        """Make the editor agree with notes that were rewritten behind it.
-
-        A route that writes straight onto a stored note leaves the editor
-        holding the version from before — and the editor's next save,
-        which is one keystroke away, puts that version back. The change
-        then vanishes with nothing to show it ever happened. Field-
-        reported on the import route, where it is the LIKELY case rather
-        than a corner one: the note you send out is the note you have
-        open, so it is the one you are looking at when its code comes
-        back.
-
-        Callers flush the editor BEFORE they change anything, so what the
-        user had typed is part of what the rescue copy holds instead of
-        something this quietly drops.
+        """Make the editor agree with notes rewritten behind it, or its next
+        save put the old version back (field report: the note sent out is
+        the one open when its code returns). Callers flush first, so the
+        typing is in the rescue copy.
         """
         if self.selected_note_id is None or self.selected_note_id not in changed_ids:
             return
         note = self.find_note(self.selected_note_id)
         if note is not None:
-            # The same note read back: the way back to the calendar stays, as
-            # a move keeps it (_relocate_day). Opening clears it, and a day
-            # opened from the calendar lost its "Back to Calendar" to an
-            # import's Update or a category change (the audit's round 24).
+            # Read back, the note keeps its way back to the calendar, as a move
+            # does (_relocate_day): opening cleared it.
             pending = getattr(self, "_pending_calendar_return", None)
             self.open_note_in_tab(note, self.current_occurrence_date, flush=False)
             if pending is not None:
@@ -11448,16 +11374,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._update_calendar_return_button()
 
     def _share_code_on_context_switch(self):
-        """A different note is in the editor now, so the code shown under it
-        is not this note's.
-
-        Field-reported: generate a code, click another note, and the code
-        stays sitting there — reading as though it belongs to the note now
-        open. Copying it then shares the wrong note, and the mistake is
-        invisible, because a code is a wall of characters nobody proofreads.
-        Cleared at the same three points the find bar's match model is
-        (see _find_on_context_switch) — for the same reason: it describes
-        a note that is no longer on screen.
+        """Another note is in the editor, so the code under it is cleared --
+        it read as the new note's, and was shared as the wrong one (field
+        report). Cleared where the find bar's matches are
+        (_find_on_context_switch).
         """
         area = self.editor_code_area
         if area is None:
@@ -11472,10 +11392,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             pass
 
     def _render_editor_code(self, code, had_attachments, copy=False):
-        # Direct .configure() calls, not self.track_theme(): this area is
-        # destroyed and rebuilt every time "Copy code" is clicked, so it
-        # always picks up the current theme fresh anyway — same leak fixed
-        # elsewhere (note list, calendar, attachments, share panel).
+        # Plain colours, not track_theme(): rebuilt at every "Copy code".
         parent = self.editor_code_area
         header = tk.Frame(parent, bg=self.colors["bg"])
         header.pack(fill="x")
@@ -11526,12 +11443,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # repeating day's edit, and then nothing here may touch the editor.
         if self.open_blank_tab() is False:
             return False
-        # The identity it arrived with goes into its first save, unless a
-        # note here already wears it. This editor used to drop it, so a
-        # note sent out, edited elsewhere and sent back arrived as a
-        # stranger and became a second copy. Read from what arrived, not
-        # from `note`: normalize_note mints an identity for a note that
-        # carries none, and "Add as a new note" removes it on purpose.
+        # The arriving identity goes into its first save, unless a note here
+        # wears it (dropped, it came back a stranger) -- read from what
+        # arrived, as normalize_note mints one.
         uid = str(shared_note.get("uid") or "").strip()
         self._arrived_uid = (uid if uid and find_by_uid(self.notes, uid) is None
                              else "")
@@ -11575,22 +11489,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._sync_checklist_open_state()
 
         self.update_word_count()
-        # Ctrl+Z starts from the note as it arrived, as after every other
-        # load: the import itself was the first step on Tk's stack, and
-        # Ctrl+Z took the whole body back -- which the autosave then stored,
-        # the imported note saved empty.
+        # Ctrl+Z starts from the note as it arrived: the import was Tk's first
+        # step, and Ctrl+Z emptied the note, saved so.
         self._reset_text_undo()
         self.set_status(
             "Imported from code — trimmed to the app's size limits; saved as "
             "a new note, review it here" if trimmed
             else "Imported from code — saved as a new note, review it here")
         if trimmed:
-            # The status bar is not enough for this one: it is a transient
-            # line, and the autosave that follows the import overwrites it
-            # with "Auto-saved ..." before anyone reads it (measured). A
-            # note arriving SHORTER than it was sent is a change to the
-            # user's data, so it gets the same channel the backup import
-            # uses to report what it did.
+            # A note arriving SHORTER than sent is said in a dialog, as the
+            # backup's report is: the autosave overwrote the status line.
             self.show_info(
                 "Part of this note was left out",
                 "The note in that code was larger than one note can hold, "
@@ -11605,13 +11513,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return True
 
     def import_data(self):
-        """Import a previously exported .zip. Notes are MERGED into your
-        current list (never overwritten) — safe to use even if this device
-        already has notes of its own.
-
-        The slow parts (extracting the zip, copying attachments back) run on
-        a background thread, same as export — for a backup with a lot of
-        attachments this used to visibly freeze the app while it worked."""
+        """Import a previously exported .zip, MERGED into the notes here, never
+        over them. The slow parts run on a background thread, as the export
+        does (it froze the app)."""
         # Same one-at-a-time guard as export_data (audit Z05-F05).
         if self._export_state is not None or self._import_state is not None:
             self.set_status("An export or import is already running — "
