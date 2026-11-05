@@ -17708,45 +17708,30 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Cancel the pending autosave and save real changes now, before a
         switch or close, so a late timer cannot hit the wrong note.
 
-        False when the person went back ("Go back and fix it", a date or
-        repeat not storable): every caller replacing the editor stops, and
-        only on ``is False`` -- a bare return must not keep a window open.
-        ``leaving`` is False on a route changing something ELSE (a delete,
-        an import): the question belongs to the way out, and there it reset
-        a date or cancelled the delete. Such a save, and a delete's before
-        its question (*hold_repeat_off*), holds a repeat's turn-off back
-        (_date_and_repeat_to_store): No kept it made anyway."""
+        False when the person went back (a date or repeat not storable):
+        callers replacing the editor stop, on ``is False`` only. ``leaving``
+        is False on a route changing something ELSE: the question is the way
+        out's. Such a save, or a delete's (*hold_repeat_off*), holds a
+        repeat's turn-off back (_date_and_repeat_to_store)."""
         self._cancel_pending_autosave()
         if self.selected_note_id is None and not self.open_tabs:
-            # The blank editor a delete leaves, or a start with no note open,
-            # still takes typing, and the autosave just cancelled was all that
-            # would have kept it: a click away within half a second lost it.
-            # An item typed in the checklist's Add box counts as typing too.
+            # A blank editor still takes typing (the Add box's too), which a
+            # click away within the autosave's half second lost.
             try:
                 if not self._editor_holds_typing():
                     return True
             except Exception:  # noqa: BLE001 -- not knowing tries the save, never skips it
                 self._log_swallowed("flush: blank editor")
-        # selected_note_id can end up stale — pointing at a note that no
-        # longer exists — in the brief window between a delete removing the
-        # note from self.notes and the editor being repointed somewhere
-        # real (e.g. the flush switch_to_tab performs during the
-        # post-delete cleanup, before it restores the next tab's state).
-        # If that happens, there's nothing real to flush
-        # against; skip silently rather than falling through to a save
-        # attempt that fails with a "Note missing" dialog — an automatic,
-        # invisible safety net shouldn't ever surface an interruptive error
-        # for something the user didn't directly ask to happen.
+        # Between a delete and the editor's repointing the id names nothing:
+        # skipped quietly, as an automatic save raised "Note missing".
         if self.selected_note_id is not None and self.find_note(self.selected_note_id) is None:
             return True
         # A checklist item typed but not yet added is typing like any other:
         # it goes into the note it was typed for, before that note is left.
         # It used to stay in the box and be added to whichever note came next.
         self._take_pending_checklist_item()
-        # So is a date typed short: leaving the note settles it as leaving
-        # the field does (17.10 -> 17.10.2026). A click on another note, a
-        # new note or the window's close need not move the keyboard out of
-        # the field first, so its own <FocusOut> cannot be relied on here.
+        # A short date settles on leaving the note, as on leaving the field:
+        # leaving the note may never move the keyboard out of it.
         if leaving:
             self._settle_date_fields()
         try:
@@ -17754,18 +17739,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except Exception:
             self._log_swallowed("flush: capture_editor_state")
             return True
-        # Same shared gate as _autosave_now, same exemption: an emptied
-        # SAVED note must flush like any other edit — this was the second
-        # of the two gatekeepers that made T0-5's "switch away and come
-        # back" route lose the emptying.
+        # The gate _autosave_now uses: an emptied SAVED note flushes too.
         if not self._editor_state_has_content(st) and not self._editing_saved_note():
             return True
         try:
             if not self.editor_state_matches_saved(st):
-                # A route that saves on its way to something else holds a
-                # repeat's turn-off back, as the autosave does: it moved a
-                # series' days into the rescue copy unasked, the note still
-                # open (see _date_and_repeat_to_store).
+                # Not leaving, a repeat's turn-off is held, as the autosave
+                # holds it (_date_and_repeat_to_store).
                 held = getattr(self, "_holding_repeat_off", False)
                 self._holding_repeat_off = held or (
                     not leaving if hold_repeat_off is None else hold_repeat_off)
@@ -17778,11 +17758,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # note-switch or close, is exactly "stopped saving in
             # complete silence" — leave the trace.
             self._log_swallowed("flush: save_current_note")
-        # A date or repeat the save could not store exists only on the
-        # screen now, and a caller that is leaving is about to replace the
-        # screen. Asked, not decided: going back to fix it is the safe
-        # answer, so it is what Escape and Enter give. Not at the end of a
-        # Windows session, which ends whatever is answered.
+        # A date not stored lives only on screen, which leaving replaces:
+        # asked, going back the safe answer -- not at a session's end.
         if not leaving or getattr(self, "_ending_session", False):
             return True
         try:
@@ -17791,11 +17768,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._log_swallowed("flush: date and repeat check")
             left_out = []
         if left_out and hold_repeat_off and self._repeat_off_waits():
-            # "Continue" puts the stored date and repeat back, and with them
-            # the turn-off this save held for its question -- so it is named:
-            # the question said everything else was saved, and dropped it
-            # without a word. Not asked for it alone, or every delete of
-            # such a note would ask.
+            # "Continue" drops the turn-off this save held too, so it is
+            # named; not asked for alone, or every delete would ask.
             held = getattr(self, "_holding_repeat_off", False)
             self._holding_repeat_off = True
             try:
@@ -17842,14 +17816,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._sync_active_tab()
 
     def _bind_global_shortcuts(self):
-        """App-wide keyboard shortcuts, bound with bind_all so they fire
-        whichever widget holds focus (same mechanism the app already uses
-        for Activate/Deactivate). Neither Ctrl+N nor Ctrl+S carries a
-        default Text or Entry binding on this Tk, so nothing is being
-        overridden; each handler returns 'break' so the combo is never
-        also typed. Both letter cases are bound, to survive Caps Lock --
-        the same as the Ctrl+V bindings elsewhere. Ctrl+F opens the
-        find-in-the-current-note bar (the editor meaning of Ctrl+F)."""
+        """App-wide shortcuts (bind_all) -- Ctrl+N, Ctrl+S, Ctrl+F for find
+        in the note -- in both letter cases for Caps Lock, each returning
+        'break' so the combo is never typed."""
         for lower, upper, handler in (
                 ("<Control-n>", "<Control-N>", self._shortcut_new_note),
                 ("<Control-f>", "<Control-F>", self._shortcut_find),
@@ -17868,15 +17837,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         "<Double-Button-1>", "<B1-Motion>")
 
     def _release_caret_on_empty_click(self, event):
-        """A click on empty space -- a frame, a label, a blank stretch of
-        the window -- takes the keyboard out of the box that held it, as
-        other programs do. Tk moves the focus nowhere on such a click, so
-        the caret kept blinking in the box it had left (field pass).
-
-        Left alone: a click inside a popup (its own Toplevel, with its own
-        rules), and any widget that does something with a click -- a
-        binding of its own or on any of its tags except the window's and
-        "all", which every widget shares."""
+        """A click on empty space takes the keyboard out of its box, as other
+        programs do (the caret kept blinking; field pass). Left alone: a
+        popup's clicks, and a widget with a click binding of its own or on a
+        tag besides the window's and "all"."""
         w = event.widget
         if not isinstance(w, tk.Misc):
             return
@@ -17902,23 +17866,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.focus_set()
 
     def _leave_settings_for_the_editor(self):
-        """What a shortcut that needs the editor does first: let a popup
-        holding typed work have its say, then leave Settings the way the
-        Back button does. Returns False when the person has to stay.
-
-        Settings is a page swapped in place of the notebook, not a tab of
-        it, so Ctrl+N and Ctrl+F used to select the Notes tab of a notebook
-        that was not on screen: nothing visible happened, the hidden editor
-        was cleared (or grew an invisible find bar), and the keys typed next
-        went nowhere. Worse, with a template half-written in its editor and
-        the Calendar tab underneath, that tab change dismissed the editor
-        directly -- the template gone without the question a click outside
-        it asks. It gets the same three answers everywhere: Cancel (or
-        Escape) keeps editing, No discards, Yes saves.
-
-        A popup with nothing to lose closes, as a click outside closes it:
-        left open, a picture's preview stood over the box the shortcut gave
-        the keyboard to, and the keys typed at it went into a hidden note.
+        """What a shortcut needing the editor does first: a popup holding
+        typed work asks (Cancel keeps editing, No discards, Yes saves) and
+        one with nothing to lose closes; then Settings is left as Back
+        leaves it -- under it, the shortcut worked on a hidden editor.
+        Returns False when the person has to stay.
         """
         if not self._dismiss_mini_popup_asking():
             return False
@@ -17932,11 +17884,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if self._a_dialog_is_asking() or not self._leave_settings_for_the_editor():
             return "break"
         self.notebook.select(self.TAB_NOTES)
-        # Flush before clearing, like every other route into an empty
-        # editor — without it the shortcut silently discarded whatever
-        # the debounce hadn't caught yet (and, when a day of a series
-        # waited for a question on the way out, that day's session in
-        # full). Going back to fix a date keeps the note.
+        # Flushed before clearing, or the debounce's typing went; going
+        # back to fix a date keeps the note.
         if self._flush_autosave() is False:
             return "break"
         self.new_note()
@@ -17949,10 +17898,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         (same emptiness test the autosave uses)."""
         if self._a_dialog_is_asking():
             return "break"
-        # Typing in a popup that saves -- the template editor -- Ctrl+S is
-        # that popup's own Save. It used to save the note hidden behind the
-        # Settings page instead, or nothing, and say nothing either way.
-        # Asked of the key's own widget: that is where the keystroke went.
+        # In the template editor Ctrl+S is its Save (it saved the hidden
+        # note), asked of the key's own widget.
         pop = getattr(self, "_mini_popup", None)
         save_popup = (getattr(pop, "_save_from_keyboard", None)
                       if pop is not None else None)
@@ -17965,15 +17912,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except Exception:  # noqa: BLE001 -- logged, as the autosave's is
             self._log_swallowed("Ctrl+S: capture_editor_state")
             return "break"
-        # The emptied-saved-note exemption applies to Ctrl+S too: without
-        # it the shortcut was a silent no-op on exactly the edit T0-5 is
-        # about, while the Save button accepted it.
-        #
-        # And the date counts here for the same reason it counts in the
-        # Save button: both are the user explicitly asking. Left out,
-        # Ctrl+S silently refused the bare dated reminder the button
-        # accepted, which is the two explicit gestures disagreeing about
-        # the same editor.
+        # Ctrl+S takes what the Save button takes: an emptied saved note,
+        # and a bare dated reminder -- both explicit asks.
         deliberate = (self._editor_state_has_content(st)
                       or (st.get("date") or "").strip()
                       or self._editing_saved_note())
@@ -17982,14 +17922,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return "break"
 
     # ---------- Find in the current note (Ctrl+F) ----------
-    # Read-only: this feature ONLY adds/removes its own two background tags
-    # (find_all / find_current) and draws/deletes one throwaway canvas
-    # rectangle. It never inserts/deletes body text, never moves the caret,
-    # never calls _render_table_grids, and never touches a serialized tag --
-    # so it cannot dirty the note, autosave, or fight the grid-render/
-    # view-restore machinery. (A pre-existing cell-editor commit-on-focus-
-    # loss may still rebuild grids when Ctrl+F steals focus; the canvas
-    # flash is always re-resolved live to survive that.)
+    # Read-only: its two tags and one canvas flash (re-resolved live, as a
+    # cell commit may rebuild grids). No text, caret or saved tag touched.
     FIND_MATCH_CAP = 2000
 
     def _shortcut_find(self, event=None):
@@ -18014,10 +17948,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                        highlightthickness=1,
                        highlightbackground=self.colors["accent"],
                        highlightcolor=self.colors["accent"])
-        # The accent-coloured border must be tracked too, not just the fill:
-        # left off the map it stays frozen at the theme the bar was first
-        # built under, so changing the accent (purple -> blue) leaves the
-        # old colour framing the bar until it is rebuilt.
+        # The accent border tracked too, or it kept the old accent.
         self.track_theme(bar, bg="card", highlightbackground="accent",
                          highlightcolor="accent")
         self._find_var = tk.StringVar()
@@ -18475,10 +18406,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._find_count_lbl.config(
             text=f"{self._find_index + 1}/{n}{'+' if capped else ''}")
 
-    # Painted hits a line can hold. Every tag_add, and every read of the
-    # line, walks its tag toggles: 2,000 hits in one paragraph held each key
-    # 0.7 to 1.4 s with the bar open (the final audit's twelfth round). The
-    # model keeps every hit, for the count and Enter; spelling is bounded so.
+    # Painted hits a line holds: 2,000 in a paragraph held each key up to
+    # 1.4 s. The model keeps every hit, for the count and Enter.
     FIND_LINE_PAINT = 200
 
     def _find_painted(self, matches, anchor):
@@ -18644,15 +18573,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._find_flash = {"line": m["line"]}
 
     def _retint_find_tags(self, text_widget):
-        """(Re)apply the find highlight colours for the current palette.
-        Both colours are blended from the theme, so a theme switch must
-        refresh them or the next find would paint in the old accent. The
-        current match is the full accent, and the note's own text colour
-        fell below 4.5:1 on it in every theme: its words are letters_on.
-
-        It is also boxed, as a table cell's match is: told from the others
-        by its fill alone, it was one shade among three to a colour-blind
-        eye. Tk draws a solid relief dark on any fill, so it reads on all."""
+        """(Re)apply the find colours, blended from the theme. The current
+        match is the full accent, its words letters_on (the text colour fell
+        below 4.5:1), and boxed as a cell's is: by fill alone it was one
+        shade of three to a colour-blind eye."""
         try:
             text_widget.tag_configure("find_all",
                                       background=find_all_surface(self.colors))
@@ -18743,10 +18667,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._find_on_context_switch()
         self._share_code_on_context_switch()
         self._update_occurrence_banner()
-        # A fresh editor means any calendar trip is over — a pending
-        # return that survived (e.g. across a delete) made a later,
-        # unrelated Save yank the user onto a stale calendar day.
-        # _add_note_for_date re-arms its own pending right after this.
+        # A fresh editor ends any calendar trip (_add_note_for_date re-arms
+        # its own): one surviving a delete jumped a later Save.
         self._pending_calendar_return = None
         self._update_calendar_return_button()
         # No note is open now, so no card wears the "open" outline: Ctrl+N,
@@ -18758,22 +18680,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Open a note. If occurrence_date is given, the note is being opened
         from one specific day of a repeating series, and any per-occurrence
         override for that day is shown instead of the base content."""
-        # The same note loaded again over itself -- Restore previous, Reset
-        # this day, a save's own reload, a change made behind the editor --
-        # is the same editing session when it brings back the checklist the
-        # editor holds: the list keeps its identity, so the Undo just offered
-        # for a deleted item still has somewhere to put it back
-        # (_undo_checklist_delete knows the list by identity, and said "That
-        # note is no longer open" with the note on screen). A reload that
-        # brings ANOTHER checklist -- a rescue copy's own, an import's
-        # Update -- starts a new list: the item it brought back as a new
-        # entry was put back again beside it, and stored twice.
-        # A day only where the series still draws one: reloaded after Restore
-        # previous brought back a version with that day deleted, or an
-        # import's Update, the editor stayed on the date, and what was typed
-        # there was saved to a day no screen showed and no search found
+        # A reload bringing back the checklist held keeps the list, so a
+        # delete's Undo can still put an item back (it knows the list by
+        # identity); ANOTHER checklist starts a new one, or an item doubled.
+        # A day only where the series still draws one, else the whole note
         # (ISSUES_LOG: "Round twenty-three: the day the editor stayed on").
-        # The whole note opens instead, as for a note that no longer repeats.
         day = self._day_to_open(note, occurrence_date)
         same_session = (self.selected_note_id == note.get("id")
                         and self.current_occurrence_date == day)
@@ -18792,11 +18703,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # showed a kept day's words, and the save wrote them over the note.
         shown = effective_note(note, day) if day else note
 
-        # Clear out any pending style left over from whatever note was open
-        # before, BEFORE inserting this note's body — the insert hook that
-        # applies pending styles doesn't know or care that this particular
-        # insert is "loading a note" rather than "typing", so a stale
-        # pending style at this point would silently tag this note's text.
+        # A pending style cleared BEFORE the body goes in: the insert hook
+        # would take the load for typing and style it.
         self._pending_styles = set()
         self._pending_text_color = None
         self._pending_font_size = None
@@ -18807,11 +18715,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.title_entry.config(fg=self.colors["text"])
         self.body_text.delete("1.0", "end")
         self.body_text.insert("1.0", shown["body"])
-        # Formatting spans are only ever saved for the base note, never a
-        # per-occurrence override (see save_current_note) — reapplying them
-        # against override text of a different length/content would place
-        # bold/italic on the wrong characters. Only apply when what's shown
-        # actually IS the base content (no override for this occurrence).
+        # Spans belong to the base note (save_current_note): laid only on
+        # its own text, or bold lands on the wrong characters.
         if shown.get("body") == note.get("body"):
             self._apply_formatting(self.body_text, note.get("formatting", []))
         # The lines' looks: all on the series' words, a day's own list lines
@@ -18883,12 +18788,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         import copy as _copy
         clone = _copy.deepcopy(note)
         clone["id"] = max([n["id"] for n in self.notes], default=0) + 1
-        # The deep copy brought the original's identity with it, and two
-        # notes sharing a uid is the exact collision uid exists to
-        # prevent — manufactured here, locally, by a feature that has
-        # nothing to do with sharing. Dropped so normalize_note below
-        # mints a fresh one: a duplicate is a different note that happens
-        # to start with the same words.
+        # A duplicate is a different note: the copied uid is dropped, and
+        # normalize_note mints a fresh one.
         clone.pop("uid", None)
         base_title = (note.get("title") or "").strip()
         clone["title"] = f"{base_title} (copy)" if base_title else "(copy)"
@@ -18896,11 +18797,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # A duplicate is its own note, its series' own days (deleted, edited,
         # moved) copied with it, so it reads as the original does.
         clone = normalize_note(clone)
-        # Give the copy its OWN attachment files. The deep-copy above shared
-        # the original's stored_as names — i.e. the same files on disk — so
-        # permanently deleting either note later removed the file the other
-        # still pointed at (silent attachment loss). A failed/absent copy
-        # keeps the old reference, no worse than before.
+        # The copy gets its OWN files (shared, deleting either took the
+        # other's); a failed copy keeps the old reference.
         new_atts = []
         for att in clone.get("attachments", []):
             fresh = copy_attachment_file(att.get("stored_as", "")) if isinstance(att, dict) else None
@@ -18988,20 +18886,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
 
     def _new_context_menu(self, **options):
-        """A fresh right-click menu, and the end of the previous one.
-
-        Each right-click builds its menu anew, because the entries depend
-        on what was clicked -- and none was ever destroyed. Measured over a
-        thousand right-clicks on notes: three windows and eighteen Tcl
-        commands more per click, each menu holding the note it was built
-        for, and a theme switch that walks them all slowing from about
-        80 ms to over 400.
-
-        Not destroyed as soon as tk_popup returns: on Linux it returns at
-        once, with the menu still open (measured: 1 ms, still mapped), so
-        the menu would vanish before anyone chose. Only one right-click
-        menu is ever open, so the previous one is done with by the time
-        the next is asked for. Its cascades are its children and go too.
+        """A fresh right-click menu, and the end of the previous one: none
+        was destroyed, and a thousand clicks slowed a theme switch from 80
+        ms to 400. Not at tk_popup's return -- on Linux the menu is still
+        open then -- but at the next, as only one is ever open.
         """
         old = getattr(self, "_context_menu", None)
         if old is not None:
