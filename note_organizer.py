@@ -8865,10 +8865,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         _, marker, _rest = parse_list_marker(line)
         if not marker or col != len(marker):
             return None
-        # Nested first: Backspace against the marker climbs out one level,
-        # and only removes the marker once the item is back at the margin.
-        # Deleting a bullet three levels in would otherwise leave its text
-        # stranded at a depth with nothing above it.
+        # Nested, BackSpace at the marker climbs out a level, removing it only
+        # at the margin, or the text was stranded at a depth.
         indent = self._paragraph_indent_of(self.body_text, line_no)
         # One unit with the renumbering it causes: apart, Ctrl+Z took back
         # the new numbers first and left the marker gone.
@@ -8890,20 +8888,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return "break"
 
     def _list_aware_delete(self, event=None, virtual=None):
-        """Tk's own deletes, when they reach a list: done here as
-        core/formatting's list_deletion_range says, then renumbered, as one
-        Ctrl+Z.
-
-        Left to Tk, a selection across items deleted left "1. one / 4. four",
-        typing over them "x4. four", and BackSpace at a line's start
-        "2. two3. three" -- the marker of the line joined kept among the
-        words, nothing renumbered until the next Enter. In the styled-delete
-        bindtag, after _note_key_down and before _note_styled_delete, so it
-        sees BackSpace, Delete, Ctrl+H, Ctrl+K, a key typed over a selection
-        and *virtual* "cut" or "clear" before Tk acts. What the body's own
-        handlers already own is left to them: cells, a drawn table's lines,
-        BackSpace just after a marker, Enter and Tab over a selection, and a
-        paste (_on_body_paste, and _renumber_after_paste for Tk's own).
+        """Tk's own deletes, when they reach a list: done as list_deletion_range
+        says, then renumbered, one Ctrl+Z ("2. two3. three" left to Tk). In
+        the styled-delete bindtag, so it sees every deleting key and virtual
+        cut or clear first; cells, a drawn table, BackSpace after a marker,
+        Enter and Tab over a selection and pastes are their own handlers'.
         """
         b = self.body_text
         self._lines_before_key = int(b.index("end-1c").split(".")[0])
@@ -9018,12 +9007,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _paste_brings(self):
         """The text Ctrl+V is about to put in, read as its routes read the
-        clipboard -- our own copy's, another program's HTML as the rich route
-        reads it, else the clipboard's text -- and whether the rich route
-        takes it; (None, False) when it holds no text. Read off the plain
-        text alone, a Word paragraph's line break, which the rich route
-        drops, took the next item's ("2. Hello world3. three", the lows
-        wave's verification, round 7)."""
+        clipboard, and whether the rich route takes it; (None, False) for no
+        text. Off the plain text alone, a line break the rich route drops
+        took the next item's ("2. Hello world3. three")."""
         markup = clipboard.read_html()
         if markup:
             cut = {}
@@ -9062,10 +9048,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # Nothing to paste -- a picture, a file: the selection stays, as
             # under Tk's own paste (the lows wave's verification, round 7).
             return "break"
-        # What a table route places itself -- a spreadsheet's cells, rows at
-        # the paste's start -- keeps the typing rule; any other paste's first
-        # line goes in first, marker and all. Rows anywhere kept the covered
-        # marker: "2. 3. three" (round 8).
+        # A table route's paste keeps the typing rule; any other's first line
+        # goes in first, marker and all (rows kept it: "2. 3. three").
         pasted = None if (("\t" in brings and not rich)
                           or is_table_row(brings.split("\n", 1)[0])) else brings
         if self._list_range_for(sel, True, pasted) is None:
@@ -9200,33 +9184,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         text_widget.tag_configure("bold_italic", font=self._fmt_bold_italic_font)
         text_widget.tag_configure("underline", underline=True)
         text_widget.tag_configure("strike", overstrike=True)
-        # Find-in-note highlights: background ONLY, so any text style under a
-        # match keeps its exact look. Raised over highlight_* at find time.
-        # Their names match no serialized style, so they never dirty the note.
-        # Blended from the palette, so apply_theme re-runs this to re-tint them.
+        # Find's highlights: background ONLY, names no saved style has, blended
+        # from the palette (apply_theme re-tints them).
         self._retint_find_tags(text_widget)
-        # Tk gives later-configured tags higher display priority, and "sel"
-        # is created before any of these -- left alone, a highlight/text
-        # color tag always paints over the selection color, making selected
-        # highlighted text look unselected even though it really is (see
-        # _ensure_color_tag, which re-raises "sel" for the same reason
-        # whenever a new color tag is created later).
+        # A later tag paints over "sel", and selected highlighted text looked
+        # unselected: raised, as _ensure_color_tag raises it again.
         text_widget.tag_raise("sel")
 
     @staticmethod
     def _char_offset(w, index):
-        # PYTHON characters -- the exact space the saved body string
-        # lives in. Tk's count("chars") counts UTF-16 units (an emoji is
-        # two) while the "+Nc" arithmetic that APPLIES spans counts
-        # characters (an emoji is one): extracting with the former
-        # against spans applied with the latter shifted every span one
-        # right per preceding emoji. The phantom difference then re-saved
-        # the note -- "Note updated" on every startup, no edit anywhere,
-        # and the stored span walked one character further each launch.
-        # Both len(get()) and count("chars") skip embedded window
-        # characters, which the drawn tables add — measured 2026-09-11,
-        # after this comment had claimed for a while that they differ.
-        # The astral difference above is the real one.
+        # PYTHON characters, the saved body's: count("chars") gives UTF-16
+        # units, and each emoji shifted a span one right, re-saved at every
+        # start. Both skip a drawn table's window character.
         return len(w.get("1.0", index))
 
 
@@ -9244,17 +9213,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if style == "text_color":
             text_widget.tag_configure(tag, foreground=hex_color)
         else:
-            # The saved colour stays pure (the tag NAME carries it); only
-            # the paint blends toward the page surface, exactly as the
-            # table cells draw theirs -- the solid palette fill buried
-            # the text under it. Theme switches re-blend via
-            # _retint_highlight_tags.
+            # The saved colour stays pure (in the tag's NAME); the paint blends
+            # toward the page, as the cells do (_retint_highlight_tags).
             text_widget.tag_configure(tag, background=self._blend_hex(
                 hex_color, self.colors["card"], 0.45))
-        # A newly created tag becomes the new highest display priority,
-        # which would bury "sel" underneath it -- see the matching
-        # tag_raise("sel") in _setup_body_formatting_tags for why that
-        # matters.
+        # A new tag would bury "sel" (see _setup_body_formatting_tags).
         text_widget.tag_raise("sel")
         # Same trap for the find highlights: a colour applied from the
         # toolbar fires no KeyRelease, so the edit-rescan that normally
@@ -9279,16 +9242,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     @staticmethod
     def _tag_add_no_newline(text_widget, tag, start, end):
-        """tag_add over [start, end), but per line and never covering a
-        line's newline character.
-
-        Tk paints a BACKGROUND tag across the full remaining width of a
-        line whenever the tag covers that line's newline -- so a highlight
-        spanning several lines drew a full-width bar on every fully-covered
-        line, far past the actual text, instead of hugging the words. Same
-        family as the Select-All and triple-click fixes: don't include the
-        invisible trailing newline. Only highlight (a background) is
-        affected; foreground color and underline/strike don't paint one.
+        """tag_add over [start, end), per line, never over a line's newline:
+        a background over it painted a full-width bar past the words.
         """
         first = int(str(text_widget.index(start)).split(".")[0])
         last = int(str(text_widget.index(end)).split(".")[0])
@@ -9299,14 +9254,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 text_widget.tag_add(tag, seg_start, seg_end)
 
     def _ensure_font_tag(self, text_widget, is_bold, is_italic, size, family):
-        """The tag carrying one whole font combination, made on demand.
-
-        The Font object is held on self because Tkinter needs a live Python
-        reference to keep using it -- let it be collected and the tag
-        quietly stops applying. Built lazily because the combinations
-        multiply, weight by slant by size by family: creating all 192 of the
-        ones this app can offer measured 193ms, which is startup time spent
-        on tags almost every note never uses.
+        """The tag carrying one whole font combination, made on demand (all
+        192 cost 193 ms at start), its Font held on self -- collected, the
+        tag quietly stops applying.
         """
         name = core_font_tag_for(is_bold, is_italic, size, family)
         if name is None or name in KNOWN_FORMAT_STYLES:
@@ -9353,14 +9303,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _set_weight_by_stretch(self, ranges, style, on):
         """Bold or italic (*style*) turned *on* or off over *ranges*, each
-        stretch keeping its own other one: Ctrl+B over "one *two* three"
-        leaves "two" italic. The whole selection got one answer for both,
-        so an italic word in it lost its italic.
-
-        By stretches, where none of the plain font tags starts or stops,
-        as _fit_font_tags goes -- which then gives each stretch under a
-        size or a font the composite its weight now calls for, the way a
-        character typed or pasted gets it, at what the selection costs."""
+        stretch keeping its own other one (Ctrl+B over "one *two* three"
+        leaves "two" italic) -- by stretches, as _fit_font_tags goes, which
+        gives a stretch under a size or font the composite it now needs."""
         b = self.body_text
         for start, end in ranges:
             start, end = b.index(start), b.index(end)
@@ -9386,31 +9331,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._fit_font_tags(start, end)
 
     def _fit_font_tags(self, start, end, like=None, size=None, family=None):
-        """Give each of the characters from *start* to *end* -- just typed
-        or pasted -- the composite font tag its own bold and italic
-        call for, with the size and family of the composite it wears, or
-        else of the one at *like*: the character it was typed onto. A *size*
-        or *family* given -- one picked before typing -- takes the place of
-        that property alone.
-
-        Tk passes a tag on only to text typed between two characters that
-        both wear it, and a composite carries a weight: a letter typed with
-        Bold on inside a bigger heading was drawn in the heading's plain
-        weight, one glued onto a bold word at a heading's end lost the
-        heading's size, and a size picked before typing inside a run set in
-        Georgia took Georgia away with the composite it replaced -- each
-        saved that way.
-
-        Bold and italic laid over the same letters as two plain tags become
-        bold_italic here too: the two both set the font and do not compose,
-        and italic -- made after bold -- won. Letters typed after a bold word
-        with Italic turned on, or bold pasted inside an italic word, were
-        drawn italic alone while the toolbar lit both.
-
-        By stretches: wherever none of the tags that decide the font starts
-        or stops, every character wears the same ones. Fitted a character at
-        a time, a long paste into a note set in a font cost two to three
-        times what laying the whole note again had."""
+        """Give the characters from *start* to *end*, just typed or pasted,
+        the composite font tag their bold and italic call for, with the size
+        and family they wear or *like*'s (the character typed onto); a
+        *size* or *family* picked before typing replaces that one. Bold and
+        italic over the same letters become bold_italic, as the two do not
+        compose. By stretches, not a character at a time (2-3x slower)."""
         b = self.body_text
         source = None
         if like is not None:
@@ -9514,23 +9440,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     @staticmethod
     def _offset_indices(text_widget, offsets):
         """The way back from :meth:`_char_offsets`: {offset: Tk index} for
-        many offsets into the text as it is saved.
-
-        One walk through the text for all of them. "1.0+Nc" for every span
-        end walked the note from its top each time: Enter in a numbered
-        list of a note of 8,000 styled words froze the editor for 3.6 s
-        (the renumber lays every span again). Sorted, each offset is reached
-        from the one before it, and Tk's "+Nc" adds up, so with no drawn
-        table in the text every index is the one "1.0+Nc" gave.
-
-        And a saved offset never counts a drawn table's window character
-        (len(get()) skips it) while "+Nc" does: a font size set on a word
-        under a drawn table landed one character early per table above it,
-        and every later size or font moved the earlier ones again -- saved
-        that way. So the windows a hop passes are hopped again. Where
-        windows stand right at an offset, its index is before them: a range
-        ending there does not take them in, and one starting there reads
-        back at the same offset either way.
+        many saved offsets, in one walk, each reached from the one before
+        ("1.0+Nc" each froze Enter for 3.6 s). A saved offset skips a drawn
+        table's window and "+Nc" counts it, so the windows a hop passes are
+        hopped again; at a window, the index stands before it.
         """
         wanted = sorted(set(offsets))
         if not wanted:
@@ -9557,23 +9470,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return out
 
     def _extract_formatting(self, text_widget, text=None):
-        """Read the widget's current tags back out as a plain span list,
-        for saving. Character offsets (not Tkinter's own line.col indices)
-        so they're stable plain data, independent of line wrapping.
-
-        Every tag range is collected first and the offsets worked out in
-        one pass, on *text* -- the widget's text as its caller read it, or
-        read once here (see :meth:`_char_offsets`).
+        """Read the widget's tags back out as a span list of character
+        offsets, for saving, every range worked out in one pass on *text* --
+        as its caller read it, or read once here (:meth:`_char_offsets`).
         """
         plain, fonts, colors = [], [], []
         for style in KNOWN_FORMAT_STYLES:
             ranges = text_widget.tag_ranges(style)
             for i in range(0, len(ranges), 2):
                 plain.append((style, ranges[i], ranges[i + 1]))
-        # Composite font tags carry size and family. Weight and slant are
-        # folded into them for rendering, but are read back from their own
-        # bold/italic tags above -- taking them from here as well would save
-        # the same run twice.
+        # Composite font tags give size and family only; weight and slant come
+        # from their own tags above, or a run was saved twice.
         for tag_name in text_widget.tag_names():
             parsed = parse_font_tag(tag_name)
             if not parsed:
@@ -9624,18 +9531,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if end > start:
                 spans.append({"start": start, "end": end, "style": style,
                               "value": hex_color})
-        # Merged before returning: a composite font tag is split into one
-        # range per bold/italic boundary inside it, so a single size across a
-        # paragraph reads back in pieces and would be written to the note
-        # that way, then split again on the next save.
+        # Merged: a composite reads back in pieces at every bold or italic
+        # boundary, saved so and split again at each save.
         return merge_spans(spans)
 
     def _apply_formatting(self, text_widget, spans):
         """Re-apply a saved span list as live Tkinter tags, for loading."""
-        # Size and family are not applied one span at a time: they have to
-        # be merged with whatever bold/italic covers the same characters
-        # into a single tag, which _apply_font_runs does once the whole list
-        # is known.
+        # Size and family wait for the whole list: merged with bold and italic
+        # into one tag each by _apply_font_runs.
         laid = [span for span in normalize_formatting(spans)
                 if span["style"] not in FONT_VALUE_STYLES]
         where = self._offset_indices(
@@ -9650,10 +9553,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 else:
                     tag = span["style"]
                 if span["style"] == "highlight":
-                    # Notes saved before the newline fix can still hold a
-                    # single highlight span running across several lines --
-                    # re-apply those the corrected way too, so an old note
-                    # renders right without needing to be re-highlighted.
+                    # An older note's highlight across lines is laid the
+                    # corrected way too, without a newline.
                     self._tag_add_no_newline(text_widget, tag, start_idx, end_idx)
                 else:
                     text_widget.tag_add(tag, start_idx, end_idx)
@@ -9662,13 +9563,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._apply_font_runs(text_widget, spans)
 
     def _selection_has_style(self, text_widget, style_set, start, end):
-        """True only if EVERY character in [start, end) already carries at
-        least one tag from style_set — used to decide whether a toolbar
-        toggle should turn a style off (already uniformly applied) or on,
-        the same convention most rich text editors use for a mixed
-        selection (treated as 'off' until the whole thing is one style).
-        Asked of the tags' ranges (_stretches_over): a character at a time
-        cost every key and click with a long selection seconds."""
+        """True only if EVERY character in [start, end) carries a tag from
+        style_set: a toggle turns off a style applied throughout, else on, as
+        editors treat a mixed selection. Asked of the tags' ranges
+        (_stretches_over), not a character at a time (seconds a key)."""
         for _first, _last, wearing in self._stretches_over(
                 text_widget, sorted(style_set), start, end):
             if wearing is None:
