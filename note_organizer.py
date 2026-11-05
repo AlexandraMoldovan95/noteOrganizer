@@ -13270,14 +13270,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         tab = self._calendar_tab
         if tab is None:
             return True  # unknown layout: rebuild rather than risk staleness
-        # Settings replaces the whole notebook, and it used to be spotted
-        # here by winfo_ismapped(). That answer lags: pack()/pack_forget()
-        # do not settle it until Tk goes idle, so a caller on either side
-        # of the swap could read the state from before it. Measured
-        # failing for real once deferral rode on this answer -- leaving
-        # Settings rebuilt nothing, because the notebook it had just
-        # re-packed still read as hidden. The flag is set by the two
-        # methods that own the swap and is right the instant they run.
+        # Settings is told by the flag its two swap methods set, not by
+        # winfo_ismapped(), which lags until idle: leaving Settings rebuilt
+        # nothing, the notebook still read as hidden.
         if getattr(self, "_settings_open", False):
             return False
         try:
@@ -13301,12 +13296,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     # theme (same hex used by both) — only remap true mismatches.
                     if val.lower() != cur[key].lower():
                         remap[val.lower()] = cur[key]
-        # Surfaces DERIVED from a palette are invisible to the loop above,
-        # because they are in no palette: Settings blends card toward text
-        # for the well inside a card, and toward subtext for its hairlines.
-        # A widget built under one theme therefore kept the other theme's
-        # inset -- which is why the information bars in General, Backup and
-        # About stayed dark, and unreadable, on a light theme.
+        # Surfaces BLENDED from a palette (Settings' wells and hairlines) are
+        # in none, so the loop above missed them: the information bars stayed
+        # dark, and unreadable, on a light theme.
         for name, palette in THEMES.items():
             if name == self.theme_name:
                 continue
@@ -13373,13 +13365,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             walk(self)
         except tk.TclError:
             pass
-        # An open day's list paints each row's stripe in its note's own
-        # colour, and the walk above cannot tell that from a palette's: a
-        # note in #4cd9a3, a preset that is also the dark theme's success,
-        # had it swapped for the new theme's.
-        # Drawn again from the notes, as _recolor_note_cards does for the
-        # note list -- also while Settings hides it, so that it is right
-        # when it shows. (The one-note view has no colour of its own.)
+        # An open day's stripes are the notes' own colours, which the walk
+        # above swapped (#4cd9a3 is a palette's too): drawn again from the
+        # notes, as _recolor_note_cards does, even under Settings.
         if self._day_panel_mode == "list":
             self.show_day_list()
 
@@ -13403,17 +13391,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._ring_shown(w, held == str(w))
 
     def _refresh_placeholder_colors(self):
-        # self._placeholders only ever grows (add_placeholder() appends,
-        # nothing ever removes an entry when the widget that owns it is
-        # later destroyed) -- harmless for a permanent field, but every
-        # hex-code entry inside a temporary color-picker popup (this
-        # feature's two new ones, and the note's own pre-existing color
-        # picker) registers here too, and gets destroyed the moment its
-        # popup closes. The next theme switch after that used to crash on
-        # "invalid command name" trying to read a long-gone widget. Prune
-        # dead entries here, the first time each one is found stale,
-        # rather than letting the list accumulate references that can
-        # never be read again.
+        # self._placeholders only grows, and a colour picker's hex box dies
+        # with its popup: the next switch crashed reading it. Dead entries
+        # are dropped the first time they are found.
         alive = []
         for entry, placeholder in self._placeholders:
             try:
@@ -13486,17 +13466,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return core_blend(hex_a, hex_b, t)
 
     # ---------- Resizing the window by its edge ----------
-    # A drag of the window's edge sends a new size every few milliseconds,
-    # and laying the whole window out again cost far more than that:
-    # measured, 260 ms a step with the Calendar showing, 155 with a note in
-    # the editor, 70 on Settings -- 98% of it inside Tk, placing and
-    # painting hundreds of widgets, so no Python could make it quicker. The
-    # edge crawled behind the pointer (field-reported on the Calendar).
-    #
-    # So while the mouse button holds the edge, the window waits: its frame
-    # follows the pointer, and the content is laid out once, when the drag
-    # pauses or the button is let go. A resize with no button held --
-    # maximising, a snap, the keyboard -- is laid out at once, as before.
+    # A layout cost 70-260 ms a step, 98% inside Tk, and the edge crawled
+    # (field report). While the button holds the edge, the content waits
+    # for a pause or the release; a resize with none held is laid out now.
     RESIZE_PAUSE_MS = 120   # a held drag this still is laid out anyway
     RESIZE_WATCH_MS = 40    # how often a held drag looks for the release
 
@@ -13525,18 +13497,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             bar.pack_forget()
 
     def _page_follows_the_drag(self):
-        """Whether the page on screen is laid out at every step of a held
-        drag, rather than when the drag pauses or ends.
-
-        The calendar's month is drawn on one canvas, and a step of the drag
-        costs it under 40 ms there -- quick enough to follow the mouse, which
-        is what the field test asked for. Every other page is built of
-        widgets and still costs 70 ms or more a step, so it keeps the frame
-        light and catches up once the hand stops. The History register is
-        rows of widgets too, so it waits with the rest -- and so does an
-        open day's panel below the month: a row per note, or a whole note's
-        text, laid out again at every step (60 ms a step for an ordinary
-        month, 150 and more for a busy one, measured)."""
+        """Whether the page is laid out at every step of a held drag: the
+        month alone, one canvas, under 40 ms a step. Widget pages cost 70 ms
+        and more and wait -- History, and an open day's panel (60-150 ms a
+        step, measured), among them."""
         return (self._calendar_is_showing()
                 and not self._history_visible
                 and self._day_panel_mode == "empty")
@@ -13590,14 +13554,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._lay_out_at_window_size()
 
     def _pointer_button_held(self):
-        """Whether the mouse's primary button is down right now.
-
-        Asked of Windows, because the window's edge belongs to the
-        operating system: Tk hears the new sizes and nothing of the button
-        making them. Windows reports the PHYSICAL button, so for someone
-        who has swapped the buttons the primary one is the right. Anywhere
-        else, or if the question fails, the answer is no -- which is simply
-        the behaviour from before."""
+        """Whether the mouse's primary button is down, asked of Windows (the
+        edge is the system's; Tk hears only sizes), swapped buttons allowed
+        for. Elsewhere, or if asking fails, no: the behaviour from before."""
         if not sys.platform.startswith("win"):
             return False
         try:
@@ -13659,12 +13618,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.toast_frame, font=("Segoe UI", 9, "bold"),
             bg=self.colors["success"], fg=self._on_fill("success"), padx=14, pady=6)
         self.toast_lbl.pack(side="left")
-        # The toast can carry one action -- "Undo", after a delete. Built
-        # here and packed on demand, so a plain toast looks exactly as it
-        # did. Its colours are set in _show_toast() rather than tracked:
-        # the toast is recoloured on every appearance from self.colors,
-        # which is the app's other theming pattern and the right one for
-        # a widget nobody sees between showings.
+        # The toast's one action ("Undo"), packed on demand; coloured at each
+        # showing in _show_toast(), not tracked, as nobody sees it between.
         self.toast_action_lbl = tk.Label(
             self.toast_frame, font=("Segoe UI", 9, "bold", "underline"),
             bg=self.colors["success"], fg=self._on_fill("success"), padx=0, pady=5,
@@ -13681,10 +13636,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._toast_hide_job = None
         # Not placed yet — shown on demand by _show_toast().
 
-        # --- Export progress bar: floats near the bottom of the window,
-        # visible no matter which tab is active — same overlay approach as
-        # the toast above, since export can now run while the user keeps
-        # working in any tab. Not placed yet; shown on demand. ---
+        # --- Export progress bar: an overlay like the toast, seen from any
+        # tab while the export runs. Placed on demand. ---
         self.export_progress_frame = tk.Frame(self, bg=self.colors["card"],
                                               highlightthickness=1,
                                               highlightbackground=self.colors["accent"])
@@ -13709,13 +13662,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._export_poll_job = None
 
         # --- Notebook: Notes tab / Calendar tab ---
-        # Settings is deliberately NOT a third tab here anymore — it lives as
-        # a separate page (see show_settings_page/hide_settings_page below),
-        # reached via its own button in the sidebar's bottom action zone,
-        # alongside New Note / Import / Share. Putting it in the tab strip
-        # made it read as "just another tab", and the alternative of pushing
-        # it to the top-right corner risked sitting too close to the
-        # window's own close button.
+        # Settings is a page (show_settings_page), from the sidebar's foot:
+        # a tab read as "just another tab", and the top-right corner sat
+        # by the window's close button.
         self.notebook = ttk.Notebook(self.main_inner)
         self.notebook.pack(fill="both", expand=True)
         # Its focus ring is for the keyboard (_tab_ring_colour): a click
@@ -13782,19 +13731,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # comes back to Notes first, so it is not closed on arrival.
             if shown != self.TAB_NOTES:
                 self._hide_find()
-            # The Calendar tab's home is the month grid; History is only a
-            # view of it. Leaving the tab (or returning to it) resets to
-            # the grid, so the calendar never reopens showing History
-            # from a session two tab-switches ago (field report).
+            # The tab's home is the month: leaving it resets History, which
+            # reopened two tab switches later (field report).
             if self._history_visible:
                 self._hide_calendar_history()
-            # Defensive: some platforms move keyboard focus to whatever Entry
-            # happens to sit first in the newly-shown tab (e.g. the search box)
-            # when the previously-focused widget is hidden by the tab switch.
-            # Explicitly park focus on the notebook itself so no field silently
-            # starts capturing keystrokes the user didn't click into.
-            # And off anything the tab left out of sight: the note list, a
-            # Canvas, kept it, and Alt+Up reordered notes nobody could see.
+            # Focus parked on the notebook: some platforms hand it to the
+            # tab's first Entry, and the hidden note list kept it -- Alt+Up
+            # reordered notes nobody could see.
             try:
                 focused = self.focus_get()
                 held = self._keyboard_inside(self.notebook)
@@ -13875,12 +13818,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # query is known now, and a clear button that appeared a fifth of
             # a second after the typing would read as a glitch.
             self._refresh_search_clear()
-            # Rebuilding the note list on every keystroke made typing a
-            # search term feel laggy with a large note collection, worse the
-            # more notes there were (exactly when search matters most) --
-            # back when every card was a handful of widgets. A rebuild is
-            # cheap now that the list is drawn, but filtering still reads
-            # every note; wait for a short pause in typing, as autosave does.
+            # Filtering reads every note, so it waits for a pause in typing,
+            # as autosave does: per keystroke, a big notebook lagged.
             if self._search_debounce_job is not None:
                 try:
                     self.after_cancel(self._search_debounce_job)
@@ -13904,10 +13843,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         search_entry.pack(side="left", fill="x", expand=True, ipady=6)
         # The most-used field in the app was the only text field without one.
         self._add_paste_menu(search_entry)
-        # Long-lived (this row is built once and never rebuilt), so
-        # track_theme — and every colour option it has, not just bg and fg:
-        # an untracked activebackground is how a button ends up wearing the
-        # old accent after a theme switch.
+        # Built once, so track_theme, every colour option: an untracked
+        # activebackground kept the old accent.
         self.search_clear_btn = tk.Button(
             search_row, text="✕", command=self._clear_search,
             relief="flat", bd=0, cursor="hand2", font=("Segoe UI", 9, "bold"),
@@ -13916,10 +13853,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                          activebackground="card", activeforeground="text",
                          highlightbackground="card")
         self.add_placeholder(search_entry, "Search notes...")
-        # The placeholder went in through search_var, so the trace has
-        # already run once and settled the ✕. Called again anyway, because
-        # relying on that ordering is how this breaks when someone reorders
-        # these lines.
+        # The trace has settled the ✕ already; called anyway, so reordering
+        # these lines cannot break it.
         self._refresh_search_clear()
         # ...and it scheduled a list rebuild for a search nobody typed: a
         # second full rebuild at every startup, on top of the one the
@@ -13931,18 +13866,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 pass
             self._search_debounce_job = None
 
-        # Sort + category filter row
-        # Captions for the two controls below, because both are labelled with
-        # their current VALUE -- "Recently updated ▾", "All ▾" -- so the words
-        # "sort" and "show" appeared nowhere on the screen, and "All" in
-        # particular reads as a state rather than as a control you can press.
-        #
-        # ABOVE the row and not inside it, deliberately. The row has 250px for
-        # two controls and the comments further down record real clipping
-        # fights over exactly that; a caption here competes for none of it.
-        # The alignment is free: the sort control below packs left and the
-        # filter packs right, so a caption at each end of a frame with the
-        # same padding sits over the edge its control is anchored to.
+        # Sort + category filter row, captioned: both show their VALUE, and
+        # "All" read as a state. The captions sit ABOVE the 250px row, which
+        # has no width to spare, each over its control's edge.
         caption_row = tk.Frame(self.sidebar)
         self.track_theme(caption_row, bg="sidebar")
         caption_row.pack(fill="x", padx=15, pady=(0, 1))
@@ -13970,43 +13896,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "Calendar: oldest",
             self.SORT_CUSTOM,
         ]
-        # Remembered across launches, like the "Group by category" checkbox a
-        # few pixels below and the folded groups beside it. Three controls on
-        # adjacent rows of one panel, two of which were remembered: someone
-        # who prefers Title A–Z re-picked it at every launch with no way to
-        # tell why that one preference did not stick.
-        #
-        # Validated on the way IN, not only on the way out. What comes back is
-        # whatever is in a settings file -- possibly written by an older build,
-        # possibly hand-edited, possibly naming a sort this version no longer
-        # has -- and an unknown key here would reach the sort comparator.
+        # Remembered, as "Group by category" below is, and validated on the
+        # way IN: a settings file may name a sort this version lacks.
         _stored_sort = load_settings().get("note_sort")
         self.sort_var = tk.StringVar(
             value=_stored_sort if _stored_sort in self.SORT_OPTIONS
             else self.SORT_OPTIONS[0])
         self.sort_var.trace_add(
             "write", lambda *a: save_setting("note_sort", self.sort_var.get()))
-        # width_chars=0: content-sized, because this control is the one
-        # packed to FLEX below and a width fixed in characters defeats
-        # that. 18 was the previous number, chosen by measuring the label
-        # alone -- the longest option needs 93px and 18 chars gives 114px,
-        # so the label did fit. The ROW then asked for 260px inside a
-        # 250px sidebar, and pack took the 10px off this control's right
-        # edge: its arrow, then the last letters of "Recently updated".
-        # Visible in every scene screenshot, and invisible to any check
-        # that measures the label. No fixed number would have worked
-        # either -- 16 fits Segoe UI on Windows and is still 19px
-        # over-full in DejaVu Sans on the Linux CI image.
+        # width_chars=0: this control FLEXES. 18 chars fit the label, but the
+        # row asked 260px of 250 and lost this arrow; no fixed number fits
+        # both Segoe UI and DejaVu Sans.
         sort_menu = self._build_themed_dropdown(
             filter_row, self.sort_var, self.SORT_OPTIONS,
             on_change=self._on_sort_chosen, width_chars=0)
 
-        # Same as the sort above, with one more thing to be careful about: a
-        # stored filter can name a category that has since been deleted, or
-        # one this notebook never had. _keep_filter_valid asks the dropdown's
-        # own vocabulary rather than a second copy of it, so the load-time
-        # answer and the runtime answer cannot drift apart. It runs after the
-        # dropdown exists, below.
+        # As the sort; a stored filter may name a category gone, so
+        # _keep_filter_valid asks the dropdown's own vocabulary, below.
         self.filter_var = tk.StringVar(
             value=load_settings().get("note_filter", "All"))
         self.filter_var.trace_add(
@@ -14015,22 +13921,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.filter_menu = self._build_themed_dropdown(
             filter_row, self.filter_var, self._filter_options,
             on_change=lambda v: self.refresh_note_list(),
-            # Content-sized too, for the same reason as the sort control
-            # above: 13 characters is 113px in Segoe UI and 122px in
-            # DejaVu Sans, and the row has 250px for both. Anchored right
-            # and not flexing, it takes exactly what it is showing; the
-            # sort control beside it absorbs whatever is left, including
-            # when a long category name is selected here.
+            # Content-sized too, anchored right: the sort absorbs the rest,
+            # a long category name included.
             dot_color_fn=lambda v: CATEGORY_COLORS.get(v), width_chars=0)
         # Packed FIRST so pack honours its width — packed last on a full
         # row, the button was squeezed to a bare "🔁 R…" (seen in a
         # screenshot, not guessed). The sort button flexes instead.
         self.filter_menu.pack(side="right")
         sort_menu.pack(side="left", fill="x", expand=True, padx=(0, 4))
-        # After the dropdown exists, because the guard checks hasattr on it
-        # the same way refresh_category_widgets does. A stored filter naming
-        # a category this notebook does not have falls back to All here,
-        # before anything reads it.
+        # After the dropdown exists (the guard's hasattr): an unknown filter
+        # falls back to All before anything reads it.
         self._keep_filter_valid()
 
         # Group by category — an independent toggle. When on, notes are
@@ -14072,39 +13972,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _build_bulk_action_bar(self):
         """The bar a selection acts through, built hidden."""
-        # Bulk-action bar: hidden until selection mode is turned on. Built
-        # once, like the rest of this persistent sidebar chrome — its inner
-        # label/buttons get live theme tracking for the same reason group_cb
-        # above does.
+        # Bulk-action bar, hidden until selection mode; built once, tracked.
         self.bulk_action_bar = tk.Frame(self.sidebar)
         self.track_theme(self.bulk_action_bar, bg="sidebar")
-        # The count on its own line, then the four actions two by two.
-        #
-        # All five used to sit in ONE line across a fixed 280px sidebar,
-        # which meant the line could not fit and had no way to say so:
-        # the packer gives each control what it asks for in order and the
-        # LAST one lives on whatever is left. Everything before it looks
-        # perfect, which is why nothing seemed wrong until the end of the
-        # row. On Windows that was Export asking 40px and drawn at 27 --
-        # the word against the edge with its caret cut off, which is how
-        # it was reported. On the Linux CI image, where the fonts are
-        # wider, the same four asked 338px of the 250 available and
-        # Export was drawn at ONE pixel. It had been that broken there
-        # the whole time, and no check had ever measured it.
-        #
-        # (The comment this replaces recorded the same fight being won by
-        # a single pixel: "four controls need 281px and the sidebar is a
-        # fixed 280 -- the emoji alone is the overflow". A layout that
-        # fits by one pixel is one font away from not fitting, and this
-        # one had already lost that bet on the other platform.)
-        #
-        # Two by two is the fix rather than a smaller font, because it
-        # changes what has to be true: the widest row now needs the two
-        # widest labels side by side (180px measured on Linux, 105 on
-        # Windows) instead of all four, which leaves room to spare on
-        # both rather than a margin to be eaten by the next label, glyph
-        # or font. Each button expands to fill its half, so they stay the
-        # same size as each other whatever the text does.
+        # The count on its own line, then the actions two by two: in one
+        # line the last got what was left -- Export 27px of 40 on Windows,
+        # ONE pixel on Linux. Two a row needs 180px at most; each fills its
+        # half, so they stay one size.
         self.bulk_selected_lbl = tk.Label(
             self.bulk_action_bar, text="0 selected", font=("Segoe UI", 8, "bold"))
         self.track_theme(self.bulk_selected_lbl, bg="sidebar", fg="text")
@@ -14154,18 +14028,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         _bulk_pack(bulk_export_btn)
         self._bulk_export_btn = bulk_export_btn
 
-        # Pinning had exactly one route in the whole app -- the right-click
-        # menu, one note at a time -- so reordering twenty notes meant opening
-        # the menu twenty times. It belongs here, where Trash, Category and
-        # Export already act on everything ticked.
-        #
-        # On a THIRD row rather than squeezed beside Export, and that is not
-        # fussiness: the comment above records the two-by-two layout being the
-        # fix for a bar that once fitted by a single pixel and then did not on
-        # the other platform. Two per row is the invariant; a fifth button on
-        # a row of two would put three of the widest labels side by side and
-        # re-open the fight. Vertical space is cheap here, because this bar
-        # only exists while notes are ticked.
+        # Pin for everything ticked (the menu pinned one at a time), on a
+        # THIRD row: two a row is the invariant above, and this bar's height
+        # costs nothing while notes are ticked.
         pin_row = _bulk_row()
         self._bulk_pin_btn = tk.Button(
             pin_row, text="📌 Pin", command=self._bulk_toggle_pin,
@@ -14177,10 +14042,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _build_note_list_and_buttons(self, parent):
         """The list's canvas, New Note / Import / Share / Settings under it,
         and the toggle that hides the sidebar."""
-        # Bottom action zone — pinned to the bottom of the sidebar so New Note /
-        # Import / Share and their inline panels always stay on-screen even when
-        # the window is short. Packed BEFORE the list so it reserves its space;
-        # the note list then fills whatever's left and scrolls on its own.
+        # The action zone, packed BEFORE the list, keeps its space in a short
+        # window; the list fills what is left and scrolls.
         bottom_zone = tk.Frame(self.sidebar)
         self.track_theme(bottom_zone, bg="sidebar")
         bottom_zone.pack(side="bottom", fill="x")
@@ -14209,10 +14072,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.canvas.configure(yscrollcommand=self._list_view_changed)
         self._bind_list_input()
 
-        # Pack the scrollbar FIRST (side="right") so it always reserves its own
-        # width before the canvas claims the rest with expand=True — packed in
-        # the other order, the canvas could grab all available width and
-        # squeeze the scrollbar down to nothing (invisible, unusable).
+        # The scrollbar FIRST, or the expanding canvas squeezed it to nothing.
         scrollbar.pack(side="right", fill="y")
         self.canvas.pack(side="left", fill="both", expand=True)
 
