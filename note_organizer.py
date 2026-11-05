@@ -13661,10 +13661,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._import_state = None  # same idea, for import
         self._export_poll_job = None
 
-        # --- Notebook: Notes tab / Calendar tab ---
-        # Settings is a page (show_settings_page), from the sidebar's foot:
-        # a tab read as "just another tab", and the top-right corner sat
-        # by the window's close button.
+        # --- Notebook: Notes and Calendar. Settings is a page instead
+        # (show_settings_page): as a tab it read as just another tab. ---
         self.notebook = ttk.Notebook(self.main_inner)
         self.notebook.pack(fill="both", expand=True)
         # Its focus ring is for the keyboard (_tab_ring_colour): a click
@@ -13685,10 +13683,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                       lambda e: self._tab_target_into_sight(e, backwards=True),
                       add="+")
         self._bind_keyboard_tags()
-        # Tk's Entry keeps edits no other Windows box has: Ctrl+D deleted a
-        # letter, Ctrl+K the rest of the line, Ctrl+T swapped two -- in a
-        # title saved at once, with no Undo (and Ctrl+D is Strikethrough on
-        # the shortcuts page). The final audit's wave 3.
+        # Tk's Entry edits no Windows box has (Ctrl+D, Ctrl+K, Ctrl+T) changed
+        # a title saved at once, with no Undo.
         for seq in ("<Control-d>", "<Control-D>", "<Control-k>", "<Control-K>",
                     "<Control-t>", "<Control-T>"):
             self.bind_class("Entry", seq, lambda _e: "break")
@@ -13975,10 +13971,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Bulk-action bar, hidden until selection mode; built once, tracked.
         self.bulk_action_bar = tk.Frame(self.sidebar)
         self.track_theme(self.bulk_action_bar, bg="sidebar")
-        # The count on its own line, then the actions two by two: in one
-        # line the last got what was left -- Export 27px of 40 on Windows,
-        # ONE pixel on Linux. Two a row needs 180px at most; each fills its
-        # half, so they stay one size.
+        # The count, then the actions two by two: in one line the last got
+        # what was left (Export ONE pixel on Linux). Two a row need 180px at
+        # most, each filling its half.
         self.bulk_selected_lbl = tk.Label(
             self.bulk_action_bar, text="0 selected", font=("Segoe UI", 8, "bold"))
         self.track_theme(self.bulk_selected_lbl, bg="sidebar", fg="text")
@@ -14215,10 +14210,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """The lines over a note that only some notes show: from an empty
         calendar day, one day of a series, its days off the schedule, and
         the day strip of day mode."""
-        # Shown only when the current note was started from an empty calendar
-        # day — lets you jump straight back to that exact month/day instead of
-        # hunting for it again. Not packed yet; shown/hidden as a whole by
-        # _update_calendar_return_button() so it leaves no empty gap when off.
+        # Back to the calendar day a note was started from; packed whole by
+        # _update_calendar_return_button(), so it leaves no gap when off.
         self.calendar_return_btn = tk.Button(
             self.editor, text="← Back to Calendar",
             command=self._return_to_calendar, relief="flat", cursor="hand2",
@@ -14226,40 +14219,30 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         )
         self.track_theme(self.calendar_return_btn, bg="bg", fg="accent_text")
 
-        # Shown only while the editor holds one DAY of a repeating series:
-        # the date field shows the series' start date, so without this
-        # line the user has to remember which day they opened (field
-        # request). Packed/unpacked whole by _update_occurrence_banner().
+        # Which DAY of a series is open, as the date field shows the start
+        # (field request); packed whole by _update_occurrence_banner().
         self.occurrence_banner = tk.Label(
             self.editor, text="", font=("Segoe UI", 9, "bold"),
             anchor="center"
         )
         self.track_theme(self.occurrence_banner, bg="bg", fg="accent_text")
-        # Under the series line, only while a day's own edit sits on a date
-        # the series no longer has (_update_occurrence_banner): the one way
-        # to them. Long-lived, so every colour it has follows the theme --
-        # hover and the keyboard's ring as well as its words.
+        # The one way to a day's edit on a date the series no longer has
+        # (_update_occurrence_banner); long-lived, every colour tracked.
         self.offschedule_btn = tk.Button(
             self.editor, text="", relief="flat", cursor="hand2", bd=0,
             font=("Segoe UI", 9, "bold"), command=self._show_off_schedule_days)
         self.track_theme(self.offschedule_btn, bg="bg", fg="accent_text",
                          activebackground="bg", activeforeground="accent_text",
                          highlightbackground="bg", highlightcolor="focus_ring")
-        # Both wrap to the width they have instead of being cut at both
-        # ends: the series line runs long ("Every week on Mon, Tue, Wed,
-        # until ...", then the days that keep their own edits), and centred
-        # wider than the editor it lost its first and last words -- seen at
-        # 1200 px, the 🔁 and the "(✎)" gone (2026-10-12).
+        # Both wrap to their width: the series line runs long, and centred
+        # wider than the editor it lost the 🔁 and the "(✎)".
         for line in (self.occurrence_banner, self.offschedule_btn):
             line.bind("<Configure>", lambda e, w=line: w.configure(
                 wraplength=max(120, e.width - 8)), add="+")
 
-        # One day of a series, opened on its own from the calendar (day mode,
-        # _show_day_mode): the strip says which day, that what changes here
-        # stays on it, and holds the one way to the whole series. A small
-        # line used to name the day, above the series' own date and repeat
-        # as fields to change, and a field test could not find how to edit
-        # one day (2026-10-12). Long-lived, so every colour follows the theme.
+        # Day mode (_show_day_mode): the strip says which day, that changes
+        # stay on it, and holds the way to the series -- a field test found
+        # no way to edit one day. Long-lived, every colour tracked.
         self.day_strip = tk.Frame(self.editor)
         self.track_theme(self.day_strip, bg="card")
         day_strip_bar = tk.Frame(self.day_strip, width=4)
@@ -14291,11 +14274,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         top_row.pack(fill="x", padx=30, pady=(25, 5))
         self.editor_top_row = top_row
 
-        # width=1: the title asks for next to nothing, and fill and expand give
-        # it the rest of the row. Asking its natural twenty characters, it was
-        # given them first, and what is packed beside it later -- a long
-        # title's counter, a day's "This day:" -- got what was left: at the
-        # smallest window, nothing (measured: the counter 8 px of its 46).
+        # width=1, and expand gives the rest: at twenty characters it took
+        # them first, and the counter beside it got 8 px of its 46.
         self.title_entry = tk.Entry(
             top_row, insertbackground=self.colors["text"],
             relief="flat", font=("Segoe UI", 20, "bold"), width=1,
@@ -14306,10 +14286,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.title_entry.pack(side="left", fill="x", expand=True)
         self.add_placeholder(self.title_entry, "Note title...")
         self._add_paste_menu(self.title_entry)
-        # How much of the title is left, shown only once it starts to matter.
-        # A permanent "12/200" beside a twelve-character title is noise about
-        # a limit nobody is near; the point is to warn before the field stops
-        # accepting, not to keep score.
+        # How much title is left, shown once it matters: a warning before the
+        # field stops accepting, not a score.
         self.title_count_lbl = tk.Label(top_row, text="", font=("Segoe UI", 8))
         self.track_theme(self.title_count_lbl, bg="bg", fg="subtext")
         self.title_entry.bind("<KeyRelease>", self._schedule_autosave)
@@ -14317,11 +14295,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._after_edits_without_a_key(
             self.title_entry,
             lambda: (self._schedule_autosave(), self._refresh_title_count()))
-        # add="+": add_placeholder() above already bound <<Paste>> to clear
-        # the placeholder first, and a plain bind() here would replace it --
-        # which is exactly how the title came to paste "Note title...X".
-        # Registration order is the run order, so the clear happens before
-        # the length cap below is measured against the field's contents.
+        # add="+" keeps the placeholder's clear, which runs first (replaced,
+        # a paste read "Note title...X"); then the length cap measures.
         self.title_entry.bind("<<Paste>>", self._on_title_paste, add="+")
         # A middle-click is a paste too (Tk binds it on Windows as well).
         self.title_entry.bind("<<PasteSelection>>", self._on_title_paste_selection,
@@ -14333,11 +14308,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # however it's set (load, template, restore, etc.).
         self.category_var.trace_add(
             "write", lambda *a: self._refresh_category_button_safe())
-        # Custom themed dropdown (replaces ttk.Combobox, which can't be fully
-        # themed — its popup list stays OS-white). This button shows the current
-        # category with a colored bullet and opens an in-theme list on click.
-        # Uses plain Labels only (no Canvas) — simpler and more consistent
-        # across platforms/DPI settings than mixing widget types.
+        # A themed dropdown (ttk.Combobox's list stays OS-white): the category
+        # with its bullet, in plain Labels, consistent across DPI settings.
         self.category_menu = tk.Frame(top_row, bg=self.colors["sidebar"],
                                       highlightthickness=1,
                                       highlightbackground=self.colors["card"])
@@ -14389,30 +14361,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.date_entry.pack(side="left", padx=(6, 4), ipady=3)
         # The empty field shows its form: the order a typed date is read in.
         self.add_placeholder(self.date_entry, DATE_FORM)
-        # Finishing with the field settles what was typed into the form it
-        # shows (_settle_date_fields): 17.10 becomes 17.10.2026 then, and
-        # only then -- read while someone is still typing, "17.10.20" on its
-        # way to 2026 would be stored as 2020. What finishing means is wired
-        # in one place, for this field and the repeat's end date alike.
+        # Finishing settles the date into its form (_settle_date_fields), and
+        # only then: mid-typing, "17.10.20" would be stored as 2020. Wired
+        # once, for this field and the repeat's end alike.
         self._watch_date_field(self.date_entry)
         # Typing a date directly (as opposed to using the picker popup, which
         # already autosaves via _pick()) previously had no autosave binding
         # at all, so a typed date change could be silently lost.
         self.date_entry.bind("<KeyRelease>", self._schedule_autosave)
-        # And a PASTED date reaches the field without any key release, so the
-        # line above never sees it -- measured: a pasted date scheduled no
-        # save at all while a typed character did. That is the same silent
-        # loss the comment above describes, on the route the paste menu below
-        # is about to open. add="+" keeps add_placeholder's own <<Paste>>
-        # clear, which runs first and is what stops the paste landing on top
-        # of the field's form (DATE_FORM).
+        # A PASTED date has no key release and scheduled no save. add="+"
+        # keeps the placeholder's clear, first, so it does not land on the
+        # field's form (DATE_FORM).
         self.date_entry.bind("<<Paste>>", self._schedule_autosave, add="+")
-        # The repeat's summary reads the start date from this field: every
-        # route that changes it redraws the summary (typing and pasting here,
-        # the picker's _pick, clear_note_date). Only the repeat's own boxes
-        # did, and the summary went on saying "needs a start date" after one
-        # was typed, or naming a date already put right. A paste lands after
-        # this binding returns, so its redraw waits for idle.
+        # The repeat's summary reads this date, so every route changing it
+        # redraws it (it said "needs a start date" after one was typed); a
+        # paste lands later, so its redraw waits for idle.
         self.date_entry.bind("<KeyRelease>",
                              lambda _e: self.update_recurrence_summary(),
                              add="+")
@@ -14453,11 +14416,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.day_date_lbl = tk.Label(meta_row, text="", font=("Segoe UI", 10))
         self.track_theme(self.day_date_lbl, bg="bg", fg="text")
         self._date_row_label = date_label
-        # ...and beside it, the way to hold that one day on another date while
-        # it stays a day of the series (_move_this_day). Long-lived, so every
-        # colour it has follows the theme. It shares a frame with Reset below,
-        # which goes under the date when the row has no room for the two
-        # (_place_day_buttons).
+        # ...beside it, moving the one day (_move_this_day), tracked; its frame
+        # with Reset goes under the date when the row is short.
         self.day_btns = tk.Frame(meta_row)
         self.track_theme(self.day_btns, bg="bg")
         self._day_btns_wrapped = None
@@ -14469,10 +14429,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.track_theme(self.day_move_btn, bg="sidebar", fg="text",
                          activebackground="card", activeforeground="text",
                          highlightbackground="bg", highlightcolor="focus_ring")
-        # ...and, while the day has something to reset -- a move, or text of
-        # its own -- the way back to the series, from the day itself: in the
-        # calendar's right-click menu alone, it was not found (field request,
-        # 2026-10-13). The menu's own Reset, with its questions.
+        # ...and, with a move or text to reset, the menu's Reset from the day
+        # itself: in the menu alone it was not found (field request).
         self.day_reset_btn = tk.Button(self.day_btns, text="↺ Reset this day…",
                                        relief="flat", cursor="hand2",
                                        font=("Segoe UI", 9),
@@ -14518,26 +14476,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.track_theme(self.word_count_lbl, bg="bg", fg="subtext")
         self.word_count_lbl.pack(side="right")
 
-        # --- Formatting toolbar: Bold/Italic/Underline/Strikethrough toggle
-        # buttons, applying to the current selection. Requires an active
-        # selection (no sticky format-at-cursor in this first version) —
-        # see _toggle_body_style. Each button previews its own style in its
-        # own label font. ---
+        # --- Formatting toolbar: the style toggles (_toggle_body_style), each
+        # labelled in its own style. ---
         format_bar = tk.Frame(self.editor)
         self.track_theme(format_bar, bg="bg")
         format_bar.pack(fill="x", padx=30, pady=(0, 4))
 
-        # Two rows, and the controls are dealt into them by width rather
-        # than packed straight in. Everything fits one row at the sizes this
-        # app is used at; the second exists so that a narrow window, a
-        # different font, or a scaled display can never put a control out of
-        # reach. See _reflow_format_bar.
+        # Controls dealt into rows by width (_reflow_format_bar): one row
+        # usually, more so no window, font or scale puts one out of reach.
         self._fmt_bar = format_bar
         self._fmt_bar_items = []
         self._fmt_bar_rows = []
-        # Three, not two: the number of rows needed depends on the font, and
-        # a machine whose substitute font is much wider than this was
-        # measured on could want a third. Unused rows cost nothing -- they
+        # Three: a much wider substitute font could want one; unused rows
         # are never packed.
         for _ in range(3):
             row = tk.Frame(format_bar)
@@ -14547,11 +14497,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         format_bar.bind("<Configure>", self._on_format_bar_resize)
 
         self._fmt_buttons = {}
-        # List buttons get their own registry rather than sharing _fmt_buttons:
-        # dict is driven by _refresh_format_buttons, which asks whether the
-        # *selection* carries a character style. A list is a property of a
-        # line, so it would answer "no" every time and hold the buttons
-        # permanently unpressed.
+        # List buttons apart from _fmt_buttons, which asks the *selection*
+        # for a character style: a list belongs to a line, never "pressed".
         self._list_buttons = {}
         self._align_buttons = {}
         self._pending_styles = set()  # styles queued up for the next typed char
@@ -14582,10 +14529,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._attach_tooltip(btn, tip, tip_detail)
             self._fmt_buttons[style] = btn
 
-        # Font: a family and a size, as dropdowns rather than buttons —
-        # neither is a toggle, and neither fits in three characters. They
-        # sit before Colors because they are the coarsest thing here: the
-        # typeface a run is set in, before anything is done to it.
+        # Font: family and size as dropdowns (no toggle, no three letters),
+        # before Colors as the coarsest thing here.
         font_divider = tk.Frame(format_bar, width=1)
         self.track_theme(font_divider, bg="card")
         self._add_fmt_item(font_divider, padx=(5, 5), fill="y", pady=3)
@@ -14614,22 +14559,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._attach_tooltip(size_dd, "Font size",
                              "Default follows the size set in Settings")
 
-        # A thin divider + short label mark the color pickers as their own
-        # group, distinct from the four toggle buttons — they work
-        # differently (open a picker rather than applying anything
-        # directly) and deserve to read that way at a glance, not blend
-        # into the row as two more toggle-looking buttons.
+        # A divider and label make the colour pickers their own group: they
+        # open a picker, and should not read as two more toggles.
         divider = tk.Frame(format_bar, width=1)
         self.track_theme(divider, bg="card")
         self._add_fmt_item(divider, padx=(5, 5), fill="y", pady=3)
-        # Text color / Highlight: unlike the four toggle buttons above,
-        # these open a swatch picker rather than applying anything
-        # directly (there's no single obvious "the" color to toggle).
-        # Each button previews the current state as an actual swatch —
-        # its own background set to the chosen color, with the "A"/"H"
-        # letter's contrast computed to stay legible against it — falling
-        # back to the theme's normal button look when nothing is set. See
-        # _refresh_format_buttons / _contrasting_fg.
+        # Text color / Highlight open a swatch picker, and each button is a
+        # swatch of the colour set, its letter kept legible (_contrasting_fg);
+        # with none, the theme's button.
         self.text_color_btn = tk.Button(
             format_bar, text="A", font=("Segoe UI", 10, "bold"), width=2,
             relief="flat", cursor="hand2")
@@ -14650,10 +14587,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._attach_tooltip(self.highlight_btn, "Highlight",
                              "Colours the background behind the letters")
 
-        # Paragraph formatting -- what a whole line looks like -- kept apart
-        # from the Style group, which is about the characters inside it. The
-        # name is not "Lists": the note already has a Checklist below, and
-        # two things called lists in one editor is one too many.
+        # Paragraph -- a whole line -- apart from Style, the characters; not
+        # "Lists", beside the Checklist below.
         para_divider = tk.Frame(format_bar, width=1)
         self.track_theme(para_divider, bg="card")
         self._add_fmt_item(para_divider, padx=(5, 5), fill="y", pady=3)
@@ -14673,11 +14608,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._attach_tooltip(btn, tip, tip_detail)
             self._list_buttons[kind] = btn
 
-        # Alignment sits in the same group: it is another property of the
-        # whole line. The icons are drawn rather than lettered -- there is no
-        # icon font to lean on and the app ships no image assets, and drawn
-        # bars recolour with the theme, which a picture would not. Same
-        # approach as the Settings nav glyphs.
+        # Alignment belongs to the line too. Its icons are drawn, as the
+        # Settings glyphs are: no icon font or image, and they recolour.
         for align, tip in (("left", "Align left"), ("center", "Centre"),
                            ("right", "Align right")):
             btn = self._make_align_button(format_bar, align)
@@ -14769,14 +14701,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.body_text.bind("<Return>", self._on_body_return)
         self.body_text.bind("<BackSpace>", self._on_body_backspace)
         self.body_text.bind("<Delete>", self._on_body_delete_key)
-        # Ahead of every other binding the body has: Tk's own deletes --
-        # Delete, BackSpace, typing over a selection, Cut -- put no tag on
-        # the undo stack, so Ctrl+Z brought styled text back plain. This
-        # notes the formatting first (see _note_styled_delete).
-        # Every key is noted going down first, its own binding or none, so
-        # what the key before typed is settled before this one acts (see
-        # _note_key_down); the body's <KeyPress> then speaks for the keys
-        # that type.
+        # First of all: Tk's deletes left no tag on the undo stack, so this
+        # notes the formatting (_note_styled_delete), and settles the key
+        # before (_note_key_down); <KeyPress> speaks for the typing keys.
         self.bind_class(self._STYLED_DELETE_TAG, "<KeyPress>",
                         self._note_key_down)
         # A delete that reaches a list is the app's own, in one undo unit
@@ -14785,12 +14712,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         self._list_aware_delete, add="+")
         self.bind_class(self._STYLED_DELETE_TAG, "<KeyPress>",
                         self._note_styled_delete, add="+")
-        # Each virtual binding says what it is: a key that means Cut or
-        # Paste (Ctrl+X, Ctrl+V) arrives as that key's own press, and read
-        # as a key, Ctrl+X was no delete at all -- the bold it cut came
-        # back plain on Ctrl+Z. Only the menu's Cut was a virtual event.
-        # The same outranking hid Ctrl+V and Shift+Insert from
-        # _note_key_down, and a paste after its Ctrl wore the word's style.
+        # Each virtual binding says what it is: read as keys, Ctrl+X cut bold
+        # that Ctrl+Z gave back plain, and a paste wore the word's style.
         for virtual, name in (("<<Cut>>", "cut"), ("<<Clear>>", "clear"),
                               ("<<Paste>>", None)):
             self.bind_class(self._STYLED_DELETE_TAG, virtual,
@@ -14811,10 +14734,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             lambda e: self._paste_selection_capped(e, in_body=True), add="+")
         self.body_text.bind("<Tab>", lambda e: self._on_body_tab(e, +1))
         self.body_text.bind("<Shift-Tab>", lambda e: self._on_body_tab(e, -1))
-        # X11 reports Shift+Tab as its own keysym rather than a modified Tab.
-        # Windows has never heard of it, and binding an unknown keysym is an
-        # error there, so this is allowed to fail rather than guarded by a
-        # platform check -- the same binding is simply unnecessary on Windows.
+        # X11's own Shift+Tab keysym, an error to bind on Windows (where it is
+        # not needed): allowed to fail.
         try:
             self.body_text.bind("<ISO_Left_Tab>",
                                 lambda e: self._on_body_tab(e, -1))
@@ -14843,50 +14764,32 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                             add="+")
         self.body_text.bind("<KeyRelease>", self._extend_word_styles_on_typing,
                             add="+")
-        # What the key did, settled at its release or at the next key's
-        # press (see _spread_typed_run): a key with no binding of its own
-        # here -- the keys that type -- sets two marks at the caret, and
-        # what it types lands between them.
+        # A typing key sets two marks at the caret; what lands between is
+        # settled at its release or the next press (_spread_typed_run).
         self.body_text.bind("<KeyPress>", self._note_typing_key, add="+")
-        # KeyRelease alone re-centred the line one frame LATE -- the
-        # character appears left-justified for a blink, then snaps to the
-        # middle. An idle callback scheduled at KeyPress runs right after
-        # the class binding inserts the character and BEFORE Tk repaints,
-        # so the line never shows its uncentred moment.
+        # At KeyRelease the line re-centred a frame LATE; idle from KeyPress
+        # runs after the insert and before the repaint.
         self.body_text.bind(
             "<KeyPress>",
             lambda e: self.after_idle(self._reassert_line_alignment),
             add="+")
         self.body_text.bind("<ButtonRelease-1>", self._caret_out_of_hidden, add="+")
         self.body_text.bind("<ButtonRelease-1>", self._caret_past_marker, add="+")
-        # Overrides Tk's default double-click "select word" so punctuation
-        # like "." always breaks a word (and an empty line selects
-        # nothing), and its default triple-click "select line" so it stops
-        # at the real end of the line instead of overshooting into the
-        # trailing newline. The comments box gets the same treatment.
+        # Double-click words break at punctuation, an empty line selects
+        # nothing, and triple-click stops before the newline (comments too).
         self._bind_text_selection_fixes(self.body_text)
-        # A paste (Ctrl+V, or the right-click menu's synthetic <<Paste>>)
-        # must never pick up a pending style — resyncing here, right after
-        # the paste's own text lands, means the length-based growth check
-        # in _apply_pending_style_to_typed_char sees no NEW growth by the
-        # time that KeyRelease callback runs, so it correctly does nothing.
+        # A paste never takes a pending style: resynced as it lands, the
+        # growth check in _apply_pending_style_to_typed_char sees none.
         self.body_text.bind("<<Paste>>", self._resync_pending_style_anchor, add="+")
-        # Keyboard shortcuts for the same four toggles as the toolbar/menu.
-        # Bound to body_text specifically, not the whole app, so they only
-        # fire while actually editing the note body. Each returns "break"
-        # to stop Tk's own default handling of the key combo (relevant on
-        # some Tk builds/platforms where Ctrl+letter combos have a default
-        # Text-widget behavior of their own) from also running.
+        # The toggles' shortcuts, on the body only; "break" stops Tk's own
+        # Ctrl+letter behaviour on builds that have one.
         for key, style in self.FORMAT_KEYS:
             self.body_text.bind(key, lambda e, s=style: (self._toggle_body_style(s), "break")[1])
         # Let the mousewheel scroll the text box's own content when it overflows,
         # instead of bubbling up to the editor's outer scroll.
         self._bind_text_wheel(self.body_text)
-        # Plain text labels, no decorative glyph prefixes: the styled
-        # characters these used to carry (astral math letters, combining
-        # underline/strike marks, an emoji) all render at different widths,
-        # so the words after them lined up neither with each other nor with
-        # the unprefixed Cut/Copy/Paste entries above.
+        # Plain labels: styled glyph prefixes had their own widths, and the
+        # words lined up with nothing.
         self._add_paste_menu(self.body_text, extra_items=[
             ("Bold", lambda: self._toggle_body_style("bold"), "Ctrl+B"),
             ("Italic", lambda: self._toggle_body_style("italic"), "Ctrl+I"),
