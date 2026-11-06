@@ -227,6 +227,10 @@ is in the table below as well.
 | [Wave 3: a promise about Enter, kept by one copy of the question](#wave-3-a-promise-about-enter-kept-by-one-copy-of-the-question) | A promise in the person's documents is a rule every copy of the code must keep; find the copies before trusting the one that was fixed. | next |
 | [Wave 2: the timers that ran inside a question](#wave-2-the-timers-that-ran-inside-a-question) | A question that waits is a window in which every timer runs: read what it decides about after it is answered, never before. | next |
 | [The comments that told every story twice](#the-comments-that-told-every-story-twice) | A comment says why; the story of how goes where stories are kept, with a pointer left behind. | next |
+| [Wave 2's lows: three checks that could not tell](#wave-2s-lows-three-checks-that-could-not-tell) | Before trusting a check, build the world without the fix, not a gentler one. | next |
+| [Wave 2's lows: Ctrl+Z read from a guess, then from the event](#wave-2s-lows-ctrlz-read-from-a-guess-then-from-the-event) | Record an event where it happens, for that event only, rather than inferring it from a state with other causes. | next |
+| [Wave 2's lows: a tab turned behind Settings](#wave-2s-lows-a-tab-turned-behind-settings) | When the same loss comes back by another road, fix the place every road passes, not the road. | next |
+| [Wave 2's lows: the banner that waited](#wave-2s-lows-the-banner-that-waited) | A message held back is about the past: ask it again when it is finally said, and say whose it is. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -3895,6 +3899,131 @@ commit went in with `check_mutant_targets.py` red, its exit code read through `|
 
 **Takeaway:** a comment says why; the story of how goes where stories are kept, with a pointer
 left behind.
+
+### Wave 2's lows: three checks that could not tell
+
+*(2026-11-06 · the lows of the final audit's second wave, fixed in two batches and every fix
+mutation-tested)*
+
+**Symptom:** three checks passed whether or not their fix was there:
+
+- **Ctrl+Z that did two things.** In a table cell, Ctrl+Z took back the cell's last typing and
+  the banner's Undo too: Tk's own Undo runs first, and the app then saw nothing left to undo. The
+  qa check for "one press undid twice" built a box with TWO steps, so one press always left one,
+  and the check passed whatever the order. (The fix itself guessed, and was wrong twice: see the
+  next story.)
+- **A Trash restore that restored nothing.** The check that a note kept aside and put back from
+  the Trash stays moved it to the Trash without taking it out of the notes: the "restore" made a
+  second copy, and the mutant (no forgetting on restore) survived.
+- **One check left Settings open for the rest of the suite.** With the mutant for "Show all
+  leaves Settings", the page stayed up, every later keyboard check typed into it, and the suite
+  ended early: NO-RUN, not KILLED.
+
+**Mechanism:** each check built a gentler world than the bug's -- two undo steps where one
+matters, a "restore" that copied, a page its own failure left open.
+
+**Fix:** the box has one step; the note is deleted as a delete does; the check closes Settings in
+its own `finally`.
+
+**Takeaway:** before trusting a check, ask what the world looks like when the fix is gone -- one
+undo step, a note really gone, a page left open -- and build that world, not a gentler one.
+
+### Wave 2's lows: Ctrl+Z read from a guess, then from the event
+
+*(2026-11-06 to 2026-11-07 · the lows wave's verification, rounds 1 to 6)*
+
+**Symptom:** the lows fix for "Ctrl+Z in a cell undid twice" decided whether the cell's own Undo
+had just taken typing back by looking at what it left: a redo step. Two verification rounds each
+found a road where that guess was wrong, both of medium weight:
+
+- **Round 1.** The note's text and comments ask before their own Undo runs, so a redo step there
+  is an EARLIER press's. Ctrl+Z after an undo did nothing at all while the banner offered Undo.
+  Patched with a flag for those two boxes.
+- **Round 2.** The same guess on the all-tag road: a table cell holding only a redo step -- its
+  typing taken back a moment before -- did nothing too, and so did the comments with Caps Lock
+  on, which reach Tk's own Undo.
+
+**Mechanism:** the guess. A redo step has other causes than this press.
+
+**Fix:** Tk's own `<<Undo>>` is now bound on the Text class (`_text_class_undo`): it undoes as Tk
+does and records whether this press took anything back, and the banner's Undo reads that record.
+The rounds after found what the guess had hidden:
+
+- **Round 3 (medium).** Ctrl+Shift+Z, the Redo key, matched `<Control-Z>` -- bound for Caps Lock,
+  and a Tk pattern allows extra modifiers -- and ran the banner's Undo from a cell, a title or the
+  list. A press with Shift held is now never the banner's Undo. The record also outlived its
+  press: left by a Caps Lock press with no banner up, it made the next Ctrl+Z in the comments do
+  nothing. It is now forgotten at idle, so it belongs to one press only.
+- **Round 4 (low).** In a table cell the Redo key did nothing (Tk on Windows redoes by Ctrl+Y
+  alone), and under Caps Lock, where it arrives as a lower-case z, it undid a second step. A Text
+  class binding now redoes, and the class Undo redoes when Shift is held. That fix made round 3's
+  mutant survive: its check pressed the key in a text box, which the new Redo now answers before
+  the banner's code. The check presses it on the list as well.
+- **Round 5 (medium).** A cell left with Enter and opened again took the banner's Undo with
+  Ctrl+Z: the cell's typing was already in the note's own journal, which the record did not
+  count. The count of steps now rises where every step is pushed (`_push_atom_step`) -- placed
+  first at the step's end, it missed the cell's commit, and qa1's count stood still to show it.
+- **Round 6 (medium).** A style applied in a cell, then Ctrl+Z: the style was a step the count did
+  not know, and the banner's Undo went instead. A style now counts as the cell's own edit.
+
+**Takeaway:** do not infer what an event did from the state it left when the state has other
+causes. Record the event where it happens, and keep the record no longer than the event. A key
+binding matches more than it names: list every key that reaches it. And count where every step
+passes, not where one road ends.
+
+### Wave 2's lows: a tab turned behind Settings
+
+*(2026-11-07 · the lows wave's verification, rounds 4 to 7; high twice)*
+
+**Symptom:** round 4 of the lows wave's verification made Show all take the person to the list.
+Round 5 found it high: pressed with Settings open over a template being written, its question
+answered Cancel, Show all still turned the tab, and the template editor kept for the person was
+destroyed with its words. Round 5's fix asked Settings first. Round 6 found the same loss by
+another road (Ctrl+S over Settings turned the tab behind it), high again.
+
+**Mechanism:** a change of the tab behind Settings closed what Settings holds, whichever road
+turned it; each fix closed one road.
+
+**Fix:** at the class: while Settings is open, a change of the tab behind it no longer closes what
+Settings holds. Round 7 added that Ctrl+S over Settings saves without turning the calendar either.
+
+**Takeaway:** when a fix moves the screen, ask what the screen it leaves is holding; and when the
+same loss comes back by another road, fix the place every road passes, not the road.
+
+### Wave 2's lows: the banner that waited
+
+*(2026-11-06 to 2026-11-07 · the lows wave and its verification, rounds 1 to 10)*
+
+**Symptom:** a new note hidden by Show, or an "(earlier text)" note, said over an Undo still
+offered, took the delete's only way back (wave 2, round 2). The lows wave held such banners back
+until the Undo went. The verification rounds then found what holding back does to a message:
+
+- **Round 1 (medium).** Put on the status line, the next autosave wrote over it within a second.
+  Now it shows beneath the Undo, and as its own banner with Show all once the Undo goes.
+- **Round 2 (lows).** "Once the Undo goes" was also "the moment Undo is clicked", so the held-back
+  banner covered what the Undo itself said. One slot kept only the last of two. The "(earlier
+  text)" banner offered Show for a note deleted or spent meanwhile. And "Saved in General, hidden
+  by Show: Work", shown seconds late, read as being about the note the Undo had just put back.
+
+**Mechanism:** a message held back is said about a moment that has passed.
+
+**Fix:** the held-back banners are a list shown in turn, behind any banner put up since
+(`_banners_in_turn`). Each asks again, when it is finally shown, whether it still has something
+true to say, and the hidden note's banner names its note. The rounds after kept finding banners
+and timers on the same seam, none above low once round 7 came back clean:
+
+- **Round 7.** The Undo ran out under a question it could not be clicked through: it now waits the
+  question out, and four seconds more.
+- **Round 8 (the verification's second clean round).** Asking again cost a read of the whole list
+  per hidden note -- a large import froze; the list is read once. "Import cancelled" and the
+  comments' table notice still showed straight over an Undo.
+- **Round 9.** Round 8's finding had named "Earlier text of N days … Show" as a sibling; only
+  "Import cancelled" was moved, and the record said both. Now every such banner goes through
+  `_banner_after_undo`. Round 10 found nothing at all.
+
+**Takeaway:** a message held back is a message about the past. Ask it again when it is finally
+said, and say whose it is. And a finding that names its siblings is closed when each sibling is,
+not when the first is.
 
 ## Tk & platform gotchas
 
