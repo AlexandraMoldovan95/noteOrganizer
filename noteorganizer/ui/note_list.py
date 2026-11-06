@@ -237,9 +237,18 @@ class NoteListMixin:
         if hides:
             tail = (f"hidden by {hides}" if len(notes) == 1
                     else f"{len(hidden)} of them hidden by {hides}")
-            self._show_toast(f"{what}, {tail}", kind="info",
-                             action=lambda: self._show_all_notes(hidden[0]),
-                             action_text="Show all")
+            said = f"{what}, {tail}"
+
+            def say():
+                # Asked again when shown, as it can wait behind an Undo.
+                still = [n for n in hidden if any(m is n for m in self.notes)
+                         and n.get("id") not in self._visible_note_ids()]
+                if still:
+                    self._show_toast(said, kind="info", action=lambda: self._show_all_notes(still[0]),
+                                     action_text="Show all")
+            # Not over an Undo still showing: 'Day removed' holds the day's
+            # text in it alone (the lows wave's round 6).
+            self._banner_after_undo(said, say)
 
     def _bring_card_into_view(self, note_id):
         """Draw the list down to *note_id*'s card, if it is still waiting to

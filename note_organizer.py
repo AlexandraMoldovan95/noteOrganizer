@@ -3352,6 +3352,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         editor = getattr(self, "_cell_editor", None)
         if not editor:
             return
+        # An edit of the note's, as a journal step is, which the banner's
+        # Undo then stands behind (_toast_undo_key; the lows wave's round 6).
+        self._units_done = getattr(self, "_units_done", 0) + 1
         t = editor["entry"]
         try:
             s, e = t.index("sel.first"), t.index("sel.last")
@@ -12382,9 +12385,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # Undo toast: a question before every tidy-up costs more than
             # the risk, and confirmation follows how recoverable a loss is.
             label = _truncate(item.get("text", ""), 40)
+            where = (self.selected_note_id, self.current_occurrence_date)
             self._show_toast(
                 f"Removed “{label}”" if label else "Checklist item removed",
-                action=lambda: self._undo_checklist_delete(items, index, item))
+                action=lambda: self._undo_checklist_delete(items, index, item, where))
 
         bin_btn = tk.Button(row, text="🗑", command=delete, relief="flat",
                             cursor="hand2", bg=self.colors["card"],
@@ -13699,7 +13703,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             cursor="hand2")
         self._toast_action = None
         self.toast_action_lbl.bind(
-            "<Button-1>", lambda _e: self._run_toast_action())
+            "<Button-1>", lambda _e: self._run_toast_action_by_click())
         # A Tab stop (its ring the pixel of padding it gave up), and Ctrl+Z
         # outside a text box while it is offered (_toast_undo_key).
         self._ring_round(self.toast_action_lbl)
@@ -13821,10 +13825,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             except (tk.TclError, KeyError):
                 pass
         self.notebook.bind("<<NotebookTabChanged>>", _on_tab_changed, add="+")
-        # Notes <-> Calendar: same rule -- a popup belongs to the page it
-        # was opened on.
+        # Notes <-> Calendar: a popup belongs to the page it was opened on --
+        # over Settings, Settings': the tab turned behind it (a save sent back
+        # to the calendar) destroyed the template editor kept (lows rounds 5-6).
         self.notebook.bind("<<NotebookTabChanged>>",
-                           lambda e: self._dismiss_mini_popup(), add="+")
+                           lambda e: None if getattr(self, "_settings_open", False)
+                           else self._dismiss_mini_popup(), add="+")
 
 
 
@@ -20917,16 +20923,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         else:
             self.set_status(f"Put back {len(restored)} note(s)")
 
-    def _undo_checklist_delete(self, items, index, item):
+    def _undo_checklist_delete(self, items, index, item, where=None):
         """Put a removed checklist item back where it was. `items`, the list
         it left, is checked by IDENTITY: every change of what the editor
         holds rebinds `_working_checklist`, and an old list was "put back"
         into while nothing read it -- a confident lie. The stamp is fresh,
         unlike _undo_bulk_category's: this edit happened in the editor.
         """
-        if self._get_checklist() is not items:
-            self._show_toast("That note is no longer open", kind="info")
-            return
+        current = self._get_checklist()
+        if current is not items:
+            # The same note and day opened again, read back with the very list
+            # the row left: the row goes into it. Refused, it was in no file
+            # (the lows wave's round 6); another list -- a template's -- is.
+            if where != (self.selected_note_id, self.current_occurrence_date) or current != items:
+                self._show_toast("That note is no longer open", kind="info")
+                return
+            items = current
         if any(existing is item for existing in items):
             # A second click on a toast that has not yet faded. Matched by
             # identity, not equality, so an item the user has since typed
@@ -21507,6 +21519,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._hide_toast()
         if action is not None:
             action()
+
+    def _run_toast_action_by_click(self):
+        """The toast's offer clicked: one press, one question. An action that
+        asked about a popup, kept, left the window's click-outside to ask
+        again, and its No threw the work away (the lows wave's round 6)."""
+        self._run_toast_action()
+        return "break" if getattr(self, "_mini_popup", None) is not None else None
 
     def _run_toast_action_by_key(self):
         """The toast's Undo pressed from the keyboard: the banner goes, and

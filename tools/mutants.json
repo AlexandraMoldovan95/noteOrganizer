@@ -17054,8 +17054,8 @@
     "id": "WS137",
     "about": "The note's edits since a banner's Undo was offered are not counted",
     "edits": [{"file": "note_organizer.py",
-               "find": "        self._units_done = getattr(self, \"_units_done\", 0) + 1\n",
-               "replace": ""}],
+               "find": "        self._units_done = getattr(self, \"_units_done\", 0) + 1\n        journal.append(",
+               "replace": "        journal.append("}],
     "must_fail": ["...and with the banner offering Undo, a cell just clicked takes it, one reopened under an edit does not"],
     "suites": ["qa1"],
     "expect": "killed"
@@ -17067,6 +17067,56 @@
                "find": "        self._toast_units_at = getattr(self, \"_units_done\", 0)\n",
                "replace": ""}],
     "must_fail": ["...and with the banner offering Undo, a cell just clicked takes it, one reopened under an edit does not"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS139",
+    "about": "The tab turned behind Settings destroys the template editor kept, words and all",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                           lambda e: None if getattr(self, \"_settings_open\", False)\n                           else self._dismiss_mini_popup(), add=\"+\")\n",
+               "replace": "                           lambda e: self._dismiss_mini_popup(), add=\"+\")\n"}],
+    "must_fail": ["...and the tab turned behind Settings leaves the template editor and its words"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS140",
+    "about": "A style in an open cell is no edit the banner's Undo stands behind",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self._units_done = getattr(self, \"_units_done\", 0) + 1\n        t = editor[\"entry\"]\n",
+               "replace": "        t = editor[\"entry\"]\n"}],
+    "must_fail": ["...nor one just styled"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS141",
+    "about": "A banner's offer clicked asks about a kept popup twice for one press",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        return \"break\" if getattr(self, \"_mini_popup\", None) is not None else None\n",
+               "replace": "        return None\n"}],
+    "must_fail": ["...but over Settings with the template editor kept, nothing moves, asked once"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS142",
+    "about": "The word on notes brought in where the list does not look takes the place of a live Undo",
+    "edits": [{"file": "noteorganizer/ui/note_list.py",
+               "find": "            self._banner_after_undo(said, say)\n",
+               "replace": "            say()\n"}],
+    "must_fail": ["...and a word on notes brought in where the list does not look waits behind an Undo too"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS143",
+    "about": "A checklist row's Undo, taken after leaving the note and coming back, is refused and the row is in no file",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            items = current\n",
+               "replace": "            self._show_toast(\"That note is no longer open\", kind=\"info\")\n            return\n"}],
+    "must_fail": ["checklist undo: Undo after leaving the note and coming back puts the item back"],
     "suites": ["qa1"],
     "expect": "killed"
   }

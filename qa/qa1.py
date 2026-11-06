@@ -368,8 +368,9 @@ try:
     app.show_settings_page(); app.update()
     app.toggle_settings_panel('templates'); app.update()
     _fh_real_ask = app.ask_yes_no_cancel
-    app.ask_yes_no_cancel = lambda *a, **k: None
-    _fh_kept = False
+    _fh_asks = []
+    app.ask_yes_no_cancel = lambda *a, **k: _fh_asks.append(1)
+    _fh_kept = _fh_turned = False
     try:
         app._edit_template(None, lambda: None); app.update()
         _fh_boxes = []
@@ -382,16 +383,28 @@ try:
         _fh_walk(app._mini_popup)
         _fh_boxes[0].delete(0, 'end')
         _fh_boxes[0].insert(0, 'Packing')
-        app._show_all_notes(); app.update()
+        # Clicked on the banner: one question for one press -- the window's
+        # click-outside asked again, and its No threw the work away (round 6).
+        app._show_toast('Added 1 note, hidden by Show: Work', kind='info',
+                        action=lambda: app._show_all_notes(), action_text='Show all')
+        app.toast_action_lbl.event_generate('<Button-1>'); app.update()
         _fh_kept = (app._mini_popup is not None and bool(app._mini_popup.winfo_exists())
                     and _fh_boxes[0].get() == 'Packing')
         _fh_where = (app._settings_open, app.notebook.index('current'), app.filter_var.get())
+        # ...and the tab turned behind Settings -- a save sent back to the
+        # calendar -- leaves the editor and its words too (round 6).
+        app.notebook.select(app.TAB_NOTES); app.update()
+        _fh_turned = (app._mini_popup is not None and bool(app._mini_popup.winfo_exists())
+                      and _fh_boxes[0].get() == 'Packing')
     finally:
         app.ask_yes_no_cancel = _fh_real_ask
         app._dismiss_mini_popup()
         app.hide_settings_page(); app.update()
-    check(f'...but over Settings with the template editor kept, nothing moves ({_fh_kept}, {_fh_where})',
-          _fh_kept and _fh_where == (True, app.TAB_CALENDAR, 'Work'))
+    check(f'...but over Settings with the template editor kept, nothing moves, asked once '
+          f'({_fh_kept}, {_fh_where}, {len(_fh_asks)})',
+          _fh_kept and _fh_where == (True, app.TAB_CALENDAR, 'Work') and len(_fh_asks) == 1)
+    check(f'...and the tab turned behind Settings leaves the template editor and its words ({_fh_turned})',
+          _fh_turned)
     # Over an Undo still offered, a new note hidden is said on the status
     # line and the Undo stays: a note typed right after a delete took the
     # delete's way back (wave 2, round 2).
@@ -432,6 +445,22 @@ try:
           _fh_seen == ['Put back: Plan Q4', '“Feed the cat” saved in General, hidden by Show: Work',
                        '“Water the plants” saved in General, hidden by Show: Work'])
     app.notes = [n for n in app.notes if n.get('id') in _fh_ids]
+    app._hide_toast(); app.update()
+    # ...and so is the word on notes brought in where the list does not look:
+    # over 'Day removed' it took the one way back to that day's text (round 6).
+    _fh_in = [NO.normalize_note({'id': 8701, 'title': 'Arrived here', 'body': '', 'category': 'General'})]
+    app.notes.extend(_fh_in)
+    app.refresh_note_list(); app.update()
+    app._show_toast('Day removed', action=lambda: None)
+    app._say_hidden_arrivals(_fh_in, 'Added 1 note')
+    app.update()
+    _fh_undo_stays = app._toast_action is not None and 'Day removed' in str(app.toast_lbl.cget('text'))
+    app._hide_toast(); app.update()
+    _fh_after = _fh_toasts[-1][0] if _fh_toasts else None
+    check(f'...and a word on notes brought in where the list does not look waits behind an Undo too '
+          f'({_fh_undo_stays}, {_fh_after!r})',
+          _fh_undo_stays and _fh_after == 'Added 1 note, hidden by Show: Work')
+    app.notes = [n for n in app.notes if n.get('id') != 8701]
     app._hide_toast(); app.update()
 finally:
     app._show_toast = _fh_real_toast
@@ -3551,6 +3580,18 @@ if take_focus(app._cell_editor['entry']):
     app.update()
 check(f"...and with the banner offering Undo, a cell just clicked takes it, one reopened "
       f"under an edit does not ({_cz_taken}; units {_cz_marks})", _cz_taken == ['clicked'])
+# ...nor one just styled: a style is the note's edit too, on no Undo of the
+# cell's own (round 6).
+app._show_toast('Removed “milk”', action=lambda: _cz_taken.append('styled'))
+app._open_cell_editor(app._grid_at_line(1), 1, 0)
+app.update()
+app._editor_apply_style('bold')
+app.update()
+if take_focus(app._cell_editor['entry']):
+    app._cell_editor['entry'].event_generate('<Control-z>')
+    app.update()
+check(f"...nor one just styled ({_cz_taken})", _cz_taken == ['clicked'])
+app._editor_apply_style('bold')
 app._hide_toast()
 app._cell_editor['entry'].delete('1.0', 'end')
 app._cell_editor['entry'].insert('1.0', 'Milk')
@@ -12428,6 +12469,23 @@ check("checklist undo: and the other note's list is untouched",
 # note's list cannot see this, so watch what the app says instead.
 check('checklist undo: and it does not claim to have put anything back',
       'put back' not in str(app.status_lbl.cget('text')))
+
+# ...but the same note opened again within the eight seconds, read back with
+# the very list the row left, takes it: refused, the row was in no file (the
+# lows wave's round 6).
+check('checklist undo: fixture ready for leaving and coming back',
+      _cu_setup(['milk', 'bread']))
+_cu_press(0)
+_cu_undo = app._toast_action
+_cu_home = app.selected_note_id
+app.open_note_in_tab(app.find_note(9101))
+app.update()
+app.open_note_in_tab(app.find_note(_cu_home))
+app.update()
+_cu_undo()
+app.update()
+check(f'checklist undo: Undo after leaving the note and coming back puts the item back ({_cu_texts()})',
+      _cu_texts() == ['milk', 'bread'])
 
 check('checklist undo: fixture ready for the template',
       _cu_setup(['milk', 'bread']))
