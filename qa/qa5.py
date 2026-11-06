@@ -1835,6 +1835,23 @@ finally:
     app._show_toast = _sp_real
 check(f'a note kept aside spent again is said on the banner, with no Show ({_sp_toasts[-1:]})',
       bool(_sp_toasts) and 'gone again' in _sp_toasts[-1][0] and _sp_toasts[-1][1] is None)
+# ...and held back behind an Undo, then spent before that Undo went: its Show
+# is not offered once it goes, waiting for a note gone (the lows wave's round 2).
+_sp_toasts = []
+try:
+    _mv_fixture()
+    _sp_real('Note moved to Trash', action=lambda: None)
+    app._show_toast = lambda text, *a, **k: (_sp_toasts.append((text, k.get('action'))), _sp_real(text, *a, **k))[1]
+    _mv_body(_mv_p2)
+    _mv_body(_mv_p1 + '\n' + _mv_p2)
+    app._hide_toast(); app.update()
+    app._hide_toast(); app.update()
+finally:
+    app._show_toast = _sp_real
+check(f'...and held back behind an Undo, then spent, it offers no Show once the Undo goes '
+      f'({[t for t, _a in _sp_toasts]})',
+      not any('kept as a note of their own' in t for t, _a in _sp_toasts)
+      and any('gone again' in t for t, _a in _sp_toasts))
 # ...one pinned since, or put back from the Trash, is the person's and stays:
 # untouched read as its stamp, it went outright (rounds 7 and 8).
 _mv_fixture()

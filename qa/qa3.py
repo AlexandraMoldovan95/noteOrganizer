@@ -692,6 +692,25 @@ for _la_way, _la_code in (('one note', [{'uid': 'la-add', 'title': 'Paint', 'bod
 check(f"a known note added as a new one is not asked about again as a look-alike ({_la_ways})",
       _la_ways['one note'][0:2] == ([['Cancel', 'Add as a new note', 'Update this note']], 2)
       and len(_la_ways['a batch'][0]) == 1 and _la_ways['a batch'][1:] == (2, 1))
+# ...but as a look-alike of a copy added before, it is: the same code added
+# twice made a second copy unasked (the lows wave's round 2).
+app.notes = [n for n in app.notes if n.get('title') not in ('Paint', 'Fresh')]
+app.notes.append(NO.normalize_note({'id': 9603, 'uid': 'la-add', 'title': 'Paint', 'body': 'walls'}))
+app.notes.append(NO.normalize_note({'id': 9677, 'title': 'Paint', 'body': 'walls', 'color': '#e57373'}))
+app.save_notes(); app.new_note(); app.update()
+_la_asked = []
+app._themed_dialog = _la_add
+if not app._is_placed(app.import_panel):
+    app.toggle_import_panel(); app.update()
+app.import_box.delete('1.0', 'end')
+app.import_box.insert('1.0', NO.encode_share_code(
+    [{'uid': 'la-add', 'title': 'Paint', 'body': 'walls', 'color': '#e57373'}]))
+app._do_inline_import()
+app.update()
+app._themed_dialog = _real_dlg_id
+check(f"...but as a look-alike of a copy added before, it is ({_la_asked})",
+      _la_asked == [['Cancel', 'Add as a new note', 'Update this note'], ['Cancel', 'Add it anyway']]
+      and sum(1 for n in app.notes if n.get('title') == 'Paint') == 2)
 # "Added 1 note", not "Added 1 notes": one fresh note in, one look-alike skipped.
 app.notes = [n for n in app.notes if n.get('title') not in ('Paint', 'Fresh')]
 app.notes.append(NO.normalize_note({'id': 9604, 'title': 'Paint', 'body': 'walls'}))
@@ -3932,6 +3951,41 @@ app.open_blank_tab(); app.update()
 _ic_open = [a.get('stored_as') for a in app.find_note(1).get('attachments') or []]
 check(f"...and to the note open in the editor, still there once it is left ({_ic_open})",
       'qa3_ic_skip.txt' in _ic_open)
+# ...but "Go back and fix it" on the open note's date leaves it out: its save
+# never made, the file given was read over by the typing (the lows wave's round 2).
+for _ic_name in _ic_names:
+    if os.path.exists(_ic_path(_ic_name)):
+        os.remove(_ic_path(_ic_name))
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Groceries', 'body': 'milk'})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+_ic_real_flush = app._flush_autosave
+app._flush_autosave = lambda *a, **k: False
+_ic_asked = _ic_import(
+    [{'title': 'Groceries', 'body': 'milk',
+      'attachments': [{'name': 's.txt', 'stored_as': 'qa3_ic_skip.txt'}]},
+     {'title': 'Fresh', 'body': 'new'}],
+    ['qa3_ic_skip.txt'], 'skip')
+app._flush_autosave = _ic_real_flush
+_ic_open = [a.get('stored_as') for a in app.find_note(1).get('attachments') or []]
+check(f"...but not when its save was sent back to fix a date ({_ic_asked}, {_ic_open})",
+      any('Possible duplicates' in t for t in _ic_asked) and not _ic_open)
+app._cancel_pending_autosave()
+app.open_blank_tab(); app.update()
+# ...and a look-alike bringing no file leaves the note open alone: read back
+# for nothing, it lost its Ctrl+Z and its place (the lows wave's round 2).
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Groceries', 'body': 'milk'})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.body_text.insert('1.0', 'x'); app.body_text.edit_separator()
+app.body_text.delete('1.0'); app.body_text.edit_separator()
+_ic_asked = _ic_import([{'title': 'Groceries', 'body': 'milk'}, {'title': 'Fresh', 'body': 'new'}],
+                       [], 'skip')
+check(f"...and one bringing no file leaves the note open as it is, its Ctrl+Z too "
+      f"({_ic_asked}, {app._can_edit_undo(app.body_text)})",
+      any('Possible duplicates' in t for t in _ic_asked) and app._can_edit_undo(app.body_text))
+app._cancel_pending_autosave()
+app.open_blank_tab(); app.update()
 # A backup of look-alikes that brings nothing but a file a twin lacks is
 # offered Skip, which gives it the file: Cancel was the default, and deleted
 # it (the lows wave's round 1).
@@ -3946,12 +4000,20 @@ def _ic_skip_if_offered(*a, **k):
     return 'skip' if 'Skip them' in labels else 'cancel'
 
 
+_ic_said = []
+_ic_real_info = app.show_info
+app.show_info = lambda *a, **k: (_ic_said.append(' '.join(str(x) for x in a)), True)[1]
 _ic_import([{'title': 'Groceries', 'body': 'milk',
              'attachments': [{'name': 'd.txt', 'stored_as': 'qa3_ic_dup.txt'}]}],
            ['qa3_ic_dup.txt'], _ic_skip_if_offered)
+app.show_info = _ic_real_info
 _ic_only = [a.get('stored_as') for a in app.find_note(1).get('attachments') or []]
 check(f"a backup of look-alikes bringing only a file a twin lacks offers Skip, which gives it "
       f"({_ic_offered}, {_ic_only})", 'qa3_ic_dup.txt' in _ic_only)
+# ...and says so: "Added 0 note(s)" and nothing more read as nothing done
+# (the lows wave's round 2).
+check(f"...and the import says where the file went ({_ic_said[-1:]})",
+      any('1 attached file(s) went to the notes the skipped ones look like' in s for s in _ic_said))
 for _ic_name in _ic_names:
     if os.path.exists(_ic_path(_ic_name)):
         os.remove(_ic_path(_ic_name))
@@ -5281,6 +5343,21 @@ if _kt_take(_kz_own):
 check(f'...and in any box with an undo of its own, the box\'s too, its last step as well '
       f'({_kz_own.get("1.0", "end-1c")!r})',
       _kz_own.get("1.0", "end-1c") == '' and 'KeyUndoMe' in _trash_titles() and app._toast_action is not None)
+# ...but such a box holding only a redo step -- its last typing taken back a
+# moment before -- takes the offer: read off the redo step left, the press
+# did nothing at all (the lows wave's round 2; a table cell).
+_kz_own.edit_reset()
+_kz_own.insert('end', 'x'); _kz_own.edit_separator()
+_kz_own.edit_undo()
+if _kt_take(_kz_own):
+    _kz_own.event_generate('<Control-z>')
+    _kt_settle()
+check("...and such a box holding only a redo step takes the offer",
+      'KeyUndoMe' in _titles() and 'KeyUndoMe' not in _trash_titles())
+_kz_back = next((n for n in app.notes if n.get('title') == 'KeyUndoMe'), None)
+if _kz_back is not None:
+    app._delete_note(_kz_back, None)
+    _kt_settle(2)
 _kz_own.destroy()
 check('the toast\'s Undo is a Tab stop',
       str(app.toast_action_lbl.cget('takefocus')) == '1')

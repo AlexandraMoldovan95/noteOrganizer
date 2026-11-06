@@ -814,8 +814,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            if not asked and _dup_key(normalize_note(incoming)) in existing_keys:",
-        "replace": "            if _dup_key(normalize_note(incoming)) in existing_keys:"
+        "find": "                incoming, asked_about = copies[0], mine",
+        "replace": "                incoming, asked_about = copies[0], None"
       }
     ],
     "must_fail": ["a code holding notes exactly as they are here asks once"],
@@ -15751,7 +15751,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                return (self._toast_undo_key(event, own_undo_ran=False) if undo and event is not None\n                        else None) or \"break\"\n",
+        "find": "                return (self._toast_undo_key(event) if undo and event is not None\n                        else None) or \"break\"\n",
         "replace": "                return \"break\"\n"
       }
     ],
@@ -15769,7 +15769,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "if self._can_edit_undo(w) else (self._toast_undo_key(e, own_undo_ran=False) or \"break\"))\n",
+        "find": "if self._can_edit_undo(w) else (self._toast_undo_key(e) or \"break\"))\n",
         "replace": "if self._can_edit_undo(w) else \"break\")\n"
       }
     ],
@@ -16513,8 +16513,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                for twin, n in adopting:\n                    self._adopt_backup_attachments(twin, n)\n",
-        "replace": "                for twin, n in adopting:\n                    pass\n"
+        "find": "                    files_given += len(self._files_to_adopt(twin, n))\n                    self._adopt_backup_attachments(twin, n)\n",
+        "replace": "                    files_given += len(self._files_to_adopt(twin, n))\n"
       }
     ],
     "must_fail": [
@@ -16583,8 +16583,8 @@
     "id": "WS90",
     "about": "A note kept aside that the list hides is not said hidden",
     "edits": [{"file": "note_organizer.py",
-               "find": "        said += one_line(kept[\"title\"], 60) + (f\", hidden by {hides}\" if hides else \"\")\n",
-               "replace": "        said += one_line(kept[\"title\"], 60)\n"}],
+               "find": "            return lead + one_line(aside[\"title\"], 60) + (f\", hidden by {hides}\" if hides else \"\")\n",
+               "replace": "            return lead + one_line(aside[\"title\"], 60)\n"}],
     "must_fail": ["a note kept aside that Show hides is said so, and its Show shows all"],
     "suites": ["qa5"],
     "expect": "killed"
@@ -16723,7 +16723,7 @@
     "id": "WS104",
     "about": "A one-note code's known note added as a new one is asked about again as a look-alike",
     "edits": [{"file": "note_organizer.py",
-               "find": "                # Answered: not asked again as a look-alike of the note it is.\n                asked = True\n",
+               "find": "                # of that note only: a copy added before is (lows round 2).\n                asked_about = mine\n",
                "replace": ""}],
     "must_fail": ["a known note added as a new one is not asked about again as a look-alike"],
     "suites": ["qa3"],
@@ -16733,7 +16733,7 @@
     "id": "WS105",
     "about": "Ctrl+Z that takes back a text box's last typing also takes the banner's Undo",
     "edits": [{"file": "note_organizer.py",
-               "find": "                    or (kind == \"Text\" and not self._can_edit_undo(widget)\n                        and not (own_undo_ran and self._can_edit_redo(widget)))):\n",
+               "find": "                    or (kind == \"Text\" and not self._can_edit_undo(widget) and not undid)):\n",
                "replace": "                    or (kind == \"Text\" and not self._can_edit_undo(widget))):\n"}],
     "must_fail": ["...and in any box with an undo of its own, the box's too, its last step as well"],
     "suites": ["qa3"],
@@ -16823,7 +16823,7 @@
     "id": "WS114",
     "about": "A banner held back by an Undo is said beneath it and then never shown: no Show all",
     "edits": [{"file": "note_organizer.py",
-               "find": "        self._show_words_beneath(text)\n        self._after_banner = show\n",
+               "find": "        self._show_words_beneath(text)\n        self._after_banner = (getattr(self, \"_after_banner\", None) or []) + [show]\n",
                "replace": "        self._show_words_beneath(text)\n"}],
     "must_fail": ["...and over an Undo still offered, the Undo stays, the words show beneath it"],
     "suites": ["qa1"],
@@ -16831,11 +16831,12 @@
   },
   {
     "id": "WS115",
-    "about": "Ctrl+Z in the note's text holding only a redo step does nothing: the banner's Undo not taken",
+    "about": "A redo step left in a text box read as this press's undo: Ctrl+Z there does nothing, the banner's Undo not taken",
     "edits": [{"file": "note_organizer.py",
-               "find": "                        and not (own_undo_ran and self._can_edit_redo(widget)))):\n",
-               "replace": "                        and not self._can_edit_redo(widget))):\n"}],
-    "must_fail": ["...and in the note's text holding only a redo step, it takes the offer"],
+               "find": "            undid = took is not None and str(took[0]) == str(widget) and took[1]\n",
+               "replace": "            undid = self._can_edit_redo(widget)\n"}],
+    "must_fail": ["...and in the note's text holding only a redo step, it takes the offer",
+                  "...and such a box holding only a redo step takes the offer"],
     "suites": ["qa3"],
     "expect": "killed"
   },
@@ -16866,6 +16867,86 @@
                "find": "                    bool(updates or copies) or files_too or self._backup_brings_more(state, added_names))\n",
                "replace": "                    bool(updates or copies) or self._backup_brings_more(state, added_names))\n"}],
     "must_fail": ["a backup of look-alikes bringing only a file a twin lacks offers Skip"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS119",
+    "about": "A text box's own Undo keeps no word of what it took back: one press in a cell undoes its typing and the banner's Undo",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self._text_undo_took = (widget, took)\n",
+               "replace": "        self._text_undo_took = None\n"}],
+    "must_fail": ["...and in any box with an undo of its own, the box's too, its last step as well"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS120",
+    "about": "A backup's Skip gives look-alikes' files to their twins and says nothing of it",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if state.get(\"files_given\"):\n",
+               "replace": "        if False:\n"}],
+    "must_fail": ["...and the import says where the file went"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS121",
+    "about": "A backup's Skip gives the open note a look-alike's file after Go back and fix it",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                    adopting = [(twin, n) for twin, n in adopting if twin.get(\"id\") != self.selected_note_id]\n",
+               "replace": "                    pass\n"}],
+    "must_fail": ["...but not when its save was sent back to fix a date"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS122",
+    "about": "A backup's Skip reads the open note back for a look-alike that brings it no file",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                            if twin is not None and self._files_to_adopt(twin, n)]\n",
+               "replace": "                            if twin is not None]\n"}],
+    "must_fail": ["...and one bringing no file leaves the note open as it is, its Ctrl+Z too"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS123",
+    "about": "Banners held back for an Undo are shown at once over what the Undo itself said",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        while waiting and not self._is_placed(self.toast_frame):\n",
+               "replace": "        while waiting:\n"}],
+    "must_fail": ["...and two held back under one Undo come in turn, after what the Undo says"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS124",
+    "about": "Two banners held back for one Undo keep only the last",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self._after_banner = (getattr(self, \"_after_banner\", None) or []) + [show]\n",
+               "replace": "        self._after_banner = [show]\n"}],
+    "must_fail": ["...and two held back under one Undo come in turn, after what the Undo says"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS125",
+    "about": "A note kept aside, held back behind an Undo and spent meanwhile, still offers its Show",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            aside = find_by_uid(self.notes, kept.get(\"uid\"))\n",
+               "replace": "            aside = find_by_uid(self.notes, kept.get(\"uid\")) or kept\n"}],
+    "must_fail": ["...and held back behind an Undo, then spent, it offers no Show once the Undo goes"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS126",
+    "about": "A code's note added as a new one is not asked about as a look-alike of a copy added before",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            existing_keys = {_dup_key(n) for n in self.notes if n is not asked_about}\n",
+               "replace": "            existing_keys = {_dup_key(n) for n in self.notes if asked_about is None}\n"}],
+    "must_fail": ["...but as a look-alike of a copy added before, it is"],
     "suites": ["qa3"],
     "expect": "killed"
   }

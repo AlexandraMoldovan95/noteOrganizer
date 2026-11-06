@@ -300,7 +300,8 @@ try:
     app.save_current_note(); app.update()
     _fh_last = _fh_toasts[-1] if _fh_toasts else (None, None, None)
     check(f'a new note hidden by Show says so, with Show all ({_fh_last[:2]})',
-          _fh_last[0] == 'Saved in General, hidden by Show: Work' and _fh_last[1] == 'Show all')
+          _fh_last[0] == '“Call the dentist” saved in General, hidden by Show: Work'
+          and _fh_last[1] == 'Show all')
     if _fh_last[2]:
         _fh_last[2](); app.update()
     _fh_new = app.selected_note_id
@@ -367,7 +368,28 @@ try:
     check(f'...and over an Undo still offered, the Undo stays, the words show beneath it, and its '
           f'own banner with Show all follows ({_fh_undo_kept}, {_fh_beneath!r}, {_fh_after[:2]})',
           _fh_undo_kept and 'hidden by Show: Work' in _fh_beneath
-          and _fh_after[:2] == ('Saved in General, hidden by Show: Work', 'Show all'))
+          and _fh_after[:2] == ('“Book the vet” saved in General, hidden by Show: Work', 'Show all'))
+    # Two held back under one Undo come in turn, and after what the Undo
+    # itself says: shown at once they covered it, and one slot kept only the
+    # last of two (the lows wave's round 2).
+    _fh_ids = {n.get('id') for n in app.notes}
+    app._show_toast('Note moved to Trash',
+                    action=lambda: app._show_toast('Put back: Plan Q4', kind='info'))
+    for _fh_title in ('Feed the cat', 'Water the plants'):
+        app.new_note(); app.update()
+        app._insert_title(_fh_title)
+        app.save_current_note(); app.update()
+    app._run_toast_action(); app.update()
+    _fh_seen = [_fh_toasts[-1][0] if _fh_toasts else None]
+    app._hide_toast(); app.update()
+    _fh_seen.append(_fh_toasts[-1][0] if _fh_toasts else None)
+    app._hide_toast(); app.update()
+    _fh_seen.append(_fh_toasts[-1][0] if _fh_toasts else None)
+    check(f'...and two held back under one Undo come in turn, after what the Undo says ({_fh_seen})',
+          _fh_seen == ['Put back: Plan Q4', '“Feed the cat” saved in General, hidden by Show: Work',
+                       '“Water the plants” saved in General, hidden by Show: Work'])
+    app.notes = [n for n in app.notes if n.get('id') in _fh_ids]
+    app._hide_toast(); app.update()
 finally:
     app._show_toast = _fh_real_toast
     # Settings left open by a failure would take the keys of every check after.
