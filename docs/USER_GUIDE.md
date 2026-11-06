@@ -981,7 +981,9 @@ When that happens you are asked:
   repeat rule and checklist with the version from the code. It stays the same note in the same
   place, keeps its attachments, and keeps the date it was created. If it was a mistake, the
   editor's **↩ Restore previous** puts all of it back — the ticks in the checklist included,
-  not only the words.
+  not only the words. That way back stays even if you then delete much of the updated note: the
+  words you took away are kept as a note of their own, "<title> (earlier text)", and it goes
+  again by itself if you put those words back (Ctrl+Z, say) without touching it.
 - **Add as a new note** leaves both, so you can read them side by side and delete whichever you
   don't want. The copy is a note in its own right from then on — editing it never touches the
   original.
