@@ -11881,8 +11881,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 if (any(twin.get("id") == self.selected_note_id for twin, _n in adopting)
                         and self._flush_autosave() is False):
                     # ...and said: deleted unsaid, they were what Skip was offered for (round 3).
-                    state["files_left"] = sum(len(self._files_to_adopt(twin, n)) for twin, n in adopting
-                                              if twin.get("id") == self.selected_note_id)
+                    left = [(twin, n) for twin, n in adopting if twin.get("id") == self.selected_note_id]
+                    state["files_left"] = (sum(len(self._files_to_adopt(twin, n)) for twin, n in left),
+                                           left[0][0].get("title") or "")
                     adopting = [(twin, n) for twin, n in adopting if twin.get("id") != self.selected_note_id]
                 files_given = 0
                 for twin, n in adopting:
@@ -12059,8 +12060,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             known_note += (f" {state['files_given']} attached file(s) went to the notes "
                            "the skipped ones look like.")
         if state.get("files_left"):
-            known_note += (f" {state['files_left']} attached file(s) for the note you went back to "
-                           "were not added: import the backup again once it is saved.")
+            # Named: it was said to someone still on Settings (round 4).
+            left, title = state["files_left"]
+            known_note += (f" {left} attached file(s) for “{one_line(title.strip() or 'Untitled note', 40)}” "
+                           "were not added, as that note could not be saved: fix it, then import the "
+                           "backup again.")
         # A sign-out's word for the next start is no longer true: this import
         # finished, its merge saved -- and a session that ends with "Import
         # complete" on screen leaves none (round 8 of the final audit).
@@ -13702,8 +13706,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._pressable(self.toast_action_lbl, self._run_toast_action_by_key)
         for _key in ("<Control-z>", "<Control-Z>"):
             self.bind_all(_key, self._toast_undo_key, add="+")
-        # Tk's own Undo for the other text boxes, telling what it took back.
+        # Tk's own Undo for the other text boxes, telling what it took back,
+        # and the guide's Redo, which Tk on Windows gives Ctrl+Y alone.
         self.bind_class("Text", "<<Undo>>", self._text_class_undo)
+        self.bind_class("Text", "<Control-Shift-Z>", self._text_class_redo)
         self._toast_hide_job = None
         # Not placed yet — shown on demand by _show_toast().
 
@@ -21536,6 +21542,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Tk's own <<Undo>> for a text box, as Tk does it, and whether this
         press took anything back, for the banner's Undo (_toast_undo_key)."""
         widget = event.widget
+        # Ctrl+Shift+Z under Caps Lock arrives as a lower-case z: a Redo, as
+        # it is everywhere -- it undid a second step (the lows wave's round 4).
+        if getattr(event, "state", 0) & 0x0001:
+            return self._text_class_redo(event)
         try:
             # Tk's own separators around it: without them, typing after an
             # undo joins the step below it.
@@ -21560,6 +21570,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _forget_text_undo(self):
         """The record _text_class_undo left, gone once its press is over."""
         self._text_undo_took = None
+
+    @staticmethod
+    def _text_class_redo(event):
+        """Ctrl+Shift+Z in a text box with no Redo of its own (a table cell):
+        the guide's Redo, which did nothing there, or undid (round 4)."""
+        widget = event.widget
+        try:
+            if widget.edit("canredo"):
+                widget.edit("redo")
+        except (tk.TclError, AttributeError):
+            pass
+        return "break"
 
     def _toast_undo_key(self, event):
         """Ctrl+Z, while the toast offers an Undo and the keyboard is not in

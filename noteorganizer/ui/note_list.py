@@ -187,6 +187,15 @@ class NoteListMixin:
         # it: Show all changed a list nobody could see (wave 2, round 12).
         if getattr(self, "_settings_open", False):
             self.hide_settings_page()
+        # ...and from the Calendar, or with the list put away, the list is
+        # brought where it is seen (the lows wave's round 4).
+        try:
+            if self.notebook.index("current") != self.TAB_NOTES:
+                self.notebook.select(self.TAB_NOTES)
+        except tk.TclError:
+            pass
+        if getattr(self, "_sidebar_hidden", False):
+            self.toggle_sidebar()
         if note is not None and self._list_group_of(note) in self.collapsed_groups:
             self._toggle_group_collapsed(self._list_group_of(note))
         self.filter_var.set("All")

@@ -349,6 +349,17 @@ try:
     check(f'Show all from a banner over Settings leaves Settings for the list '
           f'({app._settings_open}, {app.filter_var.get()!r})',
           callable(_fh_last[2]) and not app._settings_open and app.filter_var.get() == 'All')
+    # ...and from the Calendar, with the list put away, it brings the list into
+    # sight first: it changed a list nobody could see (the lows wave's round 4).
+    app.filter_var.set('Work'); app.refresh_note_list(); app.update()
+    app.notebook.select(app.TAB_CALENDAR); app.update()
+    if not app._sidebar_hidden:
+        app.toggle_sidebar(); app.update()
+    if callable(_fh_last[2]):
+        _fh_last[2](); app.update()
+    _fh_where = (app.notebook.index('current'), app._sidebar_hidden, app.filter_var.get())
+    check(f'...and from the Calendar with the list put away, it shows the list first ({_fh_where})',
+          _fh_where == (app.TAB_NOTES, False, 'All'))
     # Over an Undo still offered, a new note hidden is said on the status
     # line and the Undo stays: a note typed right after a delete took the
     # delete's way back (wave 2, round 2).
@@ -14289,6 +14300,28 @@ try:
           _ck_cm_ok and _ck_cm.get('1.0', 'end-1c') == 'first second')
     _ck_cm.delete('1.0', 'end')
     _ck_cm.edit_reset()
+    # ...and in every other text box -- a table cell -- Caps Lock on or off:
+    # under it Tk's own Undo took a second step, without it nothing happened
+    # (the lows wave's round 4).
+    _ck_cell = tk.Text(app, undo=True, height=1, width=10)
+    _ck_cell.place(x=0, y=0)
+    _ck_cell_seen = []
+    for _ck_state in (0x7, 0x5):
+        _ck_cell.delete('1.0', 'end')
+        _ck_cell.edit_reset()
+        _ck_cell.insert('end', 'MILK')
+        _ck_cell.edit_separator()
+        _ck_cell.insert('end', ' 2 L')
+        _ck_cell.edit_separator()
+        _ck_cell.edit_undo()
+        if _ck_z is not None and take_focus(_ck_cell):
+            _ck_cell.event_generate('<KeyPress>', keycode=_ck_z, state=_ck_state)
+            _ck_cell.event_generate('<KeyRelease>', keycode=_ck_z, state=_ck_state)
+            app.update()
+        _ck_cell_seen.append(_ck_cell.get('1.0', 'end-1c'))
+    _ck_cell.destroy()
+    check(f'caps lock: Ctrl+Shift+Z in any other text box redoes, Caps Lock on or off ({_ck_cell_seen})',
+          _ck_cell_seen == ['MILK 2 L', 'MILK 2 L'])
 finally:
     app.body_text.bindtags(_ck_tags)
     del app._body_undo_redo

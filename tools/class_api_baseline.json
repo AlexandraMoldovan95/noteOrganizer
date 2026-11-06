@@ -874,6 +874,7 @@
   "_technical_details": "(self)",
   "_templates_full": "(self, name, replacing=None)",
   "_text_button": "(self, parent, text, command, kind='normal')",
+  "_text_class_redo": "(event)",
   "_text_class_undo": "(self, event)",
   "_text_wheel_scroll": "(self, text_widget, event, fallback_canvas=None)",
   "_themed_dialog": "(self, title, message, kind='info', buttons=None, default=None)",

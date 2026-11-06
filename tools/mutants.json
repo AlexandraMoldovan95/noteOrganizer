@@ -16979,5 +16979,55 @@
     "must_fail": ["...and the files left out are said"],
     "suites": ["qa3"],
     "expect": "killed"
+  },
+  {
+    "id": "WS130",
+    "about": "Show all from a banner over the Calendar changes the list on a tab nobody sees",
+    "edits": [{"file": "noteorganizer/ui/note_list.py",
+               "find": "            if self.notebook.index(\"current\") != self.TAB_NOTES:\n                self.notebook.select(self.TAB_NOTES)\n",
+               "replace": "            pass\n"}],
+    "must_fail": ["...and from the Calendar with the list put away, it shows the list first"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS131",
+    "about": "Show all from a banner with the list put away changes a list nobody sees",
+    "edits": [{"file": "noteorganizer/ui/note_list.py",
+               "find": "        if getattr(self, \"_sidebar_hidden\", False):\n            self.toggle_sidebar()\n",
+               "replace": ""}],
+    "must_fail": ["...and from the Calendar with the list put away, it shows the list first"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS132",
+    "about": "Ctrl+Shift+Z in a table cell does nothing: Tk on Windows redoes by Ctrl+Y alone",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self.bind_class(\"Text\", \"<Control-Shift-Z>\", self._text_class_redo)\n",
+               "replace": ""}],
+    "must_fail": ["caps lock: Ctrl+Shift+Z in any other text box redoes, Caps Lock on or off"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS133",
+    "about": "Ctrl+Shift+Z under Caps Lock in a table cell undoes a second step",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if getattr(event, \"state\", 0) & 0x0001:\n            return self._text_class_redo(event)\n",
+               "replace": ""}],
+    "must_fail": ["caps lock: Ctrl+Shift+Z in any other text box redoes, Caps Lock on or off"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS134",
+    "about": "The files a backup's Skip left out are said without the note they were for",
+    "edits": [{"file": "note_organizer.py",
+               "find": "for “{one_line(title.strip() or 'Untitled note', 40)}” ",
+               "replace": "for the note you went back to "}],
+    "must_fail": ["...and the files left out are said"],
+    "suites": ["qa3"],
+    "expect": "killed"
   }
 ]

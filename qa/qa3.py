@@ -3974,9 +3974,10 @@ app._flush_autosave = _ic_real_flush
 _ic_open = [a.get('stored_as') for a in app.find_note(1).get('attachments') or []]
 check(f"...but not when its save was sent back to fix a date ({_ic_asked}, {_ic_open})",
       any('Possible duplicates' in t for t in _ic_asked) and not _ic_open)
-# ...which is said: deleted unsaid, they were what Skip was offered for (round 3).
+# ...which is said, with the note named: deleted unsaid, they were what Skip
+# was offered for (rounds 3-4).
 check(f"...and the files left out are said ({_ic_said[-1:]})",
-      any('1 attached file(s) for the note you went back to were not added' in s for s in _ic_said))
+      any('1 attached file(s) for “Groceries” were not added' in s for s in _ic_said))
 app._cancel_pending_autosave()
 app.open_blank_tab(); app.update()
 # ...and a look-alike bringing no file leaves the note open alone: read back
@@ -5372,6 +5373,10 @@ _kz_own.insert('end', 'y'); _kz_own.edit_separator()
 _kz_own.edit_undo()
 if _kt_take(_kz_own):
     _kz_own.event_generate('<Control-Shift-Z>')
+    _kt_settle()
+# ...and on the list, which no text box's own Redo answers first (round 4).
+if _kt_take(app.canvas):
+    app.canvas.event_generate('<Control-Shift-Z>')
     _kt_settle()
 check("...but Ctrl+Shift+Z, the Redo key, leaves the offer where it is",
       'KeyUndoMe' in _trash_titles() and app._toast_action is not None)
