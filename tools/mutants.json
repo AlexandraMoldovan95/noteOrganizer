@@ -16567,8 +16567,8 @@
     "edits": [
       {
         "file": "noteorganizer/ui/note_list.py",
-        "find": "        if getattr(self, \"_settings_open\", False):\n            self.hide_settings_page()\n",
-        "replace": "        if False:\n            self.hide_settings_page()\n"
+        "find": "        if not self._leave_settings_for_the_editor():\n            return\n",
+        "replace": ""
       }
     ],
     "must_fail": [
@@ -17028,6 +17028,46 @@
                "replace": "for the note you went back to "}],
     "must_fail": ["...and the files left out are said"],
     "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS135",
+    "about": "Show all over Settings goes on after leaving it was refused, and the tab change destroys the template editor kept",
+    "edits": [{"file": "noteorganizer/ui/note_list.py",
+               "find": "        if not self._leave_settings_for_the_editor():\n            return\n",
+               "replace": "        if getattr(self, \"_settings_open\", False):\n            self.hide_settings_page()\n"}],
+    "must_fail": ["...but over Settings with the template editor kept, nothing moves"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS136",
+    "about": "Ctrl+Z in a cell reopened under the person's edit takes the banner's Undo",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            if (cell is not None and str(cell) == str(widget)\n",
+               "replace": "            if (False and cell is not None and str(cell) == str(widget)\n"}],
+    "must_fail": ["...and with the banner offering Undo, a cell just clicked takes it, one reopened under an edit does not"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS137",
+    "about": "The note's edits since a banner's Undo was offered are not counted",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self._units_done = getattr(self, \"_units_done\", 0) + 1\n",
+               "replace": ""}],
+    "must_fail": ["...and with the banner offering Undo, a cell just clicked takes it, one reopened under an edit does not"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS138",
+    "about": "A banner's Undo keeps no mark of the edits made before it, and a cell just clicked refuses it",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self._toast_units_at = getattr(self, \"_units_done\", 0)\n",
+               "replace": ""}],
+    "must_fail": ["...and with the banner offering Undo, a cell just clicked takes it, one reopened under an edit does not"],
+    "suites": ["qa1"],
     "expect": "killed"
   }
 ]

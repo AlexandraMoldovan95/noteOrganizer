@@ -183,10 +183,11 @@ class NoteListMixin:
         hand draws nothing). The search box is emptied without the focus:
         the banner comes while a new note is being written, and the words
         typed after Show all went into the search."""
-        # From a banner over Settings, Settings is left first, as Back leaves
-        # it: Show all changed a list nobody could see (wave 2, round 12).
-        if getattr(self, "_settings_open", False):
-            self.hide_settings_page()
+        # Settings is left first, as Back leaves it (wave 2, round 12); a
+        # popup holding typed work asks, and kept, nothing moves: the tab
+        # change below destroyed it, words and all (lows round 5).
+        if not self._leave_settings_for_the_editor():
+            return
         # ...and from the Calendar, or with the list put away, the list is
         # brought where it is seen (the lows wave's round 4).
         try:

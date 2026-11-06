@@ -360,6 +360,38 @@ try:
     _fh_where = (app.notebook.index('current'), app._sidebar_hidden, app.filter_var.get())
     check(f'...and from the Calendar with the list put away, it shows the list first ({_fh_where})',
           _fh_where == (app.TAB_NOTES, False, 'All'))
+    # ...but over Settings with the template editor kept -- Cancel at "Save
+    # changes?" -- nothing moves: the tab change destroyed the editor, with
+    # what was typed in it (the lows wave's round 5).
+    app.filter_var.set('Work'); app.refresh_note_list(); app.update()
+    app.notebook.select(app.TAB_CALENDAR); app.update()
+    app.show_settings_page(); app.update()
+    app.toggle_settings_panel('templates'); app.update()
+    _fh_real_ask = app.ask_yes_no_cancel
+    app.ask_yes_no_cancel = lambda *a, **k: None
+    _fh_kept = False
+    try:
+        app._edit_template(None, lambda: None); app.update()
+        _fh_boxes = []
+
+        def _fh_walk(w):
+            for c in w.winfo_children():
+                if isinstance(c, tk.Entry):
+                    _fh_boxes.append(c)
+                _fh_walk(c)
+        _fh_walk(app._mini_popup)
+        _fh_boxes[0].delete(0, 'end')
+        _fh_boxes[0].insert(0, 'Packing')
+        app._show_all_notes(); app.update()
+        _fh_kept = (app._mini_popup is not None and bool(app._mini_popup.winfo_exists())
+                    and _fh_boxes[0].get() == 'Packing')
+        _fh_where = (app._settings_open, app.notebook.index('current'), app.filter_var.get())
+    finally:
+        app.ask_yes_no_cancel = _fh_real_ask
+        app._dismiss_mini_popup()
+        app.hide_settings_page(); app.update()
+    check(f'...but over Settings with the template editor kept, nothing moves ({_fh_kept}, {_fh_where})',
+          _fh_kept and _fh_where == (True, app.TAB_CALENDAR, 'Work'))
     # Over an Undo still offered, a new note hidden is said on the status
     # line and the Undo stays: a note typed right after a delete took the
     # delete's way back (wave 2, round 2).
@@ -3498,6 +3530,32 @@ app.update()
 check(f"Ctrl+Z in a cell just opened leaves its words, and leaving it keeps them "
       f"({_cz_left!r}; {lines_now()[1]!r})",
       _cz_left == 'Milk' and core_tables.split_row(lines_now()[1]) == ['Milk', '2'])
+# With the banner offering Undo, a cell just clicked takes it -- but one the
+# app reopened under the person's edit (Enter) does not: taken, it brought back
+# a checklist row removed a moment before (the lows wave's round 5).
+_cz_taken = []
+app._show_toast('Removed “milk”', action=lambda: _cz_taken.append('clicked'))
+app._open_cell_editor(app._grid_at_line(1), 1, 0)
+app.update()
+if take_focus(app._cell_editor['entry']):
+    app._cell_editor['entry'].event_generate('<Control-z>')
+    app.update()
+app._show_toast('Removed “milk”', action=lambda: _cz_taken.append('reopened'))
+_cz_marks = [getattr(app, '_units_done', None), getattr(app, '_toast_units_at', None)]
+app._cell_editor['entry'].insert('end', ' 2 L')
+app._editor_newline()
+app.update()
+_cz_marks.append(getattr(app, '_units_done', None))
+if take_focus(app._cell_editor['entry']):
+    app._cell_editor['entry'].event_generate('<Control-z>')
+    app.update()
+check(f"...and with the banner offering Undo, a cell just clicked takes it, one reopened "
+      f"under an edit does not ({_cz_taken}; units {_cz_marks})", _cz_taken == ['clicked'])
+app._hide_toast()
+app._cell_editor['entry'].delete('1.0', 'end')
+app._cell_editor['entry'].insert('1.0', 'Milk')
+app._commit_cell_editor()
+app.update()
 
 # Tab walks the cells; at the very last one it makes a new row, which is
 # what lets a whole table be typed without reaching for the mouse.

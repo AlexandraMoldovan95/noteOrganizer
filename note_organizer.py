@@ -12063,8 +12063,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # Named: it was said to someone still on Settings (round 4).
             left, title = state["files_left"]
             known_note += (f" {left} attached file(s) for “{one_line(title.strip() or 'Untitled note', 40)}” "
-                           "were not added, as that note could not be saved: fix it, then import the "
-                           "backup again.")
+                           "were not added while its date or repeat waits to be fixed: once it is, "
+                           "import the backup again.")
         # A sign-out's word for the next start is no longer true: this import
         # finished, its merge saved -- and a session that ends with "Import
         # complete" on screen leaves none (round 8 of the final audit).
@@ -16715,6 +16715,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 and len(before) > 2 and len(after) > 2
                 and _fmt_window_free(before) == _fmt_window_free(after)):
             return
+        # Counted for the banner's Undo, which an edit made since it was
+        # offered stands between (_toast_undo_key).
+        self._units_done = getattr(self, "_units_done", 0) + 1
         journal.append({"text": text,
                         "before": before, "after": after,
                         "grids_down": getattr(self, "_atom_part_grids_down", False)})
@@ -21612,6 +21615,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     kind in ("Entry", "TEntry")
                     or (kind == "Text" and not self._can_edit_undo(widget) and not undid)):
                 return None
+            # A cell reopened under the person's edit -- Enter, Tab, a pasted
+            # block, a row command -- holds no Undo of its own, the edit is
+            # the note's: taken, the banner's undid an older action (round 5).
+            cell = (getattr(self, "_cell_editor", None) or {}).get("entry")
+            if (cell is not None and str(cell) == str(widget)
+                    and getattr(self, "_units_done", 0) != getattr(self, "_toast_units_at", 0)):
+                return None
             # A one-line box only while nothing is typed in it (its hint
             # aside): a title begun after the delete had its typo "undone" by
             # the deleted note coming back over it.
@@ -21697,6 +21707,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Ctrl+Z takes an Undo, never another word: "Show" on the '(earlier
         # text)' banner was taken as one (the audit's round 18).
         self._toast_action_undoes = action_text == "Undo"
+        self._toast_units_at = getattr(self, "_units_done", 0)
         self._toast_kind = kind
         try:
             self.toast_frame.configure(bg=color)

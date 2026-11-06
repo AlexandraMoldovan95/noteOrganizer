@@ -3599,8 +3599,9 @@ class SettingsPageMixin:
             ("Space  /  Enter", "Press what the keyboard is on — a drawn "
                                 "button too: a theme, an alignment, a "
                                 "category's rename or colour."),
-            ("Ctrl+Z", "Right after a delete, with the keyboard outside a "
-                       "text box: take it back, as the banner's Undo does."),
+            ("Ctrl+Z", "While the banner offers Undo — a delete, a "
+                       "removed row, a move: take it, anywhere but a box "
+                       "with typing of its own to take back."),
         )),
         ("Text formatting, in the note", (
             ("Ctrl+B", "Bold the selection — or with nothing selected, "
