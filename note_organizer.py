@@ -1927,8 +1927,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # bar's edge or onto a line about something else (rounds 16-17).
             first = self.notes[-made]
             first_id, first_uid = first.get("id"), first.get("uid")
-            self._show_toast(news, kind="info", action=lambda: self._show_set_aside(first_id, first_uid),
-                             action_text="Show")
+            # Not over an Undo still offered: 'Day removed' holds that day's
+            # words in it alone (the lows wave's round 9). Show finds by uid.
+            self._banner_after_undo(news, lambda: self._show_toast(
+                news, kind="info", action=lambda: self._show_set_aside(first_id, first_uid),
+                action_text="Show"))
         return made
 
     def _keep_text_aside(self, note, comments_only=False):
@@ -7363,7 +7366,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # Not over an Undo still offered: 'Day removed' holds that day's
             # words in it alone (the lows wave's round 8).
             said = "Comments keep text only — the table wasn't added"
-            self._banner_after_undo(said, lambda: self._show_toast(said))
+            # Info, which the paste's own "Note updated" yields to: it took
+            # the notice's place half a second later (round 9).
+            self._banner_after_undo(said, lambda: self._show_toast(said, kind="info"))
         if cut:
             self._say_if_paste_was_cut({"text_cut": True})
         return "break"

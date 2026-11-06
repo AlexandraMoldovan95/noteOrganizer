@@ -13941,7 +13941,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            self._show_toast(news, kind=\"info\", action=lambda: self._show_set_aside(first_id, first_uid),\n                             action_text=\"Show\")\n",
+        "find": "            self._banner_after_undo(news, lambda: self._show_toast(\n                news, kind=\"info\", action=lambda: self._show_set_aside(first_id, first_uid),\n                action_text=\"Show\"))\n",
         "replace": "            self.set_status(news)\n"
       }
     ],
@@ -17204,8 +17204,8 @@
     "id": "WS152",
     "about": "A table pasted into the comments says so over an Undo still offered",
     "edits": [{"file": "note_organizer.py",
-               "find": "            self._banner_after_undo(said, lambda: self._show_toast(said))\n",
-               "replace": "            self._show_toast(said)\n"}],
+               "find": "half a second later (round 9).\n            self._banner_after_undo(said, lambda: self._show_toast(said, kind=\"info\"))\n",
+               "replace": "half a second later (round 9).\n            self._show_toast(said, kind=\"info\")\n"}],
     "must_fail": ["...and so are an import cancelled and a table pasted into the comments"],
     "suites": ["qa1"],
     "expect": "killed"
@@ -17217,6 +17217,26 @@
                "find": "        if not auto and not getattr(self, \"_save_stays\", False) and _pending and _pending.get(\"origin\") == \"add\":\n",
                "replace": "        if not auto and _pending and _pending.get(\"origin\") == \"add\":\n"}],
     "must_fail": ["Duplicate's save-first on a note added for a day leaves the notebook on Notes"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS154",
+    "about": "The days a series' copy set aside are said over an Undo still offered",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            self._banner_after_undo(news, lambda: self._show_toast(\n",
+               "replace": "            (lambda _said, show: show())(news, lambda: self._show_toast(\n"}],
+    "must_fail": ["...and so are an import cancelled and a table pasted into the comments, and days set aside"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS155",
+    "about": "The comments' table notice is replaced by its own paste's Note updated",
+    "edits": [{"file": "note_organizer.py",
+               "find": "half a second later (round 9).\n            self._banner_after_undo(said, lambda: self._show_toast(said, kind=\"info\"))\n",
+               "replace": "half a second later (round 9).\n            self._banner_after_undo(said, lambda: self._show_toast(said))\n"}],
+    "must_fail": ["...and the comments' notice outlives its paste's own save"],
     "suites": ["qa1"],
     "expect": "killed"
   }

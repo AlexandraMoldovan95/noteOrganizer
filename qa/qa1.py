@@ -567,8 +567,15 @@ try:
     _fh_real_clip = app._clipboard_text
     app._clipboard_text = lambda w: ('| a | b |\n| --- | --- |\n| 1 | 2 |', False)
     _fh_kept_under = []
+    # ...and the days a series' copy set aside as notes of their own (round 9).
+    _fh_real_settle = NO.settle_set_aside
+
+    def _fh_set_aside(notes):
+        notes.append(NO.normalize_note({'id': 8790, 'title': 'Day text', 'body': 'x'}))
+        return 1
     try:
-        for _fh_say in (app._say_import_cancelled, app._on_comments_paste):
+        NO.settle_set_aside = _fh_set_aside
+        for _fh_say in (app._say_import_cancelled, app._on_comments_paste, app._set_aside_days):
             app._show_toast('Day removed', action=lambda: None)
             _fh_say(); app.update()
             _fh_kept_under.append(app._toast_action is not None
@@ -576,10 +583,33 @@ try:
             app._hide_toast(); app.update()
             app._hide_toast(); app.update()
     finally:
+        NO.settle_set_aside = _fh_real_settle
+        app.notes = [n for n in app.notes if n.get('id') != 8790]
         app._clipboard_text = _fh_real_clip
         app.comments_text.delete('1.0', 'end')
-    check(f'...and so are an import cancelled and a table pasted into the comments ({_fh_kept_under})',
-          _fh_kept_under == [True, True])
+    check(f'...and so are an import cancelled and a table pasted into the comments, and days set aside '
+          f'({_fh_kept_under})', _fh_kept_under == [True, True, True])
+    # The comments' notice outlives its own paste's "Note updated", an info
+    # banner as a paste's other words are: replaced in half a second (round 9).
+    app.notes.append(NO.normalize_note({'id': 8791, 'title': 'Pasted into', 'body': 'x'}))
+    app.open_note_in_tab(app.find_note(8791)); app.update()
+    app._clipboard_text = lambda w: ('Plan:\n| a | b |\n| --- | --- |\n| 1 | 2 |', False)
+    # No words beneath left from the checks above: "Note updated" yields to
+    # them whatever the notice's kind, and the check could not fail.
+    if app._words_hide_job is not None:
+        app.after_cancel(app._words_hide_job)
+    app._hide_words_beneath(); app.update()
+    try:
+        app._on_comments_paste(); app.update()
+        app._autosave_now(); app.update()
+        _fh_notice = str(app.toast_lbl.cget('text'))
+    finally:
+        app._clipboard_text = _fh_real_clip
+        app._hide_toast(); app.update()
+        app.new_note(); app.update()
+        app.notes = [n for n in app.notes if n.get('id') != 8791]
+    check(f"...and the comments' notice outlives its paste's own save ({_fh_notice!r})",
+          'keep text only' in _fh_notice)
     app.notes = [n for n in app.notes if not 8710 <= (n.get('id') or 0) < 8715]
     app._hide_toast(); app.update()
 finally:
