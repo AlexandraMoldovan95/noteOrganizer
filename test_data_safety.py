@@ -1811,7 +1811,8 @@ if os.name == "nt":
         _export_state=None, _import_state=None, set_status=lambda *a: None,
         ask_yes_no=lambda *a, **k: True, export_progress_bar=_Quiet(),
         export_progress_lbl=_Quiet(), export_progress_frame=_Quiet(),
-        _start_io_worker=lambda work: work(), _poll_import_progress=lambda: None)
+        _start_io_worker=lambda work: work(), _poll_import_progress=lambda: None,
+        _while_native=lambda show: show())
     _m_real_open = NO.filedialog.askopenfilename
     NO.filedialog.askopenfilename = lambda **k: _m_zip
     try:
@@ -1835,7 +1836,7 @@ if os.name == "nt":
         current_attachments=[], selected_note_id=None,
         show_warning=lambda *a, **k: None, show_error=lambda *a, **k: None,
         ask_yes_no=lambda *a, **k: True, refresh_attachments_list=lambda: None,
-        _schedule_autosave=lambda: None)
+        _schedule_autosave=lambda: None, _while_native=lambda show: show())
     _m_real_many = _tkfd_m.askopenfilenames
     _tkfd_m.askopenfilenames = lambda **k: (_m_src,)
     try:

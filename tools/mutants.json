@@ -4000,7 +4000,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        if not days or self._flush_autosave() is False:\n",
+        "find": "        if not days or self._flush_autosave(leaving=leaving) is False:\n",
         "replace": "        if not days:\n"
       }
     ],
@@ -15841,7 +15841,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        self._say_hidden_arrivals(arrived, f\"Added {added} notes\")\n",
+        "find": "        self._say_hidden_arrivals(arrived, f\"Added {added} {notes_word}\")\n",
         "replace": ""
       }
     ],
@@ -16130,8 +16130,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        self._kept_asides.setdefault(note.get(\"uid\"), []).append((kept.get(\"uid\"), words))\n",
-        "replace": "        self._kept_asides[note.get(\"uid\")] = [(kept.get(\"uid\"), words)]\n"
+        "find": "        self._kept_asides.setdefault(note.get(\"uid\"), []).append(\n            (kept.get(\"uid\"), words, self._aside_look(kept)))\n",
+        "replace": "        self._kept_asides[note.get(\"uid\")] = [\n            (kept.get(\"uid\"), words, self._aside_look(kept))]\n"
       }
     ],
     "must_fail": [
@@ -16148,8 +16148,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                if all(words_lost(value, note.get(key) or \"\") == 0 for key, value in words.items())]\n",
-        "replace": "                if all((note.get(key) or \"\") == value for key, value in words.items())]\n"
+        "find": "                if all(words_lost(value, note.get(key) or \"\") == 0 for key, value in entry[1].items())]\n",
+        "replace": "                if all((note.get(key) or \"\") == value for key, value in entry[1].items())]\n"
       }
     ],
     "must_fail": [
@@ -16346,8 +16346,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                choice = self._all_lookalike_choice(len(valid_notes), other, \"backup\",\n                                                    bool(updates or copies))\n",
-        "replace": "                choice = self._all_lookalike_choice(len(valid_notes), other, \"backup\",\n                                                    False)\n"
+        "find": "                    bool(updates or copies) or self._backup_brings_more(state, added_names))\n",
+        "replace": "                    False)\n"
       }
     ],
     "must_fail": [
@@ -16364,8 +16364,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        if not state[\"done\"] or self._a_dialog_is_asking():\n",
-        "replace": "        if not state[\"done\"]:\n"
+        "find": "        if not state[\"done\"] or self._a_dialog_is_asking() or getattr(self, \"_natives_open\", 0):\n",
+        "replace": "        if not state[\"done\"] or getattr(self, \"_natives_open\", 0):\n"
       }
     ],
     "must_fail": [
@@ -16405,8 +16405,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        if flush and not self._dismiss_mini_popup_asking():\n            return False\n        # Cleared BEFORE the flush",
-        "replace": "        if not self._dismiss_mini_popup_asking():\n            return False\n        # Cleared BEFORE the flush"
+        "find": "        if flush and not self._dismiss_mini_popup_asking():\n            return False\n        # On a reload the rest still close",
+        "replace": "        if not self._dismiss_mini_popup_asking():\n            return False\n        # On a reload the rest still close"
       }
     ],
     "must_fail": [
@@ -16433,6 +16433,300 @@
     "suites": [
       "qa3"
     ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS82",
+    "about": "A change made from outside leaves a popup with nothing to lose open over the reloaded note",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if not flush and pop is not None and not callable(getattr(pop, \"_confirm_dismiss\", None)):\n",
+        "replace": "        if False:\n"
+      }
+    ],
+    "must_fail": [
+      "a change made from outside closes a popup with nothing to lose"
+    ],
+    "suites": [
+      "qa9"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS83",
+    "about": "A failed restore is taken back in memory only, the notes file left holding it",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            self._notes_unsaved = not core_save_notes(self.notes)[0]\n",
+        "replace": "            pass\n"
+      }
+    ],
+    "must_fail": [
+      "a restore whose save fails leaves the notes file without it"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS84",
+    "about": "Removing a new note's file reads its first save under the question as the editor having moved on",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/attachments.py",
+        "find": "        if self.current_attachments is not files:\n",
+        "replace": "        if self.selected_note_id is not None:\n"
+      }
+    ],
+    "must_fail": [
+      "a new note's file removed while its first save runs under the question goes"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS85",
+    "about": "Walking another note's days off the schedule flushes the open note as if it were left",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        leaving = note.get(\"id\") == self.selected_note_id\n",
+        "replace": "        leaving = True\n"
+      }
+    ],
+    "must_fail": [
+      "walking another note's days off the schedule asks nothing of the open note"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS86",
+    "about": "Skipped look-alikes from a backup take their attached files with them",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                        self._adopt_backup_attachments(twin, n)\n",
+        "replace": "                        pass\n"
+      }
+    ],
+    "must_fail": [
+      "...and skipping the duplicates gives their files to the notes they look like"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS87",
+    "about": "A backup's merge waiting on a question still reads as copying attachments",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        elif state[\"done\"] and (self._a_dialog_is_asking() or getattr(self, \"_natives_open\", 0)):\n",
+        "replace": "        elif False:\n"
+      }
+    ],
+    "must_fail": [
+      "a backup's merge waiting on a question says so"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS88",
+    "about": "A backup's merge runs under a file chooser or a posted menu",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if not state[\"done\"] or self._a_dialog_is_asking() or getattr(self, \"_natives_open\", 0):\n",
+        "replace": "        if not state[\"done\"] or self._a_dialog_is_asking():\n"
+      }
+    ],
+    "must_fail": [
+      "a backup's merge waits while a file chooser or a menu is up, then runs"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS89",
+    "about": "Show all from a banner over Settings changes a list nobody can see",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/note_list.py",
+        "find": "        if getattr(self, \"_settings_open\", False):\n            self.hide_settings_page()\n",
+        "replace": "        if False:\n            self.hide_settings_page()\n"
+      }
+    ],
+    "must_fail": [
+      "Show all from a banner over Settings leaves Settings for the list"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "WS90",
+    "about": "A note kept aside that the list hides is not said hidden",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                         + (f\", hidden by {hides}\" if hides else \"\"), kind=\"info\",\n",
+               "replace": "                         , kind=\"info\",\n"}],
+    "must_fail": ["a note kept aside that Show hides is said so, and its Show shows all"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS91",
+    "about": "A note kept aside, spent again, is said only on the status line, the banner's Show still offering it",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                self._show_toast(said, kind=\"info\")\n",
+               "replace": "                pass\n"}],
+    "must_fail": ["a note kept aside spent again is said on the banner, with no Show"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS92",
+    "about": "A note kept aside counts as untouched by its stamp alone: pinned since, it is spent",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            if aside is not None and self._aside_look(aside) == entry[2]:\n",
+               "replace": "            if aside is not None and aside.get(\"updated\") == aside.get(\"created\"):\n"}],
+    "must_fail": ["a note kept aside, pinned since or put back from the Trash, stays"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS93",
+    "about": "A note kept aside, put back from the Trash, is spent again by the next Ctrl+Z",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            held[:] = [entry for entry in held if entry[0] not in uids]\n",
+               "replace": "            pass\n"}],
+    "must_fail": ["a note kept aside, pinned since or put back from the Trash, stays"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS94",
+    "about": "A known note added as a new one goes back to the look-alike question, whose Cancel undoes the Add",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        return finish(fresh, [], self._without_identity(known))\n",
+               "replace": "        return finish(fresh + self._without_identity(known), [])\n"}],
+    "must_fail": ["a known note added as a new one is not asked about again as a look-alike"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS95",
+    "about": "A one-note code's Update takes the editor off the day it was on, and drops the way back",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                    if self.selected_note_id == mine.get(\"id\"):\n                        self._editor_follows_external_change({mine.get(\"id\")})\n",
+               "replace": "                    if False:\n                        self._editor_follows_external_change({mine.get(\"id\")})\n"}],
+    "must_fail": ["a one-note code's Update keeps the day it was on, and the way back"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS96",
+    "about": "A double-click on Import says in red that no code was pasted",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        import_btn.bind(\n            \"<ButtonPress-1>\",\n            lambda e: \"break\" if self._second_press_of_double_click(e) else None,\n",
+               "replace": "        import_btn.bind(\n            \"<ButtonPress-1>\",\n            lambda e: None,\n"}],
+    "must_fail": ["a double-click on Import adds the notes and says nothing false"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS97",
+    "about": "One note added from a code is said as 'Added 1 notes'",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        notes_word = \"note\" if added == 1 else \"notes\"\n",
+               "replace": "        notes_word = \"notes\"\n"}],
+    "must_fail": ["...and one note added is said as one note"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS98",
+    "about": "Empty trash leaves Statistics' In trash figure as it was",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "            # figure until the list next changed (wave 2, round 4).\n            self._render_statistics()\n",
+               "replace": "            # figure until the list next changed (wave 2, round 4).\n"}],
+    "must_fail": ["Empty trash takes Statistics' \"In trash\" to 0 at once"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS99",
+    "about": "Tk's own Ctrl+K, Ctrl+O and Ctrl+T edit a template box that has no Undo",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "                    t.bind(seq, lambda _e: \"break\")\n",
+               "replace": "                    pass\n"}],
+    "must_fail": ["Ctrl+K, Ctrl+O and Ctrl+T leave a template box's words alone"],
+    "suites": ["qa9"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS100",
+    "about": "A second Enter over the calculator's result makes the result its own formula",
+    "edits": [{"file": "noteorganizer/ui/calculator_panel.py",
+               "find": "            if self._calc_just_evaluated:\n                pass\n            elif current and current != \"Error\":\n",
+               "replace": "            if current and current != \"Error\":\n"}],
+    "must_fail": ["a second Enter over its result changes nothing"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS101",
+    "about": "After Error, a minus typed is glued to the word",
+    "edits": [{"file": "noteorganizer/ui/calculator_panel.py",
+               "find": "        if first and (self._calc_display_var.get() == \"Error\"\n                      or ((first.isdecimal() or first in \".,([{√\") and self._calc_just_evaluated)):\n",
+               "replace": "        if (first and (first.isdecimal() or first in \".,([{√\")\n                and (self._calc_just_evaluated or self._calc_display_var.get() == \"Error\")):\n"}],
+    "must_fail": ["a minus typed after Error starts a new sum"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS102",
+    "about": "A backup of look-alikes that brings a template gets no Skip, and its default Cancel drops the template",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        names = {t.get(\"name\") for t in self.templates}\n        if any(isinstance(t, dict)",
+               "replace": "        names = {t.get(\"name\") for t in self.templates}\n        if False and any(isinstance(t, dict)"}],
+    "must_fail": ["a backup of look-alikes that brings a template offers Skip them, and the template comes"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS103",
+    "about": "A double-click on Restore selected answers Empty trash, slid up under the second press",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "        empty_holder.bind(\n            \"<ButtonPress-1>\",\n            lambda e: \"break\" if self._second_press_of_double_click(e) else None,\n",
+               "replace": "        empty_holder.bind(\n            \"<ButtonPress-1>\",\n            lambda e: None,\n"}],
+    "must_fail": ["a double-click on Restore selected does not answer Empty trash"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS104",
+    "about": "A one-note code's known note added as a new one is asked about again as a look-alike",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                # Answered: not asked again as a look-alike of the note it is.\n                asked = True\n",
+               "replace": ""}],
+    "must_fail": ["a known note added as a new one is not asked about again as a look-alike"],
+    "suites": ["qa3"],
     "expect": "killed"
   }
 ]

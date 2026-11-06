@@ -562,6 +562,25 @@ check('stats show the correct checklist-notes count',
       stats_pairs().get('With a checklist') == 1)
 check('stats show the correct deleted (Trash) count',
       stats_pairs().get('In trash') == 1)
+# ...and Empty trash takes it to 0 at once: it kept the old figure until the
+# list next changed (wave 2, round 4).
+app.toggle_settings_panel('trash'); app.update()
+_st_ask = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: True
+try:
+    def _st_walk(w):
+        yield w
+        for c in w.winfo_children():
+            yield from _st_walk(c)
+    _st_empty = next((w for w in _st_walk(app) if isinstance(w, tk.Button)
+                      and 'Empty trash' in str(w.cget('text'))), None)
+    if _st_empty is not None:
+        _st_empty.invoke(); app.update()
+finally:
+    app.ask_yes_no = _st_ask
+check(f'Empty trash takes Statistics\' "In trash" to 0 at once ({stats_pairs().get("In trash")})',
+      _st_empty is not None and stats_pairs().get('In trash') == 0)
+app.toggle_settings_panel('statistics'); app.update()
 check('stats show a first-launch date',
       any('Using Note Organizer since' in t for t in texts))
 
@@ -780,6 +799,28 @@ for _sh_where in ('notes', 'trash'):
 # reach its footer to say so.
 if os.path.isfile(_sh_path):
     os.remove(_sh_path)
+
+# A new note's file removed while the question waits and the autosave inside
+# it gives the note its id: read as the editor having moved on, Remove did
+# nothing and said nothing (wave 2, round 13).
+app.new_note()
+app.title_entry.insert(0, 'NewWithFile')
+_nf_path = os.path.join(NO.ATTACHMENTS_DIR, 'new_file_rm.txt')
+with open(_nf_path, 'w') as _nf_f:
+    _nf_f.write('attached to a new note')
+app.current_attachments = [{'filename': 'new.txt', 'stored_as': 'new_file_rm.txt'}]
+app.ask_yes_no = lambda *a, **k: (app._autosave_now(), True)[1]
+try:
+    app.remove_attachment(0)
+    app.update()
+finally:
+    app.ask_yes_no = _orig_ask_att
+check("a new note's file removed while its first save runs under the question goes (%s, %s)"
+      % (app.selected_note_id, app.current_attachments),
+      app.selected_note_id is not None and app.current_attachments == []
+      and not os.path.isfile(_nf_path))
+if os.path.isfile(_nf_path):
+    os.remove(_nf_path)
 
 # A file attached or removed after a save in the same visit. The save stored
 # the editor's own list in the note, so the attach changed the note too: the

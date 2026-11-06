@@ -1947,6 +1947,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "formatting": [] if comments_only else copy.deepcopy(note.get("formatting") or []),
             "paragraphs": [] if comments_only else copy.deepcopy(note.get("paragraphs") or []),
             "comments": comments, "category": note.get("category") or "General",
+            # A one-off's date comes along; a series' start is no day of the words.
+            "date": "" if is_recurring(note) else note.get("date") or "",
             "color": note.get("color") or "", "created": stamp, "updated": stamp})
         self.notes.append(kept)
         self._asides_changed = True
@@ -1954,10 +1956,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         words = {"comments": comments} if comments_only else {
             "title": title, "body": body, "comments": comments}
         self._kept_asides = getattr(self, "_kept_asides", {})
-        self._kept_asides.setdefault(note.get("uid"), []).append((kept.get("uid"), words))
+        self._kept_asides.setdefault(note.get("uid"), []).append(
+            (kept.get("uid"), words, self._aside_look(kept)))
         said = ("The comments this cleared are kept as a note of their own: " if comments_only
                 else "The words this took away are kept as a note of their own: ")
-        self._show_toast(said + one_line(kept["title"], 60), kind="info",
+        # Said when the list hides it, as a new note is: Show then shows all
+        # (_show_set_aside); unsaid, it was nowhere to be seen (wave 2, round 6).
+        hides = self._what_hides_notes(kept)
+        self._show_toast(said + one_line(kept["title"], 60)
+                         + (f", hidden by {hides}" if hides else ""), kind="info",
                          action=lambda: self._show_set_aside(kept["id"], kept.get("uid")),
                          action_text="Show")
 
@@ -1971,18 +1978,29 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         held = getattr(self, "_kept_asides", {}).get(note.get("uid"))
         if not held:
             return
-        back = [(aside_uid, words) for aside_uid, words in held
-                if all(words_lost(value, note.get(key) or "") == 0 for key, value in words.items())]
+        back = [entry for entry in held
+                if all(words_lost(value, note.get(key) or "") == 0 for key, value in entry[1].items())]
         for entry in back:
             held.remove(entry)
             aside = next((n for n in self.notes if entry[0] and n.get("uid") == entry[0]), None)
-            if aside is not None and aside.get("updated") == aside.get("created"):
+            # Untouched is as made: a pin or a category kept no stamp, and a
+            # note someone had filed went outright (wave 2, round 7).
+            if aside is not None and self._aside_look(aside) == entry[2]:
                 self.notes.remove(aside)
                 self._asides_changed = True
-                self.set_status("The words are back in the note; the note kept aside of them is gone again")
+                said = "The words are back in the note; the note kept aside of them is gone again"
+                self.set_status(said)
                 self._box_words_until = time.monotonic() + 4
+                # On the banner too, over its Show: it offered a note just gone.
+                self._show_toast(said, kind="info")
         if not held:
             del self._kept_asides[note.get("uid")]
+
+    @staticmethod
+    def _aside_look(note):
+        """What an '(earlier text)' note is made of, to tell it untouched:
+        its content, a pin among it, and the stamp any edit leaves."""
+        return content_signature(note), note.get("updated")
 
     def _show_set_aside(self, note_id, uid):
         """The '(earlier text)' banner's Show: the first note made, found by
@@ -2000,6 +2018,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.notebook.select(self.TAB_NOTES)
         except tk.TclError:
             pass
+        if self._what_hides_notes(note):
+            self._show_all_notes(note)
         self._open_unless_shown(note)
 
     def save_notes(self):
@@ -2120,11 +2140,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "says what happened.")
             return
         default_name = f"NotesBackup_{datetime.now().strftime('%Y-%m-%d')}.zip"
-        save_path = filedialog.asksaveasfilename(
+        save_path = self._while_native(lambda: filedialog.asksaveasfilename(
             title="Export your notes to a backup file",
             defaultextension=".zip",
             initialfile=default_name,
-            filetypes=[("Zip files", "*.zip")]
+            filetypes=[("Zip files", "*.zip")])
         )
         if not save_path:
             return
@@ -2441,7 +2461,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # A misspelled word under the pointer brings its
                 # suggestions to the top (ui/spelling.py).
                 self._spell_menu(text_widget, menu, event)
-                menu.tk_popup(event.x_root, event.y_root)
+                self._while_native(lambda: menu.tk_popup(event.x_root, event.y_root))
             finally:
                 menu.grab_release()
         text_widget.bind("<Button-3>", popup)
@@ -6805,7 +6825,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         menu.add_command(label="Unhide all columns",
                          command=lambda: self._grid_unhide_all(info))
         try:
-            menu.tk_popup(event.x_root, event.y_root)
+            self._while_native(lambda: menu.tk_popup(event.x_root, event.y_root))
         finally:
             menu.grab_release()
         return "break"
@@ -6896,7 +6916,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     command=lambda a=align_value, box=sel["box"]:
                         self._grid_set_alignment(info, box, a))
             try:
-                menu.tk_popup(event.x_root, event.y_root)
+                self._while_native(lambda: menu.tk_popup(event.x_root, event.y_root))
             finally:
                 menu.grab_release()
             return "break"
@@ -7017,7 +7037,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             command=lambda: self._grid_delete_table(info))
         menu.add_cascade(label="Table", menu=table_menu)
         try:
-            menu.tk_popup(event.x_root, event.y_root)
+            self._while_native(lambda: menu.tk_popup(event.x_root, event.y_root))
         finally:
             menu.grab_release()
         return "break"
@@ -10233,10 +10253,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         row = tk.Frame(p, bg=self.colors["sidebar"])
         self.track_theme(row, bg="sidebar")
         row.pack(fill="x", padx=6, pady=6)
-        tk.Button(row, text="Import", command=self._do_inline_import,
-                  bg=self.colors["accent"], fg=self._on_fill("accent"), relief="flat",
-                  font=("Segoe UI", 9, "bold"), cursor="hand2"
-                  ).pack(side="left", fill="x", expand=True, padx=(0, 3), ipady=3)
+        import_btn = tk.Button(row, text="Import", command=self._do_inline_import,
+                               bg=self.colors["accent"], fg=self._on_fill("accent"), relief="flat",
+                               font=("Segoe UI", 9, "bold"), cursor="hand2")
+        import_btn.pack(side="left", fill="x", expand=True, padx=(0, 3), ipady=3)
+        # A double-click's second press found the box the first had emptied, and
+        # said in red that no code was pasted (wave 2, round 9).
+        import_btn.bind(
+            "<ButtonPress-1>",
+            lambda e: "break" if self._second_press_of_double_click(e) else None,
+            add="+")
         tk.Button(row, text="Clear", command=self._clear_import_box,
                   bg=self.colors["card"], fg=self.colors["text"], relief="flat",
                   font=("Segoe UI", 9), cursor="hand2"
@@ -10390,9 +10416,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         unchanged = len(same)
         known = differing
 
-        def finish(remaining, updates):
+        def finish(remaining, updates, added=()):
             copies = self._unchanged_copies(same, len(incoming), source)
-            return True, remaining, updates, unchanged - len(copies), copies
+            return True, remaining, updates, unchanged - len(copies), list(added) + copies
 
         if not known:
             return finish(fresh, [])
@@ -10456,10 +10482,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     mine.get("id") for mine, _theirs in known}) is False:
                 return False, [], [], unchanged, []
             return finish(fresh, known)
-        # "add": the copies go on as new notes, without the identity they
-        # arrived with -- two notes wearing one uid is the collision this
-        # whole field exists to prevent.
-        return finish(fresh + self._without_identity(known), [])
+        # "add": new notes without the identity they came with (one uid on two
+        # notes), as copies asked for: put to the look-alike question again,
+        # its Cancel undid the Add (wave 2, round 10).
+        return finish(fresh, [], self._without_identity(known))
 
     @staticmethod
     def _without_identity(pairs):
@@ -10548,6 +10574,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             buttons=[("Cancel the import", "cancel"), ("Import anyway", "all"),
                      ("Skip them", "skip")],
             default="Skip them")
+
+    def _backup_brings_more(self, state, added_names):
+        """Whether a backup brings anything beside its notes -- a category, a
+        template or a Trash entry not here, a day's marks: what Skip goes on
+        with. Unseen, its look-alike question's default Cancel dropped them
+        all (wave 2, round 10)."""
+        if added_names:
+            return True
+        names = {t.get("name") for t in self.templates}
+        if any(isinstance(t, dict) and t.get("name") and t.get("name") not in names
+               for t in state.get("imported_templates") or []):
+            return True
+        here = {content_signature(normalize_note(e)) for e in self.trash if isinstance(e, dict)}
+        if any(isinstance(e, dict) and content_signature(normalize_note(e)) not in here
+               for e in state.get("imported_trash") or []):
+            return True
+        return any(isinstance(state.get(key), dict)
+                   and any(day not in (getattr(self, attr, None) or {}) for day in state.get(key))
+                   for key, attr in (("imported_day_colors", "day_colors"),
+                                     ("imported_day_emoji", "day_emoji")))
 
     def _known_note_differs(self, mine, theirs, source):
         """Whether importing *theirs* over *mine* would change anything: a
@@ -10672,9 +10718,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     self.toggle_import_panel()
                     self.refresh_note_list()
                     self.render_calendar()
-                    # flush=False, or the editor's old version was saved back
-                    # over the update; the flush above kept the work.
-                    self.open_note_in_tab(mine, flush=False)
+                    # flush=False, or the old version was saved over it; held
+                    # already, it is read back as the other routes read it,
+                    # its day and way back kept (wave 2, round 11).
+                    if self.selected_note_id == mine.get("id"):
+                        self._editor_follows_external_change({mine.get("id")})
+                    else:
+                        self.open_note_in_tab(mine, flush=False)
                     self.set_status("Note updated from the code "
                                     "— ↩ Restore previous undoes it")
                     return
@@ -10684,6 +10734,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 incoming = dict(incoming)
                 incoming.pop("uid", None)
                 valid = [incoming]
+                # Answered: not asked again as a look-alike of the note it is.
+                asked = True
             existing_keys = {_dup_key(n) for n in self.notes}
             if not asked and _dup_key(normalize_note(incoming)) in existing_keys:
                 choice = self._themed_dialog(
@@ -10772,7 +10824,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.save_notes()
         self.refresh_note_list()
         self.render_calendar()
-        self._say_hidden_arrivals(arrived, f"Added {added} notes")
+        notes_word = "note" if added == 1 else "notes"
+        self._say_hidden_arrivals(arrived, f"Added {added} {notes_word}")
         self.import_box.delete("1.0", "end")
         skipped_note = f" ({dupe_count} duplicate(s) skipped)" if dupe_count and to_import is not valid else ""
         oversize_note = (f" — {oversized} oversized note(s) trimmed to safe limits"
@@ -10780,7 +10833,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         known_note = ((f", updated {updated}" if updated else "")
                       + (f", {unchanged} already here" if unchanged else ""))
         self.import_status.config(
-            text=f"Added {added} notes{known_note} ✓{skipped_note}{oversize_note}",
+            text=f"Added {added} {notes_word}{known_note} ✓{skipped_note}{oversize_note}",
             fg=self.colors["success_text"])
 
     def toggle_share_panel(self):
@@ -11179,11 +11232,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                  "txt": ("Text file", ".txt")}
         label, ext = kinds[fmt]
         # A title is prose; a filename is not. Strip what Windows forbids.
-        path = filedialog.asksaveasfilename(
+        path = self._while_native(lambda: filedialog.asksaveasfilename(
             title=f"Export “{title}” as a {label.lower()}",
             defaultextension=ext,
             initialfile=export_file_stem(title) + ext,
-            filetypes=[(label, "*" + ext), ("All files", "*.*")])
+            filetypes=[(label, "*" + ext), ("All files", "*.*")]))
         if not path:
             return
         content = self._note_export_content(note, fmt, title)
@@ -11495,10 +11548,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "lost when the app closes. Close Note Organizer, open it "
                 "again, and import then.")
             return
-        zip_path = filedialog.askopenfilename(
+        zip_path = self._while_native(lambda: filedialog.askopenfilename(
             title="Choose a notes backup (.zip) to import",
             filetypes=[("Zip files", "*.zip")]
-        )
+        ))
         if not zip_path:
             return
 
@@ -11653,6 +11706,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         if state["phase"] == "extracting":
             self.export_progress_lbl.config(text="Importing… reading backup")
+        elif state["done"] and (self._a_dialog_is_asking() or getattr(self, "_natives_open", 0)):
+            # Said as what it is: "0 / 1 attachments" stood for a backup with
+            # none, waiting on another question (wave 2, round 12).
+            self.export_progress_bar.configure(maximum=1, value=1)
+            self.export_progress_lbl.config(text="Import ready — waiting for your answer above")
         else:
             self.export_progress_bar.configure(maximum=state["total"], value=state["current"])
             self.export_progress_lbl.config(
@@ -11661,7 +11719,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Its merge waits for a question already open: run inside a share
         # code's, the backup's notes took the ids that import had counted
         # before it asked, and the two wore one id (wave 2, round 11).
-        if not state["done"] or self._a_dialog_is_asking():
+        if not state["done"] or self._a_dialog_is_asking() or getattr(self, "_natives_open", 0):
             self._export_poll_job = self.after(100, self._poll_import_progress)
             return
 
@@ -11764,8 +11822,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     default=f"Skip the {dupe_count} duplicate(s)",
                 )
             else:
-                choice = self._all_lookalike_choice(len(valid_notes), other, "backup",
-                                                    bool(updates or copies))
+                choice = self._all_lookalike_choice(
+                    len(valid_notes), other, "backup",
+                    bool(updates or copies) or self._backup_brings_more(state, added_names))
             if choice is None or choice == "cancel":
                 _undo_category_merge()
                 shutil.rmtree(temp_dir, ignore_errors=True)
@@ -11774,6 +11833,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 return
             if choice == "skip":
                 to_import = fresh
+                # A look-alike's files go to the note it looks like: skipped
+                # whole, they were deleted with it (wave 2, round 14).
+                twins = {_dup_key(n): n for n in self.notes}
+                for n in valid_notes:
+                    twin = twins.get(_dup_key(normalize_note(n)))
+                    if twin is not None and not any(n is f for f in fresh):
+                        self._adopt_backup_attachments(twin, n)
 
         # Agreed to: only now do the categories reach disk and the sidebar.
         if added_categories:
@@ -15521,8 +15587,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         days = off_schedule_days(note)
         # What the editor holds is saved first, as every route that writes a
-        # note behind the editor saves it (_editor_follows_external_change).
-        if not days or self._flush_autosave() is False:
+        # note behind the editor saves it (_editor_follows_external_change) --
+        # as left only when it is this note: another's leaves it open.
+        leaving = note.get("id") == self.selected_note_id
+        if not days or self._flush_autosave(leaving=leaving) is False:
             self._update_occurrence_banner()
             return
         made = trashed = 0
@@ -17273,8 +17341,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         note, through the same rendering the single-note export uses.
         Same-title notes get " (2)", " (3)" -- never an overwrite."""
         ext = {"html": ".html", "txt": ".txt"}[fmt]
-        folder = filedialog.askdirectory(
-            title=f"Export {len(self.selected_note_ids)} note(s) into…")
+        folder = self._while_native(lambda: filedialog.askdirectory(
+            title=f"Export {len(self.selected_note_ids)} note(s) into…"))
         if not folder:
             return
         written, failed, used = 0, [], set()
@@ -17563,6 +17631,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # reload (flush=False) is not asked: Cancel saved the stale editor.
         if flush and not self._dismiss_mini_popup_asking():
             return False
+        # On a reload the rest still close: a palette or a picker aimed at
+        # the old text wrote into the new (wave 2, round 13).
+        pop = getattr(self, "_mini_popup", None)
+        if not flush and pop is not None and not callable(getattr(pop, "_confirm_dismiss", None)):
+            self._dismiss_mini_popup()
         # Cleared BEFORE the flush, whose save would jump to the calendar.
         pending_return = getattr(self, "_pending_calendar_return", None)
         self._pending_calendar_return = None
@@ -18963,7 +19036,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.hide_day_tooltip()
         self._context_menu_open = True
         try:
-            menu.tk_popup(event.x_root, event.y_root)
+            self._while_native(lambda: menu.tk_popup(event.x_root, event.y_root))
         finally:
             menu.grab_release()
             self._context_menu_open = False
@@ -20627,10 +20700,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             back = {id(n) for n in restored}
             self.notes[:] = [n for n in self.notes if id(n) not in back]
             self.trash = kept_trash
+            # That autosave may have written them, and the next start showed
+            # them in both lists: the file is put back too, or the close tries.
+            self._set_aside_days()
+            self._notes_unsaved = not core_save_notes(self.notes)[0]
             self.set_status("Not restored — the notes could not be saved; "
                             "it stays in Recently deleted")
             return None
         save_trash(self.trash)
+        # A note kept aside, put back from the Trash, is the person's now: the
+        # next Ctrl+Z spent it a second time (wave 2, round 8).
+        uids = {n.get("uid") for n in restored}
+        for held in getattr(self, "_kept_asides", {}).values():
+            held[:] = [entry for entry in held if entry[0] not in uids]
         self.refresh_note_list()
         self.render_calendar()
         self._say_hidden_arrivals(restored, "Restored from Recently deleted")

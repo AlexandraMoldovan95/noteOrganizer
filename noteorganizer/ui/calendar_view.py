@@ -1865,7 +1865,7 @@ class CalendarViewMixin:
         self.hide_day_tooltip()
         self._context_menu_open = True
         try:
-            menu.tk_popup(event.x_root, event.y_root)
+            self._while_native(lambda: menu.tk_popup(event.x_root, event.y_root))
         finally:
             menu.grab_release()
             self._context_menu_open = False

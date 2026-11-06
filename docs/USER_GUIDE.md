@@ -1037,7 +1037,8 @@ templates and the Trash together, and from its settings your categories and the 
 colours and marks. The theme, your name, the text size, the list's order and the rest stay as this
 computer has them; so does how long the Trash keeps notes, unless you never chose it here and the
 backup's is longer. Just like importing a code, you'll be asked
-about any notes that look identical to what you already have before anything is added; a
+about any notes that look identical to what you already have before anything is added. Skipped,
+such a note's attached files still come in, onto the note it looks like, as an update's do. A
 template only comes in if you don't already have one by that name, and re-importing the same
 backup never doubles the Trash.
 

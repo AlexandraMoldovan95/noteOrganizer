@@ -1822,6 +1822,54 @@ check(f'a note kept aside, taken away by the save its opening makes, is not open
       f'({_gh_opened}, {app.selected_note_id})',
       _gh_aside is not None and _gh_opened is False and app.selected_note_id == 1
       and _mv_asides() == 0)
+# Spent, it is said on the banner too, not only on a status line out of sight,
+# whose Show then offered a note just gone (wave 2, round 7)...
+_sp_toasts = []
+_sp_real = app._show_toast
+app._show_toast = lambda text, *a, **k: (_sp_toasts.append((text, k.get('action'))), _sp_real(text, *a, **k))[1]
+try:
+    _mv_fixture()
+    _mv_body(_mv_p2)
+    _mv_body(_mv_p1 + '\n' + _mv_p2)
+finally:
+    app._show_toast = _sp_real
+check(f'a note kept aside spent again is said on the banner, with no Show ({_sp_toasts[-1:]})',
+      bool(_sp_toasts) and 'gone again' in _sp_toasts[-1][0] and _sp_toasts[-1][1] is None)
+# ...one pinned since, or put back from the Trash, is the person's and stays:
+# untouched read as its stamp, it went outright (rounds 7 and 8).
+_mv_fixture()
+_mv_body(_mv_p2)
+next(n for n in app.notes if n.get('title') == 'Trip (earlier text)')['pinned'] = True
+_mv_body(_mv_p1 + '\n' + _mv_p2)
+_sp_pinned = _mv_asides()
+_mv_fixture()
+_mv_body(_mv_p2)
+_sp_aside = next(n for n in app.notes if n.get('title') == 'Trip (earlier text)')
+# Deleted as a delete does it: out of the notes, into the Trash.
+app.notes.remove(_sp_aside); app._move_notes_to_trash([_sp_aside]); app.save_notes(); app.update()
+_sp_gone = _mv_asides()
+app._restore_trash_entries([e for e in app.trash if e.get('uid') == _sp_aside.get('uid')]); app.update()
+_sp_back = _mv_asides()
+_mv_body(_mv_p1 + '\n' + _mv_p2)
+check(f'a note kept aside, pinned since or put back from the Trash, stays '
+      f'({_sp_pinned}; {_sp_gone} -> {_sp_back} -> {_mv_asides()})',
+      _sp_pinned == 1 and (_sp_gone, _sp_back) == (0, 1) and _mv_asides() == 1)
+# ...and one the list hides is said so, its Show showing all (round 6).
+_sp_toasts = []
+app._show_toast = lambda text, *a, **k: (_sp_toasts.append((text, k.get('action'))), _sp_real(text, *a, **k))[1]
+try:
+    _mv_fixture()
+    app.filter_var.set(app.FILTER_DATED); app.refresh_note_list(); app.update()
+    _mv_body(_mv_p2)
+finally:
+    app._show_toast = _sp_real
+_sp_said = next((t for t, _a in _sp_toasts if 'earlier text' in t), '')
+_sp_show = next((a for t, a in _sp_toasts if 'earlier text' in t), None)
+if callable(_sp_show):
+    _sp_show(); app.update()
+check(f'a note kept aside that Show hides is said so, and its Show shows all ({_sp_said!r}, {app.filter_var.get()!r})',
+      'hidden by Show: ' + app.FILTER_DATED in _sp_said and app.filter_var.get() == 'All')
+app.filter_var.set('All'); app.refresh_note_list(); app.update()
 # Comments cleared after an Update: the copy keeps this computer's comments,
 # not the backup's, which go to a note of their own (round 5).
 app.new_note(); app.update()
@@ -4471,6 +4519,23 @@ finally:
 check(f'...and a click on one opens the way in, not a day the calendar lacks ({_os_asked})',
       _os_asked[:1] == ['Day 1 of 2 off the schedule'])
 app._toggle_calendar_history(); app.update()
+# Walking ANOTHER note's days leaves the open one as it is: flushed as if left,
+# its unreadable date was asked about, and Continue threw it away while the
+# note stayed open (wave 2, round 13).
+_os_seed()
+app.open_note_in_tab(app.find_note(2)); app.update()
+app.date_entry.delete(0, 'end'); app.date_entry.insert(0, '31.09.2026')
+_os_asked = []
+app._themed_dialog = lambda title, message, *a, **k: (_os_asked.append(title), 'keep')[1]
+try:
+    app._show_off_schedule_days(app.find_note(1)); app.update()
+finally:
+    app._themed_dialog = _os_real
+check(f"walking another note's days off the schedule asks nothing of the open note ({_os_asked})",
+      "Part of this note isn't saved" not in _os_asked
+      and _os_asked[:1] == ['Day 1 of 2 off the schedule']
+      and app.date_entry.get() == '31.09.2026')
+app._cancel_pending_autosave()
 app.notebook.select(app.TAB_NOTES); app.update()
 app.new_note(); app.update()
 app.notes = []; app.save_notes()

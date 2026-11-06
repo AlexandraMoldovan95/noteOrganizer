@@ -799,6 +799,17 @@ class DialogsMixin:
         bound with bind_all asks this first and does nothing if so."""
         return getattr(self, "_modal_depth", 0) > 0
 
+    def _while_native(self, show):
+        """Run *show* -- a file chooser or a posted menu, whose own loop runs
+        every timer -- counted in `_natives_open`, so a backup's merge waits
+        for it as for a question: under it, its questions opened behind the
+        chooser (wave 2, round 12)."""
+        self._natives_open = getattr(self, "_natives_open", 0) + 1
+        try:
+            return show()
+        finally:
+            self._natives_open -= 1
+
     def _bring_question_forward(self):
         """The window was asked to close while a question waits: show the
         question instead, as Windows does for a modal one. The window comes

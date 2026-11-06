@@ -875,6 +875,11 @@ class SettingsPageMixin:
                        lambda e, w=t: self._paste_table_aware(w))
                 # The middle button's paste keeps the same ceiling.
                 t.bind("<<PasteSelection>>", self._paste_selection_capped)
+                # Tk's own Ctrl+K, Ctrl+O and Ctrl+T, which no Windows box has,
+                # edited a box with no Undo for good (wave 2, round 6).
+                for seq in ("<Control-k>", "<Control-K>", "<Control-o>", "<Control-O>",
+                            "<Control-t>", "<Control-T>"):
+                    t.bind(seq, lambda _e: "break")
                 return t
 
         # The note's own title box holds TITLE_MAX_LEN; these two took any paste.
@@ -1645,6 +1650,9 @@ class SettingsPageMixin:
                 gone, spare=attachment_names_in(list(self.notes) + kept))
             self.trash = kept
             save_trash(self.trash)
+            # Statistics' "In trash" is what is there now: it kept the old
+            # figure until the list next changed (wave 2, round 4).
+            self._render_statistics()
 
         def delete_selected():
             named = ticked_entries()
@@ -1777,6 +1785,12 @@ class SettingsPageMixin:
             parent, text="↩ Restore selected", command=restore_selected,
             relief="flat", cursor="hand2", font=("Segoe UI", 9, "bold"),
             bg=self.colors["accent"], fg=self._on_fill("accent"))
+        # A double-click's second press landed on Empty trash, which slid up
+        # into its place (wave 2, round 7).
+        restore_btn.bind(
+            "<ButtonPress-1>",
+            lambda e: "break" if self._second_press_of_double_click(e) else None,
+            add="+")
         # Cannot be undone, so it is outlined in `danger` as Empty trash is:
         # filled, under thirty ticks, it was the heaviest thing on the page.
         # With Select all, it keeps a few and deletes the rest.
@@ -1792,6 +1806,11 @@ class SettingsPageMixin:
         empty_holder = self._settings_big_button(
             parent, "Empty trash", empty_trash, kind="danger")
         empty_holder.pack(fill="x", padx=12, pady=(4, 10), ipady=5)
+        # ...and it answers that echo too: the guard is on the press it lands on.
+        empty_holder.bind(
+            "<ButtonPress-1>",
+            lambda e: "break" if self._second_press_of_double_click(e) else None,
+            add="+")
         # A change from outside -- the toast's Undo -- redraws the rows while
         # the panel shows (_refresh_open_trash_panel), or they offered entries gone.
         self._trash_panel_redraw = redraw

@@ -183,6 +183,10 @@ class NoteListMixin:
         hand draws nothing). The search box is emptied without the focus:
         the banner comes while a new note is being written, and the words
         typed after Show all went into the search."""
+        # From a banner over Settings, Settings is left first, as Back leaves
+        # it: Show all changed a list nobody could see (wave 2, round 12).
+        if getattr(self, "_settings_open", False):
+            self.hide_settings_page()
         if note is not None and self._list_group_of(note) in self.collapsed_groups:
             self._toggle_group_collapsed(self._list_group_of(note))
         self.filter_var.set("All")

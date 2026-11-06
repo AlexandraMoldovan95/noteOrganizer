@@ -336,8 +336,19 @@ try:
     _fh_last = _fh_toasts[-1] if _fh_toasts else (None, None, None)
     check(f'notes a code brings in where Show does not look are said, with Show all ({_fh_last[:2]})',
           _fh_last[0] == 'Added 2 notes, 2 of them hidden by Show: Work' and _fh_last[1] == 'Show all')
+    # Its Show all pressed over Settings leaves Settings first: it changed a list
+    # nobody could see (wave 2, round 12).
+    app.show_settings_page(); app.update()
+    if callable(_fh_last[2]):
+        _fh_last[2](); app.update()
+    check(f'Show all from a banner over Settings leaves Settings for the list '
+          f'({app._settings_open}, {app.filter_var.get()!r})',
+          callable(_fh_last[2]) and not app._settings_open and app.filter_var.get() == 'All')
 finally:
     app._show_toast = _fh_real_toast
+    # Settings left open by a failure would take the keys of every check after.
+    if getattr(app, '_settings_open', False):
+        app.hide_settings_page(); app.update()
     app.filter_var.set('All')
     app._clear_search()
     app.notes = [n for n in app.notes if n.get('title') not in ('Call the dentist', 'Second hidden note',
@@ -670,6 +681,14 @@ check(f'Enter gives the result, and its release leaves Insert on '
       f'({app._calc_display_var.get()!r}, {app.calculator_insert_btn.cget("state")})',
       app._calc_display_var.get() == '36'
       and str(app.calculator_insert_btn.cget('state')) == 'normal')
+# ...and a second Enter keeps the sum: it made the result its own formula,
+# "36=36" in the history and on Insert (wave 2, round 3).
+_ck_hist = len(app._calc_history)
+app.calculator_display.event_generate('<Return>'); app.update()
+check(f'a second Enter over its result changes nothing '
+      f'({app._calc_display_var.get()!r}, {app._calc_history[:1]})',
+      app._calc_display_var.get() == '36' and len(app._calc_history) == _ck_hist
+      and app._calc_last_full_expr == '12*3')
 # ...and a number typed next starts a new sum, as a button's does: typed, it
 # went on the end of the result, and after Error onto the word (round 3).
 app.calculator_display.event_generate('<KeyPress-5>')
@@ -681,6 +700,13 @@ app.update()
 check(f'a number typed after a result or Error starts a new sum '
       f'({_ck_after_result!r}, {app._calc_display_var.get()!r})',
       _ck_after_result == '5' and app._calc_display_var.get() == '7')
+# ...and after Error a minus does too: glued to the word, Enter said Error
+# again (wave 2, round 4).
+app._calc_display_var.set('Error')
+app.calculator_display.event_generate('<KeyPress-minus>')
+app.update()
+check(f'a minus typed after Error starts a new sum ({app._calc_display_var.get()!r})',
+      app._calc_display_var.get() == '-')
 find_calc_btn('C').invoke()
 app.update()
 

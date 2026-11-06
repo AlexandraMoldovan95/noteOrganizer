@@ -56,7 +56,8 @@ class AttachmentsMixin:
     """
 
     def add_attachment(self):
-        filepaths = filedialog.askopenfilenames(title="Choose file(s) to attach")
+        filepaths = self._while_native(
+            lambda: filedialog.askopenfilenames(title="Choose file(s) to attach"))
         if not filepaths:
             return
         # normalize_note enforces MAX_ATTACHMENTS by truncating -- right for
@@ -110,7 +111,7 @@ class AttachmentsMixin:
         if not (0 <= index < len(self.current_attachments)):
             return
         target = self.current_attachments[index]
-        note_id = self.selected_note_id
+        files = self.current_attachments
         # Deletes the STORED FILE for good: asked as every irreversible step
         # is -- the warning glyph, No chosen, Escape backs out.
         if not self.ask_yes_no(
@@ -121,9 +122,11 @@ class AttachmentsMixin:
                 icon="warning", default="no"):
             return
         # The file found again: under the question the editor can move on,
-        # and the index named another note's file. Moved on, nothing goes.
-        if self.selected_note_id != note_id:
+        # and the index named another note's file. Moved on (its list rebuilt),
+        # nothing goes -- a new note's first save is no move (wave 2, round 13).
+        if self.current_attachments is not files:
             return
+        note_id = self.selected_note_id
         stored = target.get("stored_as")
         index = next((i for i, a in enumerate(self.current_attachments)
                       if a is target

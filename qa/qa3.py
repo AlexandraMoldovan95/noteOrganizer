@@ -471,6 +471,51 @@ check('...so the next save cannot put the replaced version back',
       'the version that arrived' in _bulk_after['body'])
 check('...while the note nothing here matched was added',
       any(n['title'] == 'AlsoNew' for n in app.notes))
+# A one-note code's Update of the series open on one of its days keeps the day
+# and the way back to the calendar, as the batch's does: it took the editor to
+# the whole series and dropped Back to Calendar (wave 2, round 11).
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Weekly sync', 'body': 'series words',
+                                'date': '2026-09-07', 'recurrence': {'freq': 'weekly'}})]
+app.save_notes(); app.new_note(); app.update()
+app.open_note_in_tab(app.find_note(1), occurrence_date='2026-09-14'); app.update()
+_one_opened_on = app.current_occurrence_date
+app._pending_calendar_return = {'year': 2026, 'month': 9, 'date_str': '2026-09-14', 'origin': 'edit'}
+_one_code = NO.encode_share_code([dict(app.find_note(1), body='series words, updated')])
+app._themed_dialog = lambda *a, **k: 'update'
+if not app._is_placed(app.import_panel):
+    app.toggle_import_panel(); app.update()
+app.import_box.delete('1.0', 'end'); app.import_box.insert('1.0', _one_code)
+app._do_inline_import(); app.update()
+app._themed_dialog = _real_dialog
+check(f"a one-note code's Update keeps the day it was on, and the way back "
+      f"({_one_opened_on} -> {app.current_occurrence_date}, {app._pending_calendar_return})",
+      _one_opened_on == app.current_occurrence_date == '2026-09-14'
+      and app._pending_calendar_return is not None
+      and 'updated' in app.find_note(1)['body'])
+app._pending_calendar_return = None
+app.notes = []; app.save_notes(); app.new_note(); app.update()
+# A double-click on Import: the second press found the box the first emptied,
+# and said in red that no code was pasted (wave 2, round 9).
+from _qa_support import fire as _ib_fire
+if not app._is_placed(app.import_panel):
+    app.toggle_import_panel(); app.update()
+_ib_btn = find_btn(app.import_panel, 'Import')
+app.import_box.delete('1.0', 'end')
+app.import_box.insert('1.0', NO.encode_share_code([{'title': 'Twice', 'body': 'a'},
+                                                   {'title': 'Clicked', 'body': 'b'}]))
+for _ib_t in (300000, 300250):
+    if not app._is_placed(app.import_panel):
+        app.toggle_import_panel(); app.update()
+    _ib_fire(_ib_btn, '<Enter>')
+    _ib_fire(_ib_btn, '<ButtonPress-1>', x=5, y=5, rootx=420, rooty=310, time=_ib_t)
+    _ib_fire(_ib_btn, '<ButtonRelease-1>', x=5, y=5, rootx=420, rooty=310, time=_ib_t + 60)
+    app.update()
+_ib_said = str(app.import_status.cget('text'))
+check(f"a double-click on Import adds the notes and says nothing false ({_ib_said!r})",
+      'No code' not in _ib_said and sum(1 for n in app.notes if n.get('title') in ('Twice', 'Clicked')) == 2)
+app.notes = []; app.save_notes(); app.new_note(); app.update()
+if app._is_placed(app.import_panel):
+    app.toggle_import_panel(); app.update()
 
 # ---- SETTINGS SHOWS WHAT IS TRUE NOW, NOT AT THE LAST VISIT ----
 # Field-reported: delete a note, open Settings, and Recently deleted did
@@ -614,6 +659,58 @@ check(f"an Update agreed to, then look-alikes skipped: the Update still happens 
       and app.find_note(9601)['body'] == 'second words'
       and sum(1 for n in app.notes if n.get('title') == 'Look alike') == 1)
 app.notes = [n for n in app.notes if n.get('id') not in (9601, 9602)]
+# A known note answered "Add it as a new note" is not asked about again as a
+# look-alike: differing only in its colour, it was, and the default Cancel
+# undid the Add unsaid (wave 2, round 10).
+def _la_add(*a, **k):
+    labels = [label for label, _v in k.get('buttons') or []]
+    _la_asked.append(labels)
+    return ('add' if any('new note' in label for label in labels)
+            else 'skip' if any(label.startswith('Skip') for label in labels) else 'cancel')
+
+
+_la_ways = {}
+for _la_way, _la_code in (('one note', [{'uid': 'la-add', 'title': 'Paint', 'body': 'walls', 'color': '#e57373'}]),
+                          ('a batch', [{'uid': 'la-add', 'title': 'Paint', 'body': 'walls', 'color': '#e57373'},
+                                       {'title': 'Fresh', 'body': 'brand new'}])):
+    app.notes = [n for n in app.notes if n.get('title') not in ('Paint', 'Fresh')]
+    app.notes.append(NO.normalize_note({'id': 9603, 'uid': 'la-add', 'title': 'Paint', 'body': 'walls'}))
+    app.save_notes(); app.new_note(); app.update()
+    _la_asked = []
+    app._themed_dialog = _la_add
+    if not app._is_placed(app.import_panel):
+        app.toggle_import_panel(); app.update()
+    app.import_box.delete('1.0', 'end')
+    app.import_box.insert('1.0', NO.encode_share_code(_la_code))
+    app._do_inline_import()
+    app.update()
+    app._themed_dialog = _real_dlg_id
+    # One note opens in the editor, a new note its first save makes.
+    app._autosave_now(); app.update()
+    _la_ways[_la_way] = (_la_asked, sum(1 for n in app.notes if n.get('title') == 'Paint'),
+                         sum(1 for n in app.notes if n.get('title') == 'Fresh'))
+check(f"a known note added as a new one is not asked about again as a look-alike ({_la_ways})",
+      _la_ways['one note'][0:2] == ([['Cancel', 'Add as a new note', 'Update this note']], 2)
+      and len(_la_ways['a batch'][0]) == 1 and _la_ways['a batch'][1:] == (2, 1))
+# "Added 1 note", not "Added 1 notes": one fresh note in, one look-alike skipped.
+app.notes = [n for n in app.notes if n.get('title') not in ('Paint', 'Fresh')]
+app.notes.append(NO.normalize_note({'id': 9604, 'title': 'Paint', 'body': 'walls'}))
+app.save_notes(); app.new_note(); app.update()
+_la_asked = []
+app._themed_dialog = _la_add
+if not app._is_placed(app.import_panel):
+    app.toggle_import_panel(); app.update()
+app.import_box.delete('1.0', 'end')
+app.import_box.insert('1.0', NO.encode_share_code([{'title': 'Paint', 'body': 'walls'},
+                                                   {'title': 'Solo', 'body': 'only this'}]))
+app._do_inline_import()
+app.update()
+app._themed_dialog = _real_dlg_id
+_la_said = str(app.import_status.cget('text'))
+check(f"...and one note added is said as one note ({_la_said!r})",
+      _la_said.startswith('Added 1 note ✓') and 'Added 1 notes' not in _la_said)
+app.notes = [n for n in app.notes if n.get('title') not in ('Paint', 'Fresh', 'Solo')]
+app.save_notes()
 app.save_notes()
 
 # A note saved while the code's question waited -- a backup's merge, a new
@@ -652,6 +749,7 @@ try:
     app._modal_depth = 1
     app._poll_import_progress()
     _pi_waited = not _pi_merged and app._import_state is not None
+    _pi_said = str(app.export_progress_lbl.cget('text'))
     app._modal_depth = 0
     if _pi_waited:   # the wait re-armed the poll; merged at once, nothing was
         app.after_cancel(app._export_poll_job)
@@ -662,6 +760,24 @@ finally:
     app._import_state = None
 check(f"a backup's merge waits while a question is open, then runs ({_pi_waited}, {len(_pi_merged)})",
       _pi_waited and len(_pi_merged) == 1)
+# ...and its bar says it waits, not "0 / 1 attachments" (wave 2, round 12).
+check(f"a backup's merge waiting on a question says so ({_pi_said!r})", 'waiting' in _pi_said)
+# ...and it waits for a file chooser or a posted menu as well: under one, its
+# questions opened behind the chooser (wave 2, round 12).
+_pi_merged = []
+app._merge_finished_import = lambda state: _pi_merged.append(state)
+try:
+    app._import_state = {'phase': 'copying', 'total': 1, 'current': 1, 'done': True}
+    app._while_native(app._poll_import_progress)
+    _pi_waited = not _pi_merged and app._import_state is not None
+    if _pi_waited:
+        app.after_cancel(app._export_poll_job)
+    app._poll_import_progress()
+finally:
+    app.__dict__.pop('_merge_finished_import', None)
+    app._import_state = None
+check(f"a backup's merge waits while a file chooser or a menu is up, then runs ({_pi_waited}, {len(_pi_merged)})",
+      _pi_waited and len(_pi_merged) == 1 and not getattr(app, '_natives_open', 0))
 # A restore whose save fails takes back exactly the notes it brought: a new
 # note's autosave inside the error's wait came after them, and a cut by count
 # threw it away (round 12).
@@ -671,15 +787,22 @@ app.trash = []
 app.save_notes(); NO.save_trash(app.trash)
 app._delete_note(app.find_note(2), None); app.update()   # asked yes: line 26
 _rb_new = NO.normalize_note({'id': 9, 'title': 'Typed meanwhile', 'body': 'x'})
-app.save_notes = lambda *a, **k: (app.notes.append(_rb_new), False)[1]
+# The autosave inside the wait writes the file, the restored note in it.
+app.save_notes = lambda *a, **k: (app.notes.append(_rb_new), NO.core_save_notes(app.notes), False)[2]
 try:
     _rb_back = app._restore_trash_entries(list(app.trash))
 finally:
     app.__dict__.pop('save_notes', None)
+with open(NO.DATA_FILE, encoding='utf-8') as _rb_fh:
+    _rb_file = [n.get('title') for n in json.load(_rb_fh)]
 check(f"a restore whose save fails keeps a note saved meanwhile "
       f"({_rb_back}, {[n.get('title') for n in app.notes]})",
       _rb_back is None and any(n is _rb_new for n in app.notes)
       and not any(n.get('title') == 'Sent away' for n in app.notes))
+# ...and the file is put back as well: written inside the wait, the note stood
+# in the list and in the Trash at the next start (wave 2, round 13).
+check(f"a restore whose save fails leaves the notes file without it ({_rb_file})",
+      'Sent away' not in _rb_file and 'Typed meanwhile' in _rb_file)
 app.notes = _ni_keep
 app.save_notes()
 
@@ -3288,6 +3411,33 @@ check('a double-click on a Trash row restores one note, not the next one too',
 _dc_restore(201500)
 check('...while a click of its own, later, still restores',
       sorted(n['title'] for n in app.notes) == ['Newer', 'Older'])
+# Double-clicking "Restore N selected": the second press landed on Empty
+# trash, slid up into its place, and asked to delete the rest (wave 2, round 7).
+app.trash = [dict(NO.normalize_note({'id': 3, 'title': 'Ticked', 'body': 'z'}),
+                  deleted_at='2026-09-30 12:00:00'),
+             dict(NO.normalize_note({'id': 4, 'title': 'Left', 'body': 'w'}),
+                  deleted_at='2026-09-30 09:00:00')]
+NO.save_trash(app.trash)
+app.toggle_settings_panel('statistics'); app.toggle_settings_panel('trash'); app.update()
+_rs_rows = _trash_rows()
+_rs_tick = next((c for c in _rs_rows[0].winfo_children() if isinstance(c, tk.Checkbutton)), None) if _rs_rows else None
+if _rs_tick is not None:
+    _rs_tick.invoke(); app.update()
+_rs_asked = []
+_rs_ask = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: (_rs_asked.append(a[0]), False)[1]
+try:
+    for _rs_label, _rs_t in (('↩ Restore 1 selected', 202000), ('Empty trash', 202250)):
+        _rs_btn = find_btn(app, _rs_label)
+        if _rs_btn is not None:
+            _dc_fire(_rs_btn, '<Enter>')
+            _dc_fire(_rs_btn, '<ButtonPress-1>', x=5, y=5, rootx=420, rooty=330, time=_rs_t)
+            _dc_fire(_rs_btn, '<ButtonRelease-1>', x=5, y=5, rootx=420, rooty=330, time=_rs_t + 60)
+            app.update()
+finally:
+    app.ask_yes_no = _rs_ask
+check(f"a double-click on Restore selected does not answer Empty trash ({_rs_asked}, {len(app.trash)})",
+      _rs_tick is not None and 'Empty trash' not in _rs_asked and len(app.trash) == 1)
 app.hide_settings_page(); app.update()
 app.trash = []; NO.save_trash(app.trash)
 app.notes = []; app.save_notes()
@@ -3666,9 +3816,9 @@ def _ic_path(name):
     return os.path.join(NO.ATTACHMENTS_DIR, name)
 
 
-def _ic_import(notes, files, answer):
-    """Import a backup holding `notes` and the attachment `files`,
-    answering the import's own questions with `answer`."""
+def _ic_import(notes, files, answer, templates=None):
+    """Import a backup holding `notes`, the attachment `files` and any
+    `templates`, answering the import's own questions with `answer`."""
     src = tempfile.mkdtemp(prefix='qa3_ic_')
     os.makedirs(os.path.join(src, 'attachments'))
     for name in files:
@@ -3681,6 +3831,8 @@ def _ic_import(notes, files, answer):
         os.remove(zpath)
     with zipfile.ZipFile(zpath, 'w') as zf:
         zf.write(os.path.join(src, 'notes_data.json'), 'notes_data.json')
+        if templates is not None:
+            zf.writestr('templates.json', json.dumps(templates))
         for name in files:
             zf.write(os.path.join(src, 'attachments', name), 'attachments/' + name)
     _ic_shutil.rmtree(src, ignore_errors=True)
@@ -3731,9 +3883,13 @@ _ic_asked = _ic_import(
       'attachments': [{'name': 'f.txt', 'stored_as': 'qa3_ic_fresh.txt'}]}],
     ['qa3_ic_skip.txt', 'qa3_ic_fresh.txt'], 'skip')
 _ic_fresh = [n for n in app.notes if n.get('title') == 'Fresh']
-check(f'...nor skipping the duplicates: their files go ({_ic_asked})',
+# Skipped, a look-alike's files go to the note it looks like: they were deleted
+# with it, the date and files the twin lacked never brought in (wave 2, round 14).
+_ic_twin = [a.get('stored_as') for a in app.find_note(1).get('attachments') or []]
+check(f"...and skipping the duplicates gives their files to the notes they look like ({_ic_asked}, {_ic_twin})",
       any('Possible duplicates' in t for t in _ic_asked)
-      and not os.path.exists(_ic_path('qa3_ic_skip.txt')))
+      and 'qa3_ic_skip.txt' in _ic_twin
+      and os.path.exists(_ic_path('qa3_ic_skip.txt')))
 check('...while the note imported keeps its own file, on disk',
       len(_ic_fresh) == 1
       and [a.get('stored_as') for a in _ic_fresh[0].get('attachments') or []]
@@ -3762,6 +3918,18 @@ check(f"a backup's Update agreed to, then look-alikes skipped: the Update still 
       any('Skip them' in labels for labels in _bk_asked)
       and (app.find_note(1) or {}).get('body', '').rstrip('\n') == 'second words'
       and sum(1 for n in app.notes if n.get('title') == 'Look alike') == 1)
+# A backup of look-alikes alone that brings a template: Skip them goes on with
+# the template -- with only Cancel and Import anyway, the default Cancel dropped
+# it (wave 2, round 10).
+_bk_asked = []
+_ic_import([{'title': 'Look alike', 'body': 'same words'}], [], _bk_answer,
+           templates=[{'name': 'Weekly review', 'title': 'Review', 'body': 'wins'}])
+check(f"a backup of look-alikes that brings a template offers Skip them, and the template comes ({_bk_asked})",
+      any('Skip them' in labels for labels in _bk_asked)
+      and any(t.get('name') == 'Weekly review' for t in app.templates)
+      and sum(1 for n in app.notes if n.get('title') == 'Look alike') == 1)
+app.templates = [t for t in app.templates if t.get('name') != 'Weekly review']
+NO.save_templates(app.templates)
 app.notes = []; app.save_notes()
 
 # ---- A BACKUP WITH A DAMAGED FILE IN IT ----

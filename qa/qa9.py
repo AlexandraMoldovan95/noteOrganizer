@@ -2578,6 +2578,32 @@ check("a change made from outside reloads the open note without asking the "
       "template editor (%s, %r)" % (_xo_asked, _xo_shown),
       not _xo_asked and _xo_shown == 'after' and app._mini_popup is _xo_pop)
 app._dismiss_mini_popup(); app.update()
+# ...but a popup with nothing to lose closes: an emoji picker or a palette aimed
+# at the old text stayed open over the reload and wrote into the new (wave 2,
+# round 13).
+app.hide_settings_page(); app.update()
+app._show_emoji_picker(app.body_text); app.update()
+_xo_picker = app._mini_popup
+app.find_note(1)['body'] = 'later'
+app._editor_follows_external_change({1}); app.update()
+check("a change made from outside closes a popup with nothing to lose (%r)" % _xo_picker,
+      _xo_picker is not None and app._mini_popup is None
+      and app.body_text.get('1.0', 'end-1c') == 'later')
+app._dismiss_mini_popup(); app.update()
+# The template editor's boxes have no Undo: Tk's own Ctrl+K deleted the rest of
+# the line there for good, Ctrl+O and Ctrl+T split and swapped (wave 2, round 6).
+app.show_settings_page(); app.update()
+app.toggle_settings_panel('templates'); app.update()
+app._edit_template(app.templates[0], redraw=lambda: None); app.update()
+_ck_box = [w for w in _walk9(app._mini_popup) if isinstance(w, tk.Text)][0]
+_ck_box.delete('1.0', 'end'); _ck_box.insert('1.0', 'keep this whole line')
+_ck_box.focus_force(); _ck_box.mark_set('insert', '1.4'); app.update()
+for _ck_key in ('<Control-k>', '<Control-o>', '<Control-t>'):
+    _ck_box.event_generate(_ck_key); app.update()
+check(f"Ctrl+K, Ctrl+O and Ctrl+T leave a template box's words alone ({_ck_box.get('1.0', 'end-1c')!r})",
+      _ck_box.get('1.0', 'end-1c') == 'keep this whole line')
+app._dismiss_mini_popup(); app.update()
+app.hide_settings_page(); app.update()
 
 # ============================================================
 # ENTER ANSWERS A QUESTION WITH THE BUTTON THAT HOLDS THE KEYBOARD
