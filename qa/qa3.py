@@ -3961,15 +3961,22 @@ app.save_notes()
 app.open_note_in_tab(app.find_note(1)); app.update()
 _ic_real_flush = app._flush_autosave
 app._flush_autosave = lambda *a, **k: False
+_ic_said = []
+_ic_real_info = app.show_info
+app.show_info = lambda *a, **k: (_ic_said.append(' '.join(str(x) for x in a)), True)[1]
 _ic_asked = _ic_import(
     [{'title': 'Groceries', 'body': 'milk',
       'attachments': [{'name': 's.txt', 'stored_as': 'qa3_ic_skip.txt'}]},
      {'title': 'Fresh', 'body': 'new'}],
     ['qa3_ic_skip.txt'], 'skip')
+app.show_info = _ic_real_info
 app._flush_autosave = _ic_real_flush
 _ic_open = [a.get('stored_as') for a in app.find_note(1).get('attachments') or []]
 check(f"...but not when its save was sent back to fix a date ({_ic_asked}, {_ic_open})",
       any('Possible duplicates' in t for t in _ic_asked) and not _ic_open)
+# ...which is said: deleted unsaid, they were what Skip was offered for (round 3).
+check(f"...and the files left out are said ({_ic_said[-1:]})",
+      any('1 attached file(s) for the note you went back to were not added' in s for s in _ic_said))
 app._cancel_pending_autosave()
 app.open_blank_tab(); app.update()
 # ...and a look-alike bringing no file leaves the note open alone: read back
@@ -5358,6 +5365,16 @@ _kz_back = next((n for n in app.notes if n.get('title') == 'KeyUndoMe'), None)
 if _kz_back is not None:
     app._delete_note(_kz_back, None)
     _kt_settle(2)
+# ...but Ctrl+Shift+Z there, the guide's Redo, never takes it: bound for Caps
+# Lock, <Control-Z> took it too (the lows wave's round 3).
+_kz_own.edit_reset()
+_kz_own.insert('end', 'y'); _kz_own.edit_separator()
+_kz_own.edit_undo()
+if _kt_take(_kz_own):
+    _kz_own.event_generate('<Control-Shift-Z>')
+    _kt_settle()
+check("...but Ctrl+Shift+Z, the Redo key, leaves the offer where it is",
+      'KeyUndoMe' in _trash_titles() and app._toast_action is not None)
 _kz_own.destroy()
 check('the toast\'s Undo is a Tab stop',
       str(app.toast_action_lbl.cget('takefocus')) == '1')
@@ -5375,6 +5392,22 @@ if app._toast_hide_job is not None and _kt_take(app.toast_action_lbl):
 check(f'while the keyboard is on Undo the toast waits for it ({_kz_waited}), '
       f'and Space takes the offer',
       _kz_waited and 'KeyUndoMe' in _titles() and 'KeyUndoMe' not in _trash_titles())
+app._hide_toast()
+# What Tk's own Undo took is that press's only: a Caps Lock Ctrl+Z in the
+# comments with no offer up left its word for the next press there, which then
+# did nothing while the banner offered Undo (the lows wave's round 3).
+app.comments_text.insert('end', 'TODO'); app.comments_text.edit_separator()
+app.comments_text.event_generate('<<Undo>>')
+_kt_settle()
+_kz_back = next((n for n in app.notes if n.get('title') == 'KeyUndoMe'), None)
+if _kz_back is not None:
+    app._delete_note(_kz_back, None)
+    _kt_settle(2)
+if _kt_take(app.comments_text):
+    app.comments_text.event_generate('<Control-z>')
+    _kt_settle()
+check("...and a Caps Lock Ctrl+Z with no offer up leaves no word for the next press",
+      _kz_back is not None and 'KeyUndoMe' in _titles() and 'KeyUndoMe' not in _trash_titles())
 app._hide_toast()
 # Round 2 of the final audit: a plain banner in its place hid the Undo the
 # keyboard was on, and nothing moved the keyboard -- left on a word no

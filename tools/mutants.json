@@ -16949,5 +16949,35 @@
     "must_fail": ["...but as a look-alike of a copy added before, it is"],
     "suites": ["qa3"],
     "expect": "killed"
+  },
+  {
+    "id": "WS127",
+    "about": "Ctrl+Shift+Z, the Redo key, runs the banner's Undo through the Caps Lock binding",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if getattr(event, \"state\", 0) & 0x0001:\n            return None\n",
+               "replace": ""}],
+    "must_fail": ["...but Ctrl+Shift+Z, the Redo key, leaves the offer where it is"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS128",
+    "about": "What Tk's own Undo took outlives its press, and a later Ctrl+Z in that box does nothing",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            self.after_idle(self._forget_text_undo)\n",
+               "replace": "            pass\n"}],
+    "must_fail": ["...and a Caps Lock Ctrl+Z with no offer up leaves no word for the next press"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS129",
+    "about": "A backup's Skip leaves out the open note's files after Go back and says nothing of it",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if state.get(\"files_left\"):\n",
+               "replace": "        if False:\n"}],
+    "must_fail": ["...and the files left out are said"],
+    "suites": ["qa3"],
+    "expect": "killed"
   }
 ]

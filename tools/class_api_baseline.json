@@ -332,6 +332,7 @@
   "_foreground_is_ours": "(self)",
   "_foreign_plain": "(self, raw)",
   "_forget_dead_cell_editor": "(self, entry)",
+  "_forget_text_undo": "(self)",
   "_forward_grid_wheel": "(self, event)",
   "_found_at": "(self, place)",
   "_frame_delay": "(info)",
