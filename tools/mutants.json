@@ -2651,8 +2651,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            self.refresh_note_list()\n        try:\n            self.notebook.select(self.TAB_NOTES)\n        except tk.TclError:\n            pass\n        self._open_unless_shown(note)\n",
-        "replace": "            self.refresh_note_list()\n"
+        "find": "        if self._what_hides_notes(note):\n            self._show_all_notes(note)\n        self._open_unless_shown(note)\n\n    def _set_aside_days",
+        "replace": "\n    def _set_aside_days"
       }
     ],
     "must_fail": ["Settings -> About's Show brings a deleted welcome note back"],
@@ -16727,6 +16727,96 @@
                "replace": ""}],
     "must_fail": ["a known note added as a new one is not asked about again as a look-alike"],
     "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS105",
+    "about": "Ctrl+Z that takes back a text box's last typing also takes the banner's Undo",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                    or (kind == \"Text\" and not self._can_edit_undo(widget)\n                        and not self._can_edit_redo(widget))):\n",
+               "replace": "                    or (kind == \"Text\" and not self._can_edit_undo(widget))):\n"}],
+    "must_fail": ["...and in any box with an undo of its own, the box's too, its last step as well"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS106",
+    "about": "A new note hidden by Show, typed right after a delete, takes the delete's Undo off the banner",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            if hides and undo_shown:\n",
+               "replace": "            if hides and False:\n"}],
+    "must_fail": ["...and over an Undo still offered, the Undo stays and the status line says it"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS107",
+    "about": "A Cancel at an import code's question says nothing, under the last import's 'Added'",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self.import_status.config(text=\"\")\n        self._import_pasted_code()\n",
+               "replace": "        self._import_pasted_code()\n"}],
+    "must_fail": ["a Cancel at a code's question says nothing was imported"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS108",
+    "about": "A category recoloured in Settings leaves the open note's category dot in the old colour",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "                # colour beside a new swatch, card and calendar (wave 2, round 5).\n                self._refresh_category_button_safe()\n",
+               "replace": "                # colour beside a new swatch, card and calendar (wave 2, round 5).\n"}],
+    "must_fail": ["a category recoloured in Settings recolours the open note's category dot"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS109",
+    "about": "From a day of a series, the category entry reads as the day's and moves every day",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        menu.add_cascade(label=(\"🗂  Move the series to category\"\n",
+               "replace": "        menu.add_cascade(label=(\"🗂  Move to category\"\n"}],
+    "must_fail": ["from a day of a series, the category entry says it moves the series"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS110",
+    "about": "A duplicate keeps the original's Created",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        clone[\"created\"] = clone[\"updated\"] = now_stamp()\n",
+               "replace": "        clone[\"updated\"] = now_stamp()\n"}],
+    "must_fail": ["...made now, not on the original's day"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS111",
+    "about": "A category added at the foot of a long list stays below the part shown",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "            canvas.yview_moveto(1.0)\n",
+               "replace": "            pass\n"}],
+    "must_fail": ["a category added at the foot of a long list is brought into sight"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS112",
+    "about": "The welcome note brought back from About under a Show that hides it lands hidden",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        # unsaid (wave 2, round 3), as the '(earlier text)' note's Show does.\n        if self._what_hides_notes(note):\n",
+               "replace": "        # unsaid (wave 2, round 3), as the '(earlier text)' note's Show does.\n        if False:\n"}],
+    "must_fail": ["the welcome note brought back under Show is on the list it opens over"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS113",
+    "about": "A long category name is cut bare at 13 letters in the note's category list",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            lbl = tk.Label(row, text=one_line(cat, 30), bg=row.cget(\"bg\"),\n",
+               "replace": "            lbl = tk.Label(row, text=cat, bg=row.cget(\"bg\"),\n"}],
+    "must_fail": ["a long category name is cut with"],
+    "suites": ["qa6"],
     "expect": "killed"
   }
 ]

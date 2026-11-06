@@ -2726,6 +2726,119 @@ check(f'redrawing the Templates list leaves no Tcl command behind '
 app.templates = _lk_tpl_saved
 app.hide_settings_page(); app.update()
 
+# A category recoloured in Settings recolours the open note's category
+# button too: its dot kept the old colour beside the new swatch, card and
+# calendar (wave 2, round 5).
+app.new_note(); app.update()
+app.category_var.set('General'); app.update()
+_rc_was = NO.CATEGORY_COLORS['General']
+_rc_real_palette = app._show_color_palette
+
+
+def _rc_swatch(widget, colour):
+    for child in widget.winfo_children():
+        if (isinstance(child, tk.Frame) and str(child.cget('cursor')) == 'hand2'
+                and str(child.cget('bg')).lower() == colour.lower()):
+            return child
+        found = _rc_swatch(child, colour)
+        if found is not None:
+            return found
+    return None
+
+
+def _rc_recolour(colour_from, colour_to):
+    app._show_color_palette = lambda anchor, current, apply, **k: apply(colour_to)
+    try:
+        app.show_settings_page(); app.update()
+        app.toggle_settings_panel('categories'); app.update()
+        swatch = _rc_swatch(app.settings_categories_panel, colour_from)
+        if swatch is not None:
+            swatch.event_generate('<Button-1>'); app.update()
+        return swatch is not None
+    finally:
+        app._show_color_palette = _rc_real_palette
+
+
+_rc_found = _rc_recolour(_rc_was, '#123456')
+_rc_dot = str(app._cat_dot.cget('fg'))
+check(f"a category recoloured in Settings recolours the open note's category dot ({_rc_found}, {_rc_dot})",
+      _rc_found and _rc_dot.lower() == '#123456')
+_rc_recolour('#123456', _rc_was)
+app.hide_settings_page(); app.update()
+
+# A category added at the foot of a list longer than its 220 pixels is
+# brought into sight: "+ Add" looked as if it did nothing (wave 2, round 9).
+_ac_saved = dict(NO.CATEGORY_COLORS)
+for _ac_i in range(14):
+    NO.CATEGORY_COLORS['Shelf %02d' % _ac_i] = '#888888'
+NO.persist_categories()
+app.show_settings_page(); app.update()
+app.toggle_settings_panel('categories'); app.update()
+
+
+def _ac_find(widget, kind, text=None):
+    for child in widget.winfo_children():
+        if isinstance(child, kind) and (text is None or str(child.cget('text')) == text):
+            return child
+        found = _ac_find(child, kind, text)
+        if found is not None:
+            return found
+    return None
+
+
+_ac_entry = _ac_find(app.settings_categories_panel, tk.Entry)
+_ac_add = _ac_find(app.settings_categories_panel, tk.Button, '+ Add')
+if _ac_entry is not None and _ac_add is not None:
+    _ac_entry.insert(0, 'Zeta shelf')
+    _ac_add.invoke(); app.update()
+_ac_view = app._active_panel_canvas.yview()
+check(f'a category added at the foot of a long list is brought into sight ({_ac_view})',
+      'Zeta shelf' in NO.CATEGORY_COLORS and _ac_view[0] > 0 and _ac_view[1] == 1.0)
+NO.CATEGORY_COLORS.clear(); NO.CATEGORY_COLORS.update(_ac_saved); NO.persist_categories()
+app.hide_settings_page(); app.update()
+
+# The welcome note brought back from About under a Show that hides it: Show
+# all first, so it is on the list it opens over (wave 2, round 3).
+_wn_notes = list(app.notes)
+app.filter_var.set('Work'); app.refresh_note_list(); app.update()
+app.show_welcome_note(); app.update()
+_wn_uid = NO.load_settings().get('welcome_note_uid')
+_wn_id = next((n['id'] for n in app.notes if _wn_uid and n.get('uid') == _wn_uid), None)
+check(f'the welcome note brought back under Show is on the list it opens over '
+      f'({app.filter_var.get()!r}, {_wn_id}, {app.selected_note_id})',
+      app.filter_var.get() == 'All' and _wn_id is not None and app.selected_note_id == _wn_id)
+app.filter_var.set('All')
+app.notes = _wn_notes; app.save_notes(); app.new_note(); app.update()
+
+# A long category name is cut with "…" in the note's category list and on
+# its button: cut bare at 13 letters, two sharing a start read the same,
+# and a long one crowded out the title (wave 2, round 6).
+_lc_name = 'Household paperwork and receipts 2026'
+NO.CATEGORY_COLORS[_lc_name] = '#888888'
+app.new_note(); app.update()
+app.category_var.set(_lc_name); app.update()
+_lc_button = str(app._cat_btn_lbl.cget('text'))
+app._open_category_dropdown(); app.update()
+
+
+def _lc_texts(widget):
+    out = []
+    for child in widget.winfo_children():
+        if isinstance(child, tk.Label):
+            out.append(str(child.cget('text')))
+        out.extend(_lc_texts(child))
+    return out
+
+
+_lc_rows = _lc_texts(app._mini_popup) if getattr(app, '_mini_popup', None) is not None else []
+app._dismiss_mini_popup(); app.update()
+check(f'a long category name is cut with "…" on the note\'s button and in its list ({_lc_button!r}, '
+      f'{[t for t in _lc_rows if t.startswith("Household")]})',
+      _lc_button.endswith('…') and len(_lc_button) <= 21
+      and any(t.startswith('Household paperwork') and t.endswith('…') and len(t) <= 31 for t in _lc_rows))
+del NO.CATEGORY_COLORS[_lc_name]
+app.new_note(); app.update()
+
 # 107: the wheel over an empty Trash panel must reach the page beneath
 # it. A fully-shown list has nothing of its own to scroll, and trapping
 # the wheel there is a scroll that silently does nothing.

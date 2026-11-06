@@ -1907,6 +1907,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.notebook.select(self.TAB_NOTES)
         except tk.TclError:
             pass
+        # Where the list shows it: under Show or a search it landed hidden,
+        # unsaid (wave 2, round 3), as the '(earlier text)' note's Show does.
+        if self._what_hides_notes(note):
+            self._show_all_notes(note)
         self._open_unless_shown(note)
 
     def _set_aside_days(self, say=True):
@@ -10640,6 +10644,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             have.add(att["stored_as"])
 
     def _do_inline_import(self):
+        """Import the pasted code, and say what came of it: a Cancel at any
+        of its questions said nothing, under the last import's "Added …"
+        (wave 2, round 3)."""
+        self.import_status.config(text="")
+        self._import_pasted_code()
+        try:
+            if self._is_placed(self.import_panel) and not self.import_status.cget("text"):
+                self.import_status.config(text="Nothing was imported.", fg=self.colors["subtext"])
+        except tk.TclError:
+            pass
+
+    def _import_pasted_code(self):
         code = self.import_box.get("1.0", "end")
         try:
             shared = decode_share_code(code)
@@ -12976,7 +12992,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         color = CATEGORY_COLORS.get(cat, self.colors["accent"])
         try:
             self._cat_dot.configure(bg=self.colors["sidebar"], fg=color)
-        except tk.TclError:
+            self._cat_btn_lbl.configure(text=one_line(cat, 20))
+        except (tk.TclError, AttributeError):
             pass
 
 
@@ -13003,10 +13020,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             dot = tk.Label(row, text="●", bg=row.cget("bg"), fg=color,
                           font=("Segoe UI", 11), cursor="hand2")
             dot.pack(side="left", padx=(10, 6), pady=4)
-            lbl = tk.Label(row, text=cat, bg=row.cget("bg"),
+            # Cut with "…" past 30 letters: at a width of 13 every name was cut
+            # bare, and two sharing a start read the same (wave 2, round 6).
+            lbl = tk.Label(row, text=one_line(cat, 30), bg=row.cget("bg"),
                            fg=self.colors["accent_text"] if is_cur else self.colors["text"],
                            font=("Segoe UI", 10, "bold" if is_cur else "normal"),
-                           anchor="w", width=13)
+                           anchor="w", width=min(30, max(13, len(cat) + 1)))
             lbl.pack(side="left", padx=(0, 10))
 
             def pick(c=cat):
@@ -14327,7 +14346,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                  fg=CATEGORY_COLORS.get("General", self.colors["accent"]),
                                  font=("Segoe UI", 11))
         self._cat_dot.pack(side="left", padx=(10, 6))
-        self._cat_btn_lbl = tk.Label(self.category_menu, textvariable=self.category_var,
+        # Its name cut with "…" past 20 letters (_refresh_category_button): a
+        # long one crowded out the title beside it (wave 2, round 6).
+        self._cat_btn_lbl = tk.Label(self.category_menu, text=one_line(self.category_var.get(), 20),
                                      bg=self.colors["sidebar"], fg=self.colors["text"],
                                      font=("Segoe UI", 10), anchor="w")
         self._cat_btn_lbl.pack(side="left")
@@ -18801,7 +18822,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         clone.pop("uid", None)
         base_title = (note.get("title") or "").strip()
         clone["title"] = f"{base_title} (copy)" if base_title else "(copy)"
-        clone["updated"] = now_stamp()
+        # Made now: it kept the original's "Created" (wave 2, round 3).
+        clone["created"] = clone["updated"] = now_stamp()
         # A duplicate is its own note, its series' own days (deleted, edited,
         # moved) copied with it, so it reads as the original does.
         clone = normalize_note(clone)
@@ -18972,7 +18994,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # "which is this?" as well as offering to change it.
                 label=("✓  " if cat_name == current_cat else "     ") + cat_name,
                 command=lambda c=cat_name: self._ctx_move_to_category(note, c))
-        menu.add_cascade(label="🗂  Move to category", menu=cat_menu)
+        # From a day of a series it moves the series, and says so: read as
+        # the day's, it moved every day unasked (wave 2, round 7).
+        menu.add_cascade(label=("🗂  Move the series to category"
+                                if occurrence_date and is_recurring(note)
+                                else "🗂  Move to category"), menu=cat_menu)
 
         # Recurrence-specific actions, only meaningful from the calendar.
         if occurrence_date is not None:
@@ -20387,9 +20413,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             made = self.notes[-1]
             hides = (self._what_hides_notes(made)
                      if new_id not in self._visible_note_ids() else "")
-            if hides:
-                self._show_toast(f"Saved in {made.get('category') or 'General'}, hidden by {hides}",
-                                 kind="info", action=lambda: self._show_all_notes(made),
+            said = f"Saved in {made.get('category') or 'General'}, hidden by {hides}"
+            undo_shown = self._offer_on_banner() and (
+                getattr(self, "_toast_action_undoes", False)
+                or getattr(self, "_toast_kind", None) == "error")
+            if hides and undo_shown:
+                # Not over an Undo or an error still showing: a new note typed
+                # right after a delete took the delete's way back (round 2).
+                self.set_status(said)
+            elif hides:
+                self._show_toast(said, kind="info", action=lambda: self._show_all_notes(made),
                                  action_text="Show all")
             elif auto:
                 self._show_toast("Note created", yield_to_action=True)
@@ -21466,9 +21499,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if isinstance(widget, str):
                 return None
             kind = widget.winfo_class()
+            # A Text's own Undo runs first (its class binding): a redo step
+            # left says this press took back its last typing (round 2).
             if kind in self._TYPING_CLASSES and not (
                     kind in ("Entry", "TEntry")
-                    or (kind == "Text" and not self._can_edit_undo(widget))):
+                    or (kind == "Text" and not self._can_edit_undo(widget)
+                        and not self._can_edit_redo(widget))):
                 return None
             # A one-line box only while nothing is typed in it (its hint
             # aside): a title begun after the delete had its typo "undone" by

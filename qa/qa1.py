@@ -138,9 +138,13 @@ check('note unpinned', app.find_note(note2['id'])['pinned']==False)
 
 # duplicate
 before_count = len(app.notes)
+note2['created'] = '2020-01-01 09:00:00'
 app.duplicate_note(note2)
 app.update()
 check('duplicate adds a note', len(app.notes)==before_count+1)
+# Made now: it kept the original's "Created" (wave 2, round 3).
+check(f"...made now, not on the original's day ({app.notes[-1].get('created')!r})",
+      app.notes[-1].get('created') != '2020-01-01 09:00:00' and app.notes[-1].get('title', '').endswith('(copy)'))
 
 # delete (soft, to trash)
 target_id = note2['id']
@@ -344,6 +348,20 @@ try:
     check(f'Show all from a banner over Settings leaves Settings for the list '
           f'({app._settings_open}, {app.filter_var.get()!r})',
           callable(_fh_last[2]) and not app._settings_open and app.filter_var.get() == 'All')
+    # Over an Undo still offered, a new note hidden is said on the status
+    # line and the Undo stays: a note typed right after a delete took the
+    # delete's way back (wave 2, round 2).
+    if getattr(app, '_settings_open', False):
+        app.hide_settings_page(); app.update()
+    app.filter_var.set('Work'); app.refresh_note_list(); app.update()
+    app._show_toast('Note moved to Trash', action=lambda: None)
+    app.new_note(); app.update()
+    app._insert_title('Book the vet')
+    app.save_current_note(); app.update()
+    check(f'...and over an Undo still offered, the Undo stays and the status line says it '
+          f'({app.toast_action_lbl.cget("text")!r}, {app.status_lbl.cget("text")!r})',
+          app._toast_action is not None and app.toast_action_lbl.cget('text') == 'Undo'
+          and 'hidden by Show: Work' in str(app.status_lbl.cget('text')))
 finally:
     app._show_toast = _fh_real_toast
     # Settings left open by a failure would take the keys of every check after.
@@ -352,7 +370,7 @@ finally:
     app.filter_var.set('All')
     app._clear_search()
     app.notes = [n for n in app.notes if n.get('title') not in ('Call the dentist', 'Second hidden note',
-                                                                'Arrived one', 'Arrived two')
+                                                                'Arrived one', 'Arrived two', 'Book the vet')
                  and not str(n.get('title') or '').startswith('Work item ')]
     app.save_notes(); app.new_note(); app.update()
 

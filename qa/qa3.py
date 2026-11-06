@@ -709,6 +709,24 @@ app._themed_dialog = _real_dlg_id
 _la_said = str(app.import_status.cget('text'))
 check(f"...and one note added is said as one note ({_la_said!r})",
       _la_said.startswith('Added 1 note ✓') and 'Added 1 notes' not in _la_said)
+# A Cancel at the code's question says so, the last import's "Added …" no
+# longer under the new code (wave 2, round 3).
+_la_id = max((n['id'] for n in app.notes), default=0) + 1     # an id no note holds
+app.notes.append(NO.normalize_note({'id': _la_id, 'uid': 'la-cancel', 'title': 'Fence', 'body': 'paint it'}))
+app.save_notes()
+app._themed_dialog = lambda *a, **k: 'cancel'
+if not app._is_placed(app.import_panel):
+    app.toggle_import_panel(); app.update()
+app.import_box.delete('1.0', 'end')
+app.import_box.insert('1.0', NO.encode_share_code([{'uid': 'la-cancel', 'title': 'Fence', 'body': 'paint it green'}]))
+app._do_inline_import()
+app.update()
+app._themed_dialog = _real_dlg_id
+_la_cancel = str(app.import_status.cget('text'))
+_la_fence = [(n.get('id'), n.get('body')) for n in app.notes if n.get('title') == 'Fence']
+check(f"a Cancel at a code's question says nothing was imported ({_la_cancel!r}, {_la_fence})",
+      _la_cancel == 'Nothing was imported.' and _la_fence == [(_la_id, 'paint it')])
+app.notes = [n for n in app.notes if n.get('title') != 'Fence']
 app.notes = [n for n in app.notes if n.get('title') not in ('Paint', 'Fresh', 'Solo')]
 app.save_notes()
 app.save_notes()
@@ -5192,16 +5210,18 @@ check('...but in a text box with typing of its own Ctrl+Z is the box\'s, and the
       'KeyUndoMe' in _trash_titles() and app._toast_action is not None)
 app.body_text.delete('1.0', 'end')
 # A text box with an undo of its own and no Ctrl+Z binding (Tk's own <<Undo>>
-# takes it back): the offer stays, or one press undid twice.
+# takes it back): the offer stays, or one press undid twice. One step only:
+# with two, the box could still undo after the press, and the check passed
+# whatever the order (wave 2, round 2: a table cell's last typing).
 _kz_own = tk.Text(app, undo=True, height=1, width=10)
 _kz_own.place(x=0, y=0)
 _kz_own.insert('end', 'one'); _kz_own.edit_separator()
-_kz_own.insert('end', ' two'); _kz_own.edit_separator()
 if _kt_take(_kz_own):
     _kz_own.event_generate('<Control-z>')
     _kt_settle()
-check(f'...and in any box with an undo of its own, the box\'s too ({_kz_own.get("1.0", "end-1c")!r})',
-      'KeyUndoMe' in _trash_titles() and app._toast_action is not None)
+check(f'...and in any box with an undo of its own, the box\'s too, its last step as well '
+      f'({_kz_own.get("1.0", "end-1c")!r})',
+      _kz_own.get("1.0", "end-1c") == '' and 'KeyUndoMe' in _trash_titles() and app._toast_action is not None)
 _kz_own.destroy()
 check('the toast\'s Undo is a Tab stop',
       str(app.toast_action_lbl.cget('takefocus')) == '1')

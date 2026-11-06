@@ -554,6 +554,11 @@ class SettingsPageMixin:
             new_name_var.set("")
             redraw()
             self.refresh_category_widgets()
+            # In sight, at the list's foot: below the 220 pixels shown, "+ Add"
+            # looked as if it did nothing (wave 2, round 9).
+            canvas.update_idletasks()
+            canvas.configure(scrollregion=canvas.bbox("all"))
+            canvas.yview_moveto(1.0)
 
         # Pressed, not held (_enter_repeats), as every Enter that acts.
         new_entry.bind("<Return>", lambda e: (
@@ -3050,6 +3055,9 @@ class SettingsPageMixin:
                 self.refresh_note_list()
                 self.render_calendar()
                 self._update_color_swatch()
+                # The open note's category button too: its dot kept the old
+                # colour beside a new swatch, card and calendar (wave 2, round 5).
+                self._refresh_category_button_safe()
             self._show_color_palette(swatch, CATEGORY_COLORS[name], apply_color,
                                      allow_reset=False)
 

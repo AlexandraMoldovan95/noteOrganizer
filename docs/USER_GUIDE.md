@@ -624,7 +624,8 @@ remembered.
 - **Duplicate** a note to create an editable copy, titled "(copy)". The copy owns its own
   copies of any attached files, so the two notes can be edited — or deleted — independently.
 - **Move a note to another category** from its own right-click menu (**🗂 Move to category**),
-  without opening it — the same list of categories the editor offers.
+  without opening it — the same list of categories the editor offers. On a calendar day of a
+  repeating note it reads **🗂 Move the series to category**, as it moves every day of it.
 - **Categories** act as folders — create, rename, recolour, or delete them from Settings →
   Categories. Renaming one keeps its place in the list and its folded group, and reaches every
   note, repeating day, template and Trash entry filed under it. Deleting a category with notes in

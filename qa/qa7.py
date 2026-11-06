@@ -123,6 +123,18 @@ _cal_posted = []
 _cal_real_popup = NO.tk.Menu.tk_popup
 NO.tk.Menu.tk_popup = lambda _m, *a, **k: _cal_posted.append(_m)
 try:
+    # From a day of a series, the category entry says it moves the series:
+    # read as the day's, it moved every day unasked (wave 2, round 7).
+    app.show_note_context_menu(
+        type('E', (), {'x_root': 0, 'y_root': 0})(),
+        NO.normalize_note(dict(app.notes[0], recurrence={'freq': 'weekly'})), occurrence_date='2026-07-22')
+    _ser_labels = ([str(_cal_posted[-1].entrycget(_i, 'label'))
+                    for _i in range(_cal_posted[-1].index('end') + 1)
+                    if _cal_posted[-1].type(_i) != 'separator'] if _cal_posted else [])
+    check(f'from a day of a series, the category entry says it moves the series '
+          f'({[_l for _l in _ser_labels if "category" in _l]})',
+          any('Move the series to category' in _l for _l in _ser_labels))
+    _cal_posted.clear()
     app.show_note_context_menu(
         type('E', (), {'x_root': 0, 'y_root': 0})(),
         app.notes[0], occurrence_date='2026-07-15')
