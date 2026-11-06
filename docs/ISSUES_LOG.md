@@ -225,6 +225,8 @@ is in the table below as well.
 | [The lows wave's own rounds: a day's lists, read by line](#the-lows-waves-own-rounds-a-days-lists-read-by-line) | What a copy can change, the copy keeps; structure borrowed by line number holds only until the first line moves. | next |
 | [The lows wave's last rounds: a paste meeting a list, one road at a time](#the-lows-waves-last-rounds-a-paste-meeting-a-list-one-road-at-a-time) | When each fix of a rule leaves the case beside it, write the rule down and test its whole matrix on both apps at once; a fix by road is a fix of one cell. | next |
 | [Wave 3: a promise about Enter, kept by one copy of the question](#wave-3-a-promise-about-enter-kept-by-one-copy-of-the-question) | A promise in the person's documents is a rule every copy of the code must keep; find the copies before trusting the one that was fixed. | next |
+| [Wave 2: the timers that ran inside a question](#wave-2-the-timers-that-ran-inside-a-question) | A question that waits is a window in which every timer runs: read what it decides about after it is answered, never before. | next |
+| [The comments that told every story twice](#the-comments-that-told-every-story-twice) | A comment says why; the story of how goes where stories are kept, with a pointer left behind. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -3832,6 +3834,67 @@ its own was read: none else ends on an answer that cannot be taken back.
 
 **Takeaway:** a promise in the person's documents is a rule every copy of the code must keep;
 find the copies before trusting the one that was fixed.
+
+### Wave 2: the timers that ran inside a question
+
+*(2026-11-03 to 2026-11-04 · the final audit's second wave, an ordinary person's week and a
+careless hand, rounds 1 to 14; rounds 13 and 14 were clean, which closed it on the desktop)*
+
+**Symptom:** the gravest finds came last, in rounds 11 and 12, and had one shape. A backup import
+that finished while a share code's "Possible duplicates" question was open merged inside it: the
+backup's notes took the ids the code's import had counted before it asked, two notes wore one id,
+and opening one wrote over the other. A backup's Update of the open note, read back into the
+editor, asked the template editor's "Save changes?"; its Cancel kept the stale editor, whose next
+save put the old text back over the Update. A restore from the Trash whose save failed took back
+"the last n notes", counted before the error's question, and with them a new note whose autosave
+had run inside it.
+
+**Mechanism:** the app's questions wait in a nested event loop, and every timer runs inside it --
+the backup's poll, the autosave, a new note's first save. Anything read before a question (a
+count, the next free id, which note is open) can be stale when it is answered. Round 11 fixed the
+case it met; round 12 swept the class and found the other two.
+
+**Fix:** a backup's merge waits for a question already open; a code's import counts its next id
+once its questions are answered; a reload after a change made from outside asks nothing; a failed
+restore takes back exactly the notes it brought, by identity. WS78-WS81.
+
+**On the way.** Rounds 1 to 10 walked an ordinary person's first week. Every search now folds
+case and accents by one rule; a new note that Show or the search hides is said, with Show all;
+opening the note already on screen leaves it as it is, where it reloaded it and emptied Ctrl+Z.
+They also caught my own fixes:
+
+- The search fold first cut a Korean syllable to its first letter; the calculator's comma first
+  read "1,000" as 1; Show all first took the keyboard away.
+- Round 4 kept an Update's rescue copy whole on every later big delete, and so lost the words
+  that delete took (round 5). Round 5 kept those words aside as an "(earlier text)" note, which
+  stayed in the list after every Ctrl+Z (round 6).
+- Two scroll checks passed or failed on the state the check before them left behind.
+
+**Takeaway:** a question that waits is a window in which every timer runs: read what it decides
+about after it is answered, never before.
+
+### The comments that told every story twice
+
+*(2026-11-03 to 2026-11-06 · the owner's decision of 3 November, done between the rounds of
+wave 2)*
+
+**Symptom:** the code's comments had grown into a second copy of this log. Around 7,000 lines
+told how a line came to be -- the field report, the round, the measurement -- beside what it does.
+A reader went through the history to find the reason, and the same story lived twice, free to
+drift.
+
+**Mechanism:** each fix wrote its story where it was made, and nothing ever took one out.
+
+**Fix:** a comment says why in at most three lines, a docstring's prose in six, a module's
+overview in ten; a story that needs more is here, and the code points at it (`ISSUES_LOG:
+"<title>"`). `tools/check_comments.py` holds every module to it -- 29 of 29 since the entry file
+joined on 2026-11-05 -- and follows every pointer. Each commit was compared with its comments
+stripped: nothing but comments changed. Four mutants that quoted a comment were re-aimed. One
+commit went in with `check_mutant_targets.py` red, its exit code read through `| tail`
+(ba97c20, fixed in a33dd21); each gate's own exit code is read since.
+
+**Takeaway:** a comment says why; the story of how goes where stories are kept, with a pointer
+left behind.
 
 ## Tk & platform gotchas
 
