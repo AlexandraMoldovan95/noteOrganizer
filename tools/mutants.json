@@ -15877,8 +15877,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        self._box_words_until = time.monotonic() + 8\n        self._show_toast(self._IMPORT_CANCELLED, kind=\"info\")\n",
-        "replace": "        self._show_toast(self._IMPORT_CANCELLED, kind=\"info\")\n"
+        "find": "        self._box_words_until = time.monotonic() + 8\n        # Not over an Undo the import's question",
+        "replace": "        # Not over an Undo the import's question"
       }
     ],
     "must_fail": [
@@ -17177,6 +17177,46 @@
                "find": "            if self._toast_action is not None and getattr(self, \"_toast_waited\", False):\n",
                "replace": "            if False:\n"}],
     "must_fail": ["an Undo does not run out under a question, and stays a while after it"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS150",
+    "about": "The word on notes brought in reads the whole list once a note when it is shown",
+    "edits": [{"file": "noteorganizer/ui/note_list.py",
+               "find": "                still = [n for n in hidden if id(n) in held and n.get(\"id\") not in shown_now]\n",
+               "replace": "                still = [n for n in hidden if id(n) in held and n.get(\"id\") not in self._visible_note_ids()]\n"}],
+    "must_fail": ["...and reads the list once when it is shown, not once a note"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS151",
+    "about": "An import cancelled says so over an Undo still offered",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self._banner_after_undo(self._IMPORT_CANCELLED,\n                                lambda: self._show_toast(self._IMPORT_CANCELLED, kind=\"info\"))\n",
+               "replace": "        self._show_toast(self._IMPORT_CANCELLED, kind=\"info\")\n"}],
+    "must_fail": ["...and so are an import cancelled and a table pasted into the comments"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS152",
+    "about": "A table pasted into the comments says so over an Undo still offered",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            self._banner_after_undo(said, lambda: self._show_toast(said))\n",
+               "replace": "            self._show_toast(said)\n"}],
+    "must_fail": ["...and so are an import cancelled and a table pasted into the comments"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS153",
+    "about": "Duplicate's save-first on a note added for a day turns the window to the Calendar",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if not auto and not getattr(self, \"_save_stays\", False) and _pending and _pending.get(\"origin\") == \"add\":\n",
+               "replace": "        if not auto and _pending and _pending.get(\"origin\") == \"add\":\n"}],
+    "must_fail": ["Duplicate's save-first on a note added for a day leaves the notebook on Notes"],
     "suites": ["qa1"],
     "expect": "killed"
   }

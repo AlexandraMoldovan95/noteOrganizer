@@ -432,6 +432,29 @@ try:
     app._update_calendar_return_button()
     check(f'a save over Settings of a note added from a day leaves the notebook on Notes, the way '
           f'back armed ({_fh_back})', _fh_back == (app.TAB_NOTES, True))
+    # Duplicate's "Yes, save first" on a note added for a day saves on the way
+    # to the copy, and leaves the notebook where it is: it went back to the
+    # Calendar and the copy opened out of sight (round 8).
+    app.new_note(); app.update()
+    app._insert_title('Day errand')
+    app.save_current_note(); app.update()
+    app._pending_calendar_return = {'year': 2026, 'month': 10, 'date_str': '2026-10-12', 'origin': 'add'}
+    app.body_text.insert('end', ' more')
+    _fh_real_ync = app.ask_yes_no_cancel
+    app.ask_yes_no_cancel = lambda *a, **k: True
+    try:
+        _fh_dup = app._note_to_duplicate(app.find_note(app.selected_note_id))
+        app.update()
+    finally:
+        app.ask_yes_no_cancel = _fh_real_ync
+    _fh_stay = (app.notebook.index('current'), _fh_dup is not None)
+    app._pending_calendar_return = None
+    app._update_calendar_return_button()
+    app.notebook.select(app.TAB_NOTES); app.update()
+    app.new_note(); app.update()
+    app.notes = [n for n in app.notes if n.get('title') != 'Day errand']
+    check(f"Duplicate's save-first on a note added for a day leaves the notebook on Notes ({_fh_stay})",
+          _fh_stay == (app.TAB_NOTES, True))
     # An Undo does not run out under a question -- an import finished over it
     # -- and stays a while after it: its eight seconds ran out unseen (round 7).
     _fh_real_asking = app._a_dialog_is_asking
@@ -521,6 +544,43 @@ try:
           _fh_undo_stays and _fh_after == 'Added 1 note, hidden by Show: ' + app.FILTER_DATED)
     app.filter_var.set('Work'); app.refresh_note_list(); app.update()
     app.notes = [n for n in app.notes if n.get('id') != 8701]
+    app._hide_toast(); app.update()
+    # ...and reads the list once when it is shown, not once a note: a big
+    # import with Show set froze the window (round 8).
+    _fh_many = [NO.normalize_note({'id': 8710 + i, 'title': f'Many {i}', 'body': '', 'category': 'General'})
+                for i in range(5)]
+    app.notes.extend(_fh_many); app.refresh_note_list(); app.update()
+    app._show_toast('Day removed', action=lambda: None)
+    app._say_hidden_arrivals(_fh_many, 'Added 5 notes')
+    _fh_reads = []
+    _fh_real_vis = app._visible_note_ids
+    app._visible_note_ids = lambda: (_fh_reads.append(1), _fh_real_vis())[1]
+    try:
+        app._hide_toast(); app.update()
+    finally:
+        app._visible_note_ids = _fh_real_vis
+    check(f'...and reads the list once when it is shown, not once a note ({len(_fh_reads)} reads)',
+          1 <= len(_fh_reads) <= 2)
+    # ...and so are the words of an import cancelled and of a table pasted into
+    # the comments: over 'Day removed' they took its one way back (round 8).
+    # The clipboard read is stood in for: the machine's is the owner's.
+    _fh_real_clip = app._clipboard_text
+    app._clipboard_text = lambda w: ('| a | b |\n| --- | --- |\n| 1 | 2 |', False)
+    _fh_kept_under = []
+    try:
+        for _fh_say in (app._say_import_cancelled, app._on_comments_paste):
+            app._show_toast('Day removed', action=lambda: None)
+            _fh_say(); app.update()
+            _fh_kept_under.append(app._toast_action is not None
+                                  and 'Day removed' in str(app.toast_lbl.cget('text')))
+            app._hide_toast(); app.update()
+            app._hide_toast(); app.update()
+    finally:
+        app._clipboard_text = _fh_real_clip
+        app.comments_text.delete('1.0', 'end')
+    check(f'...and so are an import cancelled and a table pasted into the comments ({_fh_kept_under})',
+          _fh_kept_under == [True, True])
+    app.notes = [n for n in app.notes if not 8710 <= (n.get('id') or 0) < 8715]
     app._hide_toast(); app.update()
 finally:
     app._show_toast = _fh_real_toast

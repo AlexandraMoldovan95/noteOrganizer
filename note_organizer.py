@@ -7360,7 +7360,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.comments_text.insert("insert", cleaned)
         self._schedule_autosave()
         if table:
-            self._show_toast("Comments keep text only — the table wasn't added")
+            # Not over an Undo still offered: 'Day removed' holds that day's
+            # words in it alone (the lows wave's round 8).
+            said = "Comments keep text only — the table wasn't added"
+            self._banner_after_undo(said, lambda: self._show_toast(said))
         if cut:
             self._say_if_paste_was_cut({"text_cut": True})
         return "break"
@@ -19686,7 +19689,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if choice is None:
             return None
         if choice:
-            self.save_current_note()
+            # Saved on the way to the copy: as the person's Save, a note added
+            # for a day went back to the Calendar, the copy opened out of sight
+            # (the lows wave's round 8).
+            self.save_current_note(stay=True)
             # The note the question was about, saved: not whichever one
             # the editor holds after the answer.
             return self.find_note(note["id"])
@@ -20362,13 +20368,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         note["checklist"] = [dict(it) for it in self._get_checklist()]
         return rescued
 
-    def save_current_note(self, auto=False, body_read=None):
+    def save_current_note(self, auto=False, body_read=None, stay=False):
         """Store the editor in its note. *body_read* is the body's text as a
         capture read it just before, nothing run since (_capture_and_read):
-        the autosave and the flush save from that read, not a second one."""
+        the autosave and the flush save from that read, not a second one.
+        *stay*: a save on the way to something else, which goes nowhere."""
         fields = self._editor_fields_to_save(auto, body_read)
         if fields is not None:
-            self._write_fields_to_note(auto, *fields)
+            self._save_stays = stay
+            try:
+                self._write_fields_to_note(auto, *fields)
+            finally:
+                self._save_stays = False
 
     def _editor_fields_to_save(self, auto, body_read):
         """What the editor holds, as a save stores it -- or None when there
@@ -20766,7 +20777,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Only Save on a note added for a day goes back; an EXISTING note's
         # Save stays (field feedback), with Back to Calendar.
         _pending = getattr(self, "_pending_calendar_return", None)
-        if not auto and _pending and _pending.get("origin") == "add":
+        if not auto and not getattr(self, "_save_stays", False) and _pending and _pending.get("origin") == "add":
             self._return_to_calendar()
 
     # ---------- Trash / recently deleted ----------
@@ -21487,7 +21498,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         typed on -- the road a stray key took to that Cancel."""
         self.set_status(self._IMPORT_CANCELLED)
         self._box_words_until = time.monotonic() + 8
-        self._show_toast(self._IMPORT_CANCELLED, kind="info")
+        # Not over an Undo the import's question waited out (lows round 8).
+        self._banner_after_undo(self._IMPORT_CANCELLED,
+                                lambda: self._show_toast(self._IMPORT_CANCELLED, kind="info"))
 
     def set_status(self, text, reassurance=False):
         # *reassurance* -- the autosave's own "Auto-saved" -- does not write

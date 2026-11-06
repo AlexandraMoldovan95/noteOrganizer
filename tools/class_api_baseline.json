@@ -1017,7 +1017,7 @@
   "restore_editor_state": "(self, st)",
   "restore_previous_version": "(self)",
   "save_current_as_template": "(self)",
-  "save_current_note": "(self, auto=False, body_read=None)",
+  "save_current_note": "(self, auto=False, body_read=None, stay=False)",
   "save_notes": "(self)",
   "save_theme_setting": "(self)",
   "save_username": "(self, name)",

@@ -242,8 +242,10 @@ class NoteListMixin:
             def say():
                 # Asked again when shown, as it can wait behind an Undo -- its
                 # words too, or they named a filter changed since (round 7).
-                still = [n for n in hidden if any(m is n for m in self.notes)
-                         and n.get("id") not in self._visible_note_ids()]
+                # The list read once: per note, a big import froze (round 8).
+                shown_now = self._visible_note_ids()
+                held = {id(m) for m in self.notes}
+                still = [n for n in hidden if id(n) in held and n.get("id") not in shown_now]
                 if still:
                     hides_now = self._what_hides_notes(still[0])
                     now = (f"hidden by {hides_now}" if len(notes) == 1
