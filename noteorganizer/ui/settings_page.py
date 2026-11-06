@@ -1417,6 +1417,9 @@ class SettingsPageMixin:
                         self.notes + [e for e in self.trash if e is not entry]))
                 self.trash = [e for e in self.trash if e is not entry]
                 save_trash(self.trash)
+                # As the bulk delete's: Statistics' "In trash" kept the old
+                # figure (the lows wave's round 1).
+                self._render_statistics()
             redraw()
             if keyed:
                 self._keyboard_to_trash_row(block, place, "delete")

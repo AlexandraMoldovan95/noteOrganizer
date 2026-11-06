@@ -572,12 +572,24 @@ try:
         yield w
         for c in w.winfo_children():
             yield from _st_walk(c)
+    # A row's own Delete takes "In trash" down at once, as the bulk ones do
+    # (the lows wave's round 1).
+    app.trash.append({'id': 902, 'title': 'Deleted too', 'category': 'General',
+                      'deleted_at': '2026-01-01 00:00'})
+    app._refresh_open_trash_panel(); app._render_statistics(); app.update()
+    _st_row = next((w for w in _st_walk(app) if isinstance(w, tk.Button)
+                    and str(w.cget('text')) == 'Delete'), None)
+    if _st_row is not None:
+        _st_row.invoke(); app.update()
+    _st_after_row = stats_pairs().get('In trash')
     _st_empty = next((w for w in _st_walk(app) if isinstance(w, tk.Button)
                       and 'Empty trash' in str(w.cget('text'))), None)
     if _st_empty is not None:
         _st_empty.invoke(); app.update()
 finally:
     app.ask_yes_no = _st_ask
+check(f'a row\'s own Delete takes Statistics\' "In trash" down by one at once ({_st_after_row})',
+      _st_row is not None and _st_after_row == 1)
 check(f'Empty trash takes Statistics\' "In trash" to 0 at once ({stats_pairs().get("In trash")})',
       _st_empty is not None and stats_pairs().get('In trash') == 0)
 app.toggle_settings_panel('statistics'); app.update()

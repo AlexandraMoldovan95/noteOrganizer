@@ -3881,9 +3881,11 @@ _ic_asked = _ic_import(
     [{'title': 'Groceries', 'body': 'milk',
       'attachments': [{'name': 'r.txt', 'stored_as': 'qa3_ic_dup.txt'}]}],
     ['qa3_ic_dup.txt'], 'cancel')
+# A look-alike bringing a file its twin lacks is asked with Skip since the
+# lows wave's round 1 ('Possible duplicates'); Cancel there still keeps none.
 check(f'Cancel on "all notes already imported" leaves no file no note owns '
       f'({_ic_asked})',
-      any('already imported' in t for t in _ic_asked)
+      any('already imported' in t or 'Possible duplicates' in t for t in _ic_asked)
       and not os.path.exists(_ic_path('qa3_ic_dup.txt')))
 _ic_asked = _ic_import(
     [{'uid': app.find_note(1)['uid'], 'title': 'Groceries',
@@ -3913,6 +3915,46 @@ check('...while the note imported keeps its own file, on disk',
       and [a.get('stored_as') for a in _ic_fresh[0].get('attachments') or []]
       == ['qa3_ic_fresh.txt']
       and os.path.exists(_ic_path('qa3_ic_fresh.txt')))
+for _ic_name in _ic_names:
+    if os.path.exists(_ic_path(_ic_name)):
+        os.remove(_ic_path(_ic_name))
+# ...and to the note open in the editor too: its next save put its own list of
+# files back over the ones given (the lows wave's round 1).
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Groceries', 'body': 'milk'})]
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+_ic_import(
+    [{'title': 'Groceries', 'body': 'milk',
+      'attachments': [{'name': 's.txt', 'stored_as': 'qa3_ic_skip.txt'}]},
+     {'title': 'Fresh', 'body': 'new'}],
+    ['qa3_ic_skip.txt'], 'skip')
+app.open_blank_tab(); app.update()
+_ic_open = [a.get('stored_as') for a in app.find_note(1).get('attachments') or []]
+check(f"...and to the note open in the editor, still there once it is left ({_ic_open})",
+      'qa3_ic_skip.txt' in _ic_open)
+# A backup of look-alikes that brings nothing but a file a twin lacks is
+# offered Skip, which gives it the file: Cancel was the default, and deleted
+# it (the lows wave's round 1).
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Groceries', 'body': 'milk'})]
+app.save_notes()
+_ic_offered = []
+
+
+def _ic_skip_if_offered(*a, **k):
+    labels = [label for label, _v in k.get('buttons') or []]
+    _ic_offered.append(labels)
+    return 'skip' if 'Skip them' in labels else 'cancel'
+
+
+_ic_import([{'title': 'Groceries', 'body': 'milk',
+             'attachments': [{'name': 'd.txt', 'stored_as': 'qa3_ic_dup.txt'}]}],
+           ['qa3_ic_dup.txt'], _ic_skip_if_offered)
+_ic_only = [a.get('stored_as') for a in app.find_note(1).get('attachments') or []]
+check(f"a backup of look-alikes bringing only a file a twin lacks offers Skip, which gives it "
+      f"({_ic_offered}, {_ic_only})", 'qa3_ic_dup.txt' in _ic_only)
+for _ic_name in _ic_names:
+    if os.path.exists(_ic_path(_ic_name)):
+        os.remove(_ic_path(_ic_name))
 for _ic_name in _ic_names:
     if os.path.exists(_ic_path(_ic_name)):
         os.remove(_ic_path(_ic_name))
@@ -5208,6 +5250,23 @@ if _kt_take(app.body_text):
     _kt_settle()
 check('...but in a text box with typing of its own Ctrl+Z is the box\'s, and the offer stays',
       'KeyUndoMe' in _trash_titles() and app._toast_action is not None)
+app.body_text.delete('1.0', 'end')
+# ...and in the note's text holding only a redo step -- a typo taken back a
+# moment before -- it takes the offer: read as this press's, the press did
+# nothing at all (the lows wave's round 1).
+app.body_text.edit_reset()
+app.body_text.insert('end', 'oops'); app.body_text.edit_separator()
+app.body_text.edit_undo()
+if _kt_take(app.body_text):
+    app.body_text.event_generate('<Control-z>')
+    _kt_settle()
+check(f"...and in the note's text holding only a redo step, it takes the offer "
+      f"({app._can_edit_redo(app.body_text)})",
+      'KeyUndoMe' in _titles() and 'KeyUndoMe' not in _trash_titles())
+_kz_back = next((n for n in app.notes if n.get('title') == 'KeyUndoMe'), None)
+if _kz_back is not None:
+    app._delete_note(_kz_back, None)
+    _kt_settle(2)
 app.body_text.delete('1.0', 'end')
 # A text box with an undo of its own and no Ctrl+Z binding (Tk's own <<Undo>>
 # takes it back): the offer stays, or one press undid twice. One step only:

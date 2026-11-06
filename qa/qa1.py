@@ -358,10 +358,16 @@ try:
     app.new_note(); app.update()
     app._insert_title('Book the vet')
     app.save_current_note(); app.update()
-    check(f'...and over an Undo still offered, the Undo stays and the status line says it '
-          f'({app.toast_action_lbl.cget("text")!r}, {app.status_lbl.cget("text")!r})',
-          app._toast_action is not None and app.toast_action_lbl.cget('text') == 'Undo'
-          and 'hidden by Show: Work' in str(app.status_lbl.cget('text')))
+    _fh_beneath = str(getattr(app, '_words_lbl', None) and app._words_lbl.cget('text'))
+    _fh_undo_kept = app._toast_action is not None and app.toast_action_lbl.cget('text') == 'Undo'
+    # ...and once the Undo goes, its own banner with Show all: said on the
+    # status line, the next autosave wrote over it (the lows wave's round 1).
+    app._hide_toast(); app.update()
+    _fh_after = _fh_toasts[-1] if _fh_toasts else (None, None, None)
+    check(f'...and over an Undo still offered, the Undo stays, the words show beneath it, and its '
+          f'own banner with Show all follows ({_fh_undo_kept}, {_fh_beneath!r}, {_fh_after[:2]})',
+          _fh_undo_kept and 'hidden by Show: Work' in _fh_beneath
+          and _fh_after[:2] == ('Saved in General, hidden by Show: Work', 'Show all'))
 finally:
     app._show_toast = _fh_real_toast
     # Settings left open by a failure would take the keys of every check after.

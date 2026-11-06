@@ -1967,10 +1967,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Said when the list hides it, as a new note is: Show then shows all
         # (_show_set_aside); unsaid, it was nowhere to be seen (wave 2, round 6).
         hides = self._what_hides_notes(kept)
-        self._show_toast(said + one_line(kept["title"], 60)
-                         + (f", hidden by {hides}" if hides else ""), kind="info",
-                         action=lambda: self._show_set_aside(kept["id"], kept.get("uid")),
-                         action_text="Show")
+        said += one_line(kept["title"], 60) + (f", hidden by {hides}" if hides else "")
+        # Not over an Undo still showing (_banner_after_undo).
+        self._banner_after_undo(said, lambda: self._show_toast(
+            said, kind="info", action=lambda: self._show_set_aside(kept["id"], kept.get("uid")),
+            action_text="Show"))
 
     def _take_back_aside(self, note):
         """The note _keep_text_aside made of *note*'s words taken away again,
@@ -1995,8 +1996,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 said = "The words are back in the note; the note kept aside of them is gone again"
                 self.set_status(said)
                 self._box_words_until = time.monotonic() + 4
-                # On the banner too, over its Show: it offered a note just gone.
-                self._show_toast(said, kind="info")
+                # On the banner too, over its Show: it offered a note just gone
+                # -- but not over another action's Undo (_banner_after_undo).
+                self._banner_after_undo(said, lambda: self._show_toast(said, kind="info"))
         if not held:
             del self._kept_asides[note.get("uid")]
 
@@ -11838,9 +11840,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     default=f"Skip the {dupe_count} duplicate(s)",
                 )
             else:
+                # A look-alike's files its twin lacks are what Skip goes on
+                # with too: offered no Skip, the default Cancel deleted them
+                # (the lows wave's round 1).
+                twins = {_dup_key(n): n for n in self.notes}
+                files_too = any(twin is not None and self._files_to_adopt(twin, n) for twin, n in
+                                ((twins.get(_dup_key(normalize_note(n))), n) for n in valid_notes))
                 choice = self._all_lookalike_choice(
                     len(valid_notes), other, "backup",
-                    bool(updates or copies) or self._backup_brings_more(state, added_names))
+                    bool(updates or copies) or files_too or self._backup_brings_more(state, added_names))
             if choice is None or choice == "cancel":
                 _undo_category_merge()
                 shutil.rmtree(temp_dir, ignore_errors=True)
@@ -11852,10 +11860,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # A look-alike's files go to the note it looks like: skipped
                 # whole, they were deleted with it (wave 2, round 14).
                 twins = {_dup_key(n): n for n in self.notes}
-                for n in valid_notes:
-                    twin = twins.get(_dup_key(normalize_note(n)))
-                    if twin is not None and not any(n is f for f in fresh):
-                        self._adopt_backup_attachments(twin, n)
+                adopting = [(twins.get(_dup_key(normalize_note(n))), n) for n in valid_notes
+                            if not any(n is f for f in fresh)]
+                adopting = [(twin, n) for twin, n in adopting if twin is not None]
+                # The open note among them saved first and read back after, as
+                # an Update does: its next save put its own list of files back
+                # over the ones given (the lows wave's round 1).
+                if any(twin.get("id") == self.selected_note_id for twin, _n in adopting):
+                    self._flush_autosave()
+                for twin, n in adopting:
+                    self._adopt_backup_attachments(twin, n)
+                self._editor_follows_external_change({twin.get("id") for twin, _n in adopting})
 
         # Agreed to: only now do the categories reach disk and the sidebar.
         if added_categories:
@@ -14945,7 +14960,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         _tw = self.comments_text
         # With nothing of its own to take back, the toast's Undo (as the body).
         _tw.bind("<Control-z>", lambda e, w=_tw: (w.edit_undo(), "break")[1]
-                 if self._can_edit_undo(w) else (self._toast_undo_key(e) or "break"))
+                 if self._can_edit_undo(w) else (self._toast_undo_key(e, own_undo_ran=False) or "break"))
         _tw.bind("<Control-y>", lambda e, w=_tw: (w.edit_redo(), "break")[1]
                  if self._can_edit_redo(w) else "break")
         _tw.bind("<Control-Shift-Z>", lambda e, w=_tw: (w.edit_redo(), "break")[1]
@@ -16972,7 +16987,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # Nothing of its own to take back: Ctrl+Z is the toast's
                 # Undo, when it offers one. A delete leaves a blank note
                 # open, and the press there did nothing at all.
-                return (self._toast_undo_key(event) if undo and event is not None
+                return (self._toast_undo_key(event, own_undo_ran=False) if undo and event is not None
                         else None) or "break"
             came, went = ("after", "before") if undo else ("before", "after")
             # A step is replayed as recorded: tables down if so
@@ -20413,17 +20428,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             made = self.notes[-1]
             hides = (self._what_hides_notes(made)
                      if new_id not in self._visible_note_ids() else "")
-            said = f"Saved in {made.get('category') or 'General'}, hidden by {hides}"
-            undo_shown = self._offer_on_banner() and (
-                getattr(self, "_toast_action_undoes", False)
-                or getattr(self, "_toast_kind", None) == "error")
-            if hides and undo_shown:
-                # Not over an Undo or an error still showing: a new note typed
-                # right after a delete took the delete's way back (round 2).
-                self.set_status(said)
-            elif hides:
-                self._show_toast(said, kind="info", action=lambda: self._show_all_notes(made),
-                                 action_text="Show all")
+            def say_hidden(made=made):
+                hides_now = (self._what_hides_notes(made) if any(n is made for n in self.notes)
+                             and made.get("id") not in self._visible_note_ids() else "")
+                if hides_now:
+                    self._show_toast(f"Saved in {made.get('category') or 'General'}, hidden by {hides_now}",
+                                     kind="info", action=lambda: self._show_all_notes(made),
+                                     action_text="Show all")
+            if hides:
+                # Not over an Undo still showing: a new note typed right after
+                # a delete took the delete's way back (round 2).
+                self._banner_after_undo(f"Saved in {made.get('category') or 'General'}, hidden by {hides}",
+                                        say_hidden)
             elif auto:
                 self._show_toast("Note created", yield_to_action=True)
         else:
@@ -21483,12 +21499,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if target is not None:
                 target.focus_set()
 
-    def _toast_undo_key(self, event):
+    def _toast_undo_key(self, event, own_undo_ran=True):
         """Ctrl+Z, while the toast offers an Undo and the keyboard is not in
         a text box with typing of its own to take back: takes the offer.
         Eight seconds is short to reach the banner by Tab. A delete leaves
         the keyboard in the new note's title, and an Entry has no undo: Ctrl+Z
-        there did nothing at all."""
+        there did nothing at all. *own_undo_ran*: False from a box that asks
+        before any undo of its own (the note's text and comments)."""
         if (self._toast_action is None
                 or not getattr(self, "_toast_action_undoes", True)
                 or self._toast_hide_job is None
@@ -21499,12 +21516,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if isinstance(widget, str):
                 return None
             kind = widget.winfo_class()
-            # A Text's own Undo runs first (its class binding): a redo step
-            # left says this press took back its last typing (round 2).
+            # A Text's own Undo runs first: a redo step left says this press
+            # took back its typing (round 2) -- not where the box asks first,
+            # where it is an earlier press's (the lows wave's round 1).
             if kind in self._TYPING_CLASSES and not (
                     kind in ("Entry", "TEntry")
                     or (kind == "Text" and not self._can_edit_undo(widget)
-                        and not self._can_edit_redo(widget))):
+                        and not (own_undo_ran and self._can_edit_redo(widget)))):
                 return None
             # A one-line box only while nothing is typed in it (its hint
             # aside): a title begun after the delete had its typo "undone" by
@@ -21531,6 +21549,30 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             except (tk.TclError, ValueError):
                 pass
             self._toast_hide_job = None
+        # A banner that waited for this one to go (_banner_after_undo).
+        then, self._after_banner = getattr(self, "_after_banner", None), None
+        if then is not None:
+            try:
+                self.after_idle(then)
+            except tk.TclError:
+                pass
+
+    def _undo_on_banner(self):
+        """Whether the banner holds an Undo or an error, which no other
+        banner may cover: it took the one way back."""
+        return self._offer_on_banner() and (
+            getattr(self, "_toast_action_undoes", False)
+            or getattr(self, "_toast_kind", None) == "error")
+
+    def _banner_after_undo(self, text, show):
+        """*text* on the banner by *show* -- or, while an Undo or an error
+        holds it, beneath it now and by *show* once it goes: put on the status
+        line, the next autosave wrote over it (the lows wave's round 1)."""
+        if not self._undo_on_banner():
+            show()
+            return
+        self._show_words_beneath(text)
+        self._after_banner = show
 
     def _show_toast(self, text, kind="success", action=None, action_text="Undo",
                     yield_to_action=False):
