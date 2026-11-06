@@ -405,6 +405,62 @@ try:
           _fh_kept and _fh_where == (True, app.TAB_CALENDAR, 'Work') and len(_fh_asks) == 1)
     check(f'...and the tab turned behind Settings leaves the template editor and its words ({_fh_turned})',
           _fh_turned)
+    # ...while a popup the offer never asked about closes on the click, as on
+    # every click outside it (the lows wave's round 7).
+    app.show_settings_page(); app.update()
+    app.toggle_settings_panel('templates'); app.update()
+    _fh_closed = False
+    try:
+        app._edit_template(None, lambda: None); app.update()
+        app._show_toast('Removed “milk”', action=lambda: None)
+        app.toast_action_lbl.event_generate('<Button-1>'); app.update()
+        _fh_closed = app._mini_popup is None or not app._mini_popup.winfo_exists()
+    finally:
+        app._dismiss_mini_popup()
+        app.hide_settings_page(); app.update()
+    check(f'...while a popup the offer never asked about closes on the click ({_fh_closed})', _fh_closed)
+    # A save made over Settings (Ctrl+S) of a note added from a calendar day
+    # leaves the notebook where it was: it turned to the Calendar behind
+    # Settings, and "Back to Notes" showed the Calendar (round 7).
+    app.notebook.select(app.TAB_NOTES); app.update()
+    app._pending_calendar_return = {'year': 2026, 'month': 10, 'date_str': '2026-10-12', 'origin': 'add'}
+    app.show_settings_page(); app.update()
+    app._return_to_calendar(); app.update()
+    _fh_back = (app.notebook.index('current'), app._pending_calendar_return is not None)
+    app.hide_settings_page(); app.update()
+    app._pending_calendar_return = None
+    app._update_calendar_return_button()
+    check(f'a save over Settings of a note added from a day leaves the notebook on Notes, the way '
+          f'back armed ({_fh_back})', _fh_back == (app.TAB_NOTES, True))
+    # An Undo does not run out under a question -- an import finished over it
+    # -- and stays a while after it: its eight seconds ran out unseen (round 7).
+    _fh_real_asking = app._a_dialog_is_asking
+
+    def _fh_fire():
+        # Its timer's own callback, run now -- none when the banner has gone,
+        # which the check then reads as gone, not as a crash.
+        job = app._toast_hide_job
+        if job is None:
+            return
+        script = app.tk.splitlist(app.tk.call('after', 'info', job))[0]
+        app.tk.call('after', 'cancel', job)
+        app.tk.eval(script)
+        app.update()
+    try:
+        app._show_toast('Note moved to Trash', action=lambda: None)
+        app._a_dialog_is_asking = lambda: True
+        _fh_fire()
+        _fh_under = app._toast_action is not None
+        app._a_dialog_is_asking = _fh_real_asking
+        _fh_fire()
+        _fh_after_q = app._toast_action is not None
+        _fh_fire()
+        _fh_gone = app._toast_action is None
+    finally:
+        app._a_dialog_is_asking = _fh_real_asking
+        app._hide_toast(); app.update()
+    check(f'an Undo does not run out under a question, and stays a while after it '
+          f'({_fh_under}, {_fh_after_q}, {_fh_gone})', _fh_under and _fh_after_q and _fh_gone)
     # Over an Undo still offered, a new note hidden is said on the status
     # line and the Undo stays: a note typed right after a delete took the
     # delete's way back (wave 2, round 2).
@@ -455,11 +511,15 @@ try:
     app._say_hidden_arrivals(_fh_in, 'Added 1 note')
     app.update()
     _fh_undo_stays = app._toast_action is not None and 'Day removed' in str(app.toast_lbl.cget('text'))
+    # ...and says what hides the note when it is shown: worded when made, it
+    # named a filter changed since (round 7).
+    app.filter_var.set(app.FILTER_DATED); app.refresh_note_list(); app.update()
     app._hide_toast(); app.update()
     _fh_after = _fh_toasts[-1][0] if _fh_toasts else None
     check(f'...and a word on notes brought in where the list does not look waits behind an Undo too '
           f'({_fh_undo_stays}, {_fh_after!r})',
-          _fh_undo_stays and _fh_after == 'Added 1 note, hidden by Show: Work')
+          _fh_undo_stays and _fh_after == 'Added 1 note, hidden by Show: ' + app.FILTER_DATED)
+    app.filter_var.set('Work'); app.refresh_note_list(); app.update()
     app.notes = [n for n in app.notes if n.get('id') != 8701]
     app._hide_toast(); app.update()
 finally:

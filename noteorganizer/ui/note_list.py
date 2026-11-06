@@ -240,12 +240,16 @@ class NoteListMixin:
             said = f"{what}, {tail}"
 
             def say():
-                # Asked again when shown, as it can wait behind an Undo.
+                # Asked again when shown, as it can wait behind an Undo -- its
+                # words too, or they named a filter changed since (round 7).
                 still = [n for n in hidden if any(m is n for m in self.notes)
                          and n.get("id") not in self._visible_note_ids()]
                 if still:
-                    self._show_toast(said, kind="info", action=lambda: self._show_all_notes(still[0]),
-                                     action_text="Show all")
+                    hides_now = self._what_hides_notes(still[0])
+                    now = (f"hidden by {hides_now}" if len(notes) == 1
+                           else f"{len(still)} of them hidden by {hides_now}")
+                    self._show_toast(f"{what}, {now}", kind="info",
+                                     action=lambda: self._show_all_notes(still[0]), action_text="Show all")
             # Not over an Undo still showing: 'Day removed' holds the day's
             # text in it alone (the lows wave's round 6).
             self._banner_after_undo(said, say)

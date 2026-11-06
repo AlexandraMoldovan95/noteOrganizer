@@ -15306,6 +15306,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _return_to_calendar(self):
         """Jump back to the exact month/day the user was viewing before they
         started creating a note from the calendar."""
+        # Not from under Settings: a save made there (Ctrl+S) turned the
+        # notebook behind it, and "Back to Notes" showed the Calendar (lows
+        # round 7). The way back stays armed.
+        if getattr(self, "_settings_open", False):
+            return
         # Save first — leaving a dirty day behind rendered the day panel
         # from the store, which still held the OLD content: the edit
         # looked lost.
@@ -21524,8 +21529,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """The toast's offer clicked: one press, one question. An action that
         asked about a popup, kept, left the window's click-outside to ask
         again, and its No threw the work away (the lows wave's round 6)."""
+        self._popup_kept = False
         self._run_toast_action()
-        return "break" if getattr(self, "_mini_popup", None) is not None else None
+        # Only then: a popup the action never asked about closes on the click,
+        # as on every click outside it (the lows wave's round 7).
+        return "break" if self._popup_kept else None
 
     def _run_toast_action_by_key(self):
         """The toast's Undo pressed from the keyboard: the banner goes, and
@@ -21765,8 +21773,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if held and self._toast_action is not None:
                 self._toast_hide_job = self.after(1000, hide)
                 return
+            # Nor under a question -- an import finished over the Undo -- and
+            # seen again for a while after it: its eight seconds ran out
+            # unseen beneath (the lows wave's round 7).
+            if self._toast_action is not None and self._a_dialog_is_asking():
+                self._toast_waited = True
+                self._toast_hide_job = self.after(1000, hide)
+                return
+            if self._toast_action is not None and getattr(self, "_toast_waited", False):
+                self._toast_waited = False
+                self._toast_hide_job = self.after(4000, hide)
+                return
             self._hide_toast()
 
+        self._toast_waited = False
         self._toast_hide_job = self.after(8000 if action else self.TOAST_MS, hide)
 
     # How long a banner with nothing to offer stays up.

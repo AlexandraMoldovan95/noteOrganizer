@@ -17094,7 +17094,7 @@
     "id": "WS141",
     "about": "A banner's offer clicked asks about a kept popup twice for one press",
     "edits": [{"file": "note_organizer.py",
-               "find": "        return \"break\" if getattr(self, \"_mini_popup\", None) is not None else None\n",
+               "find": "        return \"break\" if self._popup_kept else None\n",
                "replace": "        return None\n"}],
     "must_fail": ["...but over Settings with the template editor kept, nothing moves, asked once"],
     "suites": ["qa1"],
@@ -17117,6 +17117,66 @@
                "find": "            items = current\n",
                "replace": "            self._show_toast(\"That note is no longer open\", kind=\"info\")\n            return\n"}],
     "must_fail": ["checklist undo: Undo after leaving the note and coming back puts the item back"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS144",
+    "about": "A click on a banner's offer keeps open a popup it never asked about",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        return \"break\" if self._popup_kept else None\n",
+               "replace": "        return \"break\" if getattr(self, \"_mini_popup\", None) is not None else None\n"}],
+    "must_fail": ["...while a popup the offer never asked about closes on the click"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS145",
+    "about": "A popup kept at its question leaves no word of it, and the same press asks again",
+    "edits": [{"file": "noteorganizer/ui/dialogs.py",
+               "find": "                        self._popup_kept = True\n",
+               "replace": ""}],
+    "must_fail": ["...but over Settings with the template editor kept, nothing moves, asked once"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS146",
+    "about": "A save over Settings of a note added from a day turns the notebook to the Calendar behind it",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if getattr(self, \"_settings_open\", False):\n            return\n        # Save first",
+               "replace": "        # Save first"}],
+    "must_fail": ["a save over Settings of a note added from a day leaves the notebook on Notes"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS147",
+    "about": "The word on notes brought in, held behind an Undo, names what hid them when it was made",
+    "edits": [{"file": "noteorganizer/ui/note_list.py",
+               "find": "                    self._show_toast(f\"{what}, {now}\", kind=\"info\",\n",
+               "replace": "                    self._show_toast(said, kind=\"info\",\n"}],
+    "must_fail": ["...and a word on notes brought in where the list does not look waits behind an Undo too"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS148",
+    "about": "An Undo runs out under a question that came over it",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            if self._toast_action is not None and self._a_dialog_is_asking():\n",
+               "replace": "            if False:\n"}],
+    "must_fail": ["an Undo does not run out under a question, and stays a while after it"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "WS149",
+    "about": "An Undo that waited under a question goes the moment the question does",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            if self._toast_action is not None and getattr(self, \"_toast_waited\", False):\n",
+               "replace": "            if False:\n"}],
+    "must_fail": ["an Undo does not run out under a question, and stays a while after it"],
     "suites": ["qa1"],
     "expect": "killed"
   }

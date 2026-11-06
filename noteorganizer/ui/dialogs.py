@@ -1368,6 +1368,8 @@ class DialogsMixin:
                 # Only a popup still on screen is someone's unfinished work.
                 try:
                     if pop.winfo_exists():
+                        # Kept: the press that asked asks no more (_run_toast_action_by_click).
+                        self._popup_kept = True
                         return False
                 except tk.TclError:
                     pass
