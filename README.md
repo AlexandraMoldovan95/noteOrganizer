@@ -99,7 +99,9 @@ the code and the documentation, working under the rules in
 ([not planned](docs/ROADMAP.md#explicitly-not-planned-right-now)). Commits
 the agent made carry a `Co-Authored-By` line naming the model
 ([counted](docs/AI_WORKFLOW.md#models)). How the work
-is divided and checked: [built with an AI agent](docs/AI_WORKFLOW.md).
+is divided and checked: [built with an AI agent](docs/AI_WORKFLOW.md). The
+few words the history uses in a sense of its own (a wave, a round, the
+walk) are [the house words](CLAUDE.md#house-words).
 
 > Everyone takes notes, whatever they do. I spent years in support — three
 > of them at HP, documenting processes for teams who had to follow them —
@@ -169,6 +171,9 @@ feature added so far, the last every fix
 - Sharp at one screen scale: the main screen's. On a second screen at
   another scale, Windows resizes the app, a little soft there
   ([why](docs/ARCHITECTURE.md#sharp-on-a-scaled-screen-every-size-is-given-at-100)).
+- Not for screen readers: Tk 8.6 draws its controls itself and describes
+  almost none of them to Windows' accessibility interface, so a screen
+  reader cannot read most of the window.
 
 ## License
 

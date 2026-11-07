@@ -4,7 +4,7 @@ I'm Alexandra Moldovan, and I built Note Organizer with Claude Code, Anthropic's
 agent. I decide what the app does, choose between the options the agent proposes, test the
 packaged app by hand, and approve every change. The agent writes most of the code and the
 documentation. Tools - CI, static gates, mutation tests, photographed end-to-end walks - check
-the agent's work, so nothing rests on its word.
+most of the agent's work; what rests on review instead is named in the table below.
 
 This page explains that process. The agent's rules are in [CLAUDE.md](../CLAUDE.md), what went
 wrong and what changed is in the [Issues Log](ISSUES_LOG.md), and my own account of the work is
@@ -93,7 +93,7 @@ something that does not depend on the agent remembering:
 | Tests never run where they could wipe real notes | **Enforced.** The agent's deny list refuses any shell command that would start a destructive script in the project folder; `tools/run_tests.py` runs everything in a fresh scratch copy; the qa scripts' hermetic seed refuses to start outside one, or beside a notebook that holds notes. |
 | Every destructive script has a deny rule | **Enforced** in CI by `tools/check_agent_rules.py`, which finds the scripts itself. |
 | English throughout the repository; comments short and about *why* | **Enforced** in CI (`check_english.py`, `check_comments.py`) whenever code, tests or tools change. A change to the documentation alone skips CI to save minutes; for those, the English check runs in `tools/pre_push_check.py` before the push - a step the agent is asked to take, not one CI repeats. |
-| One definition per judgement (no hand-copied field lists) | **Enforced** in CI (`check_one_definition.py`). |
+| One definition per judgement (no hand-copied field lists) | **Enforced** in CI for eight named questions (`check_one_definition.py`); a question asked in a new place joins it by hand. |
 | Text readable in every theme | **Enforced** in CI (`check_contrast.py`, WCAG AA). |
 | `core/` never imports the interface | **Enforced** by a unit check. |
 | The mutant catalogue still aims at real code | **Enforced** in CI (`check_mutant_targets.py`). |
@@ -209,10 +209,10 @@ were made without the convention.
 
 ## How to read the other documents
 
-- The [Issues Log](ISSUES_LOG.md) is my own internal engineering journal, not published on this
-  site - the day-to-day story of what went wrong and what changed, including the agent's own
-  first-person entries ("one of my own renames"). Once the repository is public, anyone curious
-  can read it on GitHub.
+- The [Issues Log](ISSUES_LOG.md) is the project's internal engineering journal, written by the
+  agent and not published on this site - the day-to-day story of what went wrong and what
+  changed, so its first person ("one of my own renames") is the agent. Once the repository is
+  public, anyone curious can read it on GitHub.
 - The **test plan** ([`qa/NoteOrganizer_TestPlan.xlsx`](../qa/NoteOrganizer_TestPlan.xlsx), with
   an [excerpt in Markdown](TEST_PLAN_EXCERPT.md)) is mine: I walk it, and its status column is
   mine to set.
