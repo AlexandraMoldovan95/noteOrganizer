@@ -133,6 +133,23 @@ def romanian_in(line):
     return None
 
 
+# Lines the rule must find, and lines it must leave alone, read before the
+# repository: a change to the list or the shapes that blinds the rule fails
+# here, where a clean repository would have passed it in silence.
+# One of each ending no listed word carries, so each shape is read alone.
+MUST_FIND = ["titlu nou", "NotaTabelVeche", "done\\ntrei",
+             "planul", "creionului", "copiilor", "notelor", "titlurilor",
+             "deseneaza", "citeasca", "sectiune", "optiunea", "optiuni", "doisprezece"]
+MUST_PASS = ["annul the consul's order", "the sailor told the tailor",
+             "set the font to DejaVu Sans", "a mogul in Istanbul", "a tailor's bachelor party"]
+
+
+def examples_misread():
+    """(what went wrong, line) for each example the rule reads wrongly."""
+    return ([("missed", line) for line in MUST_FIND if not romanian_in(line)]
+            + [("flagged", line) for line in MUST_PASS if romanian_in(line)])
+
+
 # Checked only against FILENAMES: too short or too code-like to search for
 # in code (`cos` is the icon's cosine), but in a filename nothing else.
 FILENAME_ONLY = ["lista", "setari", "categorii", "cos", "cosul", "tema",
@@ -200,6 +217,11 @@ def hits_in(relative):
 def main():
     import guest  # the memory ceiling, before git starts (tools/guest.py)
     guest.settle(heavy=False)
+    misread = examples_misread()
+    for what, line in misread:
+        print("The rule %s its own example: %r" % (what, line))
+    if misread:
+        return 1
     show_all = "--list" in sys.argv
     leaks = []
     named = []
