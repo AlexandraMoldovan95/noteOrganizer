@@ -623,7 +623,14 @@ def grouped_notes():
 def tables():
     """A table in a note: header row, aligned columns, the caption."""
     _table_note()
-    capture('tables', widgets=_editor_box('body_text'), pad=12)
+    # Cut at the text box's own top: the format bar sits closer than the
+    # margin above it, and a strip of its buttons came into the picture.
+    widgets = _editor_box('body_text')
+    box = None
+    if widgets:
+        left, _top, right, bottom = _box_of(widgets, 12)
+        box = (left, min(w.winfo_rooty() for w in widgets), right, bottom)
+    capture('tables', box=box)
 
 
 @scene('checklist')
