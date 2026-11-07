@@ -1054,7 +1054,7 @@ app.notes = _od_saved
 app.save_notes()
 
 # ---- LONG LISTS SCROLL TO THEIR END ----
-# Round 5 of the final audit: every long list was one frame on a canvas, and
+# Every long list was one frame on a canvas, and
 # Tk keeps a canvas window's place in 16 bits, so none scrolled past about
 # 32,767 px (ISSUES_LOG: "The list that ended in the middle"). Each list here
 # runs past that -- reaches_the_end refuses one that does not -- and is
@@ -1360,7 +1360,7 @@ check(f'a checklist of 40 items of 100 lines is built in chunks inside 16 bits, 
 # X and Windows can place. Past four times TALLEST the rows are chunked again.
 # TALLEST is lowered here, so two items of 100 lines are enough. The move asks
 # at once: a restack's own chunking again comes once for each width, and is
-# taken here as spent, as it is after a window narrowed (round 7).
+# taken here as spent, as it is after a window narrowed.
 _ll_tall = 'line\n' * 99 + 'end'
 app._working_checklist = (
     [{'text': f's{i}', 'done': False} for i in range(3)]
@@ -1397,7 +1397,7 @@ check(f'long checklist items moved together by Alt+Up are chunked again before '
       and _ll_gather.get('tallest chunk', 10 ** 9) <= 4 * 600
       and _ll_gather.get('keyboard on Ta') is True)
 
-# Round 7: a chunk was measured once, as its rows were made, and never again.
+# A chunk was measured once, as its rows were made, and never again.
 # Long items gathered by moves in a wide window, then narrowed, wrapped again
 # and stood 2.7 times what the chunk was taken for -- past what X places, and
 # the list was blank 32,767 px into it while Space ticked an item there. Here
@@ -1607,7 +1607,7 @@ check(f'the picker with 1,000 templates scrolls to the last; End takes the '
       _ll_ok and _ll_keys == [True, True])
 # ...and Left and Right find nothing beside a template in its one column:
 # a chunk parked out of sight stands 20,000 px to the left of the view, and
-# Left went to a template 30 further down, parked there (round 7).
+# Left went to a template 30 further down, parked there.
 _ll_sides = {}
 if _ll_ok:
     _ll_view.yview_moveto(0); _ll_settle()
@@ -1656,7 +1656,7 @@ if _ll_add is not None and _ll_focus(_ll_add):
         _ll_seen['Tab from the last row'] = str(app.tk.call('focus')) == str(_ll_add)
 # ...in chunks inside 16 bits, as the note's is: a chunk past them is placed no
 # further than RowStack.REACH, and its last rows, drawn a few hundred px short
-# of their place, could still read as in sight (round 7).
+# of their place, could still read as in sight.
 _ll_cl_chunks = _ll_stack.groups[1].chunks if _ll_stack is not None else []
 _ll_seen['in chunks inside 16 bits'] = (
     len(_ll_cl_chunks) > 1

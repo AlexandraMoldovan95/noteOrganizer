@@ -276,7 +276,7 @@ def days_to_rescue(before, recurrence):
     none unless it repeats now and will not after, and only the kinds it
     holds. Whatever ends a repeat COPIES these into its rescue copy and
     leaves the note's own: one copy slot, and the next copy erased days
-    moved there (2026-10-28, the final audit, rounds two and three)."""
+    moved there."""
     if not is_recurring(before) or is_recurring({"recurrence": recurrence}):
         return {}
     return {key: copy.deepcopy(before[key]) for key in DAY_FIELDS if before.get(key)}
@@ -400,8 +400,8 @@ def spend_series_days(note):
     back into the note and are spent from the copy. A copy's day is dropped
     only where the note deleted that day; one whose words a day already
     holding words lacks is set aside, to be a note of its own (_set_aside).
-    ISSUES_LOG: "Round ten: the days a date held without a word", and round
-    fifteen: four ways of adding its words to the day each left a case."""
+    ISSUES_LOG: "Round ten: the days a date held without a word" and
+    ISSUES_LOG: "Round fifteen: four ways of adding"."""
     if not copy_holds_this_series(note):
         return
     prev = note["_prev"]
@@ -493,8 +493,8 @@ def copy_days_set_aside(note, incoming=None):
 def notes_set_aside(note):
     """The notes made of *note*'s days set aside (_set_aside), each on its
     date with its words, look and the series' title marked "(earlier text)",
-    taken off the note. Shown on its day, they were read four ways in four
-    rounds, each leaving a case; a note of its own is seen and kept as it is
+    taken off the note. Shown on its day, they were read four ways, each
+    leaving a case; a note of its own is seen and kept as it is
     (the owner's choice)."""
     made = []
     # Shaped as a read shapes them: an entry with no words made an empty
@@ -586,7 +586,7 @@ def _copy_days_placed(note, prev, moved):
             gone.append(key)
     # Two of the copy's edits for one date: the one with words goes in, then
     # the one its day is drawn on there; the other is set aside. A day moved
-    # onto a day off the schedule wrote one (round eleven).
+    # onto a day off the schedule wrote one.
     taken, aside = set(), []
     # A day the note deleted stays deleted, but the copy's words for it are
     # set aside, not dropped: the phone's older build showed such a day blank,
@@ -643,8 +643,8 @@ def drop_hidden_moves(note):
 
 def _days_back_from_copy(note):
     """A note that no longer repeats keeps its days' own text in itself, as
-    a turn-off here does; a turn-off by the phone, or by this app before the
-    final audit, kept them only in the series' copy, which the next copy
+    a turn-off here does; a turn-off by the phone, or by an older version of
+    this app, kept them only in the series' copy, which the next copy
     erased. Brought back into the note once, as it is read -- and
     into a note the phone turned back on as it was, which got none of them
     back, the copy's days then spent (spend_series_days)."""
@@ -666,7 +666,7 @@ def kept_days_fit(note, date_value, recurrence):
     with *date_value* and *recurrence*: only when both are as the series had
     them, which its rescue copy holds. True when it kept none, or nothing
     says what the series was: kept, they lose nothing. An old deleted day
-    hid a series restarted on it (round five of the final audit)."""
+    hid a series restarted on it."""
     if is_recurring(note) or not is_recurring({"recurrence": recurrence}):
         return True
     kept = {key: note.get(key) for key in DAY_FIELDS if note.get(key)}
@@ -716,7 +716,7 @@ def apply_shared_update(note, incoming, fields=UPDATABLE_FROM_SHARED):
     for field in fields:
         note[field] = copy.deepcopy(fresh[field])
     # A backup's note sets aside what its own copy kept, as it is read: an
-    # Add kept those, an Update dropped them (the audit's twenty-second round).
+    # Add kept those, an Update dropped them.
     if "overrides" in fields and fresh.get("_set_aside"):
         note["_set_aside"] = (note.get("_set_aside") or []) + copy.deepcopy(fresh["_set_aside"])
     if restarted:
@@ -798,7 +798,7 @@ def _lost(old, new):
     that each never come out under it. text_lost read a column added to every
     row, or a list renumbered, as the whole span lost; words_lost reads one
     letter changed in a paragraph with no spaces (Chinese, Japanese) as the
-    paragraph lost (2026-10-28, the final audit's fourth round)."""
+    paragraph lost."""
     return min(text_lost(old, new), words_lost(old, new))
 
 
@@ -909,7 +909,7 @@ def split_by_identity(notes, incoming):
             mine_by_uid.setdefault(note["uid"], note)
     # The first arrival claims an identity; a second comes in as a note of
     # its own, as the phone's Importing.plan has it. Paired twice, one note
-    # was updated twice and the person's words kept in no copy (wave 3).
+    # was updated twice and the person's words kept in no copy.
     claimed = set()
     known, fresh = [], []
     for note in incoming:

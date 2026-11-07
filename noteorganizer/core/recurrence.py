@@ -754,7 +754,7 @@ def _history_bucket_of(date_str, today):
     if d is None:
         return None
     # A day already given words in a year to come is this year's work: under
-    # "Older" it read as the archive (the audit's nineteenth round).
+    # "Older" it read as the archive.
     if d.year >= today.year:
         return "This year"
     if d.year == today.year - 1:

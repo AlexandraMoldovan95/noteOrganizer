@@ -965,7 +965,7 @@
     "must_fail": ["Space on a row's Restore puts that note back"],
     "suites": ["qa3"],
     "expect": "killed",
-    "note": "Two roads bring the keyboard back after a Restore pressed by key: the Trash's own, and the one every Tk button's press takes (_tk_press_ends). The first alone already survived before round six (measured on 2a17ad7), so both are taken away."
+    "note": "Two roads bring the keyboard back after a Restore pressed by key: the Trash's own, and the one every Tk button's press takes (_tk_press_ends). The first alone already survived before the second was added (measured on 2a17ad7), so both are taken away."
   },
   {
     "id": "KF08",
@@ -13426,7 +13426,7 @@
   },
   {
     "id": "DR143",
-    "about": "the take-back drops the copy's words for a day that holds words already, as round ten did, instead of setting them aside",
+    "about": "the take-back drops the copy's words for a day that holds words already, as the code before the fix did, instead of setting them aside",
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
@@ -14243,7 +14243,7 @@
   },
   {
     "id": "DR187",
-    "about": "the fuzz of a series' days without the repeat put back as its copy holds it, nor the older versions' turn-off and turn-on: it never reaches a copy's words for a day the note deleted, the road round 21 fixed",
+    "about": "the fuzz of a series' days without the repeat put back as its copy holds it, nor the older versions' turn-off and turn-on: it never reaches a copy's words for a day the note deleted, the road DR188's fix closed",
     "edits": [
       {
         "file": "test_data_safety.py",
@@ -14266,7 +14266,7 @@
   },
   {
     "id": "DR188",
-    "about": "round 21's fix taken out, watched by the fuzz alone: a copy's words for a day the note deleted are dropped",
+    "about": "the fix for deleted days taken out, watched by the fuzz alone: a copy's words for a day the note deleted are dropped",
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
@@ -14284,7 +14284,7 @@
   },
   {
     "id": "DR189",
-    "about": "the start says the '(earlier text)' notes are of days now holding text of their own, though round 21's are of deleted days",
+    "about": "the start says the '(earlier text)' notes are of days now holding text of their own, though those set aside now are of deleted days too",
     "edits": [
       {
         "file": "note_organizer.py",

@@ -496,7 +496,7 @@ app.update()
 app.update_idletasks()
 """),
     # The question an attachment of a kind the app does not know asks before
-    # it opens (the final audit's allow list). Photographed while it waits
+    # it opens (the app's allow list). Photographed while it waits
     # for its answer, in place of the wait; nothing is opened.
     ("27-an-unknown-kind-of-file-asks-first", """
 app._dismiss_mini_popup()
@@ -522,8 +522,8 @@ finally:
 _scene_took_its_own = True
 """),
     # An attachment's row: a name too long for it gives way before its type,
-    # which always shows, and the name is a Tab stop with its ring (the final
-    # audit's third round). No other scene shows an attachment row.
+    # which always shows, and the name is a Tab stop with its ring. No other
+    # scene shows an attachment row.
     ("28-an-attachment-row-with-a-long-name", """
 app._dismiss_mini_popup()
 app.hide_settings_page()
@@ -556,7 +556,7 @@ app.update_idletasks()
 """),
     # A checklist of 1,000 items, every fifth a long one, scrolled to its end:
     # its last items drawn at the bottom of the list, where one frame holding
-    # them all stopped some 50,000 px short (the final audit's fifth round).
+    # them all stopped some 50,000 px short.
     ("29-a-long-checklist-at-its-end", """
 app._dismiss_mini_popup()
 app.hide_settings_page()
@@ -602,7 +602,7 @@ app.update_idletasks()
 """),
     # The template editor, opened from Settings, saying under its heading that
     # a paste into its name was shortened: the status line that said it stands
-    # hidden behind Settings (the final audit's sixth round).
+    # hidden behind Settings.
     ("31-the-template-editor-says-a-paste-was-shortened", """
 app._dismiss_mini_popup()
 app.templates = []
@@ -631,7 +631,7 @@ app.update_idletasks()
 """),
     # A checklist of sixteen items of 100 lines, at its top: item 00 is what is
     # drawn there. Chunks taller than their parking place hung over the top of
-    # such a list at 150-300% (the final audit's sixth round).
+    # such a list at 150-300%.
     ("32-a-checklist-of-long-items-at-its-top", """
 app._dismiss_mini_popup()
 app.hide_settings_page()

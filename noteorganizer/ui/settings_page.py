@@ -1279,7 +1279,7 @@ class SettingsPageMixin:
             """The end of a Windows session, which asks nothing: a changed
             template is kept, under its own name when that is free, else
             beside the one that has it -- never over it. It used to go with
-            the session (2026-10-28, the final audit)."""
+            the session."""
             nonlocal tpl, is_new, opened_snapshot
             if collect() == opened_snapshot:
                 return
@@ -3286,7 +3286,7 @@ class SettingsPageMixin:
                     seen_attach.add(a.get("stored_as"))
                     # Duplicate gave the copy each file again under a new
                     # name: the kept note holds it already, and merged, it
-                    # listed every file twice (the final audit's wave 3).
+                    # listed every file twice.
                     if any(same_attached_file(a, k) for k in merged_attach):
                         continue
                     new_name = copy_attachment_file(a.get("stored_as"))
@@ -3348,7 +3348,7 @@ class SettingsPageMixin:
         name_entry.pack(side="left", fill="x", expand=True, padx=(12, 6), pady=9)
         # Kept as every limited box is (_limit_entry): a paste past the cap
         # shortened and said so. Its own check refused one whole, without a
-        # word (the final audit's eleventh round).
+        # word.
         self._limit_entry(name_entry, USERNAME_MAX_LEN, "Your name")
         self._add_paste_menu(name_entry)
         self._guard_entry_astral(name_entry)

@@ -4,8 +4,8 @@
 //
 // Only through that door, which takes the computer's turn, holds Edge's
 // whole tree of processes in its job object and gives the walk a time
-// limit. Started bare, a walk stopped midway left headless Edge running
-// (final audit, round eight); started bare, it refuses.
+// limit. Started bare, a walk stopped midway left headless Edge running;
+// started bare, it refuses.
 //
 // Serves public/ on 127.0.0.1 with the headers Netlify will send
 // (public/_headers, the Content-Security-Policy included), drives Microsoft

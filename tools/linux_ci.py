@@ -7,7 +7,7 @@ plain ``docker run`` of it was the documented command, and a docker client
 that is killed -- a closed terminal, an agent's call that timed out --
 leaves its container running in Docker's VM: nothing is signalled into the
 container, and the suite ran on for tens of minutes, out of sight, while
-the next run started beside it (final audit, round seven). Two heavy jobs
+the next run started beside it. Two heavy jobs
 at once is how the computer went down (ISSUES_LOG: "The test that took the
 computer down"). This is the one door to the image, and every document
 uses it:
@@ -20,16 +20,16 @@ uses it:
 * it sees, at /repo and read-only, a copy of what git tracks, as the
   working tree has it -- never a file git does not track, such as a
   notebook, settings or notebook_location.txt at the root, which the rules
-  forbid reading on this side and a probe could print (final audit, round
-  eight). Not "what git would add" either: that leans on .gitignore, which
-  missed the app's own copies of a Trash or settings kept aside (round
-  nine). A new file is shown once git knows it (git add -N). It has no
+  forbid reading on this side and a probe could print. Not "what git would
+  add" either: that leans on .gitignore, which missed the app's own copies
+  of a Trash or settings kept aside. A new file is shown once git knows it
+  (git add -N). It has no
   network;
 * its filesystem is read-only but for its /tmp, where every run inside it
   writes (and a probe's /work): a tmpfs of TMP_SIZE, counted in its memory
   limit. A runaway writer fails there, or anywhere else at once, and
   Docker's virtual disk, which never gives space back to Windows, does not
-  grow (round nine: /, /root and /var/tmp were writable on it);
+  grow (/, /root and /var/tmp were writable on it);
 * inside, the run has a time limit of its own (``timeout -k``), and a
   watcher on the container's input, which this runner holds open and never
   writes: when the runner goes, however it goes, the input closes and the
@@ -46,7 +46,7 @@ USAGE
     py tools/linux_ci.py --script qa/probe_bar_width.py
                                           # one script, in a throwaway copy inside the container
     py tools/linux_ci.py --probe <folder under %TEMP%>/probe.py
-                                          # an audit's own probe, run as --script is; its
+                                          # a reviewer's own probe, run as --script is; its
                                           # folder is /work, the one place it may write
     py tools/linux_ci.py --limit 1800 ... # the run's own time limit, in seconds
     py tools/linux_ci.py --build          # build the image once (tools/linux-ci/Dockerfile)
@@ -273,12 +273,12 @@ def not_shown(root=ROOT):
 
 
 def probe_folder(path):
-    """The folder an audit's own probe is in, mounted read-write at /work: a
+    """The folder a reviewer's own probe is in, mounted read-write at /work: a
     .py file in a folder below the temporary folder and outside this
     repository -- never the temporary folder itself, which holds every other
     run's. Read through its links, so a link cannot carry /work elsewhere.
-    An audit's agents may not write in the repository, and a docker run of
-    their own is what left containers running (final audit, round eight)."""
+    Review agents may not write in the repository, and a docker run of
+    their own is what left containers running."""
     real = os.path.realpath(path)
     folder = os.path.dirname(real)
 

@@ -6,7 +6,7 @@ check_demo.mjs drives headless Microsoft Edge, which is a tree of
 processes. Started bare it took no turn, had no ceiling and no time limit,
 and a walk interrupted midway -- Ctrl+C, a closed terminal, a call that
 timed out -- ended node before its clean-up, leaving about ten headless
-Edge processes running (final audit, round eight). Through this door:
+Edge processes running. Through this door:
 
 * guest.settle() takes the machine's turn and puts this runner in its job
   object, which node, Edge and every process Edge starts are in too (the

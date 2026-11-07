@@ -14,6 +14,9 @@ package -- two things:
   names the start of a story's title, and ``smaller lessons: ...`` names
   an entry in its "Smaller lessons, moved out of the code" section.
 
+The tests' and tools' Python, and the reasons in tools/mutants.json, are
+held to the round rule as well: they are read outside the audit too.
+
 In the modules listed in BRIEF, three limits as well:
 
 * a run of comment lines is at most three lines long;
@@ -37,7 +40,9 @@ Run: py tools/check_comments.py
 """
 
 import ast
+import glob
 import io
+import json
 import os
 import re
 import sys
@@ -87,8 +92,19 @@ MAX_MODULE_DOCSTRING_LINES = 10
 # 17.10.2026 and toolkit versions such as Tk 8.6.15 do not match.
 RELEASE = re.compile(r"\b0\.\d{1,3}\.\d{1,4}\b")
 
-# A round of an audit, as the comments once named them.
-ROUND = re.compile(r"\brounds? \d+\b|\blows wave\b", re.I)
+# A round of an audit, as the comments once named them: in figures, in
+# words ("round eleven", "the twelfth round"), or as the audit itself. Only
+# figures were refused at first, and 9 labels in words stayed.
+_NUM = (r"(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|"
+        r"twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|"
+        r"nineteen|twenty(?:-[a-z]+)?)")
+_ORD = (r"(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|"
+        r"tenth|eleventh|twelfth|thirteenth|fourteenth|fifteenth|sixteenth|"
+        r"seventeenth|eighteenth|nineteenth|twentieth|twenty-[a-z]+)")
+ROUND = re.compile(
+    r"\brounds? %s\b|\b(?:%s|%s)(?: and (?:%s|%s))? rounds?\b(?! trip)|\blows wave\b"
+    r"|\bfinal audit\b|\baudit's\b|\bwave %s\b"
+    % (_NUM, _ORD, _NUM, _ORD, _NUM, _NUM), re.I)
 
 # Where a docstring's prose ends and its interface sections begin.
 SECTION = re.compile(r"^(Args|Arguments|Returns|Raises|Yields):\s*$")
@@ -200,6 +216,43 @@ def named_round(text):
     return found.group(0) if found else None
 
 
+def test_and_tool_files():
+    """The tests' and tools' Python, held to the round rule alone. This file
+    is left out: it quotes the labels it refuses."""
+    files = []
+    for pattern in ("test_*.py", "qa/*.py", "tools/*.py", "site/*.py", "site/tools/*.py"):
+        files += [os.path.relpath(path, ROOT).replace(os.sep, "/")
+                  for path in glob.glob(os.path.join(ROOT, pattern))]
+    return sorted(set(files) - {"tools/check_comments.py"})
+
+
+def rounds_named(path):
+    """(line, problem) for each comment run or docstring in *path* that
+    names a round of the audit."""
+    with io.open(os.path.join(ROOT, path), encoding="utf-8") as fh:
+        source = fh.read()
+    problems = []
+    for first, _length, text, _alone in comment_runs(comment_lines(source)):
+        found = named_round(text)
+        if found:
+            problems.append((first, "names the audit's %r" % found))
+    for line, doc, _module in docstrings(ast.parse(source)):
+        found = named_round(doc)
+        if found:
+            problems.append((line, "docstring names the audit's %r" % found))
+    return sorted(problems)
+
+
+def catalogue_rounds():
+    """(mutant id, label) for each mutant whose reason names a round:
+    tools/mutants.json is read by whoever runs a mutant, as a comment is."""
+    with io.open(os.path.join(ROOT, "tools", "mutants.json"), encoding="utf-8") as fh:
+        catalogue = json.load(fh)
+    return [(m.get("id", "?"), found) for m in catalogue
+            for found in [named_round(m.get("about", "") + " " + m.get("note", ""))]
+            if found]
+
+
 def check(path, titles, lessons):
     with io.open(os.path.join(ROOT, path), encoding="utf-8") as fh:
         source = fh.read()
@@ -262,6 +315,14 @@ def main():
         for line, what in check(path, titles, lessons):
             print("%s:%d: %s" % (path, line, what))
             failures += 1
+    others = test_and_tool_files()
+    for path in others:
+        for line, what in rounds_named(path):
+            print("%s:%d: %s" % (path, line, what))
+            failures += 1
+    for mid, found in catalogue_rounds():
+        print("tools/mutants.json: %s's reason names the audit's %r" % (mid, found))
+        failures += 1
     if failures:
         print("\n%d problem(s). A comment says why in at most %d lines; the "
               "story goes to docs/ISSUES_LOG.md, with a pointer left here."
@@ -269,7 +330,8 @@ def main():
         return 1
     print("Comments brief: %d module(s) read, no release or audit round named, every pointer "
           "into ISSUES_LOG leads somewhere, %d condensed module(s) within "
-          "their limits." % (len(files), len(BRIEF)))
+          "their limits; %d test and tool file(s) and the mutants' reasons name "
+          "no round." % (len(files), len(BRIEF), len(others)))
     return 0
 
 

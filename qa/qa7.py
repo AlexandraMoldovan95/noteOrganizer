@@ -124,7 +124,7 @@ _cal_real_popup = NO.tk.Menu.tk_popup
 NO.tk.Menu.tk_popup = lambda _m, *a, **k: _cal_posted.append(_m)
 try:
     # From a day of a series, the category entry says it moves the series:
-    # read as the day's, it moved every day unasked (wave 2, round 7).
+    # read as the day's, it moved every day unasked.
     app.show_note_context_menu(
         type('E', (), {'x_root': 0, 'y_root': 0})(),
         NO.normalize_note(dict(app.notes[0], recurrence={'freq': 'weekly'})), occurrence_date='2026-07-22')
@@ -1259,7 +1259,7 @@ check(f'an animated PNG shows and plays every frame, and lets its file go '
       _ap_raised is None and _ap_placed
       and len(app._image_preview_ref or []) == 6 and app._preview_source is None)
 app._dismiss_mini_popup(); app.update()
-# Round 5: a frame of 0.6 ms ticked every millisecond, half a core while the
+# A frame of 0.6 ms ticked every millisecond, half a core while the
 # preview was open. 10 ms and less plays at 100, as browsers play it.
 _fd_got = {d: app._frame_delay({'duration': d})
            for d in (0.6, 1.5, 10, 10.4, 11, 20, 40.0, None, 'junk')}
@@ -1480,7 +1480,7 @@ check(f'a photo label over another kind of file shows that kind: its name, '
       and any('Opens in your default app' in t for t in _row_texts))
 # A label too long for the row gives way before its type, never at the edge:
 # padded with blank-looking characters, "Holiday photo.jpg" over an .rdp hid
-# the ".rdp" beyond the row's end (round 3 of the final audit).
+# the ".rdp" beyond the row's end.
 app.current_attachments = [{'filename': 'Holiday photo.jpg' + '\u2800' * 120 + '.jpg',
                             'stored_as': '20261001120000000001_trip.rdp'}]
 app.refresh_attachments_list(); app.update(); app.update()
@@ -1505,7 +1505,7 @@ check(f'a long-named attachment keeps its ✕ in the row '
       f'of {_ll_row.winfo_width()} px)',
       _ll_x is not None and _ll_x.winfo_ismapped() and _ll_x.winfo_width() > 10
       and _ll_x.winfo_x() + _ll_x.winfo_width() <= _ll_row.winfo_width())
-# Round 4: a capital dotted I lower-cases to two characters, and the cut was
+# A capital dotted I lower-cases to two characters, and the cut was
 # found in a lower-cased copy, so four of them moved it past the type. And a
 # label with no type, or one of three hundred lines, was drawn whole: at
 # 60,000 letters it ended the app at every start, the note being last open.

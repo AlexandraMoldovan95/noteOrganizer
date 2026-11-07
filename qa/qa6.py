@@ -138,7 +138,7 @@ check('a single KeyRelease immediately corrects an over-length value, '
       'without waiting for a save', len(app.username_var.get()) == 30)
 
 # A paste past the 30 is shortened to fit and said, as in every limited box:
-# its own check refused it whole, without a word (the final audit's eleventh round).
+# its own check refused it whole, without a word.
 app.username_var.set('Ana ')
 name_entry.icursor('end')
 _yn_told = []
@@ -563,7 +563,7 @@ check('stats show the correct checklist-notes count',
 check('stats show the correct deleted (Trash) count',
       stats_pairs().get('In trash') == 1)
 # ...and Empty trash takes it to 0 at once: it kept the old figure until the
-# list next changed (wave 2, round 4).
+# list next changed.
 app.toggle_settings_panel('trash'); app.update()
 _st_ask = app.ask_yes_no
 app.ask_yes_no = lambda *a, **k: True
@@ -572,8 +572,7 @@ try:
         yield w
         for c in w.winfo_children():
             yield from _st_walk(c)
-    # A row's own Delete takes "In trash" down at once, as the bulk ones do
-    # (the lows wave's round 1).
+    # A row's own Delete takes "In trash" down at once, as the bulk ones do.
     app.trash.append({'id': 902, 'title': 'Deleted too', 'category': 'General',
                       'deleted_at': '2026-01-01 00:00'})
     app._refresh_open_trash_panel(); app._render_statistics(); app.update()
@@ -641,7 +640,7 @@ check('template count updates live after deleting a template, no navigation away
 
 # The template editor kept a template's styles as offsets beside its text,
 # so any edit before a bold run moved the bold onto other words -- and every
-# note made from the template inherited it (2026-10-28, the final audit).
+# note made from the template inherited it.
 _tf_body = 'Attendees: Ana, Bo\nDecisions are final'
 app.templates = [NO.normalize_template({
     'name': 'Minutes', 'body': _tf_body,
@@ -814,7 +813,7 @@ if os.path.isfile(_sh_path):
 
 # A new note's file removed while the question waits and the autosave inside
 # it gives the note its id: read as the editor having moved on, Remove did
-# nothing and said nothing (wave 2, round 13).
+# nothing and said nothing.
 app.new_note()
 app.title_entry.insert(0, 'NewWithFile')
 _nf_path = os.path.join(NO.ATTACHMENTS_DIR, 'new_file_rm.txt')
@@ -1874,7 +1873,7 @@ check('window not known: ...and says it once',
       not any('Nothing will be removed' in m for m in _rt_said)
       and NO.trash_retention_days() is None)
 # The start's '(earlier text)' notes are said for both reasons, a day the
-# note deleted among them: round 21's were said to be of days holding text
+# note deleted among them: those were once said to be of days holding text
 # of their own. The phone's line is the same.
 _rt_said.clear()
 app._set_aside_at_start = 1
@@ -2740,7 +2739,7 @@ app.hide_settings_page(); app.update()
 
 # A category recoloured in Settings recolours the open note's category
 # button too: its dot kept the old colour beside the new swatch, card and
-# calendar (wave 2, round 5).
+# calendar.
 app.new_note(); app.update()
 app.category_var.set('General'); app.update()
 _rc_was = NO.CATEGORY_COLORS['General']
@@ -2779,7 +2778,7 @@ _rc_recolour('#123456', _rc_was)
 app.hide_settings_page(); app.update()
 
 # A category added at the foot of a list longer than its 220 pixels is
-# brought into sight: "+ Add" looked as if it did nothing (wave 2, round 9).
+# brought into sight: "+ Add" looked as if it did nothing.
 _ac_saved = dict(NO.CATEGORY_COLORS)
 for _ac_i in range(14):
     NO.CATEGORY_COLORS['Shelf %02d' % _ac_i] = '#888888'
@@ -2810,7 +2809,7 @@ NO.CATEGORY_COLORS.clear(); NO.CATEGORY_COLORS.update(_ac_saved); NO.persist_cat
 app.hide_settings_page(); app.update()
 
 # The welcome note brought back from About under a Show that hides it: Show
-# all first, so it is on the list it opens over (wave 2, round 3).
+# all first, so it is on the list it opens over.
 _wn_notes = list(app.notes)
 app.filter_var.set('Work'); app.refresh_note_list(); app.update()
 app.show_welcome_note(); app.update()
@@ -2824,7 +2823,7 @@ app.notes = _wn_notes; app.save_notes(); app.new_note(); app.update()
 
 # A long category name is cut with "…" in the note's category list and on
 # its button: cut bare at 13 letters, two sharing a start read the same,
-# and a long one crowded out the title (wave 2, round 6).
+# and a long one crowded out the title.
 _lc_name = 'Household paperwork and receipts 2026'
 NO.CATEGORY_COLORS[_lc_name] = '#888888'
 app.new_note(); app.update()
@@ -3528,7 +3527,7 @@ check('...and a day restored under a category that is gone comes back under Gene
 # Restore previous from a day the restored version had deleted: the editor
 # leaves the day for the whole note. It stayed on the date, and what was
 # typed there was saved to a day no screen showed and no search found
-# (the phone's round 23).
+# (found on the phone first).
 app.new_note(); app.update()
 _rg_note = NO.normalize_note({'id': 5, 'title': 'Team meeting',
                               'body': 'Agenda', 'date': '2026-11-03',
@@ -3557,7 +3556,7 @@ check(f'Restore previous from a day the restored version deleted leaves the '
       and 'Call the supplier' in _rg_after.get('body', ''))
 # A day showing the series' words shows the series' lines' looks; a day with
 # text of its own shows none: put on by line number, they centred the wrong
-# lines (the phone's twenty-fifth round).
+# lines (found on the phone first).
 app.new_note(); app.update()
 app.notes = [NO.normalize_note({'id': 6, 'title': 'Plan', 'body': 'Agenda\nsecond',
                                 'date': '2026-11-02', 'recurrence': {'freq': 'weekly'},
@@ -3576,8 +3575,7 @@ check(f"a day showing the series' words shows its lines' looks, a day of its own
               for p in app.find_note(6).get('paragraphs') or []))
 # ...but a list's depth, which lives in its entries alone, stays on a day of
 # its own text where the line keeps its marker: dropped, a nested numbered
-# list read flat and the next Enter renumbered it as one run (the lows
-# wave's verification).
+# list read flat and the next Enter renumbered it as one run.
 app.new_note(); app.update()
 app.notes.append(NO.normalize_note({'id': 7, 'title': 'Weekly agenda',
                                 'body': 'Agenda\n1. Buy\n1. milk\n2. eggs\n2. Clean',
@@ -3594,8 +3592,8 @@ _nl_day = app._extract_paragraphs(app.body_text)
 check(f"a day of its own text keeps the series' list depth where its lines keep their markers ({_nl_day})",
       [(p.get('line'), p.get('indent', 0)) for p in _nl_day if p.get('kind')]
       == [(1, 0), (2, 1), (3, 1), (4, 0)])
-# ...and a day keeps its OWN lists' structure (the owner's choice, the lows
-# wave): an item added to a sub-list keeps its level when the day is opened
+# ...and a day keeps its OWN lists' structure (the owner's choice): an item
+# added to a sub-list keeps its level when the day is opened
 # again -- taken from the series by line, it slid to the outer list.
 app.open_note_in_tab(app.find_note(7), occurrence_date='2026-11-23'); app.update()
 app.body_text.delete('1.0', 'end')
@@ -3640,7 +3638,7 @@ check(f"a level changed on a day of the series' words is that day's, and reopeni
       and [p.get('indent', 0) for p in app.find_note(8).get('paragraphs')] == [0])
 # A change made behind a day opened from the calendar -- an import's Update,
 # a category change -- reads the note back and keeps "Back to Calendar": the
-# reopening cleared it (the audit's round 24).
+# reopening cleared it.
 app.open_note_in_tab(app.find_note(6), occurrence_date='2026-11-09'); app.update()
 app._pending_calendar_return = {'year': 2026, 'month': 11, 'date_str': '2026-11-09', 'origin': 'edit'}
 app._update_calendar_return_button()
@@ -4298,7 +4296,7 @@ _sp_b.insert('1.0', _sp_long)
 app._spell_run(_sp_b)
 _sp_first = len(_sp_dict.asked)
 # ...and once the last slice has run, no look is still due: its timer's id
-# stayed behind, and every wait for the look ran to its cap (round 9).
+# stayed behind, and every wait for the look ran to its cap.
 _sp_done = _sp_settle(cap=10)
 check(f'a long note is read a slice at a time ({_sp_first} lines in the first, '
       f'{app.SPELL_SLICE} allowed), and all of it in the end '
@@ -4438,7 +4436,7 @@ app.geometry('1100x850')
 _kv_settle()
 
 # ---- KEYBOARD: a Tk button its own press destroys hands the keyboard on ----
-# Round 2 of the final audit: every "Show N more" goes as it draws the next
+# Every "Show N more" goes as it draws the next
 # page, and the keyboard fell to the window -- about a hundred Tabs back to
 # the rows just drawn. Tk's own buttons take Space through their class
 # binding, which never reached _keyboard_stays; nor did a template
@@ -4806,7 +4804,7 @@ check(f"a picture's preview opened by a click takes the keyboard, so keys "
 check(f"...and Tab and Shift+Tab walk its two buttons only ({_kp_inside}, "
       f"still open {_kp_open})", len(_kp_inside) == 6 and all(_kp_inside)
       and _kp_open)
-# Round 6: Enter presses the preview's button the keyboard is on, as Space
+# Enter presses the preview's button the keyboard is on, as Space
 # does and as a question's answers take it -- a Tk button answers Space alone,
 # and Enter on Close did nothing. And Open externally opens the picture: a
 # name reused below it in the same function made it open the overlay's name.
@@ -4845,7 +4843,7 @@ check(f"Enter (and the keypad's, off Windows) presses the preview's Close, and i
       _kr_seen == {f'{k} on {"Open externally" if s else "✕ Close"}': (True, True)
                    for k, s in _kr_keys}
       and _kr_opened == ['20261002120000000000_kb.png'])
-# Round 7: Enter held on a picture's name presses it once. The preview gave
+# Enter held on a picture's name presses it once. The preview gave
 # its Close the keyboard, Close took the next repeat and shut it, the name got
 # the keyboard back and the next one, and the preview opened and shut over and
 # over. A held key repeats as presses alone on Windows, as a release and a
@@ -4906,7 +4904,7 @@ check(f"Enter held on a picture's name opens its preview once, and held on its "
                    ('presses alone', 'release and press')}
       | {f'held on Close, {s}': (1, 'the name', True) for s in
          ('presses alone', 'release and press')})
-# Round 5: Ctrl+F and Ctrl+N gave the keyboard to a box under the preview,
+# Ctrl+F and Ctrl+N gave the keyboard to a box under the preview,
 # left open over it, and the keys went into a note nobody could see. The
 # shortcut closes it, as a click outside does. Ctrl+N last: it clears the note.
 _ks_seen = {}
@@ -5085,7 +5083,7 @@ for _kw_key, _kw_want, _kw_way in (('<Control-Shift-Tab>', _kw_prev, 'before'),
           and app.capture_editor_state().get('paragraphs') == _kw_paras)
 # A drawn table's open cell has Tab bindings of its own, and Tk matched
 # Ctrl+Tab to them as well: it moved a cell, and on the last one added a
-# row (the final audit's wave 3). From there too it leaves the note, the
+# row. From there too it leaves the note, the
 # cell's typing kept.
 app.notes = [NO.normalize_note({'id': 982, 'title': 'CtNote',
                                 'body': '| Item | Qty |\n| --- | --- |\n| cinnamon | 1 |'})]
@@ -5155,7 +5153,7 @@ check(f"...and in the comments box the four do nothing to the words "
 app.comments_text.delete('1.0', 'end')
 # Tk's Entry kept edits of its own on Ctrl+D, Ctrl+K and Ctrl+T: in the
 # title, saved at once with no Undo, a letter, the line's rest, two letters
-# swapped (the final audit's wave 3).
+# swapped.
 app.title_entry.delete(0, 'end')
 app.title_entry.insert(0, 'Buy milk today')
 app.title_entry.icursor(8)
@@ -5169,7 +5167,7 @@ check(f"...and in the title Ctrl+D, Ctrl+K and Ctrl+T leave the words as they "
       _ek_pressed and app.title_entry.get() == 'Buy milk today')
 # Ctrl+Tab leaves the note through Tk's own traversal, so what it lands on
 # is scrolled into sight as after any Tab; focus set by hand left it below
-# the fold (the final audit's wave 3).
+# the fold.
 app.geometry('900x400'); app.update(); app.update_idletasks()
 app.editor_canvas.yview_moveto(0); app.update()
 _lv_target = app.body_text.tk_focusNext()
@@ -5202,7 +5200,7 @@ app.hide_settings_page()
 _kv_settle()
 
 # ---- KEYBOARD: the Settings page scrolled from the keyboard ----
-# Round 2 of the final audit: Keyboard shortcuts is labels alone, nothing to
+# Keyboard shortcuts is labels alone, nothing to
 # Tab to, and four fifths of it lay below the fold with no key to reach it --
 # the page telling keyboard users how to use the keyboard.
 app.geometry('1100x750')
@@ -5256,7 +5254,7 @@ _kv_settle()
 
 
 # ---- KEYBOARD: a Tk button whose own press hides it ----
-# Round 3 of the final audit: Tk's buttons hand the keyboard on after a press
+# Tk's buttons hand the keyboard on after a press
 # that destroys them, and one that only HID itself kept it -- on a control no
 # longer on screen, no ring anywhere, Tab starting again from the window's
 # top. Share and Import's Close, the Trash's bulk delete, Settings and
@@ -5340,7 +5338,7 @@ app.refresh_note_list()
 _kv_settle()
 
 # ---- KEYBOARD: Settings opened by a click, from the note ----
-# Round 3 of the final audit: a click on ⚙ Settings takes no keyboard, which
+# A click on ⚙ Settings takes no keyboard, which
 # stayed in the note body, out of sight. Page Down moved its caret instead of
 # the page, and Tab, letters and Backspace edited the note, which was saved.
 def _ks_holder():
@@ -5426,7 +5424,7 @@ app.refresh_note_list()
 _kv_settle()
 
 # ---- THE TEMPLATE EDITOR'S TABLE PREVIEW SHORTENS A LONG CELL BY HALVES ----
-# Round 3 of the final audit: a cell wider than its column was shortened a
+# A cell wider than its column was shortened a
 # letter at a time, the rest measured whole at each step, on every key typed
 # in the body: 2 s a key at 12 rows of 1,200 characters, minutes for one long
 # cell. Counted in measures asked of Tk, never in time.
@@ -5465,7 +5463,7 @@ check(f'the template preview shortens a {len(_tp_cell):,}-character cell in a fe
       and _tp_cell.startswith(_tp_shown[0][:-1]))
 
 # ---- THE TEMPLATE EDITOR'S BOXES HAVE LIMITS OF THEIR OWN ----
-# Round 3 of the final audit: the checklist's box took a paste of any length,
+# The checklist's box took a paste of any length,
 # one item drawn as one label as tall as its text, and so did the template's
 # name and title. Each keeps a limit now, as the note's own title box does.
 def _tl_entries(w):
@@ -5539,7 +5537,7 @@ check(f'the template editor draws a checklist item past the limit cut '
       and len(_tl_label) <= NO.MAX_CHECKLIST_ITEM_CHARS + 1)
 
 # ---- A NAME KEPT WHOLE IS DRAWN ON ONE LINE, CUT ----
-# Round 4 of the final audit: Save as template's name box took a pasted page,
+# Save as template's name box took a pasted page,
 # and the picker and Settings > Templates drew a name whole -- 300 letters made
 # the picker wider than the screen, 5,000 passed X's limit and ended the app
 # at every visit. Names stay whole in the file; boxes keep the limit, and
@@ -5584,7 +5582,7 @@ check(f"Save as template's name box shortens a paste to the note title's "
       and _nm_told[:1] == ['Pasted text shortened: a template name can be up '
                            f'to {app.TITLE_MAX_LEN} characters'])
 
-# Round 6: opened from Settings, where the note's page and its status line
+# Opened from Settings, where the note's page and its status line
 # stand hidden, the template editor cut a paste without a word on screen; it
 # says so on a line of its own. And a paste is weighed with each line break
 # one character, as Tk's own paste puts it in: Windows' clipboard keeps CR LF,
@@ -5637,7 +5635,7 @@ check(f"the template editor, opened from Settings, says in itself that a paste "
       and _lw_seen.get('ten lines that fit') == (1999, 0)
       and _lw_seen.get('eleven lines, shortened') == (NO.MAX_CHECKLIST_ITEM_CHARS, 0, 10))
 
-# Round 7: on the note's page the status line stands at the foot of the
+# On the note's page the status line stands at the foot of the
 # scrolled editor -- mapped, and far below the view at the window's own
 # sizes -- and a paste cut to fit the checklist's Add box or the title was
 # said there, where nobody saw it. Out of sight, it is said in a banner over
@@ -5698,7 +5696,7 @@ check(f"the note's page says a paste cut to fit where it is seen: in a banner "
       and _ns_seen.get('status line in sight, scrolled down') is True
       and _ns_seen.get('Add box, the line in sight') == (2000, []))
 
-# Round 8: while an Undo was on offer the banner stayed quiet "because the
+# While an Undo was on offer the banner stayed quiet "because the
 # words stay on the line" -- the line out of sight -- so a paste cut to fit
 # was said nowhere seen for the offer's eight seconds. The words stand on a
 # banner of their own beneath it, the offer untouched.
@@ -5778,7 +5776,7 @@ check(f"a paste cut to fit while an Undo is on offer is said on a banner beneath
           'beneath': False, 'words': None})
 
 # ...and the autosave the title's paste sets off, half a second later, wrote
-# "Note updated" over that banner and "Auto-saved" over the line (round 8):
+# "Note updated" over that banner and "Auto-saved" over the line:
 # reassurance yields to the words, on the banner and on the line in sight.
 _wa_seen = {}
 _wa_geo = app.geometry()
@@ -5842,7 +5840,7 @@ try:
             ('', 0, 'Shopping list\n'), ('', 0, 'Shopping list\r\n'),
             ('', 0, 'Shopping  list'),
             # ...and a paste's own spaces at its edges stay: str.split() took
-            # them, and two words ran together (round 8).
+            # them, and two words ran together.
             ('Buy milk', 4, 'fresh '), ('Buy milk', 3, ' fresh'),
             ('Groceries', 9, ' and more\r\n')):
         app.title_entry.delete(0, 'end')
@@ -5865,7 +5863,7 @@ check(f"a title pasted with its line break, or a double space, is not said to be
 
 # ...and the join takes time in proportion to the paste: "\s*" around a break
 # tried every place in a run of spaces, and 40,000 with no break in them froze
-# the window 5 s (round 9). Timed in this run against the same run ending in
+# the window 5 s. Timed in this run against the same run ending in
 # a break, the quickest of three each; the sizes are fixed, never read from
 # the app.
 _tl_took = {'run': [], 'run ending in a break': []}
@@ -5897,7 +5895,7 @@ check(f"a title paste of 30,000 spaces with no break in them takes what the same
 
 # ...reads no more of the clipboard than any paste reads (_cap_paste); and at
 # the cap, a paste whose only overflow is its own trailing space is not
-# called shortened (round 9). Words left out still are.
+# called shortened. Words left out still are.
 _tc_kept, _tc_told = {}, {}
 _tc_real_status = app.set_status
 try:
@@ -5934,7 +5932,7 @@ check(f"at the title's cap, a paste that loses only its own trailing space is no
 
 # A title already past the cap -- a share code's, a backup's -- shortens: every
 # Backspace and Delete was refused as too long, and a paste over a selection
-# deleted it and then found no room, so the selected words went (round 10).
+# deleted it and then found no room, so the selected words went.
 _ol_seen, _ol_told = {}, []
 _ol_real_status = app.set_status
 app._autosave_now = lambda: None            # no note is made of it meanwhile
@@ -5979,7 +5977,7 @@ check(f"a title past the cap shortens by Backspace and Delete, and a paste over 
 # ...and a middle-click is a paste too -- Tk binds it on Windows as well -- and
 # it went past every rule a paste keeps: the selection's line breaks into the
 # title, a checklist item past its limit refused whole, a hint left in front
-# of the words (round 10).
+# of the words.
 _mc_seen, _mc_told = {}, []
 _mc_real_status = app.set_status
 _mc_source = tk.Text(app)
@@ -6048,7 +6046,7 @@ check(f"a middle-click into the title or the checklist's Add box keeps the rules
       in _mc_told)
 
 # ...and a limited box's paste over a selection keeps it when nothing fits: a
-# value past its limit, from a backup's template, lost the selection (round 10).
+# value past its limit, from a backup's template, lost the selection.
 _lb_box = tk.Entry(app)
 _lb_box.insert(0, 'v' * 15)
 app._limit_entry(_lb_box, 10, 'A test value')
@@ -6101,7 +6099,7 @@ check(f"a limited box says a paste was shortened only when words were left out, 
 
 # ...and an edit no key made in the title, the comments or the date -- the menu's
 # Cut -- is saved, and the title's count follows it: only a key's release set
-# either off, and a right-click Cut was saved when the note was left (round 10).
+# either off, and a right-click Cut was saved when the note was left.
 _nk_seen = {}
 app._autosave_now = lambda: None
 try:
@@ -6245,7 +6243,7 @@ check(f"the status line quotes a name of many lines on one line "
 app.set_status('')
 
 # ---- A ROW'S BUTTONS KEEP THEIR ROOM ----
-# Round 4: Tk's packer serves widgets in the order they were packed, and a
+# Tk's packer serves widgets in the order they were packed, and a
 # name packed before its row's buttons took the room they needed: in
 # Settings > Templates a 50-letter name pushed the pencil out, 80 the bin
 # too, and the same in Categories (80 letters allowed) and the statistics.
@@ -6308,7 +6306,7 @@ check(f"a long name leaves its row's buttons in the row: the template's pencil "
       and _rb_room is not None and _rb_need > _rb_room)
 
 # ---- KEYBOARD: a part put away by a click hands the keyboard on ----
-# Round 4: a click takes no keyboard, so folding the checklist with the caret
+# A click takes no keyboard, so folding the checklist with the caret
 # in its Add box left it there: x and Return added an item nobody saw, and it
 # was saved. The same for the calculator, a Settings section left, the import
 # panel closed. One watcher hands the keyboard on from any part put away.
@@ -6404,7 +6402,7 @@ check(f"a tab left with the keyboard on the note list takes it off the list "
       _pa_on_list and _pa_h is not None and bool(_pa_h.winfo_viewable()))
 app.notebook.select(app.TAB_NOTES)
 _kv_settle(4)
-# Round 5: a toolbar re-dealt by a resize read as put away -- pack maps a
+# A toolbar re-dealt by a resize read as put away -- pack maps a
 # button laid out again once its row's new size settles -- and the keyboard
 # went from B into the note. The case is the watcher looking at B unmapped.
 _rb_bold = app._fmt_buttons['bold']
@@ -6436,7 +6434,7 @@ app.refresh_note_list()
 _kv_settle()
 
 # ---- KEYBOARD: a table cell's menu ----
-# Round 4: every row, column and merge command of a table lived in a
+# Every row, column and merge command of a table lived in a
 # right-click alone, and its two palettes closed at the first Tab with the
 # keyboard on nothing. Shift+F10 in a cell opens the cell's menu there, a
 # palette it opens takes the keyboard and keeps it, and the keyboard comes
@@ -6510,7 +6508,7 @@ app.refresh_note_list()
 _kv_settle()
 
 # ---- KEYBOARD: Tab and Enter in a table keep it in the table ----
-# Round 5: Tab at the last cell of a table with a separator row (a column
+# Tab at the last cell of a table with a separator row (a column
 # resized or hidden, a markdown table pasted) added a row and opened no editor:
 # the rows were counted with the separator. The keyboard fell to nothing.
 def _tt_open(nid, body):
@@ -6571,7 +6569,7 @@ check(f"Enter, and Tab at the last cell, that take a table past what is drawn pu
       _tt_flip == {'<Return>': (True, True, ['Eggs', '12<br>x']),
                    '<Tab>': (True, True, ['x', ''])})
 
-# Round 6: Escape in a cell, and Ctrl+V of copied cells, closed the editor
+# Escape in a cell, and Ctrl+V of copied cells, closed the editor
 # holding the keyboard and left it on nothing -- what was typed next went
 # nowhere, and Tab began again at the tab strip. Escape leaves it in the
 # note's text under the table, where the caret goes from a drawn table's
@@ -6650,7 +6648,7 @@ app.refresh_note_list()
 _kv_settle()
 
 # ---- A POPUP THAT GROWS STAYS INSIDE THE WINDOW ----
-# Round 4: the template editor grew with its checklist and never scrolled,
+# The template editor grew with its checklist and never scrolled,
 # placed once for the height it opened at: 25 items, or one long one, put
 # Save, Category and the Add box below the screen. The picker did the same
 # with as many templates. What grows scrolls, and a popup that grows is
@@ -6714,7 +6712,7 @@ app.refresh_note_list()
 _kv_settle()
 
 # ---- KEYBOARD: a tick box is looked at the moment it is pressed ----
-# Round 3 of the final audit: the look after Space waited 100 ms for every
+# The look after Space waited 100 ms for every
 # Tk button, though a tick box runs its command at once. A template's tick
 # box redraws its list, the keyboard fell to the editor's own window, and a
 # Tab inside those 100 ms went to the header's ✕, whose next Space closed the
@@ -6762,7 +6760,7 @@ check(f'Space on a template\'s tick box, then Tab 40 ms later, goes on from '
       and not isinstance(_cb_after, tk.Toplevel))
 
 # ---- THE TEMPLATE PREVIEW IS DRAWN AGAIN ONLY WHEN ITS TABLES CHANGE ----
-# Round 4: every key in the template editor redrew one canvas item per line
+# Every key in the template editor redrew one canvas item per line
 # of every cell -- 0.16 s a key for one paste of line breaks -- though the
 # tables are out of the box's sight and typing never changes them.
 _pv_ids = []
@@ -6789,11 +6787,11 @@ check(f"the template preview is drawn again only when its tables change "
       and _pv_ids[1] != _pv_ids[2])
 
 # ---- A PASTE OVER A SELECTION IN A LIMITED BOX REPLACES IT, SHORTENED ----
-# Round 4: off X11, Tk's own paste deletes the selection and inserts as two
+# Off X11, Tk's own paste deletes the selection and inserts as two
 # edits; the delete passed the limit's check, the insert did not, and what
-# was typed was gone. Windows' paste is run here on every system. Since
-# round 5 a paste past the limit is shortened to the room the selection
-# leaves, as the title's is.
+# was typed was gone. Windows' paste is run here on every system. A paste
+# past the limit is shortened to the room the selection leaves, as the
+# title's is.
 _wp_real_bind = str(app.tk.call('bind', 'Entry', '<<Paste>>'))
 _wp_real_read = NO.clipboard.read_text
 _wp_kept = None
@@ -6825,8 +6823,8 @@ check(f"a paste past a box's limit over its selection replaces it, shortened to 
       _wp_kept == 'y' * 1800 + 'z' * 200)
 
 # ---- A checklist item left in an Add box goes into the template saved ----
-# Round six of the final audit (a twin the Android fixer named): the template
-# editor's Save, its question on closing and its quiet save read the
+# A twin of a phone fix: the template editor's Save, its question on closing
+# and its quiet save read the
 # checklist without the item typed in its Add box and not yet added, so a
 # "passport" typed there and saved was lost with the editor; Save as template
 # read a note's checklist the same way. The note's box keeps its item.
@@ -6887,7 +6885,7 @@ check(f"an item typed in a checklist's Add box and not added goes into the "
 
 # ...and a template's list at 1,000 items: its Add, and words waiting in the
 # box, were cut by normalize_template at Save, unsaid, and the editor closed
-# without asking (round 6). The Add and Save refuse them and say why; closing
+# without asking. The Add and Save refuse them and say why; closing
 # asks; Save as template from a full note says so too.
 _cfp_seen, _cfp_said = {}, []
 _cfp_real = (app.show_info, app.ask_yes_no_cancel)
@@ -6947,7 +6945,7 @@ check(f"a template's list at 1,000 items refuses more at its Add and Save, "
       f"says why, and closing asks ({_cfp_seen}, {_cfp_said})",
       len(_cfp_seen) == 4 and all(_cfp_seen.values()))
 
-# Round 8: round 7 taught Enter held down to press once on a drawn control,
+# An earlier fix taught Enter held down to press once on a drawn control,
 # the preview's buttons and a question's answers -- not the note list, the
 # calendar or the boxes that act on Enter. A group header folded and opened
 # at every repeat, writing settings.json each time; and a press nobody asked

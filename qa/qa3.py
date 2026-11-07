@@ -179,7 +179,7 @@ check('share code area becomes visible', app.editor_code_area.winfo_ismapped())
 code_entry = find_text_widget(app.editor_code_area)
 check('share code text widget exists', code_entry is not None)
 # Generate, fix a word, Copy: the code that went out was the one from before
-# the fix, a wall of characters nobody proofreads (wave 2).
+# the fix, a wall of characters nobody proofreads.
 app.body_text.insert('end', ' and the fix')
 _sc_copy = next(w for w in app.editor_code_area.winfo_children()
                 if isinstance(w, tk.Button) and 'Copy code' in str(w.cget('text')))
@@ -201,7 +201,7 @@ _para_back = NO.decode_share_code(
 check('a share code carries the paragraphs (table position, indents)',
       _para_back.get('paragraphs') == _para_note['paragraphs'])
 # A code with words around it -- a greeting, a mail signature, a "Thanks!" --
-# read only now and then: whether it did hung on the code's padding (wave 2).
+# read only now and then: whether it did hung on the code's padding.
 _cw_found = []
 for _cw_body in ('x', 'xy', 'xyz', 'wxyz'):   # codes of every padding length
     _cw_code = NO.encode_share_code([{'title': _cw_body, 'body': _cw_body}])
@@ -473,7 +473,7 @@ check('...while the note nothing here matched was added',
       any(n['title'] == 'AlsoNew' for n in app.notes))
 # A one-note code's Update of the series open on one of its days keeps the day
 # and the way back to the calendar, as the batch's does: it took the editor to
-# the whole series and dropped Back to Calendar (wave 2, round 11).
+# the whole series and dropped Back to Calendar.
 app.notes = [NO.normalize_note({'id': 1, 'title': 'Weekly sync', 'body': 'series words',
                                 'date': '2026-09-07', 'recurrence': {'freq': 'weekly'}})]
 app.save_notes(); app.new_note(); app.update()
@@ -495,7 +495,7 @@ check(f"a one-note code's Update keeps the day it was on, and the way back "
 app._pending_calendar_return = None
 app.notes = []; app.save_notes(); app.new_note(); app.update()
 # A double-click on Import: the second press found the box the first emptied,
-# and said in red that no code was pasted (wave 2, round 9).
+# and said in red that no code was pasted.
 from _qa_support import fire as _ib_fire
 if not app._is_placed(app.import_panel):
     app.toggle_import_panel(); app.update()
@@ -631,7 +631,7 @@ check('an update leaves the rescue copy Restore previous reads',
 
 # An Update agreed to, the code's other notes all look-alikes: the question
 # about them can skip them and go on -- Cancel, its only no, dropped the
-# Update unsaid (wave 2, round 9).
+# Update unsaid.
 _la_known = NO.normalize_note({'id': 9601, 'uid': 'la-known', 'title': 'Synced',
                                'body': 'first words'})
 _la_same = NO.normalize_note({'id': 9602, 'title': 'Look alike', 'body': 'same words'})
@@ -661,7 +661,7 @@ check(f"an Update agreed to, then look-alikes skipped: the Update still happens 
 app.notes = [n for n in app.notes if n.get('id') not in (9601, 9602)]
 # A known note answered "Add it as a new note" is not asked about again as a
 # look-alike: differing only in its colour, it was, and the default Cancel
-# undid the Add unsaid (wave 2, round 10).
+# undid the Add unsaid.
 def _la_add(*a, **k):
     labels = [label for label, _v in k.get('buttons') or []]
     _la_asked.append(labels)
@@ -693,7 +693,7 @@ check(f"a known note added as a new one is not asked about again as a look-alike
       _la_ways['one note'][0:2] == ([['Cancel', 'Add as a new note', 'Update this note']], 2)
       and len(_la_ways['a batch'][0]) == 1 and _la_ways['a batch'][1:] == (2, 1))
 # ...but as a look-alike of a copy added before, it is: the same code added
-# twice made a second copy unasked (the lows wave's round 2).
+# twice made a second copy unasked.
 app.notes = [n for n in app.notes if n.get('title') not in ('Paint', 'Fresh')]
 app.notes.append(NO.normalize_note({'id': 9603, 'uid': 'la-add', 'title': 'Paint', 'body': 'walls'}))
 app.notes.append(NO.normalize_note({'id': 9677, 'title': 'Paint', 'body': 'walls', 'color': '#e57373'}))
@@ -729,7 +729,7 @@ _la_said = str(app.import_status.cget('text'))
 check(f"...and one note added is said as one note ({_la_said!r})",
       _la_said.startswith('Added 1 note ✓') and 'Added 1 notes' not in _la_said)
 # A Cancel at the code's question says so, the last import's "Added …" no
-# longer under the new code (wave 2, round 3).
+# longer under the new code.
 _la_id = max((n['id'] for n in app.notes), default=0) + 1     # an id no note holds
 app.notes.append(NO.normalize_note({'id': _la_id, 'uid': 'la-cancel', 'title': 'Fence', 'body': 'paint it'}))
 app.save_notes()
@@ -752,7 +752,7 @@ app.save_notes()
 
 # A note saved while the code's question waited -- a backup's merge, a new
 # note's autosave -- took the id the import had counted before it asked, and
-# two notes wore one id: opening one wrote over the other (wave 2, round 11).
+# two notes wore one id: opening one wrote over the other.
 _ni_keep = list(app.notes)
 app.notes = [NO.normalize_note({'id': 9701, 'title': 'Here already', 'body': 'same words'})]
 app.save_notes()
@@ -797,10 +797,10 @@ finally:
     app._import_state = None
 check(f"a backup's merge waits while a question is open, then runs ({_pi_waited}, {len(_pi_merged)})",
       _pi_waited and len(_pi_merged) == 1)
-# ...and its bar says it waits, not "0 / 1 attachments" (wave 2, round 12).
+# ...and its bar says it waits, not "0 / 1 attachments".
 check(f"a backup's merge waiting on a question says so ({_pi_said!r})", 'waiting' in _pi_said)
 # ...and it waits for a file chooser or a posted menu as well: under one, its
-# questions opened behind the chooser (wave 2, round 12).
+# questions opened behind the chooser.
 _pi_merged = []
 app._merge_finished_import = lambda state: _pi_merged.append(state)
 try:
@@ -817,7 +817,7 @@ check(f"a backup's merge waits while a file chooser or a menu is up, then runs (
       _pi_waited and len(_pi_merged) == 1 and not getattr(app, '_natives_open', 0))
 # A restore whose save fails takes back exactly the notes it brought: a new
 # note's autosave inside the error's wait came after them, and a cut by count
-# threw it away (round 12).
+# threw it away.
 app.notes = [NO.normalize_note({'id': 1, 'title': 'Kept here', 'body': 'k'}),
              NO.normalize_note({'id': 2, 'title': 'Sent away', 'body': 's'})]
 app.trash = []
@@ -837,7 +837,7 @@ check(f"a restore whose save fails keeps a note saved meanwhile "
       _rb_back is None and any(n is _rb_new for n in app.notes)
       and not any(n.get('title') == 'Sent away' for n in app.notes))
 # ...and the file is put back as well: written inside the wait, the note stood
-# in the list and in the Trash at the next start (wave 2, round 13).
+# in the list and in the Trash at the next start.
 check(f"a restore whose save fails leaves the notes file without it ({_rb_file})",
       'Sent away' not in _rb_file and 'Typed meanwhile' in _rb_file)
 app.notes = _ni_keep
@@ -1039,7 +1039,7 @@ app.update()
 check('single-note import allows opening the duplicate anyway if chosen',
       app.title_entry.get() == 'ShareMe')
 # The button says Add, since the note is saved at once: "Open it anyway"
-# read as a look, and a second copy was in the list (the final audit's wave 3).
+# read as a look, and a second copy was in the list.
 app._autosave_now()
 app.update()
 check(f'...and "Add it anyway" adds it, as its word says ({_sd_before} -> {len(app.notes)})',
@@ -3039,7 +3039,7 @@ def _next_start_says():
 
 # ...but one finished as the window closed that held only the session's notes,
 # or left a held file out, was recorded as the notebook's backup, whole, and
-# nothing said otherwise (round 6). What its message would have said, the
+# nothing said otherwise. What its message would have said, the
 # next start says; a backup of the session alone is not remembered.
 NO.save_setting('last_export_at', None)
 app._export_state = {'current': 1, 'total': 1, 'done': True, 'error': None,
@@ -3139,8 +3139,8 @@ app.notes = []; app.save_notes()
 # The end of a Windows session is a question the person can still cancel
 # (Tk answers WM_QUERYENDSESSION with it), so it tears down nothing the app
 # needs if the session goes on. It stopped the export and dropped the import
-# outright, behind a progress bar that never moved again (2026-10-28, the
-# final audit). A file is held until the test lets it go (_sx['go']).
+# outright, behind a progress bar that never moved again. A file is held
+# until the test lets it go (_sx['go']).
 _sx = {'on': None, 'seen': False, 'go': False}
 
 
@@ -3216,7 +3216,7 @@ try:
     check(f'the next start says Windows cut it short ({_words[:120]!r})',
           'qa3_held_import.zip' in _words and 'when Windows signed out' in _words)
     # ...and a re-import that finishes takes that word back: it said "nothing
-    # was kept" after the person had done just what it asked (round three).
+    # was kept" after the person had done just what it asked.
     NO.save_setting('backup_cut_short',
                     {'kind': 'import', 'file': _hb_zip, 'when': 'session'})
     _sx.update(on=None)
@@ -3243,7 +3243,7 @@ try:
           'when Windows signed out' in _words and not os.path.exists(_he_zip + '.tmp'))
     # A session that ends while an import's question waits found no import
     # running: the files it had copied and its unpacked backup stayed, and
-    # nothing was said (round 7). Word for the next start, which takes them out.
+    # nothing was said. Word for the next start, which takes them out.
     _sq_film = next(n for n in app.notes if n.get('title') == 'Film')
     _sq_name = '20261029120000000001_cut.bin'
     with zipfile.ZipFile(_hb_zip, 'w') as _zf:
@@ -3300,7 +3300,7 @@ try:
         os.remove(os.path.join(NO.ATTACHMENTS_DIR, _sq_name))
     # A session that ends while "Import complete" is on screen: the merge is
     # saved, yet the next start said the import kept nothing and asked for it
-    # again (round 8). No word is left once the merge is saved.
+    # again. No word is left once the merge is saved.
     with zipfile.ZipFile(_hb_zip, 'w') as _zf:
         _zf.writestr('notes_data.json', json.dumps([{
             'uid': 'qa3-done-at-session-end', 'title': 'Done at sign-out', 'body': 'kept'}]))
@@ -3327,7 +3327,7 @@ try:
     # A backup moving in a notebook from the phone's 0.13.0 -- a series turned
     # off and on as it was, the blank-looking day deleted -- makes a note of
     # the copy's words for that day, and "Import complete" says so: its banner
-    # went under the dialog (the phone's twenty-third round).
+    # went under the dialog (found on the phone first).
     with zipfile.ZipFile(_hb_zip, 'w') as _zf:
         _zf.writestr('notes_data.json', json.dumps([{
             'uid': 'qa3-older-series', 'title': 'Gym older', 'body': 'plan', 'date': '2026-11-02',
@@ -3350,7 +3350,7 @@ try:
           any(t == 'Import complete' and 'Earlier text of 1 day of a repeating note' in m for t, m in _et_said)
           and any(n.get('title') == 'Gym older (earlier text)' and n.get('body') == 'knee' for n in app.notes))
     # An import's worker held past the session end's join (a file another
-    # program holds): its word named nothing it copied or unpacked (round 8).
+    # program holds): its word named nothing it copied or unpacked.
     app._import_state = {'zip': _hb_zip, 'done': False, 'stop': False,
                          'copied': ['20261030010000000001_held.bin'],
                          'temp_dir': os.path.join(tempfile.gettempdir(), 'notes_import_qa3_held')}
@@ -3365,7 +3365,7 @@ try:
           and _hw_said.get('temp_dir', '').endswith('notes_import_qa3_held'))
     # A start that could not read the notes keeps those files (a file the
     # notes use would look free) -- and kept no word either, so no later start
-    # took them out (round 8). The word stays, said once.
+    # took them out. The word stays, said once.
     _uw_name = '20261030010000000002_left.bin'
     with open(os.path.join(NO.ATTACHMENTS_DIR, _uw_name), 'wb') as _fh:
         _fh.write(b'left')
@@ -3388,7 +3388,7 @@ try:
           and NO.get_setting('backup_cut_short') is None)
     # "Import failed" on screen when a session ends: Windows ends the app with
     # the dialog up, and the unpacked folder, removed only after it, stayed in
-    # the temp folder for good, the word lowered before it (round 9).
+    # the temp folder for good, the word lowered before it.
     _if_dir = tempfile.mkdtemp(prefix='notes_import_qa3_failed_')
     _if_seen = {}
     _if_real_err = app.show_error
@@ -3449,7 +3449,7 @@ _dc_restore(201500)
 check('...while a click of its own, later, still restores',
       sorted(n['title'] for n in app.notes) == ['Newer', 'Older'])
 # Double-clicking "Restore N selected": the second press landed on Empty
-# trash, slid up into its place, and asked to delete the rest (wave 2, round 7).
+# trash, slid up into its place, and asked to delete the rest.
 app.trash = [dict(NO.normalize_note({'id': 3, 'title': 'Ticked', 'body': 'z'}),
                   deleted_at='2026-09-30 12:00:00'),
              dict(NO.normalize_note({'id': 4, 'title': 'Left', 'body': 'w'}),
@@ -3540,7 +3540,7 @@ check("fixture: the edit is saved as that day's own",
       == 'Weekly (moved to 10:00)')
 # The day, shared from here, travels as a note of that date: the series'
 # identity and repeat went with the day's words, and an Update on the other
-# device wrote that one day over the whole series (wave 2).
+# device wrote that one day over the whole series.
 app.share_current_note_as_code(copy=True); app.update()
 _sc_day = NO.decode_share_code(app.clipboard_get())[0]
 check(f"a day of a series shares as a note of that date, not as the series "
@@ -3737,11 +3737,11 @@ _ra_note['body'] = 'March, paid'
 _ra_note['updated'] = '2099-01-01 00:00:00'
 app.save_notes()
 # Cancel on its question says so: asked while the person may be typing, a
-# stray Enter ended the import without a word (wave 2, round 2).
+# stray Enter ended the import without a word.
 app.set_status('')
 _ra_import('cancel')
 # ...and the autosave's "Auto-saved" that follows the person's typing does
-# not write over it (round 3: it did, within a second).
+# not write over it (it did, within a second).
 app.set_status('Auto-saved 10:00', reassurance=True)
 check(f"an import cancelled at its question says nothing was added ({app.status_lbl.cget('text')!r})",
       app.status_lbl.cget('text') == app._IMPORT_CANCELLED
@@ -3756,7 +3756,7 @@ check(f'an edited note offers Update ({_ra_asked})',
 check(f'...and Enter there replaces nothing: Cancel holds the focus ({_ra_focus[-1:]})',
       _ra_focus[-1:] == [('1 note you already have', 'Cancel')])
 # Every question with buttons of its own names the one Enter presses: left
-# to the dialog, Enter pressed the last, which replaced or deleted (wave 2).
+# to the dialog, Enter pressed the last, which replaced or deleted.
 import ast as _dq_ast
 _dq_root = os.path.dirname(os.path.abspath(NO.__file__))
 _dq_missing = []
@@ -3900,8 +3900,8 @@ _ic_asked = _ic_import(
     [{'title': 'Groceries', 'body': 'milk',
       'attachments': [{'name': 'r.txt', 'stored_as': 'qa3_ic_dup.txt'}]}],
     ['qa3_ic_dup.txt'], 'cancel')
-# A look-alike bringing a file its twin lacks is asked with Skip since the
-# lows wave's round 1 ('Possible duplicates'); Cancel there still keeps none.
+# A look-alike bringing a file its twin lacks is asked with Skip ('Possible
+# duplicates'); Cancel there still keeps none.
 check(f'Cancel on "all notes already imported" leaves no file no note owns '
       f'({_ic_asked})',
       any('already imported' in t or 'Possible duplicates' in t for t in _ic_asked)
@@ -3923,7 +3923,7 @@ _ic_asked = _ic_import(
     ['qa3_ic_skip.txt', 'qa3_ic_fresh.txt'], 'skip')
 _ic_fresh = [n for n in app.notes if n.get('title') == 'Fresh']
 # Skipped, a look-alike's files go to the note it looks like: they were deleted
-# with it, the date and files the twin lacked never brought in (wave 2, round 14).
+# with it, the date and files the twin lacked never brought in.
 _ic_twin = [a.get('stored_as') for a in app.find_note(1).get('attachments') or []]
 check(f"...and skipping the duplicates gives their files to the notes they look like ({_ic_asked}, {_ic_twin})",
       any('Possible duplicates' in t for t in _ic_asked)
@@ -3938,7 +3938,7 @@ for _ic_name in _ic_names:
     if os.path.exists(_ic_path(_ic_name)):
         os.remove(_ic_path(_ic_name))
 # ...and to the note open in the editor too: its next save put its own list of
-# files back over the ones given (the lows wave's round 1).
+# files back over the ones given.
 app.notes = [NO.normalize_note({'id': 1, 'title': 'Groceries', 'body': 'milk'})]
 app.save_notes()
 app.open_note_in_tab(app.find_note(1)); app.update()
@@ -3952,7 +3952,7 @@ _ic_open = [a.get('stored_as') for a in app.find_note(1).get('attachments') or [
 check(f"...and to the note open in the editor, still there once it is left ({_ic_open})",
       'qa3_ic_skip.txt' in _ic_open)
 # ...but "Go back and fix it" on the open note's date leaves it out: its save
-# never made, the file given was read over by the typing (the lows wave's round 2).
+# never made, the file given was read over by the typing.
 for _ic_name in _ic_names:
     if os.path.exists(_ic_path(_ic_name)):
         os.remove(_ic_path(_ic_name))
@@ -3975,13 +3975,13 @@ _ic_open = [a.get('stored_as') for a in app.find_note(1).get('attachments') or [
 check(f"...but not when its save was sent back to fix a date ({_ic_asked}, {_ic_open})",
       any('Possible duplicates' in t for t in _ic_asked) and not _ic_open)
 # ...which is said, with the note named: deleted unsaid, they were what Skip
-# was offered for (rounds 3-4).
+# was offered for.
 check(f"...and the files left out are said ({_ic_said[-1:]})",
       any('1 attached file(s) for “Groceries” were not added' in s for s in _ic_said))
 app._cancel_pending_autosave()
 app.open_blank_tab(); app.update()
 # ...and a look-alike bringing no file leaves the note open alone: read back
-# for nothing, it lost its Ctrl+Z and its place (the lows wave's round 2).
+# for nothing, it lost its Ctrl+Z and its place.
 app.notes = [NO.normalize_note({'id': 1, 'title': 'Groceries', 'body': 'milk'})]
 app.save_notes()
 app.open_note_in_tab(app.find_note(1)); app.update()
@@ -3996,7 +3996,7 @@ app._cancel_pending_autosave()
 app.open_blank_tab(); app.update()
 # A backup of look-alikes that brings nothing but a file a twin lacks is
 # offered Skip, which gives it the file: Cancel was the default, and deleted
-# it (the lows wave's round 1).
+# it.
 app.notes = [NO.normalize_note({'id': 1, 'title': 'Groceries', 'body': 'milk'})]
 app.save_notes()
 _ic_offered = []
@@ -4018,8 +4018,7 @@ app.show_info = _ic_real_info
 _ic_only = [a.get('stored_as') for a in app.find_note(1).get('attachments') or []]
 check(f"a backup of look-alikes bringing only a file a twin lacks offers Skip, which gives it "
       f"({_ic_offered}, {_ic_only})", 'qa3_ic_dup.txt' in _ic_only)
-# ...and says so: "Added 0 note(s)" and nothing more read as nothing done
-# (the lows wave's round 2).
+# ...and says so: "Added 0 note(s)" and nothing more read as nothing done.
 check(f"...and the import says where the file went ({_ic_said[-1:]})",
       any('1 attached file(s) went to the notes the skipped ones look like' in s for s in _ic_said))
 for _ic_name in _ic_names:
@@ -4029,7 +4028,7 @@ for _ic_name in _ic_names:
     if os.path.exists(_ic_path(_ic_name)):
         os.remove(_ic_path(_ic_name))
 # A backup's Update agreed to, its other notes all look-alikes: skipped, the
-# Update still happens -- Cancel was the only no, and dropped it (round 9).
+# Update still happens -- Cancel was the only no, and dropped it.
 app.notes = [NO.normalize_note({'id': 1, 'uid': 'bk-known', 'title': 'Synced', 'body': 'first words'}),
              NO.normalize_note({'id': 2, 'title': 'Look alike', 'body': 'same words'})]
 app.save_notes()
@@ -4050,7 +4049,7 @@ check(f"a backup's Update agreed to, then look-alikes skipped: the Update still 
       and sum(1 for n in app.notes if n.get('title') == 'Look alike') == 1)
 # A backup of look-alikes alone that brings a template: Skip them goes on with
 # the template -- with only Cancel and Import anyway, the default Cancel dropped
-# it (wave 2, round 10).
+# it.
 _bk_asked = []
 _ic_import([{'title': 'Look alike', 'body': 'same words'}], [], _bk_answer,
            templates=[{'name': 'Weekly review', 'title': 'Review', 'body': 'wins'}])
@@ -4191,8 +4190,8 @@ app.notes = []; app.save_notes()
 
 # The failed save's message sends the person to Settings → Backup → Export,
 # and that backup was packed from the file on disk: "Export complete",
-# without the very changes it was made to rescue (2026-10-28, the final
-# audit). It packs what the app holds now.
+# without the very changes it was made to rescue. It packs what the app
+# holds now.
 _xf_note = NO.normalize_note({'id': 1, 'title': 'Chapter', 'body': 'Chapter one draft.'})
 app.notes = [_xf_note]; app.save_notes()
 app.open_note_in_tab(_xf_note); app.update()
@@ -4220,7 +4219,7 @@ try:
           _xf_failed and 'Export complete' in _xf_said
           and any('Three hours of work' in (n.get('body') or '') for n in _xf_packed))
     # A start that could not read the notes file holds none: the export said
-    # "Export complete" over an empty notebook (round three). It refuses.
+    # "Export complete" over an empty notebook. It refuses.
     _xf_said.clear()
     _xf_asked = []
     fd.asksaveasfilename = lambda **k: (_xf_asked.append(1), _xf_zip)[1]
@@ -4269,7 +4268,7 @@ app.notes = []; app.save_notes()
 # not brought in from an older notebook) saves nothing. Every way out it gave
 # was closed: a dialog at every pause with advice that cannot work there, an
 # import that said "Import complete" with its notes in no file, a dialog
-# inside a Windows sign-out (round 4).
+# inside a Windows sign-out.
 _hr_said, _hr_status = [], []
 _hr_real = (app.show_error, app.show_warning, app.set_status)
 app.show_error = lambda *a, **k: _hr_said.append(a[0] if a else '')
@@ -4316,7 +4315,7 @@ app.notes = []; app.save_notes()
 
 # A restore on a held run took the entry out of the Trash in memory, its notes
 # save refused: the next Delete or Empty trash wrote that Trash over the file,
-# and the note was in neither file (round 6). Refused before anything moves;
+# and the note was in neither file. Refused before anything moves;
 # a notes write that fails on an ordinary run puts the lists back as well; and
 # no attached file is deleted on a held run, one its unread notes may use.
 _rt_file = os.path.join(NO.ATTACHMENTS_DIR, '20261029120000000000_recipe.png')
@@ -4379,7 +4378,7 @@ app.trash = []; NO.save_trash(app.trash)
 app.notes = []; app.save_notes()
 
 # One attached file another program holds with no sharing failed the whole
-# backup (round 4): it is left out of it, and named.
+# backup: it is left out of it, and named.
 _la_file = os.path.join(NO.ATTACHMENTS_DIR, '20261028120000000000_scan.png')
 os.makedirs(NO.ATTACHMENTS_DIR, exist_ok=True)
 with open(_la_file, 'wb') as _f:
@@ -4424,7 +4423,7 @@ app.notes = []; app.save_notes()
 
 # A templates file the start could not read leaves the app holding only the
 # session's: one template saved made "Export complete" of a backup without
-# the file's own (round 5). Read at the export, or named as left out.
+# the file's own. Read at the export, or named as left out.
 _ht_zip = os.path.join(tempfile.gettempdir(), 'qa3_export_held_templates.zip')
 _ht_said, _ht_got = [], []
 _ht_real = (app.show_info, fd.asksaveasfilename, app.templates)
@@ -4434,7 +4433,7 @@ try:
     app.notes = [NO.normalize_note({'id': 1, 'title': 'Kept', 'body': 'words'})]
     app.save_notes()
     # The third: a name the session made again, unable to see the file's --
-    # the file's won, and the newest was in no backup (round 7). Both go, the
+    # the file's won, and the newest was in no backup. Both go, the
     # session's first, as an import keeps the first of a name.
     for _ht_file, _ht_mine in (
             ('[{"name": "Weekly", "body": "a"}, {"name": "Trip", "body": "b"}]', 'Made today'),
@@ -4489,7 +4488,7 @@ app.notes = []; app.save_notes()
 
 # The blank editor a delete leaves -- no note, no tab -- still takes typing,
 # and a way out within the autosave's half second (Ctrl+N, another note, the
-# close, a sign-out) cancelled that autosave and saved nothing (round 4).
+# close, a sign-out) cancelled that autosave and saved nothing.
 _be_real = (app.ask_yes_no, app._themed_dialog)
 app.ask_yes_no = lambda *a, **k: True
 app._themed_dialog = lambda *a, **k: True
@@ -4523,7 +4522,7 @@ check(f'typing in the blank editor a delete leaves is saved by any way out '
 app.new_note(); app.update()
 app.notes = []; app.save_notes()
 # ...an item typed in its checklist's Add box too: the blank editor's question
-# left that box out, and Ctrl+N cleared it (round 5).
+# left that box out, and Ctrl+N cleared it.
 app._themed_dialog = lambda *a, **k: True
 try:
     _be_doomed = NO.normalize_note({'id': 4251, 'title': 'Gone', 'body': 'old'})
@@ -4545,7 +4544,7 @@ app.notes = []; app.save_notes()
 
 # A checklist of 1,000 items took a 1,001st by Add, by the box taken on
 # leaving, and by a delete's Undo after an Add into its room: drawn and
-# saved, then cut without a word at the next start (round 6). Each door
+# saved, then cut without a word at the next start. Each door
 # refuses it and says so; the Add leaves the words in the box.
 _cf_said = []
 _cf_real = app.show_info
@@ -4580,7 +4579,7 @@ app.new_note(); app.update()
 app.notes = []; app.save_notes()
 
 # The Add box taken by a save that stays on the note (Export, a day moved)
-# rebuilt every row, 2.2 s at 1,000 (round 6): one row is added, as Add does.
+# rebuilt every row, 2.2 s at 1,000: one row is added, as Add does.
 _pr_note = NO.normalize_note({'id': 4256, 'title': 'Rows', 'body': 'b', 'checklist': [
     {'text': 'row %d' % i, 'done': False} for i in range(30)]})
 app.notes = [_pr_note]; app.save_notes()
@@ -4600,7 +4599,7 @@ app.notes = []; app.save_notes()
 
 # Use template dropped an item typed in the Add box: in a new note nothing
 # asked (the question's test left the box out), and over a saved note Yes
-# lost what the autosave had not yet written (round 6). A new note's box is
+# lost what the autosave had not yet written. A new note's box is
 # asked about; a saved note is left, saved first, and not asked about.
 _ut_asked = []
 _ut_real = app.ask_yes_no
@@ -4637,7 +4636,7 @@ app.new_note(); app.update()
 app.notes = []; app.save_notes()
 
 # Comments wiped kept no rescue copy: the save's measure read the title and
-# body only, though the copy holds the comments (round 6).
+# body only, though the copy holds the comments.
 _cw_old = ' '.join('Remember the vet said %d grams a day' % i for i in range(24))
 _cw_note = NO.normalize_note({'id': 4255, 'title': 'Dog', 'body': 'Walk twice a day.',
                               'comments': _cw_old})
@@ -4653,8 +4652,8 @@ check(f'comments wiped keep a rescue copy of them ({len(_cw_prev.get("comments",
 app.notes = []; app.save_notes()
 
 # ...but a comment of two letters cleared after a big delete replaced that
-# delete's copy with the note as it stood: the deleted body was in no file
-# (round 7). The waiting copy keeps its words and takes the comments.
+# delete's copy with the note as it stood: the deleted body was in no file.
+# The waiting copy keeps its words and takes the comments.
 _cb_body = ' '.join('Pack item %d for the mountain trip' % i for i in range(20))
 _cb_note = NO.normalize_note({'id': 4257, 'title': 'Trip', 'body': _cb_body, 'comments': 'ok'})
 app.notes = [_cb_note]; app.save_notes()
@@ -4673,7 +4672,7 @@ app.notes = []; app.save_notes()
 
 # ...and the comments half of the same loss: a long comment deleted, kept in
 # the copy, then two letters typed, saved and cleared wrote over it -- the
-# long comment in no file (round 8). The copy keeps whichever comments lose
+# long comment in no file. The copy keeps whichever comments lose
 # more; a long comment cleared over a short one takes its place.
 _cc_long = ' '.join('Ask the vet about %d grams of the new food' % i for i in range(9))
 
@@ -4704,7 +4703,7 @@ check(f'...and a long comment cleared over a short one takes its place '
       f'({(_cc_long_after_short or "")[:12]!r})', _cc_long_after_short == _cc_long)
 
 # A full checklist's Add box taken on leaving said "Delete an item to make
-# room", and the words went with the box (round 7): they wait for the note,
+# room", and the words went with the box: they wait for the note,
 # back in its box when it opens again, and the window's close asks first.
 _cw_said, _cw_asked, _cw_closed = [], [], []
 _cw_real = (app.show_info, app.ask_yes_no, app.destroy)
@@ -4723,8 +4722,8 @@ try:
     app.open_note_in_tab(_cw_full); app.update()
     _cw_back = app.checklist_add_var.get()
     # ...said once for those words, not at every way out of the note: back
-    # in its box at each opening, they raised "Checklist full" each time
-    # (round 8). Other words are said again.
+    # in its box at each opening, they raised "Checklist full" each time.
+    # Other words are said again.
     for _cw_i in range(3):
         app.open_note_in_tab(_cw_other); app.update()
         app.open_note_in_tab(_cw_full); app.update()
@@ -4749,7 +4748,7 @@ app.new_note(); app.update()
 app.notes = []; app.save_notes()
 
 # ...but not about words of a note in the Trash: the close asked to lose
-# words of a note the person had deleted (round 8).
+# words of a note the person had deleted.
 _ct_asked, _ct_closed = [], []
 _ct_real = (app.show_info, app.ask_yes_no, app.destroy)
 app.show_info = lambda *a, **k: None
@@ -4795,8 +4794,7 @@ def _cs_lists(full_id):
 
 # ...and "once" is once for those words: added -- by Add, or by a way out of
 # the note once there was room -- they are no longer the words that were
-# said, and the same words typed into the list full again waited in silence
-# (round 9).
+# said, and the same words typed into the list full again waited in silence.
 _ca_said, _ca_seen = [], {}
 _ca_real = app.show_info
 app.show_info = lambda *a, **k: _ca_said.append(a[1] if len(a) > 1 else '')
@@ -4832,7 +4830,7 @@ app.notes = []; app.save_notes()
 # ...and they are remembered as said only once they are: words a Windows
 # sign-out took, the sign-out then cancelled, were never said at all. A close
 # answered No has named them in its question, and the next way out keeps
-# silent (round 9).
+# silent.
 _cs_said, _cs_asked, _cs_seen = [], [], {}
 _cs_real = (app.show_info, app.ask_yes_no, app.destroy)
 app.show_info = lambda *a, **k: _cs_said.append(a[1] if len(a) > 1 else '')
@@ -4867,7 +4865,7 @@ app.notes = []; app.save_notes()
 
 # A repeat turned off on the phone kept a day's own text only in the rescue
 # copy; here the next big delete made a copy of words alone, and the day's
-# text was in no file (round 6). A note read keeps those days in itself.
+# text was in no file. A note read keeps those days in itself.
 _pd_note = {'id': 4257, 'title': 'Gym', 'body': 'Warm up.\n' + 'Then the plan for the week. ' * 4,
             '_prev': {'title': 'Gym', 'body': 'Warm up.', 'date': '2026-11-02',
                       'recurrence': {'freq': 'weekly', 'interval': 1},
@@ -4888,7 +4886,7 @@ app.notes = []; app.save_notes()
 
 # ...and saves all the close saves (one list, _save_on_the_way_out). Its own
 # copy had drifted: a date typed short was left unsettled, so unsaved, and a
-# write that had failed was never tried again (2026-10-28, the final audit).
+# write that had failed was never tried again.
 app.new_note(); app.update()
 _se2 = NO.normalize_note({'id': 4243, 'title': 'Dentist', 'body': 'call'})
 app.notes = [_se2]; app.save_notes()
@@ -4940,7 +4938,7 @@ finally:
 app.notes = []; app.save_notes()
 
 # ...and keeps a template half written in its editor: the close asks it, the
-# session asks nothing, and the work went with the session (round three).
+# session asks nothing, and the work went with the session.
 app.templates = [NO.normalize_template({'name': 'Week plan', 'body': 'Mon'})]
 NO.save_templates(app.templates)
 app.show_settings_page(); app.update()
@@ -4968,7 +4966,7 @@ try:
           _st_names == ['Week plan', 'Week plan (2)'] and not _st_asked)
     # A sign-out can be cancelled, and the editor stays. It went on editing
     # the template it had opened, so a second sign-out added a "(3)", and its
-    # own Save and close asked about work already written (round 4).
+    # own Save and close asked about work already written.
     _st_boxes[1].insert('end', 'Monday')
     app.on_session_end(); app.update()
     _st_again = [(t.get('name'), t.get('title')) for t in NO.load_templates()]
@@ -4985,7 +4983,7 @@ finally:
 app.templates = []; NO.save_templates(app.templates)
 
 # ...but at 1,000 templates it wrote a 1,001st, which the next start cut,
-# unsaid (round 7): refused at the sign-out, and the next start says so.
+# unsaid: refused at the sign-out, and the next start says so.
 app.templates = [NO.normalize_template({'name': 'T%d' % i, 'body': 'x'})
                  for i in range(1000)]
 NO.save_templates(app.templates)
@@ -5022,7 +5020,7 @@ app.templates = []; NO.save_templates(app.templates)
 
 # ...and with the sign-out cancelled, room made and the editor's own Save
 # pressed, that word stayed: the next start said a template on disk was not
-# kept (round 8).
+# kept.
 app.templates = [NO.normalize_template({'name': 'T%d' % i, 'body': 'x'})
                  for i in range(1000)]
 NO.save_templates(app.templates)
@@ -5084,7 +5082,7 @@ _tw_settings.pop('trash_retention_days', None)
 NO.save_settings(_tw_settings)
 # ...and never a shorter one: this notebook's own Trash was deleted under
 # the default's promise, and a backup from a 7-day notebook emptied it at
-# the next start, files and all (2026-10-28, the final audit).
+# the next start, files and all.
 app.notes = []; app.save_notes()
 app.trash = [dict(NO.normalize_note({'id': 3, 'title': 'Mine, 10 days ago'}),
                   deleted_at=time.strftime('%Y-%m-%d %H:%M:%S',
@@ -5102,8 +5100,7 @@ app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
 # A Trash entry is kept as the file held it, and four readers still read its
 # fields raw: a title of 7 kept Recently deleted from opening, comments or
 # files of the wrong type broke a row's hover and left its window behind, and
-# a files field of 7 stopped a backup's merge after its files were copied
-# (2026-10-28, the final audit).
+# a files field of 7 stopped a backup's merge after its files were copied.
 app.trash = [
     {'id': 11, 'deleted_at': '2026-10-20 10:00:00', 'title': 5},
     {'id': 12, 'deleted_at': '2026-10-20 10:00:00', 'title': ['a'], 'comments': 9},
@@ -5280,7 +5277,7 @@ if _kz_back is not None:
     app._delete_note(_kz_back, None)
     _kt_settle(2)
 # A delete leaves the keyboard in the new note's title, which has no undo of
-# its own: Ctrl+Z there did nothing at all (wave 2).
+# its own: Ctrl+Z there did nothing at all.
 if _kt_take(app.title_entry):
     app.title_entry.event_generate('<Control-z>')
     _kt_settle()
@@ -5291,7 +5288,7 @@ if _kz_back is not None:
     app._delete_note(_kz_back, None)
     _kt_settle(2)
 # ...but not in a title typed in since: the next note's typo "undone" brought
-# the deleted note back over it (wave 2, round 2).
+# the deleted note back over it.
 app.title_entry.insert(0, 'Shopping lisr')
 if _kt_take(app.title_entry):
     app.title_entry.event_generate('<Control-z>')
@@ -5323,7 +5320,7 @@ check('...but in a text box with typing of its own Ctrl+Z is the box\'s, and the
 app.body_text.delete('1.0', 'end')
 # ...and in the note's text holding only a redo step -- a typo taken back a
 # moment before -- it takes the offer: read as this press's, the press did
-# nothing at all (the lows wave's round 1).
+# nothing at all.
 app.body_text.edit_reset()
 app.body_text.insert('end', 'oops'); app.body_text.edit_separator()
 app.body_text.edit_undo()
@@ -5341,7 +5338,7 @@ app.body_text.delete('1.0', 'end')
 # A text box with an undo of its own and no Ctrl+Z binding (Tk's own <<Undo>>
 # takes it back): the offer stays, or one press undid twice. One step only:
 # with two, the box could still undo after the press, and the check passed
-# whatever the order (wave 2, round 2: a table cell's last typing).
+# whatever the order (a table cell's last typing).
 _kz_own = tk.Text(app, undo=True, height=1, width=10)
 _kz_own.place(x=0, y=0)
 _kz_own.insert('end', 'one'); _kz_own.edit_separator()
@@ -5353,7 +5350,7 @@ check(f'...and in any box with an undo of its own, the box\'s too, its last step
       _kz_own.get("1.0", "end-1c") == '' and 'KeyUndoMe' in _trash_titles() and app._toast_action is not None)
 # ...but such a box holding only a redo step -- its last typing taken back a
 # moment before -- takes the offer: read off the redo step left, the press
-# did nothing at all (the lows wave's round 2; a table cell).
+# did nothing at all (a table cell).
 _kz_own.edit_reset()
 _kz_own.insert('end', 'x'); _kz_own.edit_separator()
 _kz_own.edit_undo()
@@ -5367,14 +5364,14 @@ if _kz_back is not None:
     app._delete_note(_kz_back, None)
     _kt_settle(2)
 # ...but Ctrl+Shift+Z there, the guide's Redo, never takes it: bound for Caps
-# Lock, <Control-Z> took it too (the lows wave's round 3).
+# Lock, <Control-Z> took it too.
 _kz_own.edit_reset()
 _kz_own.insert('end', 'y'); _kz_own.edit_separator()
 _kz_own.edit_undo()
 if _kt_take(_kz_own):
     _kz_own.event_generate('<Control-Shift-Z>')
     _kt_settle()
-# ...and on the list, which no text box's own Redo answers first (round 4).
+# ...and on the list, which no text box's own Redo answers first.
 if _kt_take(app.canvas):
     app.canvas.event_generate('<Control-Shift-Z>')
     _kt_settle()
@@ -5400,7 +5397,7 @@ check(f'while the keyboard is on Undo the toast waits for it ({_kz_waited}), '
 app._hide_toast()
 # What Tk's own Undo took is that press's only: a Caps Lock Ctrl+Z in the
 # comments with no offer up left its word for the next press there, which then
-# did nothing while the banner offered Undo (the lows wave's round 3).
+# did nothing while the banner offered Undo.
 app.comments_text.insert('end', 'TODO'); app.comments_text.edit_separator()
 app.comments_text.event_generate('<<Undo>>')
 _kt_settle()
@@ -5414,7 +5411,7 @@ if _kt_take(app.comments_text):
 check("...and a Caps Lock Ctrl+Z with no offer up leaves no word for the next press",
       _kz_back is not None and 'KeyUndoMe' in _titles() and 'KeyUndoMe' not in _trash_titles())
 app._hide_toast()
-# Round 2 of the final audit: a plain banner in its place hid the Undo the
+# A plain banner in its place hid the Undo the
 # keyboard was on, and nothing moved the keyboard -- left on a word no
 # longer on screen, where Tab started again from the window's top.
 app.notebook.select(app.TAB_NOTES)
@@ -5447,7 +5444,7 @@ app._hide_toast()
 app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
 app.refresh_note_list()
 _kt_settle()
-# Round 3: with the list put away by the sidebar's arrow, the list was still
+# With the list put away by the sidebar's arrow, the list was still
 # the landing -- a hidden window, for which Tk only notes a request -- so the
 # keyboard stayed on the hidden Undo. Asked where it IS, not where it was sent.
 app.toggle_sidebar()

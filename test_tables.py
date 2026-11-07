@@ -251,7 +251,7 @@ _orphans, _orphan_covered = tables.merge_map([["<", "a"], ["^", "b"]])
 check("an orphan marker stays ordinary content",
       _orphans == {} and _orphan_covered == set())
 # ...and so does a "^" under a row too short to have its column: reading that
-# cell raised, and Export note and Ctrl+C with it (round 5 of the final audit).
+# cell raised, and Export note and Ctrl+C with it.
 try:
     _ragged = tables.merge_map([["a", "b"], ["^", "^", "^"]])
     _ragged_html = note_to_html("| a | b |\n| ^ | ^ | ^ |")

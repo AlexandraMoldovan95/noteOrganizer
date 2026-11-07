@@ -140,7 +140,7 @@ different questions, and a check that wants the second asserts it itself
     asked of the app's own resolver (core.paths) as ``initialise()`` asks
     it. The guards looked for a notebook in their own folder while the
     app opened the one notebook_location.txt names: in a checkout, the
-    owner's (final audit, round ten).
+    owner's.
 
 ``waiting_timers(app, name)``
     The Tcl timers waiting to run a callback called *name*, asked of Tcl
@@ -200,13 +200,13 @@ def as_a_guest():
     runner does (tools/guest.py): a suite that a settled run started shares
     its turn, homes and memory ceiling, and one started any other way --
     by hand, or by CI -- takes its own. The suites were let off that rule
-    because "a runner starts them", and nothing made it so (final audit,
-    round nine). guest.py is found beside this file, as every scratch copy
+    because "a runner starts them", and nothing made it so. guest.py is
+    found beside this file, as every scratch copy
     has it, or in the repository's tools/; without it, the script refuses.
 
     Settled, it refuses beside an app whose notebook_location.txt names a
     folder: that app opens someone's own notebook, and a copy made to test
-    in never carries the file (round ten)."""
+    in never carries the file."""
     if _SETTLED:
         return _SETTLED[0]
     here = os.path.dirname(os.path.abspath(__file__))
@@ -357,7 +357,7 @@ def hermetic_seed(app_dir=None):
     * unless the folder the app will open is this one, asked of the app's
       own resolver (``where_the_app_opens``). The guard looked for a
       notebook here while the app opened the folder notebook_location.txt
-      names -- in the owner's checkout, her own (final audit, round ten).
+      names -- in the owner's checkout, her own.
 
     Declared a scratch run, it settles as a guest (``as_a_guest``) before
     it writes anything. *app_dir*: see ``seed_here``.

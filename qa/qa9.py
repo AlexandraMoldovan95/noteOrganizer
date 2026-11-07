@@ -2535,7 +2535,7 @@ else:
     skip('ctrl+s in the template editor: the keyboard never reached it')
     print('      (Ctrl+S in the template editor unverified in this run: no focus)')
 # The editor's own ✕ asks as Escape does: it closed a half-written template
-# without a word (wave 2, round 7).
+# without a word.
 app._dismiss_mini_popup(); app.update()
 app._edit_template(app.templates[0], redraw=lambda: None); app.update()
 _cs_pop = app._mini_popup
@@ -2555,7 +2555,7 @@ check("the template editor's ✕ asks before a half-written template goes, and "
       and 'fourth line' in _cs_body.get('1.0', 'end'))
 # A change made from outside -- a backup's Update -- reloads the open note
 # without asking the template editor: its Cancel kept the stale editor, which
-# saved over the change (wave 2, round 12). The editor stays open.
+# saved over the change. The editor stays open.
 app._dismiss_mini_popup(); app.update()
 app.hide_settings_page(); app.update()
 app.notes = [NO.normalize_note({'id': 1, 'title': 'Outside', 'body': 'before'})]
@@ -2579,8 +2579,7 @@ check("a change made from outside reloads the open note without asking the "
       not _xo_asked and _xo_shown == 'after' and app._mini_popup is _xo_pop)
 app._dismiss_mini_popup(); app.update()
 # ...but a popup with nothing to lose closes: an emoji picker or a palette aimed
-# at the old text stayed open over the reload and wrote into the new (wave 2,
-# round 13).
+# at the old text stayed open over the reload and wrote into the new.
 app.hide_settings_page(); app.update()
 app._show_emoji_picker(app.body_text); app.update()
 _xo_picker = app._mini_popup
@@ -2591,7 +2590,7 @@ check("a change made from outside closes a popup with nothing to lose (%r)" % _x
       and app.body_text.get('1.0', 'end-1c') == 'later')
 app._dismiss_mini_popup(); app.update()
 # The template editor's boxes have no Undo: Tk's own Ctrl+K deleted the rest of
-# the line there for good, Ctrl+O and Ctrl+T split and swapped (wave 2, round 6).
+# the line there for good, Ctrl+O and Ctrl+T split and swapped.
 app.show_settings_page(); app.update()
 app.toggle_settings_panel('templates'); app.update()
 app._edit_template(app.templates[0], redraw=lambda: None); app.update()
@@ -3558,7 +3557,7 @@ app.refresh_note_list()
 _kd_settle()
 
 # ---- KEYBOARD: a popup opened from the keyboard lands where one types ----
-# Round 2 of the final audit: the template editor and the month jump put the
+# The template editor and the month jump put the
 # keyboard on the ✕ of their header, the first control built. A space typed
 # into a new template's name closed the editor, and the year typed into the
 # jump went nowhere (its own request for the year box is held by Tk until the

@@ -17,7 +17,7 @@ in the first place.
 
     py tools/verify_findings.py
 
-Two groups, because the register has two rounds. The T rows come from the
+Two groups, because the register was filled twice. The T rows come from the
 product review (2026-09-10); the C rows from the consistency survey
 (2026-09-25), which the earlier version of this file did not cover at all
 -- twenty-five rows closed with nothing mechanical watching them, which is
@@ -145,7 +145,7 @@ TIER_CHECKS = [
      "the build ships the User Guide"),
 ]
 
-# Round 2, the consistency survey. Each asks for the MECHANISM the row's
+# The consistency survey. Each asks for the MECHANISM the row's
 # status cell names, so reverting the fix turns the row back to "still
 # open" -- not for a word in the changelog, which would go on saying DONE
 # forever once written.

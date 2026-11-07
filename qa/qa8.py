@@ -192,7 +192,7 @@ check(f"across midnight the new day's reminder replaces the old one ({_md_said})
       app8b._reminder_bar_day == _md_today and any('1 note for today' in t for t in _md_said))
 # ...with Settings open too. Settings unpacks the notebook, Tk refused to put
 # the bar before it, the error left the day used up unseen, and the watch
-# never looked again (2026-10-28, the final audit).
+# never looked again.
 app8b.dismiss_reminder()
 _md_settings = NO.load_settings()
 _md_settings.pop('reminder_last_shown', None)
@@ -503,7 +503,7 @@ check('the same spot logs only once per session (bounded growth)',
 if getattr(app13, '_autosave_job', None):
     app13.after_cancel(app13._autosave_job)
     app13._autosave_job = None
-# The audit's WORST silent spot: a save failing at flush time
+# The WORST silent spot an audit found: a save failing at flush time
 # (note-switch/close) — that trace must exist too.
 app13.new_note()
 app13.body_text.insert('1.0', 'something to save')
@@ -541,8 +541,8 @@ check('...while a message that does not yield still replaces it',
 # and the find bar's hits, the spelling's underlines and the note's own
 # spans all add toggles. A save read each line about seventeen times, and
 # one index per styled piece's end: with the find bar open on a long
-# paragraph every pause froze the window for seconds (final audit, round
-# 10). The square is Tk's own, inside each read, so the work is COUNTED
+# paragraph every pause froze the window for seconds. The square is Tk's
+# own, inside each read, so the work is COUNTED
 # here -- the reads and what they returned -- each shape against its half.
 import random as _rd_random
 from noteorganizer.core import spelling as _rd_spelling
@@ -619,8 +619,9 @@ def _rd_saved(fn):
 
 
 def _rd_find_open_save(words):
-    """Round nine's row 9: one paragraph of "word " repeated, every other
-    word bold, the find bar open on "word", and one pause's save."""
+    """The find bar over styled words: one paragraph of "word " repeated,
+    every other word bold, the find bar open on "word", and one pause's
+    save."""
     _rd_open('word ' * words, _rd_bold_words([0], words // 2))
     app14._open_find()
     app14._find_case.set(False)
@@ -772,7 +773,7 @@ check(f'...and the word count is right after the pause, and the moment the bar c
 
 # Letters typed onto a bold word wear its bold up to a space typed with them,
 # the space found among the letters typed: Tk's search for it read the whole
-# line, 0.29 s a key with the find bar open on row 9 (round 10).
+# line, 0.29 s a key with the find bar open on row 9.
 _rd_open('word ' * 2000, _rd_bold_words([0], 500))
 app14._open_find()
 app14._find_case.set(False)

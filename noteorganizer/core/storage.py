@@ -109,8 +109,7 @@ def load_settings():
     A read the system refuses (another program holding the file) is not
     damage: the run's first read is tried as the notes are, and a file never
     read is not written that run; later the last good read stands in, or one
-    try. Retried at every read, a hold kept the start 19 s (fourth and fifth
-    rounds of the final audit, 2026-10-28)."""
+    try. Retried at every read, a hold kept the start 19 s."""
     global _settings_read, _settings_tried
     known = _settings_read[1] if _settings_read[0] == paths.SETTINGS_FILE else None
     first = _settings_tried != paths.SETTINGS_FILE

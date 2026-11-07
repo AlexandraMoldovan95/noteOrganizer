@@ -312,8 +312,8 @@ check('split_by_identity against an empty notebook calls everything new',
 # A batch holding one identity twice: the first arrival claims it. Both were
 # paired with one note, which the Update then replaced twice -- its rescue
 # copy the first arrival, the person's own words in no copy -- or, both new,
-# added two notes wearing one identity (the final audit's wave 3; the
-# phone's Importing.plan already had it).
+# added two notes wearing one identity (the phone's Importing.plan already
+# had it).
 _twice = [{"uid": _have2["uid"], "title": "first"},
           {"uid": _have2["uid"], "title": "second"}]
 _known, _fresh = split_by_identity(_mine_all, _twice)

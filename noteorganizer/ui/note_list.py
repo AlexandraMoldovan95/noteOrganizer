@@ -412,7 +412,7 @@ class NoteListMixin:
                 link = self._list_empty_link(below, "Show all notes", "list_show_all",
                                              self._show_all_notes)
                 # A day's own words (auto_expand) the list does not read: said,
-                # with the way to the History (the owner's choice, wave 2). Not
+                # with the way to the History (the owner's choice). Not
                 # a dated note Show hid, which the History lists too.
                 typed = self.search_var.get().strip()
                 if (self._search_query() and typed != self.SEARCH_PLACEHOLDER

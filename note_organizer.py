@@ -3687,8 +3687,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 entry.tag_add("cellalign", "1.0", "end")
         self._editor_retag_emoji(entry)
         # The cell's words are where it starts, not an edit: left on its
-        # Undo, Ctrl+Z took them out and leaving the cell saved it empty
-        # (the final audit's twelfth round), as _reset_text_undo keeps the body.
+        # Undo, Ctrl+Z took them out and leaving the cell saved it empty,
+        # as _reset_text_undo keeps the body.
         entry.edit_reset()
         if select:
             entry.tag_add("sel", "1.0", "end-1c")
@@ -10020,7 +10020,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """The formatting keys do nothing in a box of plain text -- the
         comments, a template's boxes, the import box. Left to Tk's own Text
         bindings they edited it: Ctrl+I typed a tab over the selected words,
-        Ctrl+D deleted the next letter (the final audit's wave 3)."""
+        Ctrl+D deleted the next letter."""
         for key, _style in self.FORMAT_KEYS:
             text_widget.bind(key, lambda _e: "break")
 
@@ -12020,7 +12020,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         # The save makes notes '(earlier text)' of what a series' copy kept
         # (_set_aside_days); its banner goes under this dialog, so the
-        # dialog says them too (the phone's twenty-third round).
+        # dialog says them too.
         before = len(self.notes)
         self.save_notes()
         earlier = len(self.notes) - before
@@ -20273,7 +20273,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Whether the save that ends *note*'s repeat, or keeps it off, keeps
         its days: when any of them holds text of its own. The rescue copy
         takes a copy of them, but it is one slot, and days only there were
-        erased by the next copy made (2026-10-28, the final audit). Kept,
+        erased by the next copy made. Kept,
         they also come back if the repeat does."""
         return self._days_hold_own_text(note)
 

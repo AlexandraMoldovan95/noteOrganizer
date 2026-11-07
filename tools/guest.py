@@ -31,7 +31,7 @@ these things:
    run from source reads %APPDATA%\\NoteOrganizer, where the built app kept
    the owner's notebook until 2026-10-27, and an app started in an empty
    folder copies that notebook in. One test did, on every Windows run of
-   the suite (final audit, round eight). USERPROFILE is left as it is: git
+   the suite. USERPROFILE is left as it is: git
    and docker read their settings there, and only the built app keeps a
    notebook under it.
 5. A floor under the disk. On Windows a heavy run does not start, and

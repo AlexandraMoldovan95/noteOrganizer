@@ -215,7 +215,7 @@ check('cleanup-duplicates: purging the trashed twin leaves the survivor file int
       and _os4.path.isfile(_os4.path.join(_paths4.ATTACHMENTS_DIR, _merged4[0])))
 # The merge stops where a note's files do, as the backup import's: past
 # NO.MAX_ATTACHMENTS the next load cut the list, and the purge took the files
-# no note named any more (the final audit's wave 3).
+# no note named any more.
 _cap_kept = dict(_kept4, id=12, attachments=[
     {'filename': f'k{i}.txt', 'stored_as': f'2026010100000000{i:04d}_k.txt'}
     for i in range(NO.MAX_ATTACHMENTS - 1)])
@@ -241,7 +241,7 @@ check(f"cleanup-duplicates: the kept copy takes files up to the {NO.MAX_ATTACHME
       len(_cap_kept['attachments']) == NO.MAX_ATTACHMENTS
       and [len(e.get('attachments') or []) for e in app.trash] == [3])
 # Duplicate gives the copy each file again under a new name: cleaning the
-# copy up gave the kept note every file twice (the final audit's wave 3).
+# copy up gave the kept note every file twice.
 _mk_att4("2026010100000002_a_photo.jpg", "PHOTO")
 _mk_att4("2026010100000002_b_photo.jpg", "PHOTO")
 _mk_att4("2026010100000002_c_other.txt", "OTHER")
@@ -333,7 +333,7 @@ check('and its ring is tracked, not frozen at build',
 _probe_btn.destroy(); _probe_dd.destroy(); _probe_txt.destroy(); app.update()
 
 # ---- THEME: the keyboard's ring keeps its colours across a switch ----
-# Round 2 of the final audit: the reminder bar's message and ✕ are Tab stops
+# The reminder bar's message and ✕ are Tab stops
 # ringed in the bar's own words' colour, remembered when the bar is drawn. A
 # switch kept the old accent round them, and dark_slate's near-black ring on
 # light's violet read at 3:1 where light's own white reads at 5.7:1.
@@ -381,7 +381,7 @@ app.set_theme(_rb_theme); app.update()
 if _rb_settings:
     app.show_settings_page(); app.update()
 
-# ---- THEME sweep round 2: caret, checkbox wells, press colours ----
+# ---- THEME sweep, widened: caret, checkbox wells, press colours ----
 # The adversarial review widened the class: every long-lived text field's
 # caret (insertbackground) was frozen at build — invisible after a
 # dark<->light switch, the main editor included; the recurrence radios'
@@ -2708,8 +2708,7 @@ if _bl_work_colour is None:
     NO.CATEGORY_COLORS.pop('Work', None)
 
 # The open note's own card, pressed or Enter on it, leaves the note as it is:
-# loaded again, it jumped to its top and Ctrl+Z lost all it held (wave 2,
-# round 8).
+# loaded again, it jumped to its top and Ctrl+Z lost all it held.
 _co_fresh(_bl_notes)
 _oc_id = (app._card_order() or [None])[0]
 app.open_note_in_tab(app.find_note(_oc_id)); _ls_settle()
@@ -2731,7 +2730,7 @@ check(f"the open note's own card, Enter or a press on it, leaves its Undo in pla
       _oc_typed and _oc_enter and _oc_can_undo())
 # ...and so do the Calendar's Open in editor and the menu's Open / Edit, for a
 # one-off note on its own date: they asked of the date, not of the note the
-# editor opens for it, and loaded it again (round 9).
+# editor opens for it, and loaded it again.
 _oc_note = app.find_note(_oc_id)
 _oc_note['date'] = '2026-11-05'
 app.save_notes()

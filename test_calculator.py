@@ -131,7 +131,7 @@ def _deep(expression):
         return "raised"
 
 
-# Typed on a keyboard, a sum said Error (wave 2): - * x / : are the buttons'
+# Typed on a keyboard, a sum said Error: - * x / : are the buttons'
 # − × ÷, and a comma between digits is the decimal point, as Romanian writes.
 check('a keyboard\'s - * x / : are the buttons\' signs',
       (ev('5-3'), ev('5*3'), ev('5x3'), ev('5/2'), ev('5:2')) == (2.0, 15.0, 15.0, 2.5, 2.5))

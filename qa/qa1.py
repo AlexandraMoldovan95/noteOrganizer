@@ -142,7 +142,7 @@ note2['created'] = '2020-01-01 09:00:00'
 app.duplicate_note(note2)
 app.update()
 check('duplicate adds a note', len(app.notes)==before_count+1)
-# Made now: it kept the original's "Created" (wave 2, round 3).
+# Made now: it kept the original's "Created".
 check(f"...made now, not on the original's day ({app.notes[-1].get('created')!r})",
       app.notes[-1].get('created') != '2020-01-01 09:00:00' and app.notes[-1].get('title', '').endswith('(copy)'))
 
@@ -187,7 +187,7 @@ check('a template fills a new note',
       app.title_entry.get() == 'Templated Title'
       and app.body_text.get('1.0', 'end-1c') == 'Templated body')
 # Started from a calendar day, the note keeps the day and its way back to the
-# calendar (wave 2, round 3: the template threw both away).
+# calendar (the template threw both away).
 app._add_note_for_date('2026-11-06')
 app.update()
 app._apply_template(tpl)
@@ -217,7 +217,7 @@ check('a template asks before replacing an editor it cannot read, and No keeps i
       _tq_asked == ['Replace current note?']
       and app.body_text.get('1.0', 'end-1c') == 'typed and not saved')
 # The flush of the blank editor, not knowing either, tries the save: it said
-# "nothing here", and the note opened next replaced the typing (wave 3).
+# "nothing here", and the note opened next replaced the typing.
 app.new_note()
 app.body_text.insert('1.0', 'typed before a click away')
 _fq_before, _fq_tabs = len(app.notes), app.open_tabs
@@ -248,7 +248,7 @@ except Exception as e:
     check(f'search survives None-field note ({e})', False)
 
 # Diacritics and case fold away in every search, and the checklist's rows are
-# searched too (wave 2, the owner's choice): "creme brulee" missed "Crème
+# searched too (the owner's choice): "creme brulee" missed "Crème
 # brûlée", an s with a comma below (U+0219, as Romanian writes it) missed the
 # s with a cedilla older keyboards type (U+015F), and a shopping list could
 # not be found by what was on it. Escaped, the letters this repository's
@@ -283,7 +283,7 @@ app.notes = _fd_notes
 
 # A new note saved where the list does not look -- Show picked once and
 # forgotten -- vanished as it was written; the app says so, and Show all
-# brings it back (wave 2, the owner's choice).
+# brings it back (the owner's choice).
 _fh_toasts = []
 _fh_real_toast = app._show_toast
 app._show_toast = lambda text, *a, **k: (_fh_toasts.append((text, k.get('action_text'), k.get('action'))),
@@ -329,7 +329,7 @@ try:
           f'({_fh_rec and app._row_on_screen(_fh_rec)})',
           _fh_rec is not None and app._row_on_screen(_fh_rec) == 'all')
     # Notes brought in by a code land where the list does not look too: said
-    # the same way (wave 2, round 2 -- "Added 2 notes" over an unchanged list).
+    # the same way ("Added 2 notes" over an unchanged list).
     app.filter_var.set('Work'); app.refresh_note_list(); app.update()
     app.toggle_import_panel(); app.update()
     app.import_box.delete('1.0', 'end')
@@ -342,7 +342,7 @@ try:
     check(f'notes a code brings in where Show does not look are said, with Show all ({_fh_last[:2]})',
           _fh_last[0] == 'Added 2 notes, 2 of them hidden by Show: Work' and _fh_last[1] == 'Show all')
     # Its Show all pressed over Settings leaves Settings first: it changed a list
-    # nobody could see (wave 2, round 12).
+    # nobody could see.
     app.show_settings_page(); app.update()
     if callable(_fh_last[2]):
         _fh_last[2](); app.update()
@@ -350,7 +350,7 @@ try:
           f'({app._settings_open}, {app.filter_var.get()!r})',
           callable(_fh_last[2]) and not app._settings_open and app.filter_var.get() == 'All')
     # ...and from the Calendar, with the list put away, it brings the list into
-    # sight first: it changed a list nobody could see (the lows wave's round 4).
+    # sight first: it changed a list nobody could see.
     app.filter_var.set('Work'); app.refresh_note_list(); app.update()
     app.notebook.select(app.TAB_CALENDAR); app.update()
     if not app._sidebar_hidden:
@@ -362,7 +362,7 @@ try:
           _fh_where == (app.TAB_NOTES, False, 'All'))
     # ...but over Settings with the template editor kept -- Cancel at "Save
     # changes?" -- nothing moves: the tab change destroyed the editor, with
-    # what was typed in it (the lows wave's round 5).
+    # what was typed in it.
     app.filter_var.set('Work'); app.refresh_note_list(); app.update()
     app.notebook.select(app.TAB_CALENDAR); app.update()
     app.show_settings_page(); app.update()
@@ -384,7 +384,7 @@ try:
         _fh_boxes[0].delete(0, 'end')
         _fh_boxes[0].insert(0, 'Packing')
         # Clicked on the banner: one question for one press -- the window's
-        # click-outside asked again, and its No threw the work away (round 6).
+        # click-outside asked again, and its No threw the work away.
         app._show_toast('Added 1 note, hidden by Show: Work', kind='info',
                         action=lambda: app._show_all_notes(), action_text='Show all')
         app.toast_action_lbl.event_generate('<Button-1>'); app.update()
@@ -392,7 +392,7 @@ try:
                     and _fh_boxes[0].get() == 'Packing')
         _fh_where = (app._settings_open, app.notebook.index('current'), app.filter_var.get())
         # ...and the tab turned behind Settings -- a save sent back to the
-        # calendar -- leaves the editor and its words too (round 6).
+        # calendar -- leaves the editor and its words too.
         app.notebook.select(app.TAB_NOTES); app.update()
         _fh_turned = (app._mini_popup is not None and bool(app._mini_popup.winfo_exists())
                       and _fh_boxes[0].get() == 'Packing')
@@ -406,7 +406,7 @@ try:
     check(f'...and the tab turned behind Settings leaves the template editor and its words ({_fh_turned})',
           _fh_turned)
     # ...while a popup the offer never asked about closes on the click, as on
-    # every click outside it (the lows wave's round 7).
+    # every click outside it.
     app.show_settings_page(); app.update()
     app.toggle_settings_panel('templates'); app.update()
     _fh_closed = False
@@ -421,7 +421,7 @@ try:
     check(f'...while a popup the offer never asked about closes on the click ({_fh_closed})', _fh_closed)
     # A save made over Settings (Ctrl+S) of a note added from a calendar day
     # leaves the notebook where it was: it turned to the Calendar behind
-    # Settings, and "Back to Notes" showed the Calendar (round 7).
+    # Settings, and "Back to Notes" showed the Calendar.
     app.notebook.select(app.TAB_NOTES); app.update()
     app._pending_calendar_return = {'year': 2026, 'month': 10, 'date_str': '2026-10-12', 'origin': 'add'}
     app.show_settings_page(); app.update()
@@ -434,7 +434,7 @@ try:
           f'back armed ({_fh_back})', _fh_back == (app.TAB_NOTES, True))
     # Duplicate's "Yes, save first" on a note added for a day saves on the way
     # to the copy, and leaves the notebook where it is: it went back to the
-    # Calendar and the copy opened out of sight (round 8).
+    # Calendar and the copy opened out of sight.
     app.new_note(); app.update()
     app._insert_title('Day errand')
     app.save_current_note(); app.update()
@@ -456,7 +456,7 @@ try:
     check(f"Duplicate's save-first on a note added for a day leaves the notebook on Notes ({_fh_stay})",
           _fh_stay == (app.TAB_NOTES, True))
     # An Undo does not run out under a question -- an import finished over it
-    # -- and stays a while after it: its eight seconds ran out unseen (round 7).
+    # -- and stays a while after it: its eight seconds ran out unseen.
     _fh_real_asking = app._a_dialog_is_asking
 
     def _fh_fire():
@@ -486,7 +486,7 @@ try:
           f'({_fh_under}, {_fh_after_q}, {_fh_gone})', _fh_under and _fh_after_q and _fh_gone)
     # Over an Undo still offered, a new note hidden is said on the status
     # line and the Undo stays: a note typed right after a delete took the
-    # delete's way back (wave 2, round 2).
+    # delete's way back.
     if getattr(app, '_settings_open', False):
         app.hide_settings_page(); app.update()
     app.filter_var.set('Work'); app.refresh_note_list(); app.update()
@@ -497,7 +497,7 @@ try:
     _fh_beneath = str(getattr(app, '_words_lbl', None) and app._words_lbl.cget('text'))
     _fh_undo_kept = app._toast_action is not None and app.toast_action_lbl.cget('text') == 'Undo'
     # ...and once the Undo goes, its own banner with Show all: said on the
-    # status line, the next autosave wrote over it (the lows wave's round 1).
+    # status line, the next autosave wrote over it.
     app._hide_toast(); app.update()
     _fh_after = _fh_toasts[-1] if _fh_toasts else (None, None, None)
     check(f'...and over an Undo still offered, the Undo stays, the words show beneath it, and its '
@@ -506,7 +506,7 @@ try:
           and _fh_after[:2] == ('“Book the vet” saved in General, hidden by Show: Work', 'Show all'))
     # Two held back under one Undo come in turn, and after what the Undo
     # itself says: shown at once they covered it, and one slot kept only the
-    # last of two (the lows wave's round 2).
+    # last of two.
     _fh_ids = {n.get('id') for n in app.notes}
     app._show_toast('Note moved to Trash',
                     action=lambda: app._show_toast('Put back: Plan Q4', kind='info'))
@@ -526,7 +526,7 @@ try:
     app.notes = [n for n in app.notes if n.get('id') in _fh_ids]
     app._hide_toast(); app.update()
     # ...and so is the word on notes brought in where the list does not look:
-    # over 'Day removed' it took the one way back to that day's text (round 6).
+    # over 'Day removed' it took the one way back to that day's text.
     _fh_in = [NO.normalize_note({'id': 8701, 'title': 'Arrived here', 'body': '', 'category': 'General'})]
     app.notes.extend(_fh_in)
     app.refresh_note_list(); app.update()
@@ -535,7 +535,7 @@ try:
     app.update()
     _fh_undo_stays = app._toast_action is not None and 'Day removed' in str(app.toast_lbl.cget('text'))
     # ...and says what hides the note when it is shown: worded when made, it
-    # named a filter changed since (round 7).
+    # named a filter changed since.
     app.filter_var.set(app.FILTER_DATED); app.refresh_note_list(); app.update()
     app._hide_toast(); app.update()
     _fh_after = _fh_toasts[-1][0] if _fh_toasts else None
@@ -546,7 +546,7 @@ try:
     app.notes = [n for n in app.notes if n.get('id') != 8701]
     app._hide_toast(); app.update()
     # ...and reads the list once when it is shown, not once a note: a big
-    # import with Show set froze the window (round 8).
+    # import with Show set froze the window.
     _fh_many = [NO.normalize_note({'id': 8710 + i, 'title': f'Many {i}', 'body': '', 'category': 'General'})
                 for i in range(5)]
     app.notes.extend(_fh_many); app.refresh_note_list(); app.update()
@@ -562,12 +562,12 @@ try:
     check(f'...and reads the list once when it is shown, not once a note ({len(_fh_reads)} reads)',
           1 <= len(_fh_reads) <= 2)
     # ...and so are the words of an import cancelled and of a table pasted into
-    # the comments: over 'Day removed' they took its one way back (round 8).
+    # the comments: over 'Day removed' they took its one way back.
     # The clipboard read is stood in for: the machine's is the owner's.
     _fh_real_clip = app._clipboard_text
     app._clipboard_text = lambda w: ('| a | b |\n| --- | --- |\n| 1 | 2 |', False)
     _fh_kept_under = []
-    # ...and the days a series' copy set aside as notes of their own (round 9).
+    # ...and the days a series' copy set aside as notes of their own.
     _fh_real_settle = NO.settle_set_aside
 
     def _fh_set_aside(notes):
@@ -590,7 +590,7 @@ try:
     check(f'...and so are an import cancelled and a table pasted into the comments, and days set aside '
           f'({_fh_kept_under})', _fh_kept_under == [True, True, True])
     # The comments' notice outlives its own paste's "Note updated", an info
-    # banner as a paste's other words are: replaced in half a second (round 9).
+    # banner as a paste's other words are: replaced in half a second.
     app.notes.append(NO.normalize_note({'id': 8791, 'title': 'Pasted into', 'body': 'x'}))
     app.open_note_in_tab(app.find_note(8791)); app.update()
     app._clipboard_text = lambda w: ('Plan:\n| a | b |\n| --- | --- |\n| 1 | 2 |', False)
@@ -626,7 +626,7 @@ finally:
 
 # A search the list finds nothing for, while a day of a repeating note holds
 # the words: said, with the way to the Calendar's History, which reads a day's
-# own words and the list does not (wave 2, the owner's choice).
+# own words and the list does not (the owner's choice).
 _hd_notes = app.notes
 app.notes = [NO.normalize_note({
     'id': 9995, 'title': 'Team meeting', 'body': 'agenda', 'category': 'General',
@@ -639,7 +639,7 @@ if _hd_said:
     app._history_bucket = 'Last year'     # a year picked there earlier
     app._search_history_for('contract'); app.update(); app.update()
 # ...the History open, not the month grid the tab's own handler went back to,
-# and on every year (round 4).
+# and on every year.
 check(f'a search the list finds nothing for, held by a day of a series, points to the History '
       f'({_hd_said}, {app._history_query() if getattr(app, "_history_built", False) else None!r}, '
       f'{getattr(app, "_history_visible", None)}, {getattr(app, "_history_bucket", None)!r})',
@@ -650,7 +650,7 @@ if getattr(app, '_history_visible', False):
 app.notebook.select(app.TAB_NOTES)
 app.update()
 # ...but not for a dated note Show hides: no day of a repeating note holds it,
-# and the sentence said one did (round 4).
+# and the sentence said one did.
 app.notes = [NO.normalize_note({'id': 9996, 'title': 'Dentist', 'body': 'x', 'category': 'General',
                                 'date': '2026-11-12'})]
 app.filter_var.set('Work'); app.search_var.set('dentist'); app.refresh_note_list(); app.update()
@@ -700,7 +700,7 @@ for opt, expected in [
         check(f'sort "{opt}" orders notes correctly ({actual})', actual == expected)
     except Exception as e:
         check(f'sort option {opt} works ({e})', False)
-# Initials with a mark sort beside their letters, not after Z (wave 2): the
+# Initials with a mark sort beside their letters, not after Z: the
 # Romanian A with a breve, I with a circumflex, S with a comma, T with a cedilla.
 _rs_notes = app.notes
 app.notes = [dict(_rs_notes[0], id=310 + i, title=t)
@@ -935,8 +935,8 @@ check('pressing "=" evaluates a pasted/typed expression correctly',
 check('insert becomes enabled after evaluating a pasted expression',
       str(app.calculator_insert_btn.cget('state')) == 'normal')
 # Enter gives the result, and its release edits nothing: Insert stays on
-# (wave 2, round 2 -- the release greyed it out, and a digit then went on
-# the end of the result).
+# (the release greyed it out, and a digit then went on the end of the
+# result).
 find_calc_btn('C').invoke()
 app.update()
 app._calc_display_var.set('12*3')
@@ -950,7 +950,7 @@ check(f'Enter gives the result, and its release leaves Insert on '
       app._calc_display_var.get() == '36'
       and str(app.calculator_insert_btn.cget('state')) == 'normal')
 # ...and a second Enter keeps the sum: it made the result its own formula,
-# "36=36" in the history and on Insert (wave 2, round 3).
+# "36=36" in the history and on Insert.
 _ck_hist = len(app._calc_history)
 app.calculator_display.event_generate('<Return>'); app.update()
 check(f'a second Enter over its result changes nothing '
@@ -958,7 +958,7 @@ check(f'a second Enter over its result changes nothing '
       app._calc_display_var.get() == '36' and len(app._calc_history) == _ck_hist
       and app._calc_last_full_expr == '12*3')
 # ...and a number typed next starts a new sum, as a button's does: typed, it
-# went on the end of the result, and after Error onto the word (round 3).
+# went on the end of the result, and after Error onto the word.
 app.calculator_display.event_generate('<KeyPress-5>')
 app.update()
 _ck_after_result = app._calc_display_var.get()
@@ -969,7 +969,7 @@ check(f'a number typed after a result or Error starts a new sum '
       f'({_ck_after_result!r}, {app._calc_display_var.get()!r})',
       _ck_after_result == '5' and app._calc_display_var.get() == '7')
 # ...and after Error a minus does too: glued to the word, Enter said Error
-# again (wave 2, round 4).
+# again.
 app._calc_display_var.set('Error')
 app.calculator_display.event_generate('<KeyPress-minus>')
 app.update()
@@ -3701,7 +3701,7 @@ check(f'typing through the editor lands in the text ({lines_now()[0]!r})',
       == [['Name', 'Qty'], ['Milk', '2'], ['Eggs', '12']])
 
 # A cell's words are where its editor starts, not an edit: Ctrl+Z there took
-# them out, and leaving the cell saved it empty (the final audit's twelfth round).
+# them out, and leaving the cell saved it empty.
 app._open_cell_editor(app._grid_at_line(1), 1, 0)
 app.update()
 take_focus(app._cell_editor['entry'])
@@ -3715,7 +3715,7 @@ check(f"Ctrl+Z in a cell just opened leaves its words, and leaving it keeps them
       _cz_left == 'Milk' and core_tables.split_row(lines_now()[1]) == ['Milk', '2'])
 # With the banner offering Undo, a cell just clicked takes it -- but one the
 # app reopened under the person's edit (Enter) does not: taken, it brought back
-# a checklist row removed a moment before (the lows wave's round 5).
+# a checklist row removed a moment before.
 _cz_taken = []
 app._show_toast('Removed “milk”', action=lambda: _cz_taken.append('clicked'))
 app._open_cell_editor(app._grid_at_line(1), 1, 0)
@@ -3735,7 +3735,7 @@ if take_focus(app._cell_editor['entry']):
 check(f"...and with the banner offering Undo, a cell just clicked takes it, one reopened "
       f"under an edit does not ({_cz_taken}; units {_cz_marks})", _cz_taken == ['clicked'])
 # ...nor one just styled: a style is the note's edit too, on no Undo of the
-# cell's own (round 6).
+# cell's own.
 app._show_toast('Removed “milk”', action=lambda: _cz_taken.append('styled'))
 app._open_cell_editor(app._grid_at_line(1), 1, 0)
 app.update()
@@ -7422,7 +7422,7 @@ app.ask_yes_no = (lambda title, msg, **kw:
                   (_openAsksX.append(title), False)[1])
 
 # Exported from one day of a series, the file holds that day as it shows:
-# its own words on its date, not the series' text (wave 2, round 4).
+# its own words on its date, not the series' text.
 _dayX = app._day_as_shown(NO.normalize_note({
     'id': 77, 'title': 'Team meeting', 'body': 'agenda',
     'formatting': [{'start': '1.0', 'end': '1.6', 'tag': 'bold'}],
@@ -7694,7 +7694,7 @@ check('and stays on the theme surface for an unstyled cell',
       _bgPlain == app.colors['card'])
 set_body('')
 
-# ---- FIELD ROUND 2: THE CELL-LEVEL HIGHLIGHT SURVIVES EVERYTHING ----
+# ---- FIELD TEST: THE CELL-LEVEL HIGHLIGHT SURVIVES EVERYTHING ----
 def _fresh_G(cols=3):
     set_body('|' + '|'.join(['     '] * cols) + '|' + chr(10)
              + '|' + '|'.join([' --- '] * cols) + '|' + chr(10)
@@ -7774,7 +7774,7 @@ check('and the two tables stay separate blocks with the values intact',
       len(_blocksG) == 2 and any('val' in ln for ln in _secondG))
 set_body('')
 
-# ---- FIELD ROUND 3 ----
+# ---- FIELD TEST: AUTOFIT OVER SELECTED COLUMNS ----
 # Autofit over a selection of columns, in a single pass.
 set_body('| long content here | x |' + chr(10) + '| --- | --- |'
          + chr(10) + '| a | b |')
@@ -8442,7 +8442,7 @@ check(f'Ctrl+T and the Insert key spread no style ({_tyCT}; {_tyIns})',
       and _tyIns == (True, 'PricesFresh words: here', ['1.0', '1.6']))
 set_body('')
 
-# ---- FIELD ROUND 4 ----
+# ---- FIELD TEST: THE VIEW STAYS PUT AFTER A GRID REBUILD ----
 # The view restore after a grid rebuild stays IN FORCE: a late yank
 # (the embedded windows' geometry settling) is corrected by the timers
 # -- the old one-shot restore stayed scrolled away.
@@ -8498,7 +8498,7 @@ check('pipe rows pasted mid-line land on their own lines, never '
       and '|fig2' not in app.body_text.get('1.0', 'end-1c'))
 set_body('')
 
-# ---- FIELD ROUND 5 ----
+# ---- FIELD TEST: THE TABLE'S CAPTION ----
 # The system-managed caption: numbered, centred, with its source line,
 # the placeholder selected for immediate typing.
 set_body('| a | b |' + chr(10) + '| --- | --- |' + chr(10)
@@ -8691,7 +8691,7 @@ check('a duplicated CENTRED table pastes back centred',
       and app._grid_table_align_of(_blkL[1][0] + 1) == 'center')
 set_body('')
 
-# THE WINDOWS ROUTE (round 6): our copy also puts HTML on the clipboard,
+# THE WINDOWS ROUTE: our copy also puts HTML on the clipboard,
 # and the rich-paste route saw that FIRST -- a copied table pasted back
 # generically: no widths, no placement, and the first row landing at the
 # tail of the source line ('Source: | fff |...' in the field report, from
@@ -9009,7 +9009,7 @@ check(f'a word from an indented paragraph pastes without its indent '
       and 'indented' in app.body_text.get('2.0', '2.end'))
 # A whole line copied with its line break holds nothing of the line after
 # it: counted in, that line's centring went onto the line a paste landed
-# before (the lows wave's verification, round 5).
+# before.
 set_body('Call the bank' + chr(10) + 'Tuesday' + chr(10) + 'Dentist at 10')
 app._apply_paragraphs(app.body_text, [{'line': 1, 'align': 'center'}])
 app.body_text.tag_remove('sel', '1.0', 'end')
@@ -9029,7 +9029,7 @@ check(f'a whole line copied with its break carries none of the next line\'s look
       _cl_lines == [] and _cl_after == [(1, 'center')]
       and body() == 'Call the bank\nTuesday\nCall the bank\nDentist at 10')
 # ...nor one begun at a line's end of that line: copied from a centred
-# title's end, the copy centred the line it was pasted into (round 6).
+# title's end, the copy centred the line it was pasted into.
 set_body('Title' + chr(10) + 'Monday: gym' + chr(10) + 'Tuesday')
 app._apply_paragraphs(app.body_text, [{'line': 0, 'align': 'center'}])
 app.body_text.tag_remove('sel', '1.0', 'end')
@@ -9050,7 +9050,7 @@ check(f'a copy begun at a line\'s end carries none of that line\'s looks '
       and body() == 'Title\nMonday: gym\nTuesday\nMonday: gym')
 # A cut carries what a copy carries: moved by Ctrl+X and Ctrl+V, a nested
 # item kept its words alone -- it landed on the outer list, renumbered, its
-# bold gone (the lows wave's verification, round 6).
+# bold gone.
 set_body('Trip\n1. Book hotel\n1. Pick dates\n2. Pay deposit\n2. Pack\n3. Go')
 app._apply_paragraphs(app.body_text, [{'line': 1, 'kind': 'number'},
                                       {'line': 2, 'kind': 'number', 'indent': 1},
@@ -9119,8 +9119,7 @@ check(f'a bold word cut and pasted stays bold, and Ctrl+Z puts the cut back as o
 # Ctrl+V over list items reads what the paste puts in as its route reads it:
 # a Word paragraph's text ends in a line break the rich route drops, which
 # took the next item's ("2. Hello world3. three"); and with no text on the
-# clipboard -- a picture -- the selection went and nothing came (the lows
-# wave's verification, round 7).
+# clipboard -- a picture -- the selection went and nothing came.
 _ld_list('2.0', '3.0')
 _stub_clipboard(html='<p class=MsoNormal>Hello world<o:p></o:p></p>', text='Hello world\n')
 _ld_clip('Hello world\n')
@@ -9145,8 +9144,7 @@ check(f'Ctrl+V over list items puts in what its route reads, and a paste of noth
       f'changes nothing ({_pw_word!r}; {_pw_none!r})',
       _pw_word == '1. one\n2. Hello world\n3. three\n4. four' and _pw_none == _LD_START)
 # ...and a copy beginning with an item, a tab or rows further on, is no table
-# route's: its own marker takes the covered one's place, "2. 3. three"
-# (round 8).
+# route's: its own marker takes the covered one's place, "2. 3. three".
 set_body('3. three' + chr(10) + 'Price:' + chr(9) + '5 EUR')
 app.body_text.tag_add('sel', '1.0', 'end-1c')
 _stub_clipboard(loopback=True)
@@ -9159,7 +9157,7 @@ check(f'an item with a tab further on, pasted over an item, takes its marker\'s 
 # With nothing selected, at an item's marker end -- where Enter in a list
 # leaves the caret -- a paste bringing its own marker takes that one's place,
 # the item's depth kept ("3. 1. Kiwi"), or, with words after the caret and a
-# break of its own, goes in before the item (round 8).
+# break of its own, goes in before the item.
 _ld_list('3.3')
 _stub_clipboard()
 _ld_clip('9. new\n')
@@ -9179,7 +9177,7 @@ check(f'a paste bringing its own marker at an item\'s marker end takes its place
 # ...the item keeping its kind and its depth whatever the paste's, as Word
 # keeps a paragraph's list when a paste brings no paragraph mark: our own copy
 # of a top-level item took the level of whichever margin tag Tk had made
-# first that session (round 9).
+# first that session.
 _pk_got = []
 for _pk_clip in ('• Kiwi', None):
     if _pk_clip is None:
@@ -9221,7 +9219,7 @@ _pk_stale = body()
 _stub_clipboard()
 # A line's looks travel with its start: a word copied out of a nested item
 # and pasted into a top-level one set that item's level, and the list around
-# it renumbered (round 10).
+# it renumbered.
 _ld_list('3.3', '3.8')
 app._set_paragraph_indent(3, 1)
 _stub_clipboard(loopback=True)
@@ -9532,7 +9530,7 @@ set_body('')
 # ---- UNDO x TABLES: one operation = one single Ctrl+Z ----
 # A cell commit is a burst of small edits; without the undo unit, one
 # Ctrl+Z stopped halfway -- the old value lost, the padding collapsed
-# ('|  | 2 |' in the audit's probe).
+# ('|  | 2 |' in the probe that found it).
 set_body('| a | b |' + chr(10) + '| --- | --- |' + chr(10)
          + '| 1 | 2 |' + chr(10) + 'final')
 app._render_table_grids()
@@ -9807,7 +9805,7 @@ check('a range over a window alone is no range without it',
 
 # The whole-body renumber rewrite (delete-all + reinsert) on the key
 # path is ONE undo unit: one Ctrl+Z after such an Enter must never leave
-# the note EMPTY (the audit's Z09-F01 catastrophe). _on_body_return is
+# the note EMPTY (the Z09-F01 catastrophe). _on_body_return is
 # not itself wrapped, so this exercises _renumber_lists' own atom.
 set_body('1. one' + chr(10) + '2. two')
 app.update()
@@ -9892,8 +9890,7 @@ check('load_notes takes a safety backup when VERSION_CHANGE reports an upgrade',
 if app._version_backup_path:
     os.remove(app._version_backup_path)
 # ...and when the disk cannot hold that copy, the notice says there is none:
-# it used to say nothing, which read the same as a copy never promised
-# (2026-10-28, the final audit).
+# it used to say nothing, which read the same as a copy never promised.
 from noteorganizer.core import storage as _vb_storage
 _vb_copy2 = _vb_storage.shutil.copy2
 _vb_storage.shutil.copy2 = lambda *a, **k: (_ for _ in ()).throw(OSError(28, 'disk full'))
@@ -10073,7 +10070,7 @@ check('find/prose: a miss shows 0/0 and clears the highlight',
       and not app.body_text.tag_ranges('find_all'))
 # A paragraph of 2,000 hits paints at most FIND_LINE_PAINT of them, around the
 # current one, and still counts and walks them all: every hit painted, each key
-# with the bar open held the app 0.7 to 1.4 s (the final audit's twelfth round).
+# with the bar open held the app 0.7 to 1.4 s.
 app.body_text.delete('1.0', 'end')
 app.body_text.insert('1.0', 'see ' * 2500)
 app._find_var.set('e')
@@ -10090,7 +10087,7 @@ check(f'find/prose: 2,000 hits on one line paint {_fp_painted}, around the curre
       and app._find_count_lbl.cget('text') == f'1501/{app.FIND_MATCH_CAP}+'
       and 'find_all' in app.body_text.tag_names(_fp_here))
 # ...and the paint follows the current hit: laid around the hit current before a
-# reveal, and left behind by Enter, it left the current one's neighbours bare (round 13).
+# reveal, and left behind by Enter, it left the current one's neighbours bare.
 app.body_text.mark_set('insert', 'end-1c')
 app._find_rescan(reveal=True)
 _fp_first = 'find_all' in app.body_text.tag_names(app._find_matches[1]['start'])
@@ -10243,7 +10240,7 @@ app.update()
 
 # ...and an edit no key made. Only the body's key release told the bar, and a
 # right-click Paste, a list button, an emoji, the calculator or a spelling
-# suggestion left the count and Enter on stale places (round 10). What puts
+# suggestion left the count and Enter on stale places. What puts
 # text in the body, read from the code: keys, whose release schedules the
 # autosave; Tk's own Cut, Paste, Clear and middle-click, the menu's too; the
 # app's pastes, buttons, menus and table edits, each scheduling the autosave;
@@ -10462,7 +10459,7 @@ app._close_find()
 app.update()
 
 # A letter Tcl lowers into fewer bytes ("İ", the Kelvin sign) moved every hit
-# after it on its line one place, and Tk's search lost some (round 9). Read
+# after it on its line one place, and Tk's search lost some. Read
 # in Python, each hit is where its words are.
 set_body('İstanbul word K word K')
 app._open_find()
@@ -10477,7 +10474,7 @@ check(f'find: a hit after a letter whose lower case is shorter is highlighted on
 
 # ...and so is a query holding an emoji: str.lower() made two letters of "İ",
 # and each hit after one on its line landed a place late; and the text a drawn
-# table hides was searched as prose besides its cells (round 10).
+# table hides was searched as prose besides its cells.
 set_body('İİİ \U0001F600ok and \U0001F600ok\n'
          + '\n'.join([_frow('\U0001F600ok', 'b'), _FSEP, _frow('c', 'd')]) + '\nend')
 app._render_table_grids()
@@ -10493,7 +10490,7 @@ check(f'find: an emoji query on a line holding "İ" is highlighted on its own wo
       _fe_read == ['\U0001F600ok', '\U0001F600ok', ('cell', 0, 0)])
 
 # Diacritics fold away in Find as in the list's search, prose and cells alike,
-# unless Aa is on (wave 2, the owner's choice): "creme" missed "Crème".
+# unless Aa is on (the owner's choice): "creme" missed "Crème".
 set_body('Crème brûlée and creme\n'
          + '\n'.join([_frow('Crème', 'b'), _FSEP, _frow('c', 'd')]) + '\nend')
 app._render_table_grids()
@@ -10510,8 +10507,8 @@ _fd_spaced = len(app._find_scan_model('creme '))
 app._close_find()
 app.update()
 # A word in a lower row of a tall table: Find brings its cell into the note's
-# view, not only the table's first line (wave 2, round 6: the outline was drawn
-# below the edge, the counter saying 1/1).
+# view, not only the table's first line (the outline was drawn below the edge,
+# the counter saying 1/1).
 set_body('\n'.join([_frow('Item', 'Cost'), _FSEP]
                    + [_frow(f'line {i}', str(i)) for i in range(1, 16)]
                    + [_frow('rent', '900')]) + '\nend')
@@ -10555,7 +10552,7 @@ def _tc_cell_seen():
 
 
 # A cell in sight of a tall table that starts lower in the note: seeing the
-# table's line first scrolled the note before the cell was measured (round 7).
+# table's line first scrolled the note before the cell was measured.
 _tc_rows = ([_frow('Item', 'Cost'), _FSEP] + [_frow(f'line {i}', str(i)) for i in range(1, 16)]
             + [_frow('rent', '900')])
 set_body('\n'.join(['Rent and bills for the flat'] * 4 + _tc_rows) + '\nend')
@@ -10569,7 +10566,7 @@ _tc_still = _tc_cell_seen() and app.body_text.yview()[0] == _tc_view
 app._commit_cell_editor()
 app.update()
 # ...and Find onto a cell in sight there: a see() of the table's line first
-# made the note jump at every step (round 8).
+# made the note jump at every step.
 app._open_find()
 app._find_var.set('line 3')
 app._find_rescan(reveal=True)
@@ -10583,7 +10580,7 @@ app.update()
 check(f'find onto a cell in sight of a tall table leaves the note where it is ({_tc_find_still})',
       _tc_find_still is True)
 # Tab out of the last row in sight, its value wider than the column: the
-# rebuild's re-pin put the view back, the next cell below the edge (round 7).
+# rebuild's re-pin put the view back, the next cell below the edge.
 set_body('\n'.join(_tc_rows) + '\nend')
 app._render_table_grids()
 app.update()
@@ -10610,7 +10607,7 @@ check(f'find: a space picked up after the word is not part of it ({_fd_spaced})'
 
 # A query holding a line break is read in Python as well: Tk's -nocase search,
 # kept for it, ended the process on Linux whenever the searched line held an
-# emoji (Tk 8.6.16, round 10). Never asked; each hit its own letters, across
+# emoji (Tk 8.6.16). Never asked; each hit its own letters, across
 # the break, as Tk's search joins the lines -- the text's last break included.
 set_body('İ \U0001F389 word\nWORD and more\nalpha word\nword')
 app._open_find()
@@ -10667,7 +10664,7 @@ check(f'find: a two-line query over a line holding an emoji, case on and off, en
       and json.loads(_lb_run.stdout or 'null') == [['word\nword']] * 4)
 
 # The bar open, every pause rescans, and Tk's search measured the line from
-# its start for each hit: 1,000 hits among bold words took 15 s (round 9).
+# its start for each hit: 1,000 hits among bold words took 15 s.
 # Each shape against its half, in this run, the quickest of three.
 import gc as _fq_gc
 
@@ -10739,7 +10736,7 @@ def _fq_measured(text, query):
 for _fq_name, _fq_make in (
         ('hits 50 characters apart', lambda n: (('word' + 'w' * 45 + ' ') * n, 'word')),
         ('an emoji 50 characters apart', lambda n: (('\U0001F389' + 'w' * 49) * n, '\U0001F389')),
-        # A query holding a line break, on 2,000 lines of 49 (round 10).
+        # A query holding a line break, on 2,000 lines of 49.
         ('a line break in the query', lambda n: (('w' * 45 + 'ord\n') * n + 'w', 'd\nw'))):
     _fq_count = _fq_measured(*_fq_make(2000))
     check(f'find: {_fq_name}, the scan measures each line about once, not once per hit '
@@ -12227,7 +12224,7 @@ app.load_note(_fc_big); app.update()
 check('...and reopens with every character of it',
       len(app.body_text.get('1.0', 'end-1c')) >= 50000)
 # A "did it hang" guard only: 5 s went red at 6.6 with three suites on the
-# machine (round 5 of the final audit), the save itself unchanged.
+# machine, the save itself unchanged.
 check('...without hanging (%.1fs)' % _fc_elapsed, _fc_elapsed < 30.0)
 
 # 66: a repeat with no date cannot be stored, and the reason names the
@@ -12549,7 +12546,7 @@ _cu_press(0)
 # loaded desktop with nothing wrong with what it asks. Settled first, and
 # asserted settled, so the reading is about its own promise. (That a
 # "Note updated" can cover an error at all is its own question, reported
-# with the audit's editor fixes.)
+# with the editor's other fixes.)
 app._flush_autosave()
 app.update()
 check('checklist undo: the delete\'s own save is settled before the error '
@@ -12625,8 +12622,7 @@ check('checklist undo: and it does not claim to have put anything back',
       'put back' not in str(app.status_lbl.cget('text')))
 
 # ...but the same note opened again within the eight seconds, read back with
-# the very list the row left, takes it: refused, the row was in no file (the
-# lows wave's round 6).
+# the very list the row left, takes it: refused, the row was in no file.
 check('checklist undo: fixture ready for leaving and coming back',
       _cu_setup(['milk', 'bread']))
 _cu_press(0)
@@ -14571,8 +14567,7 @@ try:
     _ck_cm.delete('1.0', 'end')
     _ck_cm.edit_reset()
     # ...and in every other text box -- a table cell -- Caps Lock on or off:
-    # under it Tk's own Undo took a second step, without it nothing happened
-    # (the lows wave's round 4).
+    # under it Tk's own Undo took a second step, without it nothing happened.
     _ck_cell = tk.Text(app, undo=True, height=1, width=10)
     _ck_cell.place(x=0, y=0)
     _ck_cell_seen = []
@@ -17219,12 +17214,12 @@ check(f'Return on the sidebar\'s arrow folds the sidebar away and back '
 set_body('')
 
 # ---- A CHECKLIST ITEM HAS A LIMIT OF ITS OWN ----
-# Round 3 of the final audit: the "Add item" box was a paste route outside
+# The "Add item" box was a paste route outside
 # every ceiling. A pasted page became one item, drawn as one wrapped label as
 # tall as its text -- on Linux the app died drawing it -- and a 490-character
 # share code carried one in. The box keeps MAX_CHECKLIST_ITEM_CHARS, and so
 # does every load (test_data_safety). A paste past it is shortened to fit, as
-# the title's is (the owner's choice, round 5); a key past it is refused.
+# the title's is (the owner's choice); a key past it is refused.
 app.new_note(); app.update()
 _cl_box = app.checklist_add_entry
 _cl_told = []

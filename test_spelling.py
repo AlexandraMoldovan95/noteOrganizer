@@ -144,7 +144,7 @@ check("...and a run of ends is one end, only with a space or the line's end afte
       spelling.sentence_spans("e.g. this... and that?!x end…")
       == [(0, 4), (4, 12), (12, 29)])
 # A run of ends with no space after it was tried at each of its dots: 24,000
-# took 4.5 s at every look the editor takes (round 9). Timed in this run
+# took 4.5 s at every look the editor takes. Timed in this run
 # against the same run with a space after it, the quickest of three each.
 import gc as _gc
 import time as _time
@@ -178,7 +178,7 @@ check("a line's ranges are shown sentence by sentence, each sentence's in the or
       == {0: [(0, 3), (36, 5), (27, 4), (36, 5), (72, 4)]})
 # A look measured the line again for each sentence and walked every range for
 # each: 358 ms at 24,000 characters, four times that for twice the line, at
-# every pause in typing (round 9). Timed against the line's half, in one run.
+# every pause in typing. Timed against the line's half, in one run.
 _vo_long = "xqzt. " * (80_000 // 6)
 _vo_half = "xqzt. " * (40_000 // 6)
 _vo_long_s = _quickest(spelling.visible_errors, [_vo_long],
@@ -213,7 +213,7 @@ check("...and each piece's offset is where it starts, in units",
 check("a short line is one piece at 0", spelling.pieces("short line") == [(0, "short line")])
 check("an empty line is no piece", spelling.pieces("") == [])
 # The rest of the line was measured again for every piece: 200,000 characters
-# in 50 pieces measured five million (round 9). Counted, never timed.
+# in 50 pieces measured five million. Counted, never timed.
 _measured = [0]
 _real_units = spelling.utf16_units
 
@@ -244,7 +244,7 @@ check("...and away from it, none", spelling.range_at([(4, 3)], 8) is None
 # --- no more underlines than a box may hold ------------------------------
 # Each is two toggles of a tag, and Tk reads a line in about the square of
 # its toggles: one long line of typos made every save at a pause cost
-# seconds (final audit, round 10). Those nearest the caret stay.
+# seconds. Those nearest the caret stay.
 _nu_line = [(6 * i, 3) for i in range(1200)]
 _nu = spelling.nearest_underlines({0: list(_nu_line)}, 0, 6 * 900, per_line=500)
 check("a line keeps no more underlines than a line may hold",

@@ -52,7 +52,7 @@ def _dup_key(note):
         _recurrence_signature(note.get("recurrence")),
         # The days a series keeps of its own: a copy holding a deleted, an
         # edited or a moved day grouped with one that did not, and the
-        # cleanup could drop it (the final audit's wave 3).
+        # cleanup could drop it.
         (tuple(sorted(str(d) for d in exceptions)) if isinstance(exceptions, list) else (),
          _stable(overrides if isinstance(overrides, dict) else {}),
          _stable(moved if isinstance(moved, dict) else {})),

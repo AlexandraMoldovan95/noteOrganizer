@@ -984,8 +984,7 @@ for _ld_name, _ld_args, _ld_want in (
         ("everything selected from the first line's start", (_LD, (0, 0), (3, 7)), ""),
         ("bullets joined", ("• a\n• b\n• c", (0, 3), (1, 0)), "• ab\n• c"),
         # A paste bringing its own marker or line break takes the place of
-        # the one it covers: kept as a letter's are, "2. 3. three" (the lows
-        # wave's verification, round 6).
+        # the one it covers: kept as a letter's are, "2. 3. three".
         ("a whole item pasted over item 2, its break and all",
          (_LD, (1, 0), (2, 0), "3. three\n", True), "1. one\n2. three\n3. three\n4. four"),
         ("a whole item pasted over item 2, without its break",
@@ -993,7 +992,7 @@ for _ld_name, _ld_args, _ld_want in (
         ("words and a break pasted from item 2's words to item 3's start",
          (_LD, (1, 4), (2, 0), "x\n", True), "1. one\n2. tx\n3. three\n4. four"),
         # ...begun at an item's marker, wherever the selection ends: over the
-        # last item, one item's words ("3. 1. Milk", round 7).
+        # last item, one item's words ("3. 1. Milk").
         ("a whole item pasted over the last item",
          ("1. one\n2. two\nafter", (1, 3), (2, 0), "1. x\n", True), "1. one\n2. x\nafter"),
         ("a whole item pasted over one item's words",
@@ -1059,7 +1058,7 @@ check("rows and cells left open, as HTML allows, end where the next begins",
 check("a document without markers still gives its body",
       _clip.fragment_of("<html><body><p>x</p></body></html>") == "<p>x</p></body></html>")
 # ...from where its body starts: lower() made two letters of each "İ" in its
-# head, and the body was looked for that many places too late (round 10).
+# head, and the body was looked for that many places too late.
 _tr_doc = ("<html><head><title>" + "İ" * 30 + "</title></head>"
            "<BODY lang=tr><p>x</p></body></html>")
 check(f"a document without markers, a Turkish title in its head, gives its body "
@@ -1120,7 +1119,7 @@ check(f"misnested markup is read in one pass ({_mn_took:.2f} s), its text whole"
       _mn_text == "Hello world" and _mn_took < 2.0)
 # Whether a fragment holds a block tag decides whether its newlines are text.
 # "<" before a run of spaces was split every way "\s*/?\s*" could split it:
-# 8,000 spaces held a paste 4 s (round 9). Timed in this run against the same
+# 8,000 spaces held a paste 4 s. Timed in this run against the same
 # run before a tag, the quickest of three each.
 from noteorganizer.core import richtext as _bt_rt
 check("a block tag is found with spaces or a slash after its '<', in any case, "

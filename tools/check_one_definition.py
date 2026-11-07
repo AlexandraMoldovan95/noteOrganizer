@@ -151,16 +151,16 @@ RULES = [
             "_write_fields_to_note": "builds the note being saved",
             "_keep_text_aside":
                 "builds the note a big delete's words become beside an "
-                "Update's copy (wave 2); it compares nothing",
+                "Update's copy; it compares nothing",
             "_day_as_shown":
-                "builds the copy of one day a file is made of (wave 2); its "
+                "builds the copy of one day a file is made of; its "
                 "one comparison asks whether the day's text is the series' own, "
                 "as _settle_off_schedule_day's does",
             "do_save": "builds the template being saved",
             "collect": "builds the template the settings editor is editing",
             "notes_set_aside":
-                "builds the notes a series' copy's days set aside become "
-                "(round 15 of the final audit); it compares nothing",
+                "builds the notes a series' copy's days set aside become; "
+                "it compares nothing",
             "editor_state_matches_saved":
                 "the OCCURRENCE branch compares only OVERRIDABLE_FIELDS, "
                 "because an override carries exactly those -- comparing "

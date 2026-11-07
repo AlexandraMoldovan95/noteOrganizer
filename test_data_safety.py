@@ -28,10 +28,10 @@ import _qa_support  # noqa: E402
 # cannot prove empty, and only where the folder the app will open, asked of
 # its own resolver, is the working folder. The copy that was here looked
 # beside the test while the app opened the folder notebook_location.txt
-# names -- in the owner's checkout, her notebook (final audit, round ten).
+# names -- in the owner's checkout, her notebook.
 # It seeds that folder: an empty notebook and the reclaim marker. Unseeded,
 # the migration copied whatever notebook %APPDATA% held into this folder --
-# the built app's, the owner's -- on every Windows run (round eight).
+# the built app's, the owner's -- on every Windows run.
 def _guard_real_notes():
     _qa_support.hermetic_seed()
 
@@ -81,7 +81,7 @@ os.remove(NO.DATA_FILE)
 
 # On a full disk the copy stopped partway and left a cut-off file under the
 # backup's name, the update's notice said nothing of it, and the one-time
-# cleanup went ahead with no copy at all (2026-10-28, the final audit).
+# cleanup went ahead with no copy at all.
 from noteorganizer.core import storage as _bk_storage
 with open(NO.DATA_FILE, 'w', encoding='utf-8') as f:
     json.dump([{'id': 1, 'title': 'Real note', 'body': 'x'},
@@ -658,7 +658,7 @@ try:
               and 'held.bin' not in _pf_msg)
         # The notes file itself held: all or nothing. It returned in silence,
         # the app opened empty, its first save wrote a notes file, and the
-        # old notebook was never looked at again (2026-10-28, round three).
+        # old notebook was never looked at again.
         _pn_user = os.path.join(_pr_root, 'user_notes_held')
         os.environ['USERPROFILE'] = _pn_user
         os.environ['APPDATA'] = os.path.join(_pn_user, 'AppData', 'Roaming')
@@ -800,7 +800,7 @@ try:
 
     # Days a series' copy set aside become notes at the start, written at
     # once: unwritten, each start made them again under new identities and
-    # said so again (round 16 of the final audit).
+    # said so again.
     with open(NO_paths.DATA_FILE, 'r', encoding='utf-8') as f:
         _sa_was = f.read()
     with open(NO_paths.DATA_FILE, 'w', encoding='utf-8') as f:
@@ -824,7 +824,7 @@ try:
 
     # A start that set the notes file aside unreadable holds none of its
     # notes: a file the Trash's entry shares with one of them is no one's to
-    # delete. Only a held run spared them (round 7 of the final audit).
+    # delete. Only a held run spared them.
     with open(NO_paths.DATA_FILE, 'r', encoding='utf-8') as f:
         _nu_good = f.read()
     with open(NO_paths.DATA_FILE, 'w', encoding='utf-8') as f:
@@ -1563,8 +1563,7 @@ if os.name == "nt":
             _aliases.append(_short)   # absent where the volume makes no short names
     # Another case, which Windows opens as the same file: every spare and
     # claimed set compares names exactly, so a backup's Trash entry naming a
-    # kept note's photo in capitals was spared by none and deleted it
-    # (2026-10-28, the final audit).
+    # kept note's photo in capitals was spared by none and deleted it.
     _aliases.append("20261003091512345678_HOLIDAY.JPG")
     _aliases.append("zz\\..\\20261003091512345678_holiday.jpg")
 else:
@@ -1583,7 +1582,7 @@ check("...and a delete by an alias leaves the file", os.path.exists(_two_names))
 # A named stream of the file is a name for something else again: realpath
 # hands "x.jpg:Zone.Identifier" back unchanged, so it passed the exact-name
 # test, and a backup's Trash entry naming it deleted the Mark of the Web
-# the import had just written (2026-10-28, the final audit's third round).
+# the import had just written.
 # Refused on every system, so the check runs on each: on Linux the
 # "stream" is a file of its own, which the rule keeps all the same.
 _zone = b"[ZoneTransfer]\r\nZoneId=3\r\n"
@@ -2473,8 +2472,8 @@ check("normalize_note caps the checklist at the data choke point",
 check("and the cap is far above any real list",
       _model.MAX_CHECKLIST_ITEMS >= 500)
 # ...and each item's length: one item is drawn as one wrapped label as tall as
-# its text, and a 490-character share code carried a 60,000-character item in
-# (2026-10-28, the final audit's third round). The boxes refuse one past the
+# its text, and a 490-character share code carried a 60,000-character item in.
+# The boxes refuse one past the
 # limit (qa1, qa6); one already longer is a person's words, kept whole by every
 # load, and drawn cut.
 from noteorganizer.core import model as _coreCL, sharing as _sharingCL
@@ -2618,8 +2617,8 @@ try:
 
     # A lock file another program holds a moment (a sharing violation) is
     # tried again: failing open at once let a second window in once it was
-    # let go (round 5). Raised twice, then the file opens: the lock is taken.
-    # Raised as open() raises it on Windows: EACCES, with no winerror (round 7).
+    # let go. Raised twice, then the file opens: the lock is taken.
+    # Raised as open() raises it on Windows: EACCES, with no winerror.
     _Sharing = PermissionError
 
     _sh_left = {"n": 2}
@@ -2650,7 +2649,7 @@ try:
     if os.name == "nt":
         # The same, held for real: opened with no sharing, let go 0.3 s later.
         # A simulated error once carried a winerror open() never sets, and
-        # the retry it proved never ran on Windows (round 7 of the audit).
+        # the retry it proved never ran on Windows.
         import ctypes as _sh_ct
         import threading as _sh_th
         _sh_k32 = _sh_ct.WinDLL("kernel32", use_last_error=True)
@@ -2817,8 +2816,8 @@ _t2 = dict(_base, title="Groceries", checklist=[{"text": "gym", "done": False}])
 check("different checklists keep two same-text notes apart",
       _fdg([_t1, _t2]) == [])
 # A series' own days are never merged either: a copy holding a deleted, an
-# edited or a moved day grouped with one that did not (the final audit's
-# wave 3). The same days, or none on both, still group.
+# edited or a moved day grouped with one that did not. The same days, or
+# none on both, still group.
 _sd = dict(_base, title="Gym", date="2026-01-05", recurrence={"freq": "weekly"})
 check("a series' own days -- deleted, edited, moved -- keep two copies apart",
       _fdg([_sd, dict(_sd, exceptions=["2026-01-12"])]) == []
@@ -3460,7 +3459,7 @@ check("...and its rescue copy holds what they replaced",
 # A share code turning a series' repeat off kept the series' own days in
 # the note, out of sight, and its rescue copy without them: the next save
 # dropped the days with no copy anywhere, and Restore previous brought the
-# repeat back empty (2026-10-28, the final audit).
+# repeat back empty.
 _off_days = {"2026-10-12": {"body": "Leg day: squats"}}
 _off_note = _model_mod.normalize_note({
     "id": 1, "title": "Gym", "body": "Warm up", "date": "2026-10-05",
@@ -3474,8 +3473,7 @@ check("a share code that ends a repeat keeps the series' days in the rescue copy
       and _off_prev.get("exceptions") == ["2026-10-26"]
       and (_off_prev.get("recurrence") or {}).get("freq") == "weekly")
 # ...COPIED, and kept in the note too: moved into the one copy slot, the
-# next copy made over it -- a second update, a big rewrite -- erased them
-# (2026-10-28, the final audit's third round).
+# next copy made over it -- a second update, a big rewrite -- erased them.
 check("...and the note keeps them too, so no later copy can take them",
       _off_note["overrides"] == _off_days and _off_note["exceptions"] == ["2026-10-26"])
 check("...and the copy keeps them across a save and a reload",
@@ -3521,7 +3519,7 @@ check("...while a table emptied of its rows still is",
 # ...nor a change made to every row: a column added or an empty one removed,
 # a numbered list renumbered by a step put in, each read as the whole span
 # between its first and last change lost, and its copy replaced the one the
-# note held (2026-10-28, the final audit's fourth round).
+# note held.
 _col_old = "\n".join(["Pie"] + ["| %s | %d |" % (w, i) for i, w in enumerate(
     ["flour", "butter", "sugar", "apples", "cinnamon", "lemon", "salt", "egg"])])
 _col_new = "\n".join(line + "  |" if line.startswith("|") else line
@@ -3541,7 +3539,7 @@ check("a column added, removed empty, or a list renumbered is no loss either "
       and not _model_mod.rescue_copy_due("t", _steps, "t", _steps_in))
 # ...nor a list's markers changed: numbers turned to bullets, or bullets one
 # level in, counted each "1." as a word lost, and the copy of a paragraph
-# deleted before was replaced (round 5, found on Android first).
+# deleted before was replaced (found on Android first).
 _mk_items = ["milk", "eggs", "bread", "butter", "flour", "sugar", "salt",
              "apples", "pears", "rice", "beans", "tea", "coffee", "onion"]
 _mk_num = "\n".join("%d. %s" % (i + 1, w) for i, w in enumerate(_mk_items))
@@ -3564,7 +3562,7 @@ _col_full = "\n".join(line + " a long note about where to buy it |"
 check("...while a column of words deleted still keeps one",
       _model_mod.rescue_copy_due("t", _col_full, "t", _col_old))
 # ...and so do five rows of eight: words gone were set against a length that
-# counts the padding, and half a table read as a quarter (round 5).
+# counts the padding, and half a table read as a quarter.
 from noteorganizer.core import tables as _tables_mod
 # Short cells, as a shopping list's: their padding is most of each row.
 _trip_lines = ["Groceries"] + _tables_mod.format_table([["Item", "Qty", "Ok"]] + [
@@ -3579,7 +3577,7 @@ check("...and five rows of a table's eight deleted at once keep one (%d of %d "
       _model_mod.rescue_copy_due("t", _trip_old, "t", _trip_cut)
       and 40 < _trip_lost < 0.3 * len(_trip_old))
 # The comments are a text the copy holds, and the measure left them out: 780
-# characters of them replaced by "ok" kept no copy (round 6). Weighed as a
+# characters of them replaced by "ok" kept no copy. Weighed as a
 # text of their own, so a long comment does not make a whole body deleted
 # read as a small share either.
 _cm_long = " ".join("Remember the vet said %d grams a day" % i for i in range(24))
@@ -3593,9 +3591,9 @@ check("comments replaced keep a copy, weighed as a text of their own",
       and not _model_mod.rescue_copy_due("Dog", _cm_body, "Dog", _cm_body, "", "new"))
 
 # A repeat turned off keeps its days' own text in the note here; the phone,
-# and this app before the final audit, kept them only in the rescue copy,
-# which the next copy erased (round 6, the owner's choice: one place, the
-# note). Brought back into the note as it is read, once.
+# and this app before the fix, kept them only in the rescue copy, which the
+# next copy erased (the owner's choice: one place, the note). Brought back
+# into the note as it is read, once.
 _kd_series = {"date": "2026-11-02", "recurrence": {"freq": "weekly", "interval": 1}}
 _kd_days = {"overrides": {"2026-11-09": {"body": "Leg day - knee hurt"}},
             "exceptions": ["2026-11-16"]}
@@ -3628,7 +3626,7 @@ check("...but not days that hold no text of their own, nor an update's copy that
       and _model_mod.normalize_note(_kd_carried) == _kd_carried)
 # The phone's 0.12.0 turned a series back on as it was with none of its days:
 # repeating, the copy the same series, its days' text in the copy alone, which
-# the next copy of words erased (round 7 of the final audit).
+# the next copy of words erased.
 _kd_back_on = _model_mod.normalize_note(dict(
     {"id": 5, "title": "Gym", "body": "Warm up.", "_prev": dict(
         {"title": "Gym", "body": "Warm up."}, **_kd_series, **_kd_days)}, **_kd_series))
@@ -3637,7 +3635,7 @@ check("a series the phone turned back on as it was takes its days back from its 
       and _kd_back_on["exceptions"] == ["2026-11-16"])
 # An update's copy repeats when the series here did, and holds the days the
 # update replaced on purpose: taken in, the same backup imported again read
-# as a change, and its Update spent the only earlier version (round 7).
+# as a change, and its Update spent the only earlier version.
 _kd_updated = _model_mod.normalize_note(dict(
     {"title": "Gym", "body": "Warm up."}, **_kd_series, **_kd_days))
 _kd_updated["uid"] = "kd-updated"
@@ -3663,8 +3661,8 @@ check("a note's rescue copy never makes the same note arriving again read as cha
           _kd_mem, {k: v for k, v in _kd_mem.items() if k != "_prev"},
           _model_mod.UPDATABLE_FROM_BACKUP))
 # Taken back into a note that repeats as the copy's series, the copy's days
-# were kept as well: a day the person then reset came back at every read
-# (round 8). Once the note repeats as that series, the copy's are spent --
+# were kept as well: a day the person then reset came back at every read.
+# Once the note repeats as that series, the copy's are spent --
 # here, and in a copy a turn-off left that holds them beside the note's.
 _kd_reset = _model_mod.normalize_note(dict(_kd_back_on, overrides={}, exceptions=[]))
 _kd_beside = _model_mod.normalize_note(dict(
@@ -3679,7 +3677,7 @@ check("once a note repeats as its copy's series, the copy's days are spent, and 
       and _kd_turned_off["_prev"].get("overrides") == _kd_days["overrides"])
 # ...and an arriving note is read as a load reads it, its copy's days taken
 # back: an older backup of a turned-off series, compared bare, lacked the days
-# the same notebook here holds and read as edited elsewhere (round 9). One
+# the same notebook here holds and read as edited elsewhere. One
 # whose copy holds a day reset here since holds that day: a real difference.
 _kd_old_off = {"id": 1, "title": "Gym", "body": "Warm up.",
                "_prev": dict({"title": "Gym", "body": "Warm up."}, **_kd_series, **_kd_days)}
@@ -3699,7 +3697,7 @@ check("an older backup of a series, turned off or back on, reads as the notebook
 # The copy's days come back per date: a note that repeats as the copy's
 # series again and holds a day of its own -- edited after 0.97.405 or the
 # phone's 0.12.0 turned it back on with none -- took none back, and the spend
-# erased the copy's own-text day for good (round 9 of the final audit).
+# erased the copy's own-text day for good.
 _kd_own = {"2026-11-23": {"body": "Rest week"}}
 _kd_some = _model_mod.normalize_note(dict(
     {"id": 12, "title": "Gym", "body": "Warm up.", "overrides": _kd_own, "_prev": dict(
@@ -3736,7 +3734,7 @@ check("a series' deleted days kept only in its copy stay deleted once it repeats
 
 # A date the note holds with no words of its own -- the same day moved, or
 # only coloured, after 0.97.405 or the phone's 0.12.0 turned the repeat back
-# on -- spent the copy's own text for that day at the first start (round 10).
+# on -- spent the copy's own text for that day at the first start.
 # The rule: a copy's day is dropped only where the note deleted that day or
 # wrote words of its own for it; its words go where the note draws the day.
 from noteorganizer.core import recurrence as _rec_t10
@@ -3818,9 +3816,9 @@ def _t10_aside(note):
 
 # What the note wrote still wins: its deletion, and its own words as they are
 # -- the copy's for that day are set aside, to be a note of their own on that
-# date (round 15, the owner's choice: added to the day's, rounds 11 to 14 read
-# them four ways, each leaving a case; round 21, the owner's choice: for a day
-# deleted too, the phone's older build having shown it blank).
+# date (the owner's choice: added to the day's, four earlier fixes read them
+# four ways, each leaving a case; and, her choice again, for a day deleted
+# too, the phone's older build having shown it blank).
 _t10_gone = _t10({"exceptions": ["2026-11-09"]}, _t10_copy_moved)
 _t10_own = _t10({"moved": {"2026-11-09": "2026-11-10"},
                  "overrides": {"2026-11-10": {"body": "Swim instead"}}})
@@ -3833,7 +3831,7 @@ check("a day the note deleted keeps the note's; one it wrote words for keeps the
 
 # A day coloured before the series' words changed holds the old words, read
 # as its own: the copy's for that day were in no file after the first start of
-# this build over 0.97.405's notebook, or the phone's 0.12.0 (round 11). Now
+# this build over 0.97.405's notebook, or the phone's 0.12.0. Now
 # the day stays as it is and the copy's words are set aside. Read again,
 # nothing changes and nothing is set aside twice.
 _t11 = _model_mod.normalize_note(dict(
@@ -3851,7 +3849,7 @@ check("a day coloured before the series' words changed keeps its words and look,
       and "overrides" not in _t11["_prev"]
       and _model_mod.normalize_note(json.loads(json.dumps(_t11))) == _t11)
 # ...a day whose words the note holds too is left as it is, its series renamed
-# since: the series' words are not the day's (round 11).
+# since: the series' words are not the day's.
 _t11_held = _model_mod.normalize_note(dict(
     {"id": 22, "title": "Gym!", "body": "Warm up.", "_prev": dict(
         {"title": "Gym", "body": "Warm up."}, **_kd_series,
@@ -3872,7 +3870,7 @@ check("a copy's day the note holds again is left as it is, nothing set aside; of
       and "overrides" not in _t11_tie["_prev"])
 # A day whose words differ from the copy's in any way -- grown from them,
 # corrected in a line, a table cell edited, a box ticked -- keeps its text to
-# the letter, and the copy's whole text is set aside once. Rounds 13 and 14
+# the letter, and the copy's whole text is set aside once. Two earlier fixes
 # added only the lines the day lacked, and each way of telling them apart
 # left a case: a moved line added again, a long day frozen.
 _t13_grown = _t10({"overrides": {"2026-11-09": {"body": "Agenda.\nBook room\nCancelled"}}},
@@ -3898,7 +3896,7 @@ check("a day grown from the copy's text, a cell edited or a box ticked keeps its
 # Read alike as a day's words: a title with a space after it, and a text
 # ending in a table with the line under it or without -- the phone keeps its
 # series' text as typed, its days with the line. Read apart, a day only
-# coloured was set aside as earlier text, or took none (round 15).
+# coloured was set aside as earlier text, or took none.
 _t15_tbl = "Plan\n| a | b |\n| --- | --- |\n| 1 | 2 |"
 _t15_alike = _model_mod.normalize_note(dict(
     {"id": 27, "title": "Gym", "body": "Warm up.", "_prev": dict(
@@ -3931,7 +3929,7 @@ check("days set aside read from a file keep a real date in the calendar's form a
       and (_t15_read.get("_set_aside") or [{}])[0].get("color") == "")
 # A copy of another series than the note's repeats as now is replaced by the
 # next turn-off, delete or import Update: its days with words were in it
-# alone, and the new copy erased them (round 15). Set aside first.
+# alone, and the new copy erased them. Set aside first.
 _t15_other = _model_mod.normalize_note(dict(
     {"id": 23, "title": "Gym", "body": "Warm up.", "_prev": {
         "title": "Gym", "body": "Warm up.", "date": "2026-11-03",
@@ -3952,8 +3950,8 @@ check("another series' copy keeps its days while it waits, and sets aside those 
       and _t15_update["_prev"]["body"] == "Warm up.")
 # A day moved onto a date its rule now gives by itself -- made daily since, or
 # started elsewhere -- was drawn nowhere, and a delete there took it: its move
-# goes, its words staying where they showed (round 15; since round 17, the
-# owner's choice, words never move on their own). A chain (the 9th to the
+# goes, its words staying where they showed (the owner's choice: words never
+# move on their own). A chain (the 9th to the
 # 10th, the 16th onto the 9th it left) holds while the rule leaves the dates
 # free; and a day deleted there leaves its date free too.
 _t15_chain = {"moved": {"2026-11-09": "2026-11-10", "2026-11-16": "2026-11-09"},
@@ -3994,7 +3992,7 @@ check("a file's days set aside are read at most as many as a series' moved days 
       % len(_t15_flood.get("_set_aside") or []),
       len(_t15_flood.get("_set_aside") or []) == _model_mod.MAX_OCCURRENCES
       and _t15_flood["_set_aside"][0]["body"] == "words 0")
-# Round 16. A day goes home only where the rule still gives its own date:
+# A day goes home only where the rule still gives its own date:
 # moved onto a Thursday, the series then on Thursdays, its words stay on the
 # Thursday they showed on, and the move goes -- sent "home" to a Monday the
 # rule no longer gives, they left the calendar.
@@ -4044,16 +4042,17 @@ check("a chain of 2,000 moved days, every date the rule's, goes home walking the
       and _t16_swap["moved"] == {"2026-11-09": "2026-11-10", "2026-11-10": "2026-11-09"})
 # ...and a note made of a day set aside has words: one with none -- an
 # untitled series whose day's text was emptied -- made an empty note at a
-# save, and none at the start (round 16).
+# save, and none at the start.
 check("days set aside with no words make no note, at a save as at the start",
       _model_mod.notes_set_aside({"title": "", "_set_aside": [
           {"day": "2026-11-09", "title": "", "body": "", "comments": "", "category": "", "color": "#ff0000"}]})
       == [])
-# Round 17. A week shifted a day at a time (Wed to Thu, Tue to Wed, Mon to
-# Tue), then the shift made the rule (Tue-Thu): round 16 sent words home one
-# by one and wrote what was left over the Wednesday's -- one day's text in no
-# file. Words now never move on their own (the owner's choice): the moves go,
-# each day's words staying where they showed; a date's own words stay too.
+# A week shifted a day at a time (Wed to Thu, Tue to Wed, Mon to
+# Tue), then the shift made the rule (Tue-Thu): an earlier fix sent words
+# home one by one and wrote what was left over the Wednesday's -- one day's
+# text in no file. Words now never move on their own (the owner's choice):
+# the moves go, each day's words staying where they showed; a date's own
+# words stay too.
 _t17_week = {"freq": "weekly", "interval": 1, "weekdays": [0, 1, 2]}
 _t17_copy_day = {"title": "Gym", "body": "x", "comments": "", "formatting": [], "paragraphs": [],
                  "recurrence": {"freq": "weekly"}, "exceptions": []}
@@ -4106,14 +4105,14 @@ check("a weekly series turned back on as it was is the same with its weekday lit
       and not _model_mod._same_series("2026-11-02", {"freq": "monthly"},
                                       "2026-11-02", {"freq": "monthly", "month_days": [3]}))
 # ...whatever month-day policy a weekly rule keeps hidden (saved from a
-# monthly draft), which it never reads; a monthly one reads it (round 19).
+# monthly draft), which it never reads; a monthly one reads it.
 check("a weekly rule is one series whatever 'Skip that month' it keeps hidden; a monthly one reads it",
       _model_mod._same_series("2026-11-02", {"freq": "weekly", "month_day_policy": "skip"},
                               "2026-11-02", {"freq": "weekly"})
       and not _model_mod._same_series("2026-01-31", {"freq": "monthly", "month_day_policy": "skip"},
                                       "2026-01-31", {"freq": "monthly"}))
 # ...nor the weekdays, month days or policy a rule keeps that its frequency
-# never reads: the phone's sheet stores all three (the lows wave).
+# never reads: the phone's sheet stores all three.
 check("a rule is one series whatever fields it keeps that its frequency never reads",
       _model_mod._same_series("2026-11-02", {"freq": "weekly", "month_days": [15]}, "2026-11-02", {"freq": "weekly"})
       and _model_mod._same_series("2026-11-02", {"freq": "daily", "weekdays": [0, 2]}, "2026-11-02", {"freq": "daily"})
@@ -4123,7 +4122,7 @@ check("a rule is one series whatever fields it keeps that its frequency never re
                                       "2026-11-02", {"freq": "weekly"}))
 # ...and an import reads the repeat by the days it gives: the start's weekday
 # lit in the backup and not here is no change, and the Update spent the
-# note's only earlier version for nothing (round 19).
+# note's only earlier version for nothing.
 _t19_here = _model_mod.normalize_note({"id": 49, "uid": "t19-lit", "title": "Gym", "body": "x",
                                        "date": "2026-11-02", "recurrence": {"freq": "weekly"}})
 check("an import reads a repeat whose start weekday is lit, or left to the start, as unchanged",
@@ -4159,7 +4158,7 @@ check("an Update's copy sets its days with words aside when replaced; a backup's
       _t10_aside(_t17_upd) == [("2026-11-22", "Room W2")] and _t10_aside(_t17_back) == [])
 
 
-# Round 18. History lists a day moved past a bounded series' end, and one
+# History lists a day moved past a bounded series' end, and one
 # moved onto a deleted date, and its search finds their words: in no row,
 # they were found nowhere -- History is the one search of a day's own words.
 _t18_bounded = _model_mod.normalize_note({
@@ -4176,7 +4175,7 @@ def _t18_found(note):
     return [c["date"] for row in _rec_t10.history_entries([note], "Budget") for c in row.get("children", [])]
 
 
-# Round 19. Two moves onto one date -- an older build's, or an Undo's beside a
+# Two moves onto one date -- an older build's, or an Undo's beside a
 # dead move -- are listed once: twice in History, and the phone's list threw.
 _t19_two = {"id": 46, "title": "Meeting", "body": "x", "date": "2026-11-02",
             "recurrence": {"freq": "weekly", "interval": 2}, "exceptions": [], "overrides": {},
@@ -4185,7 +4184,7 @@ _t19_two = {"id": 46, "title": "Meeting", "body": "x", "date": "2026-11-02",
 # check once built only the order that passes by luck).
 _t19_orders = [_t19_two, dict(_t19_two, moved={"2026-12-07": "2026-12-10", "2026-12-14": "2026-12-10"})]
 # Which origin an unread twin is named by follows the file's order (a read
-# keeps the live one, below; recorded as latent in the audit's lows): the
+# keeps the live one, below; recorded as latent among the low findings): the
 # date is listed once either way.
 check("two moves onto one date are listed once, by the banner's count and in History (%s)"
       % [_rec_t10.drawn_moves(n) for n in _t19_orders],
@@ -4193,14 +4192,14 @@ check("two moves onto one date are listed once, by the banner's count and in His
       and all([new for _orig, new in _rec_t10.drawn_moves(n)] == ["2026-12-10"]
               and [c["date"] for row in _rec_t10.history_entries([n]) for c in row.get("children", [])]
               == ["2026-12-10"] for n in _t19_orders))
-# Round 20. ...and a read keeps the one the calendar draws, whichever comes
+# ...and a read keeps the one the calendar draws, whichever comes
 # first by date: by date alone it kept the dead 7 December, and a meeting
 # moved under the phone's 0.13.0 jumped back at the upgrade.
 check("of two moves onto one date, a read keeps the one the calendar draws (%s)"
       % [_model_mod.normalize_note(copy_mod.deepcopy(n))["moved"] for n in _t19_orders],
       all(_model_mod.normalize_note(copy_mod.deepcopy(n))["moved"] == {"2026-12-14": "2026-12-10"}
           for n in _t19_orders))
-# Round 21 (the owner's choice). A day the note deleted stays deleted, but the
+# The owner's choice: a day the note deleted stays deleted, but the
 # copy's words for it are set aside, not dropped: the phone's 0.13.0 showed
 # such a day blank, its words in the copy alone, and the install erased them.
 _t21_hidden = _model_mod.normalize_note({
@@ -4213,7 +4212,7 @@ check("a day the note deleted stays deleted, and the copy's words for it are set
       % _t10_aside(_t21_hidden),
       "2026-11-09" in _t21_hidden["exceptions"] and _t10_aside(_t21_hidden) == [("2026-11-09", "Hidden words")])
 # ...and a backup's Update of that note keeps what its copy set aside as it
-# was read: an Add kept it, an Update dropped it (round 22, the lows wave).
+# was read: an Add kept it, an Update dropped it.
 _t22_mine = _model_mod.normalize_note({"id": 48, "uid": "t22-gym", "title": "Gym", "body": "here",
                                        "date": "2026-11-02", "recurrence": {"freq": "weekly"}})
 _t22_theirs = {"uid": "t22-gym", "title": "Gym", "body": "x", "date": "2026-11-02",
@@ -4226,8 +4225,7 @@ check("a backup's Update keeps the earlier text its note's copy set aside as it 
       % _t10_aside(_t22_mine),
       _t10_aside(_t22_mine) == [("2026-11-09", "Words from the backup")])
 # ...made once: a note already holding the same words on the same day is that
-# note, and each later Update from the same device made it again (the lows
-# wave's verification).
+# note, and each later Update from the same device made it again.
 _t22_book = [_t22_mine]
 _t22_first = _model_mod.settle_set_aside(_t22_book)
 _t22_mine["_set_aside"] = [{"day": "2026-11-09", "body": "Words from the backup"}]
@@ -4257,7 +4255,7 @@ check("History lists a day moved past a bounded series' end, or onto a deleted d
       and _rec_t10.history_entries([_t18_bounded])[0]["n_occurrences"] == 7)
 
 
-# The fuzz of a series' days (the owner's choice, round 17): rounds 11 to 17
+# The fuzz of a series' days (the owner's choice): seven reviews in a row
 # each found a road that lost or doubled a day's words. Random roads on one
 # series -- a day edited, moved, deleted; the rule or start changed, the
 # repeat off and on, Restore previous, a read, a share code's or a backup's
@@ -4281,7 +4279,7 @@ def _f17_where(note, made):
     can reach -- a day the calendar draws or lists off the schedule, any day of
     a note that no longer repeats (a repeat brings it back), the copy Restore
     previous brings, a note made of them). A word in the file alone, on a date
-    nothing shows, is not kept (round 18: the fuzz counted it kept)."""
+    nothing shows, is not kept (the fuzz counted it kept)."""
     overrides = note.get("overrides") or {}
     days = [p.get("body") for p in overrides.values() if p.get("body")]
     if _rec_t10.is_recurring(note):
@@ -4344,7 +4342,7 @@ def _f17_restore(note):
 
 # Whether the roads reach the placement of a copy's days on a series turned
 # back on as it was (_copy_days_placed), and its setting aside of words for a
-# day the note deleted (round 21): the fuzz once took neither, in 3,000 roads.
+# day the note deleted: the fuzz once took neither, in 3,000 roads.
 _f17_placed = {"calls": 0, "gone": 0}
 _f17_placed_fn = _model_mod._copy_days_placed
 
@@ -4361,7 +4359,7 @@ _model_mod._copy_days_placed = _f17_count_placed
 _F17_ALL = ["edit", "edit", "move", "shift", "delete", "rule", "rule", "read", "share", "backup", "restore",
             "off", "back", "back", "older"]
 # A third of the roads keep to the turn-off and the turn-on with the days
-# edited and deleted between: the corner rounds 15 to 24 kept finding.
+# edited and deleted between: the corner the reviews kept finding.
 _F17_OFF_ON = ["edit", "edit", "delete", "delete", "off", "back", "back", "older", "rule", "read"]
 _F17_ROADS = 1500
 _f17_failures, _f17_steps, _f17_doubles = [], 0, 0
@@ -4377,7 +4375,7 @@ for _f17_seed in range(_F17_ROADS):
             _note, _rec_t10.parse_date(_F17_DAYS[0]), _rec_t10.parse_date(_F17_DAYS[-1]))) & set(_F17_DAYS))
         # A copy is one slot: replaced, the words it alone held go with it --
         # the documented rule, not a loss -- unless it repeats as a series the
-        # note does not: those are set aside (copy_days_set_aside, round 15).
+        # note does not: those are set aside (copy_days_set_aside).
         _copy_was = copy_mod.deepcopy(_note.get("_prev"))
         _slot_copy = isinstance(_copy_was, dict) and not (
             _rec_t10.is_recurring(_copy_was) and not _model_mod._repeats_as(_note, _copy_was))
@@ -4391,7 +4389,7 @@ for _f17_seed in range(_F17_ROADS):
         _road.append(_op)
         if _op == "shift" and _repeats and len(_drawn) >= 2:
             # A run of days each given words, each held a day later, the last
-            # first -- the road round 17's critical loss took.
+            # first -- the road a critical loss once took.
             _i = _rng17.randrange(len(_drawn) - 1)
             _run = _drawn[_i:_i + _rng17.randint(2, 4)]
             for _d in _run:
@@ -4438,7 +4436,7 @@ for _f17_seed in range(_F17_ROADS):
             # The turn-off and the turn-on as it was of 0.97.405 and the
             # phone's 0.13.0, the versions people upgrade from: the days left
             # in the copy alone, each shown blank -- one, looking empty,
-            # perhaps deleted there (round 21's road) -- then this build's
+            # perhaps deleted there -- then this build's
             # first read, at the install. What the copy they replaced held
             # alone was theirs to lose, not this build's.
             _older_lost = {p.get("body") for p in ((_copy_was or {}).get("overrides") or {}).values()} - _days_was
@@ -4479,7 +4477,7 @@ for _f17_seed in range(_F17_ROADS):
         _was, _now = _copy_was or {}, _note.get("_prev")
         _spent = {key: value for key, value in _was.items() if key not in _model_mod.DAY_FIELDS}
         # ...and never an Update's copy a turn-off replaced: kept whole is
-        # the promise there (round 9), which the slot rule must not excuse.
+        # the promise there, which the slot rule must not excuse.
         if (isinstance(_now, dict) and _now != _was and _now != _spent
                 and not (_op in ("off", "rule") and _model_mod.update_copy(_copy_was))):
             for _word in _only_copy - _held:
@@ -4498,7 +4496,7 @@ for _f17_seed in range(_F17_ROADS):
             break
     else:
         # ...and History, the one search of a day's own words, finds every
-        # day the calendar draws or lists off the schedule (round 18).
+        # day the calendar draws or lists off the schedule.
         _off = set(_rec_t10.off_schedule_days(_note)) if _rec_t10.is_recurring(_note) else set()
         for _d, _p in (_note.get("overrides") or {}).items():
             if not (_p.get("body") and _rec_t10.is_recurring(_note) and (_d in _off or _rec_t10.expand_occurrences(
@@ -4583,7 +4581,7 @@ def _t10_broken(mine, theirs):
     """Where the take-back breaks its rule for one shape: the note's words
     or look on a day changed, or a copy's day with words of its own neither
     shown on the day the result draws it nor set aside for that date, though
-    the note did not delete that day (round 15)."""
+    the note did not delete that day."""
     out = _t10(copy_mod.deepcopy(mine), copy_mod.deepcopy(theirs))
     note = _model_mod.normalize_note(dict({"title": "Gym", "body": "Warm up."}, **_kd_series, **mine))
     kept = _model_mod.normalize_note(dict({"title": "Gym", "body": "Warm up."}, **_kd_series, **theirs))
@@ -4621,7 +4619,7 @@ check("on 300 shapes either app's editor makes, the take-back keeps every word t
       not _t10_bad)
 
 # ...and the styles of words held in the copy's but not the same: a part of
-# the copy's text made bold since was written over, no copy kept (round 8).
+# the copy's text made bold since was written over, no copy kept.
 _rs_prev = {"title": "Trip", "body": "Packing list: boots, rope, map, torch.",
             "comments": "", "formatting": [], "paragraphs": []}
 _rs_bold = _model_mod.normalize_note({
@@ -4634,7 +4632,7 @@ check("a restore over part of the copy's words made bold since keeps them as the
       and _model_mod.copy_replaced_by_restore(_rs_plain, _rs_plain["_prev"]) is None)
 
 # "↩ Restore previous" weighs all it writes over: comments typed since the
-# copy, and the styles of the same words, went to no file (round 7).
+# copy, and the styles of the same words, went to no file.
 _rp_prev = {"title": "Trip", "body": "Packing list: boots, rope, map, torch.",
             "comments": "ok", "formatting": [], "paragraphs": []}
 _rp_note = _model_mod.normalize_note({
@@ -4888,7 +4886,7 @@ finally:
 # and beside any notebook it cannot prove is empty -- leaving it untouched.
 # And it asks the app's own resolver which folder the app will open: the
 # copy this file had looked beside itself while the app opened the folder
-# notebook_location.txt names, the owner's notebook (final audit, round ten).
+# notebook_location.txt names, the owner's notebook.
 # Each fresh folder stands as a scratch copy's, the app's folder too; the
 # repository's layout is walked by tools/check_guest.py (item 12).
 # (_qa_support is imported at the top, for its guest step.)
@@ -5184,9 +5182,9 @@ for _limit, _small in (("MAX_DECOMPRESSED_BYTES", 1000), ("MAX_SHARE_CODE_CHARS"
 
 # ---- A notes file another program holds at the start ----
 # It read as unreadable, its copy failed for the same reason, and the first
-# keystroke's autosave replaced fifty notes with one (2026-10-28, the final
-# audit's third round). Read again a moment later, and never written over
-# while neither it nor a copy of it could be read.
+# keystroke's autosave replaced fifty notes with one. Read again a moment
+# later, and never written over while neither it nor a copy of it could be
+# read.
 _hw_dir = tempfile.mkdtemp(prefix="nd_held_")
 _hw_prev = _paths.APP_DIR
 try:
@@ -5240,9 +5238,9 @@ finally:
     shutil.rmtree(_hw_dir, ignore_errors=True)
 
 # ---- The settings file held the same way ----
-# Left out of round three's retries, a refused read took the place-holder for
-# the file: the cleanup ran again, and save_setting wrote the place-holder and
-# one key over the person's categories and theme (round 4).
+# Left out of the notes file's retries, a refused read took the place-holder
+# for the file: the cleanup ran again, and save_setting wrote the place-holder
+# and one key over the person's categories and theme.
 _hs_prev = _paths.APP_DIR
 _hs_real_open = open
 _hs_sleep = _storage.time.sleep
@@ -5286,7 +5284,7 @@ try:
             _hs_got = _storage.load_settings()
             _hs_held = _paths.writes_held(_paths.SETTINGS_FILE)
             # Every later read is one try: retried each time, a hold for the
-            # run cost a second a read -- the start 19 s, a note click 4 (round 5).
+            # run cost a second a read -- the start 19 s, a note click 4.
             _hs_waits = len(_hs_slept)
             _hs_later = [_storage.load_settings() for _ in range(5)]
             _hs_waits = len(_hs_slept) - _hs_waits
@@ -5333,7 +5331,7 @@ finally:
         shutil.rmtree(_d, ignore_errors=True)
 
 # A held file's refused write is reported once a run: a setting is written at
-# every note opened, and its banner took the place of a delete's Undo (round 5).
+# every note opened, and its banner took the place of a delete's Undo.
 _hr_dir = tempfile.mkdtemp(prefix="nd_heldrep_")
 _hr_prev = _paths.APP_DIR
 _hr_calls = []
@@ -5356,8 +5354,8 @@ check("a held file's refused write is reported once a run, and refused every "
 # A power cut just after a rename can leave the new name pointing at bytes
 # never written. One writer of six waited for them (_write_json_atomic): the
 # backup export over the previous backup, the migrated notes file that marks
-# a copy done and the import's attached files did not (2026-10-28, the final
-# audit). Read in the source, so a seventh cannot be added without it: each
+# a copy done and the import's attached files did not. Read in the source,
+# so a seventh cannot be added without it: each
 # os.replace has an fsync, or a call to the copier that has one, in the
 # lines before it.
 _fs_files = ["note_organizer.py"] + sorted(

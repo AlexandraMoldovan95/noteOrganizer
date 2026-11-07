@@ -243,7 +243,7 @@ check('search reaches into a day\'s own override content',
 _q2 = _hist(_h_notes, query='agenda', today=_H_TODAY)
 check('a base-only match keeps the group collapsed (no auto-expand)',
       [e['note_id'] for e in _q2] == [3] and _q2[0]['auto_expand'] is False)
-# Folded as the list's search folds (wave 2): "creme" missed "Crème" here.
+# Folded as the list's search folds: "creme" missed "Crème" here.
 _qf = _hist([{'id': 9, 'title': 'Crème brûlée night', 'body': 'x', 'comments': '',
               'date': '2026-05-04'}], query='CREME BRULEE', today=_H_TODAY)
 check("the History's search folds case and diacritics, as the list's does",
@@ -258,8 +258,8 @@ check('"Older" catches everything before two years ago',
       [e['note_id'] for e in _o] == [2])
 check('"2 years ago" is its own bucket, not part of Older',
       _hist(_h_notes, year_bucket='2 years ago', today=_H_TODAY) == [])
-# A day of a year to come is this year's work, not the archive's (the audit's
-# nineteenth round: it was filed under Older).
+# A day of a year to come is this year's work, not the archive's (it was
+# filed under Older).
 _next = [{'id': 9, 'title': 'Booked', 'body': '', 'date': '%d-01-05' % (_H_TODAY.year + 1)}]
 check('a day of next year is under "This year", not "Older"',
       [e['note_id'] for e in _hist(_next, year_bucket='This year', today=_H_TODAY)] == [9]
@@ -674,7 +674,7 @@ def _whole_reads(fn):
 
 _CAP_N = 2000
 # Ending before the dates its days are moved to: a day moved onto a date the
-# rule gives by itself goes home at a read (round 15).
+# rule gives by itself goes home at a read.
 _cap_note = NO.normalize_note({
     'id': 1, 'title': 's', 'date': '2020-01-01',
     'recurrence': {'freq': 'daily', 'end': '2035-12-31'},
@@ -742,8 +742,8 @@ def _per_day_moves(note):
 
 
 def _per_day_off(note):
-    # A deleted date a day was moved onto is asked of the series as it is
-    # (round 17 of the final audit); any other, with no day skipped.
+    # A deleted date a day was moved onto is asked of the series as it is;
+    # any other, with no day skipped.
     sched = dict(note, exceptions=[])
     exc = set(note.get('exceptions') or [])
     landed = set((note.get('moved') or {}).values())
@@ -779,9 +779,9 @@ check('...and the answers are the ones the calendar gives day by day: moved days
 check('...and days off the schedule', _agree_off)
 
 # ---- Days a note keeps after its repeat is turned off steer nothing ----
-# Kept for a turn-back-on (2026-10-28, the final audit's third round), they
+# Kept for a turn-back-on, they
 # were still read: the one-off showed its first day's words on its date, and a
-# deleted first day took it off the calendar (round 4).
+# deleted first day took it off the calendar.
 _kd = NO.normalize_note({'id': 1, 'title': 'Weekly sync', 'body': 'SERIES TEXT',
            'date': '2026-09-07', 'recurrence': {'freq': ''},
            'exceptions': ['2026-09-07'],
@@ -799,7 +799,7 @@ check('...and what a kept day holds is still read, for the saves that keep it',
 
 # ---- ...and come back only onto the series they belong to ----
 # Turned back on from another date, an old deleted day hid the new series' own
-# first day (round 5). Her answer: they come back only with the same date and
+# first day. Her answer: they come back only with the same date and
 # rule; a deleted day holds nothing, and the rescue copy keeps them all.
 import copy
 _rs_days = {'exceptions': ['2026-09-14'],

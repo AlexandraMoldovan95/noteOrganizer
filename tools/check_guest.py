@@ -21,7 +21,7 @@ what dead runs left. This gate holds it:
    A suite (qa1-qa9, test_*.py) settles through
    its guest step, qa/_qa_support.as_a_guest (which hermetic_seed calls):
    the suites were let off for "a runner starts them, and they inherit the
-   ceiling", which nothing made true (final audit, round nine). A runner
+   ceiling", which nothing made true. A runner
    that builds the app, or starts a suite, the app or a runner that takes
    the turn, may not pass heavy=False.
 2. Every child has a bound: subprocess.run/call/check_call/check_output
@@ -49,17 +49,17 @@ what dead runs left. This gate holds it:
    before it starts anything that a Python runner which settled started
    it (guest.DOOR_ENV), and such a door names it -- or, for a script that
    runs inside Windows Sandbox, a throwaway machine, that it is there. The
-   site's browser walk ran outside every guard (final audit, round eight).
+   site's browser walk ran outside every guard.
    A sandbox guard is evaluated, not read for the account's name: it must
    refuse a user of this computer at the sandbox's folder and elsewhere,
    and the sandbox's account elsewhere, and let the sandbox's own start
    through; PowerShell, where there is one, is asked too. One that took
-   the path alone as proof passed the name test (round nine). PowerShell's
+   the path alone as proof passed the name test. PowerShell's
    own parser, which runs nothing, reads the script as this gate does --
    nothing before the guard, no #requires, using or param block -- and
    only the literals' values are handed to PowerShell: this gate's reader
    once passed code after a block comment's '#>', and took a curly quote,
-   at which PowerShell ends a string, for part of one (round ten).
+   at which PowerShell ends a string, for part of one.
 8. The walk sees what it is shown: each shape in CASES, written to a
    scratch folder laid out as the repository is and found and walked as
    its files are, is caught or passes as it should; PowerShell's parser,
@@ -74,9 +74,9 @@ what dead runs left. This gate holds it:
 11. The door to the Linux image shows the container only what git
     tracks, as the working tree has it: neither the ignored files (a
     notebook, settings, notebook_location.txt) nor what the ignore list
-    misses (a Trash kept aside, round nine), read-only, with no network,
+    misses (a Trash kept aside), read-only, with no network,
     and nothing writable but a /tmp sized inside its memory limit; and a
-    link at a tracked name, which the copy followed (round ten), refuses
+    link at a tracked name, which the copy followed, refuses
     the run.
 12. A suite started outside a runner settles itself: each suite's opening
     lines, up to its guest step, run as CI runs them -- in the repository's
@@ -88,7 +88,7 @@ what dead runs left. This gate holds it:
     path or through %USERPROFILE%, each refuses and the notebook stays as
     it was; so does a qa opening whose app would open another folder than
     its own. The guards looked beside themselves while the app opened the
-    folder the file names: the owner's notebook (round ten).
+    folder the file names: the owner's notebook.
 
     py tools/check_guest.py
 """
@@ -606,11 +606,11 @@ NODE_START_CALL = re.compile(r"\b(?:spawn|spawnSync|exec|execSync|execFile|execF
 # tools/msix/make_sandbox_test.py writes maps and starts its script from.
 SANDBOX_ACCOUNT = "WDAGUtilityAccount"
 SANDBOX_FOLDER = "C:\\pkg"
-# A sandbox guard is evaluated, not read for the account's name (round nine:
-# one that took the path alone as proof passed that), so it has one shape,
+# A sandbox guard is evaluated, not read for the account's name (one that
+# took the path alone as proof passed that), so it has one shape,
 # GUARD_SHAPE, in which no evaluation can run anything. PowerShell's own parser
 # reads it too, where there is one: this reader once missed code after a
-# block comment's '#>', and quotes PowerShell ends a string at (round ten).
+# block comment's '#>', and quotes PowerShell ends a string at.
 PS_QUOTES = "'‘’‚‛"
 PS_TOKEN = re.compile(r"\s*(?:(?P<text>'(?:[^%s]|'')*')|(?P<var>\$[A-Za-z_][\w:]*)"
                       r"|(?P<op>-[A-Za-z]+)|(?P<word>[A-Za-z][\w-]*)|(?P<num>\d+)"
@@ -966,7 +966,7 @@ def docker_runs_outside_the_door():
 # -- 8: the walk sees what it is shown --
 
 # Each case: a file name, what one of its problems must say ('' for none),
-# and its text: round eight's fourteen shapes the walk once passed first,
+# and its text: the fourteen shapes the walk once passed come first,
 # and those with '' pass, so a walk that flags everything fails too.
 CASES = [
     ("class_method.py", "before guest.settle()", """
@@ -1222,7 +1222,7 @@ def the_app():
     guest.settle()
     return note_organizer
 """),
-    # Round ten: what PowerShell runs before the guard this gate read, and
+    # What PowerShell runs before the guard this gate read, and
     # quotes it ends a string at. Each is read by PowerShell's parser too.
     ("inline_block_comment.ps1", "a shell script runs commands", """
 <# header #> Write-Output 'ran before the guard'
@@ -1585,8 +1585,8 @@ def floor_holds():
 def door_shows_only_tracked():
     """linux_ci's copy of a stand-in repository holds what git tracks, as
     the working tree has it: nothing it ignores, and nothing it does not
-    track that the ignore list misses (the app's copy of a Trash kept aside,
-    final audit, round nine); and the container's /repo is that copy, with
+    track that the ignore list misses (the app's copy of a Trash kept
+    aside); and the container's /repo is that copy, with
     no network, a sized /tmp and nothing else writable."""
     import linux_ci
     work = guest.scratch("noteorg-gate-git-")       # marked: swept if this gate is killed
@@ -1666,7 +1666,7 @@ def door_shows_only_tracked():
 def links_refused(work, repo, git):
     """A tracked folder, then a tracked file, replaced by a link to a
     stand-in notebook: the copy refuses each, naming it, and shows nothing
-    of it (final audit, round ten: the copy followed links). A file link
+    of it (the copy followed links). A file link
     needs a privilege Windows may not give; a junction does not."""
     import linux_ci
     her = os.path.join(work, "her")
@@ -1944,7 +1944,7 @@ def beside_a_named_notebook(work, env, openings):
     And the checkout as it was before the file, its notebook beside the
     app: a qa opening from qa/ refuses, for the app would open the root.
     The guards looked beside themselves while the app opened the folder the
-    file names (final audit, round ten)."""
+    file names."""
     wrong = []
     profile = os.path.join(work, "profile")
     her = os.path.join(profile, "Note Organizer")
