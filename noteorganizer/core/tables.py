@@ -10,6 +10,8 @@ strings out: no tkinter, tested on any machine.
 
 import re
 
+from .formatting import parse_list_marker
+
 CELL = "|"
 # A line break INSIDE a cell, as markdown itself writes one -- a table
 # row must stay one line of text, so the break is a marker in the value.
@@ -670,9 +672,14 @@ def lines_apart(text):
     """A note's lines on one line, kept apart: each line's spaces squeezed,
     empty lines left out, " · " between. Run together, "the book borrowed
     from Radu" and "the article about sleep" read as one sentence. The
-    note card and the question about a day off its schedule both use it."""
-    return " · ".join(" ".join(line.split()) for line in (text or "").split("\n")
-                      if line.strip())
+    note card and the question about a day off its schedule both use it.
+    A list item with no words is an empty line too: kept, it read "· • ·"."""
+    kept = []
+    for line in (text or "").split("\n"):
+        kind, _marker, words = parse_list_marker(line.lstrip(" \t"))
+        if (words if kind else line).strip():
+            kept.append(" ".join(line.split()))
+    return " · ".join(kept)
 
 
 def glimpse(text, limit):

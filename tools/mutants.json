@@ -17244,8 +17244,8 @@
     "id": "PN01",
     "about": "A note's lines run together again, on the card and in the question about a day",
     "edits": [{"file": "noteorganizer/core/tables.py",
-               "find": "    return \" · \".join(\" \".join(line.split()) for line in (text or \"\").split(\"\\n\")\n",
-               "replace": "    return \" \".join(\" \".join(line.split()) for line in (text or \"\").split(\"\\n\")\n"}],
+               "find": "    return \" · \".join(kept)\n",
+               "replace": "    return \" \".join(kept)\n"}],
     "must_fail": ["a card keeps the lines of a note apart",
                   "a day off its schedule of two lines is asked with its lines kept apart",
                   "lines_apart keeps a note's lines apart"],
@@ -17302,6 +17302,17 @@
                "replace": "            text = core_tables.glimpse(\" \".join(text.split()), 160)\n"}],
     "must_fail": ["a day off its schedule of two lines is asked with its lines kept apart"],
     "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "PN09",
+    "about": "A list item with no words is kept on a card, between two dots",
+    "edits": [{"file": "noteorganizer/core/tables.py",
+               "find": "        if (words if kind else line).strip():\n",
+               "replace": "        if line.strip():\n"}],
+    "must_fail": ["lines_apart leaves out a list item with no words",
+                  "...and leaves out a list item with no words"],
+    "suites": ["test_tables", "qa7"],
     "expect": "killed"
   },
   {
