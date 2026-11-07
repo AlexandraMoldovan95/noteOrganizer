@@ -556,9 +556,34 @@ summary.
 ### Commits
 
 - Make small, logical commits with messages that clearly describe the change.
+- **The subject names the part of the app, then what changed, in plain
+  words** (the owner's rule, 2026-11-07): `area: what changed`, for
+  example `banner: keep the open popup when the tab changes behind
+  Settings`, read from `git log --oneline` by someone who never saw the
+  work. A review panel found subjects such as "a popup over Settings is
+  Settings'" unreadable there. The body tells the story; the house words
+  below belong in the body and the issues log, not in a subject. Earlier
+  history stays as it is.
 - Always inspect `git diff` and `git status` before committing.
 - Never commit files or changes that weren't part of the requested task
   without asking first.
+
+#### House words
+
+The issues log, the commit bodies and the agent's reports use a few words
+in a sense of their own:
+
+| Word | Means |
+|---|---|
+| banner (desktop), bar (phone) | the short message near the top of the window, or a phone's snackbar, often with one button: Undo, Show |
+| word | what a banner or bar says, as in "the list's word about a hidden note" |
+| road | one way a person can reach a piece of code: the same fix asked again "by every road" |
+| round | one pass of reviewer agents over the app, after which their findings are fixed |
+| wave | a group of rounds with one aim (lost data, an ordinary person's week, AI slop, the review panel) |
+| the lows | findings of low severity, fixed in a wave of their own |
+| mutant | a fix broken on purpose, to watch the check that guards it fail |
+| the walk | the phone's scripted run of the built app on an emulator (`tools/emulator/walk.py` there) |
+| a look | one reading of the phone's screen during the walk |
 
 ### Push
 

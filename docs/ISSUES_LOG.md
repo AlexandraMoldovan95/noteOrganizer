@@ -12,7 +12,9 @@ day-to-day tracking.
 Code), so a first person ("one of my own renames") is the agent. **The owner** or **she** is
 Alexandra; a **field test** or **field report** is her, testing the packaged `.exe`; and
 *reviewers*, *agents* or *waves* are Claude subagents unless a person is named. How the work is
-divided and checked is in [How Note Organizer is built with an AI agent](AI_WORKFLOW.md).
+divided and checked is in [How Note Organizer is built with an AI agent](AI_WORKFLOW.md). A few
+words carry a sense of their own here (a banner's *word*, a *road*, a *round*, *the lows*, a
+*mutant*): [the house words](../CLAUDE.md#house-words).
 
 ## Start here: five stories
 

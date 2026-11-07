@@ -18,6 +18,7 @@ in [In my words](IN_MY_WORDS.md).
 - [What is enforced, and what is only asked](#what-is-enforced-and-what-is-only-asked)
 - [Guardrails that came from real incidents](#guardrails-that-came-from-real-incidents)
 - [Agent reviews, in numbers](#agent-reviews-in-numbers)
+- [The final audit](#the-final-audit)
 - [AI reviewers and simulations: what they are, and are not](#ai-reviewers-and-simulations-what-they-are-and-are-not)
 - [Cost](#cost)
 - [Models](#models)
@@ -121,11 +122,60 @@ run is safe is the thing that failed.
 | 11 September | Thirteen hostile reviewers, three verifiers per material finding, a completeness critic | 33 kept; the critic's audit of the wave itself drove three fixes ([0.71.154](../CHANGELOG.md#071154--2026-09-11)) |
 | Late September – 2 October | Nineteen rounds trying to break the app, each aimed at what the last one changed | Every finding reproduced with a probe before it was fixed ([0.83.335](../CHANGELOG.md#083335--2026-10-02)) |
 | 8 October | Five reviewer personas on the palette, five rounds; four reviewers on colour-blindness simulations | The palette of [0.89.365](../CHANGELOG.md#089365--2026-10-08); the fixes of [0.89.371](../CHANGELOG.md#089371--2026-10-08) |
+| 27 October – 7 November | The final audit before the stores, both apps, in waves of rounds | Rounds per wave below ([the final audit](#the-final-audit)) |
 
 What the numbers taught: a wave is worth what its verification is worth - the hostile pass
 reported one first-run dialog six times, and only the harshness audit noticed - and a grep later
 found in one second a defect a 9.9-million-token review wave had reported
 ([the story](ISSUES_LOG.md#the-safety-net-that-could-not-see-the-gap)).
+
+## The final audit
+
+Before the Microsoft Store and Google Play, both apps went through one audit, from 27 October
+2026. *Ready* was defined first: notes are never lost or damaged; nothing makes the app stop or
+freeze, even on purpose; nothing from outside runs or leaves the notebook's folder; the stores'
+rules are met; everything the documents say is true of the code; an ordinary person understands
+every screen; the repositories are clean; the review panel has no objection of substance; and I
+have walked the test plans on the final builds.
+
+How a round worked:
+
+- **Agents attacked the app** in a role - an ordinary person's week, a careless hand, hostile
+  and huge input - each reading the code and running probes in a scratch copy.
+- **Every finding of medium severity or worse was re-graded by a sceptic** before it counted.
+  The severity rule is mine (1 November): only steps an ordinary person takes keep a round
+  open, and a loss of notes is always serious.
+- **Every fix came with a check, and a mutant**: the fix broken on purpose, to watch the check
+  fail ([the desktop's catalogue](../tools/mutants.json)).
+- **The next round attacked the last round's fixes by name**, and the code beside them. A fix is
+  a new road, and more than once it was the next round's finding.
+- **A wave closed after two rounds in a row with nothing of medium severity or worse.** Its low
+  findings were fixed in a wave of their own, verified the same way.
+
+| Wave | Aim | Desktop | Phone |
+|---|---|---|---|
+| 0 | Mechanical: licences, history, packaging | done in one pass | done in one pass |
+| 1 | Lost notes, hostile and huge input, security, accessibility | closed at round 20 | closed at round 25 |
+| 1's lows | The low findings of wave 1 | closed at verification round 11 | closed at verification round 11 |
+| 3 | What read as generated rather than written, in code and documents | closed at round 8 * | closed at round 8 * |
+| 2 | An ordinary person's week, and a careless hand | closed at round 14 | closed at round 25 |
+| 2's lows | The low findings of wave 2 | closed at verification round 8 | closed at verification round 10 |
+| 4 | The review panel: eight roles, two to an agent | under way | under way |
+
+\* Not by the two-clean-rounds rule. After round 5 I narrowed what kept a round of wave 3 open
+to what a person using the app would meet and be misled by, and chose round 8 as the last.
+
+The phone needed more rounds than the desktop in waves 1 and 2, and its issues log says why: most
+of the extra rounds found the round before's own fixes wrong. Custom order's drag took twelve
+rounds to settle; the list's messages were redone five times, and settled only once the phone
+did what the desktop already did.
+
+What each round found is in the [issues log](ISSUES_LOG.md), from
+[A file with two names](ISSUES_LOG.md#a-file-with-two-names) on. Tokens were counted for wave 3
+alone: about 8 million for its eight rounds, a round of a million or a little more, and the
+panel's first round, eight agents, took about the same. The whole audit had been estimated at 8
+to 13 million before it began; wave 3 used most of that by itself, and the other waves were not
+counted.
 
 ## AI reviewers and simulations: what they are, and are not
 
