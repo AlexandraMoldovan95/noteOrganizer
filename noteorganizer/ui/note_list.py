@@ -183,13 +183,13 @@ class NoteListMixin:
         hand draws nothing). The search box is emptied without the focus:
         the banner comes while a new note is being written, and the words
         typed after Show all went into the search."""
-        # Settings is left first, as Back leaves it (wave 2, round 12); a
+        # Settings is left first, as Back leaves it; a
         # popup holding typed work asks, and kept, nothing moves: the tab
-        # change below destroyed it, words and all (lows round 5).
+        # change below destroyed it, words and all.
         if not self._leave_settings_for_the_editor():
             return
         # ...and from the Calendar, or with the list put away, the list is
-        # brought where it is seen (the lows wave's round 4).
+        # brought where it is seen.
         try:
             if self.notebook.index("current") != self.TAB_NOTES:
                 self.notebook.select(self.TAB_NOTES)
@@ -241,8 +241,8 @@ class NoteListMixin:
 
             def say():
                 # Asked again when shown, as it can wait behind an Undo -- its
-                # words too, or they named a filter changed since (round 7).
-                # The list read once: per note, a big import froze (round 8).
+                # words too, or they named a filter changed since.
+                # The list read once: per note, a big import froze.
                 shown_now = self._visible_note_ids()
                 held = {id(m) for m in self.notes}
                 still = [n for n in hidden if id(n) in held and n.get("id") not in shown_now]
@@ -253,7 +253,7 @@ class NoteListMixin:
                     self._show_toast(f"{what}, {now}", kind="info",
                                      action=lambda: self._show_all_notes(still[0]), action_text="Show all")
             # Not over an Undo still showing: 'Day removed' holds the day's
-            # text in it alone (the lows wave's round 6).
+            # text in it alone.
             self._banner_after_undo(said, say)
 
     def _bring_card_into_view(self, note_id):
@@ -1621,7 +1621,7 @@ class NoteListMixin:
         would be the one route that ignores the mode. On a header, what a
         click on it does: fold or unfold its group. Enter held down presses
         once (_enter_repeats): a header folded and opened at every repeat,
-        writing settings.json each time (round 8 of the final audit)."""
+        writing settings.json each time."""
         if self._enter_repeats(event):
             return "break"
         self._bring_ring_into_view()

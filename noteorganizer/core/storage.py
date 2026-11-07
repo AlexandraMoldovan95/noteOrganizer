@@ -396,7 +396,7 @@ def _delete_attachment_files(notes_or_entries, spare=()):
     acts. ISSUES_LOG: "The Trash that gave notes back one at a time"."""
     # A run that could not read the notes file -- held, or set aside
     # unreadable -- holds notes it never saw: every file is kept, until a run
-    # that has read them (rounds 6 and 7 of the final audit).
+    # that has read them.
     if paths.writes_held(paths.DATA_FILE) or paths.DATA_FILE in _UNREAD_AT_LOAD:
         return
     for note in notes_or_entries:
@@ -659,7 +659,7 @@ def load_notes(version_change=None):
     ids_repaired = repair_note_ids(notes)
     # Days a series' copy set aside, notes of their own now, written below
     # with the identities: unwritten, each start made them again under new
-    # ones, and said so again (round 16 of the final audit).
+    # ones, and said so again.
     report["set_aside_made"] = aside_made = settle_set_aside(notes)
     # Identities minted in memory differ every launch unless written down
     # (ISSUES_LOG: "The identity that only lasted until you closed the
@@ -728,7 +728,7 @@ def load_notes(version_change=None):
 
 
 # The notes files whose last load_notes held none of their notes: set aside
-# unreadable, a run's notes are only what it writes (round 7 of the audit).
+# unreadable, a run's notes are only what it writes.
 _UNREAD_AT_LOAD = set()
 
 

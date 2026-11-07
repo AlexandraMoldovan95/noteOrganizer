@@ -123,7 +123,7 @@ class AttachmentsMixin:
             return
         # The file found again: under the question the editor can move on,
         # and the index named another note's file. Moved on (its list rebuilt),
-        # nothing goes -- a new note's first save is no move (wave 2, round 13).
+        # nothing goes -- a new note's first save is no move.
         if self.current_attachments is not files:
             return
         note_id = self.selected_note_id

@@ -11221,8 +11221,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        # into a full list, they kept waiting in silence (round 9).\n        self._waiting_said.pop(uid, None)\n",
-        "replace": "        # into a full list, they kept waiting in silence (round 9).\n        pass\n"
+        "find": "        # into a full list, they kept waiting in silence.\n        self._waiting_said.pop(uid, None)\n",
+        "replace": "        # into a full list, they kept waiting in silence.\n        pass\n"
       }
     ],
     "must_fail": [
@@ -11370,8 +11370,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        if \"\\n\" in needle:\n            # Tk's -nocase search crashed the process on Linux whenever the\n            # line held an emoji (Tk 8.6.16, round 10): read here too.\n",
-        "replace": "        if not any(ord(ch) > 0xFFFF for ch in query):\n            countv = tk.IntVar()\n            start = \"1.0\"\n            while len(matches) < cap:\n                pos = b.search(query, start, stopindex=\"end\", nocase=nocase,\n                               count=countv)\n                if not pos:\n                    break\n                line, col = _index_key(pos)\n                end = f\"{line}.{col + (countv.get() or self._tk_units(query))}\"\n                start = f\"{pos}+1c\"\n                if not b.tag_nextrange(self.TABLE_HIDE_TAG, pos, end):\n                    matches.append({\"kind\": \"prose\", \"start\": pos, \"end\": end,\n                                    \"line\": line, \"col\": col})\n            return matches\n        if \"\\n\" in needle:\n            # Tk's -nocase search crashed the process on Linux whenever the\n            # line held an emoji (Tk 8.6.16, round 10): read here too.\n"
+        "find": "        if \"\\n\" in needle:\n            # Tk's -nocase search crashed the process on Linux whenever the\n            # line held an emoji (Tk 8.6.16): read here too.\n",
+        "replace": "        if not any(ord(ch) > 0xFFFF for ch in query):\n            countv = tk.IntVar()\n            start = \"1.0\"\n            while len(matches) < cap:\n                pos = b.search(query, start, stopindex=\"end\", nocase=nocase,\n                               count=countv)\n                if not pos:\n                    break\n                line, col = _index_key(pos)\n                end = f\"{line}.{col + (countv.get() or self._tk_units(query))}\"\n                start = f\"{pos}+1c\"\n                if not b.tag_nextrange(self.TABLE_HIDE_TAG, pos, end):\n                    matches.append({\"kind\": \"prose\", \"start\": pos, \"end\": end,\n                                    \"line\": line, \"col\": col})\n            return matches\n        if \"\\n\" in needle:\n            # Tk's -nocase search crashed the process on Linux whenever the\n            # line held an emoji (Tk 8.6.16): read here too.\n"
       }
     ],
     "must_fail": [
@@ -13088,8 +13088,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        if \"\\n\" in needle:\n            # Tk's -nocase search crashed the process on Linux whenever the\n            # line held an emoji (Tk 8.6.16, round 10): read here too.\n",
-        "replace": "        if \"\\n\" in needle:\n            countv = tk.IntVar()\n            start = \"1.0\"\n            while len(matches) < cap:\n                pos = b.search(query, start, stopindex=\"end\", nocase=nocase,\n                               count=countv)\n                if not pos:\n                    break\n                line, col = _index_key(pos)\n                end = f\"{line}.{col + (countv.get() or self._tk_units(query))}\"\n                start = f\"{pos}+1c\"\n                if not b.tag_nextrange(self.TABLE_HIDE_TAG, pos, end):\n                    matches.append({\"kind\": \"prose\", \"start\": pos, \"end\": end,\n                                    \"line\": line, \"col\": col})\n            return matches\n        if \"\\n\" in needle:\n            # Tk's -nocase search crashed the process on Linux whenever the\n            # line held an emoji (Tk 8.6.16, round 10): read here too.\n"
+        "find": "        if \"\\n\" in needle:\n            # Tk's -nocase search crashed the process on Linux whenever the\n            # line held an emoji (Tk 8.6.16): read here too.\n",
+        "replace": "        if \"\\n\" in needle:\n            countv = tk.IntVar()\n            start = \"1.0\"\n            while len(matches) < cap:\n                pos = b.search(query, start, stopindex=\"end\", nocase=nocase,\n                               count=countv)\n                if not pos:\n                    break\n                line, col = _index_key(pos)\n                end = f\"{line}.{col + (countv.get() or self._tk_units(query))}\"\n                start = f\"{pos}+1c\"\n                if not b.tag_nextrange(self.TABLE_HIDE_TAG, pos, end):\n                    matches.append({\"kind\": \"prose\", \"start\": pos, \"end\": end,\n                                    \"line\": line, \"col\": col})\n            return matches\n        if \"\\n\" in needle:\n            # Tk's -nocase search crashed the process on Linux whenever the\n            # line held an emoji (Tk 8.6.16): read here too.\n"
       }
     ],
     "must_fail": [
@@ -13815,8 +13815,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        # since: that move goes now, not at the next start (round 16).\n        drop_hidden_moves(note)\n",
-        "replace": "        # since: that move goes now, not at the next start (round 16).\n"
+        "find": "        # since: that move goes now, not at the next start.\n        drop_hidden_moves(note)\n",
+        "replace": "        # since: that move goes now, not at the next start.\n"
       }
     ],
     "must_fail": [
@@ -14775,7 +14775,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        if not brings:\n            # Nothing to paste -- a picture, a file: the selection stays, as\n            # under Tk's own paste (the lows wave's verification, round 7).\n            return \"break\"\n",
+        "find": "        if not brings:\n            # Nothing to paste -- a picture, a file: the selection stays, as\n            # under Tk's own paste.\n            return \"break\"\n",
         "replace": "        if not brings:\n            brings = \"\"\n"
       }
     ],
@@ -16663,8 +16663,8 @@
     "id": "WS98",
     "about": "Empty trash leaves Statistics' In trash figure as it was",
     "edits": [{"file": "noteorganizer/ui/settings_page.py",
-               "find": "            # figure until the list next changed (wave 2, round 4).\n            self._render_statistics()\n",
-               "replace": "            # figure until the list next changed (wave 2, round 4).\n"}],
+               "find": "            # figure until the list next changed.\n            self._render_statistics()\n",
+               "replace": "            # figure until the list next changed.\n"}],
     "must_fail": ["Empty trash takes Statistics' \"In trash\" to 0 at once"],
     "suites": ["qa6"],
     "expect": "killed"
@@ -16723,7 +16723,7 @@
     "id": "WS104",
     "about": "A one-note code's known note added as a new one is asked about again as a look-alike",
     "edits": [{"file": "note_organizer.py",
-               "find": "                # of that note only: a copy added before is (lows round 2).\n                asked_about = mine\n",
+               "find": "                # of that note only: a copy added before is.\n                asked_about = mine\n",
                "replace": ""}],
     "must_fail": ["a known note added as a new one is not asked about again as a look-alike"],
     "suites": ["qa3"],
@@ -16763,8 +16763,8 @@
     "id": "WS108",
     "about": "A category recoloured in Settings leaves the open note's category dot in the old colour",
     "edits": [{"file": "noteorganizer/ui/settings_page.py",
-               "find": "                # colour beside a new swatch, card and calendar (wave 2, round 5).\n                self._refresh_category_button_safe()\n",
-               "replace": "                # colour beside a new swatch, card and calendar (wave 2, round 5).\n"}],
+               "find": "                # colour beside a new swatch, card and calendar.\n                self._refresh_category_button_safe()\n",
+               "replace": "                # colour beside a new swatch, card and calendar.\n"}],
     "must_fail": ["a category recoloured in Settings recolours the open note's category dot"],
     "suites": ["qa6"],
     "expect": "killed"
@@ -16803,8 +16803,8 @@
     "id": "WS112",
     "about": "The welcome note brought back from About under a Show that hides it lands hidden",
     "edits": [{"file": "note_organizer.py",
-               "find": "        # unsaid (wave 2, round 3), as the '(earlier text)' note's Show does.\n        if self._what_hides_notes(note):\n",
-               "replace": "        # unsaid (wave 2, round 3), as the '(earlier text)' note's Show does.\n        if False:\n"}],
+               "find": "        # unsaid, as the '(earlier text)' note's Show does.\n        if self._what_hides_notes(note):\n",
+               "replace": "        # unsaid, as the '(earlier text)' note's Show does.\n        if False:\n"}],
     "must_fail": ["the welcome note brought back under Show is on the list it opens over"],
     "suites": ["qa6"],
     "expect": "killed"
@@ -16844,8 +16844,8 @@
     "id": "WS116",
     "about": "A Trash row's own Delete leaves Statistics' In trash figure as it was",
     "edits": [{"file": "noteorganizer/ui/settings_page.py",
-               "find": "                # figure (the lows wave's round 1).\n                self._render_statistics()\n",
-               "replace": "                # figure (the lows wave's round 1).\n"}],
+               "find": "                # figure.\n                self._render_statistics()\n",
+               "replace": "                # figure.\n"}],
     "must_fail": ["a row's own Delete takes Statistics' \"In trash\" down by one at once"],
     "suites": ["qa6"],
     "expect": "killed"
@@ -17204,8 +17204,8 @@
     "id": "WS152",
     "about": "A table pasted into the comments says so over an Undo still offered",
     "edits": [{"file": "note_organizer.py",
-               "find": "half a second later (round 9).\n            self._banner_after_undo(said, lambda: self._show_toast(said, kind=\"info\"))\n",
-               "replace": "half a second later (round 9).\n            self._show_toast(said, kind=\"info\")\n"}],
+               "find": "half a second later.\n            self._banner_after_undo(said, lambda: self._show_toast(said, kind=\"info\"))\n",
+               "replace": "half a second later.\n            self._show_toast(said, kind=\"info\")\n"}],
     "must_fail": ["...and so are an import cancelled and a table pasted into the comments"],
     "suites": ["qa1"],
     "expect": "killed"
@@ -17234,8 +17234,8 @@
     "id": "WS155",
     "about": "The comments' table notice is replaced by its own paste's Note updated",
     "edits": [{"file": "note_organizer.py",
-               "find": "half a second later (round 9).\n            self._banner_after_undo(said, lambda: self._show_toast(said, kind=\"info\"))\n",
-               "replace": "half a second later (round 9).\n            self._banner_after_undo(said, lambda: self._show_toast(said))\n"}],
+               "find": "half a second later.\n            self._banner_after_undo(said, lambda: self._show_toast(said, kind=\"info\"))\n",
+               "replace": "half a second later.\n            self._banner_after_undo(said, lambda: self._show_toast(said))\n"}],
     "must_fail": ["...and the comments' notice outlives its paste's own save"],
     "suites": ["qa1"],
     "expect": "killed"

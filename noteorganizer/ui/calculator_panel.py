@@ -221,7 +221,7 @@ class CalculatorPanelMixin:
         result or Error starts a new sum, as the buttons do: typed, 12*3
         Enter 5 read 365, and after Error every sum said Error again."""
         # After Error any key starts afresh: a minus stayed glued to "Error",
-        # and Enter said Error again (wave 2, round 4).
+        # and Enter said Error again.
         if first and (self._calc_display_var.get() == "Error"
                       or ((first.isdecimal() or first in ".,([{√") and self._calc_just_evaluated)):
             self._calc_display_var.set("")
@@ -266,7 +266,7 @@ class CalculatorPanelMixin:
             self._calc_just_evaluated = False
         elif token == "=":
             # A second = over its own result keeps the sum: it made the result
-            # its own formula, "36=36" in the history and on Insert (round 3).
+            # its own formula, "36=36" in the history and on Insert.
             if self._calc_just_evaluated:
                 pass
             elif current and current != "Error":

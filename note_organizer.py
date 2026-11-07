@@ -1133,7 +1133,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 return None
             try:
                 # Nothing taken out unless something goes in: a selection
-                # deleted first was lost when nothing then fitted (round 10).
+                # deleted first was lost when nothing then fitted.
                 if room > 0:
                     if chosen:
                         entry.delete("sel.first", "sel.last")
@@ -1159,7 +1159,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         def paste_selection(event):
             # A middle-click, where the pointer is, as Tk's own puts it --
-            # which put it in past the limit, refused whole (round 10).
+            # which put it in past the limit, refused whole.
             try:
                 if self.tk.eval("expr {[info exists ::tk::Priv(mouseMoved)]"
                                 " && $::tk::Priv(mouseMoved)}") == "1":
@@ -1306,7 +1306,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     # The breaks a paste into the title's one line joins: a line break or a
     # tab. One character, never "\s*" around it: that tried every place in a
-    # run of spaces, and 40,000 of them froze the window 5 s (round 9).
+    # run of spaces, and 40,000 of them froze the window 5 s.
     _TITLE_PASTE_BREAK = re.compile(r"[\t\n\x0b\x0c\r\x1c-\x1e\x85\u2028\u2029]")
 
     @classmethod
@@ -1335,7 +1335,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _on_title_paste_selection(self, event):
         """A middle-click into the title: the selection, put where the
         pointer is as Tk's own binding puts it, on one line and within the
-        cap as any paste into it. Tk's own put its line breaks in (round 10)."""
+        cap as any paste into it. Tk's own put its line breaks in."""
         entry = self.title_entry
         try:
             # Tk's own pastes nothing after a drag with the middle button,
@@ -1356,7 +1356,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """*pasted* into the title at the caret, over its selection when
         *over_selection*: cut to the room the cap leaves, the room measured
         before anything is taken out -- a selection deleted first was lost
-        when nothing then fitted (round 10)."""
+        when nothing then fitted."""
         # No more of it is read than any paste reads (_cap_paste).
         pasted, cut = self._cap_paste(pasted)
         chosen = _entry_selected(self.title_entry) if over_selection else 0
@@ -1375,7 +1375,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.title_entry.insert("insert", clipped)
         self._refresh_title_count()
         # Shortened only if words were left out: a paste's own trailing
-        # space, all the cap took, was said to be (round 9).
+        # space, all the cap took, was said to be.
         if cut or whole[room:].strip():
             self._say_by_the_box(
                 self.title_entry,
@@ -1389,7 +1389,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         does while the find bar shows hits (_count_waits_for_pause)."""
         # Every edit passes here, whatever made it, so the find bar hears of
         # each: a key's release alone left a menu's paste or a toolbar's list
-        # stepping to stale places (round 10).
+        # stepping to stale places.
         self._find_on_body_edit()
         if not skip_word_count:
             if self._count_waits_for_pause():
@@ -1406,7 +1406,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Whether a key's word count waits for the pause's (the autosave's
         catch-up, or the find bar closing): while the bar shows hits, each
         read of their lines costs the square of their toggles, and a read a
-        key held every key back (final audit, round 10)."""
+        key held every key back."""
         return bool(getattr(self, "_find_open", False)
                     and getattr(self, "_find_matches", None))
 
@@ -1658,7 +1658,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "Nothing will be removed from the Trash until you choose "
                 "again in Settings → Recently deleted.")
         # A Trash or templates file held the same way showed an empty page,
-        # and every delete answered "Is the disk full?" (round 4).
+        # and every delete answered "Is the disk full?".
         held = [what for path, what in ((TRASH_FILE, "the Trash (Recently deleted)"),
                                         (TEMPLATES_FILE, "your templates"))
                 if _core_paths.writes_held(path)]
@@ -1691,7 +1691,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if cut.get("kind") == "import":
                 # Ended while its questions waited: what it copied goes now --
                 # or, on a run holding none of the notes, at the next start
-                # that does, the word kept for it and said once (round 8).
+                # that does, the word kept for it and said once.
                 self._drop_left_import(cut)
                 if self._notes_file_unread() and cut.get("copied"):
                     save_setting("backup_cut_short", dict(cut, temp_dir="", said=True))
@@ -1761,7 +1761,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         made = getattr(self, "_set_aside_at_start", 0)
         if made:
-            # Both reasons said: a day the note deleted is one (round 21), and
+            # Both reasons said: a day the note deleted is one, and
             # the line once named only the other. The phone's says the same.
             lines.append(
                 f"Some days of a repeating note had earlier text that only an older "
@@ -1847,7 +1847,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._cleanup_report = report["cleanup_report"]
         self._categories_adopted = report.get("categories_adopted") or []
         # Notes made of days a series' copy set aside, said with the start's
-        # other news (written by the load itself, round 16).
+        # other news (written by the load itself).
         self._set_aside_at_start = report.get("set_aside_made", 0)
         if report.get("notes_file_corrupt"):
             self._corrupt_notes_report = report.get("corrupt_backup_path")
@@ -1908,7 +1908,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except tk.TclError:
             pass
         # Where the list shows it: under Show or a search it landed hidden,
-        # unsaid (wave 2, round 3), as the '(earlier text)' note's Show does.
+        # unsaid, as the '(earlier text)' note's Show does.
         if self._what_hides_notes(note):
             self._show_all_notes(note)
         self._open_unless_shown(note)
@@ -1924,11 +1924,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     "repeating note kept as notes of their own")
             # A banner of its own, the status line left to the save: over it,
             # a turn-off's Restore previous went; after it, it ran past the
-            # bar's edge or onto a line about something else (rounds 16-17).
+            # bar's edge or onto a line about something else.
             first = self.notes[-made]
             first_id, first_uid = first.get("id"), first.get("uid")
             # Not over an Undo still offered: 'Day removed' holds that day's
-            # words in it alone (the lows wave's round 9). Show finds by uid.
+            # words in it alone. Show finds by uid.
             self._banner_after_undo(news, lambda: self._show_toast(
                 news, kind="info", action=lambda: self._show_set_aside(first_id, first_uid),
                 action_text="Show"))
@@ -1940,7 +1940,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         an Update's, the note as it was before it in no other file, and stays;
         the words a big delete takes away now would be in no file. Only the
         comments when the save clears no more (*comments_only*): a whole copy
-        was made of a note whose comment alone went (round 6)."""
+        was made of a note whose comment alone went."""
         title, body = note.get("title") or "", note.get("body") or ""
         comments = note.get("comments") or ""
         if comments_only:
@@ -1970,13 +1970,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         def said(aside):
             # Said when the list hides it, as a new note is: Show then shows all
-            # (_show_set_aside); unsaid, it was nowhere to be seen (wave 2, round 6).
+            # (_show_set_aside); unsaid, it was nowhere to be seen.
             hides = self._what_hides_notes(aside)
             return lead + one_line(aside["title"], 60) + (f", hidden by {hides}" if hides else "")
 
         def offer_show():
             # Asked again when shown, as it can wait behind an Undo: a note
-            # gone or filed meanwhile was offered as it was (lows round 2).
+            # gone or filed meanwhile was offered as it was.
             aside = find_by_uid(self.notes, kept.get("uid"))
             if aside is not None:
                 self._show_toast(said(aside), kind="info", action_text="Show",
@@ -1988,9 +1988,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """The note _keep_text_aside made of *note*'s words taken away again,
         when the note holds those words once more -- Ctrl+Z, a cut pasted
         back -- and that note is untouched since: it is spent, as a rescue
-        copy is (round 6: one stayed in the list for good after every Undo).
+        copy is (one stayed in the list for good after every Undo).
         Each of the note's asides, by words_lost: a paragraph moved, or two
-        deletes undone in turn, left one for good (round 7)."""
+        deletes undone in turn, left one for good."""
         held = getattr(self, "_kept_asides", {}).get(note.get("uid"))
         if not held:
             return
@@ -2000,7 +2000,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             held.remove(entry)
             aside = next((n for n in self.notes if entry[0] and n.get("uid") == entry[0]), None)
             # Untouched is as made: a pin or a category kept no stamp, and a
-            # note someone had filed went outright (wave 2, round 7).
+            # note someone had filed went outright.
             if aside is not None and self._aside_look(aside) == entry[2]:
                 self.notes.remove(aside)
                 self._asides_changed = True
@@ -2023,7 +2023,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """The '(earlier text)' banner's Show: the first note made, found by
         its identity -- the list may have been read again since -- opened
         where the editor is seen. From Settings, after a backup's Update, it
-        opened in the hidden editor (the audit's round 18), as show_welcome_note
+        opened in the hidden editor, as show_welcome_note
         leaves Settings first."""
         note = self._note_for_undo(note_id, uid)
         if note is None:
@@ -2184,7 +2184,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if _core_paths.writes_held(path) and os.path.exists(path):
                 # Unread at the start, the app holds only this session's: one
                 # template saved made "Export complete" of a backup without
-                # the file's (round 5). The file read now, or named left out.
+                # the file's. The file read now, or named left out.
                 kept = read_list_now(path)
                 if kept is None:
                     left_out.append(arcname)
@@ -2361,7 +2361,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._export_state = None
             # As the poll would have: a backup of the session alone is not the
             # notebook's, and files left out are named -- by the next start,
-            # where the close recorded both as whole (round 6 of the audit).
+            # where the close recorded both as whole.
             if state.get("session_only") is None:
                 self._remember_finished_export()
             if state.get("session_only") is not None or state.get("left_out"):
@@ -3356,7 +3356,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not editor:
             return
         # An edit of the note's, as a journal step is, which the banner's
-        # Undo then stands behind (_toast_undo_key; the lows wave's round 6).
+        # Undo then stands behind (_toast_undo_key).
         self._units_done = getattr(self, "_units_done", 0) + 1
         t = editor["entry"]
         try:
@@ -3778,7 +3778,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         except tk.TclError:
             pass
         # ...and inside the note's view, top to bottom: Tab into a row below
-        # the edge sent the typing into a cell nobody could see (round 6).
+        # the edge sent the typing into a cell nobody could see.
         self.after_idle(lambda: self._see_cell(info, r, c))
 
     def _see_cell(self, info, row, col):
@@ -3786,7 +3786,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         table is one line as tall as its grid, and seeing that line left a
         cell of a tall table below the edge. Measured where the view is: a
         cell in sight moves nothing, and every move made here comes before
-        the commit's re-pin is let go, which put a moved view back (round 7)."""
+        the commit's re-pin is let go, which put a moved view back."""
         first = self._grid_first_line(info)
         cell = info["cells"].get((row, col))
         if first is None or cell is None:
@@ -4932,7 +4932,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 return
             # The first space among the letters typed, found in Python: Tk's
             # search read the whole line for it, a quarter of a second a key
-            # with the find bar open on a long paragraph (round 10).
+            # with the find bar open on a long paragraph.
             typed = b.get(start, end)
             cut = next((i for i, ch in enumerate(typed) if ch.isspace()), None)
             stop = end if cut is None else b.index(f"{start}+{cut}c")
@@ -7236,7 +7236,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         is told from it: the whole line when short, or when its start is
         blank, a pipe or a run of digits; else its first characters. Tk's
         get of a whole long line costs the square of the tags on it, and
-        every key and click read one (final audit, round 10)."""
+        every key and click read one."""
         b = self.body_text
         head = b.get(f"{line_no}.0", f"{line_no}.0+{self._LINE_HEAD}c")
         if "\n" in head:
@@ -7306,7 +7306,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """
         # Each line read once, the note in one get: three readers asked Tk
         # for the same line, and Tk's cost for each is about the square of
-        # the toggles on it (final audit, round 10).
+        # the toggles on it.
         if line_no is None:
             lines = self.body_text.get("1.0", "end-1c").split("\n")
             first = 1
@@ -7364,10 +7364,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._schedule_autosave()
         if table:
             # Not over an Undo still offered: 'Day removed' holds that day's
-            # words in it alone (the lows wave's round 8).
+            # words in it alone.
             said = "Comments keep text only — the table wasn't added"
             # Info, which the paste's own "Note updated" yields to: it took
-            # the notice's place half a second later (round 9).
+            # the notice's place half a second later.
             self._banner_after_undo(said, lambda: self._show_toast(said, kind="info"))
         if cut:
             self._say_if_paste_was_cut({"text_cut": True})
@@ -8043,7 +8043,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if hi > lo:
                 clipped.append(dict(span, start=lo - first, end=hi - first))
         # A line's looks travel with its start: a word copied out of a nested
-        # item set the level of the item it was pasted into (lows wave).
+        # item set the level of the item it was pasted into.
         line_count = text.count("\n") + (0 if text.endswith("\n") else 1)
         skipped = 1 if int(start.split(".")[1]) > 0 else 0
         paragraphs = [
@@ -8065,8 +8065,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Cut as Copy copies -- the words, their styles, their lines' looks
         -- then delete, writing nothing more. Tk's own Cut and the list's put
         the words alone over it, so a move by Ctrl+X and Ctrl+V lost its bold,
-        its centring and a nested item's level, saved (the lows wave's
-        verification, round 6). Cells have no cut of their own: with cells
+        its centring and a nested item's level, saved.
+        Cells have no cut of their own: with cells
         selected, the key is left to Tk."""
         if getattr(self, "_grid_sel", None) is not None or self._copy_formatted() != "break":
             return None
@@ -8336,8 +8336,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if not kind and not indent:
                 continue
             # One margin a line: beside the one it had -- a paste's line -- the
-            # depth was the tag Tk had made first that session (the lows
-            # wave's verification, round 9).
+            # depth was the tag Tk had made first that session.
             self._clear_paragraph_tags(text_widget, line_no)
             text_widget.tag_add(
                 self._paragraph_tag(text_widget, kind, indent),
@@ -8597,7 +8596,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if self._tab_in_table(delta):
             return "break"
         first, last = self._selected_line_range()
-        # The selected lines in one read, not one a line (final audit, round 10).
+        # The selected lines in one read, not one a line.
         lines = self.body_text.get(f"{first}.0", f"{last}.end").split("\n")
         in_list = any(parse_list_marker(line)[0] for line in lines)
         if not in_list:
@@ -8637,7 +8636,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         first, last = self._selected_line_range()
         # The lines read once, not four times a line: each pass below
-        # changes its own line alone (final audit, round 10).
+        # changes its own line alone.
         texts = self.body_text.get(f"{first}.0", f"{last}.end").split("\n")
 
         def blank(line_no):
@@ -9055,7 +9054,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         brings, rich = self._paste_brings()
         if not brings:
             # Nothing to paste -- a picture, a file: the selection stays, as
-            # under Tk's own paste (the lows wave's verification, round 7).
+            # under Tk's own paste.
             return "break"
         # A table route's paste keeps the typing rule; any other's first line
         # goes in first, marker and all (rows kept it: "2. 3. three").
@@ -9099,7 +9098,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         item's marker stays and the paste's goes, so the line keeps its tags
         and its depth; with words after the caret and a line break of its own,
         the paste goes in before the item. Kept, a copied item pasted into a
-        new one read "3. 1. Kiwi" (the lows wave's verification, round 8)."""
+        new one read "3. 1. Kiwi"."""
         b = self.body_text
         kind, marker, rest = parse_list_marker(b.get("insert linestart", "insert lineend"))
         if not kind or len(b.get("insert linestart", "insert")) != len(marker):
@@ -9119,7 +9118,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         def keep_item():
             # The item keeps its marker, its kind and its depth, as Word
             # keeps a paragraph's list when a paste brings no paragraph mark:
-            # the paste's own marker goes (round 9).
+            # the paste's own marker goes.
             where = b.index("marker_paste")
             if b.get(where, f"{where}+{len(own)}c") == own:
                 b.delete(where, f"{where}+{len(own)}c")
@@ -9396,8 +9395,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """What :meth:`_char_offset` answers -- ``len(get("1.0", index))`` --
         for many indices, counted in Python on *text*, the widget's
         ``get("1.0", "end-1c")`` (read here when not given). A get per index
-        paid Tk's cost for every toggle on its line each time (final audit,
-        round 10). A column counts UTF-16 units and a window as one, so a
+        paid Tk's cost for every toggle on its line each time.
+        A column counts UTF-16 units and a window as one, so a
         line holding either is walked once, for all its indices."""
         wanted = {str(index) for index in indices}
         if not wanted:
@@ -10283,7 +10282,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                font=("Segoe UI", 9, "bold"), cursor="hand2")
         import_btn.pack(side="left", fill="x", expand=True, padx=(0, 3), ipady=3)
         # A double-click's second press found the box the first had emptied, and
-        # said in red that no code was pasted (wave 2, round 9).
+        # said in red that no code was pasted.
         import_btn.bind(
             "<ButtonPress-1>",
             lambda e: "break" if self._second_press_of_double_click(e) else None,
@@ -10509,7 +10508,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return finish(fresh, known)
         # "add": new notes without the identity they came with (one uid on two
         # notes), as copies asked for: put to the look-alike question again,
-        # its Cancel undid the Add (wave 2, round 10).
+        # its Cancel undid the Add.
         return finish(fresh, [], self._without_identity(known))
 
     @staticmethod
@@ -10584,7 +10583,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """The question when every note left in a code or a backup (*where*)
         looks like one already here. With the rest of the import *pending* --
         an Update agreed to, copies kept -- it can skip them and go on:
-        Cancel, its only no, dropped those unsaid (wave 2, round 9)."""
+        Cancel, its only no, dropped those unsaid."""
         said = (f"All {count}{other} note(s) in this {where} look identical "
                 "to notes you already have")
         if not pending:
@@ -10604,7 +10603,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Whether a backup brings anything beside its notes -- a category, a
         template or a Trash entry not here, a day's marks: what Skip goes on
         with. Unseen, its look-alike question's default Cancel dropped them
-        all (wave 2, round 10)."""
+        all."""
         if added_names:
             return True
         names = {t.get("name") for t in self.templates}
@@ -10667,7 +10666,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _do_inline_import(self):
         """Import the pasted code, and say what came of it: a Cancel at any
         of its questions said nothing, under the last import's "Added …"
-        (wave 2, round 3)."""
+       ."""
         self.import_status.config(text="")
         self._import_pasted_code()
         try:
@@ -10757,7 +10756,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     self.render_calendar()
                     # flush=False, or the old version was saved over it; held
                     # already, it is read back as the other routes read it,
-                    # its day and way back kept (wave 2, round 11).
+                    # its day and way back kept.
                     if self.selected_note_id == mine.get("id"):
                         self._editor_follows_external_change({mine.get("id")})
                     else:
@@ -10772,7 +10771,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 incoming.pop("uid", None)
                 valid = [incoming]
                 # Answered: not asked again as a look-alike of the note it is --
-                # of that note only: a copy added before is (lows round 2).
+                # of that note only: a copy added before is.
                 asked_about = mine
             existing_keys = {_dup_key(n) for n in self.notes if n is not asked_about}
             if _dup_key(normalize_note(incoming)) in existing_keys:
@@ -11577,7 +11576,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                             "let it finish first.")
             return
         # A run that saves no notes took the backup's Trash and templates and
-        # said "Import complete", its notes in no file (round 4 of the audit).
+        # said "Import complete", its notes in no file.
         if _core_paths.writes_held(DATA_FILE):
             self.show_warning(
                 "Import after reopening",
@@ -11746,7 +11745,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.export_progress_lbl.config(text="Importing… reading backup")
         elif state["done"] and (self._a_dialog_is_asking() or getattr(self, "_natives_open", 0)):
             # Said as what it is: "0 / 1 attachments" stood for a backup with
-            # none, waiting on another question (wave 2, round 12).
+            # none, waiting on another question.
             self.export_progress_bar.configure(maximum=1, value=1)
             self.export_progress_lbl.config(text="Import ready — waiting for your answer above")
         else:
@@ -11756,7 +11755,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         # Its merge waits for a question already open: run inside a share
         # code's, the backup's notes took the ids that import had counted
-        # before it asked, and the two wore one id (wave 2, round 11).
+        # before it asked, and the two wore one id.
         if not state["done"] or self._a_dialog_is_asking() or getattr(self, "_natives_open", 0):
             self._export_poll_job = self.after(100, self._poll_import_progress)
             return
@@ -11764,7 +11763,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.export_progress_frame.place_forget()
         self._import_state = None
         # Its questions wait on the person with the files already copied: the
-        # end of a Windows session meets it here too (round 7 of the audit).
+        # end of a Windows session meets it here too.
         self._import_asking = state
         try:
             self._merge_finished_import(state)
@@ -11785,7 +11784,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._drop_unclaimed_import_files(state)
             # Settled before it is said: a session that ends with the
             # failure on screen leaves no word of an import cut short -- nor
-            # its unpacked folder, which no later start would know of (round 9).
+            # its unpacked folder, which no later start would know of.
             self._import_asking = None
             if temp_dir:
                 shutil.rmtree(temp_dir, ignore_errors=True)
@@ -11862,7 +11861,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             else:
                 # A look-alike's files its twin lacks are what Skip goes on
                 # with too: offered no Skip, the default Cancel deleted them
-                # (the lows wave's round 1).
+                #.
                 twins = {_dup_key(n): n for n in self.notes}
                 files_too = any(twin is not None and self._files_to_adopt(twin, n) for twin, n in
                                 ((twins.get(_dup_key(normalize_note(n))), n) for n in valid_notes))
@@ -11878,20 +11877,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if choice == "skip":
                 to_import = fresh
                 # A look-alike's files go to the note it looks like: skipped
-                # whole, they were deleted with it (wave 2, round 14).
+                # whole, they were deleted with it.
                 twins = {_dup_key(n): n for n in self.notes}
                 adopting = [(twins.get(_dup_key(normalize_note(n))), n) for n in valid_notes
                             if not any(n is f for f in fresh)]
                 # Only those that gain a file: read back for none, the open
-                # note lost its Ctrl+Z and its place (the lows wave's round 2).
+                # note lost its Ctrl+Z and its place.
                 adopting = [(twin, n) for twin, n in adopting
                             if twin is not None and self._files_to_adopt(twin, n)]
                 # The open note among them saved first and read back after, as
                 # an Update does: its next save put its own files back over the
-                # ones given (round 1). "Go back and fix it" leaves it out.
+                # ones given. "Go back and fix it" leaves it out.
                 if (any(twin.get("id") == self.selected_note_id for twin, _n in adopting)
                         and self._flush_autosave() is False):
-                    # ...and said: deleted unsaid, they were what Skip was offered for (round 3).
+                    # ...and said: deleted unsaid, they were what Skip was offered for.
                     left = [(twin, n) for twin, n in adopting if twin.get("id") == self.selected_note_id]
                     state["files_left"] = (sum(len(self._files_to_adopt(twin, n)) for twin, n in left),
                                            left[0][0].get("title") or "")
@@ -12066,19 +12065,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             known_note += (f" {unchanged} note(s) were already here, "
                            "unchanged, and were skipped.")
         # The files a skipped look-alike gave its twin, said: "Added 0" and
-        # nothing more over a backup that brought only them (lows round 2).
+        # nothing more over a backup that brought only them.
         if state.get("files_given"):
             known_note += (f" {state['files_given']} attached file(s) went to the notes "
                            "the skipped ones look like.")
         if state.get("files_left"):
-            # Named: it was said to someone still on Settings (round 4).
+            # Named: it was said to someone still on Settings.
             left, title = state["files_left"]
             known_note += (f" {left} attached file(s) for “{one_line(title.strip() or 'Untitled note', 40)}” "
                            "were not added while its date or repeat waits to be fixed: once it is, "
                            "import the backup again.")
         # A sign-out's word for the next start is no longer true: this import
         # finished, its merge saved -- and a session that ends with "Import
-        # complete" on screen leaves none (round 8 of the final audit).
+        # complete" on screen leaves none.
         self._take_back_cut_short("import")
         self._import_asking = None
         self.show_info("Import complete",
@@ -12542,12 +12541,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if len(items) >= MAX_CHECKLIST_ITEMS:
             # Full: the words wait for this note, back in its Add box when it
             # is opened again. Leaving cleared the box, and "Delete an item to
-            # make room" could no longer be done (round 7 of the audit).
+            # make room" could no longer be done.
             if uid:
                 self._add_box_waiting[uid] = text
                 # Said once for these words in this note: back in its box at
                 # every opening, they raised "Checklist full" on every way
-                # out (round 8 of the audit). The close still asks.
+                # out. The close still asks.
                 if self._waiting_said.get(uid) == text:
                     return
             self._checklist_full(items, text, waits=uid)
@@ -12555,7 +12554,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._append_checklist_item(text)
         var.set("")
         # Added, they are no longer the words that were said: typed again
-        # into a full list, they kept waiting in silence (round 9).
+        # into a full list, they kept waiting in silence.
         self._waiting_said.pop(uid, None)
 
     def _open_note_uid(self):
@@ -12575,7 +12574,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _append_checklist_item(self, text):
         """*text* as the list's last item: one new row when the rows on screen
         are this list's, the whole list drawn otherwise. The Add box taken on
-        a save rebuilt every row, 2.2 s at 1,000 (round 6 of the audit)."""
+        a save rebuilt every row, 2.2 s at 1,000."""
         items = self._get_checklist()
         drawn = getattr(self, "_checklist_drawn", None)
         in_step = self._checklist_in_step(items)
@@ -13079,7 +13078,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                           font=("Segoe UI", 11), cursor="hand2")
             dot.pack(side="left", padx=(10, 6), pady=4)
             # Cut with "…" past 30 letters: at a width of 13 every name was cut
-            # bare, and two sharing a start read the same (wave 2, round 6).
+            # bare, and two sharing a start read the same.
             lbl = tk.Label(row, text=one_line(cat, 30), bg=row.cget("bg"),
                            fg=self.colors["accent_text"] if is_cur else self.colors["text"],
                            font=("Segoe UI", 10, "bold" if is_cur else "normal"),
@@ -13835,7 +13834,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.notebook.bind("<<NotebookTabChanged>>", _on_tab_changed, add="+")
         # Notes <-> Calendar: a popup belongs to the page it was opened on --
         # over Settings, Settings': the tab turned behind it (a save sent back
-        # to the calendar) destroyed the template editor kept (lows rounds 5-6).
+        # to the calendar) destroyed the template editor kept.
         self.notebook.bind("<<NotebookTabChanged>>",
                            lambda e: None if getattr(self, "_settings_open", False)
                            else self._dismiss_mini_popup(), add="+")
@@ -14411,7 +14410,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                  font=("Segoe UI", 11))
         self._cat_dot.pack(side="left", padx=(10, 6))
         # Its name cut with "…" past 20 letters (_refresh_category_button): a
-        # long one crowded out the title beside it (wave 2, round 6).
+        # long one crowded out the title beside it.
         self._cat_btn_lbl = tk.Label(self.category_menu, text=one_line(self.category_var.get(), 20),
                                      bg=self.colors["sidebar"], fg=self.colors["text"],
                                      font=("Segoe UI", 10), anchor="w")
@@ -15315,8 +15314,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Jump back to the exact month/day the user was viewing before they
         started creating a note from the calendar."""
         # Not from under Settings: a save made there (Ctrl+S) turned the
-        # notebook behind it, and "Back to Notes" showed the Calendar (lows
-        # round 7). The way back stays armed.
+        # notebook behind it, and "Back to Notes" showed the Calendar.
+        # The way back stays armed.
         if getattr(self, "_settings_open", False):
             return
         # Save first — leaving a dirty day behind rendered the day panel
@@ -17601,7 +17600,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Whether the editor as it is holds anything typed: its content as
         above, or an item waiting in the checklist's Add box, which no
         capture reads. The blank editor's flush asks this, and a template
-        about to replace an unsaved note (round 6 of the final audit)."""
+        about to replace an unsaved note."""
         pending = getattr(self, "checklist_add_var", None)
         return bool(self._editor_state_has_content(self.capture_editor_state())
                     or (pending is not None and pending.get().strip()))
@@ -17642,7 +17641,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     and st["category"] == shown["category"]
                     and st["color"] == shown.get("color", "")
                     # ...and its lists' structure, which a day keeps of its
-                    # looks (the owner's choice, the lows wave).
+                    # looks (the owner's choice).
                     and list_lines(st.get("paragraphs"), st["body"])
                     == list_lines(day_paragraphs_shown(note, occ), shown["body"])):
                 return False
@@ -17725,7 +17724,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if flush and not self._dismiss_mini_popup_asking():
             return False
         # On a reload the rest still close: a palette or a picker aimed at
-        # the old text wrote into the new (wave 2, round 13).
+        # the old text wrote into the new.
         pop = getattr(self, "_mini_popup", None)
         if not flush and pop is not None and not callable(getattr(pop, "_confirm_dismiss", None)):
             self._dismiss_mini_popup()
@@ -17742,7 +17741,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return False
         # Looked up again after that save, which can take the very note
         # being opened away (_take_back_aside): loaded anyway, it took typing
-        # that no save would ever store, and said nothing (wave 2, round 7).
+        # that no save would ever store, and said nothing.
         here = (find_by_uid(self.notes, note.get("uid")) if note.get("uid")
                 else next((n for n in self.notes if n is note), None))
         if here is None:
@@ -17767,8 +17766,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """open_note_in_tab for a person's open -- a card clicked, Enter on
         it, the menu's Open -- left alone when the editor already shows that
         note on that day: loaded again, it jumped to its top and Ctrl+Z lost
-        all it held (wave 2, round 8). Asked of the day load_note would open:
-        a one-off note opened from its calendar day is the note (round 9)."""
+        all it held. Asked of the day load_note would open:
+        a one-off note opened from its calendar day is the note."""
         if (self.selected_note_id is not None and note.get("id") == self.selected_note_id
                 and self._day_to_open(note, occurrence_date) == self.current_occurrence_date):
             return True
@@ -18250,7 +18249,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         matches = self._find_prose(query, nocase, text)
         # Table cells: read the plain text, walk each block's DATA rows. The
         # note split, and each grid's line asked, once: per block, both grew
-        # with the tables times the note (round 9).
+        # with the tables times the note.
         lines = text.split("\n")
         grids = {}
         for info in getattr(self, "_table_grids", []):
@@ -18289,7 +18288,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         gives them -- the shown text of each line, folded as every search
         folds it, overlapping hits each one -- found in Python, each line read
         once. Tk's search measured a line from its start for each hit (15 s
-        a rescan, round 9), and its -nocase search ends the app on Linux."""
+        a rescan), and its -nocase search ends the app on Linux."""
         b = self.body_text
         cap = self.FIND_MATCH_CAP
         matches = []
@@ -18324,7 +18323,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     (c1 if line == l1 else 0, c2 if line == l2 else None))
         if "\n" in needle:
             # Tk's -nocase search crashed the process on Linux whenever the
-            # line held an emoji (Tk 8.6.16, round 10): read here too.
+            # line held an emoji (Tk 8.6.16): read here too.
             for found in self._find_across_lines(text.split("\n"), needle, fold,
                                                  windows, hides):
                 if hit(*found):
@@ -18535,7 +18534,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Paint the hits around *current* (_find_painted) -- the cursor
         standing in for a cell's match, which has no place in the text.
         Laid around the hit current before a reveal, or not moved by Enter,
-        the paint left the current hit's neighbours bare (round 13)."""
+        the paint left the current hit's neighbours bare."""
         try:
             anchor = (current["start"] if current.get("kind") == "prose"
                       else self.body_text.index("insert"))
@@ -18652,7 +18651,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         canvas = info.get("canvas")
         if cell is None or canvas is None:
             # The table's line only: a cell in sight is _see_cell's, which a
-            # see() first made the note jump at every step (round 8).
+            # see() first made the note jump at every step.
             try:
                 self.body_text.see(f"{first}.0")
             except tk.TclError:
@@ -18894,7 +18893,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         clone.pop("uid", None)
         base_title = (note.get("title") or "").strip()
         clone["title"] = f"{base_title} (copy)" if base_title else "(copy)"
-        # Made now: it kept the original's "Created" (wave 2, round 3).
+        # Made now: it kept the original's "Created".
         clone["created"] = clone["updated"] = now_stamp()
         # A duplicate is its own note, its series' own days (deleted, edited,
         # moved) copied with it, so it reads as the original does.
@@ -19041,7 +19040,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             relief="flat", bd=0, font=("Segoe UI", 9)
         )
         # From one day of a series, that day as it shows: the series' text
-        # went out, none of the day's own words (wave 2, round 4).
+        # went out, none of the day's own words.
         exported = (self._day_as_shown(note, occurrence_date)
                     if occurrence_date and is_recurring(note) else note)
         for fmt, fmt_label in (
@@ -19067,7 +19066,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 label=("✓  " if cat_name == current_cat else "     ") + cat_name,
                 command=lambda c=cat_name: self._ctx_move_to_category(note, c))
         # From a day of a series it moves the series, and says so: read as
-        # the day's, it moved every day unasked (wave 2, round 7).
+        # the day's, it moved every day unasked.
         menu.add_cascade(label=("🗂  Move the series to category"
                                 if occurrence_date and is_recurring(note)
                                 else "🗂  Move to category"), menu=cat_menu)
@@ -19330,7 +19329,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             note["moved"].pop(origin, None)
             # A dead move onto that date goes too, as move_day drops one: the
             # date was found free above, so no live day is moved there, and
-            # left, it was two moves onto one date (the audit's round 19).
+            # left, it was two moves onto one date.
             for dead in [other for other, new in note["moved"].items() if new == origin]:
                 del note["moved"][dead]
         home = origin or occurrence_date
@@ -19434,7 +19433,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             try:
                 # The shared test, so a checklist, attachments, a repeat rule
                 # or an item in the Add box also earn the "replace?" question:
-                # the Add box alone was dropped unasked (round 6).
+                # the Add box alone was dropped unasked.
                 has_content = self._editor_holds_typing()
             except Exception:  # noqa: BLE001 -- not knowing asks, never replaces
                 self._log_swallowed("template: blank editor")
@@ -19558,7 +19557,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Whether *items* already hold MAX_CHECKLIST_ITEMS -- and if so, that
         *text* was not added is said. The doors refuse what a start would
         cut (normalize_note): the 1,001st item was drawn and saved, then gone
-        without a word at the next start (round 6 of the final audit).
+        without a word at the next start.
         *waits*: the uid of the note whose Add box the words were taken from
         on the way out, and wait for (_take_pending_checklist_item)."""
         if len(items) < MAX_CHECKLIST_ITEMS:
@@ -19574,7 +19573,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                    "item to make room, while Note Organizer stays open."
                    if waits else "added. Delete an item to make room."))
             # Remembered as said only once it is: marked before, words a
-            # cancelled sign-out took were never said at all (round 9).
+            # cancelled sign-out took were never said at all.
             if waits:
                 self._waiting_said[waits] = text
         return True
@@ -19696,7 +19695,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if choice:
             # Saved on the way to the copy: as the person's Save, a note added
             # for a day went back to the Calendar, the copy opened out of sight
-            # (the lows wave's round 8).
+            #.
             self.save_current_note(stay=True)
             # The note the question was about, saved: not whichever one
             # the editor holds after the answer.
@@ -19986,7 +19985,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     and patch["category"] not in CATEGORY_COLORS):
                 patch["category"] = "General"
         # An older rule brought back can give a date a day was moved onto
-        # since: that move goes now, not at the next start (round 16).
+        # since: that move goes now, not at the next start.
         drop_hidden_moves(note)
         if replaced is None:
             note.pop("_prev", None)
@@ -20252,9 +20251,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _repeat_off_line(self, note):
         """What the status line says of a turn-off: the copy it kept is the
         series, or -- after an import's Update -- the note as it was before
-        that, which Restore previous then brings back instead (round 9). A
+        that, which Restore previous then brings back instead. A
         copy the note holds again in full is dropped by the same save, so no
-        Restore previous is promised for it (round 10)."""
+        Restore previous is promised for it."""
         if not self._holds_unspent_rescue(note):
             return self._REPEAT_OFF_NO_COPY
         return (self._REPEAT_OFF_UPDATE_KEPT if update_copy(note.get("_prev"))
@@ -20313,13 +20312,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         replaced, either order -- so Restore previous brings both back."""
         existing = note.get("_prev")
         # An Update's copy is kept whole even when this save takes text away:
-        # that text becomes a note of its own instead (wave 2, round 5).
+        # that text becomes a note of its own instead.
         if takes_text and update_copy(existing) and not rescue_copy_spent(note):
             self._keep_text_aside(note)
             takes_text = False
         # Another series' copy, replaced here, held its days alone: they are
-        # set aside, to be notes of their own (round 15) -- not an Update's
-        # copy this turn-off keeps whole (round 17).
+        # set aside, to be notes of their own -- not an Update's
+        # copy this turn-off keeps whole.
         if takes_text or not (update_copy(existing) and not rescue_copy_spent(note)):
             copy_days_set_aside(note)
         prev = self._whole_note_rescue_copy(note)
@@ -20330,7 +20329,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         elif update_copy(existing) and not rescue_copy_spent(note):
             # An import's Update left the note as it was here before, in no
             # other file: kept whole, given the series where it lacks it --
-            # before the held branch, which kept only its words (round 9).
+            # before the held branch, which kept only its words.
             kept = copy.deepcopy(existing)
             for key in ("date", "recurrence") + DAY_FIELDS:
                 if key not in kept:
@@ -20345,7 +20344,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                   existing.get("comments") or "", note.get("comments") or "")):
             # Any other earlier copy whose words the note has LOST (the big
             # delete's test) -- of words, of this series or of one before --
-            # gives them; this copy keeps the series as it is now (round 10).
+            # gives them; this copy keeps the series as it is now.
             for key in self._RESCUE_TEXT_KEYS:
                 prev[key] = copy.deepcopy(existing.get(key, prev[key]))
         return prev
@@ -20495,7 +20494,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                      if new_id not in self._visible_note_ids() else "")
             def hidden_said(hides_now, made=made):
                 # Named: shown once an Undo went, it read as about the note
-                # that Undo had just put back (the lows wave's round 2).
+                # that Undo had just put back.
                 title = one_line((made.get("title") or "").strip() or "Untitled note", 40)
                 return f"“{title}” saved in {made.get('category') or 'General'}, hidden by {hides_now}"
 
@@ -20507,7 +20506,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                      action=lambda: self._show_all_notes(made), action_text="Show all")
             if hides:
                 # Not over an Undo still showing: a new note typed right after
-                # a delete took the delete's way back (round 2).
+                # a delete took the delete's way back.
                 self._banner_after_undo(hidden_said(hides), say_hidden)
             elif auto:
                 self._show_toast("Note created", yield_to_action=True)
@@ -20628,7 +20627,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     note["exceptions"] = []
                 if days_lost:
                     # One save that also clears the text: an older copy's text
-                    # in place of it left the newest words in no file (round 4).
+                    # in place of it left the newest words in no file.
                     note["_prev"] = self._turn_off_rescue_copy(
                         note, takes_text=rescue_due and not comments_alone)
                     if comments_alone and update_copy(note["_prev"]):
@@ -20644,7 +20643,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 elif rescue_due:
                     # The copy's own comments too, when theirs is the larger
                     # loss: two letters cleared after a long comment was
-                    # deleted wrote over it (round 8 of the final audit).
+                    # deleted wrote over it.
                     if not comments_alone:
                         copy_days_set_aside(note)
                     note["_prev"] = dict(copy.deepcopy(note["_prev"]), comments=comments_kept_by_copy(
@@ -20814,7 +20813,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return restored
         if not self.save_notes():
             # Taken back by identity: a new note's autosave inside the error's
-            # wait was appended after them, and a cut by count took it too (round 12).
+            # wait was appended after them, and a cut by count took it too.
             back = {id(n) for n in restored}
             self.notes[:] = [n for n in self.notes if id(n) not in back]
             self.trash = kept_trash
@@ -20827,7 +20826,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return None
         save_trash(self.trash)
         # A note kept aside, put back from the Trash, is the person's now: the
-        # next Ctrl+Z spent it a second time (wave 2, round 8).
+        # next Ctrl+Z spent it a second time.
         uids = {n.get("uid") for n in restored}
         for held in getattr(self, "_kept_asides", {}).values():
             held[:] = [entry for entry in held if entry[0] not in uids]
@@ -20955,7 +20954,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if current is not items:
             # The same note and day opened again, read back with the very list
             # the row left: the row goes into it. Refused, it was in no file
-            # (the lows wave's round 6); another list -- a template's -- is.
+            #; another list -- a template's -- is.
             if where != (self.selected_note_id, self.current_occurrence_date) or current != items:
                 self._show_toast("That note is no longer open", kind="info")
                 return
@@ -21053,7 +21052,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 return
             # A dead move onto the date goes, as Move this day drops one: two
             # moves onto one date were listed twice, and the phone's History
-            # threw on the twin (round 19 of the final audit).
+            # threw on the twin.
             for dead in others:
                 del moves[dead]
             moves[came_from] = date_str
@@ -21474,7 +21473,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not state.get("done"):
             # Its poll reports the stop when it comes. Held past the join (a
             # file another program holds), the word names what it copied and
-            # unpacked, for the next start to take out (round 8 of the audit).
+            # unpacked, for the next start to take out.
             save_setting("backup_cut_short", {
                 "kind": "import", "file": state.get("zip") or "", "when": "session",
                 "copied": list(state.get("copied") or []),
@@ -21503,7 +21502,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         typed on -- the road a stray key took to that Cancel."""
         self.set_status(self._IMPORT_CANCELLED)
         self._box_words_until = time.monotonic() + 8
-        # Not over an Undo the import's question waited out (lows round 8).
+        # Not over an Undo the import's question waited out.
         self._banner_after_undo(self._IMPORT_CANCELLED,
                                 lambda: self._show_toast(self._IMPORT_CANCELLED, kind="info"))
 
@@ -21546,11 +21545,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _run_toast_action_by_click(self):
         """The toast's offer clicked: one press, one question. An action that
         asked about a popup, kept, left the window's click-outside to ask
-        again, and its No threw the work away (the lows wave's round 6)."""
+        again, and its No threw the work away."""
         self._popup_kept = False
         self._run_toast_action()
         # Only then: a popup the action never asked about closes on the click,
-        # as on every click outside it (the lows wave's round 7).
+        # as on every click outside it.
         return "break" if self._popup_kept else None
 
     def _run_toast_action_by_key(self):
@@ -21591,7 +21590,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         press took anything back, for the banner's Undo (_toast_undo_key)."""
         widget = event.widget
         # Ctrl+Shift+Z under Caps Lock arrives as a lower-case z: a Redo, as
-        # it is everywhere -- it undid a second step (the lows wave's round 4).
+        # it is everywhere -- it undid a second step.
         if getattr(event, "state", 0) & 0x0001:
             return self._text_class_redo(event)
         try:
@@ -21609,7 +21608,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             took = False
         self._text_undo_took = (widget, took)
         # This press's only, read by its own Ctrl+Z: left for the next press,
-        # a later one in that box did nothing (the lows wave's round 3).
+        # a later one in that box did nothing.
         try:
             self.after_idle(self._forget_text_undo)
         except tk.TclError:
@@ -21622,7 +21621,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     @staticmethod
     def _text_class_redo(event):
         """Ctrl+Shift+Z in a text box with no Redo of its own (a table cell):
-        the guide's Redo, which did nothing there, or undid (round 4)."""
+        the guide's Redo, which did nothing there, or undid."""
         widget = event.widget
         try:
             if widget.edit("canredo"):
@@ -21644,7 +21643,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return None
         widget = getattr(event, "widget", None)
         # Ctrl+Shift+Z is Redo, everywhere: <Control-Z>, bound for Caps Lock,
-        # took it too, and ran the banner's Undo (the lows wave's round 3).
+        # took it too, and ran the banner's Undo.
         if getattr(event, "state", 0) & 0x0001:
             return None
         try:
@@ -21653,7 +21652,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             kind = widget.winfo_class()
             # A Text's own Undo runs first and says whether it took typing
             # back (_text_class_undo): a redo step left was read as this press
-            # undoing, though an earlier one's (the lows wave's rounds 1-2).
+            # undoing, though an earlier one's.
             took, self._text_undo_took = getattr(self, "_text_undo_took", None), None
             undid = took is not None and str(took[0]) == str(widget) and took[1]
             if kind in self._TYPING_CLASSES and not (
@@ -21662,7 +21661,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 return None
             # A cell reopened under the person's edit -- Enter, Tab, a pasted
             # block, a row command -- holds no Undo of its own, the edit is
-            # the note's: taken, the banner's undid an older action (round 5).
+            # the note's: taken, the banner's undid an older action.
             cell = (getattr(self, "_cell_editor", None) or {}).get("entry")
             if (cell is not None and str(cell) == str(widget)
                     and getattr(self, "_units_done", 0) != getattr(self, "_toast_units_at", 0)):
@@ -21705,7 +21704,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         turn whether it still has something to say, the rest waiting behind
         the first that does -- and all of them behind a banner put up since,
         what the Undo itself said, which the first shown covered; one slot kept
-        only the last of two (the lows wave's round 2)."""
+        only the last of two."""
         waiting = list(waiting)
         while waiting and not self._is_placed(self.toast_frame):
             waiting.pop(0)()
@@ -21721,7 +21720,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _banner_after_undo(self, text, show):
         """*text* on the banner by *show* -- or, while an Undo or an error
         holds it, beneath it now and by *show* once it goes: put on the status
-        line, the next autosave wrote over it (the lows wave's round 1)."""
+        line, the next autosave wrote over it."""
         if not self._undo_on_banner():
             show()
             return
@@ -21750,7 +21749,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         mark = {"success": "✓", "info": "i", "error": "!"}.get(kind, "✓")
         self._toast_action = action
         # Ctrl+Z takes an Undo, never another word: "Show" on the '(earlier
-        # text)' banner was taken as one (the audit's round 18).
+        # text)' banner was taken as one.
         self._toast_action_undoes = action_text == "Undo"
         self._toast_units_at = getattr(self, "_units_done", 0)
         self._toast_kind = kind
@@ -21793,7 +21792,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 return
             # Nor under a question -- an import finished over the Undo -- and
             # seen again for a while after it: its eight seconds ran out
-            # unseen beneath (the lows wave's round 7).
+            # unseen beneath.
             if self._toast_action is not None and self._a_dialog_is_asking():
                 self._toast_waited = True
                 self._toast_hide_job = self.after(1000, hide)

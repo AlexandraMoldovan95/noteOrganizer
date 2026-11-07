@@ -36,7 +36,7 @@ MIN_WORDS_IN_NOTE = 6
 IGNORE_LIMIT = 5000
 # The underlines a line, and a box, may hold, as the find bar holds its hits.
 # Each is two toggles of a tag, and Tk's cost to read a line grows with their
-# square: the save reads it at every pause (final audit, round 10).
+# square: the save reads it at every pause.
 MAX_UNDERLINES_PER_LINE = 500
 MAX_UNDERLINES = 2000
 
@@ -75,7 +75,7 @@ def pieces(text, size=PIECE_UNITS):
     cut after a space where there is one, so no word is split in two.
     *offset* is where the piece starts in *text*, in UTF-16 units. Walked
     by index, the line measured once: the rest of it, copied and measured
-    again for every piece, grew with its square (round 9)."""
+    again for every piece, grew with its square."""
     out, offset, at = [], 0, 0
     left = utf16_units(text)
     while at < len(text):
@@ -189,7 +189,7 @@ def visible_errors(lines, results, ignored=()):
             paragraph_foreign = note_foreign
         # The line measured once, each range put in its sentence once: each
         # sentence encoded the whole line and walked every range, and a long
-        # line of short sentences took seconds at every pause (round 9).
+        # line of short sentences took seconds at every pause.
         raw = text.encode("utf-16-le", "surrogatepass")
         spans = sentence_spans(text)
         starts = [start for start, _end in spans]
@@ -216,7 +216,7 @@ def visible_errors(lines, results, ignored=()):
 
 # A sentence ends at a full stop, a question or exclamation mark or an
 # ellipsis, with a space (or the end of the line) after it. Asked only where
-# a run starts: tried at each of 24,000 dots, a look took 4.5 s (round 9).
+# a run starts: tried at each of 24,000 dots, a look took 4.5 s.
 _SENTENCE_END = re.compile(r"(?<![.!?…])[.!?…]+(?=\s|$)")
 
 

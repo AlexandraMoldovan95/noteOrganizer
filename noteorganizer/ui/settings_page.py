@@ -555,7 +555,7 @@ class SettingsPageMixin:
             redraw()
             self.refresh_category_widgets()
             # In sight, at the list's foot: below the 220 pixels shown, "+ Add"
-            # looked as if it did nothing (wave 2, round 9).
+            # looked as if it did nothing.
             canvas.update_idletasks()
             canvas.configure(scrollregion=canvas.bbox("all"))
             canvas.yview_moveto(1.0)
@@ -825,7 +825,7 @@ class SettingsPageMixin:
                  bg=self.colors["card"], fg=self.colors["text"],
                  font=("Segoe UI", 11, "bold")).pack(side="left")
         # A person's close, so it asks as Escape does: it threw a half-written
-        # template away without a word (wave 2, round 7).
+        # template away without a word.
         tk.Button(head, text="✕", command=self._dismiss_mini_popup_asking, relief="flat",
                   cursor="hand2", bg=self.colors["card"], fg=self.colors["subtext"],
                   font=("Segoe UI", 10, "bold"), bd=0).pack(side="right")
@@ -881,7 +881,7 @@ class SettingsPageMixin:
                 # The middle button's paste keeps the same ceiling.
                 t.bind("<<PasteSelection>>", self._paste_selection_capped)
                 # Tk's own Ctrl+K, Ctrl+O and Ctrl+T, which no Windows box has,
-                # edited a box with no Undo for good (wave 2, round 6).
+                # edited a box with no Undo for good.
                 for seq in ("<Control-k>", "<Control-K>", "<Control-o>", "<Control-O>",
                             "<Control-t>", "<Control-T>"):
                     t.bind(seq, lambda _e: "break")
@@ -1219,7 +1219,7 @@ class SettingsPageMixin:
                     self.templates.append(new_tpl)
             save_templates(self.templates)
             # Saved after all: a cancelled sign-out's word that it was not
-            # kept is untrue now, and the next start must not say it (round 8).
+            # kept is untrue now, and the next start must not say it.
             if get_setting("template_not_kept", None, expect=str):
                 save_setting("template_not_kept", None)
             self._dismiss_mini_popup()
@@ -1294,7 +1294,7 @@ class SettingsPageMixin:
                 self.templates[self.templates.index(tpl)] = new_tpl
             elif len(self.templates) >= MAX_TEMPLATES:
                 # Written, the next start keeps the first 1,000 and cut it
-                # unsaid; refused, the next start says so (round 7).
+                # unsaid; refused, the next start says so.
                 save_setting("template_not_kept", name)
                 return
             else:
@@ -1418,7 +1418,7 @@ class SettingsPageMixin:
                 self.trash = [e for e in self.trash if e is not entry]
                 save_trash(self.trash)
                 # As the bulk delete's: Statistics' "In trash" kept the old
-                # figure (the lows wave's round 1).
+                # figure.
                 self._render_statistics()
             redraw()
             if keyed:
@@ -1659,7 +1659,7 @@ class SettingsPageMixin:
             self.trash = kept
             save_trash(self.trash)
             # Statistics' "In trash" is what is there now: it kept the old
-            # figure until the list next changed (wave 2, round 4).
+            # figure until the list next changed.
             self._render_statistics()
 
         def delete_selected():
@@ -1794,7 +1794,7 @@ class SettingsPageMixin:
             relief="flat", cursor="hand2", font=("Segoe UI", 9, "bold"),
             bg=self.colors["accent"], fg=self._on_fill("accent"))
         # A double-click's second press landed on Empty trash, which slid up
-        # into its place (wave 2, round 7).
+        # into its place.
         restore_btn.bind(
             "<ButtonPress-1>",
             lambda e: "break" if self._second_press_of_double_click(e) else None,
@@ -3059,7 +3059,7 @@ class SettingsPageMixin:
                 self.render_calendar()
                 self._update_color_swatch()
                 # The open note's category button too: its dot kept the old
-                # colour beside a new swatch, card and calendar (wave 2, round 5).
+                # colour beside a new swatch, card and calendar.
                 self._refresh_category_button_safe()
             self._show_color_palette(swatch, CATEGORY_COLORS[name], apply_color,
                                      allow_reset=False)

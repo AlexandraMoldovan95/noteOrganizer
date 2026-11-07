@@ -547,7 +547,7 @@ def list_lines(paragraphs, body=None):
     kind and the depth *paragraphs* give it (none when they give it to no
     such line). The one look a day of a series keeps of its own -- its text
     is plain, but a nested list's depth lives nowhere else (the owner's
-    choice, the lows wave). Without *body*, the list entries as they are."""
+    choice). Without *body*, the list entries as they are."""
     if not isinstance(body, str):
         return [{key: value for key, value in entry.items() if key != "align"}
                 for entry in normalize_paragraphs(paragraphs) if entry.get("kind")]

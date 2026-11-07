@@ -803,7 +803,7 @@ class DialogsMixin:
         """Run *show* -- a file chooser or a posted menu, whose own loop runs
         every timer -- counted in `_natives_open`, so a backup's merge waits
         for it as for a question: under it, its questions opened behind the
-        chooser (wave 2, round 12)."""
+        chooser."""
         self._natives_open = getattr(self, "_natives_open", 0) + 1
         try:
             return show()

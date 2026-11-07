@@ -293,7 +293,7 @@ def _same_word(word, a, b):
     around it, as day_matches_series reads one; a text with the line under a
     closing table on both sides or neither (with_caret_line) -- a copy the
     phone made keeps its series' text as typed and its days with the line,
-    and a colour-only day read as words (round 15)."""
+    and a colour-only day read as words."""
     a, b = str(a or ""), str(b or "")
     if word == "title":
         return a.strip() == b.strip()
@@ -339,8 +339,7 @@ def comments_kept_by_copy(copy_comments, comments):
     over a copy that holds *copy_comments*: the ones whose loss would be
     the larger, counted by what is gone (_lost). Two letters cleared after
     a long comment was deleted lose to it, as the body's words do; a long
-    comment cleared over a short one takes its place (round 8 of the
-    final audit)."""
+    comment cleared over a short one takes its place."""
     if _lost(comments, copy_comments) < _lost(copy_comments, comments):
         return copy_comments
     return comments
@@ -350,7 +349,7 @@ def _same_series(day, rule, other_day, other_rule):
     """Whether two starts and rules are one series. A weekly rule's start
     weekday lit, or left to the start, is the same rule -- as a monthly
     rule's day: the editor stores both, and a series turned back on as it
-    was read as another (round 17)."""
+    was read as another."""
     if day != other_day:
         return False
     rules = (normalize_recurrence(rule), normalize_recurrence(other_rule))
@@ -362,7 +361,7 @@ def _same_series(day, rule, other_day, other_rule):
             rec["month_days"] = [when.day]
     # A field the frequency never reads changes no day: kept hidden (the
     # phone's sheet stores all three), it made a series turned back on as it
-    # was read as another (the audit's round 19 and the lows wave).
+    # was read as another.
     for rec in rules:
         if rec["freq"] != "weekly":
             rec["weekdays"] = []
@@ -463,8 +462,8 @@ def copy_days_set_aside(note, incoming=None):
     """Before *note*'s rescue copy is replaced: the days with words of their
     own of a series' copy the note no longer repeats as, set aside to be
     notes of their own. The copy was the only place they were kept, and the
-    next turn-off or big delete erased them (round 15). An Update's copy too,
-    as a restore leaves it (round 17); held by the note, or by the *incoming*
+    next turn-off or big delete erased them. An Update's copy too,
+    as a restore leaves it; held by the note, or by the *incoming*
     note whose days a backup's Update is about to write."""
     prev = note.get("_prev")
     if not isinstance(prev, dict) or not is_recurring(prev) or _repeats_as(note, prev):
@@ -474,7 +473,7 @@ def copy_days_set_aside(note, incoming=None):
     def held(key):
         # A holder's day for it: on its date, on the day the copy moved there
         # from, or where the holder has moved that day since -- by date alone, a
-        # day the note moved was set aside as words it still held (round 16).
+        # day the note moved was set aside as words it still held.
         day = came.get(key, key)
         for holder in (note, incoming) if incoming is not None else (note,):
             mine, moved = holder.get("overrides") or {}, holder.get("moved") or {}
@@ -496,10 +495,10 @@ def notes_set_aside(note):
     date with its words, look and the series' title marked "(earlier text)",
     taken off the note. Shown on its day, they were read four ways in four
     rounds, each leaving a case; a note of its own is seen and kept as it is
-    (round 15, the owner's choice)."""
+    (the owner's choice)."""
     made = []
     # Shaped as a read shapes them: an entry with no words made an empty
-    # note at a save, and none at the start (round 16).
+    # note at a save, and none at the start.
     for entry in _shaped_aside(note.pop("_set_aside", None)):
         title = entry.get("title") or note.get("title") or ""
         made.append({"title": (title + " (earlier text)").strip(), "body": entry.get("body", ""),
@@ -515,7 +514,7 @@ def settle_set_aside(notes):
     highest, worked out once -- asked for each, the whole notebook was walked
     for every note made. Returns how many. At the start (core load_notes,
     which writes them at once: left for the next save, each start made them
-    again under new identities -- round 16) and at every save."""
+    again under new identities) and at every save."""
     stamp = now_stamp()
     made, next_id, held = 0, None, set()
     for note in list(notes):
@@ -524,8 +523,7 @@ def settle_set_aside(notes):
         if next_id is None:
             next_id = max([n["id"] for n in notes], default=0) + 1
             # A note already holding the same words on the same day is that
-            # note: a backup's Update made it again at every import (the lows
-            # wave's verification).
+            # note: a backup's Update made it again at every import.
             held = {(n.get("title"), n.get("date"), n.get("body"), n.get("comments"))
                     for n in notes if isinstance(n, dict)}
         for fresh in notes_set_aside(note):
@@ -592,7 +590,7 @@ def _copy_days_placed(note, prev, moved):
     taken, aside = set(), []
     # A day the note deleted stays deleted, but the copy's words for it are
     # set aside, not dropped: the phone's older build showed such a day blank,
-    # its words in the copy alone (the owner's choice, round 21).
+    # its words in the copy alone (the owner's choice).
     for key in sorted(gone):
         if not _own_words_held(prev, key, note, key):
             aside.append(_aside_entry(prev, key, key))
@@ -647,12 +645,12 @@ def _days_back_from_copy(note):
     """A note that no longer repeats keeps its days' own text in itself, as
     a turn-off here does; a turn-off by the phone, or by this app before the
     final audit, kept them only in the series' copy, which the next copy
-    erased. Brought back into the note once, as it is read (round 6) -- and
+    erased. Brought back into the note once, as it is read -- and
     into a note the phone turned back on as it was, which got none of them
-    back (round 7), the copy's days then spent (spend_series_days)."""
+    back, the copy's days then spent (spend_series_days)."""
     prev = note.get("_prev")
     # Only the series' own copy: an update's holds days it replaced on
-    # purpose, and taken in they made the same backup read as changed (round 7).
+    # purpose, and taken in they made the same backup read as changed.
     if not _series_own_copy(prev):
         return
     if is_recurring(note) and not _repeats_as(note, prev):
@@ -711,8 +709,8 @@ def apply_shared_update(note, incoming, fields=UPDATABLE_FROM_SHARED):
     if restarted and note.get("exceptions"):
         prev["exceptions"] = copy.deepcopy(note["exceptions"])
     # The copy this one replaces may hold another series' days alone: set
-    # aside once kept_days_fit has read them (round 15) -- held by the days
-    # a backup brings, too (round 17).
+    # aside once kept_days_fit has read them -- held by the days
+    # a backup brings, too.
     copy_days_set_aside(note, fresh if "overrides" in fields else None)
     note["_prev"] = prev
     for field in fields:
@@ -757,7 +755,7 @@ def _copy_field_held(note, prev, key):
     """Whether *note* holds *prev*'s field *key* again: a repeat rule by the
     days it gives (_same_series), any other as it is. Compared as stored, a
     rule with its weekday lit was never the same, and the copy never spent
-    (round 18 of the final audit)."""
+   ."""
     if key == "recurrence":
         day = note.get("date")
         return _same_series(prev.get("date", day), prev[key], day, note.get(key, NOTE_DEFAULTS.get(key)))
@@ -813,8 +811,8 @@ def rescue_copy_due(old_title, old_body, title, body, old_comments="", comments=
     """Whether a save keeps the old text as the rescue copy "↩ Restore
     previous" brings back: emptied; more than 40 characters gone, 30% of it
     or 200; or most of a short note, 70% and 15 characters at least -- for
-    the title and body, or for the comments as a text of their own (round 6
-    of the final audit). Counted by what is gone. ISSUES_LOG: "The safety
+    the title and body, or for the comments as a text of their own.
+    Counted by what is gone. ISSUES_LOG: "The safety
     net that measured the wrong thing"."""
     return (_text_rescue_due(old_title, old_body, title, body)
             or _text_rescue_due("", old_comments, "", comments))
@@ -850,14 +848,14 @@ def copy_replaced_by_restore(note, prev):
              if key not in prev}
     # Everything the restore writes over is weighed: the comments too, and
     # the styles of the same words. Comments typed since the copy went to no
-    # file, the question saying nothing (round 7 of the final audit).
+    # file, the question saying nothing.
     same_words = body == (prev.get("body") or "")
     lines = len(body.split("\n"))
     styles = (normalize_formatting(note.get("formatting") or []),
               normalize_paragraphs(note.get("paragraphs") or [], lines))
     # Words held in the copy's but not the same: their styles cannot be laid
     # beside the copy's, so any style is weighed as lost -- a part made bold
-    # since went to no file (round 8 of the final audit).
+    # since went to no file.
     styles_kept = (styles == (normalize_formatting(prev.get("formatting") or []),
                               normalize_paragraphs(prev.get("paragraphs") or [], lines))
                    if same_words else not any(styles))
@@ -885,12 +883,12 @@ def shared_update_changes(note, incoming, fields=UPDATABLE_FROM_SHARED):
     twice, the second time"; smaller lessons: shared_update_changes."""
     # The arriving note read as a load reads it, its copy's days taken back,
     # then both compared bare; this side, held in memory, is not read again
-    # (ISSUES_LOG: the final audit's rounds 7 and 9).
+    # (ISSUES_LOG: "Round seven: a copy taken"; ISSUES_LOG: "Round nine: days").
     fresh = {key: value for key, value in normalize_note(dict(incoming)).items() if key != "_prev"}
     mine = normalize_note({key: value for key, value in note.items() if key != "_prev"})
     # The repeat by the days it gives (_same_series): a start weekday lit or
-    # not read as changed, and the Update spent the only earlier version (the
-    # audit's round 19). Another start still changes "date".
+    # not read as changed, and the Update spent the only earlier version.
+    # Another start still changes "date".
     return any(not _same_series(mine["date"], mine[field], mine["date"], fresh[field])
                if field == "recurrence" else mine[field] != fresh[field] for field in fields)
 
@@ -959,7 +957,7 @@ def clean_override(patch):
         out[k] = v
     # ...and the day's own list lines, kept even empty: a day saved since
     # keeps its lists' structure, one saved before takes the series' by line
-    # (day_paragraphs; the owner's choice, the lows wave).
+    # (day_paragraphs; the owner's choice).
     if isinstance(patch.get("paragraphs"), list):
         out["paragraphs"] = list_lines(patch["paragraphs"], out.get("body"))
     return out
@@ -1219,7 +1217,7 @@ def normalize_note(note):
                    if isinstance(k, str) and isinstance(v, str))
     # Of two moves onto one date, the one the calendar draws -- its own date
     # the rule's -- is kept: by date alone the read kept a dead one, and a
-    # meeting moved under the phone's older build jumped back (round 20).
+    # meeting moved under the phone's older build jumped back.
     twins = {new for new, count in Counter(v for _k, v in pairs).items() if count > 1}
     if twins and is_recurring(clean):
         live = _rule_days_among(clean, [k for k, v in pairs if v in twins])

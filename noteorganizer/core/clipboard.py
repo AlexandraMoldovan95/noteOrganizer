@@ -153,7 +153,7 @@ def fragment_of(document):
     if start == -1 or end == -1 or end <= start:
         # Some applications omit the markers and give the whole document.
         # Found where it is: lower() makes two characters of "İ", and an
-        # offset in the lowered copy fell past the tag in this one (round 10).
+        # offset in the lowered copy fell past the tag in this one.
         found = re.search("<body", document, re.IGNORECASE)
         return (document[document.find(">", found.start()) + 1:] if found
                 else document)

@@ -7,6 +7,9 @@ package -- two things:
 
 * no comment or docstring names a release. The changelog says when; the
   code says why, and "fixed in 0.76.195" is history the day after;
+* nor a round of an audit ("round 9", "the lows wave"): it says when a
+  reason was found, never the reason, and a reader outside the audit
+  cannot use it. A story's title quoted as a pointer is not counted;
 * every pointer into the issues log leads somewhere: ``ISSUES_LOG: "..."``
   names the start of a story's title, and ``smaller lessons: ...`` names
   an entry in its "Smaller lessons, moved out of the code" section.
@@ -83,6 +86,9 @@ MAX_MODULE_DOCSTRING_LINES = 10
 # A release as this project numbers them before 1.0.0. Dates such as
 # 17.10.2026 and toolkit versions such as Tk 8.6.15 do not match.
 RELEASE = re.compile(r"\b0\.\d{1,3}\.\d{1,4}\b")
+
+# A round of an audit, as the comments once named them.
+ROUND = re.compile(r"\brounds? \d+\b|\blows wave\b", re.I)
 
 # Where a docstring's prose ends and its interface sections begin.
 SECTION = re.compile(r"^(Args|Arguments|Returns|Raises|Yields):\s*$")
@@ -187,6 +193,13 @@ def broken_pointers(text, titles, lessons):
     return broken
 
 
+def named_round(text):
+    """The audit's round *text* names, its lines joined and its pointers
+    into the issues log left out; None when it names none."""
+    found = ROUND.search(STORY.sub("", " ".join(text.split())))
+    return found.group(0) if found else None
+
+
 def check(path, titles, lessons):
     with io.open(os.path.join(ROOT, path), encoding="utf-8") as fh:
         source = fh.read()
@@ -206,10 +219,16 @@ def check(path, titles, lessons):
     for first, _length, text, _alone in runs:
         for what in broken_pointers(text, titles, lessons):
             problems.append((first, "points to %s in ISSUES_LOG" % what))
+        found = named_round(text)
+        if found:
+            problems.append((first, "names the audit's %r" % found))
     for line, doc, _module in docstrings(tree):
         for what in broken_pointers(doc, titles, lessons):
             problems.append((line, "docstring points to %s in ISSUES_LOG"
                              % what))
+        found = named_round(doc)
+        if found:
+            problems.append((line, "docstring names the audit's %r" % found))
     if path in BRIEF:
         for first, length, _text, alone in runs:
             if alone and length > MAX_COMMENT_LINES:
@@ -248,7 +267,7 @@ def main():
               "story goes to docs/ISSUES_LOG.md, with a pointer left here."
               % (failures, MAX_COMMENT_LINES))
         return 1
-    print("Comments brief: %d module(s) read, no release named, every pointer "
+    print("Comments brief: %d module(s) read, no release or audit round named, every pointer "
           "into ISSUES_LOG leads somewhere, %d condensed module(s) within "
           "their limits." % (len(files), len(BRIEF)))
     return 0

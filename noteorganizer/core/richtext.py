@@ -445,7 +445,7 @@ class _Reader(HTMLParser):
 
 
 # The spaces after "<" are read once: "\s*/?\s*" split a run of them every
-# way it could, and "<" with 8,000 spaces held a paste 4 s (round 9).
+# way it could, and "<" with 8,000 spaces held a paste 4 s.
 _BLOCK_TAG_RE = re.compile(
     r"<\s*(?:/\s*)?(?:" + "|".join(sorted(_BLOCK_TAGS | {"li", "ul", "ol", "table"}))
     + r")\b", re.I)

@@ -533,7 +533,7 @@ def drawn_moves(note):
     shown = _drawn_on_days(note, [day for _o, _n, day in pairs
                                   if day is not None])
     # One a date, the move moved_from names: two onto one date were listed
-    # twice in History (the phone's list threw on the twin key, round 19).
+    # twice in History (the phone's list threw on the twin key).
     came = _moved_from_map(note)
     return [(orig, new) for orig, new, day in pairs
             if day is not None and shown[day] == [new] and came.get(new) == orig]
@@ -573,7 +573,7 @@ def move_day(note, day, to):
     orig = moved_from(note, day) or day
     # Another move onto *to*, which the caller found free, is a dead one --
     # its own date no longer the rule's -- and goes: two moves onto one date
-    # were read as the dead one, and the next read kept only one (round 17).
+    # were read as the dead one, and the next read kept only one.
     for dead in [other for other, new in moved.items() if new == to and other != orig]:
         del moved[dead]
     if to == orig:
@@ -887,7 +887,7 @@ def history_entries(notes, query="", year_bucket="All", today=None, memo=None):
                 known["drawn"] = drawn_moves(note)
             # A day moved past the end or before the start is drawn, outside
             # the span the rule's days were asked of: listed too, or it was in
-            # no row and no search found its words (round 18 of the final audit).
+            # no row and no search found its words.
             if occ_days is not None:
                 occ_days = sorted(set(occ_days) | {new for _orig, new in known["drawn"]})
 
@@ -943,7 +943,7 @@ def history_entries(notes, query="", year_bucket="All", today=None, memo=None):
                 for day, override in sorted(overrides.items(), reverse=True):
                     if (day in exceptions and day not in landed) or not is_date(day):
                         # A deleted day's stray override stays hidden -- but
-                        # a day moved onto that date keeps its words (round 18).
+                        # a day moved onto that date keeps its words.
                         continue
                     if not bucket_ok(day):
                         continue
@@ -1132,7 +1132,7 @@ def off_schedule_days(note):
     landed = set(moved.values()) if isinstance(moved, dict) else set()
     # Asked with no day skipped, a deleted day is left out above; a deleted
     # date a day was moved onto holds its words, and is asked of the series
-    # as it is -- hidden, they were listed nowhere (round 17).
+    # as it is -- hidden, they were listed nowhere.
     schedule = dict(note, exceptions=[])
     asked = [(day, when) for day, when in
              ((d, parse_date(d)) for d in sorted(
