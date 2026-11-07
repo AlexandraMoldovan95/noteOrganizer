@@ -328,7 +328,7 @@ fifteen modules under `noteorganizer/core/` (eighteen now), none importing tkint
 into `noteorganizer/ui/` as mixins: the calculator panel, the Settings page, the dialogs and popups,
 the calendar, attachments, and — re-measured once it became one drawing — the note list. Spelling
 (2026-10-14) was written into both layers from the start: two `core/` modules and a seventh mixin. All the
-pure logic went down into `core/` first. `note_organizer.py` is about 24,000 lines — it dipped
+pure logic went down into `core/` first. `note_organizer.py` is about 22,000 lines — it dipped
 when the extractions landed and grew again through the rich-text, tables and field-testing work,
 but the pure logic behind all of that went into `core/` rather than into it, which is the point:
 the entry file is a UI hub, not a junk drawer.

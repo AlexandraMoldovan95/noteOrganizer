@@ -17,26 +17,28 @@ by hand on the packaged `.exe` before a release - a case passes only when I've s
 
 ## The plan in numbers
 
-Counted on 2 November 2026.
+Counted on 7 November 2026: 921 cases, 596 walked and passed, 325 not yet
+walked (most of them added during the final audit, for my pass on the
+final builds).
 
 ### By priority
 
 | Priority | Cases |
 |---|---:|
-| High | 241 |
-| Medium | 400 |
-| Low | 218 |
+| High | 259 |
+| Medium | 427 |
+| Low | 235 |
 
 ### The six largest areas
 
 | Area | Cases |
 |---|---:|
-| Editor | 96 |
+| Editor | 98 |
+| Notes | 91 |
+| Backup & Sharing | 88 |
 | Recurrence | 86 |
-| Notes | 83 |
-| Tables | 66 |
-| Settings | 65 |
-| Backup & Sharing | 65 |
+| Tables | 69 |
+| Settings | 67 |
 
 ## The test case template, filled out four times
 

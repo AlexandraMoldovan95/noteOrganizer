@@ -60,7 +60,7 @@ py note_organizer.py
 
 `note_organizer.py` is still the front door. The pure logic has moved into
 the `noteorganizer/` package next to it and is imported back in; the entry
-file itself stays large (about 24,000 lines) because it is the UI hub the pieces
+file itself stays large (about 22,000 lines) because it is the UI hub the pieces
 hang off, not a junk drawer of stray logic.
 
 To run every test — units + qa1–qa9 — safely in a scratch copy:

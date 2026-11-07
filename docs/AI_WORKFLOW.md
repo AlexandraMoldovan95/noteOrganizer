@@ -201,10 +201,11 @@ on Linux, and the workflow skips work a change cannot affect.
 
 ## Models
 
-Commits the agent made carry a `Co-Authored-By` line naming the model. Of the 806 commits that are
-not merges, 720 carry one (counted at the 0.89.371 release commit, `0eabe1e`): Claude Opus 5.5
-(336), Claude Fable 5 (187), Claude Opus 5 (167), Claude Sonnet 5 (16) and Claude Opus 4.8 (14). The project's first week, and
-a few dozen commits soon after, were made without the convention.
+Commits the agent made carry a `Co-Authored-By` line naming the model. Of the 1,280 commits that
+are not merges, 1,194 carry one (counted on 7 November 2026, on the final audit's branch at
+`dd891e9`): Claude Opus 5.5 (810), Claude Fable 5 (187), Claude Opus 5 (167), Claude Sonnet 5
+(16) and Claude Opus 4.8 (14). The project's first week, and a few dozen commits soon after,
+were made without the convention.
 
 ## How to read the other documents
 
