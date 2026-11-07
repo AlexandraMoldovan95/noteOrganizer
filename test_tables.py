@@ -525,6 +525,20 @@ check(f"a paste that padding carries past the ceiling is cut before the "
       len(_txtP) <= _CEIL and _cutP.get("text_cut") is True
       and _txtP.startswith("| " + "x" * 240))
 
+# A note's lines on one line, kept apart: the card and the question about a
+# day off its schedule both read them so.
+_apart = tables.lines_apart("the book borrowed\n\n  from   Radu \nthe article\n")
+check(f"lines_apart keeps a note's lines apart, empty ones left out ({_apart!r})",
+      _apart == "the book borrowed · from Radu · the article")
+check("lines_apart of nothing is nothing",
+      tables.lines_apart("") == "" and tables.lines_apart(None) == "")
+# Every cut the app shows: whole when it fits, its "…" held to the last word.
+_cuts = [tables.glimpse(t, n) for t, n in (
+    ("milk", 4), ("", 3), ("what is next", 8), ("water bottles · Call Ann", 16),
+    ("one two", 5))]
+check(f"glimpse keeps a text that fits and ends a cut at its last word ({_cuts!r})",
+      _cuts == ["milk", "", "what is…", "water bottles…", "one t…"])
+
 print()
 print(f"FAILURES: {fails if fails else 'none'}")
 

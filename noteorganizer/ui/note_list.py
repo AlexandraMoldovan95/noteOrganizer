@@ -2014,15 +2014,9 @@ class NoteListMixin:
         # only the note's plain text; the tags row says a table is there.
         # The calendar's rule, so a row typed past its last cell goes too.
         prose, table_count = core_tables.preview_text(note_body)
-        # Its lines kept apart: run together, "the book borrowed from Radu"
-        # and "the article about sleep" read as one sentence.
-        preview_src = " · ".join(
-            ln.strip() for ln in (prose if table_count else note_body).split("\n")
-            if ln.strip())
-        # The cap is a glimpse, not a width: the drawing wraps the glimpse
-        # to the card, so it stays readable however wide the characters are.
-        cap = self.CARD_PREVIEW_CHARS
-        preview = preview_src[:cap] + ("..." if len(preview_src) > cap else "")
+        preview_src = core_tables.lines_apart(prose if table_count else note_body)
+        # A glimpse, not a width: the drawing wraps it to the card.
+        preview = core_tables.glimpse(preview_src, self.CARD_PREVIEW_CHARS)
 
         tags_text = note_category
         if is_recurring(note):

@@ -5236,6 +5236,28 @@ _kp_groups = ' '.join(c for t, rows in app.SHORTCUT_GROUPS
                       if t.startswith('Settings') for c, _d in rows)
 check(f'...and the page names them, in a Settings group ({_kp_groups!r})',
       'Page Up' in _kp_groups and 'Page Down' in _kp_groups)
+# The keyboard in the menu follows the entry chosen by a click: a click does
+# not move it, and its ring stayed on General with Statistics marked.
+_kp_general = app._settings_nav_buttons.get('name')
+_kp_stats = app._settings_nav_buttons.get('statistics')
+if _take_focus(_kp_general):
+    _kp_stats.invoke()
+    _kv_settle(4)
+_kp_follow = _focus_settles_on(_kp_stats)
+check(f'a menu entry chosen by a click takes the keyboard from the entry it was on '
+      f'({app.focus_get()})',
+      _kp_follow)
+# ...and only a choice moves it: the menu is repainted at every theme change,
+# and the keyboard an arrow put on another entry stays there.
+_kp_moved = False
+if _take_focus(_kp_general):
+    app._recolor_settings_nav_icons()
+    _kp_moved = _focus_settles_on(_kp_stats, cap_s=1.0)
+check(f'...and a repaint of the menu leaves the keyboard on the entry it was on '
+      f'({app.focus_get()})',
+      not _kp_moved and app.focus_get() is _kp_general)
+app.toggle_settings_panel('shortcuts')
+_kv_settle(6)
 # In a box being typed in, End is the box's own. No section that runs past
 # the window holds one, so a box is put on this one for the question.
 _kp_box = tk.Entry(app.settings_shortcuts_panel)

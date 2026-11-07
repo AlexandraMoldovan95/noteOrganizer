@@ -365,6 +365,18 @@ _card_lines = app._card_texts(NO.normalize_note(
     {'id': 992, 'title': 'Shopping', 'body': 'milk\n\n  bread  \neggs'}))['preview']
 check(f'a card keeps the lines of a note apart ({_card_lines!r})',
       _card_lines == 'milk · bread · eggs')
+# Cut, the glimpse holds its "…" to its last word: "...", after the space the
+# cut left, wrapped onto a line of its own.
+_card_cut = app._card_texts(NO.normalize_note(
+    {'id': 993, 'title': 'Stand-up',
+     'body': 'What we shipped, what is stuck, what is next for the team'}))['preview']
+check(f'a card cut short ends in an ellipsis held to its last word ({_card_cut!r})',
+      _card_cut == 'What we shipped, what is stuck, what is…')
+_card_cut = app._card_texts(NO.normalize_note(
+    {'id': 994, 'title': 'Camping',
+     'body': 'Bring the blue tent and water bottles\nCall Ann about Sunday'}))['preview']
+check(f'...and a cut on the dot between two lines ends at the first ({_card_cut!r})',
+      _card_cut == 'Bring the blue tent and water bottles…')
 check('calendar preview does not dump the comments inline',
       'a comment that must not' not in _pv_text)
 check('calendar preview flags table + checklist + comments as chips',

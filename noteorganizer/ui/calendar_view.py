@@ -1180,8 +1180,7 @@ class CalendarViewMixin:
         preview, tables_here = core_tables.preview_text(_note_str(note, "body"))
         preview = preview.strip()
         if preview:
-            if len(preview) > 150:
-                preview = preview[:150].strip() + "…"
+            preview = core_tables.glimpse(preview, 150)
             tk.Label(inner, text=preview, bg=self.colors["card"], fg=self.colors["subtext"],
                      font=("Segoe UI", 8), anchor="w", justify="left",
                      wraplength=self.px(260)).pack(anchor="w", pady=(3, 0))

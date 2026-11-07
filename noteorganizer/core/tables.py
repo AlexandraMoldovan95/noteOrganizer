@@ -664,3 +664,21 @@ def preview_text(body):
     while prose and not prose[-1].strip():
         prose.pop()
     return "\n".join(prose), tables
+
+
+def lines_apart(text):
+    """A note's lines on one line, kept apart: each line's spaces squeezed,
+    empty lines left out, " · " between. Run together, "the book borrowed
+    from Radu" and "the article about sleep" read as one sentence. The
+    note card and the question about a day off its schedule both use it."""
+    return " · ".join(" ".join(line.split()) for line in (text or "").split("\n")
+                      if line.strip())
+
+
+def glimpse(text, limit):
+    """*text* cut to *limit* characters for display, whole when it fits. Cut,
+    its "…" is held to the last word: after the space or " · " the cut ended
+    on, it wrapped onto a line of its own. Every cut the app shows uses it."""
+    if len(text) <= limit:
+        return text
+    return text[:limit].rstrip(" \t\n·") + "…"

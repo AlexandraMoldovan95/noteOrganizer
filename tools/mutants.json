@@ -17242,12 +17242,66 @@
   },
   {
     "id": "PN01",
-    "about": "A card's preview runs a note's lines together again",
-    "edits": [{"file": "noteorganizer/ui/note_list.py",
-               "find": "        preview_src = \" · \".join(\n",
-               "replace": "        preview_src = \" \".join(\n"}],
-    "must_fail": ["a card keeps the lines of a note apart"],
-    "suites": ["qa7"],
+    "about": "A note's lines run together again, on the card and in the question about a day",
+    "edits": [{"file": "noteorganizer/core/tables.py",
+               "find": "    return \" · \".join(\" \".join(line.split()) for line in (text or \"\").split(\"\\n\")\n",
+               "replace": "    return \" \".join(\" \".join(line.split()) for line in (text or \"\").split(\"\\n\")\n"}],
+    "must_fail": ["a card keeps the lines of a note apart",
+                  "a day off its schedule of two lines is asked with its lines kept apart",
+                  "lines_apart keeps a note's lines apart"],
+    "suites": ["qa7", "qa5", "test_tables"],
+    "expect": "killed"
+  },
+  {
+    "id": "PN05",
+    "about": "Every cut the app shows ends in a \"...\" after the space the cut left",
+    "edits": [{"file": "noteorganizer/core/tables.py",
+               "find": "    return text[:limit].rstrip(\" \\t\\n·\") + \"…\"\n",
+               "replace": "    return text[:limit] + \"...\"\n"}],
+    "must_fail": ["a card cut short ends in an ellipsis held to its last word",
+                  "glimpse keeps a text that fits and ends a cut at its last word"],
+    "suites": ["qa7", "test_tables"],
+    "expect": "killed"
+  },
+  {
+    "id": "PN07",
+    "about": "A repaint of the Settings menu, as a theme change runs, moves the keyboard to the entry marked",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "                        self.colors[\"accent_text\"] if selected else self.colors[\"subtext\"])\n            except tk.TclError:\n                pass\n",
+               "replace": "                        self.colors[\"accent_text\"] if selected else self.colors[\"subtext\"])\n            except tk.TclError:\n                pass\n        if self.focus_get() in self._settings_nav_buttons.values():\n            self._settings_nav_buttons[which].focus_set()\n"}],
+    "must_fail": ["...and a repaint of the menu leaves the keyboard on the entry it was on"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "PN08",
+    "about": "A cut that lands on the dot between two lines keeps the dot before its \"…\"",
+    "edits": [{"file": "noteorganizer/core/tables.py",
+               "find": "    return text[:limit].rstrip(\" \\t\\n·\") + \"…\"\n",
+               "replace": "    return text[:limit].rstrip() + \"…\"\n"}],
+    "must_fail": ["...and a cut on the dot between two lines ends at the first",
+                  "glimpse keeps a text that fits and ends a cut at its last word"],
+    "suites": ["qa7", "test_tables"],
+    "expect": "killed"
+  },
+  {
+    "id": "PN06",
+    "about": "The keyboard stays on a Settings entry while a click marks another",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "                chosen.focus_set()\n",
+               "replace": "                pass\n"}],
+    "must_fail": ["a menu entry chosen by a click takes the keyboard from the entry it was on"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "PN04",
+    "about": "The question about a day off its schedule runs the day's lines together again",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            text = core_tables.glimpse(core_tables.lines_apart(text), 160)\n",
+               "replace": "            text = core_tables.glimpse(\" \".join(text.split()), 160)\n"}],
+    "must_fail": ["a day off its schedule of two lines is asked with its lines kept apart"],
+    "suites": ["qa5"],
     "expect": "killed"
   },
   {

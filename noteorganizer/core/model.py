@@ -24,7 +24,7 @@ from .storage import now_stamp
 from .formatting import (normalize_formatting, normalize_paragraphs,
                          clamp_spans_per_line, strip_list_markers,
                          day_paragraphs, list_lines)
-from .tables import with_caret_line
+from .tables import glimpse, with_caret_line
 from .recurrence import (
     effective_note,
     normalize_recurrence,
@@ -190,10 +190,7 @@ def _truncate(text, limit=60):
     changed — this is display-only."""
     if not isinstance(text, str):
         return ""
-    flat = " ".join(text.split())
-    if len(flat) <= limit:
-        return flat
-    return flat[:limit].rstrip() + "…"
+    return glimpse(" ".join(text.split()), limit)
 
 
 def checklist_shown(text):

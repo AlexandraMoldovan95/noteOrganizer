@@ -4441,6 +4441,16 @@ check('the day moved to the Trash comes back from it as a note on its day',
       any(n.get('date') == '2026-09-21' and n.get('title') == 'Stand-up'
           and n is not app.find_note(1) for n in app.notes))
 
+# A day's text of two lines is asked with its lines kept apart, as a card
+# shows them: run together, they read as one sentence.
+_os_seed()
+app.find_note(1)['overrides']['2026-09-14']['body'] = 'moved to Monday\n\n  room 2 '
+app.save_notes()
+_os_lines = _os_walk(['keep', 'keep'])
+check(f'a day off its schedule of two lines is asked with its lines kept apart '
+      f'({_os_lines[0][1][:90]!r})',
+      'moved to Monday · room 2' in _os_lines[0][1])
+
 # Leaving a day changes nothing, and keeps its way in. And text typed and not
 # yet saved goes into the series first, as on every route that writes behind
 # the editor: the editor is filled from the note again once a day is made a

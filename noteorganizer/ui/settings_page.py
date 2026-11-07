@@ -140,6 +140,20 @@ class SettingsPageMixin:
         target.pack(fill="both", expand=True, padx=48, pady=(40, 60))
         self._settings_selected_section = which
         self._highlight_settings_nav(which)
+        # The keyboard, already in the list, follows the entry chosen: a click
+        # does not move it, and its ring stayed on another entry than the one
+        # marked selected. Here, not in the highlight a theme repaint runs too.
+        chosen = self._settings_nav_buttons.get(which)
+        try:
+            held = self.focus_get()
+        except (KeyError, tk.TclError):
+            held = None
+        if (chosen is not None and held is not None and held is not chosen
+                and held in self._settings_nav_buttons.values()):
+            try:
+                chosen.focus_set()
+            except tk.TclError:
+                pass
         if self.settings_canvas is not None:
             try:
                 self.settings_canvas.yview_moveto(0)

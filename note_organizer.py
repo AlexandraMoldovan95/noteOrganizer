@@ -15694,9 +15694,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             when = parse_date(day)
             title = (shown.get("title") or "").strip() or "Untitled"
             text, _tables = core_tables.preview_text(shown.get("body") or "")
-            text = " ".join(text.split())
-            if len(text) > 160:
-                text = text[:160].rstrip() + "…"
+            text = core_tables.glimpse(core_tables.lines_apart(text), 160)
             choice = self._themed_dialog(
                 f"Day {index} of {len(days)} off the schedule",
                 f"{show_day(when) if when else day} — “{one_line(title, 200)}”"
@@ -21149,14 +21147,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             body, tables_here = core_tables.preview_text(shown["body"])
             body = body.strip()
             if body:
-                preview = body[:120] + ("…" if len(body) > 120 else "")
-                line("Note", preview)
+                line("Note", core_tables.glimpse(body, 120))
             if tables_here:
                 line("Holds", "▦ 1 table" if tables_here == 1
                      else "▦ %d tables" % tables_here)
             comments = shown["comments"].strip()
             if comments:
-                line("Comments", comments[:80] + ("…" if len(comments) > 80 else ""))
+                line("Comments", core_tables.glimpse(comments, 80))
             line("Date", show_date(shown["date"]))
             if shown["color"]:
                 line("Color", shown["color"])
