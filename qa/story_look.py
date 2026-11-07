@@ -362,6 +362,11 @@ app.refresh_note_list()
 app.open_note_in_tab(_tn)
 app.update()
 app._grid_insert_row(app._grid_at_line(1), 0)
+# The row schedules an autosave, whose "Note updated" toast lands in the
+# picture or not by timing alone, as in the next scene.
+app._cancel_pending_autosave()
+app.update()
+app._hide_toast()
 app.update()
 app.update_idletasks()
 """),
@@ -551,6 +556,11 @@ _names = [w for row in app.attachments_frame.winfo_children()
           if isinstance(w, tk.Label) and 'Minutes' in str(w.cget('text'))]
 if _names:
     _names[0].focus_set()
+# Opening the note schedules an autosave, and the files set above would be
+# saved by it: the toast, and today's stamp under the note, by timing alone.
+app._cancel_pending_autosave()
+app.update()
+app._hide_toast()
 app.update()
 app.update_idletasks()
 """),
