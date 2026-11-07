@@ -77,8 +77,10 @@ nothing). On 2026-10-15 `theme-picker.png` was retaken by the same script,
 on 0.94.379, to show the Sharp text and Spelling rows added since. On
 2026-10-22 `emoji-picker.png` was retaken the same way, on 0.96.392: the
 picker opens on the same three groups, and only its scrollbar is shorter,
-the picker holding more emoji since. Update this line whenever the set is
-recaptured.
+the picker holding more emoji since. On 2026-11-07 the whole set was
+retaken by the same script, on the final audit's branch: the format bar's
+lists say Font and Size, and a series' line says "the whole series". Update
+this line whenever the set is recaptured.
 
 | Filename | What to capture |
 |---|---|
