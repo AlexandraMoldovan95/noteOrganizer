@@ -54,11 +54,14 @@ code ([where they come from](docs/screenshots/README.md)).
   asks first, and on a question about something you cannot take back, Enter
   and Escape both give the safe answer
   ([questions](docs/USER_GUIDE.md#getting-started)).
-- **Readable in every theme, measured.** Every coloured word and button
-  meets WCAG AA in all eight themes, and CI fails on a pair that does not
-  ([contrast, measured](docs/ARCHITECTURE.md#contrast-measured)).
+- **Readable in every theme, measured.** Every coloured word, and every
+  word on a button, meets WCAG AA in all eight themes, and CI fails on a
+  pair that does not. The accent's fill is a design choice, not a measured
+  pair: on the light green and cream themes it is under 3:1 against the
+  sidebar ([contrast, measured](docs/ARCHITECTURE.md#contrast-measured)).
 - **Meaning carried by shape as well as colour.** Save is the one filled
-  button, the open tab stands taller, the current find match is boxed —
+  button in the editor's row of actions, the open tab stands taller, the
+  current find match is boxed —
   checked against colour-blindness simulations, and kept as a test case for
   a real colour-blind reader
   ([what a simulation is, and is not](docs/AI_WORKFLOW.md#ai-reviewers-and-simulations-what-they-are-and-are-not)).
