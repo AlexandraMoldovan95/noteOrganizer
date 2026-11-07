@@ -218,9 +218,11 @@ The indenting is drawn by the app on top of that.
 pick with nothing selected and it applies to whatever you type next — the same way the Style
 buttons work.
 
-- **Default** means "no setting of its own", so that text follows whatever the editor's default
-  is. It is how you undo a size or a typeface, rather than setting it back by hand.
-- If you select text that mixes two sizes, the dropdown shows **Default** rather than picking one
+- With nothing chosen, the two dropdowns say **Font** and **Size**. **Default font** and
+  **Default size**, first in their lists, mean "no setting of its own", so that text follows
+  whatever the editor's default is. They are how you undo a size or a typeface, rather than
+  setting it back by hand.
+- If you select text that mixes two sizes, the dropdown shows **Size** rather than picking one
   of them.
 
   *Why: otherwise it would look like the whole selection was already that size.*
@@ -775,7 +777,7 @@ thought.
 A day you edited keeps its own content from then on: later edits to the series deliberately do
 not touch it (that day is *yours*), which can look surprising — a series edit appears everywhere
 except there. The app says this out loud wherever it matters: the series shows a line above the
-title — "🔁 This note repeats — edits here apply to every day · 1 day keeps its own edits (✎)" —
+title — "🔁 This note repeats — edits here apply to the whole series · 1 day keeps its own edits (✎)" —
 and in the calendar, such a day carries a ✎ mark in the day list and an "✎ edited for this day"
 chip in the preview. To make a day follow the series again, press **↺ Reset this day…** beside its
 date while it is open — the button is there whenever the day has something of its own — or

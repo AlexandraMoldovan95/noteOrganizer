@@ -2500,9 +2500,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         text_widget.tag_configure("align_center", justify="center")
         text_widget.tag_configure("align_right", justify="right")
 
-    # Shown in both font dropdowns for "no span at all": the note follows the
-    # Settings default, not whatever it was on the day it was written.
-    DEFAULT_FONT_LABEL = "Default"
+    # Shown by the font and size dropdowns for "no span at all": the note
+    # follows the Settings default, not whatever it was on the day it was
+    # written. Both once said "Default", and neither said what it was for.
+    FONT_FAMILY_UNSET, FONT_SIZE_UNSET = "Font", "Size"
 
     INDENT_STEP = 24
     # A marker's room before its text, measured at _MARKER_ROOM_AT points and
@@ -10099,11 +10100,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         else:
             size = self._pending_font_size
             family = self._pending_font_family
-        # A mix across the selection reads as "Default" rather than as
-        # the first run's value, which would claim the whole selection
-        # is that size.
-        self.font_size_var.set(str(size) if size else self.DEFAULT_FONT_LABEL)
-        self.font_family_var.set(family or self.DEFAULT_FONT_LABEL)
+        # A mix across the selection reads as unset rather than as the
+        # first run's value, which would claim the whole selection is that
+        # size.
+        self.font_size_var.set(str(size) if size else self.FONT_SIZE_UNSET)
+        self.font_family_var.set(family or self.FONT_FAMILY_UNSET)
 
         if has_selection:
             text_color = self._uniform_color_in_selection("text_color", start, end)
@@ -14626,27 +14627,27 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         font_divider = tk.Frame(format_bar, width=1)
         self.track_theme(font_divider, bg="card")
         self._add_fmt_item(font_divider, padx=(5, 5), fill="y", pady=3)
-        # "Default" is the app's own font, i.e. no span at all — which is
-        # what makes the note follow the Settings default rather than being
-        # pinned to whatever that happened to be on the day it was written.
-        self.font_family_var = tk.StringVar(value=self.DEFAULT_FONT_LABEL)
+        # "Default font" is no span at all: the note follows the Settings
+        # default rather than whatever it was on the day it was written.
+        # Unchosen, the button says what it is for.
+        self.font_family_var = tk.StringVar(value=self.FONT_FAMILY_UNSET)
         family_dd = self._build_themed_dropdown(
             format_bar, self.font_family_var,
-            [self.DEFAULT_FONT_LABEL] + list(FONT_FAMILIES),
+            [self.FONT_FAMILY_UNSET] + list(FONT_FAMILIES),
             lambda v: self._apply_body_font(
-                "font_family", None if v == self.DEFAULT_FONT_LABEL else v),
-            width_chars=11)
+                "font_family", None if v == self.FONT_FAMILY_UNSET else v),
+            width_chars=11, listed_as={self.FONT_FAMILY_UNSET: "Default font"})
         self._add_fmt_item(family_dd, padx=(0, 4))
         self._attach_tooltip(family_dd, "Font",
                              "The selected text, or whatever you type next")
 
-        self.font_size_var = tk.StringVar(value=self.DEFAULT_FONT_LABEL)
+        self.font_size_var = tk.StringVar(value=self.FONT_SIZE_UNSET)
         size_dd = self._build_themed_dropdown(
             format_bar, self.font_size_var,
-            [self.DEFAULT_FONT_LABEL] + [str(s) for s in FONT_SIZES],
+            [self.FONT_SIZE_UNSET] + [str(s) for s in FONT_SIZES],
             lambda v: self._apply_body_font(
-                "font_size", None if v == self.DEFAULT_FONT_LABEL else int(v)),
-            width_chars=7)
+                "font_size", None if v == self.FONT_SIZE_UNSET else int(v)),
+            width_chars=7, listed_as={self.FONT_SIZE_UNSET: "Default size"})
         self._add_fmt_item(size_dd, padx=(0, 4))
         self._attach_tooltip(size_dd, "Font size",
                              "Default follows the size set in Settings")
@@ -15378,7 +15379,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             note = self.find_note(self.selected_note_id)
             if note is not None and is_recurring(note):
                 text = (f"🔁 This note repeats ({describe_recurrence(note)}) "
-                        "— edits here apply to every day")
+                        "— edits here apply to the whole series")
                 # A day off the schedule is counted apart, with its way in
                 # below; not while turning the repeat off waits.
                 if not self._repeat_off_waits():

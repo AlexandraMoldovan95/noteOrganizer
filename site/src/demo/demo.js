@@ -1293,8 +1293,8 @@
     });
     // The two lists show what the text at the caret wears, as the app's do.
     var font = fontAtCaret(), family = $("#tb-family .tb-label"), size = $("#tb-size .tb-label");
-    if (family) family.textContent = font.family || "Default";
-    if (size) size.textContent = font.size ? String(font.size) : "Default";
+    if (family) family.textContent = font.family || "Font";
+    if (size) size.textContent = font.size ? String(font.size) : "Size";
   }
 
   function updateCount() {
@@ -1336,13 +1336,14 @@
       tool(t[1], t[2], function () { exec(t[0]); }, { class: "tb " + t[3], "data-state": t[0], "aria-pressed": "false" });
     });
     newGroup();
-    // Font and size, as the app's two lists: "Default" first, which is the
-    // editor's own and stores nothing.
-    function chooser(id, title, choices, show, pick) {
-      var btn = tool(el("span", null, el("span", { class: "tb-label", text: "Default" }), el("span", { class: "tb-caret", text: "▾" })),
+    // Font and size, as the app's two lists: unchosen, each says what it is
+    // for; "Default font" or "Default size" first, the editor's own, which
+    // stores nothing.
+    function chooser(id, title, unset, listed, choices, show, pick) {
+      var btn = tool(el("span", null, el("span", { class: "tb-label", text: unset }), el("span", { class: "tb-caret", text: "▾" })),
         title, function () {
           rememberRange();
-          popup([menuItem("Default", function () { pick(null); })].concat(choices.map(function (c) {
+          popup([menuItem(listed, function () { pick(null); })].concat(choices.map(function (c) {
             var item = menuItem(String(c), function () { pick(c); });
             show(item, c);
             return item;
@@ -1350,9 +1351,9 @@
         }, { id: id, class: "tb tb-select", "aria-haspopup": "menu" });
       return btn;
     }
-    chooser("tb-family", "Font", A.fontFamilies,
+    chooser("tb-family", "Font", "Font", "Default font", A.fontFamilies,
       function (item, f) { item.style.fontFamily = '"' + f + '"'; }, applyFontFamily);
-    chooser("tb-size", "Font size", A.fontSizes, function () {}, applyFontSize);
+    chooser("tb-size", "Font size", "Size", "Default size", A.fontSizes, function () {}, applyFontSize);
     newGroup();
     var colourBtn = tool(el("span", null, "A", el("span", { class: "bar", vars: { "--bar": "#e63946" } })), "Text colour", function () {
       rememberRange();
@@ -1435,7 +1436,7 @@
 
     if (rec.freq) {
       inner.appendChild(el("div", { class: "ed-banner",
-        text: "\u{1F501} This note repeats (" + describeRec(rec) + ") — edits here apply to every day" }));
+        text: "\u{1F501} This note repeats (" + describeRec(rec) + ") — edits here apply to the whole series" }));
     }
 
     var title = el("input", { id: "ed-title", class: "ed-title", type: "text", placeholder: "Title",

@@ -359,6 +359,12 @@ check(f'a card shows the words without the table, a row typed past its last '
       f'cell included ({_card_says["preview"]!r} / {_card_says["tags"]!r})',
       '|' not in _card_says['preview'] and 'Words' in _card_says['preview']
       and '▦ 1 table' in _card_says['tags'])
+# A card keeps a note's lines apart, empty ones left out: run together, two
+# lines read as one sentence.
+_card_lines = app._card_texts(NO.normalize_note(
+    {'id': 992, 'title': 'Shopping', 'body': 'milk\n\n  bread  \neggs'}))['preview']
+check(f'a card keeps the lines of a note apart ({_card_lines!r})',
+      _card_lines == 'milk · bread · eggs')
 check('calendar preview does not dump the comments inline',
       'a comment that must not' not in _pv_text)
 check('calendar preview flags table + checklist + comments as chips',
@@ -1906,7 +1912,7 @@ check('the banner and the day strip hide on a plain note',
 app.load_note(app.find_note(60)); app.update()
 check('the banner switches to the series text on the series view',
       bool(app.occurrence_banner.winfo_ismapped())
-      and 'edits here apply to every day' in app.occurrence_banner.cget('text'))
+      and 'edits here apply to the whole series' in app.occurrence_banner.cget('text'))
 
 # An explicit Save on an EDIT-origin visit stays in the editor...
 app._ctx_open(app.find_note(60), '2026-07-15', return_day='2026-07-15')
@@ -2508,9 +2514,9 @@ app.refresh_note_list(); app.render_calendar(); app.update()
 # The series view names the repeat AND the days living on their own.
 app.open_note_in_tab(app.find_note(64)); app.update()
 _btext = app.occurrence_banner.cget('text')
-check('the series banner says edits apply to every day',
+check('the series banner says edits apply to the whole series',
       app.occurrence_banner.winfo_ismapped()
-      and 'edits here apply to every day' in _btext)
+      and 'edits here apply to the whole series' in _btext)
 check('the series banner counts the days with their own edits',
       '1 day keeps its own edits' in _btext)
 

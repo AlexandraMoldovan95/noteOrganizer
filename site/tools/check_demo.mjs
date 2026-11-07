@@ -580,7 +580,7 @@ try {
   await shot("demo-desktop-font-list");
   check("the font list offers the app's fonts",
     (await js("[...document.querySelectorAll('.popup .menu-item')].map(i => i.textContent).join('|')")) ===
-      ["Default", ...(await js("NO_APP.fontFamilies"))].join("|"));
+      ["Default font", ...(await js("NO_APP.fontFamilies"))].join("|"));
   check("Georgia chosen", await pick("Georgia")); await sleep(150);
   await press("#tb-size"); await sleep(150);
   check("16 chosen", await pick("16")); await sleep(150);

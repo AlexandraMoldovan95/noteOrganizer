@@ -17239,5 +17239,35 @@
     "must_fail": ["...and the comments' notice outlives its paste's own save"],
     "suites": ["qa1"],
     "expect": "killed"
+  },
+  {
+    "id": "PN01",
+    "about": "A card's preview runs a note's lines together again",
+    "edits": [{"file": "noteorganizer/ui/note_list.py",
+               "find": "        preview_src = \" · \".join(\n",
+               "replace": "        preview_src = \" \".join(\n"}],
+    "must_fail": ["a card keeps the lines of a note apart"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "PN02",
+    "about": "The font and size dropdowns say Default again, and not what they are for",
+    "edits": [{"file": "note_organizer.py",
+               "find": "    FONT_FAMILY_UNSET, FONT_SIZE_UNSET = \"Font\", \"Size\"\n",
+               "replace": "    FONT_FAMILY_UNSET, FONT_SIZE_UNSET = \"Default\", \"Default\"\n"}],
+    "must_fail": ["unchosen, the font and size dropdowns say Font and Size"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "PN03",
+    "about": "A weekly series' line says its edits apply to every day",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                        \"— edits here apply to the whole series\")\n",
+               "replace": "                        \"— edits here apply to every day\")\n"}],
+    "must_fail": ["the series banner says edits apply to the whole series"],
+    "suites": ["qa7"],
+    "expect": "killed"
   }
 ]

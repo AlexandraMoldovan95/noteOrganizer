@@ -918,7 +918,8 @@ class DialogsMixin:
                                    default=default)
 
     def _build_themed_dropdown(self, parent, var, options, on_change,
-                               dot_color_fn=None, width_chars=14, nested=False):
+                               dot_color_fn=None, width_chars=14, nested=False,
+                               listed_as=None):
         # width_chars=0 sizes to what shows, for a dropdown flexing in a
         # shared row: a width in characters asked more than the row had,
         # and pack cut its arrow off (fonts differ on Linux).
@@ -926,7 +927,8 @@ class DialogsMixin:
         the Frame it returns. `dot_color_fn(value)` gives a bullet's colour
         per option (falsy: none). `nested=True` for one INSIDE another popup:
         it keeps its own list rather than closing the shared popup -- which
-        is the editor it sits in."""
+        is the editor it sits in. `listed_as` names an option differently in
+        the list than on the button ("Font" shows, "Default font" is listed)."""
         btn = tk.Frame(parent, bg=self.colors["sidebar"],
                       highlightthickness=1, highlightbackground=self.colors["card"])
         lbl = tk.Label(btn, textvariable=var, bg=self.colors["sidebar"],
@@ -1009,7 +1011,7 @@ class DialogsMixin:
                                    font=("Segoe UI", 11), cursor="hand2")
                     dot.pack(side="left", padx=(10, 6), pady=4)
                     widgets.append(dot)
-                lbl2 = tk.Label(row, text=opt, bg=row_bg,
+                lbl2 = tk.Label(row, text=(listed_as or {}).get(opt, opt), bg=row_bg,
                                fg=self.colors["accent_text"] if is_cur else self.colors["text"],
                                font=("Segoe UI", 9, "bold" if is_cur else "normal"),
                                anchor="w")

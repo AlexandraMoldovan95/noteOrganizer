@@ -95,7 +95,7 @@
   "_build_table_grid": "(self, first, last)",
   "_build_template_row": "(self, parent, tpl, redraw)",
   "_build_theme_picker": "(self, parent)",
-  "_build_themed_dropdown": "(self, parent, var, options, on_change, dot_color_fn=None, width_chars=14, nested=False)",
+  "_build_themed_dropdown": "(self, parent, var, options, on_change, dot_color_fn=None, width_chars=14, nested=False, listed_as=None)",
   "_build_title_and_meta_rows": "(self)",
   "_build_trash_row": "(self, parent, entry, redraw, on_tick=None)",
   "_bulk_change_category": "(self)",

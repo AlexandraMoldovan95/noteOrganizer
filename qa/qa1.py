@@ -2345,7 +2345,11 @@ clear_selection()
 select('1.0', '1.17')
 app._refresh_format_buttons()
 check('a selection spanning two different sizes reads as Default, not the first',
-      app.font_size_var.get() == app.DEFAULT_FONT_LABEL)
+      app.font_size_var.get() == app.FONT_SIZE_UNSET)
+# Unchosen, the two dropdowns say what they are for: both said "Default".
+check(f'unchosen, the font and size dropdowns say Font and Size '
+      f'({app.font_family_var.get()!r}, {app.font_size_var.get()!r})',
+      (app.font_family_var.get(), app.font_size_var.get()) == ('Font', 'Size'))
 clear_selection()
 
 select('1.0', '1.5')
@@ -2436,7 +2440,7 @@ clear_selection()
 select('1.0', '1.11')
 app._refresh_format_buttons()
 check('two runs of different sizes report Default, not whichever came first',
-      app.font_size_var.get() == app.DEFAULT_FONT_LABEL)
+      app.font_size_var.get() == app.FONT_SIZE_UNSET)
 clear_selection()
 
 # A size or a font set under drawn tables lands on the words selected, and
