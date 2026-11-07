@@ -103,9 +103,8 @@ ROMANIAN = re.compile(r"\b(%s)\b" % "|".join(WORDS), re.I)
 # article in "planul", "-ilor", "-eaza", "-iune", the teens), so the rule
 # knows words nobody listed. A capital then lower case keeps it off base64.
 SHAPES = re.compile(r"\b[A-Za-z][a-z]{2,}(?:(?<![fao])ul|ului|ilor|elor|"
-                    r"urilor|eaza|easca|iune|iunea|iuni|sprezece)\b")
-ENGLISH_SHAPED = {"annul", "consul", "mogul", "kabul", "istanbul",
-                  "sailor", "tailor", "jailor", "bachelor"}
+                    r"eaza|easca|iune|iunea|iuni|sprezece)\b")
+ENGLISH_SHAPED = {"annul", "consul", "mogul", "kabul", "istanbul", "bachelor"}
 
 # Glue hides a word from \b ("NotaTabelQ", "vechi1", the "trei" in
 # "unu\ntrei"), so a copy of each line is pried apart at those seams first;
@@ -136,12 +135,13 @@ def romanian_in(line):
 # Lines the rule must find, and lines it must leave alone, read before the
 # repository: a change to the list or the shapes that blinds the rule fails
 # here, where a clean repository would have passed it in silence.
-# One of each ending no listed word carries, so each shape is read alone.
+# One of each ending no listed word carries, so each shape is read alone;
+# and each English exception, so none is kept that nothing needs.
 MUST_FIND = ["titlu nou", "NotaTabelVeche", "done\\ntrei",
-             "planul", "creionului", "copiilor", "notelor", "titlurilor",
+             "planul", "creionului", "copiilor", "notelor",
              "deseneaza", "citeasca", "sectiune", "optiunea", "optiuni", "doisprezece"]
-MUST_PASS = ["annul the consul's order", "the sailor told the tailor",
-             "set the font to DejaVu Sans", "a mogul in Istanbul", "a tailor's bachelor party"]
+MUST_PASS = ["annul the consul's order", "a flight to Kabul", "set the font to DejaVu Sans",
+             "a mogul in Istanbul", "a bachelor party"]
 
 
 def examples_misread():

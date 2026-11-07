@@ -14,8 +14,10 @@ package -- two things:
   names the start of a story's title, and ``smaller lessons: ...`` names
   an entry in its "Smaller lessons, moved out of the code" section.
 
-The tests' and tools' Python, and the reasons in tools/mutants.json, are
-held to the round rule as well: they are read outside the audit too.
+The tests' and tools' Python, the line comments of the tools' and CI's
+other files (scripts, the Dockerfile, workflows), and the reasons in
+tools/mutants.json are held to the round rule as well: they are read
+outside the audit too.
 
 In the modules listed in BRIEF, three limits as well:
 
@@ -102,7 +104,7 @@ _ORD = (r"(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|"
         r"tenth|eleventh|twelfth|thirteenth|fourteenth|fifteenth|sixteenth|"
         r"seventeenth|eighteenth|nineteenth|twentieth|twenty-[a-z]+)")
 ROUND = re.compile(
-    r"\brounds? %s\b|\b(?:%s|%s)(?: and (?:%s|%s))? rounds?\b(?! trip)|\blows wave\b"
+    r"\brounds?[ -]%s\b|\b(?:%s|%s)(?: and (?:%s|%s))? rounds?\b(?! trip)|\blows wave\b"
     r"|\bfinal audit\b|\baudit's\b|\bwave %s\b"
     % (_NUM, _ORD, _NUM, _ORD, _NUM, _NUM), re.I)
 
@@ -220,10 +222,42 @@ def test_and_tool_files():
     """The tests' and tools' Python, held to the round rule alone. This file
     is left out: it quotes the labels it refuses."""
     files = []
-    for pattern in ("test_*.py", "qa/*.py", "tools/*.py", "site/*.py", "site/tools/*.py"):
+    for pattern in ("test_*.py", "qa/*.py", "tools/**/*.py", "site/*.py", "site/tools/*.py"):
         files += [os.path.relpath(path, ROOT).replace(os.sep, "/")
-                  for path in glob.glob(os.path.join(ROOT, pattern))]
+                  for path in glob.glob(os.path.join(ROOT, pattern), recursive=True)]
     return sorted(set(files) - {"tools/check_comments.py"})
+
+
+# The tools' and CI's other files, read by their line comments (# or //).
+OTHER_TEXT = (".ps1", ".sh", ".bat", ".yml", ".yaml", ".mjs", ".js")
+
+
+def other_tool_files():
+    found = []
+    for pattern in ("tools/**/*", "site/tools/*", ".github/workflows/*"):
+        for path in glob.glob(os.path.join(ROOT, pattern), recursive=True):
+            name = os.path.basename(path)
+            if os.path.isfile(path) and (name == "Dockerfile" or name.endswith(OTHER_TEXT)):
+                found.append(os.path.relpath(path, ROOT).replace(os.sep, "/"))
+    return sorted(found)
+
+
+def line_comment_rounds(path):
+    """(line, problem) for each run of # or // comment lines in *path* that
+    names a round of the audit."""
+    with io.open(os.path.join(ROOT, path), encoding="utf-8") as fh:
+        lines = fh.read().split("\n")
+    runs = []
+    for number, line in enumerate(lines, 1):
+        text = line.strip()
+        if text.startswith("#") or text.startswith("//"):
+            words = text.lstrip("#/").strip()
+            if runs and runs[-1][1] == number - 1:
+                runs[-1][1], runs[-1][2] = number, runs[-1][2] + " " + words
+            else:
+                runs.append([number, number, words])
+    return [(first, "names the audit's %r" % found) for first, _last, words in runs
+            for found in [named_round(words)] if found]
 
 
 def rounds_named(path):
@@ -318,6 +352,10 @@ def main():
     others = test_and_tool_files()
     for path in others:
         for line, what in rounds_named(path):
+            print("%s:%d: %s" % (path, line, what))
+            failures += 1
+    for path in other_tool_files():
+        for line, what in line_comment_rounds(path):
             print("%s:%d: %s" % (path, line, what))
             failures += 1
     for mid, found in catalogue_rounds():

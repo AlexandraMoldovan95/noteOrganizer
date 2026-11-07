@@ -965,7 +965,7 @@
     "must_fail": ["Space on a row's Restore puts that note back"],
     "suites": ["qa3"],
     "expect": "killed",
-    "note": "Two roads bring the keyboard back after a Restore pressed by key: the Trash's own, and the one every Tk button's press takes (_tk_press_ends). The first alone already survived before the second was added (measured on 2a17ad7), so both are taken away."
+    "note": "Two roads bring the keyboard back after a Restore pressed by key: the Trash's own, and the one every Tk button's press takes (_tk_press_ends). Taken away alone, either road survives, as the other brings the keyboard back (measured on 2a17ad7), so both are taken away."
   },
   {
     "id": "KF08",

@@ -15,7 +15,7 @@
 # where the built app kept the owner's until 2026-10-27. It asks for both the
 # sandbox's own account and the path its .wsb starts it from, since neither
 # alone is proof: the path alone was once taken for it, and would have let it
-# run here from a C:\pkg (final audit, round nine); and Windows keeps an
+# run here from a C:\pkg; and Windows keeps an
 # account of that name, disabled, on this computer. tools/check_guest.py evaluates the line for a user of this
 # computer, at C:\pkg and elsewhere, and for the sandbox's own start.
 

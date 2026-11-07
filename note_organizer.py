@@ -6022,7 +6022,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     css += f"background-color:#{rec['paint_bg'][len('highlight_'):]};"
                 tag = "th" if r0 + ri == 0 else "td"
                 # Without inline borders Word paints nothing: the pasted
-                # table was a selectable phantom (round-8 field report).
+                # table was a selectable phantom (a field report).
                 css += "border:1px solid #999;padding:4px 10px;"
                 cells.append(f'<{tag}{attr} style="{css}">{inner}</{tag}>')
             parts.append("<tr>" + "".join(cells) + "</tr>")
@@ -8053,7 +8053,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if skipped <= p["line"] - first_line < line_count]
 
         # inline_tables: a fragment has no stylesheet, and Word drew a bare
-        # table borderless, a phantom (round-8 field report).
+        # table borderless, a phantom (a field report).
         html = note_to_html(text, clipped, paragraphs, inline_tables=True)
         if not clipboard.write(text, html):
             return None                      # nothing written; Tk's copy runs
