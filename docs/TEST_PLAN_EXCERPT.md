@@ -1,7 +1,7 @@
 # How it's tested
 
 An excerpt from the manual test plan, a spreadsheet,
-[`qa/NoteOrganizer_TestPlan.xlsx`](../qa/NoteOrganizer_TestPlan.xlsx): **921 cases** on 7 November
+[`qa/NoteOrganizer_TestPlan.xlsx`](../qa/NoteOrganizer_TestPlan.xlsx): **927 cases** on 7 November
 2026. I walk it
 by hand on the packaged `.exe` before a release - a case passes only when I've seen it pass.
 
@@ -17,7 +17,7 @@ by hand on the packaged `.exe` before a release - a case passes only when I've s
 
 ## The plan in numbers
 
-Counted on 7 November 2026: 921 cases, 596 walked and passed, 325 not yet
+Counted on 7 November 2026: 927 cases, 596 walked and passed, 331 not yet
 walked (most of them added during the final audit, for my pass on the
 final builds).
 
@@ -26,19 +26,19 @@ final builds).
 | Priority | Cases |
 |---|---:|
 | High | 259 |
-| Medium | 427 |
-| Low | 235 |
+| Medium | 428 |
+| Low | 240 |
 
 ### The six largest areas
 
 | Area | Cases |
 |---|---:|
-| Editor | 98 |
+| Editor | 99 |
 | Notes | 91 |
 | Backup & Sharing | 88 |
-| Recurrence | 86 |
+| Recurrence | 88 |
 | Tables | 69 |
-| Settings | 67 |
+| Settings | 68 |
 
 ## The test case template, filled out four times
 
