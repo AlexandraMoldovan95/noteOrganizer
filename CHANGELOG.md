@@ -109,6 +109,339 @@ How the numbers themselves are counted is the
 
 ---
 
+## [Unreleased]
+
+*Highlights: the final audit before the stores. For two weeks agents tried to break the app —
+lost notes, hostile and huge input, the keyboard alone, an ordinary person's week, a careless
+hand — and what they found that was already in 0.97.405 is fixed below, one entry for each
+defect, however many rounds its fix took. The notebook moves to the profile's own folder, where
+an uninstall leaves it; the keyboard reaches every part of the app; and nothing a file, a paste
+or a share code can hold stops the app starting or freezes it.*
+
+### Added
+
+- **Settings → About → Open-source licenses.** The app carries Python, Tcl/Tk, Pillow and the
+  libraries they bring; their licenses ship with it now, and **Open** shows them.
+- **The note list's search finds words in a note's checklist.** The owner's choice.
+- **An empty search that one day of a repeating note would answer says so.** The list does not
+  read a day's own words; when such a day holds them, the empty list offers **Search the
+  Calendar's History**, which opens it searching for them.
+
+### Changed
+
+- **The built app keeps its notebook in your profile, `C:\Users\<name>\Note Organizer`,**
+  beside Documents, not in AppData. The Microsoft Store installs the app as a package whose
+  AppData is its own and is deleted with it; the profile's folder is left by an update and an
+  uninstall alike. The first start copies an older notebook in from `%APPDATA%\NoteOrganizer` —
+  notes, settings, Trash, templates and attached files, each file whole — and says so; the old
+  folder is left exactly as it was. Not Documents, which Windows 11 backs up to OneDrive without
+  asking.
+- **A day's own words and a series' earlier words for it are both kept.** Where a repeat turned
+  off and on again left a day's earlier words in the rescue copy alone, a day holding words of
+  its own keeps them exactly, and the copy's other words become a note of their own on that
+  date, "*title* (earlier text)", said on a banner with **Show**. So do the words a big delete
+  takes beside an Update's copy.
+- **The format bar's lists say "Font" and "Size"** while nothing is chosen; their first entries
+  read "Default font" and "Default size".
+- **A card keeps a note's lines apart with " · "**, shows a list item's words without its marker,
+  and leaves out an item with no words.
+
+### Fixed
+
+#### Your notes, kept
+
+- **A delete the Trash cannot hold deletes nothing, and says so.** When `trash.json` could not
+  be written — a full disk, another program holding it — the note left the notes file anyway
+  and was in neither file after a restart. Every way to delete now stops with everything as it
+  was.
+- **Closing after a failed save asks before it loses your typing.** With the disk full the close
+  said recent changes "may be lost" and closed. It tries once more, then asks **Close without
+  saving?**, with No as the default.
+- **A data file reaches the disk before it replaces the old one.** A power cut just after a save
+  could leave an empty notes file.
+- **Signing out of Windows, restarting or shutting down saves your last typing,** as closing
+  does, a template half written included; a sign-out you cancel leaves a backup running.
+- **Ending a repeat by a share code or by Restore previous keeps every day's own text.** The days
+  were left out of sight in the note, and its next small edit dropped them with no copy anywhere.
+- **"↩ Restore previous" keeps its copy when a change loses nothing.** A column added, a cell
+  widened, a list renumbered or turned to bullets read as the whole table or list lost and
+  replaced the copy, leaving a paragraph deleted before in no file; a turn-off after a big
+  delete, and an Update over an earlier copy, replaced it too.
+- **Comments wiped keep a rescue copy,** as the same words deleted from the text do.
+- **Restore previous keeps what it writes over.** Comments typed since, and styles laid on part
+  of the copy's words, went to no file.
+- **An Update's copy survives a later big delete.** After an Update from a backup or a code, one
+  big delete, or a slip and Ctrl+Z, replaced the only copy of the note from before the Update.
+  That copy stays, and the words the delete took become an "(earlier text)" note.
+- **A data file another program holds at the start is never written over.** A notes file a
+  backup or sync tool held read as unreadable, and the first keystroke's autosave replaced fifty
+  notes with one; a held `settings.json` had a place-holder written over your categories, theme
+  and Trash window. The start reads each file three times; one it still cannot read is left
+  alone for the run, the start says so, and an export packs only what was written since,
+  saying so.
+- **Typing in the empty editor a delete leaves is saved by any way out.** Ctrl+N, another note,
+  the close or a sign-out dropped it.
+- **An item typed in a checklist's Add box and not yet added is kept.** The template editor's
+  Save, its close and Save as template dropped it; Use template dropped it unasked, and its Yes
+  over a saved note lost what the autosave had not yet written.
+- **A full checklist refuses a 1,001st item and says so.** It was drawn and saved, then cut at
+  the next start without a word.
+- **A checklist row's Undo works after you leave the note and come back.** It was refused, and
+  the row was in no file.
+- **Settings → Backup → Export packs what the app holds, your last typing first.** It packed the
+  file on disk, without the very changes a failed save's message sent you there to rescue.
+- **A backup leaves out an attached file another program holds, and names it,** instead of
+  failing whole.
+- **The copy taken before an update is whole or absent, and the notice says which.** On a full
+  disk it stayed cut off and unreadable under the backup's name.
+- **The start's cleanup of a leftover folder reads its backups before it deletes them.** It
+  deleted `notes_data_backup_*` files unread.
+- **A restored backup's Trash keeps the window it came with.** In a notebook that never chose
+  one, the next start purged everything older than 30 days, files included.
+- **A note arriving twice in one code or backup is added once.** It updated one note twice, the
+  first arrival taking the place of your words in the rescue copy, or added two notes wearing
+  one identity.
+- **Nothing runs inside a question it was not asked in.** A backup finishing while a share code's
+  question was open gave two notes one identity, and opening one wrote over the other; a reload
+  from outside put the template editor's old text back over an Update; a Trash restore whose
+  save failed threw away a note autosaved meanwhile.
+- **A notebook stays one window's when a backup tool holds the lock file a moment.** The app ran
+  without its lock, and a second window could open the same notebook.
+- **Restore previous from a day opens only a day the series still draws.** It brought back a
+  version with that day deleted, and what was typed next went to a day no screen showed.
+- **Moving a day never writes over another day's words.** A day moved onto a date holding a
+  hidden day's kept words wrote over them; its Undo, or Reset, brought a day home over another
+  moved there since.
+- **A day of a repeating note keeps its own lists' levels.** Its levels came from the series by
+  line number: an item added on the day put the rest on the wrong level, and the next Enter
+  renumbered and stored them so.
+- **Export as file from one day of a series writes that day,** not the series' text.
+
+#### Starting the app
+
+- **No value a data file or share code can hold stops the app starting.** A repeat of 1e999, a
+  leftover notebook nested 990 lists deep, a Trash entry's files given as a number, or half an
+  emoji spelled as an escape stopped every start.
+- **A backup's settings can no longer carry a million day colours in for good.** The restart
+  took twenty seconds at every launch after.
+- **Templates stop at 1,000,** so a backup holding 20,000 imports at once and the picker opens at
+  once; Save refuses a 1,001st with a word.
+- **A damaged Trash entry stops nothing.** A title or files of the wrong type kept Recently
+  deleted from opening, or stopped a backup's merge halfway.
+- **An app left open past midnight reminds you of the new day.** The bar said "for today" under
+  yesterday's date.
+- **A backup whose notebook is not a list is refused as not a backup,** where it raised and left
+  the import's files behind.
+
+#### Attachments and pictures
+
+- **An attached file is the one its name names, never another reached by a second name.** A
+  backup's Trash entry naming a photo by its short 8.3 name, in capitals or with a stream after a
+  colon deleted the photo at the next start; a file stored as `evil.exe::$DATA` opened the
+  program with no warning.
+- **An attachment shows the type of the file that opens.** A backup could show "Holiday
+  photo.jpg", with a picture's icon, over a remote-connection file. Characters that hide or
+  reorder text are taken out of names, and a long name gives way before its type.
+- **Only kinds of file that just show something open without asking.** The question was asked
+  for a list of dangerous kinds, and kinds missing from it — Python scripts, remote connections,
+  macro documents and more — opened at once. Every kind not known to be harmless asks now.
+- **Files restored from a downloaded backup keep Windows' "from the internet" mark,** which
+  SmartScreen and Office's Protected View go by.
+- **A picture's preview keeps within its memory.** A 33 KB GIF ran the app out of memory, a
+  12,000 × 12,000 PNG took 1.7 GB and a TIFF's second page 2.2 GB. Each frame is judged before
+  it is decoded, an animation stops at its budget, a picture past 50 megapixels or of a kind the
+  preview does not read is offered to your computer's own program, and a frame of 10 ms or less
+  plays at 100 ms, as browsers play it.
+- **An animated PNG opens in the preview and plays.** It raised and showed nothing, and removing
+  it left its file behind for good.
+- **Keys pressed at a picture's preview stay in it.** Opened by a click, Delete or a letter
+  edited the note under it, and the edit was saved; Ctrl+N and Ctrl+F typed into the note blind.
+- **A note whose title holds a control character exports,** and a note an export cannot write
+  is named.
+- **The crash log no longer writes your data file's full path,** with your user name in it.
+
+#### Pasting, and long text
+
+- **Every paste stops at 100,000 characters:** Ctrl+V of plain text, Ctrl+Shift+V, the menu's
+  Paste, the comments, a table cell, a template's fields and the middle mouse button included.
+  600,000 characters froze the app, then cost 1.7 s a key. A line break counts as one character.
+- **A pasted page is read in one pass, and only as far as the paste keeps.** Misnested markup
+  took nine seconds for 195 KB; ten megabytes of paragraphs took seven.
+- **A pasted table can no longer grow past the paste's ceiling once its columns line up.** 161 KB
+  of HTML became 210 million characters, 1.2 GB of memory and a nine-second save.
+- **A checklist item keeps 2,000 characters by every route,** and every box with a limit
+  shortens a paste to fit and says so where you can see it. A 490-character share code carried a
+  60,000-character item in, and on Linux the app died drawing it. Longer items saved before are
+  kept whole and drawn cut.
+- **A name or a message is drawn on one line and cut, never past what the screen can draw.**
+  Save as template's name had no limit, and the picker grew wider than any screen; a
+  60,000-letter attachment name or a 3,000-line title ended the app at every start on Linux.
+- **A long name leaves its row's buttons in the row.** An attachment's ✕, a template's pencil and
+  bin, a category's buttons and a picture's Close were pushed out: a file could not be removed,
+  a template neither edited nor deleted.
+- **A table too large to draw stays as its text,** with the status line saying why. A 300 × 300
+  table froze the app 40 s at every opening, and a tall one, of many rows or of cells of many
+  lines, ended it on Linux.
+- **Long lists scroll to their end.** A checklist of 1,000 items ended at item 785, the template
+  picker at its 811th, Settings → Templates near its 712th, while the scrollbar said the end.
+- **A paste into the title keeps the spaces at its edges** ("Buy freshmilk"), its "shortened"
+  message stays long enough to read, and a title longer than the limit, from a share code,
+  takes Backspace and Delete again.
+- **Ctrl+V with a picture or a file on the clipboard changes nothing.** It deleted the selection
+  and put nothing in.
+- **A ragged table's merge marker no longer stops Export note and Ctrl+C.**
+
+#### Lists, copy and cut
+
+- **Ctrl+X carries its formatting.** A move by Cut and Paste lost the bold, the centring and a
+  nested item's level.
+- **A copy carries the looks of its own lines only.** A whole line copied with its break centred
+  the line it went before; a word copied out of a nested item nested the item it went into.
+- **A list item pasted where a list item stands takes its place,** where it read "3. 1. Kiwi"
+  or "2. 3. three".
+- **A line has one margin.** A pasted list's level depended on the note opened first that
+  session: a sub-bullet at the margin, a list numbered 1 and 1.
+
+#### Speed
+
+- **A series with thousands of moved days opens at once,** not after a minute and a half at
+  every launch.
+- **A note with many styles opens and saves at once.** With the find bar on 2,000 hits every
+  pause in typing froze the window for three seconds; twenty paragraphs at the styles' ceiling
+  took five seconds to open and to save.
+- **The find bar keeps up.** 1,000 hits among bold words cost 14 s at every pause; now
+  milliseconds, with at most 200 hits painted on a line, around the current one.
+- **Spelling keeps up with long lines and many typos.** Its work at every pause grew with the
+  square of a line, and one long paragraph of typos slowed every save.
+- **Two patterns that slowed on hostile text read it once:** a pasted page of "<" and spaces
+  (8,000: 4.4 s), and a line of 24,000 dots in spelling, at every pause.
+- **The template editor's table preview keeps up with typing.** A long cell cost 1.9 s a key, and
+  a 99,000-character one never finished.
+- **Exporting or copying a wide table of empty cells takes milliseconds,** not seconds.
+- **Share and Duplicates with thousands of notes open in seconds;** 2,500 notes took 150 s.
+- **The Share panel lets its search box go when it closes,** where every opening kept a little
+  more memory.
+
+#### The keyboard
+
+- **Tab brings what it reaches into sight, and the keyboard's ring reads on every theme.** At the
+  app's opening size Tab landed on Save and Delete below the fold, and on Trash controls nobody
+  could see; the Trash's tick boxes showed no ring.
+- **Every dropdown and picker works from the keyboard.** Sort, Show, Repeat, the font and size,
+  and the colour, highlight, emoji, table-size and date pickers open with Space, Return or Down,
+  are walked with the arrows and choose with Return.
+- **Every button the app draws takes Tab, Space and Return:** a category's rename, colour and
+  delete, a template's edit and delete, the theme tiles, Light/Dark, alignment, the calendar's
+  days, a day's notes, History's rows, an attachment's name, today's reminder and a delete's
+  Undo, which Ctrl+Z takes outside a text box. A button that hides itself hands the keyboard on.
+- **Shift+F10 in a table cell opens the cell's menu.** Inserting and deleting rows and columns,
+  merging, a checkbox and a highlight lived in a right-click menu alone.
+- **Page Up, Page Down, the arrows, Home and End scroll the Settings page.** Four fifths of
+  Keyboard shortcuts lay below the fold, with no key to reach it.
+- **Keys never reach a part of the window nobody sees.** With Settings opened by a click, letters
+  and Backspace still edited the note behind it, and were saved; with the checklist folded, a
+  letter and Enter added an item nobody saw.
+- **Ctrl+Tab and Ctrl+Shift+Tab leave the note,** as the shortcuts page says, from a list line,
+  a table and an open cell: they changed a list's depth, moved a cell, or did nothing.
+- **The formatting keys style an open table cell.** Ctrl+I typed a tab over the selected words and
+  Ctrl+D deleted a letter. In the title Ctrl+D, Ctrl+K and Ctrl+T deleted or swapped letters with
+  no Undo; there they do nothing now.
+- **Ctrl+Shift+Z redoes in every text box,** a table cell included, where it did nothing on
+  Windows and undid a second step under Caps Lock.
+- **A table keeps the keyboard.** Tab at the last cell of a table with a separator row, Escape in
+  a cell and a paste of cells left it on nothing.
+- **Enter held down presses once.** On a group header it folded and opened at every repeat,
+  writing the settings each time, and in selection mode it ticked and unticked a note.
+- **The shortcuts page names the way out of a note, Ctrl+Tab, and Escape,** and Text size says
+  "in every note", not "everywhere", which it never was.
+
+#### Finding, sharing and importing
+
+- **Every search ignores case and accents the same way:** the list, Find in note, the Calendar's
+  History and Share. A Korean syllable no longer finds every syllable that starts with its first
+  letter, and Title A–Z sorts "Élan" beside E.
+- **Find in note puts each hit on its own letters** after "İ", the Kelvin sign or "Ω". It put the
+  rest of the line's hits one place early, and lost some.
+- **The find bar's count and Enter follow every edit,** a right-click Paste, an emoji, the list
+  buttons, the calculator and a spelling suggestion included; a query holding a line break no
+  longer ends the app on Linux.
+- **An edit made with the mouse — the menu's Cut or Paste, a middle-click — is saved as typing
+  is.** It was saved only when the note was left, and the word count and the title's counter
+  stood still.
+- **Find, and Tab into a table's cell, bring the cell into sight.** A tall table's cell stayed
+  below the edge, and the note jumped at every Find step.
+- **A new note that Show, the search or a folded group hides says so:** "Saved in General, hidden
+  by Show: Work", with **Show all**. It seemed to vanish. An empty list names what hides its
+  notes.
+- **Copy code copies the note as it is now,** not as it was when the panel opened; a day of a
+  series is shared as a note of that date.
+- **A share code is found among the words pasted around it.**
+- **When every note left in a code or a backup looks like one here, Skip them is the default,**
+  and their files go to the notes they look like. Cancel was the only no, and it dropped an
+  Update already agreed to, without a word.
+- **Duplicates' clean-up keeps every file and every series' own days.** Merged files past the
+  attachment limit were cut at the next start and their files purged; cleaning up the app's own
+  Duplicate gave the kept note every file twice; two series that differed only in their days
+  were called duplicates.
+
+#### Repeating notes and the calendar
+
+- **History lists a day moved past a series' end, or onto a deleted date,** and finds its words.
+- **History files a day of a year to come under its year,** not under This year.
+- **A note started from a calendar day keeps its day and the way back.** A template used on it, a
+  one-note code's Update, Duplicate and a save made over Settings threw them away or turned the
+  notebook to the Calendar behind.
+- **Opening the note already on screen leaves it as it is.** Its own card, the Calendar's Open in
+  editor or Edit this day, and the card menu's Open loaded it again: it jumped to the top, and
+  Ctrl+Z could no longer take back a slip.
+
+#### Smaller things
+
+- **Enter on a question never presses an answer that cannot be taken back.** Reset of a moved day
+  discarded its text, a category's delete moved its notes to General, and the backup import's
+  question, asked while you type, took the import.
+- **What the app says matches what it does.** Messages named a "⬇ Import" button drawn nowhere;
+  Duplicates did not say it compares the checklist and the repeat; a one-note import said
+  "review, then Save" though it is saved at once ("Add it anyway" now); a weekly note said its
+  edits apply "to every day"; the single Delete and Empty trash did not name the attached files
+  they delete; a Cancel in Import code left the last import's "Added …" standing.
+- **The template editor keeps your typing.** Its own close button, and a tab turned behind
+  Settings, threw a half-written template away without a word.
+- **The template editor and the picker scroll once taller than the window,** Save always in
+  sight; 25 items put Save below the screen.
+- **Editing a template's text keeps its bold and colours on their words,** and on every note made
+  from it.
+- **Ctrl+Z in a table cell's editor leaves its words in.** It took them out, and leaving the cell
+  saved it empty.
+- **The calculator reads the keyboard's − * x / : and a decimal comma, and Enter presses =;** a
+  number typed after a result starts a new sum.
+- **The calculator answers nothing for a sum nested too deep,** where 200 brackets reached the
+  error message.
+- **A cut ends at its last whole word, with "…",** on cards, in the calendar and in the questions
+  that quote a note; "..." wrapped onto a line of its own.
+- **A Trash row deleted while the clock ran ahead promises no more days than the window holds.**
+- **A double-click on Import or on Restore selected answers only what it meant to.**
+- **Statistics' "In trash" follows Empty trash and a row's own Delete.**
+- **A category recoloured in Settings recolours the open note's dot.**
+- **A duplicate gets its own "Created" date.**
+- **A category added at the foot of a long list is brought into sight.**
+- **Long category names end in "…"** in the note's list and on its button, not cut bare at 13
+  letters.
+
+### Testing
+
+- Every fix landed with a check that fails without it and a mutant that proves the check: the
+  catalogue grew from 422 mutants to 1,156.
+- `test_data_safety` ends with a fuzz of a series' days: 1,500 roads of edit, move, delete, rule,
+  share, backup and restore, after which no day's words are lost or doubled but those deleted or
+  typed over.
+- The suite ran 90.8% of the app's lines on Windows (8 November 2026).
+- How the audit ran, its numbers and its cost:
+  [How Note Organizer is built](docs/AI_WORKFLOW.md#the-final-audit); the prompts its agents were
+  given: [docs/audit](docs/audit/README.md).
+
+---
+
 ## [0.97.405] — 2026-10-27
 
 ### Added
