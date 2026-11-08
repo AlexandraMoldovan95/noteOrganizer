@@ -144,6 +144,7 @@ for when you need it:
   through the files.
 - **How it was made:** [in my words](docs/IN_MY_WORDS.md),
   [built with an AI agent](docs/AI_WORKFLOW.md), the
+  [final audit's prompts](docs/audit/README.md), the
   [issues log](docs/ISSUES_LOG.md), the [changelog](CHANGELOG.md) and the
   [roadmap](docs/ROADMAP.md), with the decisions it records.
 - **How it is tested:** the [test map](qa/README.md), the

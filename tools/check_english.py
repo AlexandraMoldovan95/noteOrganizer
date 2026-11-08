@@ -170,6 +170,12 @@ TEXT = (".py", ".md", ".txt", ".yml", ".yaml", ".json", ".spec", ".cfg",
 ALLOWED = {
     "tools/check_english.py":
         "this gate: the wordlist it searches for is necessarily Romanian",
+    "docs/audit/wave2/round01.js":
+        "a prompt published as it ran: it names the Romanian letters a person "
+        "types in names and searches, as input to try the app with",
+    "docs/audit/wave1/round09-android.js":
+        "a prompt published as it ran: it names the Hangul a phone keyboard "
+        "composes, as input to try the app with",
 }
 
 

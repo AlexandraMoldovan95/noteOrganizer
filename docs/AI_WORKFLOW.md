@@ -81,7 +81,7 @@ can be reviewed; the memory is just the agent's working notebook.
   When a document states a figure, a tool can usually reproduce it (`tools/bench.py` for speed,
   `tools/call_graph.py` for the module split, `tools/verify_findings.py` for the register).
   The final audit's figures cannot be: they were counted from the rounds' own records, which
-  are kept outside the repository with the prompts that ran them.
+  are kept outside the repository; the prompts that ran them are [published in it](audit/README.md).
 - **The screen, not only the code.** Some bugs exist only in a photograph - a colour, a cut-off
   label. The story scripts and `tools/doc_screenshots.py` photograph the running app, and a fix
   to anything visible is looked at before it is called done.
@@ -164,7 +164,7 @@ How a round worked:
 | 3 | What read as generated rather than written, in code and documents | closed at round 8 * | closed at round 8 * |
 | 2 | An ordinary person's week, and a careless hand | closed at round 14 | closed at round 25 |
 | 2's lows | The low findings of wave 2 | closed at verification round 8 | closed at verification round 10 |
-| 4 | The review panel: eight roles, two to an agent | closed at round 4 † | closed at round 4 † |
+| 4 | [The review panel](audit/wave4/README.md): eight roles, two to an agent | closed at round 4 † | closed at round 4 † |
 
 \* Not by the two-clean-rounds rule. After round 5 I narrowed what kept a round of wave 3 open
 to what a person using the app would meet and be misled by, and chose round 8 as the last.
@@ -183,8 +183,8 @@ did what the desktop already did.
 What each round found is in the [issues log](ISSUES_LOG.md), from
 [A file with two names](ISSUES_LOG.md#a-file-with-two-names) on. The rounds' own records give
 the numbers (counted 8 November 2026): each agent's findings with the severity it gave them, and
-each verdict of the sceptic. The records stay outside the repository, with the probes and the
-prompts.
+each verdict of the sceptic. The records stay outside the repository, with the probes; the
+prompts are published, as they ran, in [the audit's folder](audit/README.md).
 
 | Wave | App | Findings: all (high or worse / medium / low) | Shown by a probe | Re-graded by a sceptic: kept / told twice / refuted / lowered |
 |---|---|---|---|---|
