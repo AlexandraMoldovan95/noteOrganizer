@@ -1,7 +1,7 @@
 # The qa suite — read me before touching a guarded surface
 
-Nine scripts, about 3,600 checks (the eight unit suites beside them bring the
-whole run to about 4,800; `tools/run_tests.py` counts them), all driving the real app headlessly (Xvfb on
+Nine scripts, about 3,700 checks (the eight unit suites beside them bring the
+whole run to about 5,000; `tools/run_tests.py` counts them), all driving the real app headlessly (Xvfb on
 Linux CI, real Windows Tk on the Windows CI job and every dev machine).
 The manual half of the QA story sits beside them:
 `NoteOrganizer_TestPlan.xlsx`, the structured test plan for scenarios
@@ -33,7 +33,7 @@ runs on demand, as the table says.
 |---|---|---|---|
 | Static gates | Twelve `tools/check_*.py` scripts, seconds in all | Ten on every pull request that changes code; the test plan's, the links' and the English one on every one that changes a document or the plan | A tool that starts the app or a suite before taking the machine's turn and its memory ceiling; a name used but never defined; a method lost from the app class; a judgement about a note written out twice; a dead documentation link; a count of the test plan written down wrong; Romanian in anything public; a script that wipes its folder with no deny rule; a long story told in a comment; text below WCAG contrast; a mutant that no longer finds the code it mutates; a Pillow CI tests that the `.exe` does not ship |
 | Unit suites | Eight `test_*.py`, no window for seven of them | Every pull request | Dates, repeats, the calculator, tables, rich text, data safety, a note's identity, spelling |
-| The qa suite | Nine scripts, about 3,600 checks, driving the real app headlessly | Every pull request | What a person would notice: a note that must survive a restart, a share code or a backup; formatting and tables that must come back exactly; a question that must not lose what was typed |
+| The qa suite | Nine scripts, about 3,700 checks, driving the real app headlessly | Every pull request | What a person would notice: a note that must survive a restart, a share code or a backup; formatting and tables that must come back exactly; a question that must not lose what was typed |
 | Stories | Three scripts that press the buttons a person presses, restart the app and photograph it | On demand: by hand, or from the Actions tab | A screen that changed shape; a route nobody asked a check about |
 | Mutants | `tools/mutate.py` and its catalogue: the ones worth re-running, and 2 that test the runner | On demand, the same way. Most mutants were one-off runs while a fix was made, named in its commit | A check that stays green with its fix taken away |
 | Coverage | `tools/run_coverage.py` | Every pull request, with a floor of 80% | Code no test reaches |

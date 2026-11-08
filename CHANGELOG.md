@@ -12,6 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
+| [0.100.512](#0100512--2026-11-08) | 2026-11-08 | The final audit before the stores: what agents found in two weeks of trying to break the app, fixed; the notebook in the profile's own folder; the keyboard everywhere; nothing a file, a paste or a code holds stops the app or freezes it. |
 | [0.97.405](#097405--2026-10-27) | 2026-10-27 | The Trash selects all its notes, and deletes the ticked ones for good; its rows follow a new window at once and count real time; the editor's toolbar holds still as a note empties. |
 | [0.96.401](#096401--2026-10-26) | 2026-10-26 | "↩ Restore previous" keeps a note's words when they are replaced, not only shrunk; a table copied from Excel, or its cells copied here and pasted with Ctrl+Shift+V, comes in as a table; words pasted from a web page are found by search. |
 | [0.96.396](#096396--2026-10-24) | 2026-10-24 | A table pasted as markdown text, from a chat or a `.md` file, fits its words instead of arriving with its columns cut short. |
@@ -109,7 +110,7 @@ How the numbers themselves are counted is the
 
 ---
 
-## [Unreleased]
+## [0.100.512] — 2026-11-08
 
 *Highlights: the final audit before the stores. For two weeks agents tried to break the app —
 lost notes, hostile and huge input, the keyboard alone, an ordinary person's week, a careless

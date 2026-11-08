@@ -55,7 +55,7 @@ can be reviewed; the memory is just the agent's working notebook.
 5. **Walk it on the real app.** Story scripts press the keys a person presses, restart the app
    the way a person would close it, and photograph the app's window - someone looks at every
    photograph.
-6. **The whole suite, on both platforms.** About 4,800 checks, on Windows and in a Linux image
+6. **The whole suite, on both platforms.** About 5,000 checks, on Windows and in a Linux image
    that matches CI.
 7. **My turn.** I review the diff, the commits and what was tested, approve the push, open and
    merge the pull request, then rebuild and test the `.exe`. Whatever only a person can judge -
