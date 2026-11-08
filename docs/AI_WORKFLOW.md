@@ -164,10 +164,16 @@ How a round worked:
 | 3 | What read as generated rather than written, in code and documents | closed at round 8 * | closed at round 8 * |
 | 2 | An ordinary person's week, and a careless hand | closed at round 14 | closed at round 25 |
 | 2's lows | The low findings of wave 2 | closed at verification round 8 | closed at verification round 10 |
-| 4 | The review panel: eight roles, two to an agent | under way | under way |
+| 4 | The review panel: eight roles, two to an agent | closed at round 4 † | closed at round 4 † |
 
 \* Not by the two-clean-rounds rule. After round 5 I narrowed what kept a round of wave 3 open
 to what a person using the app would meet and be misled by, and chose round 8 as the last.
+
+† Not by its own rule either, which was to stop once the scores no longer rose. I chose the
+fourth round as the last before it ran, and the scores still rose in it: for the person who
+built it and for the project, the desktop's from 6.38 and 7.25 to 6.75 and 7.38, the phone's
+from 6.62 and 6.88 to 6.88 and 7.50. What it found untrue in the code and the documents was fixed after it;
+what it proposed beyond that waits for my decision.
 
 The phone needed more rounds than the desktop in waves 1 and 2, and its issues log says why: most
 of the extra rounds found the round before's own fixes wrong. Custom order's drag took twelve
@@ -199,9 +205,9 @@ sceptic seldom refuted - 6 of the 756 it re-graded - and earned its place anothe
 fixes by name and the code beside them; in wave 1 those agents found 175 of the desktop's 309
 findings and 120 of the phone's 268.
 
-The agents used about 102 million tokens, as their runs recorded them: wave 1, 49.2 million;
-its lows, 8.2; wave 3, 8.7; wave 2, 22.9; its lows, 11.2; the panel's first two rounds, 2.1. The
-whole audit had been estimated at 8 to 13 million before it began. The count leaves out the main
+The agents used about 103 million tokens, as their runs recorded them: wave 1, 49.2 million;
+its lows, 8.2; wave 3, 8.7; wave 2, 22.9; its lows, 11.2; the panel's first two rounds, 2.1, and
+its fourth, 1.0. The whole audit had been estimated at 8 to 13 million before it began. The count leaves out the main
 session's own work between rounds, and the panel's third round, given to two agents by hand.
 
 ## AI reviewers and simulations: what they are, and are not
@@ -226,7 +232,7 @@ four or five reviewers with separate territories, and a full wave only with my s
 stated reason. CI minutes are billed too - Windows minutes count double, so the mutant job runs
 on Linux, and the workflow skips work a change cannot affect.
 
-The final audit was such a sign-off, and it ran far past its estimate: about 102 million agent
+The final audit was such a sign-off, and it ran far past its estimate: about 103 million agent
 tokens against 8 to 13 million ([the numbers](#the-final-audit)). The rounds made the difference.
 A wave closed only after two clean rounds in a row, and waves 1 and 2 took 14 to 25, most of
 them attacking the last round's fixes. A finding cost about 85,000 tokens in wave 1, 92,000 in
