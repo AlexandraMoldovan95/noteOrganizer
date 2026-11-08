@@ -365,11 +365,12 @@ _card_lines = app._card_texts(NO.normalize_note(
     {'id': 992, 'title': 'Shopping', 'body': 'milk\n\n  bread  \neggs'}))['preview']
 check(f'a card keeps the lines of a note apart ({_card_lines!r})',
       _card_lines == 'milk · bread · eggs')
-# An empty list item, as Enter at a marker leaves one, is an empty line.
+# A list item shows its words without its marker, and an empty one, as Enter
+# at a marker leaves, is an empty line.
 _card_lines = app._card_texts(NO.normalize_note(
-    {'id': 995, 'title': 'Packing', 'body': 'Pack the coat\n• \n• milk'}))['preview']
-check(f'...and leaves out a list item with no words ({_card_lines!r})',
-      _card_lines == 'Pack the coat · • milk')
+    {'id': 995, 'title': 'Packing', 'body': 'Pack the coat\n• \n• milk\n2. eggs'}))['preview']
+check(f'...and leaves out a list item with no words, and a marker ({_card_lines!r})',
+      _card_lines == 'Pack the coat · milk · eggs')
 # Cut, the glimpse holds its "…" to its last word: "...", after the space the
 # cut left, wrapped onto a line of its own.
 _card_cut = app._card_texts(NO.normalize_note(

@@ -532,10 +532,14 @@ check(f"lines_apart keeps a note's lines apart, empty ones left out ({_apart!r})
       _apart == "the book borrowed · from Radu · the article")
 check("lines_apart of nothing is nothing",
       tables.lines_apart("") == "" and tables.lines_apart(None) == "")
-# A list item with no words is an empty line: kept, it read "· • ·".
+# A list item with no words is an empty line, left out.
 _items = tables.lines_apart("Pack the coat\n• \n• milk\n  ◦ \n2. \n3. eggs")
 check(f"lines_apart leaves out a list item with no words ({_items!r})",
-      _items == "Pack the coat · • milk · 3. eggs")
+      _items == "Pack the coat · milk · eggs")
+# A list item keeps its words, not its marker: "· • milk" read as two marks.
+_marks = tables.lines_apart("• bread\n  ◦  rye   flour\n▪ salt\n12. butter\n•no space")
+check(f"lines_apart keeps a list item's words without its marker ({_marks!r})",
+      _marks == "bread · rye flour · salt · butter · •no space")
 # Every cut the app shows: whole when it fits, its "…" held to the last word.
 _cuts = [tables.glimpse(t, n) for t, n in (
     ("milk", 4), ("", 3), ("what is next", 8), ("water bottles · Call Ann", 16),
