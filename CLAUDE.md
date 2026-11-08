@@ -552,6 +552,14 @@ summary.
 - Exception by agreement (2026-09-05): small, *related* docs-only changes
   may share one branch/PR to reduce review ceremony. Code changes always
   get their own branch.
+- Exception by agreement for the final audit (from 2026-10-27, written
+  down 2026-11-08): each wave works on one branch per app,
+  `audit/d-valN` here and `audit/a-valN` in the phone's repository (*val*
+  is Romanian for wave). It carries every fix of its wave — code, tests,
+  documents, the test plan — because each round attacks the branch as a
+  whole, and the last round's fixes by name. A commit still holds one change
+  and names its area. The branches are pushed only as backups; the whole
+  audit reaches `main` as one pull request per app, with one issue each.
 
 ### Commits
 

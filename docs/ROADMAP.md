@@ -34,6 +34,19 @@ Genuinely open ideas, roughly ordered by how soon they're likely to happen.
     to date, and is where people look for it. The Windows options are in
     [`docs/RELEASE_WINDOWS.md`](RELEASE_WINDOWS.md).
 
+- **After the stores: what the review panel raised for later** (the owner's call, 2026-11-08).
+  The final audit's panel of reviewers asked for these; each changes much of what a person sees,
+  or code across files, so none goes in on the eve of a release:
+  - **One set of icons.** The marks in the format bar, the sidebar and the calendar are font
+    glyphs and emoji of mixed weights, 12 to 14 pixels; one set, drawn in the theme's colour at
+    one weight, or none where the label says enough.
+  - **An editor that says no note is open.** With nothing chosen (a search that matches nothing,
+    say), the editor still shows empty fields, the format bar, Save and Delete, as if in use; a
+    short page saying what to do, with New Note, would read better.
+  - **Two moves in the code.** The note list's state, read through `getattr(self, ..., default)`,
+    declared in `__init__` instead; and the card's tags line worked out by a pure function in
+    `core/`, tested on its own.
+
 - **Feedback from real readers at the public launch, colour-blind readers among them.** The
   colour-blind check so far is an AI simulation: photographs of the app simulated for
   protanopia, deuteranopia and tritanopia, read by AI reviewers (the test plan's case 625). A

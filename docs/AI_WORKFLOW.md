@@ -123,7 +123,7 @@ run is safe is the thing that failed.
 | 11 September | Thirteen hostile reviewers, three verifiers per material finding, a completeness critic | 33 kept; the critic's audit of the wave itself drove three fixes ([0.71.154](../CHANGELOG.md#071154--2026-09-11)) |
 | Late September – 2 October | Nineteen rounds trying to break the app, each aimed at what the last one changed | Every finding reproduced with a probe before it was fixed ([0.83.335](../CHANGELOG.md#083335--2026-10-02)) |
 | 8 October | Five reviewer personas on the palette, five rounds; four reviewers on colour-blindness simulations | The palette of [0.89.365](../CHANGELOG.md#089365--2026-10-08); the fixes of [0.89.371](../CHANGELOG.md#089371--2026-10-08) |
-| 27 October – 7 November | The final audit before the stores, both apps, in waves of rounds | Rounds per wave below ([the final audit](#the-final-audit)) |
+| 27 October – 8 November | The final audit before the stores, both apps, in waves of rounds, every finding of medium severity or worse re-graded by a sceptic | 1,246 findings; of the 756 re-graded, 6 refuted, 69 lowered, 85 told twice ([the final audit](#the-final-audit)) |
 
 What the numbers taught: a wave is worth what its verification is worth - the hostile pass
 reported one first-run dialog six times, and only the harshness audit noticed - and a grep later
@@ -172,11 +172,33 @@ rounds to settle; the list's messages were redone five times, and settled only o
 did what the desktop already did.
 
 What each round found is in the [issues log](ISSUES_LOG.md), from
-[A file with two names](ISSUES_LOG.md#a-file-with-two-names) on. Tokens were counted for wave 3
-alone: about 8 million for its eight rounds, a round of a million or a little more, and the
-panel's first round, eight agents, took about the same. The whole audit had been estimated at 8
-to 13 million before it began; wave 3 used most of that by itself, and the other waves were not
-counted.
+[A file with two names](ISSUES_LOG.md#a-file-with-two-names) on. The rounds' own records give
+the numbers (counted 8 November 2026): each agent's findings with the severity it gave them, and
+each verdict of the sceptic.
+
+| Wave | App | Findings: all (high or worse / medium / low) | Shown by a probe | Re-graded by a sceptic: kept / told twice / refuted / lowered |
+|---|---|---|---|---|
+| 1 | Desktop | 309 (63 / 101 / 145) | 290 | 264: 232 / 32 / 0 / 20 |
+| 1 | Phone | 268 (53 / 97 / 118) | 172 | 219: 182 / 35 / 2 / 16 |
+| 1's lows | Desktop | 39 (0 / 9 / 30) | 35 | 9: 8 / 0 / 1 / 0 |
+| 1's lows | Phone | 39 (0 / 16 / 23) | 32 | 16: 16 / 0 / 0 / 5 |
+| 3 | Desktop | 120 (3 / 56 / 61) | 120 | 59: 51 / 6 / 2 / 6 |
+| 3 | Phone | 111 (1 / 52 / 58) | 109 | 53: 50 / 3 / 0 / 6 |
+| 2 | Desktop | 103 (9 / 39 / 55) | 97 | 48: 44 / 4 / 0 / 6 |
+| 2 | Phone | 147 (3 / 71 / 73) | 129 | 72: 68 / 4 / 0 / 7 |
+| 2's lows | Desktop | 53 (2 / 9 / 42) | 51 | 11: 10 / 0 / 1 / 2 |
+| 2's lows | Phone | 57 (0 / 5 / 52) | 55 | 5: 4 / 1 / 0 / 1 |
+
+In all, 1,246 findings, 1,090 of them shown by a probe rather than argued from the code. The
+sceptic seldom refuted - 6 of the 756 it re-graded - and earned its place another way: it lowered
+69 and caught 85 told twice. Most rounds after the first sent an agent after the last round's
+fixes by name and the code beside them; in wave 1 those agents found 175 of the desktop's 309
+findings and 120 of the phone's 268.
+
+The agents used about 102 million tokens, as their runs recorded them: wave 1, 49.2 million;
+its lows, 8.2; wave 3, 8.7; wave 2, 22.9; its lows, 11.2; the panel's first two rounds, 2.1. The
+whole audit had been estimated at 8 to 13 million before it began. The count leaves out the main
+session's own work between rounds, and the panel's third round, given to two agents by hand.
 
 ## AI reviewers and simulations: what they are, and are not
 
