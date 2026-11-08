@@ -209,6 +209,12 @@ def main(argv):
                      "found %d" % len(todo))
     else:
         wanted = [a for a in argv[1:] if not a.startswith("--")]
+        # A word that names no mutant ran nothing and passed: a typed "pn"
+        # read "0 of 0 verdicts as the catalogue expects".
+        unmatched = [w for w in wanted if not any(e["id"].startswith(w) for e in entries)]
+        if unmatched:
+            print("no mutant's id starts with: %s" % " ".join(unmatched))
+            return 2
         todo = [e for e in entries
                 if not wanted or any(e["id"].startswith(w) for w in wanted)]
     wrong = []

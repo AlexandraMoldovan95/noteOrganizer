@@ -10,13 +10,19 @@ name: Mutants
 # Manual only (the Actions tab, "Run workflow"): its verdicts change only
 # when the catalogue or the code it names does, and every run costs
 # minutes. Linux, because a Linux minute is half the price of a Windows one.
+# A run takes a piece of the catalogue, named by ids or their first letters:
+# the whole of it runs for many hours, past what one job may last.
 on:
   workflow_dispatch:
+    inputs:
+      ids:
+        description: "Mutant ids or prefixes, space-separated (e.g. PN or DR01 X01)"
+        required: true
 
 jobs:
   mutants:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 120
     env:
       PYTHONIOENCODING: utf-8
     steps:
@@ -44,5 +50,9 @@ jobs:
       - name: The runner's own two checks
         run: xvfb-run -a python tools/mutate.py --self-test
 
-      - name: The catalogue
-        run: xvfb-run -a python tools/mutate.py
+      - name: The piece of the catalogue asked for
+        # Through the environment, not pasted into the command: the words
+        # typed into the form are read as data, never as shell.
+        env:
+          IDS: ${{ inputs.ids }}
+        run: xvfb-run -a python tools/mutate.py $IDS

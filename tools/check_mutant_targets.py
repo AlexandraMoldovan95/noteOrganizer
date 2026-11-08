@@ -4,7 +4,8 @@ tools/mutate.py reports a mutant whose text has gone as PATTERN -- but only
 when someone runs that mutant, and a run names the mutants it is asked for.
 A later fix split the two lines Q05 mutated, and for a day it guarded
 nothing without anyone being told. This reads the catalogue on every run of
-the gates: each "find" must occur exactly once in its file.
+the gates: each "find" must occur exactly once in its file, and a mutant
+expected to live must say why in its note.
 
     py tools/check_mutant_targets.py
 """
@@ -27,6 +28,10 @@ def main():
         if entry["id"] in seen:
             lost.append("%s: the id is used twice in the catalogue" % entry["id"])
         seen.add(entry["id"])
+        # One left alive says why it may be, as the phone's catalogue does
+        # since one of its equivalents said only what it would do.
+        if entry.get("expect", "killed") != "killed" and not entry.get("note", "").strip():
+            lost.append("%s: expected to live (%s), with no note saying why" % (entry["id"], entry["expect"]))
     for entry in entries:
         for edit in entry["edits"]:
             path = os.path.join(ROOT, edit["file"])
@@ -41,8 +46,8 @@ def main():
     for line in lost:
         print("  " + line)
     if lost:
-        print("%d mutant(s) no longer find what they mutate: aim each at the "
-              "code as it is now, or drop it with the check it guarded."
+        print("%d problem(s) in the catalogue: aim each mutant at the code as it "
+              "is now, or drop it with the check it guarded; one left alive says why."
               % len(lost))
         return 1
     print("Every one of the %d mutants has its own id and finds the code it mutates."
