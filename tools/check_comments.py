@@ -107,6 +107,9 @@ ROUND = re.compile(
     r"\brounds?[ -]%s\b|\b(?:%s|%s)(?: and (?:%s|%s))? rounds?\b(?! trip)|\blows wave\b"
     r"|\bfinal audit\b|\baudit's\b|\bwave %s\b"
     % (_NUM, _ORD, _NUM, _ORD, _NUM, _NUM), re.I)
+# The same, in a function's or a class's name: "limits_round8", "round_9".
+# The phone's walk kept seven such names after its comments lost theirs.
+ROUND_NAME = re.compile(r"(?:^|_)rounds?_?\d+(?:_|$)", re.I)
 
 # Where a docstring's prose ends and its interface sections begin.
 SECTION = re.compile(r"^(Args|Arguments|Returns|Raises|Yields):\s*$")
@@ -218,6 +221,15 @@ def named_round(text):
     return found.group(0) if found else None
 
 
+def round_names(tree):
+    """(line, problem) for each function or class in *tree* named after a
+    round of the audit."""
+    return [(node.lineno, "named after the audit's round: %s" % node.name)
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+            and ROUND_NAME.search(node.name)]
+
+
 def test_and_tool_files():
     """The tests' and tools' Python, held to the round rule alone. This file
     is left out: it quotes the labels it refuses."""
@@ -270,11 +282,12 @@ def rounds_named(path):
         found = named_round(text)
         if found:
             problems.append((first, "names the audit's %r" % found))
-    for line, doc, _module in docstrings(ast.parse(source)):
+    tree = ast.parse(source)
+    for line, doc, _module in docstrings(tree):
         found = named_round(doc)
         if found:
             problems.append((line, "docstring names the audit's %r" % found))
-    return sorted(problems)
+    return sorted(problems + round_names(tree))
 
 
 def catalogue_rounds():
@@ -316,6 +329,7 @@ def check(path, titles, lessons):
         found = named_round(doc)
         if found:
             problems.append((line, "docstring names the audit's %r" % found))
+    problems += round_names(tree)
     if path in BRIEF:
         for first, length, _text, alone in runs:
             if alone and length > MAX_COMMENT_LINES:
