@@ -129,6 +129,12 @@ STATIC = [
     # went down with it.
     ("a test run is a guest",
      [sys.executable, os.path.join("tools", "check_guest.py")]),
+    # The eleventh and twelfth, run in CI by docs.yml: the test plan's numbers
+    # where the documents give them, and every link between the documents.
+    ("the test plan counted right",
+     [sys.executable, os.path.join("tools", "check_test_plan.py")]),
+    ("document links lead somewhere",
+     [sys.executable, os.path.join("tools", "check_doc_links.py")]),
 ]
 
 

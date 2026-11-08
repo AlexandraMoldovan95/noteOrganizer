@@ -26,9 +26,11 @@ WHAT IT RUNS
    places, answered by a hand-rolled field list at each one. Every
    omission an adversarial review has caught in this project had that
    shape; this is the grep that catches it.
-4. ``check_doc_links`` and ``check_english`` -- anchors that still go
-   somewhere, and no Romanian in anything a reader of this repository
-   sees. The app's interface is English; the qa stories had drifted.
+4. ``check_doc_links``, ``check_test_plan`` and ``check_english`` --
+   anchors that still go somewhere, the test plan's numbers as the
+   documents give them, and no Romanian in anything a reader of this
+   repository sees. The app's interface is English; the qa stories had
+   drifted.
 5. ``check_agent_rules`` -- the agent's committed deny rules cover every
    script that wipes its working folder, in every spelling.
 6. ``check_comments`` -- no release named in the app's comments, every
@@ -114,6 +116,9 @@ def main():
     # Cheap enough to run on every push rather than once a release.
     _run_gate("documentation links resolve",
               [os.path.join("tools", "check_doc_links.py")])
+    # The test plan's counts were copied into three documents by hand, and drifted.
+    _run_gate("the test plan counted right",
+              [os.path.join("tools", "check_test_plan.py")])
     # The work is discussed in Romanian and written down in English. The
     # qa stories crossed that line without anybody noticing, and every CI
     # run then printed Romanian check names into a public log.

@@ -58,8 +58,8 @@ Put the new file(s) in place, rebuild, and **test it locally** — a rebuild nev
 just for me to look at.
 
 Happy with it? Commit, run the static gates, then push. `py tools/pre_push_check.py` runs the
-cheap checks CI runs first, and the link check CI leaves out — its docstring lists them —
-and two PRs went red learning that the hard way. The full suite is `tools/run_tests.py`.
+cheap checks CI runs first — its docstring lists them — and two PRs went red learning that the
+hard way. The full suite is `tools/run_tests.py`.
 
 ```powershell
 git add .

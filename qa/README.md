@@ -23,15 +23,15 @@ floor in CI is the guard that runs every time.
 
 Every pull request that changes more than the documentation runs the
 static gates, the unit suites and the qa suite on Windows and on Linux,
-and measures coverage on Linux (a change to Markdown, `docs/` or the test
-plan alone cannot turn a check red, so it runs nothing);
-`py tools/run_tests.py` runs the same on a developer's machine, from a
-scratch copy outside the project. The rest runs on demand, as the table
-says.
+and measures coverage on Linux (`tests.yml`). A change to Markdown or the
+test plan cannot break the app, so it runs only the three gates that read
+them, on Linux (`docs.yml`). `py tools/run_tests.py` runs all of it on a
+developer's machine, from a scratch copy outside the project. The rest
+runs on demand, as the table says.
 
 | Layer | What it is | When it runs | What it catches |
 |---|---|---|---|
-| Static gates | Eleven `tools/check_*.py` scripts, seconds in all | Ten on every pull request; the link check before a push | A tool that starts the app or a suite before taking the machine's turn and its memory ceiling; a name used but never defined; a method lost from the app class; a judgement about a note written out twice; a dead documentation link; Romanian in anything public; a script that wipes its folder with no deny rule; a long story told in a comment; text below WCAG contrast; a mutant that no longer finds the code it mutates; a Pillow CI tests that the `.exe` does not ship |
+| Static gates | Twelve `tools/check_*.py` scripts, seconds in all | Ten on every pull request that changes code; the test plan's, the links' and the English one on every one that changes a document or the plan | A tool that starts the app or a suite before taking the machine's turn and its memory ceiling; a name used but never defined; a method lost from the app class; a judgement about a note written out twice; a dead documentation link; a count of the test plan written down wrong; Romanian in anything public; a script that wipes its folder with no deny rule; a long story told in a comment; text below WCAG contrast; a mutant that no longer finds the code it mutates; a Pillow CI tests that the `.exe` does not ship |
 | Unit suites | Eight `test_*.py`, no window for seven of them | Every pull request | Dates, repeats, the calculator, tables, rich text, data safety, a note's identity, spelling |
 | The qa suite | Nine scripts, about 3,600 checks, driving the real app headlessly | Every pull request | What a person would notice: a note that must survive a restart, a share code or a backup; formatting and tables that must come back exactly; a question that must not lose what was typed |
 | Stories | Three scripts that press the buttons a person presses, restart the app and photograph it | On demand: by hand, or from the Actions tab | A screen that changed shape; a route nobody asked a check about |

@@ -92,11 +92,12 @@ something that does not depend on the agent remembering:
 |---|---|
 | Tests never run where they could wipe real notes | **Enforced.** The agent's deny list refuses any shell command that would start a destructive script in the project folder; `tools/run_tests.py` runs everything in a fresh scratch copy; the qa scripts' hermetic seed refuses to start outside one, or beside a notebook that holds notes. |
 | Every destructive script has a deny rule | **Enforced** in CI by `tools/check_agent_rules.py`, which finds the scripts itself. |
-| English throughout the repository; comments short and about *why* | **Enforced** in CI (`check_english.py`, `check_comments.py`) whenever code, tests or tools change. A change to the documentation alone skips CI to save minutes; for those, the English check runs in `tools/pre_push_check.py` before the push - a step the agent is asked to take, not one CI repeats. |
+| English throughout the repository; comments short and about *why* | **Enforced** in CI (`check_english.py`, `check_comments.py`) whenever code, tests or tools change; a change to the documentation alone runs the English check too, with the test plan's and the links' (below). |
 | One definition per judgement (no hand-copied field lists) | **Enforced** in CI for eight named questions (`check_one_definition.py`); a question asked in a new place joins it by hand. |
 | Text readable in every theme | **Enforced** in CI (`check_contrast.py`, WCAG AA). |
 | `core/` never imports the interface | **Enforced** by a unit check. |
 | The mutant catalogue still aims at real code | **Enforced** in CI (`check_mutant_targets.py`). |
+| The test plan's numbers in the documents are the plan's, and their links lead somewhere | **Enforced** in CI (`check_test_plan.py`, `check_doc_links.py`), on every change to a document or the plan. |
 | One heavy job at a time; a test held to a memory ceiling, every child to a time limit | **Enforced** for this repository's runners by `tools/guest.py` (an OS lock on the machine, a job object or RLIMIT_AS), and in CI by `check_guest.py`, which finds the runners by what they do. The Linux image runs only through `tools/linux_ci.py`. The Android build and its emulator: **asked**. |
 | A picture of the app shows only the app | **Enforced** by the one shutter every photographer uses (`qa/_qa_support.photograph`): it refuses a picture another program's window is over. |
 | Push, merge, pull requests | **Held by me.** Push asks every time; I open and merge every pull request myself. |

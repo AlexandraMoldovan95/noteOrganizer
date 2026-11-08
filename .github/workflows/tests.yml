@@ -44,7 +44,8 @@ name: QA Tests
 # NOTE, if required status checks are ever turned on for `main`: a
 # documentation-only PR will not run this workflow at all, so a required
 # "qa" check would stay pending forever and block the merge. Say so and
-# this gets solved a different way.
+# this gets solved a different way. Such a PR runs docs.yml instead: the
+# test plan's numbers, the links between the documents, and English.
 on:
   push:
     branches: [main]
