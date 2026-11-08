@@ -34,10 +34,16 @@ def text(*parts):
 def main():
     pin = re.search(r"^Pillow==(\S+)$", text("requirements.txt"), re.M)
     pillow = pin.group(1) if pin else None
+    # Not shipped: the test plan's gate reads the workbook with it, in CI
+    # (docs.yml) and in the image, which runs every gate.
+    pin = re.search(r"pip install openpyxl==(\S+)$", text(".github", "workflows", "docs.yml"), re.M)
+    openpyxl = pin.group(1) if pin else None
     checks = [
         ("requirements.txt pins Pillow to one version", pillow is not None),
         ("the Linux image installs the pinned Pillow (%s)" % pillow,
          bool(pillow) and ("Pillow==%s\n" % pillow) in text("tools", "linux-ci", "Dockerfile")),
+        ("the Linux image installs the openpyxl docs.yml installs (%s)" % openpyxl,
+         bool(openpyxl) and ("openpyxl==%s\n" % openpyxl) in text("tools", "linux-ci", "Dockerfile")),
         ("%s holds the licenses of that Pillow" % diagnostics.NOTICES,
          bool(pillow) and ("\nPillow %s (" % pillow) in text(diagnostics.NOTICES)),
         ("NoteOrganizer.spec bundles %s where About looks for it" % diagnostics.NOTICES,

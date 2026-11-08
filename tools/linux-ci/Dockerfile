@@ -40,5 +40,9 @@ RUN apt-get update \
 # The version requirements.txt pins; tools/check_shipped.py keeps them equal.
 RUN pip install --no-cache-dir Pillow==13.0.0
 
+# The test plan's gate reads the workbook with it, and run_tests.py runs
+# every gate; the version docs.yml installs, kept equal the same way.
+RUN pip install --no-cache-dir openpyxl==3.1.5
+
 WORKDIR /repo
 ENTRYPOINT ["/bin/sh", "-c", "xvfb-run -a python tools/run_tests.py \"$@\"", "--"]
