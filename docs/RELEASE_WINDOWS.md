@@ -135,6 +135,11 @@ is a copy of it on Google Sites, made by hand, so nothing keeps the two in step 
    release report says so, even when nothing changed. The one accepted difference is the
    Contents list: its links do not work on Google Sites, so the Site leaves it out or uses the
    Site's own table of contents instead.
+4. Once the apps are in the stores, a change to the text also gets a dated line under the
+   policy's **What changed**, saying exactly what is different, and the release that brings it
+   says so in both stores' release notes, in a sentence or two with the policy's address. Nobody
+   should learn of a change only by comparing the page with an older copy (the owner's rule,
+   2026-11-08). An earlier version goes to whoever asks for it, from the file's history.
 
 No build ships until `PRIVACY_URL`, opened signed out (in a private window), shows the policy's
 text: a Google Site that is missing or not public sends a visitor to Google's sign-in page rather

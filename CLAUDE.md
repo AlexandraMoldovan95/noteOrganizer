@@ -537,7 +537,10 @@ summary.
   the build goes out, and the live page is compared with the file either
   way. No build ships until the page, opened signed out, shows the
   policy's text — a Site that is missing or private sends visitors to a
-  Google sign-in page instead of an error. The steps are in
+  Google sign-in page instead of an error. Once the apps are in the
+  stores, a change also gets a dated line under the policy's What
+  changed, and both stores' release notes say exactly what changed (the
+  owner's rule, 2026-11-08). The steps are in
   [RELEASE_WINDOWS](docs/RELEASE_WINDOWS.md#the-privacy-page-at-every-release).
 
 ## Git & GitHub workflow
