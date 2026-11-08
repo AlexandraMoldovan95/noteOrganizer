@@ -540,12 +540,18 @@ check(f"lines_apart leaves out a list item with no words ({_items!r})",
 _marks = tables.lines_apart("• bread\n  ◦  rye   flour\n▪ salt\n12. butter\n•no space")
 check(f"lines_apart keeps a list item's words without its marker ({_marks!r})",
       _marks == "bread · rye flour · salt · butter · •no space")
-# Every cut the app shows: whole when it fits, its "…" held to the last word.
+# Every cut the app shows: whole when it fits, else at its last whole word.
 _cuts = [tables.glimpse(t, n) for t, n in (
     ("milk", 4), ("", 3), ("what is next", 8), ("water bottles · Call Ann", 16),
-    ("one two", 5))]
-check(f"glimpse keeps a text that fits and ends a cut at its last word ({_cuts!r})",
-      _cuts == ["milk", "", "what is…", "water bottles…", "one t…"])
+    ("one two", 5), ("the team's tasks", 12))]
+check(f"glimpse keeps a text that fits and ends a cut at its last whole word ({_cuts!r})",
+      _cuts == ["milk", "", "what is…", "water bottles…", "one…", "the team's…"])
+# One long word, or a short word before an address: backing up to a space
+# would give up more than half the room, so the cut goes through the word.
+_long = [tables.glimpse(t, n) for t, n in (
+    ("Supercalifragilistic", 8), ("a https://example.com/a/long/path", 12))]
+check(f"glimpse cuts through a word that holds more than half the room ({_long!r})",
+      _long == ["Supercal…", "a https://ex…"])
 
 print()
 print(f"FAILURES: {fails if fails else 'none'}")

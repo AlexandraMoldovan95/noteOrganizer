@@ -680,8 +680,16 @@ def lines_apart(text):
 
 def glimpse(text, limit):
     """*text* cut to *limit* characters for display, whole when it fits. Cut,
-    its "…" is held to the last word: after the space or " · " the cut ended
-    on, it wrapped onto a line of its own. Every cut the app shows uses it."""
+    it ends at its last whole word, "…" right after it: a "…" after a space
+    or " · ", or after a word's first letters, wrapped onto a line of its
+    own. Every cut the app shows uses it."""
     if len(text) <= limit:
         return text
-    return text[:limit].rstrip(" \t\n·") + "…"
+    cut = text[:limit]
+    if not text[limit].isspace():
+        # Inside a word: back to the space before it, unless that gives up
+        # more than half the room (one long word, an address), cut through.
+        space = max(cut.rfind(" "), cut.rfind("\n"), cut.rfind("\t"))
+        if space >= limit // 2:
+            cut = cut[:space]
+    return cut.rstrip(" \t\n·") + "…"

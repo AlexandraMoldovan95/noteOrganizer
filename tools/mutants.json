@@ -17256,10 +17256,10 @@
     "id": "PN05",
     "about": "Every cut the app shows ends in a \"...\" after the space the cut left",
     "edits": [{"file": "noteorganizer/core/tables.py",
-               "find": "    return text[:limit].rstrip(\" \\t\\n·\") + \"…\"\n",
+               "find": "    return cut.rstrip(\" \\t\\n·\") + \"…\"\n",
                "replace": "    return text[:limit] + \"...\"\n"}],
-    "must_fail": ["a card cut short ends in an ellipsis held to its last word",
-                  "glimpse keeps a text that fits and ends a cut at its last word"],
+    "must_fail": ["a card cut short ends in an ellipsis after its last whole word",
+                  "glimpse keeps a text that fits and ends a cut at its last whole word"],
     "suites": ["qa7", "test_tables"],
     "expect": "killed"
   },
@@ -17277,10 +17277,10 @@
     "id": "PN08",
     "about": "A cut that lands on the dot between two lines keeps the dot before its \"…\"",
     "edits": [{"file": "noteorganizer/core/tables.py",
-               "find": "    return text[:limit].rstrip(\" \\t\\n·\") + \"…\"\n",
-               "replace": "    return text[:limit].rstrip() + \"…\"\n"}],
+               "find": "    return cut.rstrip(\" \\t\\n·\") + \"…\"\n",
+               "replace": "    return cut.rstrip() + \"…\"\n"}],
     "must_fail": ["...and a cut on the dot between two lines ends at the first",
-                  "glimpse keeps a text that fits and ends a cut at its last word"],
+                  "glimpse keeps a text that fits and ends a cut at its last whole word"],
     "suites": ["qa7", "test_tables"],
     "expect": "killed"
   },
@@ -17324,6 +17324,27 @@
     "must_fail": ["lines_apart keeps a list item's words without its marker",
                   "...and leaves out a list item with no words, and a marker"],
     "suites": ["test_tables", "qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "PN11",
+    "about": "A cut inside a word keeps the word's first letters: \"the team's t…\", the \"t…\" wrapping onto a line of its own",
+    "edits": [{"file": "noteorganizer/core/tables.py",
+               "find": "    if not text[limit].isspace():\n",
+               "replace": "    if False:\n"}],
+    "must_fail": ["glimpse keeps a text that fits and ends a cut at its last whole word",
+                  "...and a cut inside a word ends at the word before it"],
+    "suites": ["test_tables", "qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "PN12",
+    "about": "A cut backs up to any space, however far: a short word before an address leaves \"a…\"",
+    "edits": [{"file": "noteorganizer/core/tables.py",
+               "find": "        if space >= limit // 2:\n",
+               "replace": "        if space >= 0:\n"}],
+    "must_fail": ["glimpse cuts through a word that holds more than half the room"],
+    "suites": ["test_tables"],
     "expect": "killed"
   },
   {

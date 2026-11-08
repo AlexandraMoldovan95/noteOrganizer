@@ -371,13 +371,18 @@ _card_lines = app._card_texts(NO.normalize_note(
     {'id': 995, 'title': 'Packing', 'body': 'Pack the coat\n• \n• milk\n2. eggs'}))['preview']
 check(f'...and leaves out a list item with no words, and a marker ({_card_lines!r})',
       _card_lines == 'Pack the coat · milk · eggs')
-# Cut, the glimpse holds its "…" to its last word: "...", after the space the
-# cut left, wrapped onto a line of its own.
+# Cut, a card ends at its last whole word: "...", after the space the cut
+# left, wrapped onto a line of its own, and so did "t…" after "the team's".
 _card_cut = app._card_texts(NO.normalize_note(
     {'id': 993, 'title': 'Stand-up',
      'body': 'What we shipped, what is stuck, what is next for the team'}))['preview']
-check(f'a card cut short ends in an ellipsis held to its last word ({_card_cut!r})',
+check(f'a card cut short ends in an ellipsis after its last whole word ({_card_cut!r})',
       _card_cut == 'What we shipped, what is stuck, what is…')
+_card_cut = app._card_texts(NO.normalize_note(
+    {'id': 996, 'title': 'Quarterly review',
+     'body': "Numbers for the board pack, the team's targets for next year"}))['preview']
+check(f'...and a cut inside a word ends at the word before it ({_card_cut!r})',
+      _card_cut == "Numbers for the board pack, the team's…")
 _card_cut = app._card_texts(NO.normalize_note(
     {'id': 994, 'title': 'Camping',
      'body': 'Bring the blue tent and water bottles\nCall Ann about Sunday'}))['preview']
