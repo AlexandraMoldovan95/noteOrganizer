@@ -301,6 +301,6 @@ jobs:
         run: pip install -r requirements.txt coverage==7.16.0
 
       - name: Measure, with a floor
-        # 80: the suite executes 89.2% of the app's lines on Windows (3 Oct);
+        # 80: the suite executes 90.8% of the app's lines on Windows (8 Nov);
         # Linux runs fewer Windows-only branches, hence the margin.
         run: xvfb-run -a python tools/run_coverage.py --fail-under 80

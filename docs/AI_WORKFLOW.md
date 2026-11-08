@@ -66,7 +66,8 @@ can be reviewed; the memory is just the agent's working notebook.
 
 - **Checks are tested too.** Every fix's check is mutation-tested; the mutants worth keeping,
   and 2 that test the runner itself, live in [`tools/mutants.json`](../tools/mutants.json)
-  and run on demand in CI. A verdict counts only if the suite reached its end - a mutant that
+  and run on demand, here or in CI, a piece of the catalogue at a time; the whole of it last
+  ran on 13 October 2026. A verdict counts only if the suite reached its end - a mutant that
   crashes the import "survives nothing" by running nothing, and the runner refuses it.
 - **Findings are hypotheses.** When agents review the app, each finding is checked against the
   code before it is believed, often by separate verifiers told to refute it when unsure. What
@@ -79,6 +80,8 @@ can be reviewed; the memory is just the agent's working notebook.
 - **Real numbers only.** Failed rounds and raw scores are reported as they are, never smoothed.
   When a document states a figure, a tool can usually reproduce it (`tools/bench.py` for speed,
   `tools/call_graph.py` for the module split, `tools/verify_findings.py` for the register).
+  The final audit's figures cannot be: they were counted from the rounds' own records, which
+  are kept outside the repository with the prompts that ran them.
 - **The screen, not only the code.** Some bugs exist only in a photograph - a colour, a cut-off
   label. The story scripts and `tools/doc_screenshots.py` photograph the running app, and a fix
   to anything visible is looked at before it is called done.
@@ -174,7 +177,8 @@ did what the desktop already did.
 What each round found is in the [issues log](ISSUES_LOG.md), from
 [A file with two names](ISSUES_LOG.md#a-file-with-two-names) on. The rounds' own records give
 the numbers (counted 8 November 2026): each agent's findings with the severity it gave them, and
-each verdict of the sceptic.
+each verdict of the sceptic. The records stay outside the repository, with the probes and the
+prompts.
 
 | Wave | App | Findings: all (high or worse / medium / low) | Shown by a probe | Re-graded by a sceptic: kept / told twice / refuted / lowered |
 |---|---|---|---|---|
@@ -221,6 +225,14 @@ first (the pre-flight, static gates, mutants - no agent needed), then at most on
 four or five reviewers with separate territories, and a full wave only with my sign-off and a
 stated reason. CI minutes are billed too - Windows minutes count double, so the mutant job runs
 on Linux, and the workflow skips work a change cannot affect.
+
+The final audit was such a sign-off, and it ran far past its estimate: about 102 million agent
+tokens against 8 to 13 million ([the numbers](#the-final-audit)). The rounds made the difference.
+A wave closed only after two clean rounds in a row, and waves 1 and 2 took 14 to 25, most of
+them attacking the last round's fixes. A finding cost about 85,000 tokens in wave 1, 92,000 in
+wave 2, over 100,000 in the waves of low findings, and 38,000 in wave 3, where I chose the last
+round. On 31 October, with half a week's allowance spent, each round was cut to two agents per
+app; no wave had a ceiling of its own, and each stopped by the severity rule alone.
 
 ## Models
 

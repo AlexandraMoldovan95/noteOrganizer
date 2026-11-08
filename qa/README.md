@@ -9,8 +9,8 @@ easier to eyeball than to automate.
 
 What all of it actually executes is measured: `py tools/run_coverage.py`
 prints the line-coverage total, the per-file table and the largest
-never-executed regions — 89.2% of the app's lines when last measured on
-Windows, on 3 October 2026. CI measures on Linux, which runs fewer Windows-only branches,
+never-executed regions — 90.8% of the app's lines when last measured on
+Windows, on 8 November 2026 (89.2% on 3 October). CI measures on Linux, which runs fewer Windows-only branches,
 and fails a run below 80%. A line executed is not a line checked: whether
 a check bites is what the mutants answer.
 
