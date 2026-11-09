@@ -17366,5 +17366,55 @@
     "must_fail": ["the series banner says edits apply to the whole series"],
     "suites": ["qa7"],
     "expect": "killed"
+  },
+  {
+    "id": "WA01",
+    "about": "The window is never pulled inside the work area when it first shows",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                               lambda _e: self._keep_window_in_work_area())\n",
+               "replace": "                               lambda _e: None)\n"}],
+    "must_fail": ["when the window first shows it is moved inside, once"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "WA02",
+    "about": "The window is pulled inside at every show, not once",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self._placed_in_work_area = True\n        try:\n",
+               "replace": "        try:\n"}],
+    "must_fail": ["when the window first shows it is moved inside, once"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "WA03",
+    "about": "A window taller than the work area is pushed up past its top edge",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        new_top = max(area_top, top + min(0, area_bottom - bottom))\n",
+               "replace": "        new_top = top + min(0, area_bottom - bottom)\n"}],
+    "must_fail": ["a window is pulled just inside the work area"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "WA04",
+    "about": "The window moves the other way from the one asked (Windows only)",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        user32.SetWindowPos(handle, None, rect.left + dx, rect.top + dy, 0, 0,\n",
+               "replace": "        user32.SetWindowPos(handle, None, rect.left + dx, rect.top - dy, 0, 0,\n"}],
+    "must_fail": ["on Windows the window and its work area are measured"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "WA05",
+    "about": "A question about the window that Windows refuses escapes its guard",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        except Exception:                             # noqa: BLE001\n            self._log_swallowed(\"window kept in the work area\")\n",
+               "replace": "        except ImportError:\n            self._log_swallowed(\"window kept in the work area\")\n"}],
+    "must_fail": ["when the window first shows it is moved inside, once"],
+    "suites": ["qa6"],
+    "expect": "killed"
   }
 ]

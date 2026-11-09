@@ -43,7 +43,7 @@ except ImportError:
 # ---- Version: the one source, bumped by hand at each release by the policy in
 # docs/ROADMAP.md ("Versioning"); recorded in settings, so a newer build can
 # say it was updated ----
-APP_VERSION = "0.100.512"
+APP_VERSION = "0.100.513"
 
 
 def parse_version(v):
@@ -772,6 +772,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # On <Map> for the same reason: before the window is mapped,
         # wm_frame() names a different window. See _stop_whole_repaints.
         self._bind_window_only("<Map>", lambda _e: self._stop_whole_repaints())
+        # And where Windows put it: inside the work area, once.
+        self._bind_window_only("<Map>",
+                               lambda _e: self._keep_window_in_work_area())
 
         self.theme_name = self.load_theme_setting()
         self.colors = THEMES[self.theme_name]
@@ -967,6 +970,84 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         room_w, room_h = self._screen_room()
         return (max(1, min(self.px(width), room_w)),
                 max(1, min(self.px(height), room_h)))
+
+    @staticmethod
+    def _pull_inside(window, area):
+        """How far to move a window, (left, top, right, bottom), so it lies
+        inside *area*: (dx, dy), (0, 0) where it already does. One bigger
+        than the area keeps its top-left corner, and so its title bar, in."""
+        left, top, right, bottom = window
+        area_left, area_top, area_right, area_bottom = area
+        new_left = max(area_left, left + min(0, area_right - right))
+        new_top = max(area_top, top + min(0, area_bottom - bottom))
+        return new_left - left, new_top - top
+
+    def _window_rect_and_work_area(self):
+        """The window's outer rectangle and the work area (the screen less
+        the taskbar) of the monitor it is on, both (left, top, right,
+        bottom) in Windows' own coordinates for this window; None off
+        Windows, or for a window minimized or maximized."""
+        if not sys.platform.startswith("win"):
+            return None
+        import ctypes
+        import ctypes.wintypes
+
+        class MonitorInfo(ctypes.Structure):
+            _fields_ = [("cbSize", ctypes.wintypes.DWORD),
+                        ("rcMonitor", ctypes.wintypes.RECT),
+                        ("rcWork", ctypes.wintypes.RECT),
+                        ("dwFlags", ctypes.wintypes.DWORD)]
+
+        user32 = ctypes.windll.user32
+        handle = ctypes.c_void_p(int(self.wm_frame(), 16))
+        if user32.IsIconic(handle) or user32.IsZoomed(handle):
+            return None
+        rect = ctypes.wintypes.RECT()
+        info = MonitorInfo()
+        info.cbSize = ctypes.sizeof(MonitorInfo)
+        user32.MonitorFromWindow.restype = ctypes.c_void_p
+        monitor_defaulttonearest = 2
+        monitor = user32.MonitorFromWindow(handle, monitor_defaulttonearest)
+        if not (user32.GetWindowRect(handle, ctypes.byref(rect))
+                and user32.GetMonitorInfoW(ctypes.c_void_p(monitor),
+                                           ctypes.byref(info))):
+            return None
+        work = info.rcWork
+        return ((rect.left, rect.top, rect.right, rect.bottom),
+                (work.left, work.top, work.right, work.bottom))
+
+    def _move_window_by(self, dx, dy):
+        """Move the window as a drag would, its size untouched: in Windows'
+        coordinates, the ones _window_rect_and_work_area measured in, so
+        a screen Windows scales for the app (Sharp text off) agrees."""
+        import ctypes
+        import ctypes.wintypes
+        user32 = ctypes.windll.user32
+        handle = ctypes.c_void_p(int(self.wm_frame(), 16))
+        rect = ctypes.wintypes.RECT()
+        user32.GetWindowRect(handle, ctypes.byref(rect))
+        swp_nosize, swp_nozorder, swp_noactivate = 0x0001, 0x0004, 0x0010
+        user32.SetWindowPos(handle, None, rect.left + dx, rect.top + dy, 0, 0,
+                            swp_nosize | swp_nozorder | swp_noactivate)
+
+    def _keep_window_in_work_area(self):
+        """Once, when the window first shows: Windows places it, and a window
+        as tall as the screen allows could open with its foot under the
+        taskbar -- its Settings button half hidden on a 150% screen. Pulled
+        up or left just that far; left where it is when it fits. A failed
+        question changes nothing."""
+        if getattr(self, "_placed_in_work_area", False):
+            return
+        self._placed_in_work_area = True
+        try:
+            found = self._window_rect_and_work_area()
+            if found is None:
+                return
+            dx, dy = self._pull_inside(*found)
+            if dx or dy:
+                self._move_window_by(dx, dy)
+        except Exception:                             # noqa: BLE001
+            self._log_swallowed("window kept in the work area")
 
     # The two window classes Tk registers on Windows, and the class styles
     # that make Windows repaint a window WHOLE whenever its size changes.

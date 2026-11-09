@@ -12,7 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
-| [0.100.512](#0100512--2026-11-08) | 2026-11-08 | The final audit before the stores: what agents found in two weeks of trying to break the app, fixed; the notebook in the profile's own folder; the keyboard everywhere; nothing a file, a paste or a code holds stops the app or freezes it. |
+| [0.100.513](#0100513--2026-11-09) | 2026-11-09 | The final audit before the stores: what agents found in two weeks of trying to break the app, fixed; the notebook in the profile's own folder; the keyboard everywhere; nothing a file, a paste or a code holds stops the app or freezes it. |
 | [0.97.405](#097405--2026-10-27) | 2026-10-27 | The Trash selects all its notes, and deletes the ticked ones for good; its rows follow a new window at once and count real time; the editor's toolbar holds still as a note empties. |
 | [0.96.401](#096401--2026-10-26) | 2026-10-26 | "↩ Restore previous" keeps a note's words when they are replaced, not only shrunk; a table copied from Excel, or its cells copied here and pasted with Ctrl+Shift+V, comes in as a table; words pasted from a web page are found by search. |
 | [0.96.396](#096396--2026-10-24) | 2026-10-24 | A table pasted as markdown text, from a chat or a `.md` file, fits its words instead of arriving with its columns cut short. |
@@ -110,7 +110,7 @@ How the numbers themselves are counted is the
 
 ---
 
-## [0.100.512] — 2026-11-08
+## [0.100.513] — 2026-11-09
 
 *Highlights: the final audit before the stores. For two weeks agents tried to break the app —
 lost notes, hostile and huge input, the keyboard alone, an ordinary person's week, a careless
@@ -432,11 +432,14 @@ or a share code can hold stops the app starting or freezes it.*
 - **A category added at the foot of a long list is brought into sight.**
 - **Long category names end in "…"** in the note's list and on its button, not cut bare at 13
   letters.
+- **The window opens above the taskbar.** Windows chooses where it opens, and a window as tall as
+  the screen allows could open with its foot under the taskbar, the Settings button half hidden;
+  it is moved up or left just that far, once, and left where Windows put it when it fits.
 
 ### Testing
 
 - Every fix landed with a check that fails without it and a mutant that proves the check: the
-  catalogue grew from 422 mutants to 1,156.
+  catalogue grew from 422 mutants to 1,161.
 - `test_data_safety` ends with a fuzz of a series' days: 1,500 roads of edit, move, delete, rule,
   share, backup and restore, after which no day's words are lost or doubled but those deleted or
   typed over.

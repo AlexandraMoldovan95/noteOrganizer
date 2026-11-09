@@ -233,6 +233,7 @@ is in the table below as well.
 | [Wave 2's lows: Ctrl+Z read from a guess, then from the event](#wave-2s-lows-ctrlz-read-from-a-guess-then-from-the-event) | Record an event where it happens, for that event only, rather than inferring it from a state with other causes. | next |
 | [Wave 2's lows: a tab turned behind Settings](#wave-2s-lows-a-tab-turned-behind-settings) | When the same loss comes back by another road, fix the place every road passes, not the road. | next |
 | [Wave 2's lows: the banner that waited](#wave-2s-lows-the-banner-that-waited) | A message held back is about the past: ask it again when it is finally said, and say whose it is. | next |
+| [Wave 5: the window that opened under the taskbar](#wave-5-the-window-that-opened-under-the-taskbar) | A window's size and its place are two answers: one fitted to the screen is only half placed until something checks where it landed. | 0.100.513 |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -4026,6 +4027,31 @@ and timers on the same seam, none above low once round 7 came back clean:
 **Takeaway:** a message held back is a message about the past. Ask it again when it is finally
 said, and say whose it is. And a finding that names its siblings is closed when each sibling is,
 not when the first is.
+
+### Wave 5: the window that opened under the taskbar
+
+*([0.100.513](../CHANGELOG.md#0100513--2026-11-09) · 2026-11-09 · found in the release wave's
+photographs of the Store package, taken inside Windows Sandbox)*
+
+**Symptom:** the package to ship was started eight times, once per theme, on a sandbox at 150%,
+and its window photographed. Twice the sandbox's taskbar covered the window's last 27 px, half of
+the Settings button; the other six launches were higher on the screen and whole.
+
+**Mechanism:** the app sized its window to the work area (the screen less the taskbar), less a
+frame allowance, and left where it opens to Windows. Windows' default place moves from launch to
+launch, and for a window that tall some of those places end below the work area. The size was
+checked at 150% and 200% (qa6); the place never was. The popups were not a sibling: they already
+keep themselves inside the app's window, never the screen, and were half hidden only because the
+window was.
+
+**Fix:** once, when the window first shows, it is moved up or left just as far as it reaches past
+its monitor's work area, and left where Windows put it when it fits (`_keep_window_in_work_area`).
+It is measured and moved in Windows' own coordinates, which agree with the work area's whether or
+not Windows scales the app (Sharp text on or off). qa6 checks the arithmetic, the move made once,
+and on Windows a real move of one pixel; mutants WA01–WA05.
+
+**Takeaway:** a window's size and its place are two answers. A window fitted to the screen is only
+half placed until something checks where it landed.
 
 ## Tk & platform gotchas
 

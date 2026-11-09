@@ -4069,6 +4069,70 @@ else:
           _st_rows == [] and NO._draw_sharp_on_scaled_screens() is False)
 app.hide_settings_page(); app.notebook.select(app.TAB_NOTES); app.update()
 
+# Where the window opens. Windows places it; one as tall as the screen allows
+# opened, in Windows Sandbox at 150%, with its foot under the taskbar and the
+# Settings button half hidden. Pulled inside its monitor's work area once,
+# when it first shows; left alone when it fits.
+_wa_pull = NO.NoteOrganizer._pull_inside
+_wa_cases = {
+    'fits': (_wa_pull((100, 100, 900, 700), (0, 0, 1920, 1032)), (0, 0)),
+    'foot under the taskbar': (_wa_pull((100, 120, 1454, 1067), (0, 0, 1920, 1032)), (0, -35)),
+    'past the right edge': (_wa_pull((1000, 100, 2354, 1047), (0, 0, 1920, 1080)), (-434, 0)),
+    'bigger than the screen': (_wa_pull((50, 50, 2050, 1150), (0, 0, 1920, 1032)), (-50, -50)),
+    'a second monitor, from its left and top': (
+        _wa_pull((1800, -20, 2600, 600), (1920, 0, 3840, 1040)), (120, 20)),
+}
+check(f'a window is pulled just inside the work area, its title bar kept in when '
+      f'it is bigger ({ {k: v[0] for k, v in _wa_cases.items() if v[0] != v[1]} })',
+      all(got == want for got, want in _wa_cases.values()))
+
+_wa_moves, _wa_logged = [], []
+_wa_kept_log = app._log_swallowed
+app._log_swallowed = lambda where: _wa_logged.append(where)
+app._window_rect_and_work_area = lambda: ((100, 120, 1454, 1067), (0, 0, 1920, 1032))
+app._move_window_by = lambda dx, dy: _wa_moves.append((dx, dy))
+app._placed_in_work_area = False
+try:
+    for _ in range(2):
+        app.withdraw(); app.update()
+        app.deiconify(); app.update()
+    _wa_once = list(_wa_moves)
+
+    def _wa_refuse():
+        raise OSError('the window manager would not say')
+    app._window_rect_and_work_area = _wa_refuse
+    app._placed_in_work_area = False
+    app.withdraw(); app.update()
+    app.deiconify(); app.update()
+finally:
+    del app._window_rect_and_work_area, app._move_window_by
+    app._log_swallowed = _wa_kept_log
+    app._placed_in_work_area = True
+    app.update()
+check(f'when the window first shows it is moved inside, once, and a question '
+      f'Windows refuses only leaves a line in the crash log ({_wa_once}; {_wa_logged})',
+      _wa_once == [(0, -35)] and _wa_logged == ['window kept in the work area'])
+
+if sys.platform.startswith('win'):
+    # The real questions, of the suite's own window: a rectangle and its
+    # monitor's work area, and a move of one pixel that is one pixel.
+    _wa_found = app._window_rect_and_work_area()
+    _wa_moved = None
+    if _wa_found:
+        app._move_window_by(0, -1)
+        _wa_moved = app._window_rect_and_work_area()
+        app._move_window_by(0, 1)
+    _wa_back = app._window_rect_and_work_area()
+    check(f'on Windows the window and its work area are measured, and a move '
+          f'moves it as asked ({_wa_found}; {_wa_moved}; {_wa_back})',
+          bool(_wa_found) and all(r[2] > r[0] and r[3] > r[1] for r in _wa_found)
+          and _wa_moved is not None
+          and _wa_moved[0] == tuple(v - (i % 2) for i, v in enumerate(_wa_found[0]))
+          and _wa_back == _wa_found)
+else:
+    check('off Windows the window is left where the window manager puts it',
+          app._window_rect_and_work_area() is None)
+
 
 # ---- SPELLING ----
 # Misspelled words underlined in the note and its comments, judged by
