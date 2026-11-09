@@ -146,6 +146,10 @@ or a share code can hold stops the app starting or freezes it.*
   read "Default font" and "Default size".
 - **A card keeps a note's lines apart with " · "**, shows a list item's words without its marker,
   and leaves out an item with no words.
+- **The Microsoft Store package asks for Windows 11, version 24H2 or later**, the oldest Windows
+  it was proved on; the Store does not offer it on an older one. It had said Windows 10 version
+  1809 without ever running there
+  ([why](docs/RELEASE_WINDOWS.md#which-windows)).
 
 ### Fixed
 

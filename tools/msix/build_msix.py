@@ -11,6 +11,11 @@ Store signs what it publishes, and a test package is signed inside Windows
 Sandbox (make_sandbox_test.py), so this machine's certificate stores are
 never touched. The Store also wants a Major of 1 or more: 0.x.y.0 is for
 Sandbox only.
+
+MinVersion is Windows 11, version 24H2 (build 26100): the oldest Windows the
+package was proved on, in Windows Sandbox. Below it the Store does not offer
+the app. The owner's choice, 2026-11-09: what was never tried is not declared
+(docs/RELEASE_WINDOWS.md, "Which Windows").
 """
 import argparse
 import glob
@@ -39,7 +44,7 @@ MANIFEST = """<?xml version="1.0" encoding="utf-8"?>
     <Logo>Assets\\StoreLogo.png</Logo>
   </Properties>
   <Dependencies>
-    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0"/>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.26100.0" MaxVersionTested="10.0.26100.0"/>
   </Dependencies>
   <Resources>
     <Resource Language="en-us"/>

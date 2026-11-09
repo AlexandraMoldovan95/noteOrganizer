@@ -88,6 +88,21 @@ through the update, the uninstall and the reinstall, the package's private copy 
 and AppData was untouched. The sandbox runs without a virtual GPU: started from the Start menu,
 it lost its connection on this machine.
 
+### Which Windows
+
+The package asks for **Windows 11, version 24H2 or later**: `MinVersion="10.0.26100.0"` in the
+manifest `build_msix.py` writes. Below it Windows does not count the package as applicable, so
+the Store does not offer the app there
+([TargetDeviceFamily](https://learn.microsoft.com/en-us/uwp/schemas/appxpackage/uapmanifestschema/element-targetdevicefamily));
+the Store accepts any Windows 10 or 11 version it supports, given in that attribute
+([package requirements](https://learn.microsoft.com/en-us/windows/apps/publish/publish-your-app/msix/app-package-requirements#supported-versions)).
+
+The owner's choice, 2026-11-09: what was never tried is not declared. The package had said
+Windows 10 version 1809 (`10.0.17763.0`) while it had only ever run on Windows 11; trying it on
+Windows 10 needs a virtual machine this project does not have. Windows Sandbox is 24H2, the
+oldest version it was proved on. Versions 21H2 to 23H2 no longer get updates on Home and Pro.
+Lowering the number later is a new package and a new proof on that Windows, never only an edit.
+
 Four things wait for the listing, when there is one:
 
 - **The privacy policy's address**, which Partner Center asks for: Microsoft requires a policy for

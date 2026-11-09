@@ -1009,7 +1009,7 @@ def main():
     index_values.update({
         "version": version,
         "og": og_tags(config, "", "Note Organizer",
-                      "An offline notes app for Windows, with a web demo you can try "
+                      "An offline notes app for Windows 11, with a web demo you can try "
                       "in the browser."),
         "nav": nav_html("index.html"),
         "android_version": droid["version"],

@@ -534,7 +534,7 @@
     var welcome = add({
       title: "Welcome to the demo \u{1F44B}", pinned: true,
       html: "<div>This page is a re-creation of Note Organizer's interface, so you can try it " +
-        "without installing anything. The real app is a Windows program; what you do here is " +
+        "without installing anything. The real app is a Windows 11 program; what you do here is " +
         "kept in this browser only.</div><div><br></div>" +
         "<div><b>\u{1F4DD} Write</b></div><ul><li><b>+ New Note</b> starts a note. Give it a title " +
         "and write; it saves itself as you go.</li><li>The toolbar shapes your words: bold, " +
@@ -1931,7 +1931,7 @@
     } else {
       body.appendChild(el("h2", { text: "About this demo" }));
       body.appendChild(el("div", { class: "set-panel about" },
-        el("p", { text: "Note Organizer is a desktop app for Windows, written in Python with Tkinter. A browser cannot run it, so this page is a re-creation of its interface in HTML and JavaScript, written to let you try the everyday parts without installing anything." }),
+        el("p", { text: "Note Organizer is a desktop app for Windows 11, written in Python with Tkinter. A browser cannot run it, so this page is a re-creation of its interface in HTML and JavaScript, written to let you try the everyday parts without installing anything." }),
         el("p", { text: "Where the app has an exact rule, the demo follows it, taken from the app's own code: the eight themes and the arithmetic that picks readable letters on every colour, how a repeating note lands on the calendar, the order of each sort, the share-code format, and the fonts, sizes and indent the formatting bar offers." }),
         el("p", { text: "Only in the desktop app: attachments, templates, backups to another computer, statistics, finding duplicates, editing a single day of a repeating note, a list you arrange by hand, find-in-note, and a calculator." }),
         el("p", null, "It mirrors version " + A.version + ". Everything you type is kept in this browser's storage, on this device, and nowhere else. ",

@@ -50,6 +50,8 @@ every major feature.
 Note Organizer runs as a single window with two tabs, **Notes** and **Calendar**, plus a
 **Settings** page reached via its own button at the bottom of the sidebar. Everything is stored
 locally on your own computer — there's no account to create and no internet connection required.
+It needs Windows 11, version 24H2 or later; the Microsoft Store does not offer it on an older
+Windows ([why](RELEASE_WINDOWS.md#which-windows)).
 Run from source, the data folder sits next to the script — or wherever a `notebook_location.txt`
 beside it says, one folder path on a line (`%LOCALAPPDATA%\MyNotes`, say); the installed app
 keeps it per-user in a `Note Organizer` folder in your user folder, beside Documents (worth
