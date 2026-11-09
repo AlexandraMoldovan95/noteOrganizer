@@ -378,7 +378,8 @@ both would double-count the same work.
 
 Bump the version, and cut `CHANGELOG.md`'s `[Unreleased]` section into that new version number
 (with today's date), every time `note_organizer.py` changes and the app gets rebuilt for real
-use — the same moment a `.exe` rebuild is already called for. Docs-only changes don't move the
+use — the same moment a `.exe` rebuild is already called for. The same cut gives the stories
+marked `next` in the [issues log's index](ISSUES_LOG.md#the-stories-at-a-glance) the new number. Docs-only changes don't move the
 version, same as they don't call for a rebuild. If several small PRs land back-to-back before the
 next rebuild, they share one bump — the trigger is "about to rebuild," not "one bump per PR."
 
