@@ -73,20 +73,49 @@ tools and the App Certification Kit) and, for the proof, Windows Sandbox:
 
 ```powershell
 py tools/msix/build_msix.py --update    # dist/msix: the package, and one a build higher
-py tools/msix/make_sandbox_test.py      # dist/msix/NoteOrganizer-msix-test.wsb
+py tools/msix/make_sandbox_test.py      # dist/msix: a .wsb file for each of three proofs
 ```
 
-Double-clicking the `.wsb` opens a disposable Windows in which `sandbox_test.ps1` signs both
-packages with a certificate made there, puts an older `.exe`'s notebook in AppData, and installs,
-starts, updates, uninstalls and reinstalls the app; `dist/msix/out/result.txt` says after each
-step what the profile's notebook, the package's private copy and AppData hold — and, after each
-install, whether the licenses About opens are inside the package — and a message says
-when it is done. Nothing touches this machine's certificates or notebooks. The identity is a test
-one (`NoteOrganizer.Test`) until Partner Center reserves the Store's, and a Major of `0` is for
-Sandbox only. Run on 2026-10-27: the old notebook came in, both notes stayed byte for byte
-through the update, the uninstall and the reinstall, the package's private copy held no file,
-and AppData was untouched. The sandbox runs without a virtual GPU: started from the Start menu,
-it lost its connection on this machine.
+`make_sandbox_test.py` refuses while `dist/msix` holds any package but that pair: the first proof
+installs the lowest package there and updates to the highest, and with an older release's
+packages left beside it would have played an update from that one.
+
+Double-clicking a `.wsb` opens a disposable Windows whose script signs the packages with a
+certificate made there. Only `dist/msix/out` leaves it; a message says when it is done, and
+closing the window throws the rest away. Nothing touches this machine's certificates or
+notebooks. The identity is a test one (`NoteOrganizer.Test`) until Partner Center reserves the
+Store's, and a Major of `0` is for Sandbox only. The sandboxes run without a network, and without
+a virtual GPU: started from the Start menu, one lost its connection on this machine.
+
+| `.wsb` | What it proves | Last run |
+|---|---|---|
+| `NoteOrganizer-msix-test.wsb` | The package's life. An older `.exe`'s notebook in AppData; install, start, update, uninstall, reinstall; after each step, what the profile's notebook, the package's private copy and AppData hold, and whether the licenses About opens are inside the package (`out/result.txt`). | 2026-10-27, and 2026-11-09 for 0.100.512 and 0.100.513: the old notebook came in, both notes byte for byte through the update, the uninstall and the reinstall; the private copy held no file; AppData untouched. |
+| `NoteOrganizer-msix-look.wsb` | The package to ship on a Windows with 2 GB of memory, started in each of the eight themes on a notebook of 40 notes: how soon the window shows, whether it lies inside the work area, a photo of it, the app's memory, a close as the X closes it, the theme kept, no crash log (`out/look/`). | 2026-11-09 for 0.100.513, at the sandbox's 150%: all eight themes; the window in 1 s and inside the work area every time; the app 67 MB (37 MB its own), with about 330 MB of the sandbox's left. For 0.100.512 two of the eight had opened with their foot under the taskbar ([why](ISSUES_LOG.md#wave-5-the-window-that-opened-under-the-taskbar)). |
+| `NoteOrganizer-msix-wack.wsb` | The Windows App Certification Kit, as Partner Center runs it (`out/wack/`). | 2026-11-09 for 0.100.512: overall WARNING, below. |
+
+#### The certification kit (WACK)
+
+WACK installs the package it tests and starts the app, which on this computer would open the
+owner's notebook, and it needs a test certificate trusted; so it runs only in the sandbox. The kit
+alone does not run there. `make_sandbox_test.py` maps in its test engine (TAEF, the SDK's
+`Testing` folder), Windows' metadata and API contracts (`UnionMetadata`, `References`,
+`Platforms`), and reads the kit's COM classes and type libraries out of this computer's registry
+with `reg export`, for the sandbox to import. A run without each of them stopped at it.
+
+Run on 2026-11-09 for 0.100.512, the result was **WARNING**, which is not a failure: 23 tests
+passed, and two did not.
+
+- **Blocked executables** failed. It is an optional test, and optional tests "are informational
+  only and will not be used to evaluate your app during Microsoft Store onboarding"
+  ([Desktop Bridge app tests](https://learn.microsoft.com/en-us/windows/uwp/debug-test-perf/windows-desktop-bridge-app-tests)).
+  It found `CreateProcessW` and `ShellExecuteW` in Python's and Tcl's libraries, and the word
+  "cmd" in Tcl's scripts. The app starts no program by name: it opens a file or a folder with the
+  program Windows gives it, and the privacy policy in the browser. The same page says a flagged
+  file that is part of the app may be ignored.
+- **DPI awareness** gave a warning: the `.exe` declares no per-monitor awareness. The app declares
+  system awareness itself as it starts, and only while Sharp text is on. Per-monitor awareness needs
+  redraws Tk cannot do ([why](ARCHITECTURE.md#sharp-on-a-scaled-screen-every-size-is-given-at-100)),
+  and a declaration inside the `.exe` would take the setting away.
 
 ### Which Windows
 
