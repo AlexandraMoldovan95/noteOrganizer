@@ -828,7 +828,9 @@ class NoteListMixin:
             notes.sort(key=lambda n: (not _s(n, "title").strip(),
                                       fold_for_search(_s(n, "title")), _s(n, "title")))
         elif choice == "Title Z–A":
-            notes.sort(key=lambda n: (not _s(n, "title").strip(),
+            # Untitled notes sink here too: A–Z's whole key reversed raised
+            # them to the top, so their mark is turned over before the reverse.
+            notes.sort(key=lambda n: (bool(_s(n, "title").strip()),
                                       fold_for_search(_s(n, "title")), _s(n, "title")),
                        reverse=True)
         elif choice == "Category":

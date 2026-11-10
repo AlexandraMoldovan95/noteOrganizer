@@ -712,6 +712,16 @@ app.sort_var.set('Title A–Z')
 _rs_order = rendered_order()
 check(f'Title A–Z puts a letter with a mark beside the letter ({_rs_order})',
       _rs_order == ['\u0102dam', 'Ana', '\u00celie', 'Sam', '\u0218erban', '\u0162epe\u015f', 'Zebra'])
+# Untitled notes sink in both orders: Z–A reversed A–Z's whole key, and
+# the untitled ones rose to the top.
+app.notes = [dict(_rs_notes[0], id=320 + i, title=t)
+             for i, t in enumerate(['Banana', '', 'Apple', '   ', 'Cherry'])]
+for _ut_sort, _ut_want in (('Title A–Z', ['Apple', 'Banana', 'Cherry']),
+                           ('Title Z–A', ['Cherry', 'Banana', 'Apple'])):
+    app.sort_var.set(_ut_sort)
+    _ut_order = rendered_order()
+    check(f'{_ut_sort} keeps the untitled notes at the bottom ({_ut_order})',
+          _ut_order[:3] == _ut_want and [t.strip() for t in _ut_order[3:]] == ['', ''])
 app.notes = _rs_notes
 
 # ---- SORT DROPDOWN WIDTH (regression) ----

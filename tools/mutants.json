@@ -17467,5 +17467,15 @@
     "must_fail": ["bold on every item of a renumbered 120-item list stays on its word"],
     "suites": ["test_richtext"],
     "expect": "killed"
+  },
+  {
+    "id": "PF03",
+    "about": "Title Z–A reverses A–Z's whole key, and the untitled notes rise to the top",
+    "edits": [{"file": "noteorganizer/ui/note_list.py",
+               "find": "            notes.sort(key=lambda n: (bool(_s(n, \"title\").strip()),\n",
+               "replace": "            notes.sort(key=lambda n: (not _s(n, \"title\").strip(),\n"}],
+    "must_fail": ["Title Z–A keeps the untitled notes at the bottom"],
+    "suites": ["qa1"],
+    "expect": "killed"
   }
 ]
