@@ -305,7 +305,7 @@ a Windows check.
 ## Photographs: did a screen change shape while nobody was looking?
 
 `py qa/story_look.py` opens the app on a fixed little notebook,
-photographs every scene in its `SCENES` list (thirty-two on 2 November
+photographs every scene in its `SCENES` list (thirty-three on 11 November
 2026) — the list, the editor, the calendar,
 Settings sections, a light theme, and the popups, panels and states that
 releases changed — and compares each against the copy in `qa/screens/`. Those

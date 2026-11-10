@@ -11842,6 +11842,17 @@ _cells14 = []
 for topl in _size_pop:
     _cells14 += [c for c in _walk_widgets(topl, (tk.Frame, tk.Label))
                  if str(c.cget('cursor')) == 'hand2']
+# Every column drawn, so the squares lit are the table's shape: drawn from
+# the second, the first square said "1 x 2" and lit one.
+_tp_lit, _tp_said = None, []
+if _cells14:
+    _qa_fire(_cells14[0], '<Enter>')
+    app.update()
+    _tp_lit = sum(1 for c in _cells14 if str(c.cget('bg')) == app.colors['accent'])
+    _tp_said = [str(w.cget('text')) for topl in _size_pop
+                for w in _walk_widgets(topl, tk.Label) if 'table' in str(w.cget('text'))]
+check(f'the size grid lights two squares for the smallest table ({_tp_lit} lit, {_tp_said})',
+      _tp_lit == 2 and _tp_said == ['1 x 2 table'])
 picked = False
 for c in _cells14:
     _qa_fire(c, '<Enter>')
@@ -17203,7 +17214,9 @@ try:
     _kp_cells = _kp_choices()
     _kp_key(_kp_cells[0] if _kp_cells else None, '<Down>')
     _kp_held = _kp_asked[-1] if _kp_asked else None
+    # The first two squares both make two columns: the third makes three.
     _kp_key(_kp_held, '<Right>')
+    _kp_key(_kp_asked[-1] if _kp_asked else None, '<Right>')
     _kp_caption = [str(w.cget('text')) for w in _walk_widgets(app._mini_popup, tk.Label)
                    if 'table' in str(w.cget('text'))] if app._mini_popup else []
     _kp_key(_kp_asked[-1] if _kp_asked else None, '<Return>')

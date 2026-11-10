@@ -17487,5 +17487,15 @@
     "must_fail": ["find/cell: a table is searched row by row, as it is read"],
     "suites": ["qa1"],
     "expect": "killed"
+  },
+  {
+    "id": "PF05",
+    "about": "The table size grid starts at its second column, and two columns light one square",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            for column in range(1, self.TABLE_GRID_COLUMNS + 1):\n",
+               "replace": "            for column in range(2, self.TABLE_GRID_COLUMNS + 1):\n"}],
+    "must_fail": ["the size grid lights two squares for the smallest table"],
+    "suites": ["qa1"],
+    "expect": "killed"
   }
 ]

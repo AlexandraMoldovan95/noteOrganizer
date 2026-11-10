@@ -665,6 +665,30 @@ app._hide_toast()
 app.update()
 app.update_idletasks()
 """),
+    # The Insert table grid, the keyboard on the second row's third square:
+    # the squares lit are the table it makes, 2 x 3. Drawn from its second
+    # column, it lit one square fewer than the caption said.
+    ("33-the-table-grid-lights-the-table-it-makes", """
+app._dismiss_mini_popup()
+app._working_checklist = []
+app._render_checklist_items()
+app.hide_settings_page()
+app.notebook.select(app.TAB_NOTES)
+app.open_note_in_tab(app.notes[1])
+app.update()
+app._cancel_pending_autosave()
+app.focus_force()
+app.update()
+app._open_table_size_popup()
+app.update()
+_cells = app._walk_choices(app._mini_popup)
+if len(_cells) > 10:
+    _cells[10].focus_force()
+app.update()
+app._hide_toast()
+app.update()
+app.update_idletasks()
+"""),
 ]
 
 SEED = [

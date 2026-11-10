@@ -8635,15 +8635,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             highlight(0, 0)
             caption.configure(text="Insert table")
 
-        # Columns start at two: a one-column run of pipes is not
-        # recognisable as a table row (| x | in prose would be one), so
-        # the picker never offers a shape that cannot exist.
+        # Every column drawn, so the squares lit are the table's shape; the
+        # first chooses two, the least a table has: a one-column run of
+        # pipes is not recognisable as a table row (| x | in prose would be
+        # one). Drawn from the second, two columns lit one square.
         for r in range(1, self.TABLE_GRID_ROWS + 1):
-            for c in range(2, self.TABLE_GRID_COLUMNS + 1):
+            for column in range(1, self.TABLE_GRID_COLUMNS + 1):
+                c = max(2, column)
                 cell = tk.Frame(grid, width=self.px(14), height=self.px(14),
                                 cursor="hand2",
                                 bg=inset_surface(self.colors))
-                cell.grid(row=r, column=c, padx=1, pady=1)
+                cell.grid(row=r, column=column, padx=1, pady=1)
                 cell.bind("<Enter>", lambda e, r=r, c=c: highlight(r, c))
                 # "break": this destroys the popup the cell is in (see
                 # _show_inline_rename).
@@ -8656,7 +8658,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     self._dismiss_mini_popup(), self._insert_table(r, c)),
                     walk=True)
                 cell.bind("<FocusIn>", lambda e, r=r, c=c: highlight(r, c))
-                cells[(r, c)] = cell
+                # By the column drawn: the first two both make two columns.
+                cells[(r, column)] = cell
         grid.bind("<Leave>", leave)
 
         hint = tk.Label(body, text="Tab moves between cells",

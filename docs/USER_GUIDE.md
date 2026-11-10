@@ -305,9 +305,10 @@ nearest one would claim the note is set in something it never was.*
 ### Tables
 
 The table button on the toolbar opens a small size grid — sweep across it to choose how many rows
-and columns, and a table appears at the cursor with the first cell ready to type into. (Tables
-start at two columns: a single-column row of pipes reads as ordinary text, not a table, so the
-picker never offers one.) A very large table — over 400 rows, or 3,000 cells, or one too tall to
+and columns, and a table appears at the cursor with the first cell ready to type into; the
+squares lit are the table you get. (Tables start at two columns: a single-column row of pipes
+reads as ordinary text, not a table, so the grid's first square makes two columns as well.) A
+very large table — over 400 rows, or 3,000 cells, or one too tall to
 draw (tall cells count) — is shown as its text, the rows of `|` it is kept as, so the note stays quick to open; nothing in it changes.
 
 ![A table in a note, with a highlighted header row](screenshots/tables.png)
