@@ -1284,7 +1284,17 @@ check(f'an animated PNG shows and plays every frame, and lets its file go '
 app._dismiss_mini_popup(); app.update()
 # A frame of 0.6 ms ticked every millisecond, half a core while the
 # preview was open. 10 ms and less plays at 100, as browsers play it.
-_fd_got = {d: app._frame_delay({'duration': d})
+
+
+def _fd_of(duration):
+    # What it raises is the check's answer, not the end of the suite.
+    try:
+        return app._frame_delay({'duration': duration})
+    except Exception as exc:
+        return repr(exc)
+
+
+_fd_got = {d: _fd_of(d)
            for d in (0.6, 1.5, 10, 10.4, 11, 20, 40.0, None, 'junk')}
 check(f'a frame of 10 ms or less plays at 100 ms, a longer one as it says '
       f'({_fd_got})',

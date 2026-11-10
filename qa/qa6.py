@@ -4781,10 +4781,13 @@ _kb_where = {'the notes page': _kb_unreachable(app)}
 # An attachment opens from the keyboard as a click opens it: its name was a
 # label bound to the mouse alone, and only the remove ✕ beside it was a Tab
 # stop. A picture's preview takes the keyboard on its Close, Escape shuts
-# it, and the keyboard goes back to the row.
-_ka_names = [w for w in app.attachments_frame.winfo_children()
-             for w in w.winfo_children() for w in w.winfo_children()
-             if isinstance(w, tk.Label) and getattr(w, '_key_press', None)]
+# it, and the keyboard goes back to the row. The names are found where the
+# rows hold them, and the clicks below take those: a name that lost its keys
+# fails the key checks, and the click checks after them still run.
+_ka_rows = [w for w in app.attachments_frame.winfo_children()
+            for w in w.winfo_children() for w in w.winfo_children()
+            if isinstance(w, tk.Label)]
+_ka_names = [w for w in _ka_rows if getattr(w, '_key_press', None)]
 _ka_opened = []
 _ka_real_start = getattr(NO.os, 'startfile', None)
 NO.os.startfile = lambda p, *a, **k: _ka_opened.append(os.path.basename(p))
@@ -4838,7 +4841,7 @@ _kp_in_body = False
 try:
     _kp_in_body = _take_focus(app.body_text)
     app.body_text.tag_add('sel', '1.0', 'end-1c')
-    _qa_click(_ka_names[1])
+    _qa_click(_ka_rows[1])
     _kv_settle()
     _kp_pop = app._mini_popup
     # Generated on the window, so Tk sends each key where the keyboard is.
@@ -4882,7 +4885,7 @@ app._open_externally = lambda path, *a, **k: _kr_opened.append(os.path.basename(
 try:
     for _kr_key, _kr_steps in _kr_keys:
         _take_focus(app.body_text)
-        _qa_click(_ka_names[1])
+        _qa_click(_ka_rows[1])
         _kv_settle()
         _kr_pop = app._mini_popup
         for _ in range(_kr_steps):                      # Tab to Open externally
@@ -4933,13 +4936,13 @@ def _kh_on():
     held, pop = _ka_holder(), app._mini_popup
     if pop is not None and held is not None and str(held).startswith(str(pop) + '.'):
         return str(held.cget('text'))
-    return 'the name' if held is _ka_names[1] else str(held)[-24:]
+    return 'the name' if held is _ka_rows[1] else str(held)[-24:]
 
 
 try:
     for _kh_shape, _kh_t in (('presses alone', 100_000), ('release and press', 200_000)):
         del _kh_built[:]
-        _take_focus(_ka_names[1])
+        _take_focus(_ka_rows[1])
         _kh_key('Press', _kh_t)
         for _kh_i in range(10):
             _kh_when = _kh_t + 500 + 33 * _kh_i
@@ -4976,7 +4979,7 @@ try:
     for _ks_key, _ks_box in (('<Control-f>', lambda: getattr(app, '_find_entry', None)),
                              ('<Control-n>', lambda: app.title_entry)):
         _take_focus(app.body_text)
-        _qa_click(_ka_names[1])
+        _qa_click(_ka_rows[1])
         _kv_settle()
         _ks_pop, _ks_held = app._mini_popup, _ka_holder()
         _ks_ready = (_ks_pop is not None and _ks_held is not None

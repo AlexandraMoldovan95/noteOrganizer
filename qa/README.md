@@ -402,7 +402,28 @@ A new surface joins this list the moment it ships.
   script's FAILURES footer, never just grep for FAIL lines: a mutant
   that crashes the import prints no failures at all, and reads as
   "survived nothing" when it really ran nothing (this exact false-clean
-  happened here once; the runner refuses it).
+  happened here once; the runner refuses it). A mutant only one system
+  can kill says so, `"only_on"` with a note why; elsewhere the runner
+  names it ELSEWHERE and runs nothing.
+- **What a check works out before it judges must fail, not raise.** A
+  mutant that makes a helper raise, or empties a list the check indexes,
+  ends in a FAIL line and the suite goes on. qa7 worked out its frame
+  times outside any guard, qa6 clicked "the second name" in a list of
+  names found by the very keys the mutant took away, qa5 looked up a
+  note kept aside the mutant never made, and qa1 read a value the app
+  makes only when it first shows words beneath the banner; each suite
+  stopped halfway, the rest of its checks unrun (the whole catalogue's
+  run, 2026-11-10). Find what a check clicks by where it sits, not by
+  the property under test; look up with a default, `next(..., None)`;
+  read what the app makes late as the app reads it, `getattr` with a
+  default.
+- **A check aims where its guard alone stands.** A later, wider fix can
+  answer the same input first. A word qa1 copied from the middle of an
+  indented line stayed unindented by the later line-start rule, and the
+  guard the check was written for went untested. A road one system always
+  takes first hides another the same way: on Windows the formatted Cut
+  takes every Cut, so the list's own Cut runs only when another program
+  holds the clipboard, and qa1 now makes that happen.
 - **A fixture never sizes itself from a value a mutant can change.** A
   mutant made a long list's chunk a billion rows, and checks that built
   "two chunks' worth" began building two billion: 43 GB, and the owner's

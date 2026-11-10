@@ -20,6 +20,12 @@ tested: --self-test runs the two entries marked "self_test": true, one of
 each kind. Marked, not told by their first letter: SP, the spelling's
 mutants, start with S too.
 
+"only_on": "win32" or "linux" marks a mutant only that system can kill: a
+check that runs on one system alone (a file name holding a colon exists
+only on Linux), or code the other never takes. Elsewhere it is ELSEWHERE,
+named and not run: its verdict there would be wrong every time, and a wrong
+verdict that is always excused hides the one that is not. Its note says why.
+
 HOW A VERDICT IS REACHED
 ------------------------
 1. A fresh copy of the code and the tests goes into a temp folder outside
@@ -58,6 +64,7 @@ import guest  # tools/guest.py: the turn and the memory ceiling for a run
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 CATALOGUE = os.path.join(HERE, "mutants.json")
+ONLY_ON = ("win32", "linux")      # an entry's "only_on", as sys.platform starts
 RUNNER_FOOTERS = (b"check(s) failed", b"check(s) passed")
 # One mutant's suites may take this long each (run_tests' own limit for a
 # script), plus a margin for the copy: a hang is a verdict, not the end.
@@ -181,7 +188,16 @@ def load_catalogue():
             sys.exit("catalogue entry %s expects a kill but names no check" % e["id"])
         if e["expect"] == "survives" and e["must_fail"]:
             sys.exit("catalogue entry %s expects to survive but names checks" % e["id"])
+        # Misspelt, it would be ELSEWHERE on every system, and never run.
+        if e.get("only_on", "win32") not in ONLY_ON:
+            sys.exit("catalogue entry %s is only_on %r, not one of %s"
+                     % (e["id"], e["only_on"], ", ".join(ONLY_ON)))
     return entries
+
+
+def runs_here(entry):
+    """Whether this system can kill *entry* (its "only_on", if any)."""
+    return sys.platform.startswith(entry.get("only_on", sys.platform))
 
 
 def main(argv):
@@ -217,8 +233,13 @@ def main(argv):
             return 2
         todo = [e for e in entries
                 if not wanted or any(e["id"].startswith(w) for w in wanted)]
-    wrong = []
+    wrong, elsewhere = [], []
     for entry in todo:
+        if not runs_here(entry):
+            print("%-9s %s %s   (only %s can kill it)" % (
+                "ELSEWHERE", entry["id"], entry["about"], entry["only_on"]))
+            elsewhere.append(entry["id"])
+            continue
         status, died, text = verdict(entry)
         expected = "KILLED" if entry["expect"] == "killed" else "SURVIVED"
         ok = status == expected
@@ -234,7 +255,15 @@ def main(argv):
                 print("            " + "\n            ".join(text.splitlines()[-12:]))
         sys.stdout.flush()
     print()
-    print("%d of %d verdicts as the catalogue expects" % (len(todo) - len(wrong), len(todo)))
+    ran = len(todo) - len(elsewhere)
+    print("%d of %d verdicts as the catalogue expects" % (ran - len(wrong), ran))
+    if elsewhere:
+        print("%d not run here, which only another system can kill: %s"
+              % (len(elsewhere), " ".join(elsewhere)))
+    if not ran:
+        # Green for nothing run would read as the asked-for mutants proved.
+        print("nothing here to run: every mutant asked for is another system's")
+        return 2
     for mid in wrong:
         print("   wrong: %s" % mid)
     return 0 if not wrong else 1

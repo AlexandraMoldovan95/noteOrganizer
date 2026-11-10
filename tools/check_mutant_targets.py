@@ -5,7 +5,8 @@ when someone runs that mutant, and a run names the mutants it is asked for.
 A later fix split the two lines Q05 mutated, and for a day it guarded
 nothing without anyone being told. This reads the catalogue on every run of
 the gates: each "find" must occur exactly once in its file, and a mutant
-expected to live must say why in its note.
+expected to live, or killed only on one system ("only_on"), must say why in
+its note.
 
     py tools/check_mutant_targets.py
 """
@@ -32,6 +33,13 @@ def main():
         # since one of its equivalents said only what it would do.
         if entry.get("expect", "killed") != "killed" and not entry.get("note", "").strip():
             lost.append("%s: expected to live (%s), with no note saying why" % (entry["id"], entry["expect"]))
+        # One that only a system can kill says why, and names a system the
+        # runner knows: misspelt, it is run nowhere (tools/mutate.py).
+        if "only_on" in entry:
+            if entry["only_on"] not in ("win32", "linux"):
+                lost.append("%s: only_on %r is not win32 or linux" % (entry["id"], entry["only_on"]))
+            if not entry.get("note", "").strip():
+                lost.append("%s: only_on %s, with no note saying why" % (entry["id"], entry["only_on"]))
     for entry in entries:
         for edit in entry["edits"]:
             path = os.path.join(ROOT, edit["file"])

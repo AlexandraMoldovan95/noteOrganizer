@@ -2615,7 +2615,9 @@
     "must_fail": ["every heading of the welcome note starts with an icon from the emoji block",
                   "every heading of the welcome note starts its title in one column"],
     "suites": ["test_data_safety", "qa5"],
-    "expect": "killed"
+    "expect": "killed",
+    "only_on": "win32",
+    "note": "Killed on Windows, where the app ships: qa5 measures the headings' column only there, where the emoji font draws the icons."
   },
   {
     "id": "Y07",
@@ -3675,6 +3677,7 @@
     "must_fail": ["a deleted_at before 1970 is still past the window"],
     "suites": ["test_data_safety"],
     "expect": "killed",
+    "only_on": "win32",
     "note": "Killed on Windows, where the app runs: Linux's mktime reaches 1900, so the fallback is never taken there and the check holds either way."
   },
   {
@@ -3767,14 +3770,15 @@
     "edits": [
       {
         "file": "noteorganizer/core/paths.py",
-        "find": "        home = get_user_notebook_dir()\n        if _is_writable(home):\n            return home, None\n",
+        "find": "        if _is_writable(home):\n            return home, None\n",
         "replace": ""
       }
     ],
     "must_fail": ["the built app keeps its notebook in the profile, beside Documents"],
     "suites": ["test_data_safety"],
     "expect": "killed",
-    "note": "Killed on Windows, where the app runs; elsewhere the profile folder is the AppData equivalent and the check is a different one."
+    "only_on": "win32",
+    "note": "Killed on Windows, where the app runs; elsewhere the profile folder is the AppData equivalent and the check is a different one. The folder is still named, as the fallback's message names it: only its choice goes (taking the name too ended the suite in a NameError, 2026-11-10)."
   },
   {
     "id": "NP02",
@@ -3789,6 +3793,7 @@
     "must_fail": ["a notebook the built app has is never replaced by AppData's"],
     "suites": ["test_data_safety"],
     "expect": "killed",
+    "only_on": "win32",
     "note": "Killed on Windows, where the app runs."
   },
   {
@@ -3804,6 +3809,7 @@
     "must_fail": ["even listed as a leftover, the profile's notebook is never cleared"],
     "suites": ["test_data_safety"],
     "expect": "killed",
+    "only_on": "win32",
     "note": "Killed on Windows, where the app runs: elsewhere the two folders are one."
   },
   {
@@ -3819,6 +3825,7 @@
     "must_fail": ["an unwritable profile falls back to AppData, with a warning"],
     "suites": ["test_data_safety"],
     "expect": "killed",
+    "only_on": "win32",
     "note": "Killed on Windows, where the app runs."
   },
   {
@@ -3835,6 +3842,7 @@
                   "a run from source keeps its own Trash, and takes the templates it lacks"],
     "suites": ["test_data_safety"],
     "expect": "killed",
+    "only_on": "win32",
     "note": "Killed on Windows, where the app runs."
   },
   {
@@ -3850,6 +3858,7 @@
     "must_fail": ["a run from source keeps its own Trash, and takes the templates it lacks"],
     "suites": ["test_data_safety"],
     "expect": "killed",
+    "only_on": "win32",
     "note": "Killed on Windows, where the app runs."
   },
   {
@@ -4698,7 +4707,9 @@
                "replace": "        pass\n"}],
     "must_fail": ["on Windows, Settings -> Appearance offers Sharp text"],
     "suites": ["qa6"],
-    "expect": "killed"
+    "expect": "killed",
+    "only_on": "win32",
+    "note": "Killed on Windows, the only system whose Settings carry the Sharp text row."
   },
   {
     "id": "DPI13",
@@ -4738,7 +4749,9 @@
                "replace": "            return True\n"}],
     "must_fail": ["...and a process that declares it is drawn at its screen's scale by Windows"],
     "suites": ["qa6"],
-    "expect": "killed"
+    "expect": "killed",
+    "only_on": "win32",
+    "note": "Killed on Windows, the only system asked how it draws a process."
   },
   {
     "id": "SP01",
@@ -6209,6 +6222,7 @@
     "must_fail": ["a first start killed while copying files leaves no notes file to mark it done"],
     "suites": ["test_data_safety"],
     "expect": "killed",
+    "only_on": "win32",
     "note": "Killed on Windows, where the app runs; elsewhere the profile folder is the AppData equivalent and these checks do not run."
   },
   {
@@ -6220,6 +6234,7 @@
     "must_fail": ["a first start killed while copying files leaves no notes file to mark it done"],
     "suites": ["test_data_safety"],
     "expect": "killed",
+    "only_on": "win32",
     "note": "Killed on Windows, where the app runs; elsewhere the profile folder is the AppData equivalent and these checks do not run."
   },
   {
@@ -6350,6 +6365,7 @@
                   "an unreadable old notebook is brought in with its Trash and templates"],
     "suites": ["test_data_safety"],
     "expect": "killed",
+    "only_on": "win32",
     "note": "Killed on Windows, where the app runs; elsewhere the profile folder is the AppData equivalent and these checks do not run."
   },
   {
@@ -6441,6 +6457,7 @@
     "must_fail": ["a file in the notes folder's place is named as the cause"],
     "suites": ["test_data_safety"],
     "expect": "killed",
+    "only_on": "win32",
     "note": "Killed on Windows, where the app runs; elsewhere the profile folder is the AppData equivalent and these checks do not run."
   },
   {
@@ -6452,6 +6469,7 @@
     "must_fail": ["an empty old notebook is brought in with its Trash and templates"],
     "suites": ["test_data_safety"],
     "expect": "killed",
+    "only_on": "win32",
     "note": "Killed on Windows, where the app runs; elsewhere the profile folder is the AppData equivalent and these checks do not run."
   },
   {
@@ -6734,6 +6752,7 @@
       "test_data_safety"
     ],
     "expect": "killed",
+    "only_on": "win32",
     "note": "Killed on Windows, where the profile-folder migration checks run."
   },
   {
@@ -6753,6 +6772,7 @@
       "test_data_safety"
     ],
     "expect": "killed",
+    "only_on": "win32",
     "note": "Killed on Windows, where the profile-folder migration checks run."
   },
   {
@@ -6772,6 +6792,7 @@
       "test_data_safety"
     ],
     "expect": "killed",
+    "only_on": "win32",
     "note": "Killed on Windows, where the profile-folder migration checks run."
   },
   {
@@ -6863,6 +6884,7 @@
       "test_data_safety"
     ],
     "expect": "killed",
+    "only_on": "win32",
     "note": "Killed on Windows, whose file names ignore case; elsewhere other capitals name another file."
   },
   {
@@ -7074,6 +7096,7 @@
     "must_fail": ["an attachment restored from a downloaded backup keeps the backup's mark of the web"],
     "suites": ["test_data_safety"],
     "expect": "killed",
+    "only_on": "win32",
     "note": "Killed on Windows, where the app runs; elsewhere no file keeps the stream and these checks do not run."
   },
   {
@@ -7085,6 +7108,7 @@
     "must_fail": ["a file attached by hand keeps its own mark of the web"],
     "suites": ["test_data_safety"],
     "expect": "killed",
+    "only_on": "win32",
     "note": "Killed on Windows, where the app runs; elsewhere no file keeps the stream and these checks do not run."
   },
   {
@@ -7096,6 +7120,7 @@
     "must_fail": ["...and so does the copy a duplicated note gets"],
     "suites": ["test_data_safety"],
     "expect": "killed",
+    "only_on": "win32",
     "note": "Killed on Windows, where the app runs; elsewhere no file keeps the stream and these checks do not run."
   },
   {
@@ -7615,12 +7640,13 @@
       }
     ],
     "must_fail": [
-      "turned off in the editor, then rewritten: every day's own text is still"
+      "turning the repeat off copies the moves with the days into the rescue copy"
     ],
     "suites": [
       "qa5"
     ],
-    "expect": "killed"
+    "expect": "killed",
+    "note": "Named by the check that sees the note itself lose its days. With this mutant in, 'turned off in the editor, then rewritten' still finds them in the file, kept there by another road since, and holds (the whole catalogue's run, 2026-11-10)."
   },
   {
     "id": "DR31",
@@ -7749,6 +7775,7 @@
       "test_data_safety"
     ],
     "expect": "killed",
+    "only_on": "win32",
     "note": "Killed on Windows, where the profile-folder migration checks run."
   },
   {
@@ -7840,7 +7867,9 @@
     "suites": [
       "qa7"
     ],
-    "expect": "killed"
+    "expect": "killed",
+    "only_on": "linux",
+    "note": "Killed on Linux, the only system that lets a file's name hold a colon: on Windows the file picker never gives one, and qa7's check runs only elsewhere (proved in the Linux image, 66a44e3)."
   },
   {
     "id": "RT03",
@@ -12776,13 +12805,12 @@
         "replace": "        elif held is not None and existing is held:\n            for key in self._RESCUE_TEXT_KEYS:\n                prev[key] = copy.deepcopy(held.get(key))\n        elif update_copy(existing) and not rescue_copy_spent(note):\n            # An import's Update left the note as it was here before, in no\n"
       }
     ],
-    "must_fail": [
-      "a held turn-off after an import's Update keeps the update's copy whole"
-    ],
+    "must_fail": [],
     "suites": [
       "qa5"
     ],
-    "expect": "killed"
+    "expect": "survives",
+    "note": "Equivalent since the held save keeps an Update's copy and sets the words aside (WS55's branch): the copy a held save makes is never an Update's, so the order no longer decides. With WS55's edit as well, 'a held turn-off after an import's Update keeps the update's copy whole' fails, and passes with WS55's alone (the whole catalogue's run, 2026-11-10). Kept as the plain statement of the order, and to say so if a road back opens."
   },
   {
     "id": "DR129",
@@ -17405,7 +17433,9 @@
                "replace": "        user32.SetWindowPos(handle, None, rect.left + dx, rect.top - dy, 0, 0,\n"}],
     "must_fail": ["on Windows the window and its work area are measured"],
     "suites": ["qa6"],
-    "expect": "killed"
+    "expect": "killed",
+    "only_on": "win32",
+    "note": "Killed on Windows, the only system whose work area the app asks for."
   },
   {
     "id": "WA05",

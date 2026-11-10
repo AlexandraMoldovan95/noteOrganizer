@@ -1855,17 +1855,22 @@ check(f'...and held back behind an Undo, then spent, it offers no Show once the 
 # untouched read as its stamp, it went outright.
 _mv_fixture()
 _mv_body(_mv_p2)
-next(n for n in app.notes if n.get('title') == 'Trip (earlier text)')['pinned'] = True
+# None when no note was kept aside: the check's answer, not the suite's end.
+_sp_aside = next((n for n in app.notes if n.get('title') == 'Trip (earlier text)'), None)
+if _sp_aside:
+    _sp_aside['pinned'] = True
 _mv_body(_mv_p1 + '\n' + _mv_p2)
 _sp_pinned = _mv_asides()
 _mv_fixture()
 _mv_body(_mv_p2)
-_sp_aside = next(n for n in app.notes if n.get('title') == 'Trip (earlier text)')
-# Deleted as a delete does it: out of the notes, into the Trash.
-app.notes.remove(_sp_aside); app._move_notes_to_trash([_sp_aside]); app.save_notes(); app.update()
-_sp_gone = _mv_asides()
-app._restore_trash_entries([e for e in app.trash if e.get('uid') == _sp_aside.get('uid')]); app.update()
-_sp_back = _mv_asides()
+_sp_aside = next((n for n in app.notes if n.get('title') == 'Trip (earlier text)'), None)
+_sp_gone = _sp_back = None
+if _sp_aside:
+    # Deleted as a delete does it: out of the notes, into the Trash.
+    app.notes.remove(_sp_aside); app._move_notes_to_trash([_sp_aside]); app.save_notes(); app.update()
+    _sp_gone = _mv_asides()
+    app._restore_trash_entries([e for e in app.trash if e.get('uid') == _sp_aside.get('uid')]); app.update()
+    _sp_back = _mv_asides()
 _mv_body(_mv_p1 + '\n' + _mv_p2)
 check(f'a note kept aside, pinned since or put back from the Trash, stays '
       f'({_sp_pinned}; {_sp_gone} -> {_sp_back} -> {_mv_asides()})',

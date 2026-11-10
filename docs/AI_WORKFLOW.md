@@ -67,7 +67,8 @@ can be reviewed; the memory is just the agent's working notebook.
 - **Checks are tested too.** Every fix's check is mutation-tested; the mutants worth keeping,
   and 2 that test the runner itself, live in [`tools/mutants.json`](../tools/mutants.json)
   and run on demand, here or in CI, a piece of the catalogue at a time; the whole of it last
-  ran on 13 October 2026. A verdict counts only if the suite reached its end - a mutant that
+  ran on 10 November 2026, and the 11 of its 1,161 verdicts that came out wrong, each the fault
+  of a check or of the catalogue and none of the app, were put right that day. A verdict counts only if the suite reached its end - a mutant that
   crashes the import "survives nothing" by running nothing, and the runner refuses it.
 - **Findings are hypotheses.** When agents review the app, each finding is checked against the
   code before it is believed, often by separate verifiers told to refute it when unsure. What

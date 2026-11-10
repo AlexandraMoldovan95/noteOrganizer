@@ -596,7 +596,9 @@ try:
     app._clipboard_text = lambda w: ('Plan:\n| a | b |\n| --- | --- |\n| 1 | 2 |', False)
     # No words beneath left from the checks above: "Note updated" yields to
     # them whatever the notice's kind, and the check could not fail.
-    if app._words_hide_job is not None:
+    # Made by the first words beneath, as the app reads it: a check above
+    # that showed none leaves it unmade.
+    if getattr(app, '_words_hide_job', None) is not None:
         app.after_cancel(app._words_hide_job)
     app._hide_words_beneath(); app.update()
     try:
@@ -1621,6 +1623,27 @@ def _ld_clip(text):
     app.body_text.clipboard_append(text)
 
 
+def _ld_busy_cut():
+    # A clipboard another program holds open takes no formatted copy, and
+    # the list's own Cut puts the words there, as it does on every Cut off
+    # Windows: on Windows the formatted Cut took every one, and the list's
+    # was never reached (the whole catalogue's run, 2026-11-10).
+    _ld_clip('what was there before')
+    _ld_real_write = NO.clipboard.write
+    NO.clipboard.write = lambda *a, **k: False
+    try:
+        _ld_virtual('<<Cut>>')
+    finally:
+        NO.clipboard.write = _ld_real_write
+
+
+def _ld_clipboard():
+    try:
+        return app.body_text.clipboard_get()
+    except tk.TclError as exc:      # left empty: the check's answer
+        return repr(exc)
+
+
 for _ld_name, _ld_where, _ld_do, _ld_want in (
         ('BackSpace over items 2 and 3', ('2.0', '4.0'),
          lambda: _list_key('BackSpace'), '1. one\n2. four'),
@@ -1628,6 +1651,8 @@ for _ld_name, _ld_where, _ld_do, _ld_want in (
          lambda: _list_key('Delete'), '1. one\n2. four'),
         ('Cut over items 2 and 3', ('2.0', '4.0'),
          lambda: _ld_virtual('<<Cut>>'), '1. one\n2. four'),
+        ('Cut over items 2 and 3, the clipboard held by another program',
+         ('2.0', '4.0'), _ld_busy_cut, '1. one\n2. four'),
         ('a letter typed over items 2 and 3', ('2.0', '4.0'),
          lambda: _ld_typed('x'), '1. one\n2. x\n3. four'),
         ('a plain paste over items 2 and 3', ('2.0', '4.0'),
@@ -1654,7 +1679,7 @@ for _ld_name, _ld_where, _ld_do, _ld_want in (
     _ld_do()
     _ld_after = body()
     _ld_paras = app._extract_paragraphs(app.body_text)
-    _ld_clipped = app.body_text.clipboard_get() if 'Cut' in _ld_name else None
+    _ld_clipped = _ld_clipboard() if 'Cut' in _ld_name else None
     app._body_undo_redo('undo')
     app.update()
     check(f'{_ld_name}: renumbered, no marker among the words ({_ld_after!r}), '
@@ -8989,12 +9014,15 @@ check('the same words pasted from elsewhere bring no size or typeface',
                if s['style'] in ('font_size', 'font_family')])
 # One word copied from an indented paragraph does not indent the paragraph
 # it lands in (audit): the HTML never carried a plain paragraph's indent,
-# and the remembered copy must not start to.
+# and the remembered copy must not start to. Copied from the line's start,
+# where the line's looks travel with the words: from its middle they stay
+# behind anyway, and this check guarded nothing (the whole catalogue's run,
+# 2026-11-10).
 set_body('an indented line' + chr(10) + 'plain target here')
 app.body_text.mark_set('insert', '1.0')
 app.body_text.tag_remove('sel', '1.0', 'end')
 app._change_paragraph_indent(+1)
-app.body_text.tag_add('sel', '1.3', '1.11')
+app.body_text.tag_add('sel', '1.0', '1.11')
 app.update()
 _stub_clipboard(loopback=True)
 app._copy_formatted()

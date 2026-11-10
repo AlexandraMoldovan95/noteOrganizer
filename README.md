@@ -119,8 +119,10 @@ and checks what a person would notice: a note that must survive a restart,
 a share code or a backup; formatting and tables that must come back exactly;
 a question that must not lose what was typed. A fix lands with a check that
 fails when the fix is taken away, and the mutation runner proves it again,
-a piece of the catalogue at a time; the whole of it last ran on 13 October
-2026. The suite ran 91% of the app's lines on Windows ([measured](qa/README.md)), and CI holds
+a piece of the catalogue at a time; the whole of it last ran on 10 November
+2026, and the 11 of its 1,161 verdicts that came out wrong, each the fault
+of a check or of the catalogue and none of the app, were put right that
+day. The suite ran 91% of the app's lines on Windows ([measured](qa/README.md)), and CI holds
 a floor of 80% on Linux; a line run is not a line checked, which is what
 the mutants are for
 ([how we test, in one page](qa/README.md#how-we-test-in-one-page)).
