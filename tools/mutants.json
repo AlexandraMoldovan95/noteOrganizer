@@ -17497,5 +17497,15 @@
     "must_fail": ["the size grid lights two squares for the smallest table"],
     "suites": ["qa1"],
     "expect": "killed"
+  },
+  {
+    "id": "PF06",
+    "about": "A table inserted above another adds a second break for the table below, and leaves two empty lines",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                           or core_tables.is_table_row(above)) else \"\")\n        after = \"\\n\"\n",
+               "replace": "                           or core_tables.is_table_row(above)) else \"\")\n        after = \"\\n\" + (\"\\n\" if core_tables.is_table_row(self.body_text.get(f\"{line_no + 1}.0\", f\"{line_no + 1}.end\")) else \"\")\n"}],
+    "must_fail": ["a table inserted right above another leaves one empty line between them"],
+    "suites": ["qa1"],
+    "expect": "killed"
   }
 ]

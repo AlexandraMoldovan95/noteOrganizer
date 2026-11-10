@@ -8579,14 +8579,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         columns = max(2, min(self.TABLE_GRID_COLUMNS, int(columns)))
         line_no = int(self.body_text.index("insert").split(".")[0])
         line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
-        # Adjacent pipe rows read as ONE block: an empty line above (and below,
-        # by a table) keeps a new table from fusing with its neighbour.
+        # Adjacent pipe rows read as ONE block: an empty line above keeps a new
+        # table from fusing with its neighbour. Below, the line break that ends
+        # the caret's line already makes that empty line: one more, by a table
+        # under it, left two.
         above = (self.body_text.get(f"{line_no - 1}.0", f"{line_no - 1}.end")
                  if line_no > 1 else "")
-        below = self.body_text.get(f"{line_no + 1}.0", f"{line_no + 1}.end")
         before = ("\n" if (line.strip()
                            or core_tables.is_table_row(above)) else "")
-        after = "\n" + ("\n" if core_tables.is_table_row(below) else "")
+        after = "\n"
         block = "\n".join(core_tables.blank_table(rows, columns))
         self.body_text.insert("insert", before + block + after)
         first = line_no + (1 if before else 0)

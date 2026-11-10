@@ -4764,6 +4764,24 @@ check(f'a menu op keeps the body scrolled where it was '
       f'({_yv0:.3f} -> {_yv1:.3f})', abs(_yv1 - _yv0) < 0.1)
 set_body('')
 
+# A table inserted right above another: one empty line between them, as
+# everywhere else. The break that ends the caret's line makes it; one more,
+# for the table below, left two.
+set_body('Intro\n| a | b |\n| --- | --- |\n| c | d |')
+app._render_table_grids()
+app.update()
+app.body_text.mark_set('insert', '1.end')
+app._insert_table(2, 2)
+app.update()
+if getattr(app, '_cell_editor', None):
+    app._commit_cell_editor()
+app.update()
+_ab_blocks = core_tables.find_blocks(body())
+check(f'a table inserted right above another leaves one empty line between them '
+      f'({_ab_blocks})',
+      len(_ab_blocks) == 2 and _ab_blocks[1][0] - _ab_blocks[0][1] == 2)
+set_body('')
+
 # ---- EMOJI IN CELLS: TK COLUMNS ARE UTF-16 UNITS ----
 # Every surgical edit addressed the text by Python character offsets, but a
 # Tk Text column is a UTF-16 unit -- one astral emoji in a cell shifted
