@@ -234,6 +234,7 @@ is in the table below as well.
 | [Wave 2's lows: a tab turned behind Settings](#wave-2s-lows-a-tab-turned-behind-settings) | When the same loss comes back by another road, fix the place every road passes, not the road. | 0.100.513 |
 | [Wave 2's lows: the banner that waited](#wave-2s-lows-the-banner-that-waited) | A message held back is about the past: ask it again when it is finally said, and say whose it is. | 0.100.513 |
 | [Wave 5: the window that opened under the taskbar](#wave-5-the-window-that-opened-under-the-taskbar) | A window's size and its place are two answers: one fitted to the screen is only half placed until something checks where it landed. | 0.100.513 |
+| [Wave 5: the desktop findings the phone's port had kept](#wave-5-the-desktop-findings-the-phones-port-had-kept) | A finding written down in one repository is invisible to the other's audit: before a release, read what the other app's logs still hold open about this one. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -4052,6 +4053,45 @@ and on Windows a real move of one pixel; mutants WA01–WA05.
 
 **Takeaway:** a window's size and its place are two answers. A window fitted to the screen is only
 half placed until something checks where it landed.
+
+### Wave 5: the desktop findings the phone's port had kept
+
+*(2026-11-11 · found reading what the phone's issues log still held open about the desktop,
+before the audit's pull request)*
+
+**Symptom:** a page of two tables pasted from Word or a browser came in with the second table's
+bold on the wrong letters: "Gym" in a cell arrived as bold on "| G", and with each table after it
+the styles slid further. Four smaller things sat beside it. Title Z–A put the untitled notes
+first. Find stepped through a table column by column. The Insert table grid lit one square for a
+two-column table. A table inserted right above another left two empty lines between them.
+
+**Mechanism:** none of the five was new. Each was found in October while porting the desktop's
+code to the phone, where a function is read closely enough to answer as it answers; the phone
+was written right, and the finding was written down in the phone's issues log as a desktop
+finding, for its own repository. The desktop's register never received them, and no round of the
+final audit looked: each round attacked the fixes and the areas it was given, and these were
+already known somewhere else.
+
+- The paste: `align()` gave each padding edit a running sum of the lines before it, read after it
+  had re-padded them, so every table after the first was counted in the changed text, and
+  `shift_spans()` judges every offset in the text as it came. `renumber()` counted the same way;
+  nothing showed only because the editor drops its shifts and moves its styles itself.
+- Title Z–A reversed A–Z's whole key, and the mark that sinks an untitled note with it.
+- Find sorted a table's cells by the grid's one line, then the column: never the row.
+- The grid was drawn from its second column, the first a table can have.
+- The insert added a second line break when a table sat below, though the break that ends the
+  cursor's line already makes the empty line between them.
+
+**Fix:** `align()` and `renumber()` take each line's start before they change anything, as
+`forget_widths()` already did. Z–A turns the untitled mark over before the reverse; Find sorts
+cells by row, then column; the grid draws every column, its first making two; the insert adds
+one break. A probe of 3,000 random pages of up to five tables found a bold off its word in 1,665
+before and in none after. Checks in test_tables, test_richtext and qa1; mutants PF01–PF06. The
+phone's list held a sixth: the calculator refusing a keyboard's `-`, `*` and `/`, which wave 2
+had fixed (`2a31b35`) without anyone telling the list.
+
+**Takeaway:** a finding written down in one repository is invisible to the other's audit. Before
+a release, read what the other app's logs still hold open about this one.
 
 ## Tk & platform gotchas
 
