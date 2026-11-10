@@ -8580,9 +8580,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         line_no = int(self.body_text.index("insert").split(".")[0])
         line = self.body_text.get(f"{line_no}.0", f"{line_no}.end")
         # Adjacent pipe rows read as ONE block: an empty line above keeps a new
-        # table from fusing with its neighbour. Below, the line break that ends
-        # the caret's line already makes that empty line: one more, by a table
-        # under it, left two.
+        # table from fusing with its neighbour. Below, the break ending the
+        # caret's line makes that line already; a second, by a table, left two.
         above = (self.body_text.get(f"{line_no - 1}.0", f"{line_no - 1}.end")
                  if line_no > 1 else "")
         before = ("\n" if (line.strip()
@@ -8636,10 +8635,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             highlight(0, 0)
             caption.configure(text="Insert table")
 
-        # Every column drawn, so the squares lit are the table's shape; the
-        # first chooses two, the least a table has: a one-column run of
-        # pipes is not recognisable as a table row (| x | in prose would be
-        # one). Drawn from the second, two columns lit one square.
+        # Every column drawn, so the squares lit are the table's shape; the first
+        # makes two, the least a table has (a one-column run of pipes is not a
+        # row). Drawn from the second, two columns lit one square.
         for r in range(1, self.TABLE_GRID_ROWS + 1):
             for column in range(1, self.TABLE_GRID_COLUMNS + 1):
                 c = max(2, column)
@@ -18362,9 +18360,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                             break
                 data_r += 1
         # Order top-to-bottom; cell matches sort after prose on the same
-        # (table window) line, then row by row, as a table is read: every
-        # cell shares the grid's one line, and by column alone Find went
-        # down each column before the next.
+        # (table window) line, then row by row, as a table is read: by
+        # column alone, Find went down each column before the next.
         matches.sort(key=lambda m: (m["line"], m.get("sortcol", (0, m.get("col", 0)))))
         return matches
 
