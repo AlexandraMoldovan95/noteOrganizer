@@ -10193,6 +10193,14 @@ app._find_rescan(reveal=True)
 app.update()
 check('find/cell: a checkbox cell is never a match',
       not any(x['kind'] == 'cell' for x in app._find_matches))
+# Row by row, as a table is read: every cell shares the grid's one line,
+# and sorted by column alone Find went down each column before the next.
+app._find_var.set('e')
+app._find_rescan(reveal=True)
+app.update()
+_fcm = [(x['row'], x['col']) for x in app._find_matches if x['kind'] == 'cell']
+check(f'find/cell: a table is searched row by row, as it is read ({_fcm})',
+      _fcm == [(0, 1), (1, 1), (2, 0), (3, 1)])
 app._close_find()
 app.update()
 

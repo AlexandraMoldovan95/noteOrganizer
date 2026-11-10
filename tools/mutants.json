@@ -17477,5 +17477,15 @@
     "must_fail": ["Title Z–A keeps the untitled notes at the bottom"],
     "suites": ["qa1"],
     "expect": "killed"
+  },
+  {
+    "id": "PF04",
+    "about": "Find orders a table's cells by column alone, and goes down each column before the next",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                                        \"sortcol\": (1, data_r, c)})\n",
+               "replace": "                                        \"sortcol\": (1, 0, c)})\n"}],
+    "must_fail": ["find/cell: a table is searched row by row, as it is read"],
+    "suites": ["qa1"],
+    "expect": "killed"
   }
 ]

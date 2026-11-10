@@ -18353,13 +18353,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     if needle and needle in hay and (data_r, c) in info["cells"]:
                         matches.append({"kind": "cell", "line": live_first,
                                         "row": data_r, "col": c,
-                                        "sortcol": 10000 + c})
+                                        "sortcol": (1, data_r, c)})
                         if len(matches) >= self.FIND_MATCH_CAP:
                             break
                 data_r += 1
         # Order top-to-bottom; cell matches sort after prose on the same
-        # (table window) line via the large sortcol.
-        matches.sort(key=lambda m: (m["line"], m.get("sortcol", m.get("col", 0))))
+        # (table window) line, then row by row, as a table is read: every
+        # cell shares the grid's one line, and by column alone Find went
+        # down each column before the next.
+        matches.sort(key=lambda m: (m["line"], m.get("sortcol", (0, m.get("col", 0)))))
         return matches
 
     def _find_prose(self, query, nocase, text):
