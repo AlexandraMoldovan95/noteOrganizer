@@ -491,14 +491,15 @@ def align(text):
     removed, in ``renumber()``'s shape, for ``shift_spans()`` to move the
     formatting: without it, the bold in every later line would slide."""
     lines = (text or "").split("\n")
+    # Each line's start in the text as it came, taken before any line is
+    # re-padded: shift_spans judges every offset there. Summed off lines
+    # already padded, a second table's styles landed beside their words.
+    starts, pos = [], 0
+    for line in lines:
+        starts.append(pos)
+        pos += len(line) + 1
     shifts = []
-    # Offsets from the body's start, the lines before each block summed once
-    # and kept running: summed afresh, 6,000 pasted tables walked it 6,000 times.
-    counted = prefix = 0
     for first, block, per_row, aligns in _alignment_plans(lines):
-        prefix += sum(len(line) + 1 for line in lines[counted:first])
-        counted = first
-        pos = prefix
         for offset, old in enumerate(block):
             # Each edit recorded where it happens, between cells: at the line's
             # end, a later cell's bold sat on a space. Right to left, the line
@@ -512,9 +513,8 @@ def align(text):
                 else:
                     pieces.append(old[at - delta:end])
                 end = at
-                shifts.append((pos + at, delta))
+                shifts.append((starts[first + offset] + at, delta))
             pieces.append(old[:end])
-            pos += len(old) + 1
             lines[first + offset] = "".join(reversed(pieces))
     return "\n".join(lines), shifts
 

@@ -124,6 +124,21 @@ check("and leaves everything around it alone",
 check("re-padding an already-padded table changes nothing",
       tables.align(_aligned) == (_aligned, []))
 
+# Two tables, bold in each: every offset is counted in the text as it came,
+# as shift_spans judges them. Counted off lines the first table's padding
+# had already changed, the second table's bold sat beside its words.
+_two = ("| a | bb |\n|---|---|\n| ccc | d |\n\n"
+        "| x | yy |\n|---|:-:|\n| zzzz | w |\n| Ana-Maria | 7 |")
+_two_words = ["bb", "ccc", "yy", "zzzz", "w", "Ana-Maria", "7"]
+_two_spans = []
+for _w in _two_words:
+    _at = _two.index("| " + _w + " |") + 2
+    _two_spans.append({"start": _at, "end": _at + len(_w), "style": "bold"})
+_two_out, _two_shifts = tables.align(_two)
+_two_got = [_two_out[s["start"]:s["end"]] for s in shift_spans(_two_spans, _two_shifts)]
+check(f"bold in every cell of two tables stays on its word when both are "
+      f"re-padded ({_two_got})", _two_got == _two_words)
+
 # --- pasting one in ------------------------------------------------------
 # Until this existed, td and th were neither block tags nor cells, so the
 # cells ran together: "Milk | 2" arrived as "Milk2" with the boundary gone.
@@ -143,6 +158,18 @@ check(f"a table between paragraphs keeps its place ({_t.splitlines()[1]!r})",
       and tables.split_row(_t.split("\n")[1]) == ["A", "B"])
 check("and bold inside a cell survives the trip in",
       len(_s) == 1 and _t[_s[0]["start"]:_s[0]["end"]] == "B")
+
+# A page of two tables, as Word or a browser copies one: the second
+# table's bold came in on "| G" instead of "Gym".
+_two_page = ("<table><tr><td>Item</td><td>Price</td></tr>"
+             "<tr><td>Bread</td><td><b>Cheap</b></td></tr></table>"
+             "<p>Between</p>"
+             "<table><tr><td>Day</td><td>Plan</td></tr>"
+             "<tr><td>Monday</td><td><b>Gym</b></td></tr></table>")
+_tp_text, _tp_spans, _ = html_to_note(_two_page)
+_tp_got = [_tp_text[s["start"]:s["end"]] for s in _tp_spans]
+check(f"a pasted page's second table keeps its bold on its words ({_tp_got})",
+      _tp_got == ["Cheap", "Gym"])
 
 # --- copying one out -----------------------------------------------------
 # Real markup, for the same reason a list goes out as <ul>: a word processor

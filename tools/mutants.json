@@ -17446,5 +17446,26 @@
     "must_fail": ["when the window first shows it is moved inside, once"],
     "suites": ["qa6"],
     "expect": "killed"
+  },
+  {
+    "id": "PF01",
+    "about": "align() counts a later table's offsets in lines the first table's padding has already changed",
+    "edits": [{"file": "noteorganizer/core/tables.py",
+               "find": "                shifts.append((starts[first + offset] + at, delta))\n",
+               "replace": "                shifts.append((sum(len(x) + 1 for x in lines[:first + offset]) + at, delta))\n"}],
+    "must_fail": ["bold in every cell of two tables stays on its word when both are re-padded",
+                  "a pasted page's second table keeps its bold on its words"],
+    "suites": ["test_tables"],
+    "expect": "killed"
+  },
+  {
+    "id": "PF02",
+    "about": "renumber() counts each line's start off the markers it has already rewritten",
+    "edits": [{"file": "noteorganizer/core/formatting.py",
+               "find": "        pos += len(line) + 1\n    return \"\\n\".join(lines), shifts\n",
+               "replace": "        pos += len(lines[i]) + 1\n    return \"\\n\".join(lines), shifts\n"}],
+    "must_fail": ["bold on every item of a renumbered 120-item list stays on its word"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
   }
 ]

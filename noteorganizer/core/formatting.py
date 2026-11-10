@@ -633,7 +633,10 @@ def renumber(body, paragraphs):
             blanks += 1
             if blanks > 1:
                 counters.clear()
-        pos += len(lines[i]) + 1        # +1 for the newline
+        # The line as it came, +1 for the newline: shift_spans judges every
+        # offset in that text, and counted off the new markers, the styles
+        # of a long list slid off their words.
+        pos += len(line) + 1
     return "\n".join(lines), shifts
 
 

@@ -1190,6 +1190,22 @@ for _i in range(300):
 check("spans move by summed shifts exactly as they did one shift at a time",
       _shift_agree)
 
+# renumber() reports its shifts in the text as it came, as shift_spans
+# judges them: counted off the new markers, a list of 120 items all "1."
+# put the bold of item 13 onward on the space before its word.
+_rn_lines = ["1. w%d" % _i for _i in range(1, 121)]
+_rn_spans, _rn_at = [], 0
+for _rn_line in _rn_lines:
+    _rn_spans.append({"start": _rn_at + 3, "end": _rn_at + len(_rn_line), "style": "bold"})
+    _rn_at += len(_rn_line) + 1
+_rn_body, _rn_shifts = renumber("\n".join(_rn_lines),
+                                [{"line": _i, "kind": "number", "indent": 0}
+                                 for _i in range(len(_rn_lines))])
+_rn_off = [s for s, line in zip(_shift(_rn_spans, _rn_shifts), _rn_lines)
+           if _rn_body[s["start"]:s["end"]] != line[3:]]
+check(f"bold on every item of a renumbered 120-item list stays on its word "
+      f"({len(_rn_off)} off)", not _rn_off)
+
 # The structure open at a copy's start marker: every stray end tag walked
 # the list of open ones, and 30,000 unclosed tables with as many stray
 # </td> took seconds. Counted as comparisons with the list, never time.
