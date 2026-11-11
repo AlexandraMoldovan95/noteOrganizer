@@ -1,6 +1,6 @@
 """Colour palettes, themes, and the fixed layout numbers: data, and the
-arithmetic of colour it is judged by (blends, contrast) -- no file access,
-nothing that can fail.
+arithmetic of colour it is judged by (blends, contrast) -- no file access;
+the arithmetic expects #rrggbb, and letters_on and legible_on take any input.
 
 Every theme in :data:`THEMES` defines the same role names, so a switch is a
 straight swap and nothing asks which theme it is. ``accent``, ``danger`` and

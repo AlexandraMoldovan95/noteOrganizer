@@ -134,7 +134,7 @@ def evaluate_calculator_expression(expr):
         return None
 
     # A one-item list rather than a plain int, so the nested functions
-    # below can advance it — see the module docstring.
+    # below can advance it: assigned there, a plain int would be a new local.
     pos = [0]
 
     def peek():

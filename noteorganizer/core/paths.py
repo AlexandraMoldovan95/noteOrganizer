@@ -331,8 +331,8 @@ def preserve_corrupt_file(path):
     it still holds the person's bytes, and the next write would make the
     damage permanent. Timestamped, beside the original, matching no OWNED_*
     pattern, so no clean-up removes it; the same bytes kept once, not at
-    every launch that reads them again. Here, not in storage.py, as the
-    migrations below need it (storage re-exports it as _preserve_corrupt).
+    every launch that reads them again. Here, as the migrations below need
+    it; storage's _preserve_corrupt wraps it.
 
     Returns:
         The copy's path (an earlier one holding the same bytes, if there is

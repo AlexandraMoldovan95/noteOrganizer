@@ -780,7 +780,7 @@ thought.
 A day you edited keeps its own content from then on: later edits to the series deliberately do
 not touch it (that day is *yours*), which can look surprising — a series edit appears everywhere
 except there. The app says this out loud wherever it matters: the series shows a line above the
-title — "🔁 This note repeats — edits here apply to the whole series · 1 day keeps its own edits (✎)" —
+title — "🔁 This note repeats (Every week on Mon) — edits here apply to the whole series · 1 day keeps its own edits (✎)" —
 and in the calendar, such a day carries a ✎ mark in the day list and an "✎ edited for this day"
 chip in the preview. To make a day follow the series again, press **↺ Reset this day…** beside its
 date while it is open — the button is there whenever the day has something of its own — or

@@ -2310,7 +2310,7 @@ class SettingsPageMixin:
         # sidebar ---
         self._settings_theme_toggle()
 
-        # Everything between the brand and that foot scrolls. Nine entries in
+        # Everything between the brand and that foot scrolls. Ten entries in
         # four groups do not fit a short window, and a plain Frame simply
         # clipped whatever was past the bottom with no way to reach it.
         nav_scroll = tk.Canvas(self.settings_nav, highlightthickness=0, bd=0,

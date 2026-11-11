@@ -358,11 +358,13 @@ Without those two lines every rule would point at the same list object, and
 adding a weekday to one note would change every other note too. Worth
 remembering generally: copying a container doesn't copy what's inside it.
 
-### Reading `expand_occurrences`
+### Reading `_expand_rule`
 
-It's the biggest function here, but it's one shape repeated four times —
-a branch per frequency. Each walks forward from the anchor and calls the
-same inner helper:
+`expand_occurrences` is the door: it asks `_expand_rule` for the days the
+rule gives, then puts the days held on another date ("Move this day")
+where they are held. `_expand_rule` is the biggest function here, but it's
+one shape repeated four times — a branch per frequency. Each walks forward
+from the anchor and calls the same inner helper:
 
 ```python
 def take(candidate):

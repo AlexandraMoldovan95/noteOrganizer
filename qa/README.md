@@ -75,7 +75,8 @@ its own (`py test_<name>.py`, from a scratch copy like everything else):
 `test_entry_module_identity` builds a window — it guards against a second
 copy of the entry module.
 
-Each script's banner carries the finer print. "Primary" matters: checks
+Each script's section comments (`# ----` headings) carry the finer print.
+"Primary" matters: checks
 about one surface deliberately live in several files — which is the
 first of two things here that are not obvious from the file names, and
 both have cost a red CI run to learn:

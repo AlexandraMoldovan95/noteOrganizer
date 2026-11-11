@@ -263,8 +263,8 @@ from noteorganizer.core.storage import (
 
 def detect_version_change():
     """Compare the version in settings with the running app's, and record
-    the running one. None for the same or a first run (recorded silently);
-    ('up', old, new) after an update; ('down', old, new) for an older build."""
+    the running one. ('up', old, new) after an update; None otherwise -- the
+    same, a first run, or a lower number, all recorded silently."""
     settings = load_settings()
     stored = settings.get("app_version")
 
@@ -1670,8 +1670,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         save_setting("username", name.strip())
 
     def _refresh_greeting(self):
-        """Show 'Hi <name>,' if a name is set in Settings, otherwise a gentle
-        nudge to set one. Recomputed whenever the name changes."""
+        """Show 'Hi <name>,' if a name is set in Settings, otherwise nothing.
+        Recomputed whenever the name changes."""
         name = self.load_username()
         if name:
             self.greeting_lbl.config(text=f"Hi {name},")
@@ -1833,12 +1833,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         "the disk may be full. Settings → Backup → Export "
                         "makes one.")
                 lines.append(msg)
-            else:
-                lines.append(
-                    f"⚠ You're running an older version ({new}) over data last "
-                    f"used with {old}. Everything should still work, but if "
-                    "anything looks off, open them with the newer version."
-                )
 
         made = getattr(self, "_set_aside_at_start", 0)
         if made:
@@ -11962,8 +11956,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 )
             else:
                 # A look-alike's files its twin lacks are what Skip goes on
-                # with too: offered no Skip, the default Cancel deleted them
-                #.
+                # with too: offered no Skip, the default Cancel deleted them.
                 twins = {_dup_key(n): n for n in self.notes}
                 files_too = any(twin is not None and self._files_to_adopt(twin, n) for twin, n in
                                 ((twins.get(_dup_key(normalize_note(n))), n) for n in valid_notes))
@@ -13136,14 +13129,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._place_mini_popup(pop, anchor_widget, anchor_xy=anchor_xy,
                                keyboard_from=keyboard_from)
         return pop
-
-    # ---------- Themed dialogs (replace OS messagebox) ----------
-
-
-
-
-
-
 
     def _refresh_category_button(self):
         """Update the category button's colour dot + label to the current pick."""
@@ -19800,8 +19785,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return None
         if choice:
             # Saved on the way to the copy: as the person's Save, a note added
-            # for a day went back to the Calendar, the copy opened out of sight
-            #.
+            # for a day went back to the Calendar, the copy opened out of sight.
             self.save_current_note(stay=True)
             # The note the question was about, saved: not whichever one
             # the editor holds after the answer.

@@ -371,7 +371,6 @@ def parse_font_tag(name):
         if size not in FONT_SIZES:
             return None
     return flags[0] == "1", flags[1] == "1", size, family
-    return None
 
 
 def tag_to_spans(tag, start, end):
