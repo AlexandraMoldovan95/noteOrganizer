@@ -12,7 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
-| [0.100.513](#0100513--2026-11-09) | 2026-11-09 | The final audit before the stores: what agents found in two weeks of trying to break the app, fixed; the notebook in the profile's own folder; the keyboard everywhere; nothing a file, a paste or a code holds stops the app or freezes it. |
+| [0.100.524](#0100524--2026-11-12) | 2026-11-12 | The final audit before the stores: what agents found in two weeks of trying to break the app, fixed; the notebook in the profile's own folder; the keyboard everywhere; nothing a file, a paste or a code holds stops the app or freezes it. |
 | [0.97.405](#097405--2026-10-27) | 2026-10-27 | The Trash selects all its notes, and deletes the ticked ones for good; its rows follow a new window at once and count real time; the editor's toolbar holds still as a note empties. |
 | [0.96.401](#096401--2026-10-26) | 2026-10-26 | "↩ Restore previous" keeps a note's words when they are replaced, not only shrunk; a table copied from Excel, or its cells copied here and pasted with Ctrl+Shift+V, comes in as a table; words pasted from a web page are found by search. |
 | [0.96.396](#096396--2026-10-24) | 2026-10-24 | A table pasted as markdown text, from a chat or a `.md` file, fits its words instead of arriving with its columns cut short. |
@@ -110,7 +110,7 @@ How the numbers themselves are counted is the
 
 ---
 
-## [0.100.513] — 2026-11-09
+## [0.100.524] — 2026-11-12
 
 *Highlights: the final audit before the stores. For two weeks agents tried to break the app —
 lost notes, hostile and huge input, the keyboard alone, an ordinary person's week, a careless
@@ -146,6 +146,9 @@ or a share code can hold stops the app starting or freezes it.*
   read "Default font" and "Default size".
 - **A card keeps a note's lines apart with " · "**, shows a list item's words without its marker,
   and leaves out an item with no words.
+- **A card's signs sit on two fixed lines:** first where the note belongs (its category, its date
+  or repeat), then what it holds (comments, files, tables, checklist), the second only when it
+  holds any. No sign is split across two lines.
 - **The Microsoft Store package asks for Windows 11, version 24H2 or later**, the oldest Windows
   it was proved on; the Store does not offer it on an older one. It had said Windows 10 version
   1809 without ever running there
@@ -240,6 +243,10 @@ or a share code can hold stops the app starting or freezes it.*
 
 #### Attachments and pictures
 
+- **A file taken off a note, or deleted from the Trash for good, goes only once the change is
+  saved.** Deleted first, a save the disk refused left the note, or the Trash, naming a file no
+  longer there; now nothing is deleted then, and the app says so. The same holds for the Trash's
+  clean-up when the app starts, and a file another program holds open goes at the next save.
 - **An attached file is the one its name names, never another reached by a second name.** A
   backup's Trash entry naming a photo by its short 8.3 name, in capitals or with a stream after a
   colon deleted the photo at the next start; a file stored as `evil.exe::$DATA` opened the
@@ -267,6 +274,11 @@ or a share code can hold stops the app starting or freezes it.*
 
 #### Pasting, and long text
 
+- **A page of two tables pasted from Word or a browser keeps each table's bold on its words.**
+  Every table after the first was counted in text the first one's padding had already changed:
+  bold on "Gym" in the second came in on "| G", and the styles slid further with each table.
+- **Paste as plain text keeps the blank lines and line ends of text that is not a column.** Every
+  run of empty lines closed to one, and each line lost its trailing spaces.
 - **Every paste stops at 100,000 characters:** Ctrl+V of plain text, Ctrl+Shift+V, the menu's
   Paste, the comments, a table cell, a template's fields and the middle mouse button included.
   600,000 characters froze the app, then cost 1.7 s a key. A line break counts as one character.
@@ -362,6 +374,13 @@ or a share code can hold stops the app starting or freezes it.*
 
 #### Finding, sharing and importing
 
+- **Find steps through a table row by row,** as a table is read. It went down each column before
+  the next.
+- **A note made after another was deleted no longer arrives ticked in the Share panel, or unfolded
+  in the calendar's History.** Both kept their state by the note's id, which a delete frees and
+  the next new note takes; Generate code carried the new note unchosen.
+- **A bulk export that fails partway leaves no half-written file, and keeps the notes that failed
+  selected** to try again.
 - **Every search ignores case and accents the same way:** the list, Find in note, the Calendar's
   History and Share. A Korean syllable no longer finds every syllable that starts with its first
   letter, and Title A–Z sorts "Élan" beside E.
@@ -391,6 +410,8 @@ or a share code can hold stops the app starting or freezes it.*
 
 #### Repeating notes and the calendar
 
+- **With the calendar's History open, ◀, ▶, Today and the month title show the month asked
+  for.** They moved the month hidden behind the register, seen only on the way back.
 - **History lists a day moved past a series' end, or onto a deleted date,** and finds its words.
 - **History files a day of a year to come under its year,** not under This year.
 - **A note started from a calendar day keeps its day and the way back.** A template used on it, a
@@ -402,6 +423,13 @@ or a share code can hold stops the app starting or freezes it.*
 
 #### Smaller things
 
+- **Title Z–A keeps the untitled notes at the bottom,** as Title A–Z does. They rose to the top.
+- **The Insert table grid lights the table it makes.** Drawn from its second column, it lit one
+  square for a two-column table and one fewer than the caption said for any other; its first
+  square now makes two columns too.
+- **A table inserted right above another leaves one empty line between them,** not two.
+- **Statistics' Categories tile counts every category,** those no note is in yet too. It counted
+  only the categories in use.
 - **Enter on a question never presses an answer that cannot be taken back.** Reset of a moved day
   discarded its text, a category's delete moved its notes to General, and the backup import's
   question, asked while you type, took the import.
@@ -439,7 +467,7 @@ or a share code can hold stops the app starting or freezes it.*
 ### Testing
 
 - Every fix landed with a check that fails without it and a mutant that proves the check: the
-  catalogue grew from 422 mutants to 1,161.
+  catalogue grew from 422 mutants to 1,179.
 - `test_data_safety` ends with a fuzz of a series' days: 1,500 roads of edit, move, delete, rule,
   share, backup and restore, after which no day's words are lost or doubled but those deleted or
   typed over.

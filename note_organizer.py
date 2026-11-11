@@ -43,7 +43,7 @@ except ImportError:
 # ---- Version: the one source, bumped by hand at each release by the policy in
 # docs/ROADMAP.md ("Versioning"); recorded in settings, so a newer build can
 # say it was updated ----
-APP_VERSION = "0.100.513"
+APP_VERSION = "0.100.524"
 
 
 def parse_version(v):
