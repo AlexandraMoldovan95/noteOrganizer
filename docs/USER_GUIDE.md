@@ -703,10 +703,12 @@ startup's cleanup. Restore notes or delete them permanently, one at a time or ti
 or empty the whole trash at once. With a lot of deleted notes, the list loads the most recent batch first, with
 a button to reveal more — so it stays quick to open no matter how much has accumulated there.
 Deleting permanently — by hand or by the automatic cleanup — never removes an attached file that
-a note still uses. It does not reach the safety copies of the notes file either: the app keeps one
-from just before each update (`notes_data_backup_<date>.json`, beside your notes, named in the
-message after the update) and never deletes them itself, so a note deleted for good is still in
-those files until you delete them.
+a note still uses, and deletes nothing at all if the Trash's own file can't be saved first (a full
+disk, say); a delete by hand then says **Nothing was deleted**. It does not reach the safety
+copies of the notes file either: the app keeps one from just before each update
+(`notes_data_backup_<date>.json`, beside your notes, named in the message after the update) and
+never deletes them itself, so a note deleted for good is still in those files until you delete
+them.
 
 If the settings file can't be read (a bad shutdown or a disk problem can do that), the app no
 longer knows how long you chose, so it removes nothing from the Trash until you choose again. It
@@ -1021,9 +1023,10 @@ note lays out on a page, so adjusting the note and re-exporting is a quick loop.
 all**, which selects exactly what the current search and filter show — never a note the list is
 hiding), and use **Export ▾**
 in the action bar: pick a format and a folder, and each note becomes its own file (same-titled
-notes get “(2)”, “(3)” — nothing ever overwrites). Attached files never travel with a single-note
-export — that's what the full backup below is for, and the app reminds you when the note has
-attachments.
+notes get “(2)”, “(3)” — nothing ever overwrites). A note whose file could not be written
+leaves no half-written file behind and stays ticked, so **Export ▾** again tries just those.
+Attached files never travel with a single-note export — that's what the full backup below is
+for, and the app reminds you when the note has attachments.
 
 ### Full backup: export
 
