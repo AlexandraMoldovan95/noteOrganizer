@@ -17603,5 +17603,15 @@
     "must_fail": ["and only the note that failed stays selected"],
     "suites": ["qa1"],
     "expect": "killed"
+  },
+  {
+    "id": "RF12",
+    "about": "Statistics' Categories tile counts only the categories holding notes",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "        tile_values = (total, added_week, len(CATEGORY_COLORS), templates_count,",
+               "replace": "        tile_values = (total, added_week, len(counts), templates_count,"}],
+    "must_fail": ["the Categories tile counts every category"],
+    "suites": ["qa9"],
+    "expect": "killed"
   }
 ]

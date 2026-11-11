@@ -341,8 +341,8 @@ class SettingsPageMixin:
         updated_week, updated_month, updated_year, updated_older = _bucket_counts("updated")
 
         # --- Shown as figures, not sentences: tiles, a table with a header,
-        # then the categories -- numbers lead, captions follow. Tallied here,
-        # as the tiles count the categories too. ---
+        # then the categories -- numbers lead, captions follow. The tile is
+        # every category there is; the list below, those holding notes. ---
         counts = {}
         for n in notes:
             cat = n.get("category") or PROTECTED_CATEGORY
@@ -352,7 +352,7 @@ class SettingsPageMixin:
         templates_count = len(self.templates)
         checklists_count = sum(1 for n in notes if n.get("checklist"))
         deleted_count = len(self.trash)
-        tile_values = (total, added_week, len(counts), templates_count,
+        tile_values = (total, added_week, len(CATEGORY_COLORS), templates_count,
                        checklists_count, deleted_count)
         table_values = ((added_week, added_month, added_year, added_older),
                         (updated_week, updated_month, updated_year, updated_older))

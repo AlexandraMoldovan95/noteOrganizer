@@ -3039,6 +3039,12 @@ check('...and the tiles too (total %s, added this week %s)'
          _st_pairs['Added this week'].cget('text')),
       int(_st_pairs['Total notes'].cget('text')) == len(app.notes)
       and int(_st_pairs['Added this week'].cget('text')) == _st_oracle(app.notes)[0][0])
+# Every category there is, not only those holding notes: all of these are in
+# General, and the tile said 1 beside a notebook with several categories.
+check('the Categories tile counts every category (%s of %d)'
+      % (_st_pairs['Categories'].cget('text'), len(NO.CATEGORY_COLORS)),
+      len(NO.CATEGORY_COLORS) > 1
+      and int(_st_pairs['Categories'].cget('text')) == len(NO.CATEGORY_COLORS))
 # In place: the next render changes the figures on the SAME widgets.
 _st_before = {k: v for k, v in _st_pairs.items()}
 app.notes.append(NO.normalize_note({'id': 9950, 'title': 'One more', 'body': 'y',
