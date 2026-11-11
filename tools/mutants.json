@@ -1609,7 +1609,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            if [n[\"id\"] for n in fresh[:first]] != rendered[\"ids\"]:",
+        "find": "            if [self._order_identity(n) for n in fresh[:first]] != rendered[\"uids\"]:",
         "replace": "            if False:"
       }
     ],
@@ -17505,6 +17505,16 @@
                "find": "                           or core_tables.is_table_row(above)) else \"\")\n        after = \"\\n\"\n",
                "replace": "                           or core_tables.is_table_row(above)) else \"\")\n        after = \"\\n\" + (\"\\n\" if core_tables.is_table_row(self.body_text.get(f\"{line_no + 1}.0\", f\"{line_no + 1}.end\")) else \"\")\n"}],
     "must_fail": ["a table inserted right above another leaves one empty line between them"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "RF01",
+    "about": "The Share panel keeps its ticks by note id, so a new note given a deleted note's id arrives ticked",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            key = self._order_identity\n            rendered[\"uids\"] = rendered[\"uids\"][:first] + [",
+               "replace": "            key = lambda n: n[\"id\"]\n            rendered[\"uids\"] = rendered[\"uids\"][:first] + ["}],
+    "must_fail": ["share: a new note that takes a deleted note's id does not take its tick"],
     "suites": ["qa1"],
     "expect": "killed"
   }

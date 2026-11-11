@@ -2905,7 +2905,7 @@ for _pn_size in ('640x600', '1366x690', '1150x860'):
           and _pn_whole(app.import_box))
     app.toggle_import_panel(); _pn_settle()
     app.toggle_share_panel(); _pn_settle()
-    _pn_ids = [n['id'] for n in app.notes][:1]
+    _pn_ids = [app._order_identity(n) for n in app.notes][:1]
     for _pn_id in _pn_ids:
         app._share_vars[_pn_id].set(True)
     find_widget(app.share_panel, tk.Button, 'Generate code').invoke(); _pn_settle()
@@ -2933,7 +2933,7 @@ for _pn_size in ('640x600', '1366x690', '1150x860'):
 # sidebar changing size; the zone is given less, and fits again.
 app.geometry('1366x690'); _pn_settle()
 app.toggle_share_panel(); _pn_settle()
-for _pn_id in [n['id'] for n in app.notes][:1]:
+for _pn_id in [app._order_identity(n) for n in app.notes][:1]:
     app._share_vars[_pn_id].set(True)
 find_widget(app.share_panel, tk.Button, 'Generate code').invoke(); _pn_settle()
 if not app.selection_mode:

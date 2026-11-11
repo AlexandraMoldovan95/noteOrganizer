@@ -104,8 +104,8 @@ app.toggle_share_panel()
 # are bound to the ones the panel built, so a fresh BooleanVar would generate
 # a code for notes whose boxes still looked unticked -- a picture that lies
 # about what was asked for.
-app._share_vars[app.notes[0]['id']].set(True)
-app._share_vars[app.notes[1]['id']].set(True)
+app._share_vars[app._order_identity(app.notes[0])].set(True)
+app._share_vars[app._order_identity(app.notes[1])].set(True)
 app.notes[0]['attachments'] = [{'filename': 'f.txt', 'stored_as': 'x_f.txt'}]
 app._generate_inline_share()
 """),

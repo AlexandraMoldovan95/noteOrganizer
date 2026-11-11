@@ -11393,7 +11393,7 @@ _editor_closers = [b for b in _walk_widgets(app.editor_code_area, tk.Button)
 check('the editor code area has its ✕', len(_editor_closers) == 1)
 
 app.toggle_share_panel(); app.update()
-_first_id = app.notes[0]['id']
+_first_id = app._order_identity(app.notes[0])
 app._share_vars[_first_id] = tk.BooleanVar(value=True)
 app.notes[0]['attachments'] = [{'filename': 'f.txt', 'stored_as': 'x_f.txt'}]
 app._generate_inline_share(); app.update()
@@ -11556,7 +11556,7 @@ app.notes = [NO.normalize_note({'id': 90000 + _i, 'title': 'Over %d' % _i, 'body
 app.toggle_share_panel(); app.update()
 try:
     for _n in app.notes:
-        app._share_vars[_n['id']] = tk.BooleanVar(value=True)
+        app._share_vars[app._order_identity(_n)] = tk.BooleanVar(value=True)
     app._generate_inline_share(); app.update()
     _many_lbls = [str(l.cget('text')) for l in _walk_widgets(app.share_code_area, tk.Label)]
     _many_texts = [str(w.get('1.0', 'end-1c'))
@@ -11589,6 +11589,13 @@ app.notes = [
                        'comments': 'from grandma', 'pinned': True,
                        'created': '2026-01-03 10:00:00',
                        'updated': '2026-01-02 10:00:00'})]
+
+
+def _sp_var(nid):
+    """The Share panel's tick for the note with id *nid*: kept by its uid.
+    A tick kept some other way is a FAIL below, never a KeyError here."""
+    found = app._share_vars.get(app._order_identity(app.find_note(nid)))
+    return found if found is not None else tk.BooleanVar(value=False)
 
 
 def _sp_titles():
@@ -11630,7 +11637,7 @@ check(f'share: and in another sort, the same order as the list '
       and _sp_titles() == _sp_list)
 # Her re-test (case 594): with the panel open, a new Sort -- picked the way
 # the dropdown picks it -- or a pin shows there at once, ticks kept.
-app._share_vars[9303].set(True)
+_sp_var(9303).set(True)
 app.sort_var.set('Title A–Z')
 app._on_sort_chosen('Title A–Z')
 app.update()
@@ -11648,9 +11655,9 @@ check(f'share: an open panel follows a new Sort and a pin at once, ticks '
       _sp_follow_sort == ['Cherry jam', 'Apple pie', 'Banana bread']
       and _sp_follow_pin == ['Cherry jam', 'Apple pie', 'Banana bread']
       and _sp_titles() == ['Cherry jam', 'Banana bread', 'Apple pie']
-      and app._share_vars[9303].get())
-app._share_vars[9303].set(False)
-app._share_vars[9301].set(True)
+      and _sp_var(9303).get())
+_sp_var(9303).set(False)
+_sp_var(9301).set(True)
 check('share: typing waits for a pause before the list is drawn again, and '
       'drawing it now settles that', _sp_search('CINNAMON'))
 check(f'share: the search finds a word inside a table, whatever its case '
@@ -11673,7 +11680,7 @@ if _sp_all is not None:
     _sp_all.invoke()
     app.update()
 check('share: Select all ticks what the search shows, and nothing it hides',
-      app._share_vars[9302].get() and not app._share_vars[9303].get())
+      _sp_var(9302).get() and not _sp_var(9303).get())
 app._generate_inline_share(); app.update()
 _sp_code = next((str(w.get('1.0', 'end-1c'))
                  for w in _walk_widgets(app.share_code_area, tk.Text)), '')
@@ -11695,6 +11702,38 @@ app.share_search_var.set('pie')
 app.toggle_share_panel(); app.update()
 check('share: closing the panel calls off a search still waiting',
       app._share_search_job is None)
+for _sp_v in app._share_vars.values():
+    _sp_v.set(False)
+# A tick belongs to its note, not to its id: a deleted note frees the highest
+# id, the next new note takes it, and it arrived ticked for Generate code.
+app.toggle_share_panel(); app.update()
+_sp_top = max(app.notes, key=lambda n: n['id'])
+# Ticked by its box, as a person ticks it: however the panel keeps ticks.
+_sp_top_box = next((b for b in _sm_boxes_any()
+                    if str(b.cget('text')).startswith(_sp_top['title'][:20])), None)
+if _sp_top_box is not None:
+    _sp_top_box.invoke()
+app.update()
+check('fixture: the newest note is ticked by its box',
+      _sp_top_box is not None
+      and app.getboolean(app.getvar(_sp_top_box.cget('variable'))))
+app.toggle_share_panel(); app.update()
+app.notes = [n for n in app.notes if n is not _sp_top]
+app.new_note()
+app.title_entry.delete(0, 'end'); app.title_entry.insert(0, 'Fresh after a delete')
+app.title_entry.config(fg='black')
+app.body_text.insert('1.0', 'never picked')
+app.save_current_note(auto=False)
+app.update()
+_sp_fresh = app.find_note(app.selected_note_id) or {}
+app.toggle_share_panel(); app.update()
+_sp_fresh_box = next((b for b in _sm_boxes_any()
+                      if str(b.cget('text')).startswith('Fresh after')), None)
+check(f'share: a new note that takes a deleted note\'s id does not take its '
+      f'tick (id {_sp_fresh.get("id")} / {_sp_top["id"]})',
+      _sp_fresh.get('id') == _sp_top['id'] and _sp_fresh_box is not None
+      and not app.getboolean(app.getvar(_sp_fresh_box.cget('variable'))))
+app.toggle_share_panel(); app.update()
 for _sp_v in app._share_vars.values():
     _sp_v.set(False)
 app.sort_var.set(_sp_sort)

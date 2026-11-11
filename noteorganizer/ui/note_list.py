@@ -987,8 +987,10 @@ class NoteListMixin:
 
     @staticmethod
     def _order_identity(note):
-        """A note as the Custom order offer knows it: by its uid, which a
-        note brought back from the Trash keeps as a new dict."""
+        """A note as anything kept across a session knows it (the Custom
+        order offer, the Share panel's ticks, History's open groups): by its
+        uid, which a note back from the Trash keeps and a new note's reused
+        id does not."""
         return note.get("uid") or id(note)
 
     def _arranged_since_last_replace(self, was_notes):

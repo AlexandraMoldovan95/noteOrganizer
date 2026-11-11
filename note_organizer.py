@@ -11043,7 +11043,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._share_checklist_canvas = canvas
 
         # Plain colours, not track_theme(): rebuilt at every opening. Paged, as
-        # the Trash is: a tick box per note slows with the notebook.
+        # the Trash is: a tick box per note slows with the notebook. Ticks are
+        # kept by uid: an id is freed by a delete and taken by the next note.
         self._share_vars = getattr(self, "_share_vars", {}) or {}
         SHARE_PAGE_SIZE = 100
         shown = {"n": SHARE_PAGE_SIZE}
@@ -11051,12 +11052,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # What render_checkboxes drew: "Select all" ticks what is ON SCREEN,
         # not self.notes[:n] -- the list is paged and not live, and reading
         # the notes ticked ids with no tick box.
-        rendered = {"ids": []}
+        rendered = {"uids": []}
         wheeled = set()     # the chunks given the wheel
 
         def _revealed():
-            """The ids the panel is actually showing right now."""
-            return list(rendered["ids"])
+            """The uids of the notes the panel is actually showing right now."""
+            return list(rendered["uids"])
 
         def _all_revealed_ticked():
             ids = _revealed()
@@ -11096,10 +11097,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         def above_the_boxes(notes):
             """That the search hides some of what is picked -- Generate code
             shares those too -- or that it found nothing."""
-            showing = {n["id"] for n in notes}
-            hidden = sum(1 for n in self.notes if n["id"] not in showing
-                         and self._share_vars.get(n["id"]) is not None
-                         and self._share_vars[n["id"]].get())
+            key = self._order_identity
+            showing = {key(n) for n in notes}
+            hidden = sum(1 for n in self.notes if key(n) not in showing
+                         and self._share_vars.get(key(n)) is not None
+                         and self._share_vars[key(n)].get())
             lines = []
             if hidden:
                 lines.append(f"{hidden} picked note"
@@ -11125,13 +11127,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 offer["notes"] = offered()
             notes = offer["notes"]
             visible_notes = notes[first:shown["n"]]
-            rendered["ids"] = rendered["ids"][:first] + [
-                n["id"] for n in visible_notes]
+            key = self._order_identity
+            rendered["uids"] = rendered["uids"][:first] + [
+                key(n) for n in visible_notes]
             made = above_the_boxes(notes) if first == 0 else []
             for n in visible_notes:
-                if n["id"] not in self._share_vars:
-                    self._share_vars[n["id"]] = tk.BooleanVar(value=False)
-                var = self._share_vars[n["id"]]
+                if key(n) not in self._share_vars:
+                    self._share_vars[key(n)] = tk.BooleanVar(value=False)
+                var = self._share_vars[key(n)]
                 title = (n["title"].strip() or "(untitled)")[:24]
                 extra = " 📎" if n.get("attachments") else ""
                 cb = tk.Checkbutton(inner.add(), text=title + extra, variable=var,
@@ -11163,7 +11166,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         def redraw():
             inner.clear()
             wheeled.clear()
-            rendered["ids"] = []
+            rendered["uids"] = []
             render_checkboxes()
 
         def show_more(button):
@@ -11172,7 +11175,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             first = shown["n"]
             shown["n"] += SHARE_PAGE_SIZE
             fresh = offered()
-            if [n["id"] for n in fresh[:first]] != rendered["ids"]:
+            if [self._order_identity(n) for n in fresh[:first]] != rendered["uids"]:
                 # The notebook changed under the boxes on screen (a note
                 # deleted, or saved to a new place in the order, while this
                 # is open): all drawn again, or a note would have no box.
@@ -11196,7 +11199,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         def follow_order():
             """Draw again when the list's order moved under the panel."""
-            if [n["id"] for n in offered()][:shown["n"]] != rendered["ids"]:
+            if ([self._order_identity(n) for n in offered()][:shown["n"]]
+                    != rendered["uids"]):
                 refilter()
 
         self._share_follow_order = follow_order
@@ -11262,7 +11266,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 pass
 
     def _generate_inline_share(self):
-        chosen = [n for n in self.notes if self._share_vars.get(n["id"]) and self._share_vars[n["id"]].get()]
+        ticks = self._share_vars
+        chosen = [n for n in self.notes
+                  if ticks.get(self._order_identity(n)) is not None
+                  and ticks[self._order_identity(n)].get()]
         for w in self.share_code_area.winfo_children():
             w.destroy()
         if not chosen:
