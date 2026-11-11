@@ -2783,7 +2783,45 @@ _hl = find_all_labels(app._history_rows)
 check('expanding the group reveals its edited days, newest first',
       any('17.08.2026' in t for t in _hl)
       and any('15.06.2026' in t and 'HistSpecial' in t for t in _hl))
+# Unfolded by its note, not its id: a series deleted frees its id, and the
+# next note given that id opened unfolded.
+_h80 = app.find_note(80)
+app.notes = [n for n in app.notes if n is not _h80]
+app.notes.append(NO.normalize_note(dict(_h80, uid='')))
+app._render_calendar_history(); app.update()
+_hl = find_all_labels(app._history_rows)
+check('a new series given a deleted series\' id starts collapsed',
+      not any('17.08.2026' in t for t in _hl))
+app.notes = [n for n in app.notes if n.get('id') != 80] + [_h80]
+app._render_calendar_history(); app.update()
 app._history_toggle_group(80); app.update()
+
+
+def _exact_button(text):
+    stack = [app]
+    while stack:
+        w = stack.pop()
+        try:
+            if isinstance(w, tk.Button) and str(w.cget('text')) == text:
+                return w
+            stack.extend(w.winfo_children())
+        except tk.TclError:
+            pass
+    return None
+
+
+# A month asked for by a header button is shown: behind the register the
+# arrows moved a hidden month, seen only on the way back.
+_h_month = app.cal_year * 12 + app.cal_month
+_h_next = _exact_button('▶')
+if _h_next is not None:
+    _h_next.invoke(); app.update()
+check('History: ▶ in the header leaves the register for the next month',
+      _h_next is not None and not app._history_visible
+      and app.cal_grid_frame.winfo_ismapped()
+      and app.cal_year * 12 + app.cal_month == _h_month + 1)
+app.shift_calendar(months=-1); app.update()
+app._toggle_calendar_history(); app.update()
 
 # Search reaches into a day's own override content and auto-expands.
 app._history_search_var.set('budget')

@@ -471,6 +471,7 @@
   "_kind_from": "(icon, kind, fallback)",
   "_known_note_differs": "(self, mine, theirs, source)",
   "_lay_out_at_window_size": "(self)",
+  "_leave_history_for_the_month": "(self)",
   "_leave_note_by_keys": "(self, delta)",
   "_leave_settings_for_the_editor": "(self)",
   "_left_out_message": "(self, left_out, lead='Everything else in this note is saved, but not:')",

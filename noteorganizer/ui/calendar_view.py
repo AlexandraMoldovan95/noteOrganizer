@@ -279,7 +279,7 @@ class CalendarViewMixin:
         self._history_visible = False
         self._history_built = False
         self._history_bucket = "All"
-        self._history_expanded = set()   # note ids the user opened
+        self._history_expanded = set()   # series the user opened (_order_identity)
         self._history_shown = 50         # top-level rows rendered so far
         self._history_search_job = None
         # What each series costs to work out, kept by history_entries while
@@ -413,14 +413,22 @@ class CalendarViewMixin:
         # past them would crash the grid rather than just look odd.
         if not 1 <= year <= 9999:
             return
+        self._leave_history_for_the_month()
         self.cal_year, self.cal_month = year, month
         self.render_calendar()
 
     def go_to_today(self):
         today = datetime.now()
+        self._leave_history_for_the_month()
         self.cal_year, self.cal_month = today.year, today.month
         self._cal_key_day = today.strftime("%Y-%m-%d")
         self.render_calendar()
+
+    def _leave_history_for_the_month(self):
+        """A month asked for by a button is shown, as a History row's date
+        is: moved behind the register, it showed only on the way back."""
+        if getattr(self, "_history_visible", False):
+            self._hide_calendar_history()
 
     def _cal_note_font_size(self):
         """Two-step sizing: bigger note previews in a wide window, smaller in a
@@ -1675,7 +1683,8 @@ class CalendarViewMixin:
                 expandable = bool(entry["children"])
                 expanded = expandable and (
                     entry["auto_expand"]
-                    or entry["note_id"] in self._history_expanded)
+                    or (note is not None
+                        and self._order_identity(note) in self._history_expanded))
                 if entry["children_kind"] == "occurrences":
                     suffix = f" · {entry['n_occurrences']} occurrences"
                     if entry["n_edited"]:
@@ -1776,10 +1785,16 @@ class CalendarViewMixin:
                     self._bind_mousewheel_recursive(row, self.cal_scroll_canvas)
 
     def _history_toggle_group(self, note_id):
-        if note_id in self._history_expanded:
-            self._history_expanded.discard(note_id)
+        # Kept by uid: a series deleted frees its id, and the next note
+        # given that id would open unfolded.
+        note = self.find_note(note_id)
+        if note is None:
+            return
+        key = self._order_identity(note)
+        if key in self._history_expanded:
+            self._history_expanded.discard(key)
         else:
-            self._history_expanded.add(note_id)
+            self._history_expanded.add(key)
         self._render_calendar_history()
 
     def _history_off_schedule(self, note):

@@ -1910,7 +1910,7 @@ app.notes = [_ll_note(95000 + s, title=f'Routine {s:02d}',
                       recurrence={'freq': 'daily', 'interval': 1, 'count': 50})
              for s in range(30)]
 app._show_calendar_history(); _ll_settle(6)
-app._history_expanded = {95000 + s for s in range(30)}
+app._history_expanded = {app._order_identity(n) for n in app.notes}
 app._render_calendar_history(); _ll_settle(10)
 _ll_days = [r for r in app._history_rows.rows() if getattr(r, '_key_press', None)]
 _ll_ok, _ll_said = (_ll_reaches(app, app.cal_scroll_canvas, _ll_days[-1], _ll_settle)

@@ -17517,5 +17517,28 @@
     "must_fail": ["share: a new note that takes a deleted note's id does not take its tick"],
     "suites": ["qa1"],
     "expect": "killed"
+  },
+  {
+    "id": "RF02",
+    "about": "History keeps its open groups by note id, so a new series given a deleted series' id opens unfolded",
+    "edits": [{"file": "noteorganizer/ui/calendar_view.py",
+               "find": "        key = self._order_identity(note)\n        if key in self._history_expanded:",
+               "replace": "        key = note_id\n        if key in self._history_expanded:"},
+              {"file": "noteorganizer/ui/calendar_view.py",
+               "find": "                        and self._order_identity(note) in self._history_expanded))",
+               "replace": "                        and note.get(\"id\") in self._history_expanded))"}],
+    "must_fail": ["a new series given a deleted series' id starts collapsed"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "RF03",
+    "about": "The calendar's month arrows move the month hidden behind an open History",
+    "edits": [{"file": "noteorganizer/ui/calendar_view.py",
+               "find": "            return\n        self._leave_history_for_the_month()\n        self.cal_year, self.cal_month = year, month\n",
+               "replace": "            return\n        self.cal_year, self.cal_month = year, month\n"}],
+    "must_fail": ["History: ▶ in the header leaves the register for the next month"],
+    "suites": ["qa7"],
+    "expect": "killed"
   }
 ]
