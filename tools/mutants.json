@@ -17535,8 +17535,8 @@
     "id": "RF03",
     "about": "The calendar's month arrows move the month hidden behind an open History",
     "edits": [{"file": "noteorganizer/ui/calendar_view.py",
-               "find": "            return\n        self._leave_history_for_the_month()\n        self.cal_year, self.cal_month = year, month\n",
-               "replace": "            return\n        self.cal_year, self.cal_month = year, month\n"}],
+               "find": "        self.cal_year, self.cal_month = year, month\n        if not self._leave_history_for_the_month():\n            self.render_calendar()\n",
+               "replace": "        self.cal_year, self.cal_month = year, month\n        self.render_calendar()\n"}],
     "must_fail": ["History: ▶ in the header leaves the register for the next month"],
     "suites": ["qa7"],
     "expect": "killed"

@@ -15291,10 +15291,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if not raw.isdecimal() or not 1 <= int(raw) <= 9999:
                 error_lbl.config(text="Enter a year between 1 and 9999")
                 return
-            self._leave_history_for_the_month()
             self.cal_year = int(raw)
             self.cal_month = month_names.index(month_var.get()) + 1
-            self.render_calendar()
+            if not self._leave_history_for_the_month():
+                self.render_calendar()
             self._dismiss_mini_popup()
 
         # "break": a good year destroys this popup (see _show_inline_rename).

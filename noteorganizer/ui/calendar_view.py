@@ -413,22 +413,25 @@ class CalendarViewMixin:
         # past them would crash the grid rather than just look odd.
         if not 1 <= year <= 9999:
             return
-        self._leave_history_for_the_month()
         self.cal_year, self.cal_month = year, month
-        self.render_calendar()
+        if not self._leave_history_for_the_month():
+            self.render_calendar()
 
     def go_to_today(self):
         today = datetime.now()
-        self._leave_history_for_the_month()
         self.cal_year, self.cal_month = today.year, today.month
         self._cal_key_day = today.strftime("%Y-%m-%d")
-        self.render_calendar()
+        if not self._leave_history_for_the_month():
+            self.render_calendar()
 
     def _leave_history_for_the_month(self):
         """A month asked for by a button is shown, as a History row's date
-        is: moved behind the register, it showed only on the way back."""
+        is: moved behind the register, it showed only on the way back. True
+        when it left, the month (set first) drawn by the leaving, once."""
         if getattr(self, "_history_visible", False):
             self._hide_calendar_history()
+            return True
+        return False
 
     def _cal_note_font_size(self):
         """Two-step sizing: bigger note previews in a wide window, smaller in a
