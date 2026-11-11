@@ -2022,27 +2022,35 @@ class NoteListMixin:
         # A glimpse, not a width: the drawing wraps it to the card.
         preview = core_tables.glimpse(preview_src, self.CARD_PREVIEW_CHARS)
 
-        tags_text = note_category
+        # Two lines in fixed places (the owner's choice, 2026-11-11): when the
+        # note belongs, then what it holds. A sign's own spaces are U+00A0,
+        # which Tk never breaks at: "▦ 1" and "table" fell on two lines.
+        nb = "\xa0"
+        when = [note_category]
         if is_recurring(note):
-            tags_text += f"   🔁 {describe_recurrence(note)}"
+            when.append(f"🔁{nb}{describe_recurrence(note)}")
             if note.get("exceptions"):
-                tags_text += f"   ✕{len(note['exceptions'])}"
+                when.append(f"✕{len(note['exceptions'])}")
             if note.get("overrides"):
-                tags_text += f"   ✎{len(note['overrides'])}"
+                when.append(f"✎{len(note['overrides'])}")
         elif note.get("date"):
-            tags_text += f"   📅 {show_date(note['date'])}"
+            when.append(f"📅{nb}{show_date(note['date'])}")
+        holds = []
         if note.get("comments"):
-            tags_text += "   💬"
+            holds.append("💬")
         if note.get("attachments"):
-            tags_text += f"   📎×{len(note['attachments'])}"
+            holds.append(f"📎×{len(note['attachments'])}")
         if table_count:
-            tags_text += ("   ▦ 1 table" if table_count == 1
-                          else f"   ▦ {table_count} tables")
+            holds.append(f"▦{nb}1{nb}table" if table_count == 1
+                         else f"▦{nb}{table_count}{nb}tables")
         checklist = note.get("checklist") or []
         if isinstance(checklist, list) and checklist:
             done = sum(1 for it in checklist
                        if isinstance(it, dict) and it.get("done"))
-            tags_text += f"   ☑ {done}/{len(checklist)}"
+            holds.append(f"☑{nb}{done}/{len(checklist)}")
+        tags_text = "   ".join(when)
+        if holds:
+            tags_text += "\n" + "   ".join(holds)
         # The stripe wears the colour whole; the tags row's words a shade of
         # it that reads on the card (a pale yellow was 1.6:1 on white).
         words = legible_on(color, self.colors["card"], self.colors["text"])

@@ -6807,7 +6807,7 @@ check('a card previews the words, not the pipe rows',
       '|' not in _cardT['preview']
       and 'readable words' in _cardT['preview'])
 check('the card tags row counts the table',
-      '\u25a6 1 table' in _cardT['tags'])
+      '\u25a6\u00a01\u00a0table' in _cardT['tags'])
 
 # ---- A NEW TABLE UNDER AN OLD ONE STAYS A TABLE OF ITS OWN ----
 # Two adjacent runs of pipe rows read as one block, so a table created
@@ -13445,7 +13445,15 @@ _ov_tags = _ov_card['tags'] if _ov_card is not None else ''
 check('...and the checklist progress is whole, not a clipped "1/"',
       '1/2' in _ov_tags)
 check('...with the table mark and the attachment count still there',
-      '1 table' in _ov_tags and chr(0x00D7) + '1' in _ov_tags)
+      '1\xa0table' in _ov_tags and chr(0x00D7) + '1' in _ov_tags)
+# Two lines in fixed places (the owner's choice, 2026-11-11): when the note
+# belongs, then what it holds; the wrap fell anywhere, "1/2" alone below.
+_ov_lines = _ov_tags.split('\n')
+check(f'the tags are two lines: when, then what the note holds ({_ov_lines!r})',
+      len(_ov_lines) == 2 and _ov_lines[0].startswith('General')
+      and '\U0001F501\xa0' in _ov_lines[0]
+      and all(s in _ov_lines[1] for s in ('\U0001F4AC', '\U0001F4CE\xd71',
+                                          '\U000025a6\xa01\xa0table', '\U00002611\xa01/2')))
 
 app.notes = []
 app.trash = []

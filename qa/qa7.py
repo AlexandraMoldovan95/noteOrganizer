@@ -358,7 +358,7 @@ _card_says = app._card_texts(NO.normalize_note(
 check(f'a card shows the words without the table, a row typed past its last '
       f'cell included ({_card_says["preview"]!r} / {_card_says["tags"]!r})',
       '|' not in _card_says['preview'] and 'Words' in _card_says['preview']
-      and '▦ 1 table' in _card_says['tags'])
+      and '\U000025a6\xa01\xa0table' in _card_says['tags'])
 # A card keeps a note's lines apart, empty ones left out: run together, two
 # lines read as one sentence.
 _card_lines = app._card_texts(NO.normalize_note(

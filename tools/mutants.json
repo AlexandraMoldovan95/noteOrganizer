@@ -17613,5 +17613,25 @@
     "must_fail": ["the Categories tile counts every category"],
     "suites": ["qa9"],
     "expect": "killed"
+  },
+  {
+    "id": "RF10",
+    "about": "The card's tags run on one line, breaking wherever the room ends",
+    "edits": [{"file": "noteorganizer/ui/note_list.py",
+               "find": "            tags_text += \"\\n\" + \"   \".join(holds)\n",
+               "replace": "            tags_text += \"   \" + \"   \".join(holds)\n"}],
+    "must_fail": ["the tags are two lines: when, then what the note holds"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "RF11",
+    "about": "A card's signs keep breakable spaces, so \"▦ 1\" and \"table\" can fall on two lines",
+    "edits": [{"file": "noteorganizer/ui/note_list.py",
+               "find": "        nb = \"\\xa0\"\n",
+               "replace": "        nb = \" \"\n"}],
+    "must_fail": ["the card tags row counts the table"],
+    "suites": ["qa1"],
+    "expect": "killed"
   }
 ]

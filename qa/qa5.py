@@ -816,7 +816,7 @@ check('a dated note shows its date day first, and opens clean',
       app.date_entry.get() == '17.10.2026'
       and app.editor_state_matches_saved(app.capture_editor_state()))
 check('...and its card says it day first too',
-      '\U0001F4C5 17.10.2026' in app._card_texts(app.find_note(1))['tags'])
+      '\U0001F4C5\xa017.10.2026' in app._card_texts(app.find_note(1))['tags'])
 _w_stored = []
 for _w_form in ('16.11.2026', '16/11/2026', '16 nov 2026',
                 '16 noiembrie 2026', 'November 16, 2026', '2026-11-16'):
