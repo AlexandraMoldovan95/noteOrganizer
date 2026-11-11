@@ -489,13 +489,13 @@ def trash_entries_past_window(trash, days=None):
             if _trash_entry_is_past(entry, cutoff)]
 
 
-def purge_expired_trash(trash, notes):
+def purge_expired_trash(trash, notes, write=None):
     """Remove entries older than the retention window. Returns (kept, purged
     count). An entry with a missing/invalid deleted_at is kept: better too
-    long than early. The purged notes' attached files go too -- the one
-    deletion nobody asks for must not leave orphans -- except a file *notes*
-    or a kept entry still uses, as Delete and Empty trash spare it
-    (ISSUES_LOG: "The Trash that forgot its window")."""
+    long than early. The purged notes' files go too, except one *notes* or a
+    kept entry uses (ISSUES_LOG: "The Trash that forgot its window"). Given
+    *write* (save_trash), the kept list is written first and the files go
+    only if it landed; refused, nothing is purged."""
     cutoff = _trash_cutoff()
     kept = []
     purged_entries = []
@@ -504,6 +504,8 @@ def purge_expired_trash(trash, notes):
             purged_entries.append(entry)
         else:
             kept.append(entry)
+    if purged_entries and write is not None and not write(kept)[0]:
+        return list(trash or []), 0
     _delete_attachment_files(
         purged_entries, spare=attachment_names_in(list(notes or []) + kept))
     return kept, len(purged_entries)

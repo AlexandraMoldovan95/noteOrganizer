@@ -812,9 +812,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # is empty then, so no file a note still uses would be spared.
         self.trash = load_trash()
         if not self._notes_file_unread():
-            self.trash, purged = purge_expired_trash(self.trash, self.notes)
-            if purged:
-                save_trash(self.trash)
+            # Written before any file goes: a refused write purges nothing.
+            self.trash, _purged = purge_expired_trash(
+                self.trash, self.notes, write=save_trash)
 
         # User-chosen colors for individual calendar days (date -> #hex) and
         # emoji markers (date -> up to 3), independent of any note.
@@ -2134,6 +2134,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # screen still holds (ISSUES_LOG: "The close that outran a failed save").
         self._notes_unsaved = not ok
         if ok:
+            # What Remove took off a note goes now the file agrees.
+            self._drop_detached_files()
             return True
         # Never a dialog inside a sign-out: Windows waits on it, then ends the
         # process anyway. The crash log has the failure (_report_write_failure).

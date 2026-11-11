@@ -3924,8 +3924,8 @@
     "edits": [
       {
         "file": "noteorganizer/ui/attachments.py",
-        "find": "        _delete_attachment_files(\n            [{\"attachments\": [removed]}],\n            spare=attachment_names_in(\n                others + list(self.trash)\n                + [{\"attachments\": self.current_attachments}]))\n",
-        "replace": "        _delete_attachment_files([{\"attachments\": [removed]}])\n"
+        "find": "        gone = sorted(name for name in waiting if name not in named)\n",
+        "replace": "        gone = sorted(waiting)\n"
       }
     ],
     "must_fail": ["removing a file one of the notes still shows keeps it on disk",
@@ -3939,8 +3939,8 @@
     "edits": [
       {
         "file": "noteorganizer/ui/attachments.py",
-        "find": "        others = [n for n in self.notes\n                  if not (isinstance(n, dict) and n.get(\"id\") == note_id)]\n",
-        "replace": "        others = list(self.notes)\n"
+        "find": "            # (save_notes): first, a refused save left the note naming it.\n            self._autosave_now()\n",
+        "replace": "            # (save_notes): first, a refused save left the note naming it.\n            pass\n"
       }
     ],
     "must_fail": ["remove_attachment deletes the file from disk"],
@@ -3953,8 +3953,8 @@
     "edits": [
       {
         "file": "noteorganizer/ui/attachments.py",
-        "find": "                others + list(self.trash)\n",
-        "replace": "                others\n"
+        "find": "            list(self.notes) + list(self.trash)\n",
+        "replace": "            list(self.notes)\n"
       }
     ],
     "must_fail": ["removing a file one of the trash still shows keeps it on disk"],
@@ -3967,8 +3967,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        if not self._notes_file_unread():\n            self.trash, purged",
-        "replace": "        if True:\n            self.trash, purged"
+        "find": "        if not self._notes_file_unread():\n            # Written before any file goes",
+        "replace": "        if True:\n            # Written before any file goes"
       }
     ],
     "must_fail": ["...and purges nothing from the Trash on that launch: the entry and its file are both still there"],
@@ -17549,6 +17549,36 @@
                "replace": "        if at % 2 or not lines or not _looks_wrapped(lines):\n            blocks.append(\"\\n\".join(lines))\n"}],
     "must_fail": ["text that is not a column keeps its blank lines and line ends"],
     "suites": ["test_richtext"],
+    "expect": "killed"
+  },
+  {
+    "id": "RF05",
+    "about": "A removed attachment's file goes before the save that stops naming it is written",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self._set_aside_days()\n        ok, exc = core_save_notes(self.notes)\n",
+               "replace": "        self._set_aside_days()\n        self._drop_detached_files()\n        ok, exc = core_save_notes(self.notes)\n"}],
+    "must_fail": ["a Remove whose save the disk refuses keeps the file the note on disk names"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "RF06",
+    "about": "Deleting from the Trash for good takes the files even when trash.json could not be written",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "            if not self._trash_written(kept):\n                return False\n",
+               "replace": "            self._trash_written(kept)\n"}],
+    "must_fail": ["a Trash that cannot be written deletes nothing"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "RF07",
+    "about": "The startup purge takes the files even when the Trash write was refused",
+    "edits": [{"file": "noteorganizer/core/storage.py",
+               "find": "    if purged_entries and write is not None and not write(kept)[0]:\n        return list(trash or []), 0\n",
+               "replace": "    if purged_entries and write is not None:\n        write(kept)\n"}],
+    "must_fail": ["a purge whose Trash write is refused purges nothing and keeps the file"],
+    "suites": ["test_data_safety"],
     "expect": "killed"
   }
 ]

@@ -1355,6 +1355,23 @@ check("while the kept entry's file is untouched",
       os.path.exists(_new_att))
 os.remove(_new_att)
 
+# The Trash written first, then the files: deleted first, a refused write left
+# trash.json naming files that were gone.
+_expired = {"id": 1, "deleted_at": _stampO,
+            "attachments": [{"stored_as": "teeth_old.bin"}]}
+with open(_old_att, "w") as _f:
+    _f.write("x")
+_refusedT = _storage.purge_expired_trash(
+    [dict(_expired)], [], write=lambda kept: (False, OSError(28, "No space")))
+check("a purge whose Trash write is refused purges nothing and keeps the file",
+      _refusedT[1] == 0 and len(_refusedT[0]) == 1 and os.path.exists(_old_att))
+_writtenT = []
+_landedT = _storage.purge_expired_trash(
+    [dict(_expired)], [],
+    write=lambda kept: (_writtenT.append(list(kept)), (True, None))[1])
+check("written first, the purge then takes the file",
+      _landedT[1] == 1 and _writtenT == [[]] and not os.path.exists(_old_att))
+
 # ---- The purge spares a file something still uses ----
 # Two notes share one stored file when a duplicate or an import could not
 # copy it and kept the name. Delete and Empty trash spared it; the startup

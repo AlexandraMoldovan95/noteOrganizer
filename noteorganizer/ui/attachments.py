@@ -133,7 +133,7 @@ class AttachmentsMixin:
                       or (stored and a.get("stored_as") == stored)), None)
         if index is None:
             return
-        removed = self.current_attachments.pop(index)
+        self.current_attachments.pop(index)
         # A preview still reading it holds it open, and Windows deletes no
         # open file: the record went and the file stayed for good.
         source = getattr(self, "_preview_source", None)
@@ -141,18 +141,33 @@ class AttachmentsMixin:
         if source is not None and held and os.path.normcase(os.path.abspath(
                 str(getattr(source, "filename", "")))) == os.path.normcase(held):
             self._release_preview_source()
-        # Spared if another note, a Trash entry or this note again names it;
-        # this note's saved copy is left out, as it names the file until
-        # the autosave below.
-        others = [n for n in self.notes
-                  if not (isinstance(n, dict) and n.get("id") == note_id)]
-        _delete_attachment_files(
-            [{"attachments": [removed]}],
-            spare=attachment_names_in(
-                others + list(self.trash)
-                + [{"attachments": self.current_attachments}]))
         self.refresh_attachments_list()
-        self._schedule_autosave()
+        if stored:
+            self.__dict__.setdefault("_files_to_drop", set()).add(stored)
+        if note_id is None or self.find_note(note_id) is None:
+            # No saved note names it: a new note's file goes at once.
+            self._drop_detached_files()
+        else:
+            # The file goes after the save that stops naming it lands
+            # (save_notes): first, a refused save left the note naming it.
+            self._autosave_now()
+
+    def _drop_detached_files(self):
+        """Delete the files Remove took off a note that nothing names any
+        more -- no note, Trash entry or open editor. Run once the notes on
+        disk agree (after a save that landed); a file still named waits."""
+        waiting = getattr(self, "_files_to_drop", None)
+        # A save that failed left the disk naming what memory dropped.
+        if not waiting or getattr(self, "_notes_unsaved", False):
+            return
+        named = attachment_names_in(
+            list(self.notes) + list(self.trash)
+            + [{"attachments": self.current_attachments}])
+        gone = sorted(name for name in waiting if name not in named)
+        waiting.difference_update(gone)
+        if gone:
+            _delete_attachment_files(
+                [{"attachments": [{"stored_as": name} for name in gone]}])
 
     def open_attachment(self, index):
         if 0 <= index < len(self.current_attachments):

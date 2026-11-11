@@ -2437,6 +2437,45 @@ check('Empty trash deletes the notes its question counted, and keeps one '
       and [e.get('title') for e in NO.load_trash()] == ['Arrived while asking']
       and 'all 1 note ' in _sr_said.get('msg', ''))
 
+# The Trash written first, then the files: deleted first, a Trash the disk
+# refused kept an entry naming files that were gone.
+import noteorganizer.ui.settings_page as _sp3
+_tw_file = os.path.join(NO.ATTACHMENTS_DIR, 'tw_kept.bin')
+with open(_tw_file, 'w') as _tw_f:
+    _tw_f.write('x')
+app.trash = [{'id': 945, 'title': 'Holds a file', 'body': 'b', 'category': 'General',
+              'deleted_at': _et_now,
+              'attachments': [{'filename': 'tw_kept.bin', 'stored_as': 'tw_kept.bin'}]}]
+NO.save_trash(app.trash)
+app.toggle_settings_panel('trash')
+app.toggle_settings_panel('trash')
+app.update()
+_tw_real, _tw_warn, _tw_said = _sp3.save_trash, app.show_warning, []
+_sp3.save_trash = lambda t: (False, OSError(28, 'No space left on device'))
+app.show_warning = lambda title, msg, **k: _tw_said.append(title)
+app.ask_yes_no = lambda t, m, **k: True
+try:
+    _tw_btn = find_btn(app.settings_trash_panel, 'Empty trash')
+    if _tw_btn is not None:
+        _tw_btn.invoke()
+        app.update()
+finally:
+    _sp3.save_trash, app.show_warning = _tw_real, _tw_warn
+    app.ask_yes_no = _et_stub
+check('a Trash that cannot be written deletes nothing: the entry and its file '
+      'stay (%s)' % _tw_said,
+      _tw_btn is not None and os.path.isfile(_tw_file)
+      and [e.get('title') for e in app.trash] == ['Holds a file']
+      and _tw_said == ['Nothing was deleted'])
+app.ask_yes_no = lambda t, m, **k: True
+_tw_btn = find_btn(app.settings_trash_panel, 'Empty trash')
+if _tw_btn is not None:
+    _tw_btn.invoke()
+    app.update()
+app.ask_yes_no = _et_stub
+check('written, Empty trash then takes the file with it',
+      _tw_btn is not None and not os.path.isfile(_tw_file) and app.trash == [])
+
 # A corrupt recurrence must not break the sentence -- the trash holds
 # whatever was on disk, and normalize_note does not run on the way out.
 app.trash = [

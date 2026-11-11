@@ -748,6 +748,36 @@ check('the confirm asks with the warning glyph and No pre-selected',
 check('remove_attachment clears the list', len(app.current_attachments) == 0)
 check('remove_attachment deletes the file from disk', not os.path.isfile(stored_path))
 
+# The stored file goes after the save that stops naming it: deleted first, a
+# save the disk refused left the note on disk naming a file no longer there.
+import json as _json6r
+_rf_path = os.path.join(NO.ATTACHMENTS_DIR, 'rf_keep.txt')
+with open(_rf_path, 'w') as _rf_f:
+    _rf_f.write('keep me')
+app.current_attachments = [{'filename': 'rf_keep.txt', 'stored_as': 'rf_keep.txt'}]
+app.save_current_note(auto=True)
+app.update()
+_rf_id = app.selected_note_id
+_rf_real_save, _rf_real_err = NO.core_save_notes, app.show_error
+NO.core_save_notes = lambda notes: (False, OSError(28, 'No space left on device'))
+app.show_error = lambda *a, **k: None
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.remove_attachment(0)
+    app.update()
+finally:
+    NO.core_save_notes, app.show_error = _rf_real_save, _rf_real_err
+    app.ask_yes_no = _orig_ask_att
+with open(NO.DATA_FILE, encoding='utf-8') as _rf_fh:
+    _rf_disk = next((n for n in _json6r.load(_rf_fh) if n.get('id') == _rf_id), {})
+check('a Remove whose save the disk refuses keeps the file the note on disk names',
+      _rf_id is not None and os.path.isfile(_rf_path)
+      and any(a.get('stored_as') == 'rf_keep.txt'
+              for a in _rf_disk.get('attachments', [])))
+app.save_notes()
+app.update()
+check('and the next save that lands takes the file away', not os.path.isfile(_rf_path))
+
 # The file asked about is the file removed. While the question waited, the
 # editor could move on to another note; the index then named THAT note's
 # attachment, whose stored file went for good.
@@ -800,6 +830,10 @@ for _sh_where in ('notes', 'trash'):
     app.ask_yes_no = lambda *a, **k: True
     try:
         app.remove_attachment(0)
+        app.update()
+        # The file goes only after a save that lands: one made while the
+        # other note still shows it must spare it.
+        app.save_notes()
         app.update()
     finally:
         app.ask_yes_no = _orig_ask_att
@@ -881,12 +915,14 @@ try:
     app.update()
 finally:
     app.ask_yes_no = _orig_ask_att
+# Remove saves at once, its file going after the save lands: the editor
+# agrees with the note, and the disk has the removal before any flush.
 _aa_unsaved = not app.editor_state_matches_saved(app.capture_editor_state())
+check(f'...and a file removed after that save is stored at once '
+      f'(unsaved {_aa_unsaved}, on disk {_aa_disk()})',
+      not _aa_unsaved and _aa_disk() == ['qa6_after_one.txt'])
 app._flush_autosave()
 app.update()
-check(f'...and a file removed after that save reads as unsaved '
-      f'({_aa_unsaved}), and the next flush stores the removal ({_aa_disk()})',
-      _aa_unsaved and _aa_disk() == ['qa6_after_one.txt'])
 app.ask_yes_no = lambda *a, **k: True
 try:
     app.remove_attachment(0)

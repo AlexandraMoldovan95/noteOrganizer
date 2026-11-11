@@ -1426,11 +1426,11 @@ class SettingsPageMixin:
                 + self._series_warning([entry]),
                 icon="warning", default="no"
             ) and still_in_trash():
-                _delete_attachment_files(
-                    [entry], spare=attachment_names_in(
-                        self.notes + [e for e in self.trash if e is not entry]))
-                self.trash = [e for e in self.trash if e is not entry]
-                save_trash(self.trash)
+                kept = [e for e in self.trash if e is not entry]
+                if self._trash_written(kept):
+                    _delete_attachment_files(
+                        [entry], spare=attachment_names_in(self.notes + kept))
+                    self.trash = kept
                 # As the bulk delete's: Statistics' "In trash" kept the old
                 # figure.
                 self._render_statistics()
@@ -1516,6 +1516,18 @@ class SettingsPageMixin:
         if not files:
             return ""
         return f", along with {files} attached {'file' if files == 1 else 'files'}"
+
+    def _trash_written(self, kept):
+        """Write the Trash as *kept*, before any file leaves the disk: gone
+        first, a refused write left an entry naming files no longer there.
+        False, said, when it could not be written; nothing is deleted then."""
+        ok, _exc = save_trash(kept)
+        if not ok:
+            self.show_warning(
+                "Nothing was deleted",
+                "The Trash could not be saved, so its notes and their files stay "
+                "where they are. Is the disk full? Details are in crash_log.txt.")
+        return ok
 
     @staticmethod
     def _trash_window_line():
@@ -1668,13 +1680,15 @@ class SettingsPageMixin:
             named_ids = {id(e) for e in named}
             gone = [e for e in self.trash if id(e) in named_ids]
             kept = [e for e in self.trash if id(e) not in named_ids]
+            if not self._trash_written(kept):
+                return False
             _delete_attachment_files(
                 gone, spare=attachment_names_in(list(self.notes) + kept))
             self.trash = kept
-            save_trash(self.trash)
             # Statistics' "In trash" is what is there now: it kept the old
             # figure until the list next changed.
             self._render_statistics()
+            return True
 
         def delete_selected():
             named = ticked_entries()
@@ -1688,8 +1702,7 @@ class SettingsPageMixin:
                 f"{self._attached_files_words(named)}? This can't be undone."
                 + self._series_warning(named),
                 icon="warning", default="no"
-            ):
-                destroy(named)
+            ) and destroy(named):
                 self.set_status("Deleted %d note%s permanently"
                                 % (count, "" if count == 1 else "s"))
             redraw()
