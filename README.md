@@ -8,6 +8,11 @@ dependency (Pillow, for images).
 
 [![Tests](https://github.com/AlexandraMoldovan95/noteOrganizer/actions/workflows/tests.yml/badge.svg)](https://github.com/AlexandraMoldovan95/noteOrganizer/actions/workflows/tests.yml)
 
+**Try it without installing:** a [web demo](https://note-organizer-8f7772.netlify.app/demo/)
+re-creates the app in the browser, in HTML and JavaScript, not the app itself.
+**Written by Alexandra herself:** [In my words](docs/IN_MY_WORDS.md), and
+[Bug reports](docs/BUG_REPORTS.md), what her own manual testing found.
+
 ## In five minutes
 
 - **The app:** the pictures on this page, then the first page of the
@@ -41,7 +46,7 @@ they control.
 
 | | | |
 |---|---|---|
-| ![The main window, with a table in a note](docs/screenshots/main-window.png) | ![A repeating note](docs/screenshots/recurrence-setup.png) | ![The eight themes, in Settings → Appearance](docs/screenshots/theme-picker.png) |
+| ![The main window on a light theme, with a table in a note](docs/screenshots/main-window-light.png) | ![A repeating note](docs/screenshots/recurrence-setup.png) | ![The eight themes, in Settings → Appearance](docs/screenshots/theme-picker.png) |
 
 Every picture is a capture of the app itself, and its icon is drawn from
 code ([where they come from](docs/screenshots/README.md)).
