@@ -475,6 +475,15 @@ _blocks = _wrapped(70, "    ") + "\n\n" + _wrapped(70, "    ")
 check("a blank line still separates what it separated",
       reflow_wrapped(_blocks) == ORIGINAL + "\n\n" + ORIGINAL)
 
+# Text that is not a column comes back as it went in: rebuilt, two blank lines
+# became one, the blank lines at either end went, and every line lost its end.
+_spaced = "\n\nTitle  \n\n\n\nfirst part\n \n\nsecond part   \n\n"
+check("text that is not a column keeps its blank lines and line ends",
+      reflow_wrapped(_spaced) == _spaced)
+_runs = "\n\n\n" + _wrapped(70, "    ") + "\n\n\n\n" + _address + "\n"
+check("a column between blank runs is joined, and the runs are kept",
+      reflow_wrapped(_runs) == "\n\n\n" + ORIGINAL + "\n\n\n\n" + _address + "\n")
+
 # A hyphen at the break is kept and the space dropped. "more-or-less" split as
 # "more-" / "or-less" is the case that matters: removing the hyphen made it
 # "moreor-less", which is not a word.

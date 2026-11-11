@@ -17540,5 +17540,15 @@
     "must_fail": ["History: ▶ in the header leaves the register for the next month"],
     "suites": ["qa7"],
     "expect": "killed"
+  },
+  {
+    "id": "RF04",
+    "about": "The PDF rejoin rebuilds text that is not a column, losing its blank lines and line ends",
+    "edits": [{"file": "noteorganizer/core/richtext.py",
+               "find": "        if at % 2 or not lines or not _looks_wrapped(lines):\n            blocks.append(block)\n",
+               "replace": "        if at % 2 or not lines or not _looks_wrapped(lines):\n            blocks.append(\"\\n\".join(lines))\n"}],
+    "must_fail": ["text that is not a column keeps its blank lines and line ends"],
+    "suites": ["test_richtext"],
+    "expect": "killed"
   }
 ]

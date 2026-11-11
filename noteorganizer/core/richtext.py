@@ -1009,14 +1009,17 @@ def reflow_wrapped(text):
     column ends a paragraph. A run that does not look wrapped comes back
     exactly as it went in.
     """
+    # The blank runs between blocks are kept as captured, and a block that
+    # is not a column as it came: rebuilt, it lost its blank lines and ends.
+    parts = re.split(r"(\n[ \t]*\n(?:[ \t]*\n)*)", text or "")
     blocks = []
-    for block in re.split(r"\n[ \t]*\n", text or ""):
+    for at, block in enumerate(parts):
         lines = [line.rstrip() for line in block.split("\n") if line.strip()]
-        if not lines:
+        if at % 2 or not lines or not _looks_wrapped(lines):
+            blocks.append(block)
             continue
-        if not _looks_wrapped(lines):
-            blocks.append("\n".join(lines))
-            continue
+        lead = block[:len(block) - len(block.lstrip("\n"))]
+        tail = block[len(block.rstrip("\n")):]
         width = max(len(line) for line in lines)
         # A first line indented past the block's edge starts a paragraph,
         # whatever the measurement says.
@@ -1037,5 +1040,5 @@ def reflow_wrapped(text):
                 current = []
         if current:
             paragraphs.append(current)
-        blocks.append("\n".join(_join_wrapped(p) for p in paragraphs))
-    return "\n\n".join(blocks)
+        blocks.append(lead + "\n".join(_join_wrapped(p) for p in paragraphs) + tail)
+    return "".join(blocks)
