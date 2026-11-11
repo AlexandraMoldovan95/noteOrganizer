@@ -561,8 +561,10 @@ go to the Calendar or Settings. Your words are kept, so **Ctrl+F** brings them b
 selected, with the matches showing.
 
 Each note's card previews its first words. A table would be pipe soup at that size, so the preview
-shows only the note's plain text and the card's tag row marks the table itself — **▦ 1 table**, or
-how many the note holds — next to the comment and attachment marks.
+shows only the note's plain text and the card's tags mark the table itself — **▦ 1 table**, or how
+many the note holds. The tags sit on two lines: first where the note belongs (its category, then
+its date or how it repeats), then what it holds (a comment, attached files, tables, the
+checklist's progress), the second only when there is any.
 
 The list can be worked without a mouse. Click a note, or **Tab** into the list, and the card gets
 a visible ring; **↑** and **↓** walk from card to card in the order they are actually shown —
@@ -1173,9 +1175,9 @@ keys inside a bulleted or numbered list, and Ctrl+Z in a table.
 | **Enter** / **Space** | a picker | Picks. An emoji goes in and the picker stays open, for the next one. |
 | **Esc** | a picker | Closes it; the keyboard goes back to the button that opened it. |
 | **Alt+↑** / **Alt+↓** | checklist item with the ring (after a press on its ▲ ▼, or Tab to its box) | Moves the item one place up or down, as its ▲ ▼ do — in a note or a template. |
-| **Page Up** / **Page Down** | Calendar tab | Previous / next month. |
-| **Ctrl+Page Up** / **Ctrl+Page Down** | Calendar tab | Previous / next year. |
-| **Home** | Calendar tab | Jumps back to today. |
+| **Page Up** / **Page Down** | Calendar tab | Previous / next month; with 📋 History open, a page of the register. |
+| **Ctrl+Page Up** / **Ctrl+Page Down** | Calendar tab | Previous / next year; with 📋 History open, a page of the register. |
+| **Home** | Calendar tab | Jumps back to today; with 📋 History open, to the register's top. |
 | **Arrow keys** | the month, after Tab reaches it | Moves its ring a day, or a week; off the month's edge, into the next month or the last. |
 | **Enter** / **Space** | the month | Opens the day with the ring, as a click does. |
 | **Shift+F10** or the menu key | the month | Opens that day's right-click menu: add a note, colour or mark the day. |

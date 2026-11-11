@@ -3700,9 +3700,12 @@ class SettingsPageMixin:
                                     "checklist too."),
         )),
         ("Calendar (while the Calendar tab is showing)", (
-            ("Page Up  /  Page Down", "Previous / next month."),
-            ("Ctrl+Page Up  /  Ctrl+Page Down", "Previous / next year."),
-            ("Home", "Jump back to today."),
+            ("Page Up  /  Page Down", "Previous / next month; with History "
+                                      "open, a page of the register."),
+            ("Ctrl+Page Up  /  Ctrl+Page Down", "Previous / next year; with "
+                                                "History open, a page of the "
+                                                "register."),
+            ("Home", "Jump back to today; with History open, its top."),
             ("Arrow keys", "With Tab on the month: move its ring a day, or a "
                            "week, into the next month or the last."),
             ("Enter  /  Space", "Open the day with the ring, as a click does."),
