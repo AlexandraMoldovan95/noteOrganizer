@@ -960,6 +960,7 @@
   "_wrap_to_own_width": "(self, label, inset=4)",
   "_wrap_to_width": "(self, label, width)",
   "_write_cell": "(self, info, r, c, value)",
+  "_write_export_file": "(path, content)",
   "_write_fields_to_note": "(self, auto, title, body, formatting, paragraphs, comments, category, date_value, recurrence, left_out)",
   "_write_series_owned": "(self, note, date_value, recurrence, schedule=True)",
   "add_attachment": "(self)",

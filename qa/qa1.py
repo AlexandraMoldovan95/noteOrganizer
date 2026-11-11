@@ -7588,9 +7588,27 @@ app.show_error = lambda t, m, **k: _ctl_errs.append((t, m))
 _ctl_real_open = getattr(NO, 'open', None)
 
 
+class _HalfWritten:
+    """A file the disk fills under: one character lands, then the write fails."""
+
+    def __init__(self, f):
+        self.f = f
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.f.close()
+        return False
+
+    def write(self, text):
+        self.f.write(text[:1])
+        raise OSError(28, 'No space left on device')
+
+
 def _ctl_open(path, *a, **k):
     if 'Unwritable' in str(path):
-        raise OSError(28, 'No space left on device')
+        return _HalfWritten(_ioX.open(path, *a, **k))
     return _ioX.open(path, *a, **k)
 
 
@@ -7609,6 +7627,12 @@ check(f'a title with a control character exports, the character made safe '
 check(f'a note that fails to write is named in the message ({_ctl_errs})',
       len(_ctl_errs) == 1 and '1 failed to write' in _ctl_errs[0][1]
       and '• Unwritable title' in _ctl_errs[0][1])
+check(f'and only the note that failed stays selected, to try again '
+      f'({app.selected_note_ids})', app.selected_note_ids == {8804})
+check('a file that failed to write leaves nothing half-written behind '
+      f'({sorted(os.listdir(_ctl_dir))})',
+      not any(n.endswith('.tmp') or 'Unwritable' in n for n in os.listdir(_ctl_dir)))
+app._exit_selection_mode_after_bulk_action()
 app.notes = [_exp_note, _exp_note2]
 app._toggle_selection_mode()
 app.update()

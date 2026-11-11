@@ -17580,5 +17580,28 @@
     "must_fail": ["a purge whose Trash write is refused purges nothing and keeps the file"],
     "suites": ["test_data_safety"],
     "expect": "killed"
+  },
+  {
+    "id": "RF08",
+    "about": "The bulk export writes each file in place, leaving half a file when a write fails",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        None.\"\"\"\n        tmp_path = path + \".tmp\"\n",
+               "replace": "        None.\"\"\"\n        tmp_path = path\n"},
+              {"file": "note_organizer.py",
+               "find": "            try:\n                os.remove(tmp_path)\n            except OSError:\n                pass\n            return exc\n",
+               "replace": "            return exc\n"}],
+    "must_fail": ["a file that failed to write leaves nothing half-written behind"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "RF09",
+    "about": "A bulk export that partly failed clears the selection, so a retry means ticking them all again",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            self.selected_note_ids = failed_ids\n",
+               "replace": "            self.selected_note_ids = set()\n"}],
+    "must_fail": ["and only the note that failed stays selected"],
+    "suites": ["qa1"],
+    "expect": "killed"
   }
 ]

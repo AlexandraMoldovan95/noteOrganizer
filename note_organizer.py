@@ -11370,21 +11370,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if not path:
             return
         content = self._note_export_content(note, fmt, title)
-        # tmp-then-replace, like the backup zip: re-exporting over an
-        # existing file plus a mid-write failure used to destroy it.
-        tmp_path = path + ".tmp"
-        try:
-            with open(tmp_path, "w", encoding="utf-8") as f:
-                f.write(content)
-                # On the disk before it replaces a file of that name.
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(tmp_path, path)
-        except (IOError, OSError) as exc:
-            try:
-                os.remove(tmp_path)
-            except OSError:
-                pass
+        exc = self._write_export_file(path, content)
+        if exc is not None:
             self.show_error("Export failed",
                             f"Couldn't write the file:\n{exc}")
             return
@@ -11404,6 +11391,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 os.startfile(path)
             except OSError:
                 self.set_status(f"Saved to {path}")
+
+    @staticmethod
+    def _write_export_file(path, content):
+        """Write an exported note beside *path*, then move it into place
+        whole, as the backup zip is: written in place, a failure mid-write
+        left half a file, or destroyed the one it replaced. The error, or
+        None."""
+        tmp_path = path + ".tmp"
+        try:
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                f.write(content)
+                # On the disk before it replaces a file of that name.
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, path)
+            return None
+        except (IOError, OSError) as exc:
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+            return exc
 
     def _note_export_content(self, note, fmt, title):
         """One note rendered for one export format -- shared by the
@@ -17529,7 +17538,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             title=f"Export {len(self.selected_note_ids)} note(s) into…"))
         if not folder:
             return
-        written, failed, used = 0, [], set()
+        written, failed, failed_ids, used = 0, [], set(), set()
         for note in self.notes:
             if note["id"] not in self.selected_note_ids:
                 continue
@@ -17541,13 +17550,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 n += 1
                 name = f"{safe} ({n})"
             used.add(name.lower())
-            try:
-                with open(os.path.join(folder, name + ext), "w",
-                          encoding="utf-8") as f:
-                    f.write(self._note_export_content(note, fmt, title))
-                written += 1
-            except (IOError, OSError):
+            if self._write_export_file(os.path.join(folder, name + ext),
+                                       self._note_export_content(note, fmt, title)):
                 failed.append(title)
+                failed_ids.add(note["id"])
+            else:
+                written += 1
         if failed:
             # Which notes, not only how many: the person has to find them.
             named = "\n".join(
@@ -17556,9 +17564,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.show_error(
                 "Export incomplete",
                 f"{written} note(s) exported, {len(failed)} failed to write:"
-                f"\n\n{named}{more}")
-        else:
-            self._show_toast(f"Exported {written} note(s)")
+                f"\n\n{named}{more}\n\nThose are still selected, to try again.")
+            # Only the ones that failed stay ticked: cleared, a retry meant
+            # ticking them all again; kept whole, it wrote the rest twice.
+            self.selected_note_ids = failed_ids
+            self._update_bulk_selected_label()
+            self.refresh_note_list()
+            return
+        self._show_toast(f"Exported {written} note(s)")
         self._exit_selection_mode_after_bulk_action()
         if written and not failed and self.ask_yes_no(
                 "Open the folder?",
