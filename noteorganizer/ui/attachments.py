@@ -164,10 +164,14 @@ class AttachmentsMixin:
             list(self.notes) + list(self.trash)
             + [{"attachments": self.current_attachments}])
         gone = sorted(name for name in waiting if name not in named)
-        waiting.difference_update(gone)
         if gone:
             _delete_attachment_files(
                 [{"attachments": [{"stored_as": name} for name in gone]}])
+        # One a viewer held open, or a run that may not delete, waits for the
+        # next save that lands: let go of at once, it stayed on disk for good.
+        waiting.difference_update(
+            name for name in gone
+            if not os.path.isfile(_attachment_path_within(name) or ""))
 
     def open_attachment(self, index):
         if 0 <= index < len(self.current_attachments):
