@@ -235,6 +235,7 @@ is in the table below as well.
 | [Wave 2's lows: the banner that waited](#wave-2s-lows-the-banner-that-waited) | A message held back is about the past: ask it again when it is finally said, and say whose it is. | 0.100.513 |
 | [Wave 5: the window that opened under the taskbar](#wave-5-the-window-that-opened-under-the-taskbar) | A window's size and its place are two answers: one fitted to the screen is only half placed until something checks where it landed. | 0.100.513 |
 | [Wave 5: the desktop findings the phone's port had kept](#wave-5-the-desktop-findings-the-phones-port-had-kept) | A finding written down in one repository is invisible to the other's audit: before a release, read what the other app's logs still hold open about this one. | next |
+| [Wave 5: what a full reading found](#wave-5-what-a-full-reading-found) | A fix found on one road is a list of roads: the same shape waited on the next road, five times. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -4092,6 +4093,45 @@ had fixed (`2a31b35`) without anyone telling the list.
 
 **Takeaway:** a finding written down in one repository is invisible to the other's audit. Before
 a release, read what the other app's logs still hold open about this one.
+
+### Wave 5: what a full reading found
+
+*(2026-11-11 · ten read-only readers over both apps' code and documents, before the audit's pull
+request; every finding checked in the code before it was believed)*
+
+**Symptom:** nothing reached a person's notes, but five things could. The Share panel could show
+a new note already ticked, and Generate code carried it unchosen. With the calendar's History
+open, ◀, ▶ and Today moved the month behind it, seen only on the way back. Paste as plain text
+closed every run of empty lines to one and cut each line's end. A file removed from a note was
+deleted before the save that stopped naming it, so a save the disk refused left the note naming
+a file no longer there; deleting from the Trash for good, by hand or at the start, did the same
+to trash.json. A bulk export that failed halfway left half a file, and cleared the selection.
+
+**Mechanism:** old shapes, each fixed once on one road and waiting on the next.
+
+- State kept by a note's id across a session. The selection had learned that a delete frees the
+  highest id and the next new note takes it; the Share panel's ticks and History's open groups
+  had not.
+- A file deleted before the write that stops naming it, on four roads: Remove, Delete
+  permanently, Empty trash and the start's purge.
+- The keys had been taught to page History instead of the month behind it; the buttons beside
+  them had not.
+- A promise the body did not keep: `reflow_wrapped()` said a block that is not a column comes
+  back as it went in, and rebuilt every block it read.
+- The bulk export wrote in place, where the single one wrote beside and moved in.
+
+**Fix:** ticks and open groups are kept by `_order_identity` (the uid). The buttons leave History
+first, as a History row's date and the reminder bar already did. The rejoin keeps every blank
+run, and every block that is not a column, as captured. A removed file waits in `_files_to_drop`
+until a save lands; the Trash is written before any file goes (`_trash_written`,
+`purge_expired_trash(write=...)`), and a refused write deletes nothing, said. One writer,
+`_write_export_file`, serves both exports, and only the notes that failed stay ticked. Checks in
+qa1, qa3, qa6, qa7, test_richtext and test_data_safety; mutants RF01–RF09, with A08 and
+SF03–SF06 re-aimed. The readers' one grave claim, a hung mutant leaving its suite running beside
+the next, was refuted in the code: on Windows every run's own job ends its children with it.
+
+**Takeaway:** a fix found on one road is a list of roads to walk. And a reading by agents is worth
+what its checking is worth: every claim was read in the code before it went on the list.
 
 ## Tk & platform gotchas
 
