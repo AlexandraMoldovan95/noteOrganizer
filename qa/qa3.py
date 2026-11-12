@@ -3175,6 +3175,37 @@ for _p in (_he_zip, _he_zip + '.tmp'):
         os.remove(_p)
 app.notes = []; app.save_notes()
 
+# An export that FAILED on its own as the window closed, its error never
+# shown, was said at the next start as one the close had cut short.
+# Here it fails as a folder gone does: the worker cannot open its file.
+NO.save_setting('backup_cut_short', None)
+_fx_zip = os.path.join(os.getcwd(), 'qa3_no_such_folder', 'qa3_failed_export.zip')
+fd.asksaveasfilename = lambda **k: _fx_zip
+app.export_data()
+for _t in getattr(app, '_io_workers', []):
+    _t.join(25)
+check('fixture: the export failed on its own, not stopped by a close',
+      bool(app._export_state and app._export_state.get('done')
+           and app._export_state.get('error') and not app._export_state.get('stop')))
+app._settle_background_work_at_close()
+_fx_cut = NO.get_setting('backup_cut_short') or {}
+check(f'an export that failed as the window closed is recorded as failed, '
+      f'with its reason ({_fx_cut!r})',
+      _fx_cut.get('kind') == 'export_failed' and _fx_cut.get('file') == _fx_zip
+      and _fx_cut.get('error'))
+_fx_words = _next_start_says()
+check(f'...and the next start says it failed, and why, not that the close '
+      f'cut it short ({_fx_words[:160]!r})',
+      'qa3_failed_export.zip failed as Note Organizer closed' in _fx_words
+      and 'no new backup was made' in _fx_words and 'cut short' not in _fx_words
+      and str(_fx_cut.get('error'))[:20] in _fx_words)
+check('...once', NO.get_setting('backup_cut_short') is None)
+try:
+    app.after_cancel(app._export_poll_job)
+except (tk.TclError, ValueError, AttributeError):
+    pass
+app._export_state = None
+
 # The end of a Windows session is a question the person can still cancel
 # (Tk answers WM_QUERYENDSESSION with it), so it tears down nothing the app
 # needs if the session goes on. It stopped the export and dropped the import

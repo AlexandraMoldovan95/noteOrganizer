@@ -1810,6 +1810,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     lines.append(
                         f"The export to {name} finished as Note Organizer "
                         "closed, but not all of it. " + self._left_out_said(left))
+            elif cut.get("kind") == "export_failed":
+                # Its own error, unsaid because the window closed first.
+                reason = one_line(str(cut.get("error") or ""), 200)
+                lines.append(
+                    f"The export to {name} failed as {when}, so no new backup "
+                    "was made" + (f": {reason}" if reason else "") + ". A file "
+                    "already there under that name is as it was. To make one, "
+                    "export again (Settings → Backup → Export).")
             else:
                 # A process ended mid-export leaves its unfinished file
                 # beside the target (export_data writes there first).
@@ -2458,6 +2466,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     "kind": "export_partial", "file": state.get("save_path") or "",
                     "session_only": state.get("session_only"),
                     "left_out": list(state.get("left_out") or [])})
+        elif state is not None and state.get("done") and not state.get("stop"):
+            # Failed on its own as the window closed (a full disk, a folder
+            # gone): a failure, with its reason, not an export the close
+            # cut short.
+            self._export_state = None
+            save_setting("backup_cut_short", {
+                "kind": "export_failed", "file": state.get("save_path") or "",
+                "error": str(state.get("error") or "")[:300]})
         elif state is not None:
             # Stopped past the wait, or still running: no new backup. A
             # window that is closing cannot say so; the next start does.
