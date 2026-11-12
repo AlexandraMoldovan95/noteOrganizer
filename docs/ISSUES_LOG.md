@@ -236,6 +236,7 @@ is in the table below as well.
 | [Wave 5: the window that opened under the taskbar](#wave-5-the-window-that-opened-under-the-taskbar) | A window's size and its place are two answers: one fitted to the screen is only half placed until something checks where it landed. | 0.100.524 |
 | [Wave 5: the desktop findings the phone's port had kept](#wave-5-the-desktop-findings-the-phones-port-had-kept) | A finding written down in one repository is invisible to the other's audit: before a release, read what the other app's logs still hold open about this one. | 0.100.524 |
 | [Wave 5: what a full reading found](#wave-5-what-a-full-reading-found) | A fix found on one road is a list of roads: the same shape waited on the next road, five times. | 0.100.524 |
+| [Wave 6: the lows, fixed before the stores](#wave-6-the-lows-fixed-before-the-stores) | A low is written down to be fixed, not to be lived with: each one fixed with its class closed, or answered in writing. | next |
 
 Smaller lessons, each once a long comment in the code, are collected
 [at the end](#smaller-lessons-moved-out-of-the-code), by the name the code points with.
@@ -4133,6 +4134,52 @@ the next, was refuted in the code: on Windows every run's own job ends its child
 
 **Takeaway:** a fix found on one road is a list of roads to walk. And a reading by agents is worth
 what its checking is worth: every claim was read in the code before it went on the list.
+
+### Wave 6: the lows, fixed before the stores
+
+*(next · 2026-11-12 to 13 · the full reading's findings of low severity, which the audit's rule
+leaves for a wave of their own; the owner chose to fix every one before the stores, or say why
+not)*
+
+**Symptom:** each rare, none losing a note as a person uses the app. A title typed as
+"Note title..." was saved empty, and wiped at the next click into it; a search for "Search
+notes..." searched for nothing. An export that failed on its own as the window closed was said at
+the next start as one the close had cut short. An old notebook's one-time cleanup was marked done
+when its write had failed, its new ids alive only in the running app. A duplicate offered to put
+the original's older words over itself (Restore previous). A day off the schedule moved to the
+Trash went in twice when the app had stopped between the Trash's save and the notes'. A pin or a
+tick written by hand as "false" or "no" counted.
+
+**Mechanism:** six old shapes, each its own class.
+
+- A state told by its look: the four grey hints were recognised by their words, so the person's
+  words equal to them were taken for the hint.
+- A record written as the wrong kind: the close knew "stopped by me" and "failed by itself"
+  apart, and wrote both down as the first.
+- A write's answer ignored: the cleanup carried on as if its write had landed.
+- A copy that copies what is not the note's: the rescue copy belongs to the edit that made it.
+- Two writes in an order chosen for safety (the Trash first), with no guard for the step being
+  taken again after the first landed alone.
+- Truthiness standing for a flag: `bool()` reads any word as true; the phone reads only `true`.
+
+**Fix:** the field keeps whether its hint shows (`_hint_shown`, `show_hint`, marked before its
+words go in), and a ninth rule in `tools/check_one_definition.py` refuses a comparison with a
+hint's words anywhere in the app. The close records `export_failed` with its error. The cleanup
+works on copies and is kept only when the write lands. The duplicate leaves `_prev` with the
+original (the owner's choice; the phone already did). The Trash skips a day it already holds,
+content for content. `normalize_note`, `normalize_template` and the signatures read `is True`.
+Checks in qa1, qa3, qa4, qa5 and test_data_safety; mutants SN01–SN09, with WS36, WS41, WS48 and
+RT14 aimed at the code as it is now. The tools' lows went the same way: `build_msix` asks the exe
+its version, `check_guest` sees every way of starting a container, `run_tests` leaves no
+`__pycache__` behind.
+
+Two lows were read and left, with the reason. The qa seed's guard beside an empty notebook: the
+scratch marker, the app's own resolver, the run's empty homes and the deny rules already stand in
+front of it, and one more guard would stop the suites that run one after another in one folder.
+The site's missing third-party notices: the site ships nothing it did not write.
+
+**Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
+was either fixed, with its class closed, or answered in writing.
 
 ## Tk & platform gotchas
 

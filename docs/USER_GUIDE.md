@@ -629,7 +629,9 @@ remembered.
 - **Pin** a note (right-click → Pin to top) to keep it at the top of the list regardless of sort
   order.
 - **Duplicate** a note to create an editable copy, titled "(copy)". The copy owns its own
-  copies of any attached files, so the two notes can be edited — or deleted — independently.
+  copies of any attached files, so the two notes can be edited — or deleted — independently. A
+  **↩ Restore previous** waiting on the original stays with the original: the copy starts without
+  one.
 - **Move a note to another category** from its own right-click menu (**🗂 Move to category**),
   without opening it — the same list of categories the editor offers. On a calendar day of a
   repeating note it reads **🗂 Move the series to category**, as it moves every day of it.
