@@ -19021,6 +19021,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # A duplicate is a different note: the copied uid is dropped, and
         # normalize_note mints a fresh one.
         clone.pop("uid", None)
+        # The rescue copy ("↩ Restore previous") stays with the original:
+        # offered on the copy, it put the original's older words over a note
+        # made now. The phone's duplicate leaves it behind too.
+        clone.pop("_prev", None)
         base_title = (note.get("title") or "").strip()
         clone["title"] = f"{base_title} (copy)" if base_title else "(copy)"
         # Made now: it kept the original's "Created".

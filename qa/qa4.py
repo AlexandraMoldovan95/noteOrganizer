@@ -179,6 +179,21 @@ check('duplicate_note: the copy is given its OWN identity',
 check('duplicate_note: the two identities differ',
       _ident_clone.get('uid') != _ident_src.get('uid'))
 
+# The same seam once more: the rescue copy of a big deletion ("↩ Restore
+# previous") was copied too, so the duplicate offered to put the
+# original's older words over a note made now. It stays with the original.
+_prev_src = _model4.normalize_note(
+    {'id': 1, 'title': 'Cut down', 'body': 'short now',
+     '_prev': {'title': 'Cut down', 'body': 'the long text it had before'}})
+app.notes = [_prev_src]
+app.save_notes()
+_prev_clone = app.duplicate_note(app.notes[0])
+app.update()
+check(f'duplicate_note: the copy carries no rescue copy of the original '
+      f'({sorted(_prev_clone)!r})', '_prev' not in _prev_clone)
+check('duplicate_note: the original keeps its own',
+      (app.find_note(1).get('_prev') or {}).get('body') == 'the long text it had before')
+
 # -- Settings "clean up duplicates" merge (GAP found by the Fix-1 reviewer) --
 _merge_src = "20260101000000000002_merge.txt"
 _merge_src_path = _mk_att4(_merge_src)
