@@ -1,0 +1,20 @@
+You are a skeptical reviewer re-attacking fixes just made to the Android companion of Note Organizer (Kotlin + Compose), D:\Projects\androidVersion, branch audit/a-val5. The desktop app's Python (D:\Projects\NoteOrganizer) is the specification; read it to compare, never edit it. Read each commit with `git -C D:\Projects\androidVersion show <hash>` and the code around it.
+
+THE FIXES:
+- b2f1420 tables: Editing.insertTable adds one line break after a new table, never a second when a table sits below (as the desktop's _insert_table since 495fdf2). EditingTest; mutant AS653.
+- de68c01 import: CodeImportDialog (ImportFlow.kt) keys its four remembered states by `initial`, so a second code shared in over the open dialog (MainActivity singleTask, onNewIntent -> state.incomingCode) replaces the first. Walk part second_code_while_open.
+- fa48412 editor: Duplicate and Export as file on a blank new note (model.id == 0 && model.blank) say "Nothing to duplicate/export yet" and write nothing (NoteEditor.kt menu), as Share already refused. Walk part blank_note_menu.
+- 6e911bf texts in strings.xml: attach_remove_text, reminder_inexact, about_storage.
+- 27f2429 paste: Pasting.reflowWrapped keeps blank runs (BLANK_RUN, findAll) and returns a non-column block untouched (reflowBlock), as the desktop's reflow_wrapped since b5725e0; the paste fixture regenerated, its second-table special case removed (tools/make_paste_fixture.py), PastingTest's difference test replaced. Mutant AS654.
+- dc87761 walk tools: tools/emulator/walk.py wraps every part main() names in _settled (counts checks, writes summary.json, settle_device puts font_scale, font_weight_adjustment, user_rotation, uimode night, wm size/density back); take_screenshots.py puts the turning back as found; NEW tools/emulator/walk_groups.py runs the walk in groups of ten parts on cold emulators.
+
+Questions, in order: (a) does each fix hold on every road a person takes (a code typed by hand then a code shared in; a code shared while the import questions are showing; Duplicate on a note with only a checklist item or an attachment or a comment; Export on a day of a series; a paste of text with \r\n; a paste into a cell)? (b) did it break anything beside it (other readers of incomingCode; the dialog's own Import/Cancel/Clear; the editor's autosave and its "blank" definition; Pasting.insert and every caller of reflowWrapped; the walk's existing parts that rely on state a previous part left, e.g. the emulator rotated or dark between parts; walk_groups' stop of the emulator and its subprocess limits; summary.json written into a folder that does not exist yet)? (c) does any of the phone's docs now say something untrue about these?
+
+You MAY probe only with plain Python under <scratchpad>\miniaudit\phone1\ (e.g. comparing the desktop's reflow_wrapped on a copy of D:\Projects\NoteOrganizer\noteorganizer). Do NOT run gradle, adb, the emulator, walk.py or walk_groups.py; never edit a repository file; never open real data (C:\Users\<name>\Note Organizer, %APPDATA%\NoteOrganizer, the desktop's notebook_location.txt).
+
+Severity (the owner's rule): only steps an ordinary person takes keep a round open; a loss of notes is always serious. HIGH = lost words or the app breaks; MEDIUM = a person is misled or a road misbehaves; LOW = rare, cosmetic, or internal (the walk's tools are internal unless they could damage a real phone or leave the machine busy).
+
+Report in English, at most 60 lines, exactly these headings:
+1. VERDICT PER FIX -- holds / does not hold, one line each with the reason.
+2. FINDINGS -- each: severity, file:line, the road, the mechanism, the evidence. Concrete only; no refactors, no taste.
+3. NOT COVERED.

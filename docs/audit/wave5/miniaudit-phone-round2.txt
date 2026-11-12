@@ -1,0 +1,20 @@
+You are a skeptical reviewer in the SECOND round of re-attacking fixes in the Android companion of Note Organizer (Kotlin + Compose), D:\Projects\androidVersion, branch audit/a-val5. The desktop's Python (D:\Projects\NoteOrganizer) is the specification; read, never edit. Read each commit with `git -C D:\Projects\androidVersion show <hash>` and the code around it.
+
+ROUND 1's fixes, attack by name first:
+- 4c9063b tools/emulator/walk_groups.py: refuses to start when `adb devices` lists an emulator; boot() returns the Popen it started (or stops it and returns None); stop(proc) sends `adb emu kill`, waits, and ends only that process tree (taskkill /T /F /PID); a stuck group is detected only from output lines that are not PASS/FAIL; PASS/FAIL counted per line; a retried group keeps its first try's walk.out and summary.json as .tryN. Can it leave an emulator or qemu running, hang without a time limit, misjudge a group, or stop something it did not start?
+- af0d8c3 docs/ISSUES_LOG.md wording.
+
+Then what round 1 did not cover, for the earlier fixes b2f1420 (Editing.insertTable one break), de68c01 (CodeImportDialog remember(initial)), fa48412 (Duplicate/Export refuse a blank new note), 6e911bf (three strings), 27f2429 (Pasting.reflowWrapped keeps blank runs; paste fixture regenerated), dc87761 (walk.py _settled wrapper with settle_device and write_summary; take_screenshots.py restores rotation as found):
+- MainActivity's onNewIntent / `incoming` / LaunchedEffect flow and every other path that sets state.incomingCode; the ImportQuestions shown over a dialog when a second code arrives (round 1 called the silent discard LOW: is anything lost?);
+- take_screenshots.py's new finally (values read before; `settings get` answering "null");
+- whether walk.py's new parts second_code_while_open and blank_note_menu can pass while the bug is present (e.g. tap targets, timing of `am start`, read_file of notes_data.json before the app writes) -- a check that cannot fail is a finding;
+- whether summary.json's counts can disagree with the printed PASS/FAIL (fail() vs check()).
+
+Probe only with plain Python under <scratchpad>\miniaudit\phone2\ . Do NOT run gradle, adb, the emulator, walk.py or walk_groups.py; never edit a repository file; never open real data (C:\Users\<name>\Note Organizer, %APPDATA%\NoteOrganizer, the desktop's notebook_location.txt).
+
+Severity (the owner's rule): only steps an ordinary person takes keep a round open; a loss of notes is always serious. HIGH = lost words or the app breaks; MEDIUM = a person is misled or a road misbehaves, or a walk check that cannot fail on the bug it guards; LOW = rare, cosmetic, internal.
+
+Report in English, at most 60 lines, exactly these headings:
+1. VERDICT PER FIX -- holds / does not hold, one line each with the reason.
+2. FINDINGS -- each: severity, file:line, the road, the mechanism, the evidence. Concrete only.
+3. NOT COVERED.

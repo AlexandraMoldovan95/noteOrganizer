@@ -2,13 +2,13 @@
 
 Note Organizer is a personal project: a notes app for Windows and its Android companion, made
 to be used. Before the two went to the stores, AI agents checked them in waves of rounds, from
-27 October to 8 November 2026. This folder holds what those agents were told: every script
-that started them, as it ran.
+27 October to 12 November 2026. This folder holds what those agents were told: every script
+that started them, as it ran, and the prompts of the agents started by hand.
 
 How a round worked, what each wave was for, when it closed and what it found are told in
 [How Note Organizer is built with an AI agent](../AI_WORKFLOW.md#the-final-audit). This page is
-the index of the prompts. [The review panel](wave4/README.md), the last wave, has a page of its
-own, with what came of each of its rounds.
+the index of the prompts. [The review panel](wave4/README.md) has a page of its own, with what
+came of each of its rounds.
 
 **Contents:** [Reading a script](#reading-a-script) ·
 [What was changed for publication](#what-was-changed-for-publication) ·
@@ -43,8 +43,8 @@ The scripts are copied from the runs' own records. Three things differ from what
 - **Two comment lines** at the top of each script name its run and when it started.
 
 Wave 3 ran each round's script twice, once per app; it is here once. Wave 4's third round was
-two agents started by hand rather than by a script: their prompts are the two `.txt` files,
-taken from the agents' own transcripts.
+two agents started by hand rather than by a script, and so was all of wave 5: their prompts are
+the `.txt` files, taken from the agents' own transcripts, with the paths replaced the same way.
 
 ## What is not here
 
@@ -64,7 +64,8 @@ taken from the agents' own transcripts.
 
 ## The scripts, wave by wave
 
-The 125 runs recorded about 103.3 million tokens between them, the figure
+The 125 runs of waves 1 to 4 recorded about 103.3 million tokens between them, and wave 5's 21
+agents 3.85 million: the figure of about 107 million
 [the final audit](../AI_WORKFLOW.md#the-final-audit) gives. "Agents" counts every agent a run
 started, the sceptic included. The two agents of wave 4's third round were started by hand,
 and their tokens were not recorded.
@@ -237,3 +238,34 @@ panel met three times.
 | [round3-reattack-android.txt](wave4/round3-reattack-android.txt) | Phone | 2026-11-07 16:12 | 1 | not recorded |
 | [round3-reattack-desktop.txt](wave4/round3-reattack-desktop.txt) | Desktop | 2026-11-07 16:12 | 1 | not recorded |
 | [round4-panel.js](wave4/round4-panel.js) | Both | 2026-11-08 07:23 | 8 | 1.03 |
+
+### Wave 5: the release
+
+Ten read-only readers on 11 November, each given a part of one app, then a mini-audit that
+attacked each fix by name: two agents for the desktop's first round, one for every round after.
+The phone's rounds 3 to 8 attacked the runner for the emulator walk, written in the same wave.
+No sceptic ran in this wave: I checked each finding in the code before it counted.
+
+| Prompt | App | Started (UTC) | Agents | Tokens (millions) |
+|---|---|---|---|---|
+| [reading-desktop-hub-first-half.txt](wave5/reading-desktop-hub-first-half.txt) | Desktop | 2026-11-11 19:11 | 1 | 0.25 |
+| [reading-desktop-hub-second-half.txt](wave5/reading-desktop-hub-second-half.txt) | Desktop | 2026-11-11 19:11 | 1 | 0.26 |
+| [reading-desktop-ui-mixins.txt](wave5/reading-desktop-ui-mixins.txt) | Desktop | 2026-11-11 19:11 | 1 | 0.30 |
+| [reading-desktop-core.txt](wave5/reading-desktop-core.txt) | Desktop | 2026-11-11 19:11 | 1 | 0.23 |
+| [reading-desktop-tools-and-site.txt](wave5/reading-desktop-tools-and-site.txt) | Desktop | 2026-11-11 19:11 | 1 | 0.16 |
+| [reading-desktop-documents.txt](wave5/reading-desktop-documents.txt) | Desktop | 2026-11-11 19:11 | 1 | 0.27 |
+| [reading-phone-screens-and-manifest.txt](wave5/reading-phone-screens-and-manifest.txt) | Phone | 2026-11-11 19:11 | 1 | 0.37 |
+| [reading-phone-rules-part1.txt](wave5/reading-phone-rules-part1.txt) | Phone | 2026-11-11 19:11 | 1 | 0.28 |
+| [reading-phone-rules-part2.txt](wave5/reading-phone-rules-part2.txt) | Phone | 2026-11-11 19:11 | 1 | 0.27 |
+| [reading-phone-documents-and-tools.txt](wave5/reading-phone-documents-and-tools.txt) | Phone | 2026-11-11 19:11 | 1 | 0.24 |
+| [miniaudit-desktop-round1-data.txt](wave5/miniaudit-desktop-round1-data.txt) | Desktop | 2026-11-11 21:45 | 1 | 0.09 |
+| [miniaudit-desktop-round1-ui.txt](wave5/miniaudit-desktop-round1-ui.txt) | Desktop | 2026-11-11 21:45 | 1 | 0.09 |
+| [miniaudit-desktop-round2.txt](wave5/miniaudit-desktop-round2.txt) | Desktop | 2026-11-11 22:07 | 1 | 0.12 |
+| [miniaudit-phone-round1.txt](wave5/miniaudit-phone-round1.txt) | Phone | 2026-11-11 22:07 | 1 | 0.12 |
+| [miniaudit-phone-round2.txt](wave5/miniaudit-phone-round2.txt) | Phone | 2026-11-11 22:12 | 1 | 0.12 |
+| [miniaudit-phone-round3.txt](wave5/miniaudit-phone-round3.txt) | Phone | 2026-11-11 22:20 | 1 | 0.09 |
+| [miniaudit-phone-round4.txt](wave5/miniaudit-phone-round4.txt) | Phone | 2026-11-11 22:25 | 1 | 0.10 |
+| [miniaudit-phone-round5.txt](wave5/miniaudit-phone-round5.txt) | Phone | 2026-11-11 22:33 | 1 | 0.11 |
+| [miniaudit-phone-round6.txt](wave5/miniaudit-phone-round6.txt) | Phone | 2026-11-11 22:40 | 1 | 0.12 |
+| [miniaudit-phone-round7.txt](wave5/miniaudit-phone-round7.txt) | Phone | 2026-11-11 22:47 | 1 | 0.12 |
+| [miniaudit-phone-round8.txt](wave5/miniaudit-phone-round8.txt) | Phone | 2026-11-12 00:02 | 1 | 0.14 |

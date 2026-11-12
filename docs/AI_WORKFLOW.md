@@ -166,6 +166,7 @@ How a round worked:
 | 2 | An ordinary person's week, and a careless hand | closed at round 14 | closed at round 25 |
 | 2's lows | The low findings of wave 2 | closed at verification round 8 | closed at verification round 10 |
 | 4 | [The review panel](audit/wave4/README.md): eight roles, two to an agent | closed at round 4 † | closed at round 4 † |
+| 5 | The release: a full reading of both apps, its fixes attacked by name, the builds proved | closed at round 2 | closed at round 8 ‡ |
 
 \* Not by the two-clean-rounds rule. After round 5 I narrowed what kept a round of wave 3 open
 to what a person using the app would meet and be misled by, and chose round 8 as the last.
@@ -175,6 +176,22 @@ fourth round as the last before it ran, and the scores still rose in it: for the
 built it and for the project, the desktop's from 6.38 and 7.25 to 6.75 and 7.38, the phone's
 from 6.62 and 6.88 to 6.88 and 7.50. What it found untrue in the code and the documents was fixed after it;
 what it proposed beyond that waits for my decision.
+
+‡ By the two-clean-rounds rule as I settled it on 12 November: a gap in what a self-test covers,
+while the tool it tests is right, is a low finding. Rounds 3 to 8 attacked the phone's new runner
+for the emulator walk; from round 6 on, none could break what it promises.
+
+Wave 5 began with a reading rather than an attack. On 11 November ten read-only agents read both
+apps' code and documents, and I checked what they reported in the code before it counted: 26
+findings confirmed, 2 refuted, 8 written down unchecked. What reached a person, with five desktop
+findings the phone's port had kept since October, became the desktop's eleven fixes in 0.100.524
+and the phone's five in 0.14.1; the rest were documents and comments put right. A mini-audit then
+attacked each fix by name. One more came after it: the desktop's
+Statistics tile had changed, and the phone, ported from the old rule, was never asked; the
+release build's photograph showed it, and it is 0.14.2. Then both apps were built and proved:
+the desktop's package in Windows Sandbox and by the certification kit
+([Windows release](RELEASE_WINDOWS.md#packing-it-and-proving-it-in-windows-sandbox)), the
+phone's release build on the emulator.
 
 The phone needed more rounds than the desktop in waves 1 and 2, and its issues log says why: most
 of the extra rounds found the round before's own fixes wrong. Custom order's drag took twelve
@@ -206,9 +223,10 @@ sceptic seldom refuted - 6 of the 756 it re-graded - and earned its place anothe
 fixes by name and the code beside them; in wave 1 those agents found 175 of the desktop's 309
 findings and 120 of the phone's 268.
 
-The agents used about 103 million tokens, as their runs recorded them: wave 1, 49.2 million;
+The agents used about 107 million tokens, as their runs recorded them: wave 1, 49.2 million;
 its lows, 8.2; wave 3, 8.7; wave 2, 22.9; its lows, 11.2; the panel's first two rounds, 2.1, and
-its fourth, 1.0. The whole audit had been estimated at 8 to 13 million before it began. The count leaves out the main
+its fourth, 1.0; wave 5, 3.85 (the reading 2.63, the mini-audits 1.22). The whole audit had been
+estimated at 8 to 13 million before it began. The count leaves out the main
 session's own work between rounds, and the panel's third round, given to two agents by hand.
 
 ## AI reviewers and simulations: what they are, and are not
@@ -233,7 +251,7 @@ four or five reviewers with separate territories, and a full wave only with my s
 stated reason. CI minutes are billed too - Windows minutes count double, so the mutant job runs
 on Linux, and the workflow skips work a change cannot affect.
 
-The final audit was such a sign-off, and it ran far past its estimate: about 103 million agent
+The final audit was such a sign-off, and it ran far past its estimate: about 107 million agent
 tokens against 8 to 13 million ([the numbers](#the-final-audit)). The rounds made the difference.
 A wave closed only after two clean rounds in a row, and waves 1 and 2 took 14 to 25, most of
 them attacking the last round's fixes. A finding cost about 85,000 tokens in wave 1, 92,000 in

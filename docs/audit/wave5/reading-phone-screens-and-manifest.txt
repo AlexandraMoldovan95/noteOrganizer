@@ -1,0 +1,14 @@
+You are one of ten read-only readers getting to know two apps before a release. Your slice: **the Android app's drawing side**, in D:\Projects\androidVersion\app\src\main\: java\ro\noteorganizer\app\ NoteEditor.kt, SettingsScreens.kt, CalendarScreen.kt, NotesScreen.kt, AppState.kt, MainActivity.kt, TemplateScreens.kt, ImportFlow.kt, CalculatorPanel.kt, RepeatSheet.kt, TableView.kt, Components.kt, FindBar.kt, PdfPrint.kt, ShareFlow.kt, ExportFlow.kt, ReminderAlarm.kt, NotesBackupAgent.kt, RichText.kt, ui\theme\*; plus AndroidManifest.xml, res\values\strings.xml, res\xml\*, and app\build.gradle.kts (~13,000 lines). Read ALL of them in full with the Read tool, keeping short running notes as you go.
+
+Context: the Android app (Kotlin + Compose, 0.14.0 / versionCode 17, branch audit/a-val5), companion of the desktop Note Organizer. One Activity, one AppState, no ViewModel; the editor saves 0.8 s after a change, on Back and in onStop; every change from outside the editor goes through AppState.outside(). Read D:\Projects\androidVersion\docs\ARCHITECTURE.md first (short) and check its claims. Google Play readiness (target SDK, permissions only POST_NOTIFICATIONS + RECEIVE_BOOT_COMPLETED, no INTERNET, not debuggable in release, allowBackup with the off switch) — check the manifest and gradle agree with docs\STATUS.md "Before the first upload to Google Play".
+
+Hard rules: read only. Never edit, write, or run anything (no gradle, no adb, no python). Never open real data (C:\Users\<name>\Note Organizer, %APPDATA%\NoteOrganizer, D:\Projects\NoteOrganizer\notebook_location.txt).
+
+Already known, do NOT report: docs\STATUS.md lags behind the desktop's 10–11 Nov fixes; CLAUDE.md names the desktop as 0.97.405; insertTable's double blank line; NoteEditor.kt's TablePicker comment naming the desktop's old grid.
+
+Report (English, at most 60 lines, exactly these four headings):
+1. WHAT IT IS — at most 12 lines: what each screen owns and how state flows.
+2. MISMATCHES — a KDoc/comment/ARCHITECTURE/STATUS claim the code does not do; a screen text (strings.xml or literal) that says something untrue. Each: file:line — what it says — what the code does (file:line). Concrete only.
+3. SUSPECTED BUGS — only real behaviour a person could reach (lost words on Home/rotate/kill, wrong note saved, crash, ANR), mechanism + road. Mark each "suspected, not run". No refactors, no taste.
+4. NOT COVERED — what you skipped or only skimmed.
+If a section is empty, say "none found" — do not pad.

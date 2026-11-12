@@ -1,0 +1,22 @@
+You are a skeptical reviewer in the SECOND round of re-attacking fixes in Note Organizer, an offline Windows notes app (Python + Tkinter), D:\Projects\NoteOrganizer, branch audit/d-val5. Read each commit with `git -C D:\Projects\NoteOrganizer show <hash>` and the code around it.
+
+ROUND 1's fixes (attack these by name first):
+- 064110a calendar: leaving History for a month draws that month once (noteorganizer/ui/calendar_view.py shift_calendar, go_to_today, _leave_history_for_the_month now returns True when it left; note_organizer.py open_month_jump's apply). Does every road still end on the right month, drawn once, with History's toggle label right, the day panel closed, the keyboard ring and _cal_key_day right?
+- f00d70b attachments: a file a viewer holds open waits for the next save that lands (noteorganizer/ui/attachments.py _drop_detached_files keeps a name whose file is still on disk after the delete). Can it now retry forever in a way that costs time on every save, or delete something it should not?
+- 2fbf2ac guide and shortcuts page (docs/USER_GUIDE.md, noteorganizer/ui/settings_page.py SHORTCUT groups): are the new sentences true of the code?
+
+Then what round 1 said it did NOT cover, for the earlier fixes 8f537ce (Share ticks by _order_identity), edfb5b3 (History groups + header buttons), d972f88 (files deleted only after the write that stops naming them lands: _files_to_drop, _trash_written, purge_expired_trash(write=)), d50f907 (bulk export via _write_export_file), b5725e0 (reflow_wrapped keeps blank runs), 0aff314 (card tags on two lines, U+00A0 inside a sign):
+- other holders of an attachment name than self.notes / self.trash / current_attachments: other open tabs' saved editor states (open_tabs[i]["state"]) holding attachments not yet saved, templates, the set-aside copies, an import worker's Update replacing self.notes while a name waits in _files_to_drop;
+- the close and sign-out paths (_save_on_the_way_out, on_session_end) calling core_save_notes directly;
+- _paste_plain / _cap_paste with the newlines reflow now keeps (MAX paste caps);
+- _write_export_file's path + ".tmp" when the chosen folder already holds a file of exactly that name;
+- the card's two lines at the window's narrowest and with grouping on.
+
+You MAY probe, only like this: a new folder under <scratchpad>\miniaudit\ (e.g. r2), a copy of note_organizer.py and the noteorganizer\ package there, small pure-Python probes. Do NOT build the Tk app, do NOT run any qa*.py or test_*.py, nothing inside D:\Projects\NoteOrganizer, never edit a repository file, never open real data (notebook_location.txt, notes_data*.json / settings.json / trash.json / templates.json at the project root, attachments\, C:\Users\<name>\Note Organizer, %APPDATA%\NoteOrganizer).
+
+Severity (the owner's rule): only steps an ordinary person takes keep a round open; a loss of notes or attached files is always serious. HIGH = a person can lose words or files, or the app breaks; MEDIUM = a person is misled, a wrong note is shared, a road misbehaves; LOW = rare, cosmetic, internal, or an orphaned file (no loss).
+
+Report in English, at most 60 lines, exactly these headings:
+1. VERDICT PER FIX -- holds / does not hold, one line each with the reason.
+2. FINDINGS -- each: severity, file:line, the road, the mechanism, the evidence (probe output or exact code). Concrete only; no refactors, no taste.
+3. NOT COVERED.
