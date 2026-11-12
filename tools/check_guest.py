@@ -29,9 +29,11 @@ what dead runs left. This gate holds it:
    block (whose exit waits with none), and the starts no timeout reaches
    -- os.system, os.popen, os.startfile, multiprocessing, process pools,
    asyncio's and pty's children, runpy, webbrowser -- are not used.
-3. No document or tool writes a docker run of its own: tools/linux_ci.py
-   is the one door to the Linux image, bounded, named, and removed on
-   every way out. A killed docker client leaves its container running.
+3. No document or tool starts a container of its own -- docker run,
+   start, create or compose, typed or as a list for subprocess:
+   tools/linux_ci.py is the one door to the Linux image, bounded, named,
+   and removed on every way out. A killed docker client leaves its
+   container running.
 4. The ceiling holds here: a process capped at 256 MB starts one that asks
    for 64 MB, which runs, and one that asks for 1 GB, which fails alone.
 5. The turn holds here, on a private lock: a second run waits, names the
@@ -958,7 +960,10 @@ def docker_runs_outside_the_door():
             except (OSError, UnicodeDecodeError):
                 continue
             for number, line in enumerate(text.splitlines(), 1):
-                if re.search(r"docker\s+(container\s+)?run\b", line):
+                # Typed or as a list for subprocess, and any way to start a
+                # container: only "docker run" typed out was seen.
+                if re.search(r"""docker["']?\s*,?\s*["']?(?:container["']?\s*,?\s*["']?)?"""
+                             r"""(?:run|start|create|compose)\b""", line):
                     hits.append("%s:%d" % (rel, number))
     return hits
 

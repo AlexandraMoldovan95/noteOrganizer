@@ -161,7 +161,10 @@ def child_env(**extra):
                 # line it printed. Piped stdout is block-buffered, and a
                 # killed process takes its last few kilobytes with it --
                 # exactly the lines that say where it stopped.
-                PYTHONUNBUFFERED="1", **extra)
+                PYTHONUNBUFFERED="1",
+                # The gates run in the project itself: without this, each
+                # left __pycache__ folders there, and "only ever read" was untrue.
+                PYTHONDONTWRITEBYTECODE="1", **extra)
 
 
 def suite_env(child_tmp):

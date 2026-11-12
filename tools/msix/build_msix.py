@@ -84,6 +84,41 @@ def app_version():
     return [int(part) for part in match.groups()]
 
 
+def exe_version(path):
+    """The file version NoteOrganizer.spec wrote into *path*, as [major,
+    minor, build], or None where Windows reads none. Asked of the exe itself:
+    the number in the source said nothing of a dist/ left from an older build,
+    which was packed under the new number."""
+    import ctypes
+    from ctypes import wintypes
+
+    class FixedFileInfo(ctypes.Structure):
+        _fields_ = [(name, wintypes.DWORD) for name in (
+            "signature", "struc_version", "file_ms", "file_ls", "product_ms",
+            "product_ls", "flags_mask", "flags", "os", "type", "subtype",
+            "date_ms", "date_ls")]
+
+    dll = ctypes.WinDLL("version")
+    dll.GetFileVersionInfoSizeW.argtypes = [wintypes.LPCWSTR, wintypes.LPDWORD]
+    dll.GetFileVersionInfoW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD,
+                                        wintypes.DWORD, ctypes.c_void_p]
+    dll.VerQueryValueW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR,
+                                   ctypes.POINTER(ctypes.c_void_p),
+                                   ctypes.POINTER(wintypes.UINT)]
+    size = dll.GetFileVersionInfoSizeW(path, None)
+    if not size:
+        return None
+    data = ctypes.create_string_buffer(size)
+    if not dll.GetFileVersionInfoW(path, 0, size, data):
+        return None
+    found, length = ctypes.c_void_p(), wintypes.UINT()
+    if not dll.VerQueryValueW(data, "\\", ctypes.byref(found), ctypes.byref(length)) \
+            or length.value < ctypes.sizeof(FixedFileInfo):
+        return None
+    info = FixedFileInfo.from_address(found.value)
+    return [info.file_ms >> 16, info.file_ms & 0xFFFF, info.file_ls >> 16]
+
+
 def pack(version, args, makeappx):
     layout = os.path.join(OUT, "layout_" + version)
     if os.path.isdir(layout):
@@ -121,9 +156,15 @@ def main():
         sys.exit("no build in dist/NoteOrganizer: build the app first")
     if os.path.exists(os.path.join(DIST, "notes_data.json")):
         sys.exit("a notebook lies beside the built exe; it would ship in the package")
+    major, minor, build = app_version()
+    built = exe_version(os.path.join(DIST, "NoteOrganizer.exe"))
+    if built != [major, minor, build]:
+        sys.exit("dist/NoteOrganizer/NoteOrganizer.exe is %s, and the source says "
+                 "%d.%d.%d: build the app again (NoteOrganizer.spec) before packing it"
+                 % (".".join(map(str, built)) if built else "of no version Windows reads",
+                    major, minor, build))
     makeappx = sdk_tool("makeappx.exe")
     os.makedirs(OUT, exist_ok=True)
-    major, minor, build = app_version()
     versions = ["%d.%d.%d.0" % (major, minor, build)]
     if args.update:
         versions.append("%d.%d.%d.0" % (major, minor, build + 1))

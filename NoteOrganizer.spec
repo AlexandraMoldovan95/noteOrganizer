@@ -7,10 +7,11 @@ the app shows in its own About box -- which is exactly what an
 0.0.0.0 with no product name was: nobody had typed anything, and
 nothing would ever have noticed.
 
-The icon comes from tools/make_icon.py, which draws it rather than
-storing it, and ships inside the bundle as well as being stamped on the
-.exe -- the stamp is what Explorer and the taskbar read, the shipped
-copy is what the window itself puts in its title bar.
+The icon is drawn by tools/make_icon.py, which writes the files in
+assets/; the build takes those as they are, and ships them inside the
+bundle as well as stamping one on the .exe -- the stamp is what Explorer
+and the taskbar read, the shipped copy is what the window itself puts
+in its title bar.
 
 The licenses (THIRD_PARTY_NOTICES.txt) are checked, not generated: the
 build stops when they are not those of the Python, Pillow and PyInstaller
