@@ -430,6 +430,7 @@
   "_hide_words_beneath": "(self)",
   "_highlight_settings_nav": "(self, which)",
   "_highlight_swatch_column": "(self, popup, choose)",
+  "_hint_shown": "(entry)",
   "_history_draw_rows": "(self, entries, first)",
   "_history_entries_now": "(self)",
   "_history_off_schedule": "(self, note)",

@@ -1296,8 +1296,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         space; the apps search alike). Empty while the box shows only its
         hint, which `search_var` reads like a query.
         """
-        typed = self.search_var.get()
-        return "" if typed == self.SEARCH_PLACEHOLDER else fold_for_search(typed.strip())
+        if self._hint_shown(getattr(self, "search_entry", None)):
+            return ""
+        return fold_for_search(self.search_var.get().strip())
 
     def _refresh_search_clear(self):
         """Show the ✕ only while the box holds something typed, spaces too.
@@ -1309,7 +1310,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         btn = self.search_clear_btn
         if btn is None:
             return                      # called while the row is being built
-        if self.search_var.get() not in ("", self.SEARCH_PLACEHOLDER):
+        if self.search_var.get() and not self._hint_shown(self.search_entry):
             if not self._is_placed(btn):
                 btn.pack(side="right", padx=(0, 6))
         elif self._is_placed(btn):
@@ -1369,15 +1370,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # the edge of the row.
             self.title_count_lbl.pack(side="left", padx=(8, 0))
 
+    @staticmethod
+    def _hint_shown(entry):
+        """True while *entry* shows the grey hint add_placeholder gave it: put
+        there by the app and not typed over since. The words alone cannot
+        say: a title typed as "Note title..." is the person's, and was saved
+        empty while the hint was recognised by its text."""
+        return (entry is not None and getattr(entry, "hint_shown", False)
+                and entry.get() == getattr(entry, "hint_text", None))
+
     def _title_is_placeholder(self):
         """True while the field is showing its grey 'Note title...' prompt."""
-        return self.title_entry.get() == "Note title..."
+        return self._hint_shown(self.title_entry)
 
     def _insert_title(self, text):
         """Put a stored title into the field, cap or no cap: validation fires
         on inserts too, and an older, longer title was cut and saved back
         shortened. Loading a note must never edit it.
         """
+        # A stored title is the person's, whatever its words.
+        self.title_entry.hint_shown = False
         self._setting_title = True
         try:
             self.title_entry.insert(0, text)
@@ -13569,7 +13581,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         alive = []
         for entry, placeholder in self._placeholders:
             try:
-                if entry.get() == placeholder:
+                if self._hint_shown(entry):
                     entry.config(fg=self.colors["subtext"])
                 else:
                     entry.config(fg=self.colors["text"])
@@ -14025,7 +14037,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.track_theme(self.search_clear_btn, bg="card", fg="subtext",
                          activebackground="card", activeforeground="text",
                          highlightbackground="card")
-        self.add_placeholder(search_entry, "Search notes...")
+        self.add_placeholder(search_entry, self.SEARCH_PLACEHOLDER)
         # The trace has settled the ✕ already; called anyway, so reordering
         # these lines cannot break it.
         self._refresh_search_clear()
@@ -15953,21 +15965,22 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         DD.MM.YYYY. The one way the editor fills that field, so the text
         and its colour cannot come apart between the routes that load,
         restore, import or put back a note's date."""
-        self.date_entry.delete(0, "end")
         if value:
+            self.date_entry.hint_shown = False
+            self.date_entry.delete(0, "end")
             self.date_entry.insert(0, show_date(value))
             self.date_entry.config(fg=self.colors["text"])
         else:
-            self.date_entry.insert(0, DATE_FORM)
-            self.date_entry.config(fg=self.colors["subtext"])
+            self.date_entry.show_hint()
 
     def _typed_date(self):
         """What the date field holds as typed: its text, or "" while it shows
         its form. The one reader of the field -- the form compared by hand
         in five places was five places to forget the day it changed, and a
         rule in tools/check_one_definition.py now keeps it to one."""
-        typed = self.date_entry.get().strip()
-        return "" if typed == DATE_FORM else typed
+        if self._hint_shown(self.date_entry):
+            return ""
+        return self.date_entry.get().strip()
 
     def _settle_date_fields(self, redraw=False):
         """Finishing with the date fields: a readable date is written in the
@@ -17225,14 +17238,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._bind_mousewheel_recursive(child, canvas, skip=skip)
 
     def add_placeholder(self, entry, placeholder):
-        entry.insert(0, placeholder)
-        entry.config(fg=self.colors["subtext"])
+        # Whether the hint is showing is kept on the field (_hint_shown):
+        # read off its words, a title typed as the hint was saved empty.
+        entry.hint_text = placeholder
+
+        def show_hint():
+            # Marked first: a search box's trace runs inside the insert, and
+            # marked after it, its ✕ took the hint for typed words.
+            entry.hint_shown = True
+            entry.delete(0, "end")
+            entry.insert(0, placeholder)
+            entry.config(fg=self.colors["subtext"])
+
+        entry.show_hint = show_hint
+        show_hint()
         self._placeholders.append((entry, placeholder))
 
         def clear_if_placeholder():
-            if entry.get() == placeholder:
+            if self._hint_shown(entry):
                 entry.delete(0, "end")
                 entry.config(fg=self.colors["text"])
+            # What lands next is the person's, even the hint's own words.
+            entry.hint_shown = False
 
         # Kept on the field, and gone with it, for what puts text in with
         # no key and no paste: the emoji picker took the focus away, the
@@ -17261,8 +17288,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         def on_focus_out(e):
             if not entry.get():
-                entry.insert(0, placeholder)
-                entry.config(fg=self.colors["subtext"])
+                show_hint()
 
         entry.bind("<FocusIn>", on_focus_in)
         entry.bind("<KeyPress>", on_key)
@@ -17583,9 +17609,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # here -- autosave, tab switching, the dirty poll -- must see them
         # in the text, or a keystroke still sitting in a cell would be lost.
         self._flush_table_grids()
-        title = self.title_entry.get()
-        if title == "Note title...":
-            title = ""
+        title = "" if self._title_is_placeholder() else self.title_entry.get()
         date_raw = self._typed_date()
         # The body read once, after the flush; its formatting and lines are
         # worked out from that read rather than asked of Tk line by line.
@@ -17619,13 +17643,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.selected_note_id = st["selected_note_id"]
         self.current_occurrence_date = st.get("occurrence_date")
 
-        self.title_entry.delete(0, "end")
         if st["title"]:
+            self.title_entry.delete(0, "end")
             self._insert_title(st["title"])
             self.title_entry.config(fg=self.colors["text"])
         else:
-            self._insert_title("Note title...")
-            self.title_entry.config(fg=self.colors["subtext"])
+            self.title_entry.show_hint()
 
         # Restore this tab's own pending style (if any) before inserting
         # its body — set after the insert instead, a leftover pending style
@@ -20478,9 +20501,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _editor_fields_to_save(self, auto, body_read):
         """What the editor holds, as a save stores it -- or None when there
         is nothing to save, said out loud on an explicit Save."""
-        title = self.title_entry.get().strip()
-        if title == "Note title...":
-            title = ""
+        title = "" if self._title_is_placeholder() else self.title_entry.get().strip()
         # Only Tk's final newline comes off: a .strip() ate a pasted block's
         # shape. with_caret_line: read before the caret line under a final
         # table, a table-ending note read unsaved forever.
@@ -21759,8 +21780,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # aside): a title begun after the delete had its typo "undone" by
             # the deleted note coming back over it.
             if kind in ("Entry", "TEntry"):
-                hint = next((p for e, p in getattr(self, "_placeholders", ()) if e is widget), None)
-                if widget.get() not in ("", hint):
+                if widget.get() and not self._hint_shown(widget):
                     return None
         except (tk.TclError, AttributeError):
             return None

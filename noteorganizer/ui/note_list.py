@@ -200,7 +200,7 @@ class NoteListMixin:
         if note is not None and self._list_group_of(note) in self.collapsed_groups:
             self._toggle_group_collapsed(self._list_group_of(note))
         self.filter_var.set("All")
-        if self.search_var.get() not in ("", self.SEARCH_PLACEHOLDER):
+        if self.search_var.get() and not self._hint_shown(self.search_entry):
             try:
                 in_box = self.focus_get() is self.search_entry
             except (KeyError, tk.TclError):
@@ -208,8 +208,7 @@ class NoteListMixin:
             if in_box:
                 self.search_var.set("")
             else:
-                self.search_var.set(self.SEARCH_PLACEHOLDER)
-                self.search_entry.config(fg=self.colors["subtext"])
+                self.search_entry.show_hint()
         self.refresh_note_list()
         # Its card in sight: the list keeps its place, and the notes Show
         # had hidden can come in above it.
@@ -415,7 +414,7 @@ class NoteListMixin:
                 # with the way to the History (the owner's choice). Not
                 # a dated note Show hid, which the History lists too.
                 typed = self.search_var.get().strip()
-                if (self._search_query() and typed != self.SEARCH_PLACEHOLDER
+                if (self._search_query()
                         and any(e.get("auto_expand")
                                 for e in history_entries(self.notes, query=typed))):
                     below = self.canvas.bbox(link)[3] + self.px(12)

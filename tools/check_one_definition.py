@@ -249,6 +249,21 @@ RULES = [
         allowed={"_typed_date": "the single answer"},
         window=1,
     ),
+    Rule(
+        question="is this field showing its grey hint?",
+        owner="_hint_shown",
+        # The hint was told by its words, in ten places: a title typed as
+        # "Note title..." was saved empty and wiped at the next click, and a
+        # search for "Search notes..." searched for nothing. The field keeps
+        # whether its hint shows; comparing its text with a hint is the old
+        # way back. Code only, before any "#".
+        pattern=re.compile(
+            r'(?m)^[^#\n]*(?:(?:==|!=|\bnot in\b|\bin\s*\()[^#\n]*%s|%s[^#\n]*(?:==|!=))'
+            % ((r'(?:SEARCH_PLACEHOLDER|"Note title\.\.\."|"Search all calendar entries\.\.\."'
+                r'|\bDATE_FORM\b|\bplaceholder\b|\bhint_text\b)',) * 2)),
+        allowed={"_hint_shown": "the single answer"},
+        window=1,
+    ),
 ]
 
 

@@ -6146,8 +6146,7 @@ try:
     for _mc_hint in ('Note title...', 'Search notes...'):
         _mc_box = next(e for e, h in app._placeholders if h == _mc_hint)
         app.focus_set()
-        _mc_box.delete(0, 'end')
-        _mc_box.insert(0, _mc_hint)
+        _mc_box.show_hint()
         _mc_seen[_mc_hint] = _mc_paste(_mc_box, 'Pasted', x=4)
         _mc_box.delete(0, 'end')
 finally:

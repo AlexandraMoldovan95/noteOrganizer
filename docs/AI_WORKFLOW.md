@@ -97,7 +97,7 @@ something that does not depend on the agent remembering:
 | Tests never run where they could wipe real notes | **Enforced.** The agent's deny list refuses any shell command that would start a destructive script in the project folder; `tools/run_tests.py` runs everything in a fresh scratch copy; the qa scripts' hermetic seed refuses to start outside one, or beside a notebook that holds notes. |
 | Every destructive script has a deny rule | **Enforced** in CI by `tools/check_agent_rules.py`, which finds the scripts itself. |
 | English throughout the repository; comments short and about *why* | **Enforced** in CI (`check_english.py`, `check_comments.py`) whenever code, tests or tools change; a change to the documentation alone runs the English check too, with the test plan's and the links' (below). |
-| One definition per judgement (no hand-copied field lists) | **Enforced** in CI for eight named questions (`check_one_definition.py`); a question asked in a new place joins it by hand. |
+| One definition per judgement (no hand-copied field lists) | **Enforced** in CI for nine named questions (`check_one_definition.py`); a question asked in a new place joins it by hand. |
 | Text readable in every theme | **Enforced** in CI (`check_contrast.py`, WCAG AA). |
 | `core/` never imports the interface | **Enforced** by a unit check. |
 | The mutant catalogue still aims at real code | **Enforced** in CI (`check_mutant_targets.py`). |

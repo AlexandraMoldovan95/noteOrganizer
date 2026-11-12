@@ -1574,8 +1574,9 @@ class CalendarViewMixin:
             300, self._render_calendar_history)
 
     def _history_query(self):
-        q = self._history_search_var.get()
-        return "" if q == "Search all calendar entries..." else q.strip()
+        if self._hint_shown(getattr(self, "_history_search_entry", None)):
+            return ""
+        return self._history_search_var.get().strip()
 
     def _search_history_for(self, query):
         """The Calendar's History, searching for *query*: it reads a day's own

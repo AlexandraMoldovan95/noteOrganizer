@@ -15634,8 +15634,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "fold_for_search(typed.strip())\n",
-        "replace": "fold_for_search(typed)\n"
+        "find": "fold_for_search(self.search_var.get().strip())\n",
+        "replace": "fold_for_search(self.search_var.get())\n"
       }
     ],
     "must_fail": [
@@ -15724,8 +15724,8 @@
     "edits": [
       {
         "file": "noteorganizer/ui/note_list.py",
-        "find": "                self.search_entry.config(fg=self.colors[\"subtext\"])\n        self.refresh_note_list()\n",
-        "replace": "                self.search_entry.config(fg=self.colors[\"subtext\"])\n"
+        "find": "                self.search_entry.show_hint()\n        self.refresh_note_list()\n",
+        "replace": "                self.search_entry.show_hint()\n"
       }
     ],
     "must_fail": [
@@ -15851,7 +15851,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                if widget.get() not in (\"\", hint):\n",
+        "find": "                if widget.get() and not self._hint_shown(widget):\n",
         "replace": "                if False:\n"
       }
     ],

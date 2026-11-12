@@ -96,8 +96,7 @@ app.refresh_note_list()
 # The box as the app opens it, hint and hint colour. Set to '' it waits for
 # a <FocusOut> to write the hint back, and every later scene photographed
 # an empty, unlabelled box (tools/doc_screenshots.py had the same bug).
-app.search_var.set(app.SEARCH_PLACEHOLDER)
-app.search_entry.config(fg=app.colors['subtext'])
+app.search_entry.show_hint()
 app.refresh_note_list()
 app.toggle_share_panel()
 # The EXISTING vars are set rather than replaced: the checkbuttons on screen

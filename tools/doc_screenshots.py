@@ -299,8 +299,7 @@ def clean():
     # The box as the app opens it: its hint written in, in the hint's colour.
     # Merely emptied, it waits for a <FocusOut> to put the hint back, and
     # every sidebar was photographed with an empty, unlabelled box.
-    app.search_var.set(app.SEARCH_PLACEHOLDER)
-    app.search_entry.config(fg=app.colors['subtext'])
+    app.search_entry.show_hint()
     app.sort_var.set(app.SORT_OPTIONS[0])
     app.filter_var.set('All')
     if app.group_by_category.get():

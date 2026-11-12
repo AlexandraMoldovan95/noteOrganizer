@@ -293,8 +293,11 @@ try:
     check(f'an empty list names what hides the notes ({app.canvas.itemcget("list_empty", "text")!r})',
           app.canvas.itemcget('list_empty', 'text') == 'No notes match Show: Work.'
           and app.canvas.find_withtag('list_show_all'))
-    # A search the new note matches is not named as hiding it.
-    app.search_var.set('dentist'); app.refresh_note_list(); app.update()
+    # A search the new note matches is not named as hiding it. Typed as a
+    # person types it, into the box: set behind its back, the box still
+    # wore the hint's mark, and the ✕ check below held with the mark set late.
+    take_focus(app.search_entry)
+    app.search_entry.insert(0, 'dentist'); app.refresh_note_list(); app.update()
     app.new_note(); app.update()
     app._insert_title('Call the dentist')
     app.save_current_note(); app.update()
@@ -309,8 +312,10 @@ try:
           app.filter_var.get() == 'All' and _fh_new in app._card_order() and not app._search_query())
     # ...the search box emptied to its hint, not handed the focus: the words
     # typed next belong to the note being written.
-    check(f'...and the search box is left to its hint ({app.search_var.get()!r})',
-          app.search_var.get() == app.SEARCH_PLACEHOLDER)
+    check(f'...and the search box is left to its hint, with no ✕ beside it '
+          f'({app.search_var.get()!r})',
+          app.search_var.get() == app.SEARCH_PLACEHOLDER
+          and not app._is_placed(app.search_clear_btn))
     # With no search the list keeps its place, and the notes Show had hidden
     # come in above where it stood: Show all brings the new note's card into
     # sight, or the note it is pressed for stays out of view.
@@ -2911,6 +2916,51 @@ check('pasting onto the date placeholder replaces it too',
       app.date_entry.get() == '2026-10-05')
 app.date_entry.delete(0, 'end')
 app.update()
+
+# A hint's own words, typed, are the person's. The hint was recognised by
+# its text, so a title typed as "Note title..." was saved empty, and wiped
+# from the field the next time it was clicked into; a search for "Search
+# notes..." searched for nothing.
+app.new_note(); app.update()
+take_focus(_title)
+_title.insert(0, _PH_TITLE)
+take_focus(app.body_text)
+take_focus(_title)
+check(f'a title typed as the hint survives the next click into it ({_title.get()!r})',
+      _title.get() == _PH_TITLE)
+app.body_text.insert('1.0', 'typed as the hint')
+app.save_current_note(auto=False); app.update()
+_ph_saved = app.find_note(app.selected_note_id) if app.selected_note_id else None
+check(f'...and it is saved as typed ({_ph_saved and _ph_saved.get("title")!r})',
+      _ph_saved is not None and _ph_saved.get('title') == _PH_TITLE)
+# A stored title with the hint's words, opened while the hint was showing.
+app.notes.append(NO.normalize_note({'id': 8802, 'title': _PH_TITLE, 'body': 'b'}))
+app.new_note(); app.update()
+_title.show_hint()
+app.load_note(app.find_note(8802)); app.update()
+app.body_text.insert('end', ' again')
+app.save_current_note(auto=False); app.update()
+check(f'a stored title with the hint\'s words loads and saves as itself '
+      f'({app.find_note(8802).get("title")!r})',
+      app.find_note(8802).get('title') == _PH_TITLE)
+take_focus(app.search_entry)
+app.search_entry.insert(0, app.SEARCH_PLACEHOLDER)
+app.update()
+check(f'a search typed as the hint is a search ({app._search_query()!r})',
+      app._search_query() == NO.fold_for_search(app.SEARCH_PLACEHOLDER))
+app._clear_search(); take_focus(app.body_text)
+check('...and the hint the box shows again is not one', app._search_query() == '')
+take_focus(app.date_entry)
+app.date_entry.insert(0, NO.DATE_FORM)
+check(f'a date typed as the form is what was typed ({app._typed_date()!r})',
+      app._typed_date() == NO.DATE_FORM)
+app.date_entry.delete(0, 'end')
+take_focus(app.body_text)
+check('...and the form the field shows again is not', app._typed_date() == '')
+app.notes = [n for n in app.notes
+             if n.get('id') != 8802 and n.get('title') != _PH_TITLE]
+app.save_notes()
+app.new_note(); app.update()
 
 # The one that matters: the cap must never shorten a title already saved.
 # Validation fires on programmatic inserts too, so loading a note written
@@ -11866,9 +11916,7 @@ app._dismiss_mini_popup(); app.update()
 # was saved as "Note title..." with the emoji after it.
 for _ph_hint in ('Note title...', 'Search notes...'):
     _ph_field = next(e for e, h in app._placeholders if h == _ph_hint)
-    _ph_field.delete(0, 'end')
-    _ph_field.insert(0, _ph_hint)
-    _ph_field.config(fg=app.colors['subtext'])
+    _ph_field.show_hint()
     take_focus(app.body_text)
     app._show_emoji_picker(_ph_field)
     app.update()
