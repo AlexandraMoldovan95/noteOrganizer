@@ -631,6 +631,26 @@ in a sense of their own:
 - If pre-existing changes are found that weren't made by this session,
   stop and report them before touching anything.
 
+### Code that arrives from GitHub (the owner's rule, 2026-11-12)
+
+The agent runs this repository's code all day (the suites, the stories,
+the site's build), and `git pull --ff-only` runs without asking. A commit
+nobody here wrote, reaching `main` through a stolen account or a pull
+request merged unread, would run on the owner's computer with her rights,
+by the agent's hand. Pulling runs nothing; running does.
+
+- After every `pull` or `fetch`, and after the owner merges on GitHub,
+  show what arrived (`git log --format='%h %an <%ae> %s' OLD..NEW` and
+  `git diff --stat OLD..NEW`) **before** running anything from the
+  repository.
+- Expected: what was pushed from here, and the owner's merge of it. A
+  commit that is neither (another author, or a change nobody here made,
+  above all to the workflows, `requirements.txt`, `tools/` or the spec
+  file) means stop and ask before anything runs.
+- A stranger's pull request is read on GitHub, never checked out and run
+  here. CI runs it on GitHub's machines, with a token that can only read
+  (`tools/check_workflows.py`).
+
 ### Working tree
 
 - Inspect `git status` at the start of a task.
@@ -643,6 +663,8 @@ in a sense of their own:
 - After the user confirms that a PR has been merged, switch to `main`,
   fetch/pull the latest `main`, prune stale remote-tracking references,
   and delete the local feature branch with `git branch -d`.
+- Before running anything after that pull, show what arrived
+  ([Code that arrives from GitHub](#code-that-arrives-from-github-the-owners-rule-2026-11-12)).
 - Do not perform these cleanup operations automatically before the user
   confirms the merge.
 - After code changes are merged into `main`, remind the user that the

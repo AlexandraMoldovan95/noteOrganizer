@@ -106,6 +106,7 @@ something that does not depend on the agent remembering:
 | CI may only read the code, and runs only the actions it named | **Enforced** in CI (`check_workflows.py`): every workflow's token is read-only, every action is pinned to a commit, and no trigger hands a fork the repository's rights. The same gate holds the phone's repository. |
 | A picture of the app shows only the app | **Enforced** by the one shutter every photographer uses (`qa/_qa_support.photograph`): it refuses a picture another program's window is over. |
 | Push, merge, pull requests | **Held by me.** Push asks every time; I open and merge every pull request myself. |
+| Code from GitHub is looked at before it runs here | **Asked.** After every pull the agent shows what arrived, and stops at a commit nobody here made; a stranger's pull request is only read on GitHub ([CLAUDE.md](../CLAUDE.md#code-that-arrives-from-github-the-owners-rule-2026-11-12)). |
 | The pre-flight, the surface walk, the mutant for each fix, the photographs looked at, the report of what was not covered | **Asked.** Written in CLAUDE.md, checked by my review and by the next round finding what was skipped. |
 
 ## Guardrails that came from real incidents
