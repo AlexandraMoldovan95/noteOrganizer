@@ -8091,8 +8091,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/model.py",
-        "find": "            checklist.append({\"text\": text, \"done\": bool(item.get(\"done\"))})\n",
-        "replace": "            checklist.append({\"text\": text[:MAX_CHECKLIST_ITEM_CHARS], \"done\": bool(item.get(\"done\"))})\n"
+        "find": "            checklist.append({\"text\": text, \"done\": item.get(\"done\") is True})\n",
+        "replace": "            checklist.append({\"text\": text[:MAX_CHECKLIST_ITEM_CHARS], \"done\": item.get(\"done\") is True})\n"
       }
     ],
     "must_fail": [
@@ -17632,6 +17632,97 @@
                "replace": "        tile_values = (total, added_week, len(counts), templates_count,"}],
     "must_fail": ["the Categories tile counts every category"],
     "suites": ["qa9"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN01",
+    "about": "A field's grey hint is told by its words again, so a title typed as the hint is the hint",
+    "edits": [{"file": "note_organizer.py",
+               "find": "getattr(entry, \"hint_shown\", False)\n                and entry.get() == getattr(entry, \"hint_text\", None))",
+               "replace": "True\n                and entry.get() == getattr(entry, \"hint_text\", None))"}],
+    "must_fail": ["a title typed as the hint survives the next click into it",
+                  "a search typed as the hint is a search"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN02",
+    "about": "A click or key into a hinted field no longer says that what lands next is the person's",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            # What lands next is the person's, even the hint's own words.\n            entry.hint_shown = False\n",
+               "replace": "            # What lands next is the person's, even the hint's own words.\n"}],
+    "must_fail": ["a title typed as the hint survives the next click into it"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN03",
+    "about": "A stored title put into the field leaves the hint's mark on it",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        # A stored title is the person's, whatever its words.\n        self.title_entry.hint_shown = False\n",
+               "replace": ""}],
+    "must_fail": ["a stored title with the hint's words loads and saves as itself"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN04",
+    "about": "The hint is marked after its words go in, so the search box's trace takes them for typed words",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            entry.hint_shown = True\n            entry.delete(0, \"end\")\n            entry.insert(0, placeholder)\n",
+               "replace": "            entry.delete(0, \"end\")\n            entry.insert(0, placeholder)\n            entry.hint_shown = True\n"}],
+    "must_fail": ["and the search box is left to its hint, with no"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN05",
+    "about": "An export that failed on its own as the window closed is recorded as one the close cut short",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        elif state is not None and state.get(\"done\") and not state.get(\"stop\"):\n",
+               "replace": "        elif False:\n"}],
+    "must_fail": ["an export that failed as the window closed is recorded as failed"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN06",
+    "about": "The one-time cleanup is kept, and marked done, though its write did not land",
+    "edits": [{"file": "noteorganizer/core/storage.py",
+               "find": "        if written:\n            notes = cleaned\n",
+               "replace": "        if True:\n            notes = cleaned\n"}],
+    "must_fail": ["a cleanup whose write does not land is not marked done, and says nothing"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN07",
+    "about": "A duplicate carries the original's rescue copy, and offers its older words",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        clone.pop(\"_prev\", None)\n",
+               "replace": ""}],
+    "must_fail": ["duplicate_note: the copy carries no rescue copy of the original"],
+    "suites": ["qa4"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN08",
+    "about": "A day off the schedule the Trash already holds is put in a second time",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if how == \"trash\" and not already and self._move_notes_to_trash([fresh]) is None:\n",
+               "replace": "        if how == \"trash\" and self._move_notes_to_trash([fresh]) is None:\n"}],
+    "must_fail": ["moving it to the Trash again leaves one copy there"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN09",
+    "about": "Any value but an empty one pins a note again, so a hand-edited \"false\" is a pin",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "    clean[\"pinned\"] = clean.get(\"pinned\") is True\n",
+               "replace": "    clean[\"pinned\"] = bool(clean.get(\"pinned\"))\n"}],
+    "must_fail": ["only true pins and ticks"],
+    "suites": ["test_data_safety"],
     "expect": "killed"
   }
 ]

@@ -3486,9 +3486,17 @@ _junk_prev = _model_mod.normalize_note({"id": 1, "_prev": {
 _junk_p = _junk_prev.get("_prev") or {}
 check("the extra fields of a rescue copy pass the note's own validators",
       _junk_p.get("color") == ""
-      and _junk_p.get("pinned") is True
+      and _junk_p.get("pinned") is False
       and len(_junk_p.get("checklist") or []) == _model_mod.MAX_CHECKLIST_ITEMS
       and _junk_p.get("exceptions") == ["2026-01-02"])
+# Only true pins and ticks: bool() read a hand-edited "false" as a pin and
+# "no" as ticked, where the phone, reading true alone, said neither.
+_pin_rule = _model_mod.normalize_note({
+    "id": 1, "pinned": "false",
+    "checklist": [{"text": "a", "done": "no"}, {"text": "b", "done": True}]})
+check("only true pins and ticks: a hand-edited \"false\" is neither, as on the phone",
+      _pin_rule.get("pinned") is False
+      and [i["done"] for i in _pin_rule["checklist"]] == [False, True])
 
 # A backup is the user's own notebook: its copy owns the timeline and the
 # pin as well, and dropping them was silent.

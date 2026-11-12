@@ -1173,7 +1173,9 @@ def normalize_note(note):
     # they still show a sensible creation date.
     if not clean["created"]:
         clean["created"] = clean["updated"]
-    clean["pinned"] = bool(clean.get("pinned"))
+    # Only true pins: bool() read a hand-edited "false" as pinned, and the
+    # phone, which reads true alone, filed the same note unpinned.
+    clean["pinned"] = clean.get("pinned") is True
     # The place in Custom order, absent until a person moves the note: "not
     # placed yet" is its own answer, so it is not in NOTE_DEFAULTS. Kept only
     # if a finite number -- True, "3" or NaN would reach the sort comparator.
@@ -1261,7 +1263,7 @@ def normalize_note(note):
                 text = ""
             # Any length kept: an item saved before the box had a limit is
             # the person's words. Its row draws it cut (checklist_shown).
-            checklist.append({"text": text, "done": bool(item.get("done"))})
+            checklist.append({"text": text, "done": item.get("done") is True})
         if len(checklist) >= MAX_CHECKLIST_ITEMS:
             break
     clean["checklist"] = checklist
@@ -1402,7 +1404,7 @@ def _checklist_signature(checklist):
         if isinstance(item, dict):
             text = item.get("text")
             out.append(((text.strip() if isinstance(text, str) else ""),
-                        bool(item.get("done"))))
+                        item.get("done") is True))
     return tuple(out)
 
 
@@ -1452,7 +1454,7 @@ def content_signature(note):
         _stable(note.get("overrides")),
         _stable(note.get("exceptions")),
         _stable(note.get("moved")),
-        bool(note.get("pinned")),
+        note.get("pinned") is True,
         _text(note.get("color")),
     )
 

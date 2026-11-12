@@ -193,9 +193,10 @@ def normalize_template(tpl):
         # template: 20,000 items in templates.json froze the app the moment
         # the template was applied.
         "checklist": [
-            # An item's length kept whole, as a note's (checklist_shown).
+            # An item's length kept whole, as a note's (checklist_shown);
+            # ticked by true alone, as a note's (normalize_checklist).
             {"text": it.get("text", "") if isinstance(it.get("text"), str) else "",
-             "done": bool(it.get("done"))}
+             "done": it.get("done") is True}
             # isinstance first: the cap's slice raises on a dict-shaped
             # value, and templates.json is hand-editable -- what used to
             # degrade to an empty checklist would have crashed startup.
