@@ -690,27 +690,31 @@ def load_notes(version_change=None):
         # is re-pointed by identity, or forgotten if the cleanup removed it.
         # ISSUES_LOG, smaller lessons: load_notes.
         remembered = settings.get("last_open_note_id")
+        # On copies, kept only when their write lands: marked done over a
+        # file it never reached, its new ids met a file and a remembered
+        # note that still held the old ones. The next launch tries again.
+        copies = [dict(n) for n in notes]
         was_open = None
         if remembered is not None:
             was_open = next(
-                (n for n in notes if n.get("id") == remembered), None)
-        notes, stats = clean_notes(notes)
-        if remembered is not None:
-            settings["last_open_note_id"] = (
-                was_open["id"]
-                if was_open is not None and any(n is was_open for n in notes)
-                else None)
-        report["cleanup_report"] = (stats, backup_path)
-
-        _write_json_atomic(paths.DATA_FILE, notes)
-
-        settings["cleanup_done"] = True
-        save_settings(settings)
-        # That write already carries the new identities, and numbers
-        # every note afresh besides.
-        minted_any = False
-        ids_repaired = False
-        aside_made = 0
+                (c for c, n in zip(copies, notes) if n.get("id") == remembered), None)
+        cleaned, stats = clean_notes(copies)
+        written, _error = _write_json_atomic(paths.DATA_FILE, cleaned)
+        if written:
+            notes = cleaned
+            if remembered is not None:
+                settings["last_open_note_id"] = (
+                    was_open["id"]
+                    if was_open is not None and any(n is was_open for n in notes)
+                    else None)
+            report["cleanup_report"] = (stats, backup_path)
+            settings["cleanup_done"] = True
+            save_settings(settings)
+            # That write already carries the new identities, and numbers
+            # every note afresh besides.
+            minted_any = False
+            ids_repaired = False
+            aside_made = 0
 
     if (minted_any or ids_repaired or aside_made) and not report["notes_file_corrupt"]:
         # Guarded like the cleanup: never over a file just declared

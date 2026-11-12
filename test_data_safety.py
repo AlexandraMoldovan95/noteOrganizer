@@ -2210,6 +2210,42 @@ _setK = _storage.load_settings()
 _setK["cleanup_done"] = True
 _storage.save_settings(_setK)
 
+# A cleanup whose write did not land (the file held by another program)
+# was marked done anyway: its renumbered ids lived only in the running
+# app, against a file and a remembered open note with the old ones.
+_setW = _storage.load_settings()
+_setW.pop("cleanup_done", None)
+_setW["last_open_note_id"] = 7
+_storage.save_settings(_setW)
+_rawW = [{"id": 3, "title": "", "body": ""}, {"id": 7, "title": "Kept", "body": "x"}]
+with open(_paths.DATA_FILE, "w", encoding="utf-8") as _f:
+    json.dump(_rawW, _f)
+_writeW = _storage._write_json_atomic
+
+
+def _held_notes_file(path, value):
+    if os.path.abspath(path) == os.path.abspath(_paths.DATA_FILE):
+        return False, PermissionError(13, "held by another program", path)
+    return _writeW(path, value)
+
+
+_storage._write_json_atomic = _held_notes_file
+try:
+    _notesW, _reportW = _storage.load_notes(None)
+finally:
+    _storage._write_json_atomic = _writeW
+_afterW = _storage.load_settings()
+check("a cleanup whose write does not land is not marked done, and says nothing",
+      not _afterW.get("cleanup_done") and _reportW.get("cleanup_report") is None)
+check("...the notes keep the ids their file and the remembered note still name",
+      [n["id"] for n in _notesW] == [3, 7] and _afterW.get("last_open_note_id") == 7)
+_notesW2, _reportW2 = _storage.load_notes(None)
+check("...and the next launch that can write does the cleanup, the open note followed",
+      _reportW2.get("cleanup_report") is not None
+      and [n["id"] for n in _notesW2] == [1]
+      and _storage.load_settings().get("last_open_note_id") == 1
+      and _storage.load_settings().get("cleanup_done") is True)
+
 # The two loaders without a corrupt fixture yet: settings (unparsable)
 # and trash (wrong shape). Content-matched rather than counted, so a
 # same-second timestamp collision cannot fake a pass or a fail.
