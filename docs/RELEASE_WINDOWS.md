@@ -193,6 +193,26 @@ than answering with an error, and Google Play rejects that. The Site is made und
 account, published with **Who can view** set to Public, typed into the Site rather than an
 embedded document, and never renamed — its address is built into both apps.
 
+### Rolling out, and stopping a release
+
+Written down before the first release, so that a bad one is met with steps rather than a
+scramble (2026-11-12).
+
+1. **The first release goes to a few people first.** Partner Center can publish to a private
+   audience before the listing is public, and the package installed from the Store is the one
+   worth trying: the Store signs it again, so the Sandbox's package is close to it, not the same.
+2. **An update goes out gradually.** Partner Center's gradual package rollout offers it to a
+   share of people first; the share grows only after a few quiet days.
+3. **When something is wrong, the rollout is halted first**, in Partner Center, before anything
+   is fixed: nobody new receives the package while the fix is made. An installed version cannot
+   be taken back; the way out is a newer version.
+4. **The fix is a release like any other**: its own branch, the version a patch higher (ROADMAP,
+   "Versioning"), the whole suite on Windows and Linux, the `.exe` and the package built again,
+   the Sandbox proofs, then the submission. A fix is never made in the package by hand.
+5. **What a person sees is read before anything is guessed**: the Store's reviews, Partner
+   Center's health report, and `crash_log.txt` in the notebook's folder, which a person can send
+   when asked (the app sends nothing itself).
+
 ## Alternatives to the Microsoft Store
 
 None of these are decided on — just what exists, for when the choice comes up:
