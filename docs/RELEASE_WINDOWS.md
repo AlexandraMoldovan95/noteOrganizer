@@ -89,9 +89,9 @@ a virtual GPU: started from the Start menu, one lost its connection on this mach
 
 | `.wsb` | What it proves | Last run |
 |---|---|---|
-| `NoteOrganizer-msix-test.wsb` | The package's life. An older `.exe`'s notebook in AppData; install, start, update, uninstall, reinstall; after each step, what the profile's notebook, the package's private copy and AppData hold, and whether the licenses About opens are inside the package (`out/result.txt`). | 2026-10-27, and 2026-11-09 for 0.100.512 and 0.100.513: the old notebook came in, both notes byte for byte through the update, the uninstall and the reinstall; the private copy held no file; AppData untouched. |
-| `NoteOrganizer-msix-look.wsb` | The package to ship on a Windows with 2 GB of memory, started in each of the eight themes on a notebook of 40 notes: how soon the window shows, whether it lies inside the work area, a photo of it, the app's memory, a close as the X closes it, the theme kept, no crash log (`out/look/`). | 2026-11-09 for 0.100.513, at the sandbox's 150%: all eight themes; the window in 1 s and inside the work area every time; the app 67 MB (37 MB its own), with about 330 MB of the sandbox's left. For 0.100.512 two of the eight had opened with their foot under the taskbar ([why](ISSUES_LOG.md#wave-5-the-window-that-opened-under-the-taskbar)). |
-| `NoteOrganizer-msix-wack.wsb` | The Windows App Certification Kit, as Partner Center runs it (`out/wack/`). | 2026-11-09 for 0.100.512 and 2026-11-10 for 0.100.513: overall WARNING both times, below. |
+| `NoteOrganizer-msix-test.wsb` | The package's life. An older `.exe`'s notebook in AppData; install, start, update, uninstall, reinstall; after each step, what the profile's notebook, the package's private copy and AppData hold, and whether the licenses About opens are inside the package (`out/result.txt`). | 2026-10-27, 2026-11-09 for 0.100.512 and 0.100.513, and 2026-11-12 for 0.100.524: the old notebook came in, both notes byte for byte through the update, the uninstall and the reinstall; the private copy held no file; AppData untouched. |
+| `NoteOrganizer-msix-look.wsb` | The package to ship on a Windows with 2 GB of memory, started in each of the eight themes on a notebook of 40 notes: how soon the window shows, whether it lies inside the work area, a photo of it, the app's memory, a close as the X closes it, the theme kept, no crash log (`out/look/`). | 2026-11-09 for 0.100.513 and 2026-11-12 for 0.100.524, at the sandbox's 150%: all eight themes; the window in 1 s and inside the work area every time; the app 67 to 68 MB (37 MB its own), with 330 to 470 MB of the sandbox's left. For 0.100.512 two of the eight had opened with their foot under the taskbar ([why](ISSUES_LOG.md#wave-5-the-window-that-opened-under-the-taskbar)). |
+| `NoteOrganizer-msix-wack.wsb` | The Windows App Certification Kit, as Partner Center runs it (`out/wack/`). | 2026-11-09 for 0.100.512, 2026-11-10 for 0.100.513 and 2026-11-12 for 0.100.524: overall WARNING each time, below. |
 
 #### The certification kit (WACK)
 
@@ -102,8 +102,8 @@ alone does not run there. `make_sandbox_test.py` maps in its test engine (TAEF, 
 `Platforms`), and reads the kit's COM classes and type libraries out of this computer's registry
 with `reg export`, for the sandbox to import. A run without each of them stopped at it.
 
-Run on 2026-11-09 for 0.100.512 and on 2026-11-10 for 0.100.513, the result was **WARNING** both
-times, which is not a failure: of 24 tests, 22 passed, and two did not.
+Run on 2026-11-09 for 0.100.512, on 2026-11-10 for 0.100.513 and on 2026-11-12 for 0.100.524, the
+result was **WARNING** each time, which is not a failure: of 24 tests, 22 passed, and two did not.
 
 - **Blocked executables** failed. It is an optional test, and optional tests "are informational
   only and will not be used to evaluate your app during Microsoft Store onboarding"
