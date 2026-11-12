@@ -45,7 +45,10 @@ WHAT IT RUNS
 10. ``check_guest`` -- every runner sets tools/guest.py's ceiling before it
    starts anything and bounds its children; the ceiling and the
    one-heavy-job turn are proved on this machine.
-11. ``compile()`` over every tracked ``.py`` in the repo -- tests and qa
+11. ``check_workflows`` -- every workflow's token may only read, every
+   action is pinned to a commit, and no trigger hands a fork the
+   repository's rights.
+12. ``compile()`` over every tracked ``.py`` in the repo -- tests and qa
    scripts included, because a syntax error in a TEST file is exactly
    what the remote runner would otherwise find first (a locally-valid
    PEP 701 f-string once died only on CI's older Python; the interpreter
@@ -144,6 +147,9 @@ def main():
     # one door, and the ceiling and the one-heavy-job turn hold here.
     _run_gate("a test run is a guest",
               [os.path.join("tools", "check_guest.py")])
+    # What CI may do: a token that only reads, actions pinned to a commit.
+    _run_gate("CI may only read",
+              [os.path.join("tools", "check_workflows.py")])
 
     print("== every tracked .py compiles", flush=True)
     listed = subprocess.run(["git", "ls-files", "*.py"], cwd=ROOT,

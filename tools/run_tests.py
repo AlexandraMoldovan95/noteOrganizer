@@ -135,6 +135,11 @@ STATIC = [
      [sys.executable, os.path.join("tools", "check_test_plan.py")]),
     ("document links lead somewhere",
      [sys.executable, os.path.join("tools", "check_doc_links.py")]),
+    # The thirteenth, added 2026-11-12, before the repository went public:
+    # every workflow's token may only read, every action is pinned to a
+    # commit, and no trigger hands a fork the repository's rights.
+    ("CI may only read",
+     [sys.executable, os.path.join("tools", "check_workflows.py")]),
 ]
 
 

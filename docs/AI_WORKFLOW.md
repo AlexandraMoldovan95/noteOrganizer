@@ -103,6 +103,7 @@ something that does not depend on the agent remembering:
 | The mutant catalogue still aims at real code | **Enforced** in CI (`check_mutant_targets.py`). |
 | The test plan's numbers in the documents are the plan's, and their links lead somewhere | **Enforced** in CI (`check_test_plan.py`, `check_doc_links.py`), on every change to a document or the plan. |
 | One heavy job at a time; a test held to a memory ceiling, every child to a time limit | **Enforced** for this repository's runners by `tools/guest.py` (an OS lock on the machine, a job object or RLIMIT_AS), and in CI by `check_guest.py`, which finds the runners by what they do. The Linux image runs only through `tools/linux_ci.py`. The Android build and its emulator: **asked**. |
+| CI may only read the code, and runs only the actions it named | **Enforced** in CI (`check_workflows.py`): every workflow's token is read-only, every action is pinned to a commit, and no trigger hands a fork the repository's rights. The same gate holds the phone's repository. |
 | A picture of the app shows only the app | **Enforced** by the one shutter every photographer uses (`qa/_qa_support.photograph`): it refuses a picture another program's window is over. |
 | Push, merge, pull requests | **Held by me.** Push asks every time; I open and merge every pull request myself. |
 | The pre-flight, the surface walk, the mutant for each fix, the photographs looked at, the report of what was not covered | **Asked.** Written in CLAUDE.md, checked by my review and by the next round finding what was skipped. |
