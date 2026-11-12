@@ -4446,6 +4446,24 @@ check('the day moved to the Trash comes back from it as a note on its day',
       any(n.get('date') == '2026-09-21' and n.get('title') == 'Stand-up'
           and n is not app.find_note(1) for n in app.notes))
 
+# The Trash is written before the notes. Stopped between the two, the app
+# came back with the day still on the series and its copy in the Trash, and
+# moving it to the Trash again put a second copy there.
+_os_seed()
+_os_walk(['keep', 'trash'])
+_os_kept_trash = [dict(e) for e in app.trash]
+_os_seed()
+app.trash = _os_kept_trash
+NO.save_trash(app.trash)
+check('fixture: the day is on the series again, its copy already in the Trash',
+      '2026-09-21' in (app.find_note(1).get('overrides') or {})
+      and sum(e.get('date') == '2026-09-21' for e in app.trash) == 1)
+_os_walk(['keep', 'trash'])
+check(f"moving it to the Trash again leaves one copy there "
+      f"({sum(e.get('date') == '2026-09-21' for e in app.trash)})",
+      sum(e.get('date') == '2026-09-21' for e in app.trash) == 1
+      and '2026-09-21' not in (app.find_note(1).get('overrides') or {}))
+
 # A day's text of two lines is asked with its lines kept apart, as a card
 # shows them: run together, they read as one sentence.
 _os_seed()

@@ -15883,8 +15883,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "updated": stamp,
         })
         # Into the Trash before the day leaves the series: if trash.json
-        # cannot be written, the day's own words stay where they were.
-        if how == "trash" and self._move_notes_to_trash([fresh]) is None:
+        # cannot be written, the day's words stay where they were. Not put in
+        # twice, where the app stopped between the Trash's save and the notes'.
+        already = content_signature(fresh) in {
+            content_signature(normalize_note(e)) for e in self.trash if isinstance(e, dict)}
+        if how == "trash" and not already and self._move_notes_to_trash([fresh]) is None:
             return False
         note["overrides"].pop(day, None)
         # A day moved here whose own day the rule no longer gives: the move
