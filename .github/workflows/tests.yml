@@ -72,6 +72,11 @@ concurrency:
   group: qa-${{ github.ref }}
   cancel-in-progress: true
 
+# The token GitHub gives each run may read the code and nothing more:
+# nothing here pushes, comments or publishes.
+permissions:
+  contents: read
+
 jobs:
   qa:
     strategy:

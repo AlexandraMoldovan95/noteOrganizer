@@ -19,6 +19,11 @@ on:
         description: "Mutant ids or prefixes, space-separated (e.g. PN or DR01 X01)"
         required: true
 
+# The token GitHub gives each run may read the code and nothing more:
+# nothing here pushes, comments or publishes.
+permissions:
+  contents: read
+
 jobs:
   mutants:
     runs-on: ubuntu-latest

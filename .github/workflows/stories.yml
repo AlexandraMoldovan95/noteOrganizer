@@ -15,6 +15,12 @@ name: Stories
 on:
   workflow_dispatch:
 
+# The token GitHub gives each run may read the code and nothing more:
+# nothing here pushes, comments or publishes; the photographs are kept
+# with the run by the artifact store, which needs none of its rights.
+permissions:
+  contents: read
+
 jobs:
   stories:
     runs-on: ubuntu-latest

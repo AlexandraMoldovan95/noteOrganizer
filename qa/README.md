@@ -27,7 +27,9 @@ and measures coverage on Linux (`tests.yml`). A change to Markdown or the
 test plan cannot break the app, so it runs only the three gates that read
 them, on Linux (`docs.yml`). `py tools/run_tests.py` runs all of it on a
 developer's machine, from a scratch copy outside the project. The rest
-runs on demand, as the table says.
+runs on demand, as the table says. Every workflow's token may only read
+the code (`permissions: contents: read`): nothing in CI pushes, comments
+or publishes.
 
 | Layer | What it is | When it runs | What it catches |
 |---|---|---|---|
