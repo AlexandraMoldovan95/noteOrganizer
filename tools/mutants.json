@@ -17709,8 +17709,8 @@
     "id": "SN08",
     "about": "A day off the schedule the Trash already holds is put in a second time",
     "edits": [{"file": "note_organizer.py",
-               "find": "        if how == \"trash\" and not already and self._move_notes_to_trash([fresh]) is None:\n",
-               "replace": "        if how == \"trash\" and self._move_notes_to_trash([fresh]) is None:\n"}],
+               "find": "            if held is None and self._move_notes_to_trash([fresh]) is None:\n",
+               "replace": "            if self._move_notes_to_trash([fresh]) is None:\n"}],
     "must_fail": ["moving it to the Trash again leaves one copy there"],
     "suites": ["qa5"],
     "expect": "killed"
@@ -17722,6 +17722,86 @@
                "find": "    clean[\"pinned\"] = clean.get(\"pinned\") is True\n",
                "replace": "    clean[\"pinned\"] = bool(clean.get(\"pinned\"))\n"}],
     "must_fail": ["only true pins and ticks"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN10",
+    "about": "An untitled note's state put back over a long title keeps that title's counter beside the hint",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            self.title_entry.show_hint()\n            # The hint is no title: the last tab's \"170/200\" goes.\n            self._refresh_title_count()\n",
+               "replace": "            self.title_entry.show_hint()\n"}],
+    "must_fail": ["an untitled note's state put back over a long title leaves no counter"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN11",
+    "about": "The list's search sent to the History, written over the History box's hint, keeps the hint's mark",
+    "edits": [{"file": "noteorganizer/ui/calendar_view.py",
+               "find": "        # The list's words, even if they are the hint's own.\n        entry.hint_shown = False\n",
+               "replace": ""}],
+    "must_fail": ["...and the list's search sent to the History as its hint's words is a search"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN12",
+    "about": "A cleanup whose write does not land leaves its copy of the notes behind, one more at every launch",
+    "edits": [{"file": "noteorganizer/core/storage.py",
+               "find": "        elif backup_path is not None:\n",
+               "replace": "        elif False:\n"}],
+    "must_fail": ["...and leaves no copy of the notes behind, the file being as it was"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN13",
+    "about": "A backup's Add a copy anyway carries the original's rescue copy",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            copy.pop(\"uid\", None)\n            copy.pop(\"_prev\", None)\n",
+               "replace": "            copy.pop(\"uid\", None)\n"}],
+    "must_fail": ["an import's copies carry no rescue copy, nor the uid"],
+    "suites": ["qa4"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN14",
+    "about": "An export whose error has no words (a MemoryError) is said complete",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                state[\"error\"] = str(e) or type(e).__name__\n",
+               "replace": "                state[\"error\"] = str(e)\n"}],
+    "must_fail": ["an export whose error has no words is said failed, and no file is put in place"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN15",
+    "about": "An export that failed just before Windows ended the session is never said",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        elif export is not None and export.get(\"error\") and not export.get(\"stop\"):\n",
+               "replace": "        elif False:\n"}],
+    "must_fail": ["an export that failed just before the session ended is said at the next start"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN16",
+    "about": "A day the Trash already holds keeps that copy's first clock, and leaves sooner than promised",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            if held is not None and not core_renew_in_trash(self.trash, held)[0]:\n",
+               "replace": "            if False:\n"}],
+    "must_fail": ["...kept the whole window from now, in the file too"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN17",
+    "about": "A copy of the notes made the same second as another writes over it",
+    "edits": [{"file": "noteorganizer/core/paths.py",
+               "find": "    while os.path.exists(candidate):\n",
+               "replace": "    while False:\n"}],
+    "must_fail": ["two copies of the notes in the same second are two files"],
     "suites": ["test_data_safety"],
     "expect": "killed"
   }
