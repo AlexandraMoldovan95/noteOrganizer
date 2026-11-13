@@ -17880,7 +17880,10 @@
     "about": "The close writes its word for an export only after the wait, so a close ended there says nothing",
     "edits": [{"file": "note_organizer.py",
                "find": "        if export is not None and not export.get(\"done\"):\n            # Written before the wait",
-               "replace": "        if False:\n            # Written before the wait"}],
+               "replace": "        if False:\n            # Written before the wait"},
+              {"file": "note_organizer.py",
+               "find": "        join(cap_s)\n",
+               "replace": "        join(cap_s)\n        if export is not None and not export.get(\"done\"):\n            save_setting(\"backup_cut_short\", {\"kind\": \"export\", \"file\": export.get(\"save_path\") or \"\", \"before\": None})\n"}],
     "must_fail": ["a close that waits for an export writes its word before the wait"],
     "suites": ["qa3"],
     "expect": "killed"
@@ -17928,6 +17931,26 @@
                "find": "                                state[\"copied\"].pop()\n",
                "replace": "                                pass\n"}],
     "must_fail": ["an import names the file it is copying while the copy runs"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN30",
+    "about": "An export that replaced an older backup of the same name, and landed after its word, is said cut short",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        return now != before\n",
+               "replace": "        return False\n"}],
+    "must_fail": ["...as is one that replaced an older backup of the same name"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN31",
+    "about": "A template not kept is said as written when Windows signed out, untrue of a sign-out the person cancelled",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                f\"Windows began to sign out or shut down, was not kept: you already \"\n",
+               "replace": "                f\"Windows signed out or shut down, was not kept: you already \"\n"}],
+    "must_fail": ["a template not kept is said as written when Windows began to sign out"],
     "suites": ["qa3"],
     "expect": "killed"
   }
