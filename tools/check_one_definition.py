@@ -256,10 +256,14 @@ RULES = [
         # "Note title..." was saved empty and wiped at the next click, and a
         # search for "Search notes..." searched for nothing. The field keeps
         # whether its hint shows; comparing its text with a hint is the old
-        # way back. Code only, before any "#".
+        # way back, by ==, by membership in a tuple, list or set, or by its
+        # start or end (the last three were missed at first). Code only,
+        # before any "#".
         pattern=re.compile(
-            r'(?m)^[^#\n]*(?:(?:==|!=|\bnot in\b|\bin\s*\()[^#\n]*%s|%s[^#\n]*(?:==|!=))'
-            % ((r'(?:SEARCH_PLACEHOLDER|"Note title\.\.\."|"Search all calendar entries\.\.\."'
+            r'(?m)^[^#\n]*(?:(?:==|!=|\bnot in\b|\bin\s*[(\[{]|\.(?:startswith|endswith)\s*\()'
+            r'[^#\n]*%s|%s[^#\n]*(?:==|!=))'
+            % ((r'''(?:SEARCH_PLACEHOLDER|["']Note title\.\.\.["']'''
+                r'''|["']Search all calendar entries\.\.\.["']'''
                 r'|\bDATE_FORM\b|\bplaceholder\b|\bhint_text\b)',) * 2)),
         allowed={"_hint_shown": "the single answer"},
         window=1,

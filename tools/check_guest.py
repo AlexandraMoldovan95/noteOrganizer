@@ -959,13 +959,19 @@ def docker_runs_outside_the_door():
                 text = open(path, encoding="utf-8").read()
             except (OSError, UnicodeDecodeError):
                 continue
-            for number, line in enumerate(text.splitlines(), 1):
-                # Typed or as a list for subprocess, and any way to start a
-                # container: only "docker run" typed out was seen.
-                if re.search(r"""docker["']?\s*,?\s*["']?(?:container["']?\s*,?\s*["']?)?"""
-                             r"""(?:run|start|create|compose)\b""", line):
-                    hits.append("%s:%d" % (rel, number))
+            # Read across lines: a subprocess list split over two missed.
+            for found in DOCKER_STARTS.finditer(text):
+                hits.append("%s:%d" % (rel, text.count("\n", 0, found.start()) + 1))
     return hits
+
+
+# Typed or as a list for subprocess, through a name of its own (DOCKER),
+# and every way to start a container: only "docker run" typed out was seen,
+# then "docker-compose up", "restart", "unpause" and a split list were not.
+DOCKER_STARTS = re.compile(
+    r"""docker(?:[-_]compose)?["']?\s*,?\s*["']?"""
+    r"""(?:(?:container|compose)["']?\s*,?\s*["']?)?"""
+    r"""(?:run|start|create|compose|up|restart|unpause)\b""", re.I)
 
 
 # -- 8: the walk sees what it is shown --

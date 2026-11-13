@@ -43,7 +43,10 @@ import sys
 import tempfile
 import time
 
-import guest  # tools/guest.py: the memory ceiling for a run
+# Its own import too: PYTHONDONTWRITEBYTECODE reaches only the children,
+# and this one wrote tools/__pycache__ every time guest.py changed.
+sys.dont_write_bytecode = True
+import guest  # noqa: E402 -- tools/guest.py: the memory ceiling for a run
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 

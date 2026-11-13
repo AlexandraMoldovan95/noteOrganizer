@@ -119,6 +119,21 @@ def exe_version(path):
     return [info.file_ms >> 16, info.file_ms & 0xFFFF, info.file_ls >> 16]
 
 
+def code_newer_than(path):
+    """The first of the app's code files (the entry file, the package, the
+    spec) changed after *path* was written, as a path from the repository's
+    root, or None. A number checked alone let a dist built before the last
+    fixes pass under the same number. A checkout that only touched the
+    files asks for a build it did not need, the safe way to be wrong."""
+    built = os.path.getmtime(path)
+    code = [os.path.join(ROOT, "note_organizer.py"), os.path.join(ROOT, "NoteOrganizer.spec")]
+    code += sorted(glob.glob(os.path.join(ROOT, "noteorganizer", "**", "*.py"), recursive=True))
+    for source in code:
+        if os.path.isfile(source) and os.path.getmtime(source) > built:
+            return os.path.relpath(source, ROOT)
+    return None
+
+
 def pack(version, args, makeappx):
     layout = os.path.join(OUT, "layout_" + version)
     if os.path.isdir(layout):
@@ -163,6 +178,12 @@ def main():
                  "%d.%d.%d: build the app again (NoteOrganizer.spec) before packing it"
                  % (".".join(map(str, built)) if built else "of no version Windows reads",
                     major, minor, build))
+    changed = code_newer_than(os.path.join(DIST, "NoteOrganizer.exe"))
+    if changed:
+        # The same number over newer code: wave 6's fixes came after the
+        # 0.100.524 build, and packing then would have shipped the old app.
+        sys.exit("dist/NoteOrganizer/NoteOrganizer.exe was built before %s last changed: "
+                 "build the app again (NoteOrganizer.spec) before packing it" % changed)
     makeappx = sdk_tool("makeappx.exe")
     os.makedirs(OUT, exist_ok=True)
     versions = ["%d.%d.%d.0" % (major, minor, build)]
