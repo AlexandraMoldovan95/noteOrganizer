@@ -3584,8 +3584,8 @@
     "edits": [
       {
         "file": "noteorganizer/ui/settings_page.py",
-        "find": "            choose_trash_window(days)\n",
-        "replace": "            save_setting(\"trash_retention_days\", days)\n"
+        "find": "            if not choose_trash_window(days)[0]:\n",
+        "replace": "            if not (save_setting(\"trash_retention_days\", days),):\n"
       }
     ],
     "must_fail": ["window not known: answering Yes chooses 90 days and forgets the marker"],
@@ -12708,8 +12708,8 @@
     "edits": [
       {
         "file": "noteorganizer/ui/settings_page.py",
-        "find": "            if get_setting(\"template_not_kept\", None, expect=str):\n                save_setting(\"template_not_kept\", None)\n",
-        "replace": ""
+        "find": "                    and get_setting(\"template_not_kept\", None, expect=str)):\n                save_setting(\"template_not_kept\", None)\n",
+        "replace": "                    and get_setting(\"template_not_kept\", None, expect=str)):\n                pass\n"
       }
     ],
     "must_fail": [
@@ -15038,8 +15038,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/paths.py",
-        "find": "                or _timestamped_backup(settings_path, \"replaced\")):\n",
-        "replace": "                or _timestamped_backup(settings_path, \"replaced\") or True):\n"
+        "find": "                or _timestamped_backup(settings_path, \"replaced\")):\n            _copy_whole(appdata_settings, settings_path)\n",
+        "replace": "                or _timestamped_backup(settings_path, \"replaced\") or True):\n            _copy_whole(appdata_settings, settings_path)\n"
       }
     ],
     "must_fail": [
@@ -17242,8 +17242,8 @@
     "id": "WS153",
     "about": "Duplicate's save-first on a note added for a day turns the window to the Calendar",
     "edits": [{"file": "note_organizer.py",
-               "find": "        if not auto and not getattr(self, \"_save_stays\", False) and _pending and _pending.get(\"origin\") == \"add\":\n",
-               "replace": "        if not auto and _pending and _pending.get(\"origin\") == \"add\":\n"}],
+               "find": "        if written and not auto and not getattr(self, \"_save_stays\", False) and _pending and _pending.get(\"origin\") == \"add\":\n",
+               "replace": "        if written and not auto and _pending and _pending.get(\"origin\") == \"add\":\n"}],
     "must_fail": ["Duplicate's save-first on a note added for a day leaves the notebook on Notes"],
     "suites": ["qa1"],
     "expect": "killed"
@@ -18583,6 +18583,116 @@
                "replace": "        base += f\", {n} times\"\n"}],
     "must_fail": ["a series of one is \"1 time\", not \"1 times\", and more are \"times\""],
     "suites": ["test_recurrence"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN74",
+    "about": "A newer version's field the device holds and the import lacks is said the import's",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                    if unknown_fields_lacked(normalize_note(dict(theirs)), mine))\n",
+               "replace": "                    if unknown_fields_lacked(normalize_note(dict(theirs)), mine)\n                    or unknown_fields_lacked(mine, normalize_note(dict(theirs))))\n"}],
+    "must_fail": ["the device's own newer field, absent from an older backup or a code, is not said the import's"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN75",
+    "about": "A refused save keeps Auto-saved words, put back once the date is",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            if left_out and written else None)\n",
+               "replace": "            if left_out else None)\n"}],
+    "must_fail": ["a refused save keeps saying so once the date is put back"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN76",
+    "about": "A backup's categories the settings file refused are said restored alone",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            if not persist_categories():\n                unwritten.append(\"the categories\")\n",
+               "replace": "            persist_categories()\n"}],
+    "must_fail": ["a backup's categories the settings file refused are said not written"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN77",
+    "about": "A Trash window the disk refused stays on the dropdown",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "            if not choose_trash_window(days)[0]:\n",
+               "replace": "            if not (choose_trash_window(days), True)[1]:\n"}],
+    "must_fail": ["retention: a window the disk refuses leaves the label on the kept one"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN78",
+    "about": "The update notice offers a copy of an unread notes file as a safety net",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                if self._version_backup_path and not unread:\n",
+               "replace": "                if self._version_backup_path:\n"}],
+    "must_fail": ["...nor offers the copy of that unread file as a safety net"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN79",
+    "about": "History's note speaks of left-out days only when edited ones are",
+    "edits": [{"file": "noteorganizer/ui/calendar_view.py",
+               "find": "                                         \"n_edited_left_out\", \"n_off_left_out\",\n                                         \"n_moved_left_out\")) else \"\")),\n",
+               "replace": "                                         \"n_edited_left_out\",)) else \"\")),\n"}],
+    "must_fail": ["History counts the off-schedule and moved days a search leaves out"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN80",
+    "about": "A moved day of a bounded series a search leaves out goes uncounted",
+    "edits": [{"file": "noteorganizer/core/recurrence.py",
+               "find": "                        moved_left += bool(came.get(day))\n",
+               "replace": ""}],
+    "must_fail": ["the moved days and a bounded series' days off the schedule a search leaves out are counted"],
+    "suites": ["test_recurrence"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN81",
+    "about": "A bounded series' day off the schedule a search leaves out goes uncounted",
+    "edits": [{"file": "noteorganizer/core/recurrence.py",
+               "find": "                    if not (child_match or base_matches):\n                        off_left += 1\n",
+               "replace": "                    if not (child_match or base_matches):\n"}],
+    "must_fail": ["the moved days and a bounded series' days off the schedule a search leaves out are counted"],
+    "suites": ["test_recurrence"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN82",
+    "about": "Spelling the disk refused leaves its dropdown on the refused choice",
+    "edits": [{"file": "noteorganizer/ui/spelling.py",
+               "find": "                self.spelling_var.set(\"Off\" if on else \"On\")\n",
+               "replace": "                pass\n"}],
+    "must_fail": ["...and Off the disk refuses leaves the dropdown on On, said"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN83",
+    "about": "A template Save the disk refused takes back the word that it was not kept",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "            if (save_templates(self.templates)[0]\n",
+               "replace": "            if (save_templates(self.templates)\n"}],
+    "must_fail": ["...and a Save the disk refuses leaves that word, still true"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN84",
+    "about": "An old notebook adopted replaces this folder's readable settings with no copy",
+    "edits": [{"file": "noteorganizer/core/paths.py",
+               "find": "        if (not os.path.exists(settings_path)\n                or _preserve_settings_if_unreadable(settings_path)\n                or _timestamped_backup(settings_path, \"replaced\")):\n            settings_came = _copy_whole(legacy_settings, settings_path, tries=3)\n",
+               "replace": "        _preserve_settings_if_unreadable(settings_path)\n        settings_came = _copy_whole(legacy_settings, settings_path, tries=3)\n"}],
+    "must_fail": ["an old notebook adopted keeps this folder's own readable settings aside first"],
+    "suites": ["test_data_safety"],
     "expect": "killed"
   }
 ]
