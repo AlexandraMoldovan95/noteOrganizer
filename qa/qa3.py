@@ -3205,6 +3205,67 @@ try:
 except (tk.TclError, ValueError, AttributeError):
     pass
 app._export_state = None
+# The same failure just before Windows ends the session: the session's own
+# settle recorded only an export still writing, and this one went unsaid.
+NO.save_setting('backup_cut_short', None)
+app.export_data()
+for _t in getattr(app, '_io_workers', []):
+    _t.join(25)
+_fx_session_ready = bool(app._export_state and app._export_state.get('done')
+                         and app._export_state.get('error'))
+_fx_import_was = (getattr(app, '_import_asking', None), app._import_state)
+app._import_asking, app._import_state = None, None
+try:
+    app._settle_backups_at_session_end()
+finally:
+    app._import_asking, app._import_state = _fx_import_was
+_fx_cut = NO.get_setting('backup_cut_short') or {}
+_fx_words = _next_start_says()
+check(f'an export that failed just before the session ended is said at the next start '
+      f'({_fx_session_ready}, {_fx_cut!r}, {_fx_words[:120]!r})',
+      _fx_session_ready and _fx_cut.get('kind') == 'export_failed'
+      and 'qa3_failed_export.zip failed as Windows signed out or shut down' in _fx_words
+      and 'cut short' not in _fx_words)
+try:
+    app.after_cancel(app._export_poll_job)
+except (tk.TclError, ValueError, AttributeError):
+    pass
+app._export_state = None
+# An error without words (a MemoryError's) read as none: "Export complete",
+# "Last exported" stamped, and no file written.
+NO.save_setting('backup_cut_short', None)
+_fx_ok_zip = os.path.join(os.getcwd(), 'qa3_wordless_error.zip')
+fd.asksaveasfilename = lambda **k: _fx_ok_zip
+_fx_check_was = NO.backup_entries_problem
+
+
+def _fx_out_of_memory(_infos):
+    raise MemoryError()
+
+
+NO.backup_entries_problem = _fx_out_of_memory
+try:
+    app.export_data()
+    for _t in getattr(app, '_io_workers', []):
+        _t.join(25)
+finally:
+    NO.backup_entries_problem = _fx_check_was
+_fx_error = (app._export_state or {}).get('error')
+_fx_failed_said, _fx_error_was = [], app.show_error
+app.show_error = lambda *a, **k: _fx_failed_said.append(a[0] if a else '')
+try:
+    app._poll_export_progress()
+finally:
+    app.show_error = _fx_error_was
+check(f'an export whose error has no words is said failed, and no file is put in place '
+      f'({_fx_error!r}, {_fx_failed_said!r}, {os.path.exists(_fx_ok_zip)})',
+      _fx_error == 'MemoryError' and _fx_failed_said == ['Export failed']
+      and not os.path.exists(_fx_ok_zip))
+try:
+    app.after_cancel(app._export_poll_job)
+except (tk.TclError, ValueError, AttributeError):
+    pass
+app._export_state = None
 
 # The end of a Windows session is a question the person can still cancel
 # (Tk answers WM_QUERYENDSESSION with it), so it tears down nothing the app

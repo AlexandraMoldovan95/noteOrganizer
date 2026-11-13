@@ -2356,7 +2356,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             except Exception as e:
                 # Broad on purpose: anything escaping kills the thread silently,
                 # before state["done"], and the progress bar polled for ever.
-                state["error"] = str(e)
+                # Never empty: a MemoryError has no words, and read as no
+                # error, the export was said complete with no file written.
+                state["error"] = str(e) or type(e).__name__
                 try:
                     os.remove(tmp_path)
                 except OSError:
@@ -21590,6 +21592,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             save_setting("backup_cut_short", {
                 "kind": "export", "file": export.get("save_path") or "",
                 "when": "session"})
+        elif export is not None and export.get("error") and not export.get("stop"):
+            # Failed on its own moments before, its message not yet shown:
+            # said at the next start, as the close says it.
+            self._export_state = None
+            save_setting("backup_cut_short", {
+                "kind": "export_failed", "file": export.get("save_path") or "",
+                "error": str(export.get("error") or "")[:300], "when": "session"})
         asking = getattr(self, "_import_asking", None)
         if asking is not None:
             # Its questions on screen, its files copied: what a session that
