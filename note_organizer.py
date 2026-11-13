@@ -360,6 +360,7 @@ from noteorganizer.core.model import (
     shared_update_changes,
     UPDATABLE_FROM_SHARED,
     UPDATABLE_FROM_BACKUP,
+    unknown_fields,
     PREV_TEXT_FIELDS,
     DAY_FIELDS,
     note_richness,
@@ -20245,6 +20246,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         for key, _label in self._PREV_EXTRA_LABELS:
             if key in prev:
                 note[key] = copy.deepcopy(prev[key])
+        # ...the fields this version does not know, as the update found them.
+        if isinstance(prev.get("_unknown"), dict):
+            for name in unknown_fields(note):
+                note.pop(name, None)
+            note.update(copy.deepcopy(prev["_unknown"]))
         if note.get("category") not in CATEGORY_COLORS:
             note["category"] = "General"
         # The days it brings back follow the same rule: a day filed under

@@ -10,8 +10,8 @@ are imported inside :func:`_dup_key`: at the top, model -> categories ->
 storage -> here closed an import loop. The walk is in docs/CODE_TOUR.md.
 """
 
-# What _dup_key compares, as every text about duplicates says it: three of
-# five copies written by hand missed the checklist and the repeat rule.
+# What _dup_key compares, as every text about duplicates says it (three of
+# five hand-written copies missed parts), but a newer version's fields, unseen.
 SAME_AS = ("same title, text, comments, category, checklist, repeat rule "
            "and a series' own days")
 
@@ -40,7 +40,7 @@ def _dup_key(note):
     cleanup merges them -- left out, the dropped copy took them along.
     Attachments stay out (the cleanup gives the kept note the group's
     files, up to the cap); a date does too."""
-    from .model import _checklist_signature, _recurrence_signature, _stable, unknown_fields
+    from .model import _checklist_signature, _recurrence_signature, _stable, unknown_signature
     exceptions, overrides, moved = (note.get("exceptions"), note.get("overrides"),
                                     note.get("moved"))
     return (
@@ -58,7 +58,7 @@ def _dup_key(note):
          _stable(moved if isinstance(moved, dict) else {})),
         # A field this version does not know: the cleanup keeps one copy, and
         # grouped by the rest it dropped the other's field with it.
-        _stable(unknown_fields(note)),
+        unknown_signature(note),
     )
 
 

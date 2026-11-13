@@ -5606,6 +5606,31 @@ check("...a share code's Update leaves this note's own as they are",
 check("...and such a field alone is no change for an Update to make",
       not _d2.shared_update_changes(_d2.normalize_note({'id': 1, 'title': 'T', 'mood': 'calm'}),
                                     {'title': 'T', 'mood': 'storm'}, _d2.UPDATABLE_FROM_BACKUP))
+# ...the note's own kept in the rescue copy, through a load, so Restore
+# previous can put back a value the Update wrote over (qa5 presses it).
+_d2_over = _d2.normalize_note({'id': 1, 'title': 'Mine', 'reminder': '10:00', 'own': 1})
+_d2.apply_shared_update(_d2_over, {'title': 'Older', 'reminder': '09:00'}, _d2.UPDATABLE_FROM_BACKUP)
+_d2_reloaded = _d2.normalize_note(json.loads(json.dumps(_d2_over)))
+check(f"...a backup's Update keeps this note's own in its rescue copy, through a load "
+      f"({(_d2_reloaded.get('_prev') or {}).get('_unknown')})",
+      _d2_over.get('reminder') == '09:00'
+      and (_d2_reloaded.get('_prev') or {}).get('_unknown') == {'reminder': '10:00', 'own': 1})
+_d2_full = _d2.normalize_note(dict({'id': 1, 'title': 'T'}, **{'m%02d' % i: i for i in range(30)}))
+_d2.apply_shared_update(_d2_full, dict({'title': 'U'}, **{'z%02d' % i: i for i in range(7)}),
+                        _d2.UPDATABLE_FROM_BACKUP)
+# The note's own keys, not unknown_fields' reading of them, which bounds them as it reads.
+check("...and the two sets together are held to the bounds at once, chosen by name",
+      sorted(k for k in _d2_full if re.fullmatch(r'[mz]\d\d', k))
+      == sorted(['m%02d' % i for i in range(30)] + ['z00', 'z01']))
+check("...a note holding only such a field is not empty, so the first start's cleanup keeps it",
+      not _d2.note_is_empty(_d2.normalize_note({'id': 1, 'mood': 'calm'})))
+check("...true and 1 in such a field are two notes, as on the phone (1 and 1.0 one)",
+      _d2.content_signature(_d2.normalize_note({'id': 1, 'flag': True}))
+      != _d2.content_signature(_d2.normalize_note({'id': 1, 'flag': 1}))
+      and _d2.content_signature(_d2.normalize_note({'id': 1, 'flag': 1}))
+      == _d2.content_signature(_d2.normalize_note({'id': 1, 'flag': 1.0})))
+check("...and a list longer than the allowance is left out unwalked",
+      'huge' not in _d2.normalize_note({'id': 1, 'huge': [0] * (_d2.MAX_UNKNOWN_UNITS + 1)}))
 # Out of the Trash: kept, the Trash's own stamp left there.
 _d2_entry = dict(_d2.normalize_note({'id': 7, 'title': 'Binned', 'mood': 'calm'}),
                  deleted_at='2026-11-01 10:00:00')

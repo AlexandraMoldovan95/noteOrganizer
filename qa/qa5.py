@@ -4163,7 +4163,9 @@ app.update()
 _rn_asked, _rn_dialog_was = [], app._themed_dialog
 app._themed_dialog = lambda title, *a, **k: (_rn_asked.append(title), False)[1]
 try:
-    app._undo_occurrence_delete(1, '2026-09-14', {'body': 'DAY 14'}); app.update()
+    # Taken as a click takes it: the delete's own banner cleared first, so
+    # a "Day removed" seen after is the offer made again, not the first one.
+    app._run_toast_action(); app.update()
 finally:
     app._themed_dialog = _rn_dialog_was
 _rn_gb = (_rn_asked[:1], str(app.toast_lbl.cget('text')), app._toast_action is not None,
@@ -4173,6 +4175,24 @@ app._cancel_pending_autosave()
 check(f"going back on the question a day's Undo asks first keeps the Undo on offer ({_rn_gb})",
       _rn_gb[0] == ["Part of this note isn't saved"] and 'Day removed' in _rn_gb[1]
       and _rn_gb[2] and _rn_gb[3] and _rn_gb[4] == 1)
+# A backup's Update wrote over a field this version does not know: Restore
+# previous puts the note's own value back, as it puts back its words.
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Mine', 'body': 'b', 'reminder': '10:00'}),
+             NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+NO.apply_shared_update(app.notes[0], {'title': 'Older', 'body': 'b', 'reminder': '09:00'},
+                       NO.UPDATABLE_FROM_BACKUP)
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.restore_previous_version(); app.update()
+finally:
+    app.ask_yes_no = _ro_yes
+_rn_own = ((app.find_note(1) or {}).get('title'), (app.find_note(1) or {}).get('reminder'))
+app._cancel_pending_autosave()
+check(f"Restore previous after a backup's Update puts back a field this version does not know ({_rn_own})",
+      _rn_own == ('Mine', '10:00'))
 # The Undo of a day clicked with THAT day open -- a repeat picked anew has it
 # again, the series' text on it -- saves the editor before it writes the
 # day, and opens it without a second save. Saved after, the editor's view

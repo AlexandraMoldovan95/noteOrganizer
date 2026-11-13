@@ -155,6 +155,10 @@ def _json_units(value):
     total, stack = 0, [(value, 1)]
     while stack:
         item, level = stack.pop()
+        # Longer than the allowance by its count alone: not walked, so a
+        # crafted list of millions costs nothing (each item is a unit at least).
+        if isinstance(item, (str, list, dict)) and len(item) > MAX_UNKNOWN_UNITS:
+            return None
         if isinstance(item, str):
             total += _utf16_units(item)
         elif item is None or isinstance(item, (bool, int)):
@@ -180,6 +184,21 @@ def _json_units(value):
         if total > MAX_UNKNOWN_UNITS:
             return None
     return total
+
+
+def unknown_signature(note):
+    """*note*'s fields this version does not know, signed for the two
+    signatures: as _stable, but true is not 1, as the phone's stable tells
+    them apart (1 and 1.0 are one number on both)."""
+    def typed(value):
+        if isinstance(value, bool):
+            return ("bool", value)
+        if isinstance(value, dict):
+            return tuple(sorted((str(k), typed(v)) for k, v in value.items()))
+        if isinstance(value, list):
+            return tuple(typed(v) for v in value)
+        return value
+    return typed(unknown_fields(note))
 
 
 def unknown_fields(note):
@@ -789,7 +808,14 @@ def apply_shared_update(note, incoming, fields=UPDATABLE_FROM_SHARED):
     # own: a share code carries none (SHAREABLE_FIELDS), so a stranger's code
     # cannot add one. Restore previous puts back the known fields only.
     if fields is UPDATABLE_FROM_BACKUP:
-        note.update(unknown_fields(fresh))
+        # The note's own kept in the copy (an Update overwrote one, and
+        # Restore previous could not put it back); the two held to the bounds.
+        mine, theirs = unknown_fields(note), unknown_fields(fresh)
+        if mine or theirs:
+            note["_prev"]["_unknown"] = copy.deepcopy(mine)
+            for name in mine:
+                note.pop(name, None)
+            note.update(unknown_fields(dict(mine, **theirs)))
     # A backup's note sets aside what its own copy kept, as it is read: an
     # Add kept those, an Update dropped them.
     if "overrides" in fields and fresh.get("_set_aside"):
@@ -834,6 +860,8 @@ def _copy_field_held(note, prev, key):
     if key == "recurrence":
         day = note.get("date")
         return _same_series(prev.get("date", day), prev[key], day, note.get(key, NOTE_DEFAULTS.get(key)))
+    if key == "_unknown":
+        return prev[key] == unknown_fields(note)
     return prev[key] == note.get(key, NOTE_DEFAULTS.get(key))
 
 
@@ -945,6 +973,8 @@ def copy_replaced_by_restore(note, prev):
         return None
     kept = {key: copy.deepcopy(note.get(key, NOTE_DEFAULTS.get(key)))
             for key in list(PREV_TEXT_FIELDS) + [k for k in prev if k not in PREV_TEXT_FIELDS]}
+    if "_unknown" in prev:
+        kept["_unknown"] = unknown_fields(note)
     kept.update(taken)
     return kept
 
@@ -1229,6 +1259,9 @@ def normalize_note(note):
             shaped = normalize_note(extra)
             for key in extra:
                 clean["_prev"][key] = shaped[key]
+        # The fields this version did not know, as a backup's Update found them.
+        if isinstance(prev.get("_unknown"), dict):
+            clean["_prev"]["_unknown"] = unknown_fields(prev["_unknown"])
     for key, default in NOTE_DEFAULTS.items():
         value = note.get(key, default)
         if isinstance(default, str) and not isinstance(value, str):
@@ -1458,6 +1491,9 @@ def note_is_empty(note):
         or (isinstance(checklist, list) and checklist)
         or repeats
         or _s(note.get("date"))
+        # A newer version's field is content too: blank to this one, the
+        # first start's cleanup deleted a note that held only that.
+        or unknown_fields(note)
     )
 
 
@@ -1537,7 +1573,7 @@ def content_signature(note):
         _text(note.get("color")),
         # Two notes differing only in a field this version does not know are
         # two notes: signed alike, a cleanup kept one and the field went.
-        _stable(unknown_fields(note)),
+        unknown_signature(note),
     )
 
 
