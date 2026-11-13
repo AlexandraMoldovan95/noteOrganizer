@@ -43,8 +43,9 @@ The scripts are copied from the runs' own records. Three things differ from what
 - **Two comment lines** at the top of each script name its run and when it started.
 
 Wave 3 ran each round's script twice, once per app; it is here once. Wave 4's third round was
-two agents started by hand rather than by a script, and so was all of wave 5: their prompts are
-the `.txt` files, taken from the agents' own transcripts, with the paths replaced the same way.
+two agents started by hand rather than by a script, and so were all of waves 5 and 6: their
+prompts are the `.txt` files, taken from the agents' own transcripts (wave 6's from the files the
+agents were pointed at), with the paths replaced the same way.
 
 ## What is not here
 
@@ -269,3 +270,18 @@ No sceptic ran in this wave: I checked each finding in the code before it counte
 | [miniaudit-phone-round6.txt](wave5/miniaudit-phone-round6.txt) | Phone | 2026-11-11 22:40 | 1 | 0.12 |
 | [miniaudit-phone-round7.txt](wave5/miniaudit-phone-round7.txt) | Phone | 2026-11-11 22:47 | 1 | 0.12 |
 | [miniaudit-phone-round8.txt](wave5/miniaudit-phone-round8.txt) | Phone | 2026-11-12 00:02 | 1 | 0.14 |
+
+### Wave 6: the lows, before the stores
+
+The full reading's findings of low severity, fixed on 12 and 13 November, then attacked by two
+agents for each app in each round: one going after each fix by name, one taking an ordinary
+person's side and reading the wave's documents against the code. No sceptic ran: each finding of
+medium severity was a sentence in a document, checked in the code before it counted. The totals
+above are waves 1 to 5's.
+
+| Prompt | App | Started (UTC) | Agents | Tokens (millions) |
+|---|---|---|---|---|
+| [r1-desktop-fixes.txt](wave6/r1-desktop-fixes.txt) | Desktop | 2026-11-13 03:02 | 1 | 0.25 |
+| [r1-desktop-person.txt](wave6/r1-desktop-person.txt) | Desktop | 2026-11-13 03:02 | 1 | 0.26 |
+| [r1-phone-fixes.txt](wave6/r1-phone-fixes.txt) | Phone | 2026-11-13 03:02 | 1 | 0.25 |
+| [r1-phone-person.txt](wave6/r1-phone-person.txt) | Phone | 2026-11-13 03:02 | 1 | 0.28 |

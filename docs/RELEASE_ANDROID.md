@@ -42,7 +42,9 @@ scramble (2026-11-12).
    newer one; the way out is a newer version, its `versionCode` higher.
 4. **The fix is a release like any other**, in the app's own repository: its branch, the
    version a patch higher, the unit tests, the gates and the walk, the release build, then the
-   upload. A crash's trace in the console is read through the R8 mapping the bundle carries;
-   each release's `mapping.txt` is kept beside its build as well.
+   upload. A crash's trace in the console is read through the R8 mapping the bundle carries.
+   R8 writes `mapping.txt` into the build folder, where the next build writes over it, so each
+   release's copy is kept beside the bundle uploaded, named for its version (the phone's
+   STATUS, "Before the first upload").
 5. **What a person sees is read before anything is guessed**: the reviews, and the console's
    crashes and "isn't responding" reports (the app sends nothing itself).

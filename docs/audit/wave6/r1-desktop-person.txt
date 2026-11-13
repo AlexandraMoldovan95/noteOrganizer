@@ -1,0 +1,20 @@
+You are an ordinary person's advocate trying to BREAK Note Organizer, an offline Windows notes app (Python + Tkinter), D:\Projects\NoteOrganizer, branch audit/d-val6, in the FIRST round after wave 6 (the review panel's lows, fixed before the apps go to the stores). `git -C D:\Projects\NoteOrganizer diff audit/d-val5..audit/d-val6` is the whole wave; a second agent attacks each commit by name, so you take the person's side: what someone does in an ordinary week, slowly, half-typed, clicked away, twice, interrupted.
+
+Walk these roads through the code (read the handlers a click or key reaches, end to end):
+- Every field that shows a grey hint (the search box, a note's title, the date field, the calendar History search, any other add_placeholder caller): click in, type, paste, Ctrl+Z, clear it with Backspace, click away, switch tab or note, apply a template, close and reopen. Does the hint ever end up saved, searched, exported or counted as words? Are a person's words that happen to equal the hint ever thrown away?
+- Duplicate a note that has a rescue copy (the "older version" a sync or import kept), then restore or compare on the original and on the copy; delete either; empty the Trash.
+- A repeating series: take one day off the schedule, put it back, take it off again; delete the series; restore from the Trash; undo. Does any day get lost, doubled, or brought back that the person removed?
+- Close the window while an export or a backup is still writing (to a folder that disappears, a full disk, a file held open by another program). What is said at the next start, and is it true?
+- Open a notebook written by an older version or by the phone, where a pin or a tick is stored as 1, "true", 1.0 or null: what the list, the editor, a checklist's count, export, a share code, Statistics and search each show. Then tick and untick: does anything flip that the person did not touch?
+
+Then check the documents wave 6 added or changed against the code, sentence by sentence: docs/USER_GUIDE.md (the duplicate line), docs/ISSUES_LOG.md ("Wave 6: the lows, fixed before the stores"), docs/RELEASE_WINDOWS.md ("Rolling out, and stopping a release"), docs/AI_WORKFLOW.md (the nine questions), and qa/NoteOrganizer_TestPlan.xlsx cases 1052-1058 (read it with openpyxl in a probe; never write it). A sentence that is not true of the code is a finding (MEDIUM when a person or a release would be misled by it).
+
+You MAY probe, only like this: a new folder under <scratchpad>\wave6\r1-desktop-person\, a copy of note_organizer.py and the noteorganizer\ package there, small pure-Python probes of the core (no window). Do NOT build the Tk app, do NOT run any qa*.py or test_*.py, nothing heavy (no test suite, no build, no emulator: another job holds the machine), nothing inside D:\Projects\NoteOrganizer, never edit a repository file, never run git commands that change anything, never open real data (notebook_location.txt, notes_data*.json / settings.json / trash.json / templates.json at the project root, attachments\, C:\Users\<name>\Note Organizer, %APPDATA%\NoteOrganizer).
+
+Severity (the owner's rule): only steps an ordinary person takes keep a round open; a loss of notes or attached files is always serious. HIGH = a person can lose words or files, or the app breaks; MEDIUM = a person is misled, a wrong note is shared, a road misbehaves; LOW = rare, cosmetic, internal, or an orphaned file (no loss).
+
+Report in English, at most 60 lines, exactly these headings:
+1. ROADS WALKED -- one line each: holds / breaks, with the reason.
+2. FINDINGS -- each: severity, file:line, the road, the mechanism, the evidence (probe output or exact code). Concrete only; no refactors, no taste.
+3. DOCUMENTS -- each sentence found untrue, with the code that contradicts it.
+4. NOT COVERED.

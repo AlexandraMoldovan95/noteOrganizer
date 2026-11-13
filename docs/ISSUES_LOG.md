@@ -4178,6 +4178,33 @@ scratch marker, the app's own resolver, the run's empty homes and the deny rules
 front of it, and one more guard would stop the suites that run one after another in one folder.
 The site's missing third-party notices: the site ships nothing it did not write.
 
+**The round that attacked these fixes** found what they had not reached, all of low severity on the
+desktop, each fixed the same day with a check and a mutant (SN10–SN17):
+
+- Two more writers into a hinted field (the list's search sent to the History, a day picked in the
+  date picker) left the hint's mark, and an untitled note's state put back kept a long title's
+  counter beside the hint.
+- The cleanup's copy of the notes was kept at every launch while the file stayed held. Removing it
+  showed that copies named by the second wrote over one made the same second, an unreadable file's
+  `_corrupt_` copy among them; each now takes a name not yet used (`paths.unused_path`).
+- A backup's "Add a copy anyway" carried the original's rescue copy, the seam the duplicate had.
+- An export's error without words (a `MemoryError`) read as success, and one that failed just
+  before Windows ended the session was never said.
+- A day the Trash already held kept that entry's first clock, sooner than the question promised;
+  the clock starts again (`renew_in_trash`).
+- Three of the sentences above promised more than their tools did: `check_guest` missed
+  `docker-compose up`, `restart`, `unpause` and a split list, the ninth rule missed membership and
+  `startswith`, and `run_tests`' own import still wrote `__pycache__`. Each now does what it says.
+  And `build_msix` refuses an exe built before the code last changed: dist/ held 0.100.524's build
+  from before these fixes, under the number they have not bumped yet.
+
+Two of that round's lows were read and left. A cleanup whose notes write lands while
+`settings.json` is held at that moment re-points the open note wrongly at the next start: the
+wrong note opens, nothing is lost, and keeping the cleanup's mark anywhere but settings would be a
+new format. And `move_notes_to_trash`, stopped between its two writes, can leave a note in both
+files, a second identical row the next time it is deleted: no loss, and matching every delete
+against the whole Trash could merge two deletions a person meant apart.
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.
 
