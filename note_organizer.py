@@ -2493,8 +2493,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "kind": "export", "file": state.get("save_path") or ""})
         state = self._import_state
         if state is not None:
-            save_setting("backup_cut_short", {
-                "kind": "import", "file": state.get("zip") or ""})
+            word = {"kind": "import", "file": state.get("zip") or ""}
+            if not state.get("done"):
+                # Still running past the wait's cap: what it copied and
+                # unpacked named for the next start, as a session's end names
+                # them -- unnamed, they stayed behind for good.
+                word.update(copied=list(state.get("copied") or []),
+                            temp_dir=state.get("temp_dir") or "")
+            save_setting("backup_cut_short", word)
         if state is None or not state.get("done"):
             # Still running past the wait's cap: leave it alone.
             return

@@ -3592,6 +3592,22 @@ try:
           f'and unpacked ({sorted(_hw_said)})',
           _hw_said.get('copied') == ['20261030010000000001_held.bin']
           and _hw_said.get('temp_dir', '').endswith('notes_import_qa3_held'))
+    # ...and the window closed while one still runs past the close's wait:
+    # its word named neither, and the next start took nothing out.
+    app._import_state = {'zip': _hb_zip, 'done': False, 'stop': True,
+                         'copied': ['20261030010000000001_held.bin'],
+                         'temp_dir': os.path.join(tempfile.gettempdir(), 'notes_import_qa3_held')}
+    _hw_export_was, app._export_state = app._export_state, None
+    try:
+        app._settle_background_work_at_close()
+        _hw_said = NO.get_setting('backup_cut_short') or {}
+    finally:
+        app._import_state, app._export_state = None, _hw_export_was
+    NO.save_setting('backup_cut_short', None)
+    check(f'a close while an import still runs past its wait names what it copied '
+          f'and unpacked ({sorted(_hw_said)})',
+          _hw_said.get('copied') == ['20261030010000000001_held.bin']
+          and _hw_said.get('temp_dir', '').endswith('notes_import_qa3_held'))
     # A start that could not read the notes keeps those files (a file the
     # notes use would look free) -- and kept no word either, so no later start
     # took them out. The word stays, said once.
