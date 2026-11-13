@@ -166,15 +166,20 @@ class NoteListMixin:
         one is given -- or '' when nothing does. A new note filed under
         General vanished as it was written, with Show picked once and
         forgotten, and the empty list blamed a search nobody had typed."""
+        # *note* may be a list, said of them all: what keeps any of them off. Of
+        # the first alone, the others' folded groups and filters went unsaid.
+        group = note if isinstance(note, list) else ([] if note is None else [note])
         parts = []
         query, show = self._search_query(), self.filter_var.get()
-        if query and (note is None or not self._query_matches_note(query, note)):
+        if query and (note is None or any(not self._query_matches_note(query, n) for n in group)):
             parts.append("your search")
-        if show != "All" and (note is None or not self._note_passes_filter(note, show)):
+        if show != "All" and (note is None or any(not self._note_passes_filter(n, show) for n in group)):
             parts.append("Show: " + show)
-        if (note is not None and self.group_by_category.get()
-                and self._list_group_of(note) in self.collapsed_groups):
-            parts.append("its folded group")
+        folded = ({self._list_group_of(n) for n in group} & self.collapsed_groups
+                  if self.group_by_category.get() else set())
+        if folded:
+            parts.append("its folded group" if len(group) == 1
+                         else "their folded group" if len(folded) == 1 else "their folded groups")
         return " and ".join(parts)
 
     def _show_all_notes(self, note=None):
@@ -197,8 +202,15 @@ class NoteListMixin:
             pass
         if getattr(self, "_sidebar_hidden", False):
             self.toggle_sidebar()
-        if note is not None and self._list_group_of(note) in self.collapsed_groups:
-            self._toggle_group_collapsed(self._list_group_of(note))
+        # *note* may be a list: every group holding one is unfolded, in one
+        # write (the first's alone left the others' arrivals hidden).
+        targets = note if isinstance(note, list) else ([] if note is None else [note])
+        unfold = {self._list_group_of(n) for n in targets} & self.collapsed_groups
+        if unfold:
+            self.collapsed_groups -= unfold
+            settings = load_settings()
+            settings["collapsed_groups"] = sorted(self.collapsed_groups)
+            save_settings(settings)
         self.filter_var.set("All")
         if self.search_var.get() and not self._hint_shown(self.search_entry):
             try:
@@ -212,8 +224,8 @@ class NoteListMixin:
         self.refresh_note_list()
         # Its card in sight: the list keeps its place, and the notes Show
         # had hidden can come in above it.
-        if note is not None:
-            self._bring_card_into_view(note.get("id"))
+        if targets:
+            self._bring_card_into_view(targets[0].get("id"))
 
     def _list_empty_link(self, y, text, tag, command):
         """A link drawn under the empty list's words, at *y*: its item."""
@@ -232,7 +244,7 @@ class NoteListMixin:
         notes" and a list that had not changed."""
         shown = self._visible_note_ids()
         hidden = [n for n in notes or () if n.get("id") not in shown]
-        hides = self._what_hides_notes(hidden[0]) if hidden else ""
+        hides = self._what_hides_notes(hidden) if hidden else ""
         if hides:
             tail = (f"hidden by {hides}" if len(notes) == 1
                     else f"{len(hidden)} of them hidden by {hides}")
@@ -246,11 +258,11 @@ class NoteListMixin:
                 held = {id(m) for m in self.notes}
                 still = [n for n in hidden if id(n) in held and n.get("id") not in shown_now]
                 if still:
-                    hides_now = self._what_hides_notes(still[0])
+                    hides_now = self._what_hides_notes(still)
                     now = (f"hidden by {hides_now}" if len(notes) == 1
                            else f"{len(still)} of them hidden by {hides_now}")
                     self._show_toast(f"{what}, {now}", kind="info",
-                                     action=lambda: self._show_all_notes(still[0]), action_text="Show all")
+                                     action=lambda: self._show_all_notes(still), action_text="Show all")
             # Not over an Undo still showing: 'Day removed' holds the day's
             # text in it alone.
             self._banner_after_undo(said, say)

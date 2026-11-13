@@ -248,6 +248,18 @@ for _cb_text in ('Hi NOTE 1: buy milk', 'Meeting notes\nNOTE 1: call Ana about t
         _cb_words.append(str(_cb_e)[:38])
 check(f'...and words saying "NOTE 1:" are said to be no share code ({_cb_words})',
       _cb_words == ["This isn't a Note Organizer share code"] * 2)
+# ...while a code that reads keeps its own answer behind a hidden prefix: a
+# newer version's was called no share code at all.
+import base64 as _cb_b64
+_cb_v2 = NO.SHARE_CODE_PREFIX + _cb_b64.urlsafe_b64encode(zlib.compress(
+    json.dumps({'v': 2, 'notes': [{'title': 'n'}]}).encode())).decode()
+try:
+    NO.decode_share_code(_cb_v2[:4] + '\n' + _cb_v2[4:])
+    _cb_v2_said = 'read'
+except ValueError as _cb_e:
+    _cb_v2_said = str(_cb_e)
+check(f"...and a newer version's code behind a hidden prefix says so ({_cb_v2_said[:50]!r})",
+      'newer version' in _cb_v2_said)
 check('and an old code without paragraphs still decodes',
       'paragraphs' not in NO.decode_share_code(NO.encode_share_code([
           {'title': 'v', 'body': 'x', 'formatting': []}]))[0])

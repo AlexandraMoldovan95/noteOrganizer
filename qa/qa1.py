@@ -566,6 +566,29 @@ try:
         app._visible_note_ids = _fh_real_vis
     check(f'...and reads the list once when it is shown, not once a note ({len(_fh_reads)} reads)',
           1 <= len(_fh_reads) <= 2)
+    # ...and arrivals hidden in different folded groups are said of them all:
+    # the first's group was named for both, and Show all unfolded it alone.
+    _fg_filter_was = app.filter_var.get()
+    app.filter_var.set('All'); app.group_by_category.set(True)
+    _fg_in = [NO.normalize_note({'id': 8730, 'title': 'Into Work', 'body': '', 'category': 'Work'}),
+              NO.normalize_note({'id': 8731, 'title': 'Into Personal', 'body': '', 'category': 'Personal'})]
+    app.notes.extend(_fg_in)
+    app.collapsed_groups.update({'Work', 'Personal'})
+    app.refresh_note_list(); app.update()
+    _fg_seen = len(_fh_toasts)
+    app._say_hidden_arrivals(_fg_in, 'Added 2 notes'); app.update()
+    _fg_said = _fh_toasts[-1] if len(_fh_toasts) > _fg_seen else (None, None, None)
+    if callable(_fg_said[2]):
+        _fg_said[2](); app.update()
+    _fg_vis = set(app._visible_note_ids())
+    check(f"...and arrivals in two folded groups are said of both, and Show all unfolds both "
+          f"({_fg_said[:2]}, {sorted(app.collapsed_groups)})",
+          _fg_said[0] == 'Added 2 notes, 2 of them hidden by their folded groups'
+          and {8730, 8731} <= _fg_vis)
+    app.notes = [n for n in app.notes if n.get('id') not in (8730, 8731)]
+    app.collapsed_groups.difference_update({'Work', 'Personal'})
+    app.group_by_category.set(False); app.filter_var.set(_fg_filter_was)
+    app.refresh_note_list(); app.update()
     # ...and so are the words of an import cancelled and of a table pasted into
     # the comments: over 'Day removed' they took its one way back.
     # The clipboard read is stood in for: the machine's is the owner's.
@@ -11467,11 +11490,14 @@ app.toggle_settings_panel('backup'); app.update()
 _sh_export = [w for w in _walk_widgets(app.settings_backup_panel, tk.Widget)
               if w.winfo_class() in ('Button', 'Label')
               and str(w.cget('text')) == 'Export']
-check(f'the backup is named as Settings → Backup → Export, which exists '
-      f'({_sh_said}; {len(_sh_export)} Export button)',
+# A code's sender may be on the phone, which has Settings → Backup but no
+# Export: the decode's words name the place both apps have, this computer's
+# own warning its Export.
+check(f'the backup is named by a place that exists, Settings → Backup on either device and its '
+      f'Export here ({_sh_said}; {len(_sh_export)} Export button)',
       len(_sh_said) == 3 and len(_sh_export) == 1
-      and all('Settings → Backup → Export' in s and '(ZIP)' not in s
-              for s in _sh_said + [NO.NoteOrganizer.SHARE_ATTACHMENT_WARNING])
+      and all('Settings → Backup' in s and 'Export' not in s and '(ZIP)' not in s for s in _sh_said)
+      and 'Settings → Backup → Export' in NO.NoteOrganizer.SHARE_ATTACHMENT_WARNING
       and 'Backup' in [s[1] for s in NO.NoteOrganizer.SETTINGS_SECTIONS])
 _decoded_share = NO.decode_share_code(
     next(t for t in _share_texts if t.startswith('NOTE1:')))

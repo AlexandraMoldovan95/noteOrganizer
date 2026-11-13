@@ -138,13 +138,17 @@ def decode_share_code(code):
         raise ValueError("That doesn't look like a share code.")
     try:
         return _decode_found(code_in(code))
-    except ValueError:
-        # A prefix the wrapping hid that leads to no readable code is words
-        # saying "NOTE 1:", not a code, and is answered as such (the phone
-        # the same; its shared text becomes a note then).
+    except _Unreadable:
+        # A hidden prefix leading to bytes no code holds is words saying "NOTE
+        # 1:", answered as such (the phone the same). A code that reads keeps
+        # its own answer: a newer version's, too many notes.
         if SHARE_CODE_PREFIX not in code and SHARE_CODE_PREFIX in _CODE_SKIPPED.sub("", code):
             raise ValueError(_NOT_A_CODE) from None
         raise
+
+
+class _Unreadable(ValueError):
+    """A code whose bytes do not read: its Base64, its zlib or its JSON."""
 
 
 def _decode_found(code):
@@ -154,8 +158,8 @@ def _decode_found(code):
     if len(code) > MAX_SHARE_CODE_CHARS:
         raise ValueError(
             "That code is far too large to import safely. For a transfer this "
-            "large, send a backup instead: Settings → Backup → Export, then "
-            "Import on the other computer."
+            "large, send a backup instead: save one in Settings → Backup on the "
+            "device it came from, then import it on this one."
         )
     if not code.startswith(SHARE_CODE_PREFIX):
         raise ValueError(_NOT_A_CODE)
@@ -163,23 +167,23 @@ def _decode_found(code):
     try:
         compressed = base64.urlsafe_b64decode(body)
     except (base64.binascii.Error, ValueError):
-        raise ValueError(
+        raise _Unreadable(
             "This share code is damaged or incomplete. Ask the sender to copy "
             "the whole code again — chat apps sometimes cut long codes short."
         )
     try:
         raw = _bounded_decompress(compressed, MAX_DECOMPRESSED_BYTES)
     except (zlib.error, ValueError):
-        raise ValueError(
+        raise _Unreadable(
             "This share code is damaged, or too large to import safely. Ask the "
             "sender to send it again, or to send a backup instead (Settings → "
-            "Backup → Export)."
+            "Backup)."
         )
     try:
         # Half an emoji spelled as an escape, mended (json_from_text).
         payload = json_from_text(raw.decode("utf-8"))
     except (*JSON_UNREADABLE, ValueError):
-        raise ValueError(
+        raise _Unreadable(
             "This share code is damaged or incomplete. Ask the sender to copy "
             "the whole code again."
         )
@@ -207,7 +211,7 @@ def _decode_found(code):
             f"This code contains {len(notes)} notes, which is over the "
             f"{MAX_SHARED_NOTES}-note limit for a single code. Ask the sender to "
             "split it into smaller codes, or to send a backup instead "
-            "(Settings → Backup → Export)."
+            "(Settings → Backup)."
         )
     # The same slice encode makes, so a hand-made code carries only what a
     # real one would: no attachment whose stored_as could point a later
