@@ -3266,8 +3266,8 @@ check('with no rich clipboard content, the normal paste is left to run',
 # The formatted paste keeps at most MAX_PASTE_CHARS characters and
 # MAX_PASTE_SPANS styles. Past them it cut without a word, and the rest of
 # a long article was simply not in the note. The notice comes once the
-# paste's own work is done (after idle), and its advice -- Ctrl+Z, then
-# Ctrl+Shift+V -- has to really bring all of it in.
+# paste's own work is done (after idle); Ctrl+Z takes the paste back, and
+# Ctrl+Shift+V keeps the same ceiling, so its advice is a note of its own.
 _cut_told = []
 _cut_real_info = app.show_info
 app.show_info = lambda title, message, **k: _cut_told.append((title, message))

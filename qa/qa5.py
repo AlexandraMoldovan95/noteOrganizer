@@ -2354,8 +2354,8 @@ check(f"a day the old version moved or only coloured, its own text in the copy a
       _tb_seen == [('DAY 14 OWN TEXT, room 4B', ''), ('DAY 14 OWN TEXT, room 4B', '#ff6b6b')]
       and 'DAY 14 OWN TEXT' in _tb_disk)
 # ...and a day holding words of its own keeps them as they are: the copy's
-# for it become a note of their own on that date, said on the status line,
-# made once (added to the day, four earlier fixes read them four ways).
+# for it become a note of their own on that date, said on a banner of its
+# own, made once (added to the day, four earlier fixes read them four ways).
 app.new_note(); app.update()
 app.notes = [NO.normalize_note({'id': 1, 'title': 'Standup', 'body': 'SERIES TEXT',
                                 'date': '2026-09-07', 'recurrence': {'freq': 'weekly'},

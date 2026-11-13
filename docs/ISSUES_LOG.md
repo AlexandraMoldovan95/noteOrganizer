@@ -4321,8 +4321,8 @@ with "That file couldn't be read as a backup" (case 657 asks the owner's eye on 
 
 **The eighth round** took that last one up as a medium, rightly: a nearly full disk is an
 ordinary road, and the backup was sound. A refusal for no room is its own kind now
-(`BackupRefused`), said as that alone, and a disk that fills up during the unpacking is said as
-that too (SN37, SN38). The plan's reader went on to the Notes, Settings and Attachments cases and
+(`BackupRefused`), said as that alone (SN37, SN38), and a disk that fills up during the unpacking
+is said as that too (unguarded until the ninth round). The plan's reader went on to the Notes, Settings and Attachments cases and
 found nine mediums, all older than the wave: a name field reached through a "Your name" section
 and a Save button neither of which exists (84); a delete question said to quote the days, which
 only the selection's question does (312, and 671's step); Undo said white on a green banner (283);
@@ -4332,13 +4332,41 @@ existed (1017); two bars where there are three (353); and a banner quoted withou
 title (984). Each is true now, with mutants named wrong, renumbered or never kept said so. In
 the code, all low: `check_guest`'s joined lists could split a name every way, and took
 `["--tls", "volume"]` for a flag and its value; their items need commas and take no values now,
-a continuation needs an indented next line (Markdown's backslash line break is not one), and a
-flag's value no longer swallows bash's backslash. DR121 no longer compiled since the seventh
+a continuation needs an indented next line (so a Markdown backslash line break before text at
+the margin is not one), and a flag's value no longer swallows bash's backslash. DR121 no longer compiled since the seventh
 round; it is aimed again. A word another program wrote with a NUL in a name no longer stops
 every start, and a name with ":" (a file's stream) is never taken out. Left: an import's word is
 taken back only after the merge's redraw and cleanup (said as nothing kept, if the window is
 ended in that stretch); and a start frozen on a share that is gone freezes again at each start
 until one is waited out.
+
+**The ninth round** found four of the eighth round's own rewrites still untrue, as mediums: the
+selection's status line, said to quote the days, names none (312), and 671 quoted the single
+delete's line on the selection's road; 353's title still said two bars; and the banner is teal on
+four themes, not two (283). The plan's reader went on to the Editor and Recurrence cases and found
+eighteen mediums, all older than the wave, most of them from before day mode hid a day's date and
+repeat: a day's save said to ask a question it never asks (377), a day's Every and date changed by
+hand (473, 468, 483) or its repeat turned off (547), "(this day)" beside its date (638), a mixed
+size said as "Default" (906), Ctrl+Shift+V said to bring in all of a long paste, where it keeps the
+same ceiling (557), the "(earlier text)" notes said on the status line, where a banner of their
+own says them (934, 936, 941), a removed day said to come back by Undo alone, where four roads
+that rewrite the series bring it too (282, 285), an Undo pressed after another banner replaced it
+(931), a palette kept open by a click that closes it (327), a paste refused on the title the case
+started from (916), a Reset the menu does not offer that day (451), and a start message still
+called a low after it was fixed (949). Each is true now, with the lows beside them, and the
+sixty-one rows naming mutants the catalogue does not keep, or keeps for others, say so. In the
+code, all low: a damaged deflate stream, an encrypted entry or an unknown compression said the
+import had failed "unexpectedly"; they are a file that could not be read now (SN40). The full
+disk's words are guarded (SN39), and said for Windows' two other codes for it too (a full disk
+under a handle, a quota), which no check produces. A word another program
+wrote could still name a note's file through an alias (a trailing dot or space, or another case);
+such names are skipped, and names are compared as Windows compares them (SN41, SN42). `check_guest` sees cmd's
+caret and PowerShell's backtick going on at the margin again, and a list of spaces no longer
+costs the cube of its length. Left: bash's backslash with its next line at the margin, and a
+Markdown list item's backslash break, read the other way; a close whose read hangs on a share
+that is gone leaves the process, and its lock, until the read times out (a relaunch says it is
+open, with no window); a `settings.json` on a full disk raises a banner at every write, which can
+take a delete's Undo; and no gate compiles the mutants, so one can break unseen, as DR121 did.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.
