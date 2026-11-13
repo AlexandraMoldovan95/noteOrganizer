@@ -972,29 +972,37 @@ def docker_runs_outside_the_door():
 # compose's own verbs, up among them. Lower case as commands are written:
 # "keep Docker up to date" in prose is not one. A rewrite once dropped
 # compose's middle word; every shape seen since is in its self-test below.
-_D_NAME = r"""(?:\b\w*docker\w*(?:\.exe)?|\bDOCKER\w*)"""
+_D_NAME = r"""(?>\b\w*docker\w*(?:\.exe)?|\bDOCKER\w*)"""
 # A comma or a bracket after a closing quote or before an opening one, as
 # code writes it: "docker, run it" and "docker (start it first)" are prose.
 # A line continuation (\ ` ^) only at a line's end: Markdown's `docker` is
-# not one. Atomic, as are a flag and its value: a line of many hyphenated
-# flags split every way took the gate minutes.
-_D_CONT = r"""(?:[ \t]*[\\`^][ \t]*\r?\n)?"""
-_D_GAP = r"""(?>[}"']\s*[,(]?\s*["']?|""" + _D_CONT + r"""\s*(?:[,(]\s*[{"']|["']?))"""
+# not one. A new line only after a comma or a continuation: wrapped prose
+# ("the docker\nrun") is not a command. Atomic, as are a flag and its value:
+# a line of many hyphenated flags split every way took the gate minutes.
+_D_CONT = r"""(?:[ \t]+[\\`^][ \t]*\r?\n)?"""
+_D_GAP = r"""(?>[}"'][ \t]*(?:[,(]\s*)?["']?|""" + _D_CONT + r"""[ \t]*(?:[,(]\s*[{"']|["']?))"""
 # Before a flag's value, no opening quote taken: the value keeps its own.
-_D_PRE = r"""(?>[}"']\s*[,(]?\s*|""" + _D_CONT + r"""\s*(?:[,(]\s*)?)"""
+_D_PRE = r"""(?>[}"'][ \t]*(?:[,(]\s*)?|""" + _D_CONT + r"""[ \t]*(?:[,(]\s*)?)"""
 _D_FLAG = (r"""(?:(?>--?[a-zA-Z][\w-]*)(?:""" + _D_PRE
-           + r"""(?>"[^"\n]*"|'[^'\n]*'|[^\s"',()\[\]{}-][^\s"',()\[\]{}]*))?""" + _D_GAP
+           + r"""(?>=?"(?!-)[^"\n]*"|=?'(?!-)[^'\n]*'|[^\s"',()\[\]{}-][^\s"',()\[\]{}]*))?""" + _D_GAP
            + r"""|\{[^{}\n]*\}\s*)""")
 _D_VERB = r"""(?:run|start|create|restart|unpause)"""
+# In a list built in pieces, what may come before the verb: a flag (with
+# its value), container or compose, or a name -- not a word like "volume".
+_D_ELEM = (r"""(?:f?["']-[^"'\n]*["'](?:\s*,\s*(?:["'][^-"'\n][^"'\n]*["']|[A-Za-z_][\w.]*))?"""
+           r"""|["'](?:container|compose)["']|[A-Za-z_][\w.]*(?:\(\))?)""")
+# At most 24 flags: a line of thousands, each a "docker", began a chain at
+# every one and cost the square of its length.
+_D_FLAGS = "(?:" + _D_FLAG + "){0,24}"
 DOCKER_STARTS = re.compile(
-    _D_NAME + _D_GAP + "(?:" + _D_FLAG + ")*(?:container" + _D_GAP + "(?:" + _D_FLAG + ")*)?"
+    _D_NAME + _D_GAP + _D_FLAGS + "(?:container" + _D_GAP + _D_FLAGS + ")?"
     + _D_VERB + r"\b"
-    + "|" + _D_NAME + r"(?:[-_]|" + _D_GAP + ")" + "(?:" + _D_FLAG + ")*compose" + _D_GAP
-    + "(?:" + _D_FLAG + ")*(?:" + _D_VERB + r"|up)\b"
-    # A list built in pieces (DOCKER + ["run"], [docker, *flags, "run"]):
-    # the verb the first word after the join, compose's before it.
-    + "|" + _D_NAME + r"""["']?\]?\s*(?:\+\s*\[|,\s*\*\w+\s*,)\s*(?:["']compose["']\s*,\s*)?["'](?:"""
-    + _D_VERB + r"|up)[\"']"
+    + "|" + _D_NAME + r"(?:[-_]|" + _D_GAP + ")" + _D_FLAGS + "compose" + _D_GAP
+    + _D_FLAGS + "(?:" + _D_VERB + r"|up)\b"
+    # A list built in pieces (DOCKER + ["run"], [docker, *flags, "run"]).
+    + "|" + _D_NAME + r"""["']?\]?(?:\s*\+\s*[A-Za-z_][\w.]*(?:\([^()\n]*\))?){0,4}"""
+    + r"""\s*(?:\+\s*[\[(]|,\s*\*[\w.]+(?:\(\))?\s*,)\s*(?:""" + _D_ELEM
+    + r"""\s*,\s*){0,8}["'](?:""" + _D_VERB + r"|up)[\"']"
     + "|" + _D_NAME + r"""["']?,\s*f["'][^"'\n]*["'],\s*["']""" + _D_VERB + r"[\"']")
 
 # Shapes the pattern must see, and prose it must not take for a command.
@@ -1010,7 +1018,13 @@ DOCKER_SHAPES = [
     'subprocess.run(DOCKER + ["run", img])', '["docker"] + ["run", img]', '[docker, *flags, "run"]',
     '["docker", f"--context={ctx}", "run"]', 'f"docker {flags} run"', "docker \\\n    run img",
     "docker `\n    run img", "docker ^\n    run img", 'docker --context "my ctx" run img',
-    'DOCKER + ["compose", "up"]',
+    'DOCKER + ["compose", "up"]', 'DOCKER + ["--context", ctx, "run"]', 'DOCKER + ["-H", host, "start"]',
+    'DOCKER + [f"--context={ctx}", "run"]', 'DOCKER + ["container", "run"]',
+    'DOCKER + ["container", "create", name]', '[docker, *flags, "container", "run"]',
+    'DOCKER + ["compose", "-f", "ci.yml", "up"]', '[docker, *flags, "compose", "-f", f, "up"]',
+    '[docker, *self.flags, "run"]', '[docker, *flags(), "run"]', 'DOCKER + ("run", img)',
+    'docker --context="ci" run img', 'DOCKER + ARGS + ["run"]', 'DOCKER + list(flags) + ["run"]',
+    '[DOCKER, *extra(), "run"]',
 ]
 DOCKER_PROSE = [
     "keep Docker up to date", "Open Docker, start the app", "Docker\nStart it", "docker ps", "docker build .",
@@ -1018,7 +1032,9 @@ DOCKER_PROSE = [
     "with docker, run tools/linux_ci.py", "needs docker (start Docker Desktop first)",
     "Never let `docker` run a container by hand.", "docker `run` is forbidden", "the `docker` restart policy",
     'DOCKER + ["volume", "create", name]', 'DOCKER + ["network", "create", "ci"]',
-    '[docker, *flags, "context", "create", "x"]',
+    '[docker, *flags, "context", "create", "x"]', "the docker\nrun is slow", "a `docker`\nrun of its own",
+    # Quoted flags each read as the one before's value too: twice the work a flag.
+    '["docker", ' + '"--tls", ' * 40 + '"ps"]',
     # Many hyphenated flags and no verb: each once took the gate seconds to minutes.
     "docker-compose --project-name ci --env-file .env --log-level debug --project-directory . down",
     "docker --log-level=debug --tls-verify=1 --config-dir=/x --context-name=ci ps",
