@@ -976,21 +976,22 @@ _D_NAME = r"""(?>\b\w*docker\w*(?:\.exe)?|\bDOCKER\w*)"""
 # A comma or a bracket after a closing quote or before an opening one, as
 # code writes it: "docker, run it" and "docker (start it first)" are prose.
 # A line continuation (\ ` ^) only at a line's end: Markdown's `docker` is
-# not one. A new line only after a comma or a continuation: wrapped prose
+# not one. A new line only after a comma, a bracket or a continuation: wrapped prose
 # ("the docker\nrun") is not a command. Atomic, as are a flag and its value:
 # a line of many hyphenated flags split every way took the gate minutes.
-_D_CONT = r"""(?:[ \t]+[\\`^][ \t]*\r?\n)?"""
+_D_CONT = r"""(?:(?:[ \t]*\\|[ \t]+[`^])[ \t]*\r?\n)?"""
 _D_GAP = r"""(?>[}"'][ \t]*(?:[,(]\s*)?["']?|""" + _D_CONT + r"""[ \t]*(?:[,(]\s*[{"']|["']?))"""
 # Before a flag's value, no opening quote taken: the value keeps its own.
 _D_PRE = r"""(?>[}"'][ \t]*(?:[,(]\s*)?|""" + _D_CONT + r"""[ \t]*(?:[,(]\s*)?)"""
 _D_FLAG = (r"""(?:(?>--?[a-zA-Z][\w-]*)(?:""" + _D_PRE
            + r"""(?>=?"(?!-)[^"\n]*"|=?'(?!-)[^'\n]*'|[^\s"',()\[\]{}-][^\s"',()\[\]{}]*))?""" + _D_GAP
-           + r"""|\{[^{}\n]*\}\s*)""")
+           + r"""|\{[^{}\n]*\}[ \t]*)""")
 _D_VERB = r"""(?:run|start|create|restart|unpause)"""
 # In a list built in pieces, what may come before the verb: a flag (with
 # its value), container or compose, or a name -- not a word like "volume".
-_D_ELEM = (r"""(?:f?["']-[^"'\n]*["'](?:\s*,\s*(?:["'][^-"'\n][^"'\n]*["']|[A-Za-z_][\w.]*))?"""
-           r"""|["'](?:container|compose)["']|[A-Za-z_][\w.]*(?:\(\))?)""")
+_D_NAMED = r"""[A-Za-z_][\w.]*(?:\([^()\n]*\))?"""
+_D_ELEM = (r"""(?:f?["']-[^"'\n]*["'](?:\s*,\s*(?:f?["'][^-"'\n][^"'\n]*["']|""" + _D_NAMED + r"""))?"""
+           r"""|["'](?:container|compose)["']|""" + _D_NAMED + ")")
 # At most 24 flags: a line of thousands, each a "docker", began a chain at
 # every one and cost the square of its length.
 _D_FLAGS = "(?:" + _D_FLAG + "){0,24}"
@@ -1000,7 +1001,8 @@ DOCKER_STARTS = re.compile(
     + "|" + _D_NAME + r"(?:[-_]|" + _D_GAP + ")" + _D_FLAGS + "compose" + _D_GAP
     + _D_FLAGS + "(?:" + _D_VERB + r"|up)\b"
     # A list built in pieces (DOCKER + ["run"], [docker, *flags, "run"]).
-    + "|" + _D_NAME + r"""["']?\]?(?:\s*\+\s*[A-Za-z_][\w.]*(?:\([^()\n]*\))?){0,4}"""
+    + "|" + _D_NAME + r"""["']?\]?(?:\s*\+\s*(?:""" + _D_NAMED + r"""|\[\s*(?:""" + _D_ELEM
+    + r"""\s*,?\s*){0,8}\])){0,6}"""
     + r"""\s*(?:\+\s*[\[(]|,\s*\*[\w.]+(?:\(\))?\s*,)\s*(?:""" + _D_ELEM
     + r"""\s*,\s*){0,8}["'](?:""" + _D_VERB + r"|up)[\"']"
     + "|" + _D_NAME + r"""["']?,\s*f["'][^"'\n]*["'],\s*["']""" + _D_VERB + r"[\"']")
@@ -1024,7 +1026,10 @@ DOCKER_SHAPES = [
     'DOCKER + ["compose", "-f", "ci.yml", "up"]', '[docker, *flags, "compose", "-f", f, "up"]',
     '[docker, *self.flags, "run"]', '[docker, *flags(), "run"]', 'DOCKER + ("run", img)',
     'docker --context="ci" run img', 'DOCKER + ARGS + ["run"]', 'DOCKER + list(flags) + ["run"]',
-    '[DOCKER, *extra(), "run"]',
+    '[DOCKER, *extra(), "run"]', 'DOCKER + ["-H", f"tcp://{host}:2375", "run"]',
+    '[docker, *flags, "--context", f"{c}", "run"]', 'DOCKER + ["--context", ctx] + ["run"]',
+    'DOCKER + ["--tls"] + ["run"]', 'DOCKER + ["--config", os.path.join(h, "c"), "run"]',
+    'DOCKER + A + B + C + D + E + ["run"]', "docker\\\n    run img",
 ]
 DOCKER_PROSE = [
     "keep Docker up to date", "Open Docker, start the app", "Docker\nStart it", "docker ps", "docker build .",
@@ -1033,6 +1038,7 @@ DOCKER_PROSE = [
     "Never let `docker` run a container by hand.", "docker `run` is forbidden", "the `docker` restart policy",
     'DOCKER + ["volume", "create", name]', 'DOCKER + ["network", "create", "ci"]',
     '[docker, *flags, "context", "create", "x"]', "the docker\nrun is slow", "a `docker`\nrun of its own",
+    "the docker {see below}\nrun", "docker {flags}\n\nrun img", 'DOCKER + ["volume"] + ["create"]',
     # Quoted flags each read as the one before's value too: twice the work a flag.
     '["docker", ' + '"--tls", ' * 40 + '"ps"]',
     # Many hyphenated flags and no verb: each once took the gate seconds to minutes.
