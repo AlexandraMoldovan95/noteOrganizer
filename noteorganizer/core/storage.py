@@ -700,7 +700,10 @@ def load_notes(version_change=None):
             was_open = next(
                 (c for c, n in zip(copies, notes) if n.get("id") == remembered), None)
         cleaned, stats = clean_notes(copies)
-        unchanged = cleaned == notes
+        # Against what the file holds, not the notes as read: the read drops
+        # a field it does not know and a body written as a list, and its copy
+        # was then the only place they were left.
+        unchanged = cleaned == raw
         written, _error = _write_json_atomic(paths.DATA_FILE, cleaned)
         if written:
             notes = cleaned

@@ -2286,6 +2286,21 @@ check(f"a cleanup run again with nothing to change leaves no copy behind "
       f"({sorted(set(glob.glob(_backupsW)) - _beforeR)!r})",
       set(glob.glob(_backupsW)) == _beforeR and [n["id"] for n in _notesR] == [1]
       and (_reportR.get("cleanup_report") or (None, "kept"))[1] is None)
+# ...but a file it rewrites only by dropping what the read does not know
+# (another program's field, a body written as a list) keeps its copy:
+# compared with the notes as read, it went, the one place those were left.
+_setU = _storage.load_settings()
+_setU.pop("cleanup_done", None)
+_storage.save_settings(_setU)
+with open(_paths.DATA_FILE, "w", encoding="utf-8") as _f:
+    json.dump([{"id": 1, "uid": "u1", "title": "Kept", "body": ["words", "in a list"],
+                "extra": "theirs"}], _f)
+_beforeU = set(glob.glob(_backupsW))
+_storage.load_notes(None)
+_newU = sorted(set(glob.glob(_backupsW)) - _beforeU)
+_heldU = open(_newU[0], encoding="utf-8").read() if len(_newU) == 1 else ""
+check(f"...but one whose file held what the read drops keeps its copy, with it in ({_newU!r})",
+      len(_newU) == 1 and '"extra"' in _heldU and "in a list" in _heldU)
 
 # The two loaders without a corrupt fixture yet: settings (unparsable)
 # and trash (wrong shape). Content-matched rather than counted, so a
