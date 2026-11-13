@@ -898,6 +898,27 @@ def move_notes_to_trash(trash, notes_to_trash):
     return ok, exc
 
 
+def renew_in_trash(trash, entry):
+    """Start the Trash's clock again for *entry*, already in *trash*: what is
+    put in a second time, content for content, is kept the whole window from
+    now, as the question that put it there promised -- left on the first
+    one's clock, it went sooner.
+
+    Returns ``(True, None)`` once trash.json holds the new stamp, or
+    ``(False, exception)`` with the entry's stamp as it was.
+    """
+    had = "deleted_at" in entry
+    was = entry.get("deleted_at")
+    entry["deleted_at"] = now_stamp()
+    ok, exc = save_trash(trash)
+    if not ok:
+        if had:
+            entry["deleted_at"] = was
+        else:
+            entry.pop("deleted_at", None)
+    return ok, exc
+
+
 def days_left_in_trash(deleted_at):
     """How many days until this trashed note auto-purges. None if unknown --
     the stamp unreadable, or the window (then it never purges by itself)."""

@@ -255,6 +255,7 @@ from noteorganizer.core.storage import (
     get_setting,
     save_setting,
     move_notes_to_trash as core_move_to_trash,
+    renew_in_trash as core_renew_in_trash,
     days_left_in_trash as core_days_left_in_trash,
     restore_from_trash as core_restore_from_trash,
     restore_many_from_trash as core_restore_many_from_trash,
@@ -15889,11 +15890,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         })
         # Into the Trash before the day leaves the series: if trash.json
         # cannot be written, the day's words stay where they were. Not put in
-        # twice, where the app stopped between the Trash's save and the notes'.
-        already = content_signature(fresh) in {
-            content_signature(normalize_note(e)) for e in self.trash if isinstance(e, dict)}
-        if how == "trash" and not already and self._move_notes_to_trash([fresh]) is None:
-            return False
+        # twice, where the app stopped between the Trash's save and the notes':
+        # the entry already there is kept the whole window from now, as the
+        # question promised -- on its own first clock, it went sooner.
+        if how == "trash":
+            signature = content_signature(fresh)
+            held = next((e for e in self.trash if isinstance(e, dict)
+                         and content_signature(normalize_note(e)) == signature), None)
+            if held is None and self._move_notes_to_trash([fresh]) is None:
+                return False
+            if held is not None and not core_renew_in_trash(self.trash, held)[0]:
+                self._say_trash_not_saved()
+                return False
         note["overrides"].pop(day, None)
         # A day moved here whose own day the rule no longer gives: the move
         # goes with it, or it would draw the day again if the rule came back.
@@ -21351,15 +21359,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         before = len(self.trash)
         ok, _exc = core_move_to_trash(self.trash, notes_to_trash)
         if not ok:
-            self.show_warning(
-                "Nothing was deleted",
-                "The Trash could not be saved, so the note stays where it is. "
-                + ("Its file could not be opened when Note Organizer started, "
-                   "so nothing is saved to it until the app is opened again."
-                   if _core_paths.writes_held(TRASH_FILE) else
-                   "Is the disk full? Details are in crash_log.txt."))
+            self._say_trash_not_saved()
             return None
         return self.trash[before:]
+
+    def _say_trash_not_saved(self):
+        """What a delete the Trash refused says: the note stays."""
+        self.show_warning(
+            "Nothing was deleted",
+            "The Trash could not be saved, so the note stays where it is. "
+            + ("Its file could not be opened when Note Organizer started, "
+               "so nothing is saved to it until the app is opened again."
+               if _core_paths.writes_held(TRASH_FILE) else
+               "Is the disk full? Details are in crash_log.txt."))
 
     def delete_current_note(self):
         """Delete the note open in the editor (the Delete button / shortcut)."""

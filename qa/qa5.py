@@ -4451,7 +4451,12 @@ check('the day moved to the Trash comes back from it as a note on its day',
 # moving it to the Trash again put a second copy there.
 _os_seed()
 _os_walk(['keep', 'trash'])
-_os_kept_trash = [dict(e) for e in app.trash]
+# Put there twenty days ago: the copy kept must be kept the whole window
+# from now, as the question promised, not go in ten.
+from noteorganizer.core.storage import STAMP_FORMAT as _os_stamp_format
+_os_twenty_ago = (_dt5w.datetime.now() - _dt5w.timedelta(days=20)).strftime(_os_stamp_format)
+_os_kept_trash = [dict(e, deleted_at=_os_twenty_ago) if e.get('date') == '2026-09-21' else dict(e)
+                  for e in app.trash]
 _os_seed()
 app.trash = _os_kept_trash
 NO.save_trash(app.trash)
@@ -4463,6 +4468,13 @@ check(f"moving it to the Trash again leaves one copy there "
       f"({sum(e.get('date') == '2026-09-21' for e in app.trash)})",
       sum(e.get('date') == '2026-09-21' for e in app.trash) == 1
       and '2026-09-21' not in (app.find_note(1).get('overrides') or {}))
+_os_left = [NO.core_days_left_in_trash(e.get('deleted_at')) for e in app.trash
+            if e.get('date') == '2026-09-21']
+_os_left_on_disk = [NO.core_days_left_in_trash(e.get('deleted_at')) for e in NO.load_trash()
+                    if isinstance(e, dict) and e.get('date') == '2026-09-21']
+check(f"...kept the whole window from now, in the file too ({_os_left}, {_os_left_on_disk}, "
+      f"{NO.trash_retention_days()})",
+      _os_left == _os_left_on_disk == [NO.trash_retention_days()])
 
 # A day's text of two lines is asked with its lines kept apart, as a card
 # shows them: run together, they read as one sentence.
