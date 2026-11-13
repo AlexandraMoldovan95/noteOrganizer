@@ -5208,8 +5208,8 @@
     "id": "ST01",
     "about": "the close waits out an import it then throws away, and past the cap leaves it on disk",
     "edits": [{"file": "note_organizer.py",
-               "find": "        if self._import_state is not None:\n            self._import_state[\"stop\"] = True\n",
-               "replace": ""}],
+               "find": "        if state is not None:\n            state[\"stop\"] = True\n            if not state.get(\"done\"):",
+               "replace": "        if state is not None:\n            if not state.get(\"done\"):"}],
     "must_fail": ["closing the window stops an import held mid-unpacking at once",
                   "closing the window stops an import held mid-copying at once"],
     "suites": ["qa3"],
@@ -17951,6 +17951,26 @@
                "find": "                f\"Windows began to sign out or shut down, was not kept: you already \"\n",
                "replace": "                f\"Windows signed out or shut down, was not kept: you already \"\n"}],
     "must_fail": ["a template not kept is said as written when Windows began to sign out"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN32",
+    "about": "The start says an export that landed went unshown, untrue of a session ended with its message up",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                    f\"The export to {name} finished as {when}. Open it to \"\n",
+               "replace": "                    f\"The export to {name} finished as {when}, before its own message could be shown. Open it to \"\n"}],
+    "must_fail": ["...and an export that landed after the word is said finished, not cut short"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN33",
+    "about": "The close writes no word for an import before its wait, so a window ended there leaves the copied files unnamed",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            if not state.get(\"done\"):\n                # Before the wait, as an export's",
+               "replace": "            if False:\n                # Before the wait, as an export's"}],
+    "must_fail": ["a close that waits for an import writes its word before the wait, what it copied named"],
     "suites": ["qa3"],
     "expect": "killed"
   }
