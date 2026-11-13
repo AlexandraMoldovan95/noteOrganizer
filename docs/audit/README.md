@@ -2,7 +2,7 @@
 
 Note Organizer is a personal project: a notes app for Windows and its Android companion, made
 to be used. Before the two went to the stores, AI agents checked them in waves of rounds, from
-27 October to 12 November 2026. This folder holds what those agents were told: every script
+27 October to 13 November 2026. This folder holds what those agents were told: every script
 that started them, as it ran, and the prompts of the agents started by hand.
 
 How a round worked, what each wave was for, when it closed and what it found are told in
@@ -285,3 +285,7 @@ above are waves 1 to 5's.
 | [r1-desktop-person.txt](wave6/r1-desktop-person.txt) | Desktop | 2026-11-13 03:02 | 1 | 0.26 |
 | [r1-phone-fixes.txt](wave6/r1-phone-fixes.txt) | Phone | 2026-11-13 03:02 | 1 | 0.25 |
 | [r1-phone-person.txt](wave6/r1-phone-person.txt) | Phone | 2026-11-13 03:02 | 1 | 0.28 |
+| [r2-desktop-fixes.txt](wave6/r2-desktop-fixes.txt) | Desktop | 2026-11-13 05:02 | 1 | 0.28 |
+| [r2-desktop-person.txt](wave6/r2-desktop-person.txt) | Desktop | 2026-11-13 05:02 | 1 | 0.30 |
+| [r2-phone-fixes.txt](wave6/r2-phone-fixes.txt) | Phone | 2026-11-13 05:02 | 1 | 0.33 |
+| [r2-phone-person.txt](wave6/r2-phone-person.txt) | Phone | 2026-11-13 05:02 | 1 | 0.35 |

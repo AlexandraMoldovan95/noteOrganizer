@@ -4170,7 +4170,7 @@ original (the owner's choice; the phone already did). The Trash skips a day it a
 content for content. `normalize_note`, `normalize_template` and the signatures read `is True`.
 Checks in qa1, qa3, qa4, qa5 and test_data_safety; mutants SN01–SN09, with WS36, WS41, WS48 and
 RT14 aimed at the code as it is now. The tools' lows went the same way: `build_msix` asks the exe
-its version, `check_guest` sees every way of starting a container, `run_tests` leaves no
+its version, `check_guest` sees the shapes a container is started in here, `run_tests` leaves no
 `__pycache__` behind.
 
 Two lows were read and left, with the reason. The qa seed's guard beside an empty notebook: the
@@ -4179,7 +4179,8 @@ front of it, and one more guard would stop the suites that run one after another
 The site's missing third-party notices: the site ships nothing it did not write.
 
 **The round that attacked these fixes** found what they had not reached, all of low severity on the
-desktop, each fixed the same day with a check and a mutant (SN10–SN17):
+desktop, each fixed the same day: the app's with a check and a mutant (SN10–SN17), except the date
+picker's write, which nothing can see today; the tools' by probes of the forms they missed.
 
 - Two more writers into a hinted field (the list's search sent to the History, a day picked in the
   date picker) left the hint's mark, and an untitled note's state put back kept a long title's
@@ -4204,6 +4205,24 @@ wrong note opens, nothing is lost, and keeping the cleanup's mark anywhere but s
 new format. And `move_notes_to_trash`, stopped between its two writes, can leave a note in both
 files, a second identical row the next time it is deleted: no loss, and matching every delete
 against the whole Trash could merge two deletions a person meant apart.
+
+**The second round** found the export's three records still out of step, all of low severity:
+the session-end fix itself dropped the export, so a session whose question was cancelled kept a
+frozen bar, never said the failure, and told the next start of a sign-out that never came; an
+export still writing at the question that failed after it had its word taken back before its
+error was read; one finished just before the question was recorded as nothing. Now the session's
+end records each as the close does and keeps the export for its poll, the poll takes back any of
+the export's words (only "export" was), and a failure's word stays, as a failure, until its
+message has been read. The cleanup, rerun at every start while `settings.json` refused its mark,
+still kept a copy of a notebook it no longer changed; a cleanup that changes nothing keeps none.
+An import still running past the close's wait is named with what it copied and unpacked, so the
+next start takes them out. `check_guest` and the ninth rule were widened again (a helper, flags
+before the verb, `is`, membership either way round), lower case so that "keep Docker up to date"
+is not a command; a hint held under another name is past any pattern, and the sentence above now
+says so. `build_msix` also watches the icons and the licences the spec ships. Left: an export that
+finishes between the session's word and the process ending is said as cut short at the next start,
+erring towards a backup thought missing; and a start whose three reads are refused just before
+the holder lets go calls a held file damaged, its notes kept in the `_corrupt_` copy.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.

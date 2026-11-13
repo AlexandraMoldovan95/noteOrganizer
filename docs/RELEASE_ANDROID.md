@@ -44,7 +44,7 @@ scramble (2026-11-12).
    version a patch higher, the unit tests, the gates and the walk, the release build, then the
    upload. A crash's trace in the console is read through the R8 mapping the bundle carries.
    R8 writes `mapping.txt` into the build folder, where the next build writes over it, so each
-   release's copy is kept beside the bundle uploaded, named for its version (the phone's
-   STATUS, "Before the first upload").
+   release's copy is to be kept beside the bundle uploaded, named for its version: a step to add
+   to the release build before the first upload (the phone's STATUS, "Before the first upload").
 5. **What a person sees is read before anything is guessed**: the reviews, and the console's
    crashes and "isn't responding" reports (the app sends nothing itself).
