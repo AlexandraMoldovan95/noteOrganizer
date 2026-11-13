@@ -1154,7 +1154,9 @@ function that returns a note of known shape:
 - a category that no longer exists falls back to "General"
 
 So a corrupt entry degrades into a slightly emptier note instead of taking
-down the note list.
+down the note list. And a field it does not know (a newer version's) is
+kept as it came, within bounds, by `unknown_fields`: an older app must not
+erase what a newer one added.
 
 **Validate once, at the edge, then trust the data inwards.** You've now
 seen the same idea three times — `normalize_recurrence`,
