@@ -1779,7 +1779,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Left by the close (before its wait and after) or a session's end; said once.
         cut = get_setting("backup_cut_short", None, expect=dict)
         if cut:
-            save_setting("backup_cut_short", None)
+            # Taken back once said, below: taken first, a start that froze
+            # asking a share that is gone, and was ended there, lost it.
+            kept_for_later = False
             name = os.path.basename(str(cut.get("file") or "")) or "the backup"
             # "Began to": true too of a sign-out the person then cancelled,
             # which stops an import all the same.
@@ -1792,6 +1794,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._drop_left_import(cut)
                 if self._notes_file_unread() and cut.get("copied"):
                     save_setting("backup_cut_short", dict(cut, temp_dir="", said=True))
+                    kept_for_later = True
                 if not cut.get("said"):
                     lines.append(
                         f"The import of {name} was cut short when {when}, so "
@@ -1844,6 +1847,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     "new backup was made. A file already there under that name "
                     "is as it was. To make one, export again (Settings → "
                     "Backup → Export).")
+            if not kept_for_later:
+                save_setting("backup_cut_short", None)
 
         if VERSION_CHANGE:
             direction, old, new = VERSION_CHANGE
@@ -2603,13 +2608,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         the import did not copy itself, is touched.
         """
         in_use = attachment_names_in(self.notes + self.trash)
-        for name in state.get("copied") or []:
-            if name in in_use or os.path.basename(name) != name:
+        for named in state.get("copied") or []:
+            if not isinstance(named, str) or os.path.basename(named) != named:
                 continue
-            try:
-                os.remove(os.path.join(ATTACHMENTS_DIR, name))
-            except OSError:
-                pass
+            # A ".part" still flushing when the word was written was renamed
+            # to its own name after: the import copies only names not there.
+            for name in [named] + ([named[:-5]] if named.endswith(".part") else []):
+                if not name or name in in_use:
+                    continue
+                try:
+                    os.remove(os.path.join(ATTACHMENTS_DIR, name))
+                except OSError:
+                    pass
 
     # ---------- Share codes ----------
     def _add_paste_menu(self, text_widget, extra_items=None):

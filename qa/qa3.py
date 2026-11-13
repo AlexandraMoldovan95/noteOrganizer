@@ -3437,6 +3437,24 @@ NO.save_setting('backup_cut_short', {'kind': 'export', 'file': _fx_cw,
 _fx_words = _next_start_says()
 check(f'...as is one that replaced an older backup of the same name ({_fx_words[:120]!r})',
       'qa3_close_wait.zip finished as Note Organizer closed' in _fx_words)
+# The word kept until the start has asked the export's file: taken first, a
+# start frozen on a share that is gone, and ended there, lost it.
+NO.save_setting('backup_cut_short', {'kind': 'export', 'file': _fx_cw, 'before': 1.0})
+_fx_at_ask, _fx_landed_was = {}, app._export_landed_after
+
+
+def _fx_landed(cut):
+    _fx_at_ask['word'] = NO.get_setting('backup_cut_short')
+    return _fx_landed_was(cut)
+
+
+app._export_landed_after = _fx_landed
+try:
+    _next_start_says()
+finally:
+    del app._export_landed_after
+check(f'the start keeps the word until it has asked the export\'s file, then takes it back ({_fx_at_ask!r})',
+      bool(_fx_at_ask.get('word')) and NO.get_setting('backup_cut_short') is None)
 # An import's word too, before the wait: a large file's flush to disk can
 # hold it, and a window ended there left the files it copied unnamed.
 NO.save_setting('backup_cut_short', None)
@@ -3475,6 +3493,24 @@ check(f'an import done but not merged at the close leaves word naming what it co
       _fx_cut.get('kind') == 'import' and _fx_cut.get('copied') == ['20261113110000000001_c.bin']
       and not os.path.exists(_fx_dir))
 NO.save_setting('backup_cut_short', None)
+# A word that named a file as ".part" (still flushing when it was written):
+# renamed after, it stayed for good. Its own name goes too, unless in use.
+os.makedirs(NO.ATTACHMENTS_DIR, exist_ok=True)
+_fx_free, _fx_used = '20261113120000000001_film.bin', '20261113120000000002_kept.bin'
+for _n in (_fx_free, _fx_used):
+    with open(os.path.join(NO.ATTACHMENTS_DIR, _n), 'wb') as _fh:
+        _fh.write(b'x')
+_fx_notes_was = app.notes
+app.notes = _fx_notes_was + [NO.normalize_note({'title': 'Uses it', 'attachments': [
+    {'name': 'kept.bin', 'stored_as': _fx_used}]})]
+try:
+    app._drop_unclaimed_import_files({'copied': [_fx_free + '.part', _fx_used + '.part']})
+finally:
+    app.notes = _fx_notes_was
+check('a file named as ".part" in an import\'s word is taken out by its own name, one a note uses kept',
+      not os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _fx_free))
+      and os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _fx_used)))
+os.remove(os.path.join(NO.ATTACHMENTS_DIR, _fx_used))
 fd.asksaveasfilename = lambda **k: _fx_zip
 # An error without words (a MemoryError's) read as none: "Export complete",
 # "Last exported" stamped, and no file written.
