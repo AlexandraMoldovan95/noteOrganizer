@@ -508,8 +508,13 @@ def run_migrations(app_dir):
     ours = os.path.exists(legacy_settings) and _looks_like_our_settings(legacy_settings)
     settings_came = True
     if ours:
-        _preserve_settings_if_unreadable(settings_path)
-        settings_came = _copy_whole(legacy_settings, settings_path, tries=3)
+        # This folder's own settings copied aside first, readable or not, as
+        # case 1's are: a readable one was replaced with no copy. If that
+        # copy fails they stay, and the notes come in alone.
+        if (not os.path.exists(settings_path)
+                or _preserve_settings_if_unreadable(settings_path)
+                or _timestamped_backup(settings_path, "replaced")):
+            settings_came = _copy_whole(legacy_settings, settings_path, tries=3)
     elif (durable and os.path.exists(legacy_settings)
           and not os.path.exists(settings_path)):
         # The old app's own settings, unreadable: copied as they are, the start

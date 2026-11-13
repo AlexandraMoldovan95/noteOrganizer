@@ -4919,6 +4919,39 @@ finally:
     _paths.get_appdata_dir = _ad_real_appdata
     shutil.rmtree(_ad_root, ignore_errors=True)
 
+# ...and this folder's own readable settings.json, met with no notes file,
+# is copied aside before the old notebook's replaces it: it was replaced
+# with no copy kept (the name, the theme, the categories, the Trash window).
+_ks_root = tempfile.mkdtemp(prefix="nd_keep_settings_")
+try:
+    _ks_app = os.path.join(_ks_root, "app")
+    _ks_old = os.path.join(_ks_root, "old")
+    os.makedirs(_ks_app)
+    os.makedirs(_ks_old)
+    with open(os.path.join(_ks_old, "notes_data.json"), "w", encoding="utf-8") as _f:
+        json.dump([{"id": 1, "title": "Old note"}], _f)
+    with open(os.path.join(_ks_old, "settings.json"), "w", encoding="utf-8") as _f:
+        json.dump({"app_version": "0.1.0", "theme": "dark"}, _f)
+    with open(os.path.join(_ks_app, "settings.json"), "w", encoding="utf-8") as _f:
+        json.dump({"theme": "light", "username": "Ana"}, _f)
+    _paths.get_legacy_dirs = lambda app_dir: [_ks_old]
+    _paths.get_appdata_dir = lambda: os.path.join(_ks_root, "no_appdata")
+    _paths.run_migrations(_ks_app)
+    _ks_kept = sorted(p for p in os.listdir(_ks_app) if p.startswith("settings_replaced_"))
+    _ks_held = {}
+    if _ks_kept:
+        with open(os.path.join(_ks_app, _ks_kept[0]), encoding="utf-8") as _f:
+            _ks_held = json.load(_f)
+    with open(os.path.join(_ks_app, "settings.json"), encoding="utf-8") as _f:
+        _ks_now = json.load(_f)
+    check("an old notebook adopted keeps this folder's own readable settings aside first "
+          "(%s, now %s)" % (_ks_kept, _ks_now),
+          _ks_held.get("username") == "Ana" and _ks_now.get("theme") == "dark")
+finally:
+    _paths.get_legacy_dirs = _ad_real_legacy
+    _paths.get_appdata_dir = _ad_real_appdata
+    shutil.rmtree(_ks_root, ignore_errors=True)
+
 # ---- The reclaim message says what happened ----
 # "Moved your notebook back", when it was COPIED and the AppData copy
 # stays -- and the entry file added that the two "can never drift apart".
