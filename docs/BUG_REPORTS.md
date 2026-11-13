@@ -3,7 +3,7 @@
 *What my manual testing found, and how a bug is reported here. - Alexandra Moldovan*
 
 The testing itself lives in the [test plan](../qa/NoteOrganizer_TestPlan.xlsx), an Excel workbook
-of **962 test cases** (on 13 November 2026). Each case has its steps and the result it expects, and once run it carries
+of **964 test cases** (on 13 November 2026). Each case has its steps and the result it expects, and once run it carries
 what actually happened, the build, the date and who tested it. 306 of them also point to the
 GitHub issue or pull request they check. Every pass and every retest is recorded there.
 

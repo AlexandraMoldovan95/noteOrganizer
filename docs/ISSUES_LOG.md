@@ -4501,6 +4501,24 @@ schedule and the moved ones counted only from the rows listed (SN72), checks for
 as text and the reminder bar going with the last note (SN70, SN71), and "Every week, 1 times",
 which the phone's reader found on both apps (SN73).
 
+**The seventeenth round** found three of the sixteenth's sentences true on the road they were
+written for and not on the next one: "Already here, unchanged" named a newer version's fields of
+a share code, or of an older backup, where only this device held them (the import's own fields are
+said now, `unknown_fields_lacked`; SN74); a refused save kept the save's words to put back, and
+"Auto-saved" came back over "Not saved" once the date was fixed (SN75); and an import's "Also
+restored 2 categories" stood beside "The calendar day markings could not be written", the
+categories in the same refused file (SN76). The lows: the Trash window's dropdown kept a refused
+choice (SN77); the update notice offered, as a safety net, a copy of a notes file that start could
+not read (SN78); History's note spoke of left-out days only when edited ones were (SN79), with the
+moved and the bounded series' off-schedule days left out given checks of their own (SN80, SN81);
+Spelling's put-back and a template Save refused after a cancelled sign-out (SN82, SN83); and,
+from the second reader of ARCHITECTURE and CODE_TOUR, an old notebook adopted over this folder's
+readable settings.json with no copy kept, now copied aside first as the other road does (SN84).
+Left, with its reason: a backup's note that differs by a file alone is asked about before the
+editor's last words are saved, so typing in it just before the question, then Update, replaces
+those words the question said it would not touch; the result says "Updated" and Restore previous
+brings them back, and saving first would move "Go back and fix it" before the question.
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.
 

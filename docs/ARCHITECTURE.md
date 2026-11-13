@@ -139,7 +139,8 @@ Two promises sit on top of the files themselves. Every write is **atomic** — s
 mended, dumped to a sibling `.tmp`, then `os.replace`d — so a crash mid-write leaves the old
 file whole, and an unreadable file is preserved aside and announced rather than silently
 emptied (0.66.104). And a **failed write is never silent** (0.71.125): every saver returns
-`(ok, exception)`, every failure lands in `crash_log.txt`, and core reaches the screen through
+`(ok, exception)` (`save_setting` and `persist_categories`, which write one key or the
+categories, say only whether it worked), every failure lands in `crash_log.txt`, and core reaches the screen through
 the one channel it has without importing tkinter — the `storage.on_write_failure` callback the
 app registers at startup, which shows an error toast naming the file.
 
@@ -352,8 +353,9 @@ which accepts six digits only.
 
 ### Hand-built popups, and the system's own dialog in two places
 
-Every dropdown, color picker, confirmation prompt, and date picker in this app is a hand-built
-`Toplevel` popup — never `tkinter.messagebox`, `ttk.Combobox`, or `colorchooser`. The trade-off
+Every dropdown, color picker and date picker in this app is a hand-built `Toplevel` popup, and
+every confirmation prompt a hand-built overlay inside the window (below) — never
+`tkinter.messagebox`, `ttk.Combobox`, or `colorchooser`. The trade-off
 is more code to maintain; what it buys is a UI that's fully themed (dark/light variants apply
 everywhere, including every dialog) and behaves consistently across the app.
 
@@ -918,7 +920,8 @@ person signs in. On a second screen at another scale, Windows resizes the app as
 a little soft there, though less so than an enlarged picture: shrinking costs less than
 stretching. The setting exists for someone who keeps the app on such a screen. It is read once,
 before the first window opens, because that is the only moment Windows listens. It stays on this
-computer; a backup carries only categories and the calendar's decorations.
+computer: a backup carries the whole `settings.json`, but restoring one takes only its
+categories, the calendar's decorations and the Trash window.
 
 Three ways to get sharp text were measured on a 150% laptop, by how crisp the letters' edges are:
 
@@ -1007,8 +1010,8 @@ The underline is a Tk tag of its own. The save, the copy, the export and the und
 character formatting from a closed list of tags (`is_format_tag`), and this tag is not on it. So
 a note never reads as unsaved because of a red line, and no red line reaches the clipboard. A
 suggestion taken goes through `_undo_atom`, so the word keeps its formatting and one Ctrl+Z
-takes the whole replacement back. The ignored words live in `settings.json`: on this computer,
-not in a backup.
+takes the whole replacement back. The ignored words live in `settings.json`, on this computer:
+a backup carries the file, but restoring one does not bring them back.
 
 #### When it looks, and how long it takes
 
@@ -1248,8 +1251,9 @@ Rules that keep it honest:
   which row it is over. A click on a card also puts the keyboard on the list, with the ring on
   that card, and the ring's walk scrolls the list to keep it in view.
 
-A rebuild keeps the depth that was drawn when the list was scrolled (a new search excepted: it
-starts from the top, below), so the position restored
+A rebuild draws as deep as a screen below the view the list was scrolled to
+(`_list_depth_for`; a new search excepted: it starts from the top, below), not every row drawn
+before, which cost 90–360 ms after one trip to the end of 1,000 notes, so the position restored
 in pixels (below) has content to land on, and draws the card the keyboard was on. This is not
 virtualization: a card once drawn stays drawn until the next rebuild — which costs the drawing
 little, since a drawn card is a handful of canvas items rather than six windows. Windowed
@@ -1443,8 +1447,9 @@ does the widget have its place in the layout (`winfo_manager()`)? Never `winfo_i
 asks whether it is on the screen and says no for a placed widget until Tk first draws it, and for
 as long as its page is hidden. A hide that asked the screen skipped a sleeping widget, which woke
 up with its page; a show that asked it packed a placed widget again, moving it to the end of its
-container. `tools/check_one_definition.py` fails on `winfo_ismapped()` outside the three places
-that mean the screen (a tooltip, a click on the Settings page, the calendar's keys). See
+container. `tools/check_one_definition.py` fails on `winfo_ismapped()` outside the four places
+that mean the screen (a tooltip, a click on the Settings page, the calendar's keys, and a table's
+keyboard waiting for its right-click menu to close). See
 [The button that woke up with its page](ISSUES_LOG.md#the-button-that-woke-up-with-its-page).
 
 Whether the person can see a widget is a third question, and neither answers it: mapped, and

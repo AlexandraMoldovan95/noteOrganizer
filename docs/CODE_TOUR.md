@@ -174,8 +174,8 @@ points to [the issues log](ISSUES_LOG.md), either by a story's title
 [smaller lessons](ISSUES_LOG.md#smaller-lessons-moved-out-of-the-code).
 A module's own docstring names what it is for in a few lines, and the walk
 through it is here. `tools/check_comments.py` checks that every pointer
-leads somewhere, and keeps the modules already condensed — `core/model.py`,
-`core/storage.py` and `ui/note_list.py` so far — that way.
+leads somewhere, and keeps every module, the entry file with them, that
+way.
 
 ---
 
@@ -860,7 +860,7 @@ in [ARCHITECTURE](ARCHITECTURE.md#background-work-exporting-and-importing).
 **What it's for.** Deciding when two notes are really the same note, so
 Settings can offer to tidy them up.
 
-Two normalisations do the real work:
+The words are compared after two normalisations:
 
 - `_strip_copy_suffix` removes any number of trailing `" (copy)"` markers,
   so a note and its duplicate match *even though the app renamed one of
@@ -868,9 +868,12 @@ Two normalisations do the real work:
 - `_normalize_ws` collapses runs of whitespace, so a stray blank line
   doesn't hide a match.
 
-Date, colour, attachments and pinned state are ignored **on purpose**. Two
-notes with identical text are the same note to a person, even if one is
-pinned — the comparison encodes a human judgement, not a mechanical one.
+Beside the words, `_dup_key` asks for the same category, checklist, repeat
+rule, a series' own days and fields a newer version wrote: no clean-up
+merges those, and left out, the copy dropped took them with it. Date,
+colour, attachments and pinned state are ignored **on purpose**. Two notes
+with identical words are the same note to a person, even if one is pinned —
+the comparison encodes a human judgement, not a mechanical one.
 
 ### One performance idea
 
@@ -947,10 +950,11 @@ The third is newer: the purge used to compare attachments by name, at the
 top level only, and then remove the whole attachments tree, so a file in a
 subfolder was destroyed without ever having been copied.
 
-`is_redundant_copy()` is the judgement behind it: a folder counts as
-redundant only if every note in it is already present locally *and* every
-attachment in it exists locally byte for byte, with nothing else beside
-them. Content is compared by **signature**, not by counting files — "10
+`is_redundant_copy()` and `_attachments_are_covered()` are the judgement
+behind it: a folder counts as redundant only if every note in it is already
+present locally (the first) *and* every attachment in it exists locally byte
+for byte, with nothing else beside them (the second). Notes are compared by
+**signature**, not by counting them — "10
 notes here, 10 notes there" must never be mistaken for "the same 10 notes".
 
 ### Two bugs this extraction caused — both worth learning from
@@ -1169,9 +1173,10 @@ one habit applied consistently, not three separate tricks.
 
 `note_is_empty` and `note_richness` support the one-time cleanup a
 notebook gets on its first load (`clean_notes`, run once and then marked
-`cleanup_done` in settings): blank notes dropped, duplicates merged, and
-richness decides *which copy to keep* — the one carrying the most actual
-content — rather than picking arbitrarily and hoping. It reports what it did
+`cleanup_done` in settings): blank notes dropped, and only exact duplicates
+merged. Richness decides *which copy to keep*, the one carrying the most
+actual content; since `content_signature` already holds everything it
+scores, copies of one group tie, and the first is kept. It reports what it did
 so the app can tell you rather than silently changing your notebook.
 Settings → Duplicates is a different, later clean-up: it keeps the first
 copy of each group.

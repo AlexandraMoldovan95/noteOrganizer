@@ -274,7 +274,7 @@ before it counted.
 
 ### Wave 6: the lows, before the stores
 
-The full reading's findings of low severity, fixed on 12 and 13 November, then attacked by two
+The full reading's findings of low severity, fixed from 12 November, then attacked by two
 agents for each app in each round: one going after each fix by name, one taking an ordinary
 person's side and reading the wave's documents against the code. No sceptic ran: the agent
 leading the audit checked each finding of medium severity in the code before it counted. The
@@ -314,6 +314,8 @@ totals above are waves 1 to 5's.
 | [r11-phone.txt](wave6/r11-phone.txt) | Phone | 2026-11-13 19:17 | 2 | 0.51 |
 | [r16-desktop.txt](wave6/r16-desktop.txt) | Desktop | 2026-11-13 20:29 | 2 | 0.52 |
 | [r12-phone.txt](wave6/r12-phone.txt) | Phone | 2026-11-13 20:29 | 2 | 0.62 |
+| [r17-desktop.txt](wave6/r17-desktop.txt) | Desktop | 2026-11-13 21:22 | 2 | 0.59 |
+| [r13-phone.txt](wave6/r13-phone.txt) | Phone | 2026-11-13 21:29 | 2 | 0.46 |
 
 From the third round, both agents of an app read one file; the line that started each named
 where to begin, one at each fix by name, the other at the person's roads and the documents.

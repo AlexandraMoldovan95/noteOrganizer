@@ -41,7 +41,8 @@ scramble (2026-11-12).
    receives the version while the fix is made. Android never puts an older version back over a
    newer one; the way out is a newer version, its `versionCode` higher.
 4. **The fix is a release like any other**, in the app's own repository: its branch, the
-   version a patch higher, the unit tests, the gates and the walk, the release build, then the
+   version a patch higher, the unit tests, the gates and the walk, the release build and the two
+   checks only it can answer (`check_release_lookups.py`, `make_licenses.py --check`), then the
    upload. A crash's trace in the console is read through the R8 mapping the bundle carries.
    R8 writes `mapping.txt` into the build folder, where the next build writes over it, so each
    release's copy is to be kept beside the bundle uploaded, named for its version: a step to add
