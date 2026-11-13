@@ -18047,25 +18047,116 @@
   },
   {
     "id": "SN41",
-    "about": "A word another program wrote takes out a note's file through a trailing dot or space",
+    "about": "A word another program wrote takes out a note's file through an alias (a trailing dot or space, another case, an 8.3 name)",
     "edits": [{"file": "note_organizer.py",
-               "find": "            if (not isinstance(named, str) or os.path.basename(named) != named or \":\" in named\n                    or named.rstrip(\". \") != named):\n",
-               "replace": "            if not isinstance(named, str) or os.path.basename(named) != named or \":\" in named:\n"}],
+               "find": "                if os.path.normcase(os.path.basename(os.path.realpath(path))) in in_use:\n",
+               "replace": "                if os.path.normcase(name) in in_use:\n"}],
     "must_fail": ["...and a name in the word that is an alias of a note's file is never taken out"],
     "suites": ["qa3"],
-    "expect": "killed"
+    "expect": "killed",
+    "only_on": "win32",
+    "note": "Killed on Windows, where the aliases name one file; on Linux each is another file and the note's is never at stake."
   },
   {
     "id": "SN42",
-    "about": "A word another program wrote takes out a note's file through another case (Windows only)",
+    "about": "The names notes use are compared as written, the file's own name as the system compares it",
     "edits": [{"file": "note_organizer.py",
                "find": "        in_use = {os.path.normcase(n) for n in attachment_names_in(self.notes + self.trash)}\n",
-               "replace": "        in_use = set(attachment_names_in(self.notes + self.trash))\n"},
-              {"file": "note_organizer.py",
-               "find": "                if not name or os.path.normcase(name) in in_use:\n",
-               "replace": "                if not name or name in in_use:\n"}],
-    "must_fail": ["...and a name in the word that is an alias of a note's file is never taken out"],
+               "replace": "        in_use = set(attachment_names_in(self.notes + self.trash))\n"}],
+    "must_fail": ["a file named as \".part\" in an import's word is taken out by its own name, one a note uses kept"],
     "suites": ["qa3"],
+    "expect": "killed",
+    "only_on": "win32",
+    "note": "Killed on Windows, where normcase lowers a name: a stored name with capitals (as real ones keep) no longer matches. On Linux normcase changes nothing."
+  },
+  {
+    "id": "DR227",
+    "about": "Going back on the question a day's Undo asks first loses the Undo, and the day's own text with it",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                self._show_toast(\n                    \"Day removed\",\n                    action=lambda: self._undo_occurrence_delete(\n                        note_id, date_str, own_edit, uid, came_from))\n                return\n",
+               "replace": "                return\n"}],
+    "must_fail": ["going back on the question a day's Undo asks first keeps the Undo on offer"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "UF01",
+    "about": "A load drops every field this version does not know",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "    clean.update(unknown_fields(note))\n",
+               "replace": ""}],
+    "must_fail": ["a field this version does not know is kept as it came"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "UF02",
+    "about": "Two notes differing only in a field this version does not know sign alike, and a cleanup drops one",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "        _stable(unknown_fields(note)),\n    )\n",
+               "replace": "    )\n"}],
+    "must_fail": ["...two notes differing only in such a field are not duplicates"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "UF03",
+    "about": "The duplicate groups take two notes differing only in an unknown field for one",
+    "edits": [{"file": "noteorganizer/core/duplicates.py",
+               "find": "        _stable(unknown_fields(note)),\n    )\n",
+               "replace": "    )\n"}],
+    "must_fail": ["...two notes differing only in such a field are not duplicates"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "UF04",
+    "about": "A backup's Update leaves its fields this version does not know behind",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "    if fields is UPDATABLE_FROM_BACKUP:\n        note.update(unknown_fields(fresh))\n",
+               "replace": ""}],
+    "must_fail": ["...a backup's Update brings its own, this note's kept"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "UF05",
+    "about": "An unknown field nested past the depth allowed is kept",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "            if level > MAX_UNKNOWN_DEPTH:\n                return None\n",
+               "replace": ""}],
+    "must_fail": ["...nested to the depth allowed, and not one level past it"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "UF06",
+    "about": "Unknown fields past the allowance in units are kept",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "        if units + size > MAX_UNKNOWN_UNITS:\n            continue\n",
+               "replace": ""}],
+    "must_fail": ["...a field past the allowance left out, the rest kept"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "UF07",
+    "about": "A field named with a leading '_', an app's own mark, is kept as unknown",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "                    and name not in KNOWN_NOTE_FIELDS and not name.startswith(\"_\")),\n",
+               "replace": "                    and name not in KNOWN_NOTE_FIELDS),\n"}],
+    "must_fail": ["...but not a name starting '_', the Trash's deleted_at, nor the removed tags"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "UF08",
+    "about": "More unknown fields than the cap are kept",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "        if len(kept) >= MAX_UNKNOWN_FIELDS:\n            break\n",
+               "replace": ""}],
+    "must_fail": ["...at most 32, the first by name"],
+    "suites": ["test_data_safety"],
     "expect": "killed"
   }
 ]
