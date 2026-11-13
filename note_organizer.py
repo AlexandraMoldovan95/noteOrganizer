@@ -361,6 +361,7 @@ from noteorganizer.core.model import (
     UPDATABLE_FROM_SHARED,
     UPDATABLE_FROM_BACKUP,
     unknown_fields,
+    unknown_signature,
     PREV_TEXT_FIELDS,
     DAY_FIELDS,
     note_richness,
@@ -1874,17 +1875,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if VERSION_CHANGE:
             direction, old, new = VERSION_CHANGE
             if direction == "up":
-                msg = (
-                    f"Updated to version {new} (from {old}).\n\n"
-                    "Your notes came through the update."
-                )
+                # Not "came through", nor a backup to make, over a notes file
+                # this start could not read: its own notice above says so.
+                unread = self._notes_file_unread()
+                msg = f"Updated to version {new} (from {old})."
+                if not unread:
+                    msg += "\n\nYour notes came through the update."
                 if self._version_backup_path:
                     msg += (
                         "\n\nAs an extra safety net, a backup of your notes "
                         "from just before this update was saved to:\n"
                         f"{self._version_backup_path}"
                     )
-                elif getattr(self, "_version_backup_failed", False):
+                elif getattr(self, "_version_backup_failed", False) and not unread:
                     msg += (
                         "\n\nThe extra backup of your notes from just before "
                         "this update could not be saved, so there is none — "
@@ -10678,36 +10681,46 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return finish(fresh, [])
         count = len(known)
         plural = "" if count == 1 else "s"
+        # A backup's note that differs by a file alone takes the file, nothing
+        # else, and keeps no copy: said apart, or Restore previous and "OLDER"
+        # were promised of it (the import's result counts it apart too).
+        filed = [] if source != "backup" else [
+            pair for pair in known
+            if not shared_update_changes(pair[0], pair[1], UPDATABLE_FROM_BACKUP)]
+        texts = [pair for pair in known if not any(pair is f for f in filed)]
+        replaces = (
+            "Updating replaces this device's copies; each one can be undone "
+            "with \u201c\u21a9 Restore previous\u201d." if not filed else
+            "Updating adds the attached files they lack, nothing else." if not texts else
+            f"Updating replaces this device's copies (each can be undone with "
+            f"\u201c\u21a9 Restore previous\u201d); {len(filed)} of them only lack "
+            f"attached files, which it adds.")
         # "All" only when it is all: the unchanged notes are counted in the
         # batch too, and are asked about straight after this question.
         if fresh or same:
             message = (
                 f"{count} of the {len(incoming)} note{'' if len(incoming) == 1 else 's'} "
                 f"in this {source} {'is' if count == 1 else 'are'} already here, "
-                f"edited elsewhere.\n\n"
-                f"Updating replaces this device's copies; each one can be "
-                f"undone with \u201c\u21a9 Restore previous\u201d.\n"
+                f"edited elsewhere.\n\n{replaces}\n"
                 f"Adding leaves both versions, so you can compare them."
             )
         else:
             message = (
                 f"All {count} note{plural} in this {source} {'is' if count == 1 else 'are'} "
-                f"already here, edited elsewhere.\n\n"
-                f"Updating replaces this device's copies; each one can be "
-                f"undone with \u201c\u21a9 Restore previous\u201d.\n"
+                f"already here, edited elsewhere.\n\n{replaces}\n"
                 f"Adding leaves both versions, so you can compare them."
             )
         # A backup's older notes are said as older: updating trades newer text
         # for them (a share code carries no saved time).
         older = 0 if source != "backup" else sum(
-            1 for mine, theirs in known
+            1 for mine, theirs in texts
             if str(theirs.get("updated") or "") < str(mine.get("updated") or ""))
         if older:
             who = "It is" if count == 1 else f"{older} of them are"
             message += f"\n\n{who} OLDER than the copy on this device."
         # One rescue copy per note: an update's takes the place of one the
         # note still needs, so that is said rather than done in silence.
-        rescued = sum(1 for mine, _theirs in known if self._holds_unspent_rescue(mine))
+        rescued = sum(1 for mine, _theirs in texts if self._holds_unspent_rescue(mine))
         if rescued:
             who = "One of them holds" if count > 1 and rescued == 1 else (
                 "It holds" if count == 1 else f"{rescued} of them hold")
@@ -10772,14 +10785,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             lead = (f"{count} of the {total} notes in this {source} "
                     f"{'is' if one else 'are'}")
         skip = "Skip it" if one else f"Skip the {count}"
-        # Said as what was compared: everything the import holds, which for
-        # a code is not everything a note has (its skipped days, its files).
+        # Said as what was compared (for a code, not its days or files). A
+        # newer version's fields are no change for an Update (D2), but the
+        # device lacks them: said, or "nothing" was untrue.
+        newer = sum(1 for mine, theirs in same
+                    if unknown_signature(normalize_note(dict(theirs))) != unknown_signature(mine))
+        if newer:
+            held = (f"nothing about {'it' if one else 'them'} that this version shows and "
+                    f"this device lacks; {'it' if one else f'{newer} of them'} also "
+                    f"{'holds' if one or newer == 1 else 'hold'} fields a newer version "
+                    "wrote, which this version keeps but cannot show.\n\n"
+                    "Skipping leaves those fields out.")
+        else:
+            held = (f"nothing about {'it' if one else 'them'} that this device lacks.\n\n"
+                    "Skipping changes nothing.")
         choice = self._themed_dialog(
             "Already here, unchanged",
-            f"{lead} already here: the {source} holds nothing about "
-            f"{'it' if one else 'them'} that this device lacks.\n\n"
-            "Skipping changes nothing. A copy is a second, separate note, "
-            f"made from what the {source} holds.",
+            f"{lead} already here: the {source} holds {held} A copy is a second, "
+            f"separate note, made from what the {source} holds.",
             kind="question",
             buttons=[(skip, "skip"),
                      ("Add a copy anyway" if one else "Add copies anyway",
@@ -12185,9 +12208,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # own) and validated as the start's are (_take_day_decorations).
         restored_decor = self._take_day_decorations(
             state.get("imported_day_colors"), state.get("imported_day_emoji"))
+        # What the result says restored and the disk refused, said so: it was
+        # "Also restored" over files that were not written.
+        unwritten = []
         if restored_decor:
-            save_setting("day_colors", dict(self.day_colors))
-            save_setting("day_emoji", dict(self.day_emoji))
+            wrote = [save_setting("day_colors", dict(self.day_colors)),
+                     save_setting("day_emoji", dict(self.day_emoji))]
+            if not all(wrote):
+                unwritten.append("the calendar day markings")
 
         # The Trash's window comes along where none was chosen here, never
         # shorter than the default (ISSUES_LOG: "The Trash restored under a
@@ -12239,8 +12267,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.templates.append(tpl)
                 template_names.add(tpl["name"])
                 added_templates += 1
-        if added_templates:
-            save_templates(self.templates)
+        if added_templates and not save_templates(self.templates)[0]:
+            unwritten.append("the templates")
         added_trash = 0
         # Skipped unasked, so the test is identity (content_signature), not
         # _dup_key's resemblance: a trashed note differing only in its date
@@ -12281,8 +12309,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             entry["attachments"] = atts
             self.trash.append(entry)
             added_trash += 1
-        if added_trash:
-            save_trash(self.trash)
+        if added_trash and not save_trash(self.trash)[0]:
+            unwritten.append("the trashed notes")
 
         # The save makes notes '(earlier text)' of what a series' copy kept
         # (_set_aside_days); its banner goes under this dialog, so the
@@ -12310,6 +12338,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             parts.append(f"{added_trash} trashed note(s)")
         if parts:
             extras_note = " Also restored " + " and ".join(parts) + "."
+        if unwritten:
+            extras_note += (" " + " and ".join(unwritten).capitalize()
+                            + " could not be written to disk yet.")
         if earlier > 0:
             extras_note += (f" Earlier text of {earlier} day{'s' if earlier != 1 else ''} "
                             "of a repeating note kept as notes of their own.")
@@ -15580,8 +15611,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         # Save first — leaving a dirty day behind rendered the day panel
         # from the store, which still held the OLD content: the edit
-        # looked lost.
-        self._flush_autosave()
+        # looked lost. "Go back and fix it" answered, the way back waits.
+        if self._flush_autosave() is False:
+            return
         # STILL dirty, the flush did not finish (a date to fix): the day panel
         # would show the old content, and load it over the edit. Stay put;
         # the way back stays armed.
@@ -15596,7 +15628,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                if k != "recurrence"}))
             if _blockable and not self.editor_state_matches_saved(st):
                 self.set_status(
-                    "Not saved yet — fix the date to go back to the calendar")
+                    "Not saved yet — fix what could not be saved to go back to the calendar")
                 return
         except Exception:  # noqa: BLE001 -- a guard that fails must not trap Back
             self._log_swallowed("return to calendar: unsaved check")
@@ -19926,8 +19958,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # If a template with this name exists, overwrite it.
             self.templates = [t for t in self.templates if t.get("name") != name]
             self.templates.append(tpl)
-            save_templates(self.templates)
-            self.set_status(f"Saved template “{one_line(name, 200)}”")
+            # Said saved only when the file took it: a refused write showed
+            # "Saved", and under a hold the red banner speaks once a run.
+            if save_templates(self.templates)[0]:
+                self.set_status(f"Saved template “{one_line(name, 200)}”")
+            else:
+                self.set_status(f"Template “{one_line(name, 200)}” not saved: "
+                                "the templates file could not be written")
             refresh = getattr(self, "_refresh_templates_panel", None)
             if callable(refresh):
                 try:
@@ -21012,7 +21049,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Recurrence or override counts may have just changed either way.
         self._update_occurrence_banner()
 
-        self.save_notes()
+        # The branches said "Saved at" / "Auto-saved" before this write: a
+        # refused one says so in their place (a hold says it itself).
+        written = self.save_notes()
+        if not written and not _core_paths.writes_held(DATA_FILE):
+            self.set_status("Not saved — your notes could not be written")
         # An autosave under a popup skips the list and calendar (delays
         # still tore the sidebar): saved anyway, they catch up later.
         if auto and getattr(self, "_mini_popup", None) is not None:
@@ -21060,7 +21101,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # What was left out waits on screen: said by the status line, aloud
         # on Save (which then sends no one to the calendar). The words less
         # "except" are kept for _say_nothing_is_left_out.
-        if left_out:
+        if left_out and written:
             self.set_status(("Auto-saved " if auto else "Saved at ") + show_stamp(now)
                             + " — except " + "; ".join(left_out)
                             + (self._repeat_off_line(note) if repeat_off_kept else ""))
@@ -21222,7 +21263,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
         if not restored:
             # Already put back, refiled, or gone: nothing to apologise for.
-            self._show_toast("Nothing left to put back", kind="info")
+            # Every one kept off by a category gone since is said as that: it
+            # was "Nothing left to put back" with the notes still there.
+            self._show_toast(
+                f"{homeless} note(s) could not go back to a category that no longer exists"
+                if homeless else "Nothing left to put back", kind="info")
             return
 
         self.save_notes()

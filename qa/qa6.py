@@ -824,6 +824,32 @@ check('a Remove whose save the disk refuses keeps the file the note on disk name
 app.save_notes()
 app.update()
 check('and the next save that lands takes the file away', not os.path.isfile(_rf_path))
+# A save the disk refuses says so on the status line: "Saved at" was written
+# before the write and stayed under the red banner.
+app.body_text.insert('end', ' more words')
+NO.core_save_notes = lambda notes: (False, OSError(28, 'No space left on device'))
+app.show_error = lambda *a, **k: None
+try:
+    app.save_current_note(auto=False); app.update()
+    _sv_status = str(app.status_lbl.cget('text'))
+finally:
+    NO.core_save_notes, app.show_error = _rf_real_save, _rf_real_err
+app.save_notes(); app.update()
+check(f"a save the disk refuses says Not saved on the status line ({_sv_status!r})",
+      _sv_status.startswith('Not saved'))
+# A category move's Undo whose notes' category was deleted since says that,
+# not "Nothing left to put back" with the notes still there.
+_cu_note = NO.normalize_note({'id': 9301, 'title': 'Homeless', 'body': 'x', 'category': 'Work'})
+app.notes.append(_cu_note)
+_cu_toasts, _cu_toast_was = [], app._show_toast
+app._show_toast = lambda text, *a, **k: _cu_toasts.append(text)
+try:
+    app._undo_bulk_category([(9301, 'Gone category', '2026-01-01 00:00:00', _cu_note['uid'])], 'Work')
+finally:
+    app._show_toast = _cu_toast_was
+app.notes = [n for n in app.notes if n.get('id') != 9301]
+check(f"a category move's Undo over a category gone since says so ({_cu_toasts})",
+      bool(_cu_toasts) and 'could not go back to a category that no longer exists' in _cu_toasts[-1])
 
 # The file asked about is the file removed. While the question waited, the
 # editor could move on to another note; the index then named THAT note's
@@ -4147,6 +4173,18 @@ if sys.platform.startswith('win'):
           f'({len(_st_rows)} row; {_st_off}, {_st_on}; "{_st_said}")',
           len(_st_rows) == 1 and _st_off is False and _st_on is True
           and 'next time you open' in _st_said)
+    # ...and Off the disk refused leaves the dropdown on what stays, On: it
+    # read the refused choice under "Not saved".
+    _sd_store = sys.modules['noteorganizer.core.storage']
+    _sd_save_was = _sd_store.save_settings
+    _sd_store.save_settings = lambda _s: (False, OSError(28, 'No space left on device'))
+    try:
+        app.sharp_text_var.set('Off')          # as the dropdown sets it first
+        app._set_sharp_text('Off')
+    finally:
+        _sd_store.save_settings = _sd_save_was
+    check(f"...and Off the disk refused leaves the dropdown on On ({app.sharp_text_var.get()!r})",
+          app.sharp_text_var.get() == 'On')
     # The real declaration, in a process of its own that opens no window:
     # the one this suite runs in has windows already, and Windows decides a
     # program's drawing mode only once.

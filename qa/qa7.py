@@ -2024,6 +2024,20 @@ app._return_to_calendar(); app.update()
 check('a clean day returns without asking either',
       scope_ux == []
       and app.notebook.index(app.notebook.select()) == app.TAB_CALENDAR)
+# "Go back and fix it" answered to the save's question keeps the note open:
+# Back read no answer, and went to the Calendar over the unsaved repeat.
+app._open_note_from_calendar(app.find_note(60), '2026-07-16'); app.update()
+_bc_flush_was = app._flush_autosave
+app._flush_autosave = lambda *a, **k: False
+try:
+    app._return_to_calendar(); app.update()
+finally:
+    app._flush_autosave = _bc_flush_was
+check(f"Back to Calendar stays when Go back and fix it is answered "
+      f"(tab {app.notebook.index(app.notebook.select())}, way back {bool(app._pending_calendar_return)})",
+      app.notebook.index(app.notebook.select()) == app.TAB_NOTES
+      and bool(app._pending_calendar_return))
+app._return_to_calendar(); app.update()
 # Settle any still-deferred edit while the mock is armed — under the
 # no-flush mutant the editor stays dirty here, and a later section's
 # flush would otherwise raise the REAL scope dialog and hang the run.

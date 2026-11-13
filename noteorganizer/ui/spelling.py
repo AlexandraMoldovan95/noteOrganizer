@@ -322,5 +322,11 @@ class SpellingMixin:
         on = value == "On"
         if on == get_setting(spelling.SPELLING_SETTING, True, expect=bool):
             return
-        save_setting(spelling.SPELLING_SETTING, on)
+        # Refused, the dropdown read the choice while the underlines, read
+        # from the file, stayed as they were: put back, and said.
+        if not save_setting(spelling.SPELLING_SETTING, on):
+            if getattr(self, "spelling_var", None) is not None:
+                self.spelling_var.set("Off" if on else "On")
+            self._show_toast("Not saved: spelling stays as it was", kind="info")
+            return
         self._spell_schedule_all()

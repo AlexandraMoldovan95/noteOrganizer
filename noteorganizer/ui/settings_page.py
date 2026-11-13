@@ -3590,6 +3590,9 @@ class SettingsPageMixin:
             self._show_toast("Saved — you'll see it the next time you open "
                              "Note Organizer")
         else:
+            # ...and the dropdown shows what stays, not the choice refused.
+            if getattr(self, "sharp_text_var", None) is not None:
+                self.sharp_text_var.set("Off" if on else "On")
             self._show_toast("Not saved: Sharp text stays as it was", kind="info")
 
     def _build_settings_backup_panel(self, parent):

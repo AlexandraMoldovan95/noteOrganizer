@@ -1578,6 +1578,22 @@ check(f'...and saving one more by hand is refused, and that is said '
 app.templates = _tp_before
 NO.save_templates(app.templates)
 os.remove(_tpz)
+# ...and one the disk refuses is said not saved: "Saved template" showed.
+_ts_real_save = NO.save_templates
+NO.save_templates = lambda _t: (False, OSError(28, 'No space left on device'))
+app._show_inline_rename = lambda _anchor, _default, on_name, **_limit: on_name('Refused one')
+try:
+    app.title_entry.delete(0, 'end')
+    app.title_entry.insert(0, 'Has a title')
+    app.save_current_as_template()
+    app.update()
+    _ts_status = str(app.status_lbl.cget('text'))
+finally:
+    NO.save_templates, app._show_inline_rename = _ts_real_save, _tp_real_rename
+app.templates = _tp_before
+NO.save_templates(app.templates)
+check(f"a template the disk refuses is said not saved ({_ts_status!r})",
+      'not saved' in _ts_status and 'Saved template' not in _ts_status)
 
 # ---- SHARE-CODE decode: every refusal branch (coverage-lift C16) ----
 # Each malformed-input class must raise ValueError with a HUMAN message
@@ -2904,6 +2920,36 @@ app._themed_dialog = _real_dialog
 check(f'two questions about one batch count it the same way ({_nt_asked})',
       len(_nt_asked) == 2
       and all('1 of the 2 notes in this backup' in m for m in _nt_asked))
+# A backup's note that differs by a file alone takes the file and keeps no
+# copy: the question promised Restore previous of it, and warned it OLDER.
+_nf_mine = NO.normalize_note({'id': 3, 'title': 'Ticket', 'body': 'trip',
+                              'updated': '2026-11-10 10:00:00'})
+_nf_theirs = dict(_nf_mine, updated='2026-11-01 10:00:00',
+                  attachments=[{'filename': 'ticket.pdf', 'stored_as': '20261101_ticket.pdf'}])
+app.notes = [_nf_mine]; app.save_notes()
+_nf_asked = []
+app._themed_dialog = lambda *a, **k: (_nf_asked.append(a[1]), 'cancel')[1]
+app._take_known_notes([_nf_theirs], 'backup')
+app._themed_dialog = _real_dialog
+_nf_said = _nf_asked[0] if _nf_asked else ''
+check(f"a note differing by a file alone is said to take the file, no Restore previous, no OLDER "
+      f"({_nf_said[-120:]!r})",
+      'adds the attached files they lack, nothing else' in _nf_said
+      and 'Restore previous' not in _nf_said and 'OLDER' not in _nf_said)
+# ...and one differing by a field a newer version wrote alone is no Update
+# (D2), but the question says the backup holds it: "nothing" was untrue.
+_nu_mine = NO.normalize_note({'id': 4, 'title': 'Plan', 'body': 'b'})
+_nu_theirs = dict(_nu_mine, reminder_at='2026-11-20 09:00')
+app.notes = [_nu_mine]; app.save_notes()
+_nu_asked = []
+app._themed_dialog = lambda *a, **k: (_nu_asked.append((a[0], a[1])), 'skip')[1]
+app._take_known_notes([_nu_theirs], 'backup')
+app._themed_dialog = _real_dialog
+_nu_said = _nu_asked[0] if _nu_asked else ('', '')
+check(f"a note differing by a newer version's field alone is said so, and that Skip leaves it out "
+      f"({_nu_said[0]!r}, {_nu_said[1][-110:]!r})",
+      _nu_said[0] == 'Already here, unchanged' and 'fields a newer version wrote' in _nu_said[1]
+      and 'Skipping leaves those fields out' in _nu_said[1])
 app.notes = [_nt_mine]; app.save_notes()
 
 # "Update" waits for the import's last answer. The updates were applied

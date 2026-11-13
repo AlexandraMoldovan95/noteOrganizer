@@ -508,6 +508,16 @@ check(f"...and a newer version's dark theme stays while a light one is chosen "
       f"({NO.load_settings().get('last_dark_theme')!r})",
       NO.load_settings().get('last_dark_theme') == 'dark_rose')
 app.set_theme(_lt_was); app.update()
+# A list or an object in "theme" is read as no theme: `in THEMES` raised on
+# it, and every start stopped.
+NO.save_setting('theme', ['dark'])
+try:
+    _lt_loaded = app.load_theme_setting()
+except TypeError as _lt_e:   # this check's FAIL, not the suite's end
+    _lt_loaded = 'raised %s' % _lt_e
+app.save_theme_setting()
+check(f"a list in the theme setting is read as the default, not a start that stops ({_lt_loaded!r})",
+      _lt_loaded == 'dark')
 
 # ---- PERFORMANCE: note list with larger count ----
 # This check used to assert a literal True: it measured the time, printed

@@ -10087,6 +10087,23 @@ finally:
 check(f'an update whose safety copy cannot be saved says there is none '
       f'({" ".join(_vb_said)[-140:]!r})',
       any('could not be saved, so there is none' in s for s in _vb_said))
+# ...and over a notes file this start could not read, it neither says the
+# notes came through nor sends the person to an Export of nothing.
+_vb_said = []
+_vb_warn = app.show_warning
+app.show_info = lambda *a, **k: _vb_said.append(' '.join(map(str, a)))
+app.show_warning = lambda *a, **k: _vb_said.append(' '.join(map(str, a)))
+app._corrupt_notes_report = ''
+app._version_backup_failed = True
+try:
+    app.announce_startup_changes()
+finally:
+    app.show_info, app.show_warning = _vb_info, _vb_warn
+    app._corrupt_notes_report = None
+check(f'...nor, over a notes file it could not read, that the notes came through '
+      f'({" ".join(_vb_said)[-160:]!r})',
+      any('Updated to version' in s for s in _vb_said)
+      and not any('came through' in s or 'Export makes one' in s for s in _vb_said))
 app._version_backup_failed = False
 NO.VERSION_CHANGE = _original_version_change
 
