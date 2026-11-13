@@ -217,6 +217,26 @@ for _cw_body in ('x', 'xy', 'xyz', 'wxyz'):   # codes of every padding length
             _cw_found.append(False)
 check(f'a code is found among the words around it, padded or not ({_cw_found})',
       all(_cw_found) and len(_cw_found) == 12)
+# ...and with its prefix broken by the wrapping ("NOTE\n1:"), read from it as
+# from a whole one, as the phone reads it: left to the lenient decoder, a
+# stray letter was read here that the phone refuses.
+_cb_found = []
+for _cw_body in ('x', 'xy', 'xyz', 'wxyz'):
+    _cw_code = NO.encode_share_code([{'title': _cw_body, 'body': _cw_body}])
+    try:
+        _cb_found.append(NO.decode_share_code(
+            'Hi\n' + _cw_code[:4] + '\n' + _cw_code[4:] + '\nThanks')[0].get('title') == _cw_body)
+    except ValueError:
+        _cb_found.append(False)
+_cb_code = NO.encode_share_code([{'title': 'stray', 'body': 'stray'}])
+try:
+    NO.decode_share_code(_cb_code[:4] + '\n' + _cb_code[4:20] + '!' + _cb_code[20:])
+    _cb_stray = 'read'
+except ValueError:
+    _cb_stray = 'refused'
+check(f'a code whose prefix the wrapping broke is read as a whole one is, a stray letter '
+      f'refused there too ({_cb_found}, {_cb_stray})',
+      all(_cb_found) and len(_cb_found) == 4 and _cb_stray == 'refused')
 check('and an old code without paragraphs still decodes',
       'paragraphs' not in NO.decode_share_code(NO.encode_share_code([
           {'title': 'v', 'body': 'x', 'formatting': []}]))[0])

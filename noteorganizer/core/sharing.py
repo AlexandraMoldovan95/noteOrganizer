@@ -112,7 +112,14 @@ def code_in(text):
     itself, whitespace out."""
     at = text.find(SHARE_CODE_PREFIX)
     if at < 0:
-        return "".join(text.split())
+        # The prefix itself broken by the wrapping ("NOTE\n1:") is read from as a
+        # whole one is: left to the lenient decoder, a stray letter read here that
+        # the phone refuses, and a code the phone reads was refused.
+        bare = _CODE_SKIPPED.sub("", text)
+        at = bare.find(SHARE_CODE_PREFIX)
+        if at < 0:
+            return "".join(text.split())
+        text = bare
     body = _CODE_SKIPPED.sub("", _CODE_BODY.match(text, at + len(SHARE_CODE_PREFIX)).group(0))
     if "=" not in body:
         body = body[:len(body) - len(body) % 4]
