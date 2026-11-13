@@ -15436,8 +15436,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/sharing.py",
-        "find": "    code = code_in(code)\n",
-        "replace": "    code = \"\".join(code.split())\n"
+        "find": "        return _decode_found(code_in(code))\n",
+        "replace": "        return _decode_found(\"\".join(code.split()))\n"
       }
     ],
     "must_fail": [
@@ -18281,6 +18281,86 @@
                "replace": "        return \"\".join(text.split())\n"}],
     "must_fail": ["a code whose prefix the wrapping broke is read as a whole one is"],
     "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN44",
+    "about": "Your name is said saved when the disk refused it, the sidebar keeping the old one",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "            if written:\n                self.set_status(",
+               "replace": "            if True:\n                self.set_status("}],
+    "must_fail": ["a name the disk refused is said not saved"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN45",
+    "about": "save_setting says nothing of its write, so every name is said not saved",
+    "edits": [{"file": "noteorganizer/core/storage.py",
+               "find": "    return save_settings(settings)[0]\n",
+               "replace": "    save_settings(settings)\n"}],
+    "must_fail": ["...and one it took is said saved"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN46",
+    "about": "Words saying NOTE 1: are called a damaged share code to send again, and the phone's shared text a code",
+    "edits": [{"file": "noteorganizer/core/sharing.py",
+               "find": "        if SHARE_CODE_PREFIX not in code and SHARE_CODE_PREFIX in _CODE_SKIPPED.sub(\"\", code):\n            raise ValueError(_NOT_A_CODE) from None\n",
+               "replace": ""}],
+    "must_fail": ["...and words saying \"NOTE 1:\" are said to be no share code"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN47",
+    "about": "Restore previous pressed again asks for the note before an update and brings back the updated one",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                \"Bring back the previous version of this note? \"\n",
+               "replace": "                \"Bring back this note as it was before it was updated? \"\n"}],
+    "must_fail": ["...and pressed again it asks for the previous version"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN48",
+    "about": "A delete in Settings' Trash is said on the status line alone, out of sight behind Settings",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "                self._say_by_the_box(self, \"Deleted %d note%s permanently\"\n",
+               "replace": "                self.set_status(\"Deleted %d note%s permanently\"\n"}],
+    "must_fail": ["...and said on the banner, the status line being behind Settings"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN49",
+    "about": "A Trash held since the start is refused as a full disk, in Settings as in the editor",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if _core_paths.writes_held(_core_paths.TRASH_FILE):\n",
+               "replace": "        if False:\n"}],
+    "must_fail": ["a delete in Settings over a Trash held since the start says why"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN50",
+    "about": "The light/dark switch's last themes are not written, and a restart gives the defaults",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        settings.update(theme=self.theme_name, last_dark_theme=self._last_dark_theme,\n                        last_light_theme=self._last_light_theme)\n",
+               "replace": "        settings.update(theme=self.theme_name)\n"}],
+    "must_fail": ["the switch's last dark and light themes are written for the next start"],
+    "suites": ["qa4"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN51",
+    "about": "The last dark theme kept is passed over at a start, the switch going to the default",
+    "edits": [{"file": "noteorganizer/core/themes.py",
+               "find": "    dark = theme if theme in DARK_THEMES else kept_dark if kept_dark in DARK_THEMES else \"dark\"\n",
+               "replace": "    dark = theme if theme in DARK_THEMES else \"dark\"\n"}],
+    "must_fail": ["...and read back at a start"],
+    "suites": ["qa4"],
     "expect": "killed"
   }
 ]
