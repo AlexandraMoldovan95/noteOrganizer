@@ -4300,6 +4300,25 @@ close up to half a minute; the log's second round now names the medium it had. L
 that fails on its own in the moment before the close is said cut short, its reason unsaid; and
 an export's target on a share that stalls is asked its time before the close's word is written.
 
+**The seventh round** gave one agent the test plan alone, case by case against the code, and
+it found eight mediums, every one older than the wave: a step that opened the notebook where the
+.exe has not kept it since 27 October (case 554), a completion message said to name the
+categories it only counts (258), new notes said to come in whichever answer while Cancel brings
+none (271), an Update said to leave the category and comments alone while it writes them (269),
+the Restore previous question quoted without the sentence that case's setup adds (370), import
+messages said to name a menu path that only the export's do (971), a "Settings → notes" that
+does not exist (997), and a close said to finish the write it stops after half a minute (244).
+Each is true now, with the lows beside them: a label, a sidebar's width, checks and mutants named
+wrong, and mutants run when a case was written but never kept in the catalogue, said so. In the
+code, all low: a file the session's end named as ".part", still flushing, was renamed after and
+stayed for good; its own name is taken out too, unless a note uses it (SN35). The start takes
+the word back only once it is said: taken first, a start frozen asking a share that is gone, and
+ended there, lost it (SN36). `check_guest` sees flag values as f-strings or calls, flag lists
+joined on, six joins, and bash's continuation with no space, while a brace no longer crosses a
+line. Left: a start whose `trash.json` is held may take out a file only the backup's Trash used,
+in the moment between a merge and its word taken back; and the import's free-space refusal opens
+with "That file couldn't be read as a backup" (case 657 asks the owner's eye on it).
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.
 
