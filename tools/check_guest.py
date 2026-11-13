@@ -965,13 +965,15 @@ def docker_runs_outside_the_door():
     return hits
 
 
-# Typed or as a list for subprocess, through a name of its own (DOCKER),
-# and every way to start a container: only "docker run" typed out was seen,
-# then "docker-compose up", "restart", "unpause" and a split list were not.
+# The shapes a container is started in: typed, as a list for subprocess or a
+# helper's arguments, through a name of its own (DOCKER, docker_exe), with
+# docker.exe or flags before the verb, and docker-compose up. Lower case as
+# commands are written: "keep Docker up to date" in prose is not one.
 DOCKER_STARTS = re.compile(
-    r"""docker(?:[-_]compose)?["']?\s*,?\s*["']?"""
-    r"""(?:(?:container|compose)["']?\s*,?\s*["']?)?"""
-    r"""(?:run|start|create|compose|up|restart|unpause)\b""", re.I)
+    r"""(?:\bdocker(?:\.exe)?|\bDOCKER\w*|\bdocker_\w+)["']?\s*[,(]?\s*["']?"""
+    r"""(?:--?[a-zA-Z][\w-]*(?:[ =]["']?[^\s"',]+["']?)?\s*,?\s*["']?)*"""
+    r"""(?:container["']?\s*,?\s*["']?)?(?:run|start|create|restart|unpause)\b"""
+    r"""|\bdocker[-_ ]compose["']?\s*,?\s*["']?(?:--?[a-zA-Z][\w-]*\s+)*up\b""")
 
 
 # -- 8: the walk sees what it is shown --

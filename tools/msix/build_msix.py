@@ -128,6 +128,10 @@ def code_newer_than(path):
     built = os.path.getmtime(path)
     code = [os.path.join(ROOT, "note_organizer.py"), os.path.join(ROOT, "NoteOrganizer.spec")]
     code += sorted(glob.glob(os.path.join(ROOT, "noteorganizer", "**", "*.py"), recursive=True))
+    # And what the spec ships beside the code: the icons and the licences.
+    code += sorted(glob.glob(os.path.join(ROOT, "assets", "icon*.ico"))
+                   + glob.glob(os.path.join(ROOT, "assets", "icon*.png")))
+    code.append(os.path.join(ROOT, "THIRD_PARTY_NOTICES.txt"))
     for source in code:
         if os.path.isfile(source) and os.path.getmtime(source) > built:
             return os.path.relpath(source, ROOT)
