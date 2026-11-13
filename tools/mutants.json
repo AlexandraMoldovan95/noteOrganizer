@@ -5403,8 +5403,8 @@
     "id": "CN02",
     "about": "an import dropped by the close leaves no word",
     "edits": [{"file": "note_organizer.py",
-               "find": "        if state is not None:\n            save_setting(\"backup_cut_short\", {\n                \"kind\": \"import\"",
-               "replace": "        if False:\n            save_setting(\"backup_cut_short\", {\n                \"kind\": \"import\""}],
+               "find": "        if state is not None:\n            word = {\"kind\": \"import\"",
+               "replace": "        if False:\n            word = {\"kind\": \"import\""}],
     "must_fail": ["...and it leaves word for the next start (unpacking)"],
     "suites": ["qa3"],
     "expect": "killed"
@@ -6609,8 +6609,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            self._export_state = None\n            self._take_back_cut_short(\"export\")\n            left = state.get(\"left_out\") or []\n",
-        "replace": "            self._export_state = None\n            left = state.get(\"left_out\") or []\n"
+        "find": "                return\n            self._take_back_cut_short(\"export\")\n            if state.get(\"session_only\") is not None:\n",
+        "replace": "                return\n            if state.get(\"session_only\") is not None:\n"
       }
     ],
     "must_fail": [
@@ -17749,8 +17749,8 @@
     "id": "SN12",
     "about": "A cleanup whose write does not land leaves its copy of the notes behind, one more at every launch",
     "edits": [{"file": "noteorganizer/core/storage.py",
-               "find": "        elif backup_path is not None:\n",
-               "replace": "        elif False:\n"}],
+               "find": "        if backup_path is not None and (unchanged or not written):\n",
+               "replace": "        if backup_path is not None and unchanged:\n"}],
     "must_fail": ["...and leaves no copy of the notes behind, the file being as it was"],
     "suites": ["test_data_safety"],
     "expect": "killed"
@@ -17803,6 +17803,66 @@
                "replace": "    while False:\n"}],
     "must_fail": ["two copies of the notes in the same second are two files"],
     "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN18",
+    "about": "An export failing after the session's question keeps its word as cut short while its message is up",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                if cut and str(cut.get(\"kind\") or \"\").startswith(\"export\"):\n                    save_setting(\"backup_cut_short\", dict(\n",
+               "replace": "                if False:\n                    save_setting(\"backup_cut_short\", dict(\n"}],
+    "must_fail": ["an export that fails after the session's question is a failure in the word while its message is up"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN19",
+    "about": "The session's end drops a failed export, its bar frozen if the session goes on",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            # stays, to say it and take the word back if the session goes on.\n",
+               "replace": "            # stays, to say it and take the word back if the session goes on.\n            self._export_state = None\n"}],
+    "must_fail": ["a session that goes on after a failed export still says it, hides the bar and leaves no word for the next start"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN20",
+    "about": "An export finished just before the session's question is recorded as nothing",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        elif export is not None and not export.get(\"stop\"):\n",
+               "replace": "        elif False:\n"}],
+    "must_fail": ["an export finished just before the session's question is recorded as the close records it"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN21",
+    "about": "The poll takes back only a word of kind export, and a failure recorded stays for good",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if cut and str(cut.get(\"kind\") or \"\").split(\"_\")[0] == kind:\n",
+               "replace": "        if cut and cut.get(\"kind\") == kind:\n"}],
+    "must_fail": ["a session that goes on after a failed export still says it, hides the bar and leaves no word for the next start"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN22",
+    "about": "A cleanup rerun with nothing to change keeps a full copy at every start",
+    "edits": [{"file": "noteorganizer/core/storage.py",
+               "find": "        if backup_path is not None and (unchanged or not written):\n",
+               "replace": "        if backup_path is not None and not written:\n"}],
+    "must_fail": ["a cleanup run again with nothing to change leaves no copy behind"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN23",
+    "about": "An import still running past the close's wait is recorded without what it copied and unpacked",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                word.update(copied=list(state.get(\"copied\") or []),\n                            temp_dir=state.get(\"temp_dir\") or \"\")\n",
+               "replace": "                pass\n"}],
+    "must_fail": ["a close while an import still runs past its wait names what it copied and unpacked"],
+    "suites": ["qa3"],
     "expect": "killed"
   }
 ]
