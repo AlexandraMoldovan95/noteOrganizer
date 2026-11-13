@@ -2609,15 +2609,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         were left by every Cancel, error or skip. Nothing a note names, or
         the import did not copy itself, is touched.
         """
-        in_use = attachment_names_in(self.notes + self.trash)
+        # As Windows compares names: "NOTE.BIN" or "note.bin." is a note's
+        # "note.bin" there, which a word another program wrote could name.
+        in_use = {os.path.normcase(n) for n in attachment_names_in(self.notes + self.trash)}
         for named in state.get("copied") or []:
             # A bare name only; ":" would name a file's stream (N::$DATA).
-            if not isinstance(named, str) or os.path.basename(named) != named or ":" in named:
+            if (not isinstance(named, str) or os.path.basename(named) != named or ":" in named
+                    or named.rstrip(". ") != named):
                 continue
             # A ".part" still flushing when the word was written was renamed
             # to its own name after: the import copies only names not there.
             for name in [named] + ([named[:-5]] if named.endswith(".part") else []):
-                if not name or name in in_use:
+                if not name or os.path.normcase(name) in in_use:
                     continue
                 try:
                     os.remove(os.path.join(ATTACHMENTS_DIR, name))

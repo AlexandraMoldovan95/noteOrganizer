@@ -3569,7 +3569,32 @@ finally:
 check('a file named as ".part" in an import\'s word is taken out by its own name, one a note uses kept',
       not os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _fx_free))
       and os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _fx_used)))
-os.remove(os.path.join(NO.ATTACHMENTS_DIR, _fx_used))
+# A word another program wrote can name a note's file through an alias:
+# a trailing dot or space, which Windows drops, or another case, which it
+# ignores (on Linux that is another file). None is even tried.
+_fx_tried, _fx_remove_was = [], os.remove
+_fx_aliases = [_fx_used + '.', _fx_used + ' ', _fx_used + '. .'] + (
+    [_fx_used.upper()] if os.name == 'nt' else [])
+
+
+def _fx_remove(path, *a, **k):
+    _fx_tried.append(os.path.basename(path))
+    return _fx_remove_was(path, *a, **k)
+
+
+app.notes = _fx_notes_was + [NO.normalize_note({'title': 'Uses it', 'attachments': [
+    {'name': 'kept.bin', 'stored_as': _fx_used}]})]
+os.remove = _fx_remove
+try:
+    app._drop_unclaimed_import_files({'copied': list(_fx_aliases)})
+finally:
+    os.remove = _fx_remove_was
+    app.notes = _fx_notes_was
+check(f"...and a name in the word that is an alias of a note's file is never taken out (tried {_fx_tried})",
+      _fx_tried == [] and os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _fx_used)))
+# Gone only when a broken guard took it: a red here stays a red, not a crash.
+if os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _fx_used)):
+    os.remove(os.path.join(NO.ATTACHMENTS_DIR, _fx_used))
 fd.asksaveasfilename = lambda **k: _fx_zip
 # An error without words (a MemoryError's) read as none: "Export complete",
 # "Last exported" stamped, and no file written.
