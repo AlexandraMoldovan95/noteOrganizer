@@ -237,6 +237,17 @@ except ValueError:
 check(f'a code whose prefix the wrapping broke is read as a whole one is, a stray letter '
       f'refused there too ({_cb_found}, {_cb_stray})',
       all(_cb_found) and len(_cb_found) == 4 and _cb_stray == 'refused')
+# ...and words that say "NOTE 1:" are no code, said so as before: not called
+# a damaged code to send again.
+_cb_words = []
+for _cb_text in ('Hi NOTE 1: buy milk', 'Meeting notes\nNOTE 1: call Ana about the plan'):
+    try:
+        NO.decode_share_code(_cb_text)
+        _cb_words.append('read')
+    except ValueError as _cb_e:
+        _cb_words.append(str(_cb_e)[:38])
+check(f'...and words saying "NOTE 1:" are said to be no share code ({_cb_words})',
+      _cb_words == ["This isn't a Note Organizer share code"] * 2)
 check('and an old code without paragraphs still decodes',
       'paragraphs' not in NO.decode_share_code(NO.encode_share_code([
           {'title': 'v', 'body': 'x', 'formatting': []}]))[0])

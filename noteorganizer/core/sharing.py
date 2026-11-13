@@ -126,13 +126,29 @@ def code_in(text):
     return SHARE_CODE_PREFIX + body
 
 
+_NOT_A_CODE = ("This isn't a Note Organizer share code. A valid code starts "
+               "with “" + SHARE_CODE_PREFIX + "”.")
+
+
 def decode_share_code(code):
     """Parse a share code back into a list of note dicts. Raises ValueError with
     a human-readable message if the code is malformed, oversized, or from a
     newer version."""
     if not isinstance(code, str):
         raise ValueError("That doesn't look like a share code.")
-    code = code_in(code)
+    try:
+        return _decode_found(code_in(code))
+    except ValueError:
+        # A prefix the wrapping hid that leads to no readable code is words
+        # saying "NOTE 1:", not a code, and is answered as such (the phone
+        # the same; its shared text becomes a note then).
+        if SHARE_CODE_PREFIX not in code and SHARE_CODE_PREFIX in _CODE_SKIPPED.sub("", code):
+            raise ValueError(_NOT_A_CODE) from None
+        raise
+
+
+def _decode_found(code):
+    """decode_share_code, once code_in has found the code in the text."""
     if not code:
         raise ValueError("No code was pasted.")
     if len(code) > MAX_SHARE_CODE_CHARS:
@@ -142,10 +158,7 @@ def decode_share_code(code):
             "Import on the other computer."
         )
     if not code.startswith(SHARE_CODE_PREFIX):
-        raise ValueError(
-            "This isn't a Note Organizer share code. A valid code starts "
-            f"with \u201c{SHARE_CODE_PREFIX}\u201d."
-        )
+        raise ValueError(_NOT_A_CODE)
     body = code[len(SHARE_CODE_PREFIX):]
     try:
         compressed = base64.urlsafe_b64decode(body)
