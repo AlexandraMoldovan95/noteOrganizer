@@ -177,19 +177,31 @@ try:
     app.username_var.set('Refused')
     name_entry.event_generate('<Return>')
     app.update()
-    _ns_said, _ns_stack = [], [app]
+    _ns_said, _ns_stack, _ns_preview = [], [app], []
     while _ns_stack:
         _ns_w = _ns_stack.pop()
         if isinstance(_ns_w, tk.Label) and 'aved' in str(_ns_w.cget('text')):
             _ns_said.append(_ns_w.cget('text'))
+        if isinstance(_ns_w, tk.Label) and str(_ns_w.cget('text')).startswith('Hi '):
+            _ns_preview.append(_ns_w.cget('text'))
         _ns_stack.extend(_ns_w.winfo_children())
     _ns_greeting = app.greeting_lbl.cget('text')
+    # Sharp text the disk refused is not said saved either.
+    _st_toasts, _st_toast_was = [], app._show_toast
+    app._show_toast = lambda text, *a, **k: _st_toasts.append(text)
+    try:
+        from noteorganizer.core.themes import SHARP_TEXT_SETTING as _st_key
+        app._set_sharp_text('Off' if NO.get_setting(_st_key, True, expect=bool) else 'On')
+    finally:
+        app._show_toast = _st_toast_was
 finally:
     _ns_store.save_settings = _ns_save_was
-check(f"a name the disk refused is said not saved, the sidebar keeping the old one "
-      f"({_ns_said}, {_ns_greeting!r})",
+check(f"a name the disk refused is said not saved, the sidebar and the preview keeping the old one "
+      f"({_ns_said}, {_ns_greeting!r}, {_ns_preview})",
       any(s.startswith('Not saved') for s in _ns_said) and 'Saved automatically' not in _ns_said
-      and 'Refused' not in _ns_greeting)
+      and 'Refused' not in _ns_greeting and not any('Refused' in p for p in _ns_preview))
+check(f"...and Sharp text the disk refused is said not saved ({_st_toasts})",
+      bool(_st_toasts) and _st_toasts[-1].startswith('Not saved'))
 app.username_var.set(_ns_name_was)
 name_entry.event_generate('<Return>')
 app.update()

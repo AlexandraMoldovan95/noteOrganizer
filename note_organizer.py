@@ -790,8 +790,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # right font rather than being restyled a moment after it appears.
         self._load_editor_font()
         # Track last-used dark/light for the quick toggle button, kept across starts.
-        self._last_dark_theme, self._last_light_theme = last_of_each(
-            self.theme_name, get_setting("last_dark_theme"), get_setting("last_light_theme"))
+        self._load_last_themes()
 
         # Load the user's categories into the live map BEFORE notes load, so
         # normalize_note validates each note's category against the real set.
@@ -1674,15 +1673,28 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     # ---------- Settings (theme) persistence ----------
     def load_theme_setting(self):
         """The saved theme, or the default if it names one that no longer exists."""
-        theme = get_setting("theme")
+        # As text: a list or an object there raised in `in` and stopped every start.
+        theme = get_setting("theme", expect=str)
         return theme if theme in THEMES else "dark"
+
+    def _load_last_themes(self):
+        """Where the quick light/dark switch goes back to, read at a start
+        from what save_theme_setting kept (last_of_each)."""
+        self._last_dark_theme, self._last_light_theme = last_of_each(
+            self.theme_name, get_setting("last_dark_theme"), get_setting("last_light_theme"))
 
     def save_theme_setting(self):
         # The theme and the last of each kind in one write, for the quick switch
         # after a restart (the phone keeps its own, under phone_theme_*).
         settings = load_settings()
-        settings.update(theme=self.theme_name, last_dark_theme=self._last_dark_theme,
-                        last_light_theme=self._last_light_theme)
+        settings["theme"] = self.theme_name
+        for key, names, last in (("last_dark_theme", DARK_THEMES, self._last_dark_theme),
+                                 ("last_light_theme", LIGHT_THEMES, self._last_light_theme)):
+            # A name a newer version wrote, which this one passes over, stays
+            # unless it is this kind being worn now.
+            kept = settings.get(key)
+            if self.theme_name in names or not isinstance(kept, str) or kept in names:
+                settings[key] = last
         save_settings(settings)
 
     def load_username(self):
@@ -20530,7 +20542,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     _REPEAT_OFF_KEPT = (" — the repeat is off; ↩ Restore previous brings it "
                         "back with every day's own text")
     _REPEAT_OFF_UPDATE_KEPT = (" — the repeat is off; ↩ Restore previous brings "
-                               "back the version it kept before, not the series")
+                               "back the version it kept before")
     _REPEAT_OFF_NO_COPY = " — the repeat is off; every day's own text stays in the note"
 
     def _repeat_off_line(self, note):

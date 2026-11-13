@@ -2213,7 +2213,7 @@ check(f"a held turn-off after an import's Update keeps the update's copy whole "
       and not app.find_note(1)['recurrence'].get('freq'))
 check(f"...and the status line says Restore previous brings back the note from before "
       f"the update, not the series ({_uh_line[-70:]!r})",
-      'the version it kept before, not the series' in _uh_line
+      'the version it kept before' in _uh_line
       and "every day's own text" not in _uh_line)
 # Turned off, on again from another start, then the start put back: the
 # second save spent the copy's deleted day, which came back on the calendar

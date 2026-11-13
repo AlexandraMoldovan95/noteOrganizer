@@ -494,6 +494,19 @@ check("...and read back at a start, the theme worn first, a name no theme has pa
       _lt_last('light_sky', *_lt_kept) == ('dark_ocean', 'light_sky')
       and _lt_last('dark', 'no_such', 'light_mint') == ('dark', 'light_mint')
       and _lt_last('light_warm', ['x'], None) == ('dark', 'light_warm'))
+# ...the start's own reading, from the file (no window opened twice):
+app._last_dark_theme = app._last_light_theme = None
+app._load_last_themes()
+check(f"...and a start reads them from settings.json ({app._last_dark_theme}, {app._last_light_theme})",
+      (app._last_dark_theme, app._last_light_theme) == ('dark_ocean', 'light_sky'))
+# A dark theme a newer version named, which this one passes over, is kept
+# while a light one is chosen: the switch wrote "dark" over it.
+NO.save_setting('last_dark_theme', 'dark_rose')
+app._load_last_themes()
+app.set_theme('light_mint'); app.update()
+check(f"...and a newer version's dark theme stays while a light one is chosen "
+      f"({NO.load_settings().get('last_dark_theme')!r})",
+      NO.load_settings().get('last_dark_theme') == 'dark_rose')
 app.set_theme(_lt_was); app.update()
 
 # ---- PERFORMANCE: note list with larger count ----

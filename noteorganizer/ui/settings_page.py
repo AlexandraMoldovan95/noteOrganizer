@@ -3417,8 +3417,17 @@ class SettingsPageMixin:
                 else self.colors["subtext"])
 
         refresh_preview()
+        # The pending clear of "Saved automatically": a refused save inside its
+        # 2.2 s had its "Not saved" wiped, which was to stay.
+        clear_job = [None]
 
         def save_name():
+            if clear_job[0] is not None:
+                try:
+                    self.after_cancel(clear_job[0])
+                except (tk.TclError, ValueError):
+                    pass
+                clear_job[0] = None
             if getattr(self, "_username_save_job", None) is not None:
                 try:
                     self.after_cancel(self._username_save_job)
@@ -3444,11 +3453,15 @@ class SettingsPageMixin:
             else:
                 said, ink = ("Not saved: the sidebar keeps the name it had",
                              self.colors["danger_text"])
+                # ...and the preview shows the name kept, not the one refused.
+                kept = self.load_username()
+                preview_value.configure(text=f"Hi {kept}," if kept else "no greeting",
+                                        fg=self.colors["text"] if kept else self.colors["subtext"])
             try:
                 saved_note.configure(text=said, fg=ink)
                 if written:
-                    self.after(2200, lambda: saved_note.winfo_exists()
-                               and saved_note.configure(text=""))
+                    clear_job[0] = self.after(2200, lambda: saved_note.winfo_exists()
+                                              and saved_note.configure(text=""))
             except tk.TclError:
                 pass
 
@@ -3572,9 +3585,12 @@ class SettingsPageMixin:
         on = value == "On"
         if on == get_setting(SHARP_TEXT_SETTING, True, expect=bool):
             return
-        save_setting(SHARP_TEXT_SETTING, on)
-        self._show_toast("Saved — you'll see it the next time you open "
-                         "Note Organizer")
+        # Said saved only when it was: refused, the red banner says why, once a run.
+        if save_setting(SHARP_TEXT_SETTING, on):
+            self._show_toast("Saved — you'll see it the next time you open "
+                             "Note Organizer")
+        else:
+            self._show_toast("Not saved: Sharp text stays as it was", kind="info")
 
     def _build_settings_backup_panel(self, parent):
         """Export everything to a file, or import from one."""

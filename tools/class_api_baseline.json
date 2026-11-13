@@ -524,6 +524,7 @@
   "_list_view_changed": "(self, first, last)",
   "_load_day_decorations": "(self)",
   "_load_editor_font": "(self)",
+  "_load_last_themes": "(self)",
   "_log_swallowed": "(self, where)",
   "_make_align_button": "(self, parent, align)",
   "_mark_day_emoji": "(self, date_str, event=None)",
