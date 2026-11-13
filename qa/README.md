@@ -41,7 +41,7 @@ says how to move an action to a newer release.
 | Stories | Three scripts that press the buttons a person presses, restart the app and photograph it | On demand: by hand, or from the Actions tab | A screen that changed shape; a route nobody asked a check about |
 | Mutants | `tools/mutate.py` and its catalogue: the ones worth re-running, and 2 that test the runner | On demand, the same way. Most mutants were one-off runs while a fix was made, named in its commit | A check that stays green with its fix taken away |
 | Coverage | `tools/run_coverage.py` | Every pull request, with a floor of 80% | Code no test reaches |
-| The test plan | `NoteOrganizer_TestPlan.xlsx`, 959 cases on 13 November 2026 ([an excerpt](../docs/TEST_PLAN_EXCERPT.md)) | By a person, on the built `.exe` | What needs a person: how a screen reads, the built `.exe`, real hardware — each row says whether a script already walks it |
+| The test plan | `NoteOrganizer_TestPlan.xlsx`, 960 cases on 13 November 2026 ([an excerpt](../docs/TEST_PLAN_EXCERPT.md)) | By a person, on the built `.exe` | What needs a person: how a screen reads, the built `.exe`, real hardware — each row says whether a script already walks it |
 
 A fix lands with a check that fails when the fix is taken away, and a
 flaky check is treated as a bug in the check, never re-run until green
@@ -584,7 +584,9 @@ A new surface joins this list the moment it ships.
   in CI, the export panel's with them. A check that needs work still in
   flight holds off what would finish it (here the poll); a check about
   what the app showed records the call (the panel's `place`), not the
-  screen after an `update()`. A check about work still running when the
+  screen after an `update()`. Wave 6's export checks forgot it and failed
+  one run in three, as a crash or a red fixture: they start their exports
+  through `_fx_start_export`, which holds that first poll. A check about work still running when the
   close stops waiting holds the worker itself: qa3 wraps its file in a
   reader that waits for the stop before reading (`_Held`), a huge file
   without one. A real 600 MB file would make the check a race against the

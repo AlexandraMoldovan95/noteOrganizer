@@ -149,11 +149,14 @@ How a round worked:
 
 - **Agents attacked the app** in a role - an ordinary person's week, a careless hand, hostile
   and huge input - each reading the code and running probes in a scratch copy.
-- **Every finding of medium severity or worse was re-graded by a sceptic** before it counted.
-  The severity rule is mine (1 November): only steps an ordinary person takes keep a round
-  open, and a loss of notes is always serious.
-- **Every fix came with a check, and a mutant**: the fix broken on purpose, to watch the check
-  fail ([the desktop's catalogue](../tools/mutants.json)).
+- **Every finding of medium severity or worse was re-graded** before it counted: by a sceptic
+  agent in waves 1 to 4, and by the agent checking it in the code in waves 5 and 6. The
+  severity rule is mine (1 November): only steps an ordinary person takes keep a round open,
+  and a loss of notes is always serious.
+- **Every fix came with a check, and a mutant**, where a check can reach it: the fix broken on
+  purpose, to watch the check fail ([the desktop's catalogue](../tools/mutants.json)). The few
+  no check can reach (a write with no effect today, a screen's timing) are named in the issues
+  log, with the walk or the probe that stood in.
 - **The next round attacked the last round's fixes by name**, and the code beside them. A fix is
   a new road, and more than once it was the next round's finding.
 - **A wave closed after two rounds in a row with nothing of medium severity or worse.** Its low

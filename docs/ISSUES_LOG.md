@@ -4164,7 +4164,8 @@ tick written by hand as "false" or "no" counted.
 
 **Fix:** the field keeps whether its hint shows (`_hint_shown`, `show_hint`, marked before its
 words go in), and a ninth rule in `tools/check_one_definition.py` refuses a comparison with a
-hint's words anywhere in the app. The close records `export_failed` with its error. The cleanup
+hint's words in the shapes it names, proved on them at every run (a hint held under another
+name is past any pattern). The close records `export_failed` with its error. The cleanup
 works on copies and is kept only when the write lands. The duplicate leaves `_prev` with the
 original (the owner's choice; the phone already did). The Trash skips a day it already holds,
 content for content. `normalize_note`, `normalize_template` and the signatures read `is True`.
@@ -4216,13 +4217,30 @@ the export's words (only "export" was), and a failure's word stays, as a failure
 message has been read. The cleanup, rerun at every start while `settings.json` refused its mark,
 still kept a copy of a notebook it no longer changed; a cleanup that changes nothing keeps none.
 An import still running past the close's wait is named with what it copied and unpacked, so the
-next start takes them out. `check_guest` and the ninth rule were widened again (a helper, flags
-before the verb, `is`, membership either way round), lower case so that "keep Docker up to date"
-is not a command; a hint held under another name is past any pattern, and the sentence above now
-says so. `build_msix` also watches the icons and the licences the spec ships. Left: an export that
-finishes between the session's word and the process ending is said as cut short at the next start,
-erring towards a backup thought missing; and a start whose three reads are refused just before
-the holder lets go calls a held file damaged, its notes kept in the `_corrupt_` copy.
+next start takes them out. `check_guest` and the ninth rule were widened again, lower case so that
+"keep Docker up to date" is not a command. `build_msix` also watches the icons and the licences
+the spec ships. Left: a start whose three reads are refused just before the holder lets go calls
+a held file damaged, its notes kept in the `_corrupt_` copy.
+
+**The third round** found two of the second round's fixes wrong, and one old road. "Changes
+nothing" was judged against the notes as read, not against the file: a file holding a field the
+read drops, or a body written as a list, was rewritten without it and its one copy removed. It is
+judged against what the file holds now. The rewritten `check_guest` pattern had dropped
+compose's middle word (`docker compose run`, `["docker", "compose", "up"]`), and the ninth rule
+missed `elif`, `assert`, `lambda` and `self.SEARCH_PLACEHOLDER` while taking a docstring for a
+comparison: each now proves itself on a list of the shapes seen so far, at every run, so a
+rewrite that drops one fails the gate. A partial export's word was taken back before its message,
+the flaw the second round fixed for failures; it is kept the same way. And from 0.94.382: closing
+the app during a big export holds the window up to half a minute (Windows shows it Not
+Responding), and the close wrote its word only after the wait, so a close ended there said
+nothing and left the unfinished `.tmp` for good. The word is written before the wait, with the
+file's state at that moment, so the next start also tells an export that landed after all
+(said finished, where "export again" would have offered to replace the only copy of a session's
+notes). A file an import was copying when the process ended is named while it is written, and a
+session's word says Windows "began to" sign out, true too of one the person cancelled. Left: one
+`backup_cut_short` word at a time, so in a run that could not read the notes, a kept import's word
+can be written over by an export's, its copied files orphaned; and the cleanup, rerun while
+`settings.json` refuses its mark, keeps a copy whenever a delete since has renumbered the ids.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.
