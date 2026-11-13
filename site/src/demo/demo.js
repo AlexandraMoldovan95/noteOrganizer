@@ -277,7 +277,7 @@
     } else if (rec.freq === "monthly" && rec.month_days.length) {
       base += " on day " + rec.month_days.join(", ");
     }
-    if (rec.count) base += ", " + rec.count + " times";
+    if (rec.count) base += ", " + rec.count + (rec.count === 1 ? " time" : " times");
     else if (rec.end) base += ", until " + showDate(rec.end);
     return base;
   }
