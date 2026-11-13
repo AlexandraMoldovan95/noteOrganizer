@@ -979,19 +979,26 @@ _D_NAME = r"""(?>\b\w*docker\w*(?:\.exe)?|\bDOCKER\w*)"""
 # not one. A new line only after a comma, a bracket or a continuation: wrapped prose
 # ("the docker\nrun") is not a command. Atomic, as are a flag and its value:
 # a line of many hyphenated flags split every way took the gate minutes.
-_D_CONT = r"""(?:(?:[ \t]*\\|[ \t]+[`^])[ \t]*\r?\n)?"""
+# The next line indented, as a script's is: Markdown's backslash line break
+# is followed by text at the margin.
+_D_CONT = r"""(?:(?:[ \t]*\\|[ \t]+[`^])[ \t]*\r?\n[ \t]+)?"""
 _D_GAP = r"""(?>[}"'][ \t]*(?:[,(]\s*)?["']?|""" + _D_CONT + r"""[ \t]*(?:[,(]\s*[{"']|["']?))"""
 # Before a flag's value, no opening quote taken: the value keeps its own.
 _D_PRE = r"""(?>[}"'][ \t]*(?:[,(]\s*)?|""" + _D_CONT + r"""[ \t]*(?:[,(]\s*)?)"""
 _D_FLAG = (r"""(?:(?>--?[a-zA-Z][\w-]*)(?:""" + _D_PRE
-           + r"""(?>=?"(?!-)[^"\n]*"|=?'(?!-)[^'\n]*'|[^\s"',()\[\]{}-][^\s"',()\[\]{}]*))?""" + _D_GAP
+           + r"""(?>=?"(?!-)[^"\n]*"|=?'(?!-)[^'\n]*'"""
+           + r"""|[^\s"',()\[\]{}-](?:[^\s"',()\[\]{}]*[^\s"',()\[\]{}\\])?))?""" + _D_GAP
            + r"""|\{[^{}\n]*\}[ \t]*)""")
 _D_VERB = r"""(?:run|start|create|restart|unpause)"""
 # In a list built in pieces, what may come before the verb: a flag (with
 # its value), container or compose, or a name -- not a word like "volume".
-_D_NAMED = r"""[A-Za-z_][\w.]*(?:\([^()\n]*\))?"""
+_D_NAMED = r"""(?>[A-Za-z_][\w.]*)(?:\([^()\n]*\))?"""
 _D_ELEM = (r"""(?:f?["']-[^"'\n]*["'](?:\s*,\s*(?:f?["'][^-"'\n][^"'\n]*["']|""" + _D_NAMED + r"""))?"""
            r"""|["'](?:container|compose)["']|""" + _D_NAMED + ")")
+# A list joined on before the verb's: flags, names, container or compose,
+# each after a comma -- a value there would take "volume" for a flag's.
+_D_LELEM = r"""(?:f?["']-[^"'\n]*["']|["'](?:container|compose)["']|""" + _D_NAMED + ")"
+_D_LIST = r"""\[\s*(?:""" + _D_LELEM + r"""(?:\s*,\s*""" + _D_LELEM + r"""){0,8})?\s*,?\s*\]"""
 # At most 24 flags: a line of thousands, each a "docker", began a chain at
 # every one and cost the square of its length.
 _D_FLAGS = "(?:" + _D_FLAG + "){0,24}"
@@ -1001,8 +1008,7 @@ DOCKER_STARTS = re.compile(
     + "|" + _D_NAME + r"(?:[-_]|" + _D_GAP + ")" + _D_FLAGS + "compose" + _D_GAP
     + _D_FLAGS + "(?:" + _D_VERB + r"|up)\b"
     # A list built in pieces (DOCKER + ["run"], [docker, *flags, "run"]).
-    + "|" + _D_NAME + r"""["']?\]?(?:\s*\+\s*(?:""" + _D_NAMED + r"""|\[\s*(?:""" + _D_ELEM
-    + r"""\s*,?\s*){0,8}\])){0,6}"""
+    + "|" + _D_NAME + r"""["']?\]?(?:\s*\+\s*(?:""" + _D_NAMED + "|" + _D_LIST + r""")){0,6}"""
     + r"""\s*(?:\+\s*[\[(]|,\s*\*[\w.]+(?:\(\))?\s*,)\s*(?:""" + _D_ELEM
     + r"""\s*,\s*){0,8}["'](?:""" + _D_VERB + r"|up)[\"']"
     + "|" + _D_NAME + r"""["']?,\s*f["'][^"'\n]*["'],\s*["']""" + _D_VERB + r"[\"']")
@@ -1029,7 +1035,7 @@ DOCKER_SHAPES = [
     '[DOCKER, *extra(), "run"]', 'DOCKER + ["-H", f"tcp://{host}:2375", "run"]',
     '[docker, *flags, "--context", f"{c}", "run"]', 'DOCKER + ["--context", ctx] + ["run"]',
     'DOCKER + ["--tls"] + ["run"]', 'DOCKER + ["--config", os.path.join(h, "c"), "run"]',
-    'DOCKER + A + B + C + D + E + ["run"]', "docker\\\n    run img",
+    'DOCKER + A + B + C + D + E + ["run"]', "docker\\\n    run img", "docker --context ci\\\n    run img",
 ]
 DOCKER_PROSE = [
     "keep Docker up to date", "Open Docker, start the app", "Docker\nStart it", "docker ps", "docker build .",
@@ -1039,6 +1045,9 @@ DOCKER_PROSE = [
     'DOCKER + ["volume", "create", name]', 'DOCKER + ["network", "create", "ci"]',
     '[docker, *flags, "context", "create", "x"]', "the docker\nrun is slow", "a `docker`\nrun of its own",
     "the docker {see below}\nrun", "docker {flags}\n\nrun img", 'DOCKER + ["volume"] + ["create"]',
+    'DOCKER + ["--tls", "volume"] + ["create", name]', "use docker\\\nrun nothing by hand",
+    "C:\\Program Files\\docker\\\nstart.ps1", 'DOCKER + [' + 'a' * 36 + ']',
+    "out = docker_cmd + [ps_format_string] + [filter_by_label]",
     # Quoted flags each read as the one before's value too: twice the work a flag.
     '["docker", ' + '"--tls", ' * 40 + '"ps"]',
     # Many hyphenated flags and no verb: each once took the gate seconds to minutes.
