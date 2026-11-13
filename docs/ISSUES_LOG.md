@@ -4354,19 +4354,43 @@ that rewrite the series bring it too (282, 285), an Undo pressed after another b
 (931), a palette kept open by a click that closes it (327), a paste refused on the title the case
 started from (916), a Reset the menu does not offer that day (451), and a start message still
 called a low after it was fixed (949). Each is true now, with the lows beside them, and the
-sixty-one rows naming mutants the catalogue does not keep, or keeps for others, say so. In the
-code, all low: a damaged deflate stream, an encrypted entry or an unknown compression said the
-import had failed "unexpectedly"; they are a file that could not be read now (SN40). The full
-disk's words are guarded (SN39), and said for Windows' two other codes for it too (a full disk
-under a handle, a quota), which no check produces. A word another program
-wrote could still name a note's file through an alias (a trailing dot or space, or another case);
-such names are skipped, and names are compared as Windows compares them (SN41, SN42). `check_guest` sees cmd's
+sixty-one rows of those two areas naming mutants the catalogue does not keep, or keeps for
+others, say so. In the code, all low: a damaged deflate stream, an encrypted entry or an unknown
+compression said the import had failed "unexpectedly"; they are a file that could not be read
+now (SN40). The full disk's words are guarded (SN39); Windows' two other codes for a full disk
+(39, 1295) were mapped too, but a failed write never carries them, so they reach only a folder
+the unpacking cannot make (said so by the tenth round). A word another program wrote could still
+name a note's file through an alias (a trailing dot or space, or another case); those two were
+closed, and the tenth round found two more (SN41, SN42 since aimed again). `check_guest` sees cmd's
 caret and PowerShell's backtick going on at the margin again, and a list of spaces no longer
 costs the cube of its length. Left: bash's backslash with its next line at the margin, and a
 Markdown list item's backslash break, read the other way; a close whose read hangs on a share
 that is gone leaves the process, and its lock, until the read times out (a relaunch says it is
 open, with no window); a `settings.json` on a full disk raises a banner at every write, which can
 take a delete's Undo; and no gate compiles the mutants, so one can break unseen, as DR121 did.
+
+**The tenth round** found nothing above low in the code, and nine old cases in the Tables,
+Calendar, Checklist and Notes list areas that a person could not walk or would fail an app that
+is right: a day's save question that day mode took away (375, and 552 following a row merged
+into another), a "Jump to" button that is the month's title, which jumps on Go (51), four markers
+where a day keeps three (417), a header row the toolbar's table does not have (674), captions
+centred under tables left where they were (232), a checkbox cell's editor said to show the box it
+opens without (192, 579), and markers said white on every painted day, where the paint decides
+(413). 552's road, the Undo offered again after going back on the question it asks first, had no
+check since day mode removed the question it was checked on; qa5 checks it on the date's question
+now (DR227). Mutant ids the catalogue does not hold are no longer looked for one area at a time: a
+sweep of the whole plan found eleven more rows, and nine rows name ids kept for other mutants;
+each says so. In the code: the alias guard missed a name cut from ".part" that ends in a dot or a
+space, and Windows' 8.3 short names (`202611~1.BIN`), both still able to take a note's file on a
+word another program wrote. Three guards had each missed one alias; the cleanup now asks the disk
+for the file's own name (`os.path.realpath`) and keeps it if a note uses that name, which closes
+every alias Windows resolves (SN41, SN42, Windows only, as on Linux each alias is another file).
+`check_guest`'s joined list was still quadratic over a run of spaces with no "]"; its spaces are
+possessive now. Left: a read that fails mid-unpack is said as an unreadable file with the system's
+errno text, which misnames a pulled stick or a gone share (older than the wave); an import whose
+worker failed while its poll waited behind a dialog, then cut short by a sign-out, never says its
+own failure (export keeps the two apart); and a disk filling during the copy phase skips files in
+silence, said only as "File missing" when one is opened.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.
