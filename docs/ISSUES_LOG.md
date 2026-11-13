@@ -4319,6 +4319,27 @@ line. Left: a start whose `trash.json` is held may take out a file only the back
 in the moment between a merge and its word taken back; and the import's free-space refusal opens
 with "That file couldn't be read as a backup" (case 657 asks the owner's eye on it).
 
+**The eighth round** took that last one up as a medium, rightly: a nearly full disk is an
+ordinary road, and the backup was sound. A refusal for no room is its own kind now
+(`BackupRefused`), said as that alone, and a disk that fills up during the unpacking is said as
+that too (SN37, SN38). The plan's reader went on to the Notes, Settings and Attachments cases and
+found nine mediums, all older than the wave: a name field reached through a "Your name" section
+and a Save button neither of which exists (84); a delete question said to quote the days, which
+only the selection's question does (312, and 671's step); Undo said white on a green banner (283);
+the shortcuts page's first words and a group's name from before 299765b (215, 733); a Restore
+pressed on a row an Undo had already taken away (426); a sort by "Recently created" that never
+existed (1017); two bars where there are three (353); and a banner quoted without the note's
+title (984). Each is true now, with mutants named wrong, renumbered or never kept said so. In
+the code, all low: `check_guest`'s joined lists could split a name every way, and took
+`["--tls", "volume"]` for a flag and its value; their items need commas and take no values now,
+a continuation needs an indented next line (Markdown's backslash line break is not one), and a
+flag's value no longer swallows bash's backslash. DR121 no longer compiled since the seventh
+round; it is aimed again. A word another program wrote with a NUL in a name no longer stops
+every start, and a name with ":" (a file's stream) is never taken out. Left: an import's word is
+taken back only after the merge's redraw and cleanup (said as nothing kept, if the window is
+ended in that stretch); and a start frozen on a share that is gone freezes again at each start
+until one is waited out.
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.
 
