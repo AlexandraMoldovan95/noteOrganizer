@@ -18024,5 +18024,48 @@
     "must_fail": ["a sound backup with no room for it is said as that alone"],
     "suites": ["qa3"],
     "expect": "killed"
+  },
+  {
+    "id": "SN39",
+    "about": "A disk that fills up while a backup unpacks is said as a file that could not be read",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                    full = (getattr(e, \"errno\", None) == errno.ENOSPC\n",
+               "replace": "                    full = (False\n"}],
+    "must_fail": ["a disk that fills up while a backup unpacks is said as that"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN40",
+    "about": "A damaged stream in a backup ends the import as an unexpected failure",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                except (zipfile.BadZipFile, IOError, OSError, ValueError, zlib.error,\n                        RuntimeError, NotImplementedError) as e:\n",
+               "replace": "                except (zipfile.BadZipFile, IOError, OSError, ValueError) as e:\n"}],
+    "must_fail": ["...and a damaged stream as a file that could not be read, not as unexpected"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN41",
+    "about": "A word another program wrote takes out a note's file through a trailing dot or space",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            if (not isinstance(named, str) or os.path.basename(named) != named or \":\" in named\n                    or named.rstrip(\". \") != named):\n",
+               "replace": "            if not isinstance(named, str) or os.path.basename(named) != named or \":\" in named:\n"}],
+    "must_fail": ["...and a name in the word that is an alias of a note's file is never taken out"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN42",
+    "about": "A word another program wrote takes out a note's file through another case (Windows only)",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        in_use = {os.path.normcase(n) for n in attachment_names_in(self.notes + self.trash)}\n",
+               "replace": "        in_use = set(attachment_names_in(self.notes + self.trash))\n"},
+              {"file": "note_organizer.py",
+               "find": "                if not name or os.path.normcase(name) in in_use:\n",
+               "replace": "                if not name or name in in_use:\n"}],
+    "must_fail": ["...and a name in the word that is an alias of a note's file is never taken out"],
+    "suites": ["qa3"],
+    "expect": "killed"
   }
 ]
