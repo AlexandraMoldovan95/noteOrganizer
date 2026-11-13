@@ -18242,5 +18242,35 @@
     "must_fail": ["...a copy whose own 1 the backup wrote over as true is not spent"],
     "suites": ["test_data_safety"],
     "expect": "killed"
+  },
+  {
+    "id": "UF17",
+    "about": "Without the list tag alone, true signs as the list [\"bool\", 1] and an empty object as [\"dict\"]",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "        return (\"list\",) + tuple(_typed(v) for v in value)\n",
+               "replace": "        return tuple(_typed(v) for v in value)\n"}],
+    "must_fail": ["...and true is not the list"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "UF18",
+    "about": "Restore previous asks the spending rule, so a field the backup added goes in no copy and is lost",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "                            for key in prev if key not in PREV_TEXT_FIELDS and key != \"_unknown\")\n                    and _unknown_kept_by_restore(note, prev)\n",
+               "replace": "                            for key in prev if key not in PREV_TEXT_FIELDS)\n"}],
+    "must_fail": ["...Restore previous keeps in its turn", "...and keeps in its turn the field the backup added"],
+    "suites": ["test_data_safety", "qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "UF19",
+    "about": "Restore previous weighs the fields without their kinds, so the true the backup wrote over a 1 is lost",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "    return all(name in theirs and _typed(theirs[name]) == _typed(value)\n",
+               "replace": "    return all(name in theirs and theirs[name] == value\n"}],
+    "must_fail": ["...Restore previous keeps in its turn"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
   }
 ]
