@@ -18194,7 +18194,7 @@
     "id": "UF12",
     "about": "true and 1 in a field this version does not know sign alike, where the phone tells them apart",
     "edits": [{"file": "noteorganizer/core/model.py",
-               "find": "        if isinstance(value, bool):\n            return (\"bool\", value)\n",
+               "find": "    if isinstance(value, bool):\n        return (\"bool\", value)\n",
                "replace": ""}],
     "must_fail": ["...true and 1 in such a field are two notes, as on the phone"],
     "suites": ["test_data_safety"],
@@ -18217,6 +18217,29 @@
                "find": "            note.update(unknown_fields(dict(mine, **theirs)))\n",
                "replace": "            note.update(dict(mine, **theirs))\n"}],
     "must_fail": ["...and the two sets together are held to the bounds at once, chosen by name"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "UF15",
+    "about": "An empty object and an empty list in a field this version does not know sign alike",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "        return (\"dict\",) + tuple(sorted((str(k), _typed(v)) for k, v in value.items()))\n",
+               "replace": "        return tuple(sorted((str(k), _typed(v)) for k, v in value.items()))\n"},
+              {"file": "noteorganizer/core/model.py",
+               "find": "        return (\"list\",) + tuple(_typed(v) for v in value)\n",
+               "replace": "        return tuple(_typed(v) for v in value)\n"}],
+    "must_fail": ["...an empty object and an empty list in such a field are two notes too"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "UF16",
+    "about": "The rescue copy is spent while the note's own 1 is the backup's true, or never while a field the backup added stays",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "        return all(name in mine and _typed(mine[name]) == _typed(value)\n                   for name, value in prev[key].items())\n",
+               "replace": "        return prev[key] == mine\n"}],
+    "must_fail": ["...a copy whose own 1 the backup wrote over as true is not spent"],
     "suites": ["test_data_safety"],
     "expect": "killed"
   }
