@@ -115,4 +115,4 @@ should be fixed. They are not the same thing: BR-2 hurts a lot, but only with a 
 | **Severity** | Major: an expected option is missing. |
 | **Priority** | Medium |
 | **Frequency** | Seen once; reported, then retested after the fix. |
-| **Fixed in** | [0.84.357](../CHANGELOG.md#084357--2026-10-07): the import now asks once: **Skip** (the default) or **Add copies anyway**. |
+| **Fixed in** | [0.84.357](../CHANGELOG.md#084357--2026-10-07): the import now asks once: **Skip it** or **Skip the N** (the default), or **Add a copy anyway** or **Add copies anyway**. |

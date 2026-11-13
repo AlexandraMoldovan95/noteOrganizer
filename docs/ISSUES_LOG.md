@@ -4432,6 +4432,26 @@ the selection bar's Trash, which is flat; it is Empty trash's. Left: own fields 
 bounds live in the rescue copy alone until another Update replaces it (more than 32 such fields);
 and the import calls a note whose only change is such a field "already here, unchanged".
 
+**The thirteenth round** found the twelfth's own fix had opened a loss, graded high by the owner's
+rule. The spending rule, which rightly lets a field the backup added not count, was also the
+question Restore previous asked of what it replaces. But the restore puts back the copy's fields
+alone, so the field the backup added is exactly what the restored version lacks: with an older
+backup's words held in the note's, nothing else seemed lost, no copy was made, and the field was
+gone. The two questions are each other's reverse, and each now has its own: the restore keeps in
+its turn every field the note holds that the copy does not hold the same (UF18, UF19, and qa5
+presses the button). The phone the same. A half of the twelfth's mutant survived: without the list
+tag alone, true signed as the list ["bool", 1] (checked now, UF17). And the phone's round
+confirmed both ways what its ninth had left: a code whose prefix a chat app's wrapping broke went
+to Python's lenient decoder here and to the strict one there, each reading what the other refused;
+both now read from the prefix the wrapping hid as from a whole one (SN43). Its second reader read the
+texts not yet read against the code: the welcome note held; RELEASE_WINDOWS asked for Sandbox
+proofs of the package with the Store's identity, which the three sandbox scripts could not give,
+their certificate and package name the test identity's (they read it from the package's manifest
+now), and said the package's version need not match the app's, where `build_msix.py` packs the
+app's own; the screenshots' README dated retakes that did not happen and missed two that did; and
+the calculator history, said to last while the note is open, empties whenever the note is loaded
+again (Restore previous, another day of a series, an import's Update).
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.
 

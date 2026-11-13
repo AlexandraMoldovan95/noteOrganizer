@@ -464,8 +464,11 @@ thousand in some languages and one in others, so it says Error rather than guess
 or **Enter** while typing in the
 display, to see the result, then **Insert into note** to drop the whole formula (not
 just the answer) into the note body — repeated inserts stack cleanly below each other. A
-collapsible history keeps every calculation made while this note is open, with a Clear button and
-click-to-insert on any past entry; opening another note, a new note or a template starts it empty.
+collapsible history keeps the calculations made since the note was opened, with a Clear button
+and click-to-insert on any past entry. The calculator closes and its history starts empty each
+time a note is opened again: another note, a new note or a template, but also this note reloaded
+— another day of a repeating note, **↩ Restore previous**, resetting or moving a day, or an
+import that updates it.
 
 ![Calculator](screenshots/calculator.png)
 

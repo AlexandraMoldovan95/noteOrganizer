@@ -97,7 +97,7 @@ list and the Trash. A mutant that ignored the confirmation was caught by this ch
 **Test Steps:**
 
 1. Open Settings → Recently deleted.
-2. Click 'Show more'.
+2. Click 'Show N more (M not shown)'.
 
 **Expected Result:** Step 1: the panel opens promptly with a first batch, not a long freeze.
 Step 2: the next batch appears, added to what's already shown.
