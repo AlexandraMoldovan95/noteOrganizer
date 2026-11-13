@@ -40,7 +40,7 @@ def _dup_key(note):
     cleanup merges them -- left out, the dropped copy took them along.
     Attachments stay out (the cleanup gives the kept note the group's
     files, up to the cap); a date does too."""
-    from .model import _checklist_signature, _recurrence_signature, _stable
+    from .model import _checklist_signature, _recurrence_signature, _stable, unknown_fields
     exceptions, overrides, moved = (note.get("exceptions"), note.get("overrides"),
                                     note.get("moved"))
     return (
@@ -56,6 +56,9 @@ def _dup_key(note):
         (tuple(sorted(str(d) for d in exceptions)) if isinstance(exceptions, list) else (),
          _stable(overrides if isinstance(overrides, dict) else {}),
          _stable(moved if isinstance(moved, dict) else {})),
+        # A field this version does not know: the cleanup keeps one copy, and
+        # grouped by the rest it dropped the other's field with it.
+        _stable(unknown_fields(note)),
     )
 
 

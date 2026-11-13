@@ -132,6 +132,79 @@ NOTE_DEFAULTS = {
     "paragraphs": [],       # list lines: {"line": int, "kind": "bullet"|"number"}
 }
 
+# Any other field a note holds is kept as it came, so an older app never drops
+# what a newer one added: bounded, and chosen as the phone chooses (the owner's
+# D2, 2026-11-13; the phone's docs/DATA_FORMAT.md, "Fields a version does not know").
+KNOWN_NOTE_FIELDS = frozenset(NOTE_DEFAULTS) | {"id", "order", "_prev", "_set_aside",
+                                                 "tags", "deleted_at"}
+MAX_UNKNOWN_FIELDS = 32
+MAX_UNKNOWN_UNITS = 65536
+MAX_UNKNOWN_DEPTH = 20
+
+
+def _utf16_units(text):
+    """*text*'s length as Kotlin counts it: UTF-16 code units."""
+    return len(text.encode("utf-16-le", "surrogatepass")) // 2
+
+
+def _json_units(value):
+    """What *value* costs against MAX_UNKNOWN_UNITS, or None when it is not
+    a JSON value, nests past MAX_UNKNOWN_DEPTH, or costs more than the whole
+    allowance. Walked without recursion: a field nested a few hundred deep
+    must not stop a load."""
+    total, stack = 0, [(value, 1)]
+    while stack:
+        item, level = stack.pop()
+        if isinstance(item, str):
+            total += _utf16_units(item)
+        elif item is None or isinstance(item, (bool, int)):
+            total += 1
+        elif isinstance(item, float):
+            if not math.isfinite(item):
+                return None
+            total += 1
+        elif isinstance(item, (dict, list)):
+            if level > MAX_UNKNOWN_DEPTH:
+                return None
+            total += 1
+            if isinstance(item, dict):
+                for key, inner in item.items():
+                    if not isinstance(key, str):
+                        return None
+                    total += _utf16_units(key)
+                    stack.append((inner, level + 1))
+            else:
+                stack.extend((inner, level + 1) for inner in item)
+        else:
+            return None
+        if total > MAX_UNKNOWN_UNITS:
+            return None
+    return total
+
+
+def unknown_fields(note):
+    """The fields of *note* this version does not know, as normalize_note
+    keeps them: copies, at most MAX_UNKNOWN_FIELDS of them and
+    MAX_UNKNOWN_UNITS in all, names and values counted together."""
+    if not isinstance(note, dict):
+        return {}
+    names = sorted((name for name in note if isinstance(name, str)
+                    and name not in KNOWN_NOTE_FIELDS and not name.startswith("_")),
+                   key=lambda name: name.encode("utf-16-be", "surrogatepass"))
+    kept, units = {}, 0
+    for name in names:
+        if len(kept) >= MAX_UNKNOWN_FIELDS:
+            break
+        size = _json_units(note[name])
+        if size is None:
+            continue
+        size += _utf16_units(name)
+        if units + size > MAX_UNKNOWN_UNITS:
+            continue
+        kept[name] = copy.deepcopy(note[name])
+        units += size
+    return kept
+
 
 
 # Broad-ish emoji ranges — enough to catch common emoji people actually type
@@ -712,6 +785,11 @@ def apply_shared_update(note, incoming, fields=UPDATABLE_FROM_SHARED):
     note["_prev"] = prev
     for field in fields:
         note[field] = copy.deepcopy(fresh[field])
+    # ...and a backup's fields this version does not know, beside this note's
+    # own: a share code carries none (SHAREABLE_FIELDS), so a stranger's code
+    # cannot add one. Restore previous puts back the known fields only.
+    if fields is UPDATABLE_FROM_BACKUP:
+        note.update(unknown_fields(fresh))
     # A backup's note sets aside what its own copy kept, as it is read: an
     # Add kept those, an Update dropped them.
     if "overrides" in fields and fresh.get("_set_aside"):
@@ -873,11 +951,10 @@ def copy_replaced_by_restore(note, prev):
 
 def shared_update_changes(note, incoming, fields=UPDATABLE_FROM_SHARED):
     """Whether updating *note* from *incoming* would change any of *fields*,
-    both compared as a load shapes them.
-
-    A no-change update would replace the rescue copy with a duplicate and
-    lose the one earlier version. ISSUES_LOG: "Importing the same backup
-    twice, the second time"; smaller lessons: shared_update_changes."""
+    both compared as a load shapes them. A no-change update would replace the
+    rescue copy and lose the one earlier version (ISSUES_LOG: "Importing the
+    same backup twice, the second time"); so would an Update for a field this
+    version does not know alone, which it cannot restore (DATA_FORMAT, D2)."""
     # The arriving note read as a load reads it, its copy's days taken back,
     # then both compared bare; this side, held in memory, is not read again
     # (ISSUES_LOG: "Round seven: a copy taken"; ISSUES_LOG: "Round nine: days").
@@ -1326,6 +1403,8 @@ def normalize_note(note):
     aside = _shaped_aside(note.get("_set_aside"))
     if aside:
         clean["_set_aside"] = aside
+    # What a newer version (or another program) wrote, kept: see KNOWN_NOTE_FIELDS.
+    clean.update(unknown_fields(note))
     _days_back_from_copy(clean)
     return clean
 
@@ -1456,6 +1535,9 @@ def content_signature(note):
         _stable(note.get("moved")),
         note.get("pinned") is True,
         _text(note.get("color")),
+        # Two notes differing only in a field this version does not know are
+        # two notes: signed alike, a cleanup kept one and the field went.
+        _stable(unknown_fields(note)),
     )
 
 

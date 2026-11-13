@@ -2947,9 +2947,11 @@ _sa_parts = {"same title": ("title", "Other"), "text": ("body", "other"),
              "repeat rule": ("recurrence", {"freq": "weekly"}),
              "a series' own days": ("exceptions", ["2026-01-12"])}
 _sa_named = _same_as.replace(" and ", ", ").split(", ")
+# ...but its last part, the fields a version does not know, which no person
+# sees and the words do not name (D2; its own check is at the file's end).
 check("the words every duplicate question uses name each part of the key, "
       "and each part they name is one the key sees",
-      len(_sa_named) == len(_dk(_t1)) and sorted(_sa_named) == sorted(_sa_parts)
+      len(_sa_named) + 1 == len(_dk(_t1)) and sorted(_sa_named) == sorted(_sa_parts)
       and all(_dk(dict(_t1, **{f: v})) != _dk(_t1) for f, v in _sa_parts.values()))
 _r1 = dict(_base, title="Sport", date="2026-01-01",
            recurrence={"freq": "weekly", "weekdays": [0]})
@@ -5512,6 +5514,104 @@ with open(os.path.join("noteorganizer", "core", "sharing.py"), encoding="utf-8")
 check("every file renamed into place is written to the disk first (%s)"
       % (_fs_bare or "all"),
       not _fs_bare and "os.fsync(" in _fs_copier)
+
+# ============================================================
+# A FIELD THIS VERSION DOES NOT KNOW IS KEPT (the owner's D2, 2026-11-13)
+# ============================================================
+# A newer version, or another program, may write a field this one has never
+# heard of; rebuilt field by field, every load dropped it, and an older app
+# erased what a newer one added. Kept now, within bounds, by both apps alike.
+import re
+from noteorganizer.core import model as _d2
+from noteorganizer.core import duplicates as _d2_dups
+from noteorganizer.core import sharing as _d2_share
+
+_d2_seen = _d2.normalize_note({'id': 1, 'title': 'x', 'mood': 'calm', 'weather': {'t': 3, 'sky': ['sun']},
+                               '_mark': 1, 'deleted_at': '2026-11-01 10:00:00', 'tags': ['old']})
+check(f"a field this version does not know is kept as it came ({ {k: _d2_seen.get(k) for k in ('mood', 'weather')} })",
+      _d2_seen.get('mood') == 'calm' and _d2_seen.get('weather') == {'t': 3, 'sky': ['sun']})
+check("...but not a name starting '_', the Trash's deleted_at, nor the removed tags",
+      '_mark' not in _d2_seen and 'deleted_at' not in _d2_seen and 'tags' not in _d2_seen)
+_d2_raw = {'id': 1, 'title': 'x', 'weather': {'t': 3}}
+_d2_kept = _d2.normalize_note(_d2_raw)
+_d2_raw['weather']['t'] = 99
+check("...as a copy, not the dict it came in", _d2_kept.get('weather') == {'t': 3})
+_d2_many = _d2.normalize_note(dict({'id': 1}, **{'f%02d' % i: i for i in range(40)}))
+check(f"...at most {_d2.MAX_UNKNOWN_FIELDS}, the first by name",
+      sorted(k for k in _d2_many if re.fullmatch(r'f\d\d', k))
+      == ['f%02d' % i for i in range(_d2.MAX_UNKNOWN_FIELDS)])
+_d2_big = _d2.normalize_note({'id': 1, 'big': 'x' * _d2.MAX_UNKNOWN_UNITS, 'small': 'y'})
+check("...a field past the allowance left out, the rest kept",
+      'big' not in _d2_big and _d2_big.get('small') == 'y')
+
+
+def _d2_nest(depth):
+    value = 'core'
+    for _ in range(depth):
+        value = [value]
+    return value
+
+
+# A thousand levels kept would break the copy that keeps them (a red here
+# stays a red, not a crash before the footer).
+try:
+    _d2_deep = _d2.normalize_note({'id': 1, 'deep': _d2_nest(_d2.MAX_UNKNOWN_DEPTH),
+                                   'deeper': _d2_nest(_d2.MAX_UNKNOWN_DEPTH + 1),
+                                   'nan': float('nan'), 'thousand': _d2_nest(1000)})
+except RecursionError:
+    _d2_deep = {'thousand': 'broke the load'}
+check("...nested to the depth allowed, and not one level past it, a NaN or a thousand levels",
+      'deep' in _d2_deep and 'deeper' not in _d2_deep and 'nan' not in _d2_deep
+      and 'thousand' not in _d2_deep)
+# Through the file: load, save, read the bytes.
+_d2_dir = tempfile.mkdtemp()
+_d2_app_dir = NO_paths.APP_DIR
+try:
+    NO_paths.configure(_d2_dir)
+    with open(NO_paths.SETTINGS_FILE, 'w', encoding='utf-8') as f:
+        json.dump({'cleanup_done': True}, f)
+    with open(NO_paths.DATA_FILE, 'w', encoding='utf-8') as f:
+        json.dump([{'id': 1, 'title': 'Kept', 'mood': 'calm'}], f)
+    _d2_loaded, _ = _storage.load_notes()
+    _storage.save_notes(_d2_loaded)
+    with open(NO_paths.DATA_FILE, encoding='utf-8') as f:
+        _d2_disk = json.load(f)
+finally:
+    NO_paths.configure(_d2_app_dir)
+    shutil.rmtree(_d2_dir, ignore_errors=True)
+check(f"...through a load and a save, in the file ({_d2_disk[0].get('mood')!r})",
+      _d2_disk[0].get('mood') == 'calm')
+# Two notes the same but for such a field are two notes, to every judge.
+_d2_a = _d2.normalize_note({'id': 1, 'title': 'Same', 'body': 'b', 'mood': 'calm'})
+_d2_b = _d2.normalize_note({'id': 2, 'title': 'Same', 'body': 'b', 'mood': 'storm'})
+_d2_clean, _d2_stats = _d2.clean_notes([_d2_a, _d2_b])
+check("...two notes differing only in such a field are not duplicates (signature, groups, cleanup)",
+      _d2.content_signature(_d2_a) != _d2.content_signature(_d2_b)
+      and _d2_dups._dup_key(_d2_a) != _d2_dups._dup_key(_d2_b)
+      and not _d2_dups.find_duplicate_groups([_d2_a, _d2_b]) and len(_d2_clean) == 2)
+# A share code stays a closed list: a stranger's code brings no field.
+_d2_code_notes = _d2_share.decode_share_code(_d2_share.encode_share_code([dict(_d2_a, extra='x')]))
+check("...a share code carries none", all('mood' not in n and 'extra' not in n for n in _d2_code_notes))
+# A backup's Update brings its own beside this note's; a code's never does.
+_d2_mine = _d2.normalize_note({'id': 1, 'title': 'Old', 'mood': 'calm', 'mine': 'kept'})
+_d2.apply_shared_update(_d2_mine, {'title': 'New', 'mood': 'storm', 'theirs': 'x'},
+                        _d2.UPDATABLE_FROM_BACKUP)
+check(f"...a backup's Update brings its own, this note's kept ({ {k: _d2_mine.get(k) for k in ('mood', 'mine', 'theirs')} })",
+      _d2_mine.get('title') == 'New' and _d2_mine.get('mood') == 'storm'
+      and _d2_mine.get('mine') == 'kept' and _d2_mine.get('theirs') == 'x')
+_d2_coded = _d2.normalize_note({'id': 1, 'title': 'Old', 'mood': 'calm'})
+_d2.apply_shared_update(_d2_coded, {'title': 'New', 'mood': 'storm'}, _d2.UPDATABLE_FROM_SHARED)
+check("...a share code's Update leaves this note's own as they are",
+      _d2_coded.get('title') == 'New' and _d2_coded.get('mood') == 'calm')
+check("...and such a field alone is no change for an Update to make",
+      not _d2.shared_update_changes(_d2.normalize_note({'id': 1, 'title': 'T', 'mood': 'calm'}),
+                                    {'title': 'T', 'mood': 'storm'}, _d2.UPDATABLE_FROM_BACKUP))
+# Out of the Trash: kept, the Trash's own stamp left there.
+_d2_entry = dict(_d2.normalize_note({'id': 7, 'title': 'Binned', 'mood': 'calm'}),
+                 deleted_at='2026-11-01 10:00:00')
+_d2_notes, _d2_trash, _d2_back = _storage.restore_many_from_trash([], [_d2_entry], [_d2_entry])
+check("...and a note back from the Trash keeps it, without the Trash's deleted_at",
+      _d2_back and _d2_back[0].get('mood') == 'calm' and 'deleted_at' not in _d2_back[0])
 
 print()
 print(f"FAILURES: {fails if fails else 'none'}")

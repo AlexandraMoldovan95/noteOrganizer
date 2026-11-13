@@ -700,9 +700,9 @@ def load_notes(version_change=None):
             was_open = next(
                 (c for c, n in zip(copies, notes) if n.get("id") == remembered), None)
         cleaned, stats = clean_notes(copies)
-        # Against what the file holds, not the notes as read: the read drops
-        # a field it does not know and a body written as a list, and its copy
-        # was then the only place they were left.
+        # Against what the file holds, not the notes as read: the read drops a
+        # body written as a list, and a field past unknown ones' bounds or named
+        # "_..." -- and its copy was then the only place they were left.
         unchanged = cleaned == raw
         written, _error = _write_json_atomic(paths.DATA_FILE, cleaned)
         if written:
@@ -971,8 +971,8 @@ def restore_many_from_trash(notes, trash, entries):
     worn = {n.get("uid") for n in notes if isinstance(n, dict)}
     restored = []
     for entry in entries:
-        # normalize_note rebuilds the note from a known schema, so it drops
-        # "deleted_at" and anything else the trash entry carried.
+        # normalize_note leaves the Trash's "deleted_at" out, and keeps a field
+        # this version does not know as it came (model.KNOWN_NOTE_FIELDS).
         note = normalize_note(entry)
         # A fresh id: the trashed note's own id may have been reused by a
         # note created after it was deleted.
