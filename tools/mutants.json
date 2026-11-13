@@ -18093,7 +18093,7 @@
     "id": "UF02",
     "about": "Two notes differing only in a field this version does not know sign alike, and a cleanup drops one",
     "edits": [{"file": "noteorganizer/core/model.py",
-               "find": "        _stable(unknown_fields(note)),\n    )\n",
+               "find": "        unknown_signature(note),\n    )\n",
                "replace": "    )\n"}],
     "must_fail": ["...two notes differing only in such a field are not duplicates"],
     "suites": ["test_data_safety"],
@@ -18103,7 +18103,7 @@
     "id": "UF03",
     "about": "The duplicate groups take two notes differing only in an unknown field for one",
     "edits": [{"file": "noteorganizer/core/duplicates.py",
-               "find": "        _stable(unknown_fields(note)),\n    )\n",
+               "find": "        unknown_signature(note),\n    )\n",
                "replace": "    )\n"}],
     "must_fail": ["...two notes differing only in such a field are not duplicates"],
     "suites": ["test_data_safety"],
@@ -18113,8 +18113,8 @@
     "id": "UF04",
     "about": "A backup's Update leaves its fields this version does not know behind",
     "edits": [{"file": "noteorganizer/core/model.py",
-               "find": "    if fields is UPDATABLE_FROM_BACKUP:\n        note.update(unknown_fields(fresh))\n",
-               "replace": ""}],
+               "find": "            note.update(unknown_fields(dict(mine, **theirs)))\n",
+               "replace": "            note.update(mine)\n"}],
     "must_fail": ["...a backup's Update brings its own, this note's kept"],
     "suites": ["test_data_safety"],
     "expect": "killed"
@@ -18156,6 +18156,67 @@
                "find": "        if len(kept) >= MAX_UNKNOWN_FIELDS:\n            break\n",
                "replace": ""}],
     "must_fail": ["...at most 32, the first by name"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "UF09",
+    "about": "A note holding only a field this version does not know reads as empty, and the first start's cleanup deletes it",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "        or unknown_fields(note)\n    )\n",
+               "replace": "    )\n"}],
+    "must_fail": ["...a note holding only such a field is not empty"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "UF10",
+    "about": "A backup's Update keeps no copy of the note's own unknown fields, so Restore previous cannot put one back",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "            note[\"_prev\"][\"_unknown\"] = copy.deepcopy(mine)\n",
+               "replace": ""}],
+    "must_fail": ["...a backup's Update keeps this note's own in its rescue copy, through a load",
+                  "Restore previous after a backup's Update puts back a field this version does not know"],
+    "suites": ["test_data_safety", "qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "UF11",
+    "about": "Restore previous leaves the backup's value in a field this version does not know",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            note.update(copy.deepcopy(prev[\"_unknown\"]))\n",
+               "replace": "            pass\n"}],
+    "must_fail": ["Restore previous after a backup's Update puts back a field this version does not know"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "UF12",
+    "about": "true and 1 in a field this version does not know sign alike, where the phone tells them apart",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "        if isinstance(value, bool):\n            return (\"bool\", value)\n",
+               "replace": ""}],
+    "must_fail": ["...true and 1 in such a field are two notes, as on the phone"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "UF13",
+    "about": "A load drops the rescue copy's record of the note's own unknown fields",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "        if isinstance(prev.get(\"_unknown\"), dict):\n            clean[\"_prev\"][\"_unknown\"] = unknown_fields(prev[\"_unknown\"])\n",
+               "replace": ""}],
+    "must_fail": ["...a backup's Update keeps this note's own in its rescue copy, through a load"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "UF14",
+    "about": "An Update's two sets of unknown fields together pass the bounds until the next load",
+    "edits": [{"file": "noteorganizer/core/model.py",
+               "find": "            note.update(unknown_fields(dict(mine, **theirs)))\n",
+               "replace": "            note.update(dict(mine, **theirs))\n"}],
+    "must_fail": ["...and the two sets together are held to the bounds at once, chosen by name"],
     "suites": ["test_data_safety"],
     "expect": "killed"
   }
