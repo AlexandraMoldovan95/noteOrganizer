@@ -12672,7 +12672,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                if self._notes_file_unread() and cut.get(\"copied\"):\n                    save_setting(\"backup_cut_short\", dict(cut, temp_dir=\"\", said=True))\n",
+        "find": "                if self._notes_file_unread() and cut.get(\"copied\"):\n                    save_setting(\"backup_cut_short\", dict(cut, temp_dir=\"\", said=True))\n                    kept_for_later = True\n",
         "replace": ""
       }
     ],
@@ -18002,6 +18002,26 @@
                "find": "            kept_for_later = False\n",
                "replace": "            kept_for_later = False\n            save_setting(\"backup_cut_short\", None)\n"}],
     "must_fail": ["the start keeps the word until it has asked the export's file"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN37",
+    "about": "A sound backup with no room for it is refused as a plain ValueError, said as a file that could not be read",
+    "edits": [{"file": "noteorganizer/core/sharing.py",
+               "find": "        raise BackupRefused(room)\n",
+               "replace": "        raise ValueError(room)\n"}],
+    "must_fail": ["a backup refused for no room is refused as a sound one with no room, its own kind"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN38",
+    "about": "The import says a backup with no room for it couldn't be read as a backup",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                except BackupRefused as e:\n                    # A sound backup with no room for it: said as that alone.\n                    state[\"error\"] = str(e)\n                    state[\"done\"] = True\n                    return\n",
+               "replace": ""}],
+    "must_fail": ["a sound backup with no room for it is said as that alone"],
     "suites": ["qa3"],
     "expect": "killed"
   }
