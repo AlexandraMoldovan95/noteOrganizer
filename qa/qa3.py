@@ -10,6 +10,8 @@ _qa_seed()
 import sys
 import note_organizer as NO, tkinter as tk, tkinter.filedialog as fd, os, tempfile, time, zipfile, json
 import contextlib
+import errno
+import zlib
 import threading
 # A generated click is DISCARDED in silence when its widget is not
 # viewable, and the app hides popups whenever another program holds the
@@ -1384,6 +1386,35 @@ os.remove(_nr_zip)
 check(f"a sound backup with no room for it is said as that alone, not as a file that could not be read "
       f"({_nr_said!r})",
       any('enough free space' in s for s in _nr_said) and not any("couldn't be read" in s for s in _nr_said))
+# The disk filling up during the unpacking: said as that, and a damaged
+# stream (zlib.error) as a file that could not be read, not "unexpectedly".
+_nr_seen = {}
+for _nr_name, _nr_raise in (('full', OSError(errno.ENOSPC, 'No space left on device')),
+                            ('stream', zlib.error('Error -3 while decompressing data'))):
+    with zipfile.ZipFile(_nr_zip, 'w') as zf:
+        zf.writestr('notes_data.json', '[]')
+    _nr_said.clear()
+
+    def _nr_fails(*_a, _e=_nr_raise, **_k):
+        raise _e
+    app.show_error = lambda *a, **k: _nr_said.append(' '.join(map(str, a)))
+    NO._safe_extract_zip = _nr_fails
+    try:
+        app.import_data()
+        t0 = time.time()
+        while app._import_state is not None and time.time() - t0 < 30:
+            app.update()
+    finally:
+        NO._safe_extract_zip = _nr_unpack_was
+        app.show_error = _nr_err_was
+    os.remove(_nr_zip)
+    _nr_seen[_nr_name] = ' '.join(_nr_said)
+check(f"a disk that fills up while a backup unpacks is said as that ({_nr_seen.get('full', '')[:120]!r})",
+      'disk filled up' in _nr_seen.get('full', '') and "couldn't be read" not in _nr_seen.get('full', ''))
+check(f"...and a damaged stream as a file that could not be read, not as unexpected "
+      f"({_nr_seen.get('stream', '')[:120]!r})",
+      "couldn't be read as a backup" in _nr_seen.get('stream', '')
+      and 'unexpectedly' not in _nr_seen.get('stream', ''))
 
 # A CRAFTED backup's settings.json: a million day colours under keys that are
 # no dates, and markers 100,000 characters long. Adopted whole, every note

@@ -11855,11 +11855,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     state["error"] = str(e)
                     state["done"] = True
                     return
-                except (zipfile.BadZipFile, IOError, OSError, ValueError) as e:
+                # zlib.error (a damaged stream), RuntimeError (an encrypted
+                # entry), NotImplementedError (a method zipfile lacks): a file
+                # that could not be read, not "Import failed unexpectedly".
+                except (zipfile.BadZipFile, IOError, OSError, ValueError, zlib.error,
+                        RuntimeError, NotImplementedError) as e:
+                    full = (getattr(e, "errno", None) == errno.ENOSPC
+                            or getattr(e, "winerror", None) in (39, 112, 1295))
                     state["error"] = (
                         "The disk filled up while the backup was unpacked, so "
                         "nothing from it was kept. Free up some space and try "
-                        "again." if getattr(e, "errno", None) == errno.ENOSPC
+                        "again." if full
                         else f"That file couldn't be read as a backup:\n{e}")
                     state["done"] = True
                     return
