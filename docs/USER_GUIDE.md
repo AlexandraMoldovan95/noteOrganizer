@@ -907,7 +907,8 @@ is open, so it always says where it will take you; switching tabs and coming bac
 the calendar grid. A
 short series ("10 times", or one that ends soon) opens to **all** its days, with ✎ marking the
 ones edited separately; an endless one lists just its ✎ days (every other day shows the series
-content — a note in the group says so), and a series with nothing to unfold shows a → and takes
+content — a note in the group says so; with a search or a year chosen, the group counts the
+edited days it lists "of" all of them, and the note says the rest are left out), and a series with nothing to unfold shows a → and takes
 you straight to its day on the calendar. A day whose own edits the series no longer reaches is
 listed too, greyed and marked "off the schedule"; clicking it goes through those days the way
 **Show them** above the note does. It has its own search — one that also looks *inside* what you

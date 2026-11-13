@@ -4469,6 +4469,22 @@ full disk (SN49), Appearance's "instantly" over Sharp text's next start, a templ
 called Rename, Duplicates said to ignore case in a checklist, and "up to N could be removed" where
 a group ticked whole goes whole.
 
+**The fifteenth round** found the fourteenth's fixes held, and its second reader read the other
+screens (the calendar, the note list, files, the calculator, spelling) for the first time: History
+filtered by a search or a year counted "1 edited day" of a series with three and said every other
+day shows the series content (it counts the rest now, "1 of 3", SN55); the calendar's quick look
+called a note holding only a checklist, a table or files "(empty note)" under the chips that named
+them (SN56); and the word on notes restored or imported where the list hides them named the first
+one's folded group for all, Show all unfolding that group alone (all of them now, SN53, SN54; the
+phone the same). The lows: a day colour put back from the Calendar said on the hidden status line
+(SN61), the reminder bar keeping the count it was drawn with (counted again each minute, SN57),
+Sharp text and the name's preview said saved or shown when the disk refused them (SN58, SN59), a
+newer version's theme name written over by the switch (SN52), a list in "theme" stopping every
+start, and a hidden prefix calling a newer version's code "no share code" (SN60). The decode's
+words now send a code's sender to Settings → Backup, the place both apps have, not to an Export the
+phone lacks. And the turn-off line said "not the series" of a copy that keeps the series when the
+note repeated before the Update: it says the version it kept before, nothing more.
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.
 
