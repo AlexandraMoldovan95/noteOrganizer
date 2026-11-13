@@ -459,6 +459,24 @@ check("...and among a bounded series' days, on its new date",
       [c['date'] for c in _mhb['children']]
       == ['2026-10-19', '2026-10-13', '2026-10-05']
       and [c['moved_from'] for c in _mhb['children']] == [None, '2026-10-12', None])
+# A search that lists another day leaves the moved ones out, counted: plain
+# and edited, endless and bounded; and a bounded series' day off the schedule.
+_retro = {'title': 'Retro', 'body': 'retro'}
+_mlo = [_hist([n], query='retro', today=_H_TODAY)[0] for n in (
+    _weekly(moved={'2026-10-12': '2026-10-13'}, overrides={'2026-10-26': dict(_retro)}),
+    _weekly(moved={'2026-10-12': '2026-10-13'},
+            overrides={'2026-10-13': {'title': 'Moved', 'body': 'm'},
+                       '2026-10-26': dict(_retro)}),
+    _weekly(moved={'2026-10-12': '2026-10-13'},
+            recurrence={'freq': 'weekly', 'weekdays': [0], 'count': 3},
+            overrides={'2026-10-19': dict(_retro)}),
+    _weekly(recurrence={'freq': 'weekly', 'weekdays': [0], 'count': 3},
+            overrides={'2026-10-14': {'title': 'Off', 'body': 'o'},
+                       '2026-10-19': dict(_retro)}))]
+check(f"the moved days and a bounded series' days off the schedule a search leaves out are counted "
+      f"({[(e['n_moved'], e['n_moved_left_out'], e['n_off'], e['n_off_left_out']) for e in _mlo]})",
+      [(e['n_moved'], e['n_moved_left_out'], e['n_off'], e['n_off_left_out']) for e in _mlo]
+      == [(0, 1, 0, 0), (0, 1, 0, 0), (0, 1, 0, 0), (0, 0, 0, 1)])
 _mn = NO.normalize_note(_weekly(
     exceptions=['2026-10-26'],
     moved={'2026-10-12': '2026-10-13', '2026-10-19': '2026-10-13',

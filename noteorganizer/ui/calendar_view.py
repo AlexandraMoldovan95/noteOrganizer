@@ -1786,8 +1786,10 @@ class CalendarViewMixin:
                             self._history_rows.add(),
                             text=("    …every other day of this series shows "
                                   "the series content"
-                                  + (", or has edits this search or year leaves out"
-                                     if entry.get("n_edited_left_out") else "")),
+                                  + (", or is one this search or year leaves out"
+                                     if any(entry.get(k) for k in (
+                                         "n_edited_left_out", "n_off_left_out",
+                                         "n_moved_left_out")) else "")),
                             font=("Segoe UI", 8), anchor="w",
                             bg=self.colors["bg"], fg=self.colors["subtext"])
                         info.pack(fill="x", padx=(26, 0))

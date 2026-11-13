@@ -2870,6 +2870,24 @@ _hl = find_all_labels(app._history_rows)
 check('search finds override content and auto-expands its group',
       any('17.08.2026' in t for t in _hl)
       and not any('HistDated' in t for t in _hl))
+# ...and counts what it leaves out, of every kind, "of" all of them, the
+# note under the group saying so: it said "1 edited day" of a series with
+# two, and the days off the schedule and the moved ones went uncounted.
+_hs_was = app.notes
+app.notes = [NO.normalize_note({
+    'id': 84, 'title': 'HistCount', 'body': 'agenda', 'date': '2026-01-05',
+    'recurrence': {'freq': 'weekly'}, 'moved': {'2026-03-02': '2026-03-03'},
+    'overrides': {'2026-08-17': {'title': '', 'body': 'the budget'},
+                  '2026-06-15': {'title': 'Plan', 'body': 'budget plan'},
+                  '2026-07-08': {'title': 'Old Wednesday', 'body': 'old'}}})]
+app._render_calendar_history(); app.update()
+_hj = ' | '.join(find_all_labels(app._history_rows))
+app.notes = _hs_was
+app._render_calendar_history(); app.update()
+check(f'History counts the off-schedule and moved days a search leaves out, every edited one '
+      f'listed, and says so under the group ({_hj[-260:]!r})',
+      '2 edited days' in _hj and '0 of 1 off the schedule' in _hj
+      and '0 of 1 moved' in _hj and 'or is one this search or year leaves out' in _hj)
 app._history_search_var.set('')
 app.update(); _t7.sleep(0.4); app.update()
 
