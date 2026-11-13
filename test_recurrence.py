@@ -234,6 +234,20 @@ check("a child with no override title borrows the series'",
       and _s3['children'][1]['title'] == 'Year-end sync')
 check('a series with no edited days still gets a row',
       any(e['note_id'] == 4 and e['kind'] == 'series' for e in _all))
+# The edited days a search or a year leaves out are counted, for the row to
+# say "1 of 2": it said "1 edited day", and that every other day shows the
+# series content, of a series with two.
+# (2025-12-01 lies before the series' start: off the schedule, counted apart
+# from the edited days, filtered or not.)
+_lb = next(e for e in _hist(_h_notes, query='budget', today=_H_TODAY) if e['note_id'] == 3)
+_lr = next(e for e in _hist(_h_notes, query='retro', today=_H_TODAY) if e['note_id'] == 3)
+_ly = next(e for e in _hist(_h_notes, year_bucket='Last year', today=_H_TODAY) if e['note_id'] == 3)
+check(f"the edited days a search or a year leaves out are counted "
+      f"({_s3.get('n_edited_left_out')}, "
+      f"{[(e['n_edited'], e.get('n_edited_left_out')) for e in (_lb, _lr, _ly)]})",
+      _s3.get('n_edited_left_out') == 0
+      and [(e['n_edited'], e.get('n_edited_left_out')) for e in (_lb, _lr, _ly)]
+      == [(1, 0), (0, 1), (0, 1)])
 
 _q = _hist(_h_notes, query='budget', today=_H_TODAY)
 check('search reaches into a day\'s own override content',

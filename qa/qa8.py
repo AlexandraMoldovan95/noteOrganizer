@@ -221,6 +221,18 @@ check(f'with Settings open, the new day\'s reminder shows above it and the '
       and app8b.reminder_bar.winfo_manager() == 'pack'
       and NO.load_settings().get('reminder_last_shown') == _md_today)
 app8b.hide_settings_page(); app8b.update()
+# ...and on the same day it counts again: a note for today added since went
+# uncounted, and with the last of them deleted the bar still named one.
+app8b.notes.append(NO.normalize_note({'id': 2, 'title': 'Today too', 'body': 'y', 'date': _md_today}))
+app8b._reminder_day = _md_today
+app8b._watch_the_day(); app8b.update()
+_md_more = [str(w.cget('text')) for w in app8b.reminder_bar.winfo_children()
+            if isinstance(w, tk.Label)]
+app8b.notes = []
+app8b._watch_the_day(); app8b.update()
+check(f"...and on the same day it counts again, and goes with the last of today's notes "
+      f"({_md_more}, {app8b.reminder_bar.winfo_manager()!r})",
+      any('2 notes for today' in t for t in _md_more) and app8b.reminder_bar.winfo_manager() == '')
 app8b.destroy()
 try:
     app8b._watch_the_day()

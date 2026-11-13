@@ -273,6 +273,32 @@ app.update()
 check('Confirm on calendar delete removes the note', len(app.notes) == 0)
 check('panel falls back to list after a real delete', app._day_panel_mode == 'list')
 
+# The quick look calls a note empty only when it is: one holding a checklist
+# alone was "(empty note)" under the chip that counted its rows.
+def _ql_text(note):
+    app.notes = [note]
+    app.render_calendar(); app.open_day_popup('2026-07-15'); app.update()
+    app.show_day_note(app.notes[0], '2026-07-15'); app.update()
+    box = find_widget(app.day_panel, tk.Text)
+    return box.get('1.0', 'end-1c') if box is not None else None
+_ql_base = {'id': 3, 'title': 'Shopping', 'body': '', 'category': 'General', 'date': '2026-07-15',
+            'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00', 'attachments': []}
+_ql_said = (_ql_text(dict(_ql_base, checklist=[{'text': 'milk', 'done': False}])),
+            _ql_text(dict(_ql_base, checklist=[])))
+check(f"the calendar's quick look calls a checklist-only note no text, an empty one empty ({_ql_said})",
+      _ql_said == ('(no text)', '(empty note)'))
+app.notes = []
+# A day colour put back from the Calendar is said where it can be read: the
+# status line it went to is the Notes tab's.
+app.notebook.select(app.TAB_CALENDAR); app.update()
+app._hide_toast(); app.update()   # the delete's Undo above, which the words would go beneath
+app.day_colors.pop('2026-07-16', None)
+app._undo_day_clear('2026-07-16', 'color', '#4cc9f0'); app.update()
+_dc_said = str(app.toast_lbl.cget('text'))
+check(f"a day colour put back from the Calendar is said on the banner ({_dc_said!r})",
+      'Day colour put back' in _dc_said and app.day_colors.get('2026-07-16') == '#4cc9f0')
+app.day_colors.pop('2026-07-16', None); app._persist_day_colors()
+
 # recurring note asks for scope
 app.notes = [{'id': 3, 'title': 'RecurringCal', 'body': 'x', 'category': 'General', 'date': '2026-07-01',
               'recurrence': {'freq': 'daily'}, 'updated': '2026-01-01 00:00', 'created': '2026-01-01 00:00',

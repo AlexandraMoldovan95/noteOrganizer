@@ -172,6 +172,15 @@ def _redraw_open_day(app, notes_by_date, year, month):
         app.show_day_list()
 
 
+def _reminder_words(count, today):
+    """The reminder bar's words: *count* notes for *today*, written out day
+    first, as every date in the app is shown."""
+    noun = "note" if count == 1 else "notes"
+    day = parse_date(today)
+    friendly = show_day(day, year=False) if day else today
+    return f"🔔  You have {count} {noun} for today ({friendly})."
+
+
 class CalendarViewMixin:
     """The calendar tab for :class:`NoteOrganizer`.
 
@@ -1023,13 +1032,9 @@ class CalendarViewMixin:
                 else self.notebook)
         self.reminder_bar.pack(fill="x", side="top", before=page)
 
-        noun = "note" if count == 1 else "notes"
-        # Written out day first, as every date in the app is shown.
-        day = parse_date(today)
-        friendly = show_day(day, year=False) if day else today
-        msg = tk.Label(
+        msg = self._reminder_msg = tk.Label(
             self.reminder_bar,
-            text=f"🔔  You have {count} {noun} for today ({friendly}).",
+            text=_reminder_words(count, today),
             bg=self.colors["accent"], fg=self._on_fill("accent"), font=("Segoe UI", 9, "bold"),
             anchor="w", cursor="hand2"
         )
@@ -1088,6 +1093,15 @@ class CalendarViewMixin:
                 if getattr(self, "_reminder_bar_day", None) not in (None, today):
                     self.dismiss_reminder()
                 self.maybe_show_reminder()
+            elif (getattr(self, "_reminder_bar_day", None) == today
+                  and self.reminder_bar.winfo_manager() == "pack"):
+                # Counted once when drawn, it named notes deleted since and
+                # missed ones added: counted again, and gone with the last.
+                due = len(self.notes_on_date(today))
+                if not due:
+                    self.dismiss_reminder()
+                else:
+                    self._reminder_msg.configure(text=_reminder_words(due, today))
         finally:
             # Whatever the look met, the next one comes: an error here used
             # to end the watch for the rest of the session.
@@ -1413,7 +1427,11 @@ class CalendarViewMixin:
         txt_sb.config(command=txt.yview)
         txt_sb.pack(side="right", fill="y")
         txt.pack(side="left", fill="both", expand=True)
-        txt.insert("1.0", text_only or "(empty note)")
+        # "(empty note)" only of a note with nothing: one holding a checklist, a
+        # table or files was called empty under the chips that named them.
+        carries = bool(table_count or (isinstance(checklist, list) and checklist)
+                       or _note_str(note, "comments").strip() or note.get("attachments"))
+        txt.insert("1.0", text_only or ("(no text)" if carries else "(empty note)"))
         txt.config(state="disabled")
 
     def _open_note_from_calendar(self, base_note, date_str, whole_series=False):
@@ -1691,13 +1709,18 @@ class CalendarViewMixin:
                     entry["auto_expand"]
                     or (note is not None
                         and self._order_identity(note) in self._history_expanded))
+                # With a search or a year, of how many: the edited days it
+                # leaves out were not counted, as if the series had none.
+                left = entry.get("n_edited_left_out", 0)
+                edited_of = (f"{entry['n_edited']} of {entry['n_edited'] + left}" if left
+                             else str(entry["n_edited"]))
                 if entry["children_kind"] == "occurrences":
                     suffix = f" · {entry['n_occurrences']} occurrences"
-                    if entry["n_edited"]:
-                        suffix += f" · {entry['n_edited']} edited (✎)"
+                    if entry["n_edited"] or left:
+                        suffix += f" · {edited_of} edited (✎)"
                 else:
-                    n_kids = entry["n_edited"]
-                    suffix = (f" · {n_kids} edited day"
+                    n_kids = entry["n_edited"] + left
+                    suffix = (f" · {edited_of} edited day"
                               f"{'s' if n_kids != 1 else ''} (✎)"
                               if n_kids else "")
                 if entry.get("n_off"):
@@ -1761,7 +1784,9 @@ class CalendarViewMixin:
                         info = tk.Label(
                             self._history_rows.add(),
                             text=("    …every other day of this series shows "
-                                  "the series content"),
+                                  "the series content"
+                                  + (", or has edits this search or year leaves out"
+                                     if entry.get("n_edited_left_out") else "")),
                             font=("Segoe UI", 8), anchor="w",
                             bg=self.colors["bg"], fg=self.colors["subtext"])
                         info.pack(fill="x", padx=(26, 0))
@@ -1974,7 +1999,8 @@ class CalendarViewMixin:
         store[date_str] = list(value) if isinstance(value, list) else value
         persist()
         self.render_calendar()
-        self.set_status(done)
+        # On the banner from the Calendar: the status line is the Notes tab's.
+        self._say_by_the_box(self, done)
 
     def _persist_day_colors(self):
         save_setting("day_colors", dict(self.day_colors))

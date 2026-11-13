@@ -893,18 +893,24 @@ def history_entries(notes, query="", year_bucket="All", today=None, memo=None):
 
             children = []
             any_child_match = False
+            # Edited days the search or the year leaves out, counted: the row
+            # said "1 edited day" and "every other day shows the series content"
+            # over a series with three.
+            left_out = 0
             if occ_days is not None:
                 children_kind = "occurrences"
                 for day in sorted(occ_days, reverse=True):
-                    if not bucket_ok(day):
-                        continue
                     override = overrides.get(day)
                     edited = isinstance(override, dict)
+                    if not bucket_ok(day):
+                        left_out += edited
+                        continue
                     ov = override if edited else {}
                     child_match = edited and _history_match(
                         query, ov.get("title"), ov.get("body"),
                         ov.get("comments"))
                     if not (child_match or base_matches):
+                        left_out += edited
                         continue
                     if query and child_match:
                         any_child_match = True
@@ -946,6 +952,7 @@ def history_entries(notes, query="", year_bucket="All", today=None, memo=None):
                         # a day moved onto that date keeps its words.
                         continue
                     if not bucket_ok(day):
+                        left_out += day not in off
                         continue
                     if not isinstance(override, dict):
                         override = {}
@@ -953,6 +960,7 @@ def history_entries(notes, query="", year_bucket="All", today=None, memo=None):
                         query, override.get("title"), override.get("body"),
                         override.get("comments"))
                     if not (child_match or base_matches):
+                        left_out += day not in off
                         continue
                     if query and child_match:
                         any_child_match = True
@@ -996,6 +1004,7 @@ def history_entries(notes, query="", year_bucket="All", today=None, memo=None):
                                       else None),
                     "n_edited": sum(1 for c in children
                                     if c["edited"] and not c["off_schedule"]),
+                    "n_edited_left_out": left_out,
                     "n_off": sum(1 for c in children if c["off_schedule"]),
                     "n_moved": sum(1 for c in children if c["moved_from"]),
                     "auto_expand": any_child_match,
