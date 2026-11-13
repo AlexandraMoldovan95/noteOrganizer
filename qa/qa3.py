@@ -3555,7 +3555,8 @@ NO.save_setting('backup_cut_short', None)
 # A word that named a file as ".part" (still flushing when it was written):
 # renamed after, it stayed for good. Its own name goes too, unless in use.
 os.makedirs(NO.ATTACHMENTS_DIR, exist_ok=True)
-_fx_free, _fx_used = '20261113120000000001_film.bin', '20261113120000000002_kept.bin'
+# Its case kept, as a stored name keeps the file's ("<stamp>_Photo.JPG").
+_fx_free, _fx_used = '20261113120000000001_film.bin', '20261113120000000002_Kept.bin'
 for _n in (_fx_free, _fx_used):
     with open(os.path.join(NO.ATTACHMENTS_DIR, _n), 'wb') as _fh:
         _fh.write(b'x')
@@ -3569,12 +3570,30 @@ finally:
 check('a file named as ".part" in an import\'s word is taken out by its own name, one a note uses kept',
       not os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _fx_free))
       and os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _fx_used)))
-# A word another program wrote can name a note's file through an alias:
-# a trailing dot or space, which Windows drops, or another case, which it
-# ignores (on Linux that is another file). None is even tried.
+# A word another program wrote can name a note's file through an alias, as
+# Windows reads names: a trailing dot or space dropped (in a name cut from
+# ".part" too), another case, an 8.3 short name. On Linux each is another
+# file, and the note's file is never at stake.
 _fx_tried, _fx_remove_was = [], os.remove
-_fx_aliases = [_fx_used + '.', _fx_used + ' ', _fx_used + '. .'] + (
-    [_fx_used.upper()] if os.name == 'nt' else [])
+
+
+def _fx_short_name(path):
+    """Windows' 8.3 name for *path*, or None (Linux, or short names off)."""
+    if os.name != 'nt':
+        return None
+    import ctypes
+    buf = ctypes.create_unicode_buffer(520)
+    if not ctypes.windll.kernel32.GetShortPathNameW(path, buf, 520):
+        return None
+    short = os.path.basename(buf.value)
+    return short if short != os.path.basename(path) else None
+
+
+_fx_aliases = [_fx_used + '.', _fx_used + ' ', _fx_used + '. .', _fx_used + '..part',
+               _fx_used + ' .part', _fx_used + '. .part', _fx_used.upper(), _fx_used.lower()]
+_fx_short = _fx_short_name(os.path.join(NO.ATTACHMENTS_DIR, _fx_used))
+if _fx_short:
+    _fx_aliases += [_fx_short, _fx_short + '.part']
 
 
 def _fx_remove(path, *a, **k):
@@ -3590,8 +3609,9 @@ try:
 finally:
     os.remove = _fx_remove_was
     app.notes = _fx_notes_was
-check(f"...and a name in the word that is an alias of a note's file is never taken out (tried {_fx_tried})",
-      _fx_tried == [] and os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _fx_used)))
+check(f"...and a name in the word that is an alias of a note's file is never taken out "
+      f"(short name {_fx_short!r}; tried {_fx_tried})",
+      os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _fx_used)))
 # Gone only when a broken guard took it: a red here stays a red, not a crash.
 if os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _fx_used)):
     os.remove(os.path.join(NO.ATTACHMENTS_DIR, _fx_used))
