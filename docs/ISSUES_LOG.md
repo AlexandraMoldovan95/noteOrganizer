@@ -4392,6 +4392,30 @@ worker failed while its poll waited behind a dialog, then cut short by a sign-ou
 own failure (export keeps the two apart); and a disk filling during the copy phase skips files in
 silence, said only as "File missing" when one is opened.
 
+**The eleventh round** attacked the owner's new contract first: a note keeps the fields this version
+does not know (D2, approved on 13 November). It held on every road a note takes, but on four edges.
+A backup's Update wrote over a field of the same name, and Restore previous could not put the
+note's own value back, which by the owner's rule is a loss, if on a rare road: the rescue copy
+keeps the note's own under `_unknown` now, and Restore previous puts them back as they were (UF10,
+UF11, UF13). A note holding only such a field read as empty, and the first start's cleanup deleted
+it (UF09). An Update added the backup's fields without the bounds, which the next load then applied
+by name; they are held at once. True and 1 signed alike, where the phone tells them apart (UF12).
+And a crafted list of millions was walked before it was refused; it is refused by its count. D2
+covers a note's top level, as approved: a field a newer version adds inside a checklist item, an
+attachment or the repeat rule is still shaped away, which ARCHITECTURE, CODE_TOUR and the phone's
+DATA_FORMAT had promised otherwise and now say. qa5's check of the Undo offered again could read
+the delete's own banner; it takes the offer as a click does. The plan's reader went through the
+last sixteen areas, so every case of the plan has been read once since the wave began, and found
+ten mediums: a first start said to open on an empty list where the welcome note waits (263), the
+Duplicates buttons' looks of before (329, 330), four selection actions where there are five (293),
+the folder message's old words (703), "(earlier text)" said on the status line (937), a start's
+message called a banner or a line (929, 173), a template used over an edited note said to ask
+where it asks nothing (240), and Ctrl+S in the template editor said to save the note behind it
+(1022); and eight rows naming a mutant or a suite that does not guard their case. Each is true
+now, with the lows. Left: an Update's question never offers a note whose only change is such a
+field (it cannot say what the field means), so an older desktop keeps its own value until a real
+change brings the backup's; and the tenth round's three.
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.
 

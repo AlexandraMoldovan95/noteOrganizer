@@ -176,11 +176,14 @@ exists) into safe defaults rather than letting a bad record propagate into the U
 something. This is what lets the app survive hand-edited or corrupted data files without
 special-casing every call site.
 
-What it does not know it keeps. Once the apps are in the stores they update apart, and a newer
-version may add a field to a note; rebuilt field by field, every load here erased it. Since
-13 November 2026 any other field rides along as it came, bounded (32 fields, 65,536 units, 20
-levels deep) and chosen by the same rule as on the phone (`unknown_fields`; the contract is in
-the phone's repository, DATA_FORMAT, "Fields a version does not know").
+What it does not know at a note's top level it keeps. Once the apps are in the stores they update
+apart, and a newer version may add a field to a note; rebuilt field by field, every load here
+erased it. Since 13 November 2026 any other top-level field rides along as it came, bounded (32
+fields, 65,536 units, 20 levels deep) and chosen by the same rule as on the phone
+(`unknown_fields`), except a name starting "_", the Trash's `deleted_at` and the removed `tags`.
+A field a newer version adds INSIDE a checklist item, an attachment, the repeat rule or a day's
+edit is still shaped away. The contract is in the phone's repository, DATA_FORMAT, "Fields a
+version does not know".
 
 ### Ceilings live at the data door, not at the render
 
