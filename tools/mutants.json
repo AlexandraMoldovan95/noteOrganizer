@@ -18272,5 +18272,15 @@
     "must_fail": ["...Restore previous keeps in its turn"],
     "suites": ["test_data_safety"],
     "expect": "killed"
+  },
+  {
+    "id": "SN43",
+    "about": "A code whose prefix the wrapping broke is left to the lenient decoder, which reads a stray letter the phone refuses",
+    "edits": [{"file": "noteorganizer/core/sharing.py",
+               "find": "        bare = _CODE_SKIPPED.sub(\"\", text)\n        at = bare.find(SHARE_CODE_PREFIX)\n        if at < 0:\n            return \"\".join(text.split())\n        text = bare\n",
+               "replace": "        return \"\".join(text.split())\n"}],
+    "must_fail": ["a code whose prefix the wrapping broke is read as a whole one is"],
+    "suites": ["qa3"],
+    "expect": "killed"
   }
 ]
