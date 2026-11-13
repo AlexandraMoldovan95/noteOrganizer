@@ -899,10 +899,8 @@ def move_notes_to_trash(trash, notes_to_trash):
 
 
 def renew_in_trash(trash, entry):
-    """Start the Trash's clock again for *entry*, already in *trash*: what is
-    put in a second time, content for content, is kept the whole window from
-    now, as the question that put it there promised -- left on the first
-    one's clock, it went sooner.
+    """Start the Trash's clock again for *entry*, already in *trash*: put in
+    a second time, it is kept the whole window from now, as promised.
 
     Returns ``(True, None)`` once trash.json holds the new stamp, or
     ``(False, exception)`` with the entry's stamp as it was.

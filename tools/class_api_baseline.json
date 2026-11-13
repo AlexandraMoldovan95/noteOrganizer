@@ -756,6 +756,7 @@
   "_say_if_paste_was_cut": "(self, cut, in_body=False)",
   "_say_import_cancelled": "(self)",
   "_say_nothing_is_left_out": "(self)",
+  "_say_trash_not_saved": "(self)",
   "_scale_drawing": "(self, canvas, tag='all')",
   "_schedule_autosave": "(self, event=None, skip_word_count=False)",
   "_schedule_to_carry": "(self, date=True, repeat=True, unsaved=True)",

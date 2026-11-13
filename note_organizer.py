@@ -2355,10 +2355,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     raise ValueError("This backup would not import back. " + problem)
                 os.replace(tmp_path, save_path)
             except Exception as e:
-                # Broad on purpose: anything escaping kills the thread silently,
-                # before state["done"], and the progress bar polled for ever.
-                # Never empty: a MemoryError has no words, and read as no
-                # error, the export was said complete with no file written.
+                # Broad on purpose: anything escaping kills the thread silently.
+                # Never empty: a MemoryError's "" read as no error, and "Export
+                # complete" was said with no file written.
                 state["error"] = str(e) or type(e).__name__
                 try:
                     os.remove(tmp_path)
@@ -15888,11 +15887,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "created": stamp,
             "updated": stamp,
         })
-        # Into the Trash before the day leaves the series: if trash.json
-        # cannot be written, the day's words stay where they were. Not put in
-        # twice, where the app stopped between the Trash's save and the notes':
-        # the entry already there is kept the whole window from now, as the
-        # question promised -- on its own first clock, it went sooner.
+        # Into the Trash before the day leaves the series (if trash.json cannot
+        # be written, the words stay). One already there, the app stopped
+        # between the two saves, is kept the whole window from now instead.
         if how == "trash":
             signature = content_signature(fresh)
             held = next((e for e in self.trash if isinstance(e, dict)

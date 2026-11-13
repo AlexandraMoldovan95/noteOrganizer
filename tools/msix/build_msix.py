@@ -180,8 +180,8 @@ def main():
                     major, minor, build))
     changed = code_newer_than(os.path.join(DIST, "NoteOrganizer.exe"))
     if changed:
-        # The same number over newer code: wave 6's fixes came after the
-        # 0.100.524 build, and packing then would have shipped the old app.
+        # The same number over newer code: fixes made after the 0.100.524
+        # build, packed then, would have shipped the old app under it.
         sys.exit("dist/NoteOrganizer/NoteOrganizer.exe was built before %s last changed: "
                  "build the app again (NoteOrganizer.spec) before packing it" % changed)
     makeappx = sdk_tool("makeappx.exe")
