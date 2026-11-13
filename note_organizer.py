@@ -2221,8 +2221,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                    if t.is_alive()]
         if not workers:
             return
-        if self._import_state is not None:
-            self._import_state["stop"] = True
+        state = self._import_state
+        if state is not None:
+            state["stop"] = True
+            if not state.get("done"):
+                # Before the wait, as an export's: a large file's flush to disk
+                # can hold it for seconds, and a window ended there named none.
+                save_setting("backup_cut_short", {
+                    "kind": "import", "file": state.get("zip") or "",
+                    "copied": list(state.get("copied") or []),
+                    "temp_dir": state.get("temp_dir") or ""})
         export = self._export_state
         if export is not None and not export.get("done"):
             # Written before the wait (up to half a minute): a window ended

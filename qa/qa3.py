@@ -3418,7 +3418,8 @@ with open(os.path.join(os.getcwd(), 'qa3_close_wait.zip'), 'wb') as _fh:
     _fh.write(b'landed')
 _fx_words = _next_start_says()
 check(f'...and an export that landed after the word is said finished, not cut short ({_fx_words[:140]!r})',
-      'qa3_close_wait.zip finished as Note Organizer closed' in _fx_words and 'cut short' not in _fx_words)
+      'qa3_close_wait.zip finished as Note Organizer closed. Open it' in _fx_words
+      and 'cut short' not in _fx_words)
 NO.save_setting('backup_cut_short', {'kind': 'export', 'file': os.path.join(os.getcwd(), 'qa3_close_wait.zip'),
                                      'before': os.path.getmtime(os.path.join(os.getcwd(), 'qa3_close_wait.zip'))})
 _fx_words = _next_start_says()
@@ -3432,6 +3433,29 @@ NO.save_setting('backup_cut_short', {'kind': 'export', 'file': _fx_cw,
 _fx_words = _next_start_says()
 check(f'...as is one that replaced an older backup of the same name ({_fx_words[:120]!r})',
       'qa3_close_wait.zip finished as Note Organizer closed' in _fx_words)
+# An import's word too, before the wait: a large file's flush to disk can
+# hold it, and a window ended there left the files it copied unnamed.
+NO.save_setting('backup_cut_short', None)
+_fx_at_wait.clear()
+_fx_long = threading.Event()
+_fx_worker = _FxWorker(target=_fx_long.wait, args=(3.0,), daemon=True)
+_fx_worker.start()
+_fx_workers_was, _fx_import_was = getattr(app, '_io_workers', []), app._import_state
+_fx_copied = ['20261113100000000001_a.bin', '20261113100000000002_b.bin.part']
+app._io_workers = [_fx_worker]
+app._import_state = {'done': False, 'stop': False, 'copied': list(_fx_copied),
+                     'zip': os.path.join(os.getcwd(), 'qa3_close_wait_import.zip'),
+                     'temp_dir': os.path.join(tempfile.gettempdir(), 'notes_import_qa3_wait')}
+try:
+    app._wait_for_io_workers(cap_s=0.2)
+    _fx_cut = _fx_at_wait.get('word') or {}
+finally:
+    _fx_long.set()
+    app._io_workers, app._import_state = _fx_workers_was, _fx_import_was
+check(f'a close that waits for an import writes its word before the wait, what it copied named ({_fx_cut!r})',
+      _fx_cut.get('kind') == 'import' and _fx_cut.get('copied') == _fx_copied
+      and str(_fx_cut.get('temp_dir', '')).endswith('notes_import_qa3_wait'))
+NO.save_setting('backup_cut_short', None)
 fd.asksaveasfilename = lambda **k: _fx_zip
 # An error without words (a MemoryError's) read as none: "Export complete",
 # "Last exported" stamped, and no file written.
