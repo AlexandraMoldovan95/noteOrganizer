@@ -10622,11 +10622,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     @staticmethod
     def _without_identity(pairs):
         """The arriving side of (mine, theirs) pairs, each without its uid:
-        a copy that keeps it would be two notes wearing one identity."""
+        a copy that keeps it would be two notes wearing one identity. Nor
+        its rescue copy, which stays with the note it was made for, as a
+        duplicate's does (duplicate_note)."""
         copies = []
         for _mine, theirs in pairs:
             copy = dict(theirs)
             copy.pop("uid", None)
+            copy.pop("_prev", None)
             copies.append(copy)
         return copies
 

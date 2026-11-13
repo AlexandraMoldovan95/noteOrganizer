@@ -193,6 +193,14 @@ check(f'duplicate_note: the copy carries no rescue copy of the original '
       f'({sorted(_prev_clone)!r})', '_prev' not in _prev_clone)
 check('duplicate_note: the original keeps its own',
       (app.find_note(1).get('_prev') or {}).get('body') == 'the long text it had before')
+# ...and a backup's "Add a copy anyway" or "Add them as new notes", the
+# other roads that copy a note here: the copies came with the original's
+# rescue copy, the seam duplicate_note had.
+_prev_copies = app._without_identity([(app.notes[0], dict(app.notes[0]))])
+check(f'an import\'s copies carry no rescue copy, nor the uid '
+      f'({[sorted(c) for c in _prev_copies]!r})',
+      len(_prev_copies) == 1 and '_prev' not in _prev_copies[0] and 'uid' not in _prev_copies[0]
+      and _prev_copies[0].get('body') == 'short now')
 
 # -- Settings "clean up duplicates" merge (GAP found by the Fix-1 reviewer) --
 _merge_src = "20260101000000000002_merge.txt"
