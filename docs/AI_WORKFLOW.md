@@ -129,7 +129,7 @@ run is safe is the thing that failed.
 | 11 September | Thirteen hostile reviewers, three verifiers per material finding, a completeness critic | 33 kept; the critic's audit of the wave itself drove three fixes ([0.71.154](../CHANGELOG.md#071154--2026-09-11)) |
 | Late September – 2 October | Nineteen rounds trying to break the app, each aimed at what the last one changed | Every finding reproduced with a probe before it was fixed ([0.83.335](../CHANGELOG.md#083335--2026-10-02)) |
 | 8 October | Five reviewer personas on the palette, five rounds; four reviewers on colour-blindness simulations | The palette of [0.89.365](../CHANGELOG.md#089365--2026-10-08); the fixes of [0.89.371](../CHANGELOG.md#089371--2026-10-08) |
-| 27 October – 8 November | The final audit before the stores, both apps, in waves of rounds; in its first three, every finding of medium severity or worse re-graded by a sceptic | 1,246 findings; of the 756 re-graded, 6 refuted, 69 lowered, 85 told twice ([the final audit](#the-final-audit)) |
+| 27 October – 8 November | The final audit before the stores, both apps, in waves of rounds; in waves 1 to 3, every finding of medium severity or worse re-graded by a sceptic | 1,246 findings; of the 756 re-graded, 6 refuted, 69 lowered, 85 told twice ([the final audit](#the-final-audit)) |
 
 What the numbers taught: a wave is worth what its verification is worth - the hostile pass
 reported one first-run dialog six times, and only the harshness audit noticed - and a grep later
@@ -149,7 +149,8 @@ How a round worked:
 
 - **Agents attacked the app** in a role - an ordinary person's week, a careless hand, hostile
   and huge input - each reading the code and running probes in a scratch copy.
-- **Every finding of medium severity or worse was re-graded** before it counted: by a sceptic
+- **Every finding of medium severity or worse was re-graded** before it counted (all but two of
+  wave 2's on the phone, as the table below shows): by a sceptic
   agent in waves 1 to 3, and in waves 5 and 6 by the agent leading the audit, checking it in
   the code (wave 4, the review panel, scored the apps; the one medium of its third round was
   checked against git). The severity rule is mine (1 November): only steps an ordinary person takes keep a

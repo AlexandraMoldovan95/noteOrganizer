@@ -1543,9 +1543,10 @@ backup leaves the temp folder, and the files the worker copied in (it records th
 attachments folder unless a note uses them. Merging at close would mean asking the import's
 questions in a window that is closing.
 
-So an import is not waited for at all: the close asks it to stop at once, since its work would
-be thrown away. An export is waited for, up to the cap, and asked to stop only if it is still
-writing then. Asking means setting `"stop"` in the worker's state dict. The worker hands zipfile
+So an import is asked to stop at once, since its work would be thrown away, and waited for only
+until it answers (within the same cap, for a read that stalls on a network share or a stick). An
+export is waited for, up to the cap, and asked to stop only if it is still writing then, with up
+to 5 seconds more to answer. Asking means setting `"stop"` in the worker's state dict. The worker hands zipfile
 its file wrapped in `StoppableFile` (core/sharing.py), whose next read or write raises
 `BackupStopped`, and copies attachments with `copy_file_until_stopped`. A stop is therefore
 answered between two chunks, even inside one huge file, and the worker's own error path takes its
@@ -1554,10 +1555,15 @@ cap and the process then died mid-file, with the unpacked backup in the temp fol
 half-copied `.part` in attachments; an export cut off at the cap left its `.tmp` beside the backup.
 
 A window that is closing cannot tell anyone what it dropped, so the close writes it down:
-`_settle_background_work_at_close` leaves `backup_cut_short` in settings (which kind, which
-file) for an import dropped or an export not finished. The next start reads it out once, with
-the other startup news in `announce_startup_changes`, and clears it. An export that finished in
-time leaves nothing.
+`backup_cut_short` in settings, written before the wait (by `_wait_for_io_workers`, so a window
+ended inside the wait still leaves it) and replaced after it by
+`_settle_background_work_at_close` with what really happened. It names the kind (an import,
+an export cut short, failed or finished only in part), the file, and for an import what it
+copied and unpacked, for the next start to take out; an export's word keeps its file's time
+too, so an export that landed after all is said finished. The end of a Windows session writes
+the same word (`_settle_backups_at_session_end`). The next start reads it out once, with the
+other startup news in `announce_startup_changes`, and clears it. An export that finished whole
+in time leaves nothing.
 
 ## Feedback and the crash log: what the app says about itself
 

@@ -4207,7 +4207,8 @@ new format. And `move_notes_to_trash`, stopped between its two writes, can leave
 files, a second identical row the next time it is deleted: no loss, and matching every delete
 against the whole Trash could merge two deletions a person meant apart.
 
-**The second round** found the export's three records still out of step, all of low severity:
+**The second round** found one medium, in the test plan (case 1059's precondition named a question
+that never came, now true), and the export's three records still out of step, all of low severity:
 the session-end fix itself dropped the export, so a session whose question was cancelled kept a
 frozen bar, never said the failure, and told the next start of a sign-out that never came; an
 export still writing at the question that failed after it had its word taken back before its
@@ -4264,8 +4265,8 @@ import stopped by a sign-out then cancelled is said at once and again at
 the next start; an export to a stick unplugged before the next start is said cut short; and a
 docker command run through a name that does not say docker passes `check_guest`.
 
-**The fifth round** found nothing of medium severity on the desktop, the first round to come
-back clean. Fixed all the same: `check_guest`'s pattern could try a line of many hyphenated flags
+**The fifth round** found nothing of medium severity on the desktop, as the first round had not;
+the three between had each found one. Fixed all the same: `check_guest`'s pattern could try a line of many hyphenated flags
 every way, for minutes (a gate that would hold the paid CI job to its limit); a flag and its
 value are taken once now, the lines that took it minutes are among its prose, and a line
 continuation counts only at a line's end, so Markdown's `docker` in backticks is no command. It
@@ -4280,6 +4281,24 @@ waiting for its poll when a session ends, is said cut short, its reason unsaid; 
 update that cannot read the notes says both that the list is empty and that the notes came
 through the update; and docker commands put together in steps (`cmd += ["run"]`) or through a
 verb held in a name still pass.
+
+**The sixth round** found one medium, older than the wave, in the test plan: case 660 asked
+whether the next start's silence about an import cut short was fine, while since 0.94.382 that
+start says it (case 663); it points there now. The rest was low. The fifth round's list built in
+pieces had stopped seeing a flag, `container` or compose's flags before the verb, which the
+pattern before it saw; they are back, with `DOCKER + ARGS + ["run"]` and `--context="ci"`, a
+word like "volume" still not one. A new line counts only after a comma or a continuation, and a
+continuation only after a space, so wrapped prose and Markdown's `docker` at a line's end are no
+command; a quoted flag can no longer be read as the one before's value, which doubled the work
+with each; and a line of thousands of "docker" no longer costs the square of its length (a name
+taken once, at most 24 flags in a chain). The session's end names an import's copied files
+before its join, as the close does since the fifth round (SN34), and the close names them
+whether the import was done or not, through its cleanup (SN23 widened): a process ended there
+left them unnamed. A new case says so in the plan. ARCHITECTURE no longer says an import is not
+waited for, nor that only the settle writes the word; USER_GUIDE says a stalled stick holds the
+close up to half a minute; the log's second round now names the medium it had. Left: an import
+that fails on its own in the moment before the close is said cut short, its reason unsaid; and
+an export's target on a share that stalls is asked its time before the close's word is written.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.

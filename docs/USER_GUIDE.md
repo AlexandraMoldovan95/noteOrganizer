@@ -1082,9 +1082,11 @@ archive shaped like a damaged or hostile one: more than 100,000 files, or a larg
 whole backup, that would expand to over a hundred times its packed size. The export checks each backup
 it makes the same way before putting it in place, so it never makes one it could not bring back.
 
-Closing the app while an import is still working stops it straight away. Nothing of it is kept —
-no notes, no files, nothing left in the temp folder — and the next time you open the app it says
-so, naming the backup to import again.
+Closing the app while an import is still working stops it — straight away, unless the backup sits
+on a network drive or a stick that stops answering, when the app waits up to half a minute.
+Nothing of it is kept — no notes, no files, nothing left in the temp folder — and the next time
+you open the app it says so, naming the backup to import again, even if Windows ended the app
+while it waited.
 
 ![Import backup](screenshots/import-backup.png)
 
