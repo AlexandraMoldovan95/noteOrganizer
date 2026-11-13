@@ -4258,10 +4258,28 @@ command. The start's sentence for an export that landed no longer says its messa
 untrue of a session ended with the message up. Left: a file holding a key twice loses the first
 value when the cleanup rewrites it (the read keeps the last; only a hand edit writes one); an
 export that landed unseen leaves "Last exported" at the older date; an import gets no word before
-the close's wait (its stop answers within one chunk, in milliseconds, so no window shows Not
-Responding there); an import stopped by a sign-out then cancelled is said at once and again at
+the close's wait (its stop answers within one chunk, but not inside a large file's flush to disk,
+which can hold the window for seconds; a process ended there leaves the copied files unnamed); an
+import stopped by a sign-out then cancelled is said at once and again at
 the next start; an export to a stick unplugged before the next start is said cut short; and a
 docker command run through a name that does not say docker passes `check_guest`.
+
+**The fifth round** found nothing of medium severity on the desktop, the first round to come
+back clean. Fixed all the same: `check_guest`'s pattern could try a line of many hyphenated flags
+every way, for minutes (a gate that would hold the paid CI job to its limit); a flag and its
+value are taken once now, the lines that took it minutes are among its prose, and a line
+continuation counts only at a line's end, so Markdown's `docker` in backticks is no command. It
+also sees cmd's caret and a quoted value with a space, and leaves `DOCKER + ["volume", "create"]`
+alone. An import gets its word before the close's wait, as an export does (SN33), since a large
+file's flush to disk can hold that wait for seconds; and the check of the sentence for an export
+that landed reads the sentence's end (SN32). Left: a backup word said at a start whose
+`settings.json` writes are held is said again at the next; an import's word is taken back only
+after the merge's redraw and cleanup, so a window ended in between says nothing was kept of
+notes the file holds (importing again skips them); an import that failed on its own, still
+waiting for its poll when a session ends, is said cut short, its reason unsaid; a start after an
+update that cannot read the notes says both that the list is empty and that the notes came
+through the update; and docker commands put together in steps (`cmd += ["run"]`) or through a
+verb held in a name still pass.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.

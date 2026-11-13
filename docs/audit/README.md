@@ -294,6 +294,7 @@ totals above are waves 1 to 5's.
 | [r3-phone.txt](wave6/r3-phone.txt) | Phone | 2026-11-13 06:53 | 2 | 0.63 |
 | [r4-desktop.txt](wave6/r4-desktop.txt) | Desktop | 2026-11-13 08:06 | 2 | 0.53 |
 | [r4-phone.txt](wave6/r4-phone.txt) | Phone | 2026-11-13 08:33 | 2 | 0.52 |
+| [r5-desktop.txt](wave6/r5-desktop.txt) | Desktop | 2026-11-13 09:07 | 2 | 0.56 |
 
 From the third round, both agents of an app read one file; the line that started each named
 where to begin, one at each fix by name, the other at the person's roads and the documents.
