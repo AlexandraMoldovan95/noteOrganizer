@@ -1018,7 +1018,8 @@ def save_setting(key, value):
     Read-modify-write rather than a blind overwrite: several parts of the
     app own different keys in this one file, and a save that rewrote the
     whole thing from one caller's view of it would drop the others.
+    Returns whether it was written, for a screen that says so.
     """
     settings = load_settings()
     settings[key] = value
-    save_settings(settings)
+    return save_settings(settings)[0]

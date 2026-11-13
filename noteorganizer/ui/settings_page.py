@@ -663,7 +663,7 @@ class SettingsPageMixin:
             # The editor's save may have replaced this very template ("Replace"):
             # nothing is left for this bin to delete.
             if not any(t is tpl for t in self.templates):
-                self.set_status(f"“{shown}” was replaced by the template "
+                self._say_by_the_box(self, f"“{shown}” was replaced by the template "
                                 "you saved")
                 return "break"
             # Honest about the stakes: notes go to the Trash and can come
@@ -683,8 +683,11 @@ class SettingsPageMixin:
 
         self._icon_button(row, "trash", delete, danger=True, bg_key="sidebar"
                           ).pack(side="right", padx=(1, 6))
+        # Not "Rename": it opens the whole template to edit.
         edit_btn = self._icon_button(row, "pencil", bg_key="sidebar",
-                                     keys=lambda: edit())
+                                     keys=lambda: edit(),
+                                     tip=("Edit", "Opens this template: its name, title, text, "
+                                                  "comments, checklist and category."))
 
         def edit(_e=None):
             # Another template's editor, half written, stayed open: this
@@ -1526,7 +1529,7 @@ class SettingsPageMixin:
             self.show_warning(
                 "Nothing was deleted",
                 "The Trash could not be saved, so its notes and their files stay "
-                "where they are. Is the disk full? Details are in crash_log.txt.")
+                "where they are. " + self._why_trash_refused())
         return ok
 
     @staticmethod
@@ -1703,8 +1706,9 @@ class SettingsPageMixin:
                 + self._series_warning(named),
                 icon="warning", default="no"
             ) and destroy(named):
-                self.set_status("Deleted %d note%s permanently"
-                                % (count, "" if count == 1 else "s"))
+                # On the banner too: the status line is behind Settings.
+                self._say_by_the_box(self, "Deleted %d note%s permanently"
+                                     % (count, "" if count == 1 else "s"))
             redraw()
 
         def restore_selected():
@@ -1717,8 +1721,8 @@ class SettingsPageMixin:
                 return  # could not be kept, and said so; still ticked
             for entry in picked:
                 self._trash_sel.pop(_trash_tick_key(entry), None)
-            self.set_status("Restored %d note%s"
-                            % (len(picked), "" if len(picked) == 1 else "s"))
+            self._say_by_the_box(self, "Restored %d note%s"
+                                 % (len(picked), "" if len(picked) == 1 else "s"))
             shown_count["n"] = max(PAGE_SIZE, shown_count["n"])
             redraw()
 
@@ -1854,10 +1858,10 @@ class SettingsPageMixin:
     def _build_settings_duplicates_panel(self, parent):
         self._settings_subtitle(
             parent,
-            "Notes with the " + SAME_AS + " (ignoring "
-            "case, spacing, a “(copy)” after the title, the text's styling, "
-            "date, color and pin). Tick the copies you want to "
-            "remove — the rest are kept.")
+            "Notes with the " + SAME_AS + " (the title, text and comments "
+            "ignoring case and spacing; a “(copy)” after the title, the text's "
+            "styling, date, color and pin not counted). Tick the copies you want "
+            "to remove — the rest are kept.")
         groups = find_duplicate_groups(self.notes)
         if not groups:
             tk.Label(parent, text="No duplicates found — every note is unique. 🎉",
@@ -1866,8 +1870,9 @@ class SettingsPageMixin:
             return
 
         total_dupes = sum(len(g) - 1 for g in groups)
-        tk.Label(parent, text=f"Found {len(groups)} group(s), up to {total_dupes} note(s) "
-                              "could be removed.",
+        # Not "could be removed": a group ticked whole goes whole.
+        tk.Label(parent, text=f"Found {len(groups)} group(s): {total_dupes} note(s) "
+                              "beyond the first of each.",
                  font=("Segoe UI", 9), bg=self.colors["card"], fg=self.colors["subtext"],
                  wraplength=self.px(520), justify="left").pack(padx=12, pady=(0, 2), anchor="w")
         tk.Label(parent, text="Tick the copies you want to remove. Keep as many as "
@@ -3428,14 +3433,22 @@ class SettingsPageMixin:
             if len(current) > USERNAME_MAX_LEN:
                 current = current[:USERNAME_MAX_LEN]
                 self.username_var.set(current)
-            self.save_username(current)
+            written = self.save_username(current)
             self._refresh_greeting()
             refresh_preview()
-            self.set_status("Name saved" if current.strip() else "Name cleared")
+            # Said saved only when it was: on a full disk the page said "Saved
+            # automatically" under the red banner, the sidebar keeping the old name.
+            if written:
+                self.set_status("Name saved" if current.strip() else "Name cleared")
+                said, ink = "Saved automatically", self.colors["success_text"]
+            else:
+                said, ink = ("Not saved: the sidebar keeps the name it had",
+                             self.colors["danger_text"])
             try:
-                saved_note.configure(text="Saved automatically")
-                self.after(2200, lambda: saved_note.winfo_exists()
-                           and saved_note.configure(text=""))
+                saved_note.configure(text=said, fg=ink)
+                if written:
+                    self.after(2200, lambda: saved_note.winfo_exists()
+                               and saved_note.configure(text=""))
             except tk.TclError:
                 pass
 
@@ -3471,7 +3484,8 @@ class SettingsPageMixin:
         nav plus a content pane; only the frame it builds into differs.
         """
         self._settings_subtitle(
-            parent, "Pick a look that feels right. Changes apply instantly, everywhere.")
+            parent, "Pick a look that feels right. Changes apply at once, everywhere; "
+                    "Sharp text, at the next start.")
         appearance = parent
         # No light/dark button here any more: the mode switch is a
         # segmented control in the rail footer, reachable from every
@@ -3807,7 +3821,7 @@ class SettingsPageMixin:
             target = paths.APP_DIR or ""
             self.clipboard_clear()
             self.clipboard_append(target)
-            self.set_status("Folder path copied")
+            self._say_by_the_box(self, "Folder path copied")
 
         self._text_button(buttons, "Open folder", open_folder).pack(side="left")
         self._text_button(buttons, "Copy path", copy_path).pack(side="left", padx=(8, 0))
@@ -3880,7 +3894,7 @@ class SettingsPageMixin:
         except Exception:  # noqa: BLE001 -- any failure has the same answer
             opened = False
         if opened:
-            self.set_status("Opened in your browser")
+            self._say_by_the_box(self, "Opened in your browser")
             return
         try:
             self.clipboard_clear()

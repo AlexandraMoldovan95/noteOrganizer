@@ -480,6 +480,22 @@ check('a theme switch prunes destroyed widgets from the registry',
       not any(w is _dead_probe for w, _m in app.themed_widgets))
 app.toggle_theme(); app.update()
 
+# ---- The light/dark switch remembers each kind from one start to the next ----
+# Forgotten at each start, it promised the last theme used and gave the
+# default after a restart.
+from noteorganizer.core.themes import last_of_each as _lt_last
+_lt_was = app.theme_name
+app.set_theme('dark_ocean'); app.update()
+app.set_theme('light_sky'); app.update()
+_lt_kept = (NO.load_settings().get('last_dark_theme'), NO.load_settings().get('last_light_theme'))
+check(f"the switch's last dark and light themes are written for the next start ({_lt_kept})",
+      _lt_kept == ('dark_ocean', 'light_sky'))
+check("...and read back at a start, the theme worn first, a name no theme has passed over",
+      _lt_last('light_sky', *_lt_kept) == ('dark_ocean', 'light_sky')
+      and _lt_last('dark', 'no_such', 'light_mint') == ('dark', 'light_mint')
+      and _lt_last('light_warm', ['x'], None) == ('dark', 'light_warm'))
+app.set_theme(_lt_was); app.update()
+
 # ---- PERFORMANCE: note list with larger count ----
 # This check used to assert a literal True: it measured the time, printed
 # it into its own label, and passed unconditionally. It was the only

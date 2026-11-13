@@ -957,6 +957,7 @@
   "_wheel_pixels": "(self, delta)",
   "_while_native": "(self, show)",
   "_whole_note_rescue_copy": "(note)",
+  "_why_trash_refused": "(self)",
   "_widget_alive": "(widget)",
   "_window_rect_and_work_area": "(self)",
   "_without_identity": "(pairs)",

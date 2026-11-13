@@ -2213,7 +2213,8 @@ check(f"a held turn-off after an import's Update keeps the update's copy whole "
       and not app.find_note(1)['recurrence'].get('freq'))
 check(f"...and the status line says Restore previous brings back the note from before "
       f"the update, not the series ({_uh_line[-70:]!r})",
-      'before it was updated' in _uh_line and "every day's own text" not in _uh_line)
+      'the version it kept before, not the series' in _uh_line
+      and "every day's own text" not in _uh_line)
 # Turned off, on again from another start, then the start put back: the
 # second save spent the copy's deleted day, which came back on the calendar
 # with no way to undo it. The owner's rule: kept days come back
@@ -4214,6 +4215,20 @@ check(f"...and keeps in its turn the field the backup added, which the restored 
       f"({_rn_turn.get('body')!r}, {'x_new' in _rn_turn}, {(_rn_turn.get('_prev') or {}).get('_unknown')})",
       _rn_turn.get('body') == 'Hello world' and 'x_new' not in _rn_turn
       and (_rn_turn.get('_prev') or {}).get('_unknown') == {'x_new': 'v'})
+# Pressed again, the copy is the updated version the restore replaced: the
+# question asked "as it was before it was updated" of it, the reverse of what
+# the button then did. It names the previous version, as the button does.
+_rn_asked = []
+app.ask_yes_no = lambda _t, msg, **_k: (_rn_asked.append(msg), False)[1]
+try:
+    app.restore_previous_version(); app.update()
+finally:
+    app.ask_yes_no = _ro_yes
+app._cancel_pending_autosave()
+check(f"...and pressed again it asks for the previous version, not the note before an update "
+      f"({(_rn_asked or [''])[0][:60]!r})",
+      bool(_rn_asked) and _rn_asked[0].startswith('Bring back the previous version of this note')
+      and 'before it was updated' not in _rn_asked[0])
 # The Undo of a day clicked with THAT day open -- a repeat picked anew has it
 # again, the series' text on it -- saves the editor before it writes the
 # day, and opens it without a second save. Saved after, the editor's view

@@ -185,6 +185,16 @@ THEMES = {
 DARK_THEMES = ["dark", "dark_ocean", "dark_forest", "dark_slate"]
 LIGHT_THEMES = ["light", "light_sky", "light_mint", "light_warm"]
 
+
+def last_of_each(theme, kept_dark, kept_light):
+    """Where the quick light/dark switch goes back to, as (dark, light): the
+    theme worn now for its own kind, else the one settings.json kept (a name
+    no theme has is passed over), else the default. Forgotten at each start,
+    it promised the last theme used and gave the default after a restart."""
+    dark = theme if theme in DARK_THEMES else kept_dark if kept_dark in DARK_THEMES else "dark"
+    light = theme if theme in LIGHT_THEMES else kept_light if kept_light in LIGHT_THEMES else "light"
+    return dark, light
+
 # Friendly display names for the picker.
 THEME_LABELS = {
     "dark": "Midnight Purple",

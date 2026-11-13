@@ -166,6 +166,41 @@ check('truncated name is what gets persisted',
       len(NO.load_settings().get('username', '')) == 30)
 check('greeting reflects the truncated name, not the original 70 chars',
       len(app.greeting_lbl.cget('text')) < 40)
+# ...and said saved only when it was: on a full disk the page said "Saved
+# automatically" under the red banner, the sidebar keeping the old name.
+import errno as _errno6
+_ns_store = sys.modules['noteorganizer.core.storage']
+_ns_save_was = _ns_store.save_settings
+_ns_name_was = app.username_var.get()
+_ns_store.save_settings = lambda _s: (False, OSError(_errno6.ENOSPC, 'No space left on device'))
+try:
+    app.username_var.set('Refused')
+    name_entry.event_generate('<Return>')
+    app.update()
+    _ns_said, _ns_stack = [], [app]
+    while _ns_stack:
+        _ns_w = _ns_stack.pop()
+        if isinstance(_ns_w, tk.Label) and 'aved' in str(_ns_w.cget('text')):
+            _ns_said.append(_ns_w.cget('text'))
+        _ns_stack.extend(_ns_w.winfo_children())
+    _ns_greeting = app.greeting_lbl.cget('text')
+finally:
+    _ns_store.save_settings = _ns_save_was
+check(f"a name the disk refused is said not saved, the sidebar keeping the old one "
+      f"({_ns_said}, {_ns_greeting!r})",
+      any(s.startswith('Not saved') for s in _ns_said) and 'Saved automatically' not in _ns_said
+      and 'Refused' not in _ns_greeting)
+app.username_var.set(_ns_name_was)
+name_entry.event_generate('<Return>')
+app.update()
+_ns_said, _ns_stack = [], [app]
+while _ns_stack:
+    _ns_w = _ns_stack.pop()
+    if isinstance(_ns_w, tk.Label) and 'aved' in str(_ns_w.cget('text')):
+        _ns_said.append(_ns_w.cget('text'))
+    _ns_stack.extend(_ns_w.winfo_children())
+check(f"...and one it took is said saved ({_ns_said})",
+      'Saved automatically' in _ns_said and not any(s.startswith('Not saved') for s in _ns_said))
 
 # ---- SETTINGS + THEME SWITCH + CLICKS: NO CALLBACK ERRORS ----
 # Flipping themes rebuilds settings widgets; a click that still named a
@@ -2661,6 +2696,24 @@ _sa_press('permanently')
 check(f"answering Yes deletes the 28 and keeps the two unticked ({[e['title'] for e in app.trash]})",
       sorted(e['title'] for e in app.trash) == ['Trashed 05', 'Trashed 06']
       and sorted(e['title'] for e in NO.load_trash()) == ['Trashed 05', 'Trashed 06'])
+# ...said where it can be read: the status line it went to is out of sight
+# behind Settings.
+check(f"...and said on the banner, the status line being behind Settings "
+      f"({app.toast_lbl.cget('text')!r})",
+      'Deleted 28 notes permanently' in app.toast_lbl.cget('text'))
+# A Trash whose file could not be opened at the start refuses the write for
+# that reason, not the disk's: Settings' deletes asked "Is the disk full?".
+_tw_said, _tw_warn_was = [], app.show_warning
+app.show_warning = lambda *a, **k: _tw_said.append(' '.join(map(str, a)))
+NO._core_paths.hold_writes(NO.TRASH_FILE)
+try:
+    _tw_ok = app._trash_written(list(app.trash))
+finally:
+    NO._core_paths.WRITES_HELD.clear()
+    app.show_warning = _tw_warn_was
+check(f"a delete in Settings over a Trash held since the start says why ({' '.join(_tw_said)[-90:]!r})",
+      _tw_ok is False and 'could not be opened when Note Organizer started' in ' '.join(_tw_said)
+      and 'disk full' not in ' '.join(_tw_said))
 check('...a file a living note uses stays, one only the deleted used goes',
       os.path.exists(_sa_files['sa_shared.txt']) and not os.path.exists(_sa_files['sa_own.txt']))
 check('...and nothing is left ticked, so nothing is offered',

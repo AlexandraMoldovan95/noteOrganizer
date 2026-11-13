@@ -466,6 +466,7 @@ from noteorganizer.core.themes import (
     DARK_THEMES,
     LIGHT_THEMES,
     THEME_LABELS,
+    last_of_each,
     DEFAULT_CATEGORY_COLORS,
     PALETTE_COLORS,
     PROTECTED_CATEGORY,
@@ -788,9 +789,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Read before the editor is built, so the body text is created in the
         # right font rather than being restyled a moment after it appears.
         self._load_editor_font()
-        # Track last-used dark/light for the quick toggle button.
-        self._last_dark_theme = self.theme_name if self.theme_name in DARK_THEMES else "dark"
-        self._last_light_theme = self.theme_name if self.theme_name in LIGHT_THEMES else "light"
+        # Track last-used dark/light for the quick toggle button, kept across starts.
+        self._last_dark_theme, self._last_light_theme = last_of_each(
+            self.theme_name, get_setting("last_dark_theme"), get_setting("last_light_theme"))
 
         # Load the user's categories into the live map BEFORE notes load, so
         # normalize_note validates each note's category against the real set.
@@ -1677,13 +1678,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return theme if theme in THEMES else "dark"
 
     def save_theme_setting(self):
-        save_setting("theme", self.theme_name)
+        # The theme and the last of each kind in one write, for the quick switch
+        # after a restart (the phone keeps its own, under phone_theme_*).
+        settings = load_settings()
+        settings.update(theme=self.theme_name, last_dark_theme=self._last_dark_theme,
+                        last_light_theme=self._last_light_theme)
+        save_settings(settings)
 
     def load_username(self):
         return get_setting("username", "", expect=str)
 
     def save_username(self, name):
-        save_setting("username", name.strip())
+        return save_setting("username", name.strip())
 
     def _refresh_greeting(self):
         """Show 'Hi <name>,' if a name is set in Settings, otherwise nothing.
@@ -20174,15 +20180,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # (apply_shared_update), and the question names all of it.
         also = [label for key, label in self._PREV_EXTRA_LABELS
                 if key in prev]
+        # "The previous version", the button's own words: "as it was before it
+        # was updated" was said again over the copy a restore keeps, which is
+        # the updated version itself.
         if also:
             question = (
-                "Bring back this note as it was before it was updated? "
+                "Bring back the previous version of this note? "
                 "Its text comes back, and so do its "
                 + ", ".join(also[:-1])
                 + (" and " if len(also) > 1 else "") + also[-1]
                 + ". What the note holds now will be replaced.")
         else:
-            question = ("Bring back the earlier version of this note's text? "
+            question = ("Bring back the previous version of this note's text? "
                         "The current text will be replaced.")
         # ...and kept, when it holds anything the earlier version lacks:
         # said only then, as only then is it true.
@@ -20521,7 +20530,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     _REPEAT_OFF_KEPT = (" — the repeat is off; ↩ Restore previous brings it "
                         "back with every day's own text")
     _REPEAT_OFF_UPDATE_KEPT = (" — the repeat is off; ↩ Restore previous brings "
-                               "back the note as it was before it was updated")
+                               "back the version it kept before, not the series")
     _REPEAT_OFF_NO_COPY = " — the repeat is off; every day's own text stays in the note"
 
     def _repeat_off_line(self, note):
@@ -21491,10 +21500,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.show_warning(
             "Nothing was deleted",
             "The Trash could not be saved, so the note stays where it is. "
-            + ("Its file could not be opened when Note Organizer started, "
-               "so nothing is saved to it until the app is opened again."
-               if _core_paths.writes_held(TRASH_FILE) else
-               "Is the disk full? Details are in crash_log.txt."))
+            + self._why_trash_refused())
+
+    def _why_trash_refused(self):
+        """Why the Trash could not be written, for every message that says so:
+        held since the start, or the disk (Settings' copy asked only of the disk)."""
+        if _core_paths.writes_held(_core_paths.TRASH_FILE):
+            return ("Its file could not be opened when Note Organizer started, "
+                    "so nothing is saved to it until the app is opened again.")
+        return "Is the disk full? Details are in crash_log.txt."
 
     def delete_current_note(self):
         """Delete the note open in the editor (the Delete button / shortcut)."""
