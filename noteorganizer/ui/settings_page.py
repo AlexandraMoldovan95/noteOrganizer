@@ -1234,10 +1234,11 @@ class SettingsPageMixin:
                     self.templates[idx] = new_tpl
                 else:
                     self.templates.append(new_tpl)
-            save_templates(self.templates)
             # Saved after all: a cancelled sign-out's word that it was not
-            # kept is untrue now, and the next start must not say it.
-            if get_setting("template_not_kept", None, expect=str):
+            # kept is untrue now, and the next start must not say it. Over a
+            # refused write it is still true, and stays.
+            if (save_templates(self.templates)[0]
+                    and get_setting("template_not_kept", None, expect=str)):
                 save_setting("template_not_kept", None)
             self._dismiss_mini_popup()
             # The list as the page shows it NOW: rebuilt under the editor, the
@@ -1581,7 +1582,16 @@ class SettingsPageMixin:
                     except tk.TclError:
                         pass
                     return
-            choose_trash_window(days)
+            if not choose_trash_window(days)[0]:
+                # Refused, the dropdown showed a window the subtitle, the
+                # "days left" and the start's purge did not: put back, said.
+                try:
+                    self.trash_retention_var.set(shown(current))
+                except tk.TclError:
+                    pass
+                self._show_toast("Not saved: deleted notes are kept as long as before",
+                                 kind="info")
+                return
             # The subtitle and every row's "days left" quote the window: the
             # rows alone are redrawn, not the panel under the dropdown.
             try:

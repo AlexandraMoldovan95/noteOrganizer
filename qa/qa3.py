@@ -2934,7 +2934,7 @@ app._themed_dialog = _real_dialog
 _nf_said = _nf_asked[0] if _nf_asked else ''
 check(f"a note differing by a file alone is said to take the file, no Restore previous, no OLDER "
       f"({_nf_said[-120:]!r})",
-      'adds the attached files they lack, nothing else' in _nf_said
+      'adds the attached files it lacks, nothing else' in _nf_said
       and 'Restore previous' not in _nf_said and 'OLDER' not in _nf_said)
 # ...and one differing by a field a newer version wrote alone is no Update
 # (D2), but the question says the backup holds it: "nothing" was untrue.
@@ -2950,6 +2950,23 @@ check(f"a note differing by a newer version's field alone is said so, and that S
       f"({_nu_said[0]!r}, {_nu_said[1][-110:]!r})",
       _nu_said[0] == 'Already here, unchanged' and 'fields a newer version wrote' in _nu_said[1]
       and 'Skipping leaves those fields out' in _nu_said[1])
+# ...but only fields the import brings: this device's own, absent from an
+# older backup or from a share code (which carries none), were said its.
+_nr_mine = NO.normalize_note(dict({'id': 6, 'title': 'Plan', 'body': 'b'},
+                                  reminder_at='2026-11-20 09:00'))
+_nr_theirs = {k: v for k, v in _nr_mine.items() if k != 'reminder_at'}
+_nr_said = []
+for _nr_source in ('backup', 'code'):
+    app.notes = [_nr_mine]; app.save_notes()
+    _nr_asked = []
+    app._themed_dialog = lambda *a, **k: (_nr_asked.append((a[0], a[1])), 'skip')[1]
+    app._take_known_notes([dict(_nr_theirs)], _nr_source)
+    app._themed_dialog = _real_dialog
+    _nr_said.append(_nr_asked[0] if _nr_asked else ('', ''))
+check(f"the device's own newer field, absent from an older backup or a code, is not said the import's "
+      f"({[s[1][-70:] for s in _nr_said]!r})",
+      all(t == 'Already here, unchanged' and 'newer version' not in s
+          and 'Skipping changes nothing' in s for t, s in _nr_said))
 app.notes = [_nt_mine]; app.save_notes()
 
 # "Update" waits for the import's last answer. The updates were applied
@@ -4490,9 +4507,10 @@ def _ic_path(name):
     return os.path.join(NO.ATTACHMENTS_DIR, name)
 
 
-def _ic_import(notes, files, answer, templates=None):
+def _ic_import(notes, files, answer, templates=None, settings=None):
     """Import a backup holding `notes`, the attachment `files` and any
-    `templates`, answering the import's own questions with `answer`."""
+    `templates` or `settings`, answering the import's own questions with
+    `answer`."""
     src = tempfile.mkdtemp(prefix='qa3_ic_')
     os.makedirs(os.path.join(src, 'attachments'))
     for name in files:
@@ -4507,6 +4525,8 @@ def _ic_import(notes, files, answer, templates=None):
         zf.write(os.path.join(src, 'notes_data.json'), 'notes_data.json')
         if templates is not None:
             zf.writestr('templates.json', json.dumps(templates))
+        if settings is not None:
+            zf.writestr('settings.json', json.dumps(settings))
         for name in files:
             zf.write(os.path.join(src, 'attachments', name), 'attachments/' + name)
     _ic_shutil.rmtree(src, ignore_errors=True)
@@ -4523,6 +4543,27 @@ def _ic_import(notes, files, answer, templates=None):
     os.remove(zpath)
     return asked
 
+
+# A backup's categories the settings file refused are said not written, as
+# its day markings are: "Also restored 1 category" read as kept, and their
+# colours were gone at the next start.
+app.open_blank_tab(); app.update()
+app.notes = []; app.save_notes()
+_cw_cats = sys.modules['noteorganizer.core.categories']
+_cw_save_was, _cw_info_was, _cw_said = _cw_cats.save_settings, app.show_info, []
+_cw_cats.save_settings = lambda _s: (False, OSError(28, 'No space left on device'))
+app.show_info = lambda title, msg='', **k: _cw_said.append(msg)
+try:
+    _ic_import([{'title': 'Seedlings', 'body': 'tomatoes', 'category': 'Garden qa3'}], [],
+               lambda *a, **k: (k.get('buttons') or [(None, True)])[-1][1],
+               settings={'categories': {'Garden qa3': '#3a7d44'}})
+finally:
+    _cw_cats.save_settings, app.show_info = _cw_save_was, _cw_info_was
+NO.CATEGORY_COLORS.pop('Garden qa3', None)
+check(f"a backup's categories the settings file refused are said not written "
+      f"({(_cw_said or [''])[-1][-140:]!r})",
+      bool(_cw_said) and 'Also restored 1 category' in _cw_said[-1]
+      and 'The categories could not be written to disk yet' in _cw_said[-1])
 
 app.open_blank_tab(); app.update()
 app.notes = [NO.normalize_note({'id': 1, 'title': 'Groceries', 'body': 'milk'})]
@@ -5692,6 +5733,38 @@ check(f"a template saved after a cancelled sign-out refused it takes back the wo
       f"was not kept ({_tk_word!r}, {_tk_said[:60]!r})",
       _tk_word == 'Packing' and any(t.get('name') == 'Packing' for t in app.templates)
       and 'was not kept' not in _tk_said)
+# ...but a Save the disk refuses leaves the word, still true: it was taken back.
+app.templates = [NO.normalize_template({'name': 'T%d' % i, 'body': 'x'})
+                 for i in range(1000)]
+NO.save_templates(app.templates)
+NO.save_setting('template_not_kept', None)
+app.show_settings_page(); app.update()
+app.toggle_settings_panel('templates'); app.update()
+app.ask_yes_no = app.ask_yes_no_cancel = app.show_warning = lambda *a, **k: None
+_tr_page = sys.modules['noteorganizer.ui.settings_page']
+_tr_save_was = _tr_page.save_templates
+try:
+    app._edit_template(None, lambda: None); app.update()
+    _tk_boxes = []
+    _tk_walk(app._mini_popup)
+    _tk_boxes[0].delete(0, 'end')
+    _tk_boxes[0].insert(0, 'Packing')
+    app.on_session_end(); app.update()
+    app._ending_session = False
+    app.templates.pop()
+    _tr_page.save_templates = lambda _t: (False, OSError(28, 'No space left on device'))
+    app._mini_popup._save_from_keyboard(); app.update()
+    _tr_word = NO.get_setting('template_not_kept')
+finally:
+    _tr_page.save_templates = _tr_save_was
+    app.ask_yes_no, app.ask_yes_no_cancel, app.show_warning = _tf_real
+    app._ending_session = False
+    app._dismiss_mini_popup()
+    app.hide_settings_page(); app.update()
+check(f"...and a Save the disk refuses leaves that word, still true ({_tr_word!r})",
+      _tr_word == 'Packing')
+app.templates = []; NO.save_templates(app.templates)
+NO.save_setting('template_not_kept', None)
 # Said with "began to": true too of a sign-out the person cancelled.
 NO.save_setting('template_not_kept', 'Packing list')
 _tk_next = _next_start_says()

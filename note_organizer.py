@@ -361,7 +361,7 @@ from noteorganizer.core.model import (
     UPDATABLE_FROM_SHARED,
     UPDATABLE_FROM_BACKUP,
     unknown_fields,
-    unknown_signature,
+    unknown_fields_lacked,
     PREV_TEXT_FIELDS,
     DAY_FIELDS,
     note_richness,
@@ -1875,13 +1875,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if VERSION_CHANGE:
             direction, old, new = VERSION_CHANGE
             if direction == "up":
-                # Not "came through", nor a backup to make, over a notes file
-                # this start could not read: its own notice above says so.
+                # Not "came through", nor a backup made or to make, over a
+                # notes file this start could not read (the copy holds the
+                # same unread bytes): its own notice above says so.
                 unread = self._notes_file_unread()
                 msg = f"Updated to version {new} (from {old})."
                 if not unread:
                     msg += "\n\nYour notes came through the update."
-                if self._version_backup_path:
+                if self._version_backup_path and not unread:
                     msg += (
                         "\n\nAs an extra safety net, a backup of your notes "
                         "from just before this update was saved to:\n"
@@ -10691,10 +10692,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         replaces = (
             "Updating replaces this device's copies; each one can be undone "
             "with \u201c\u21a9 Restore previous\u201d." if not filed else
-            "Updating adds the attached files they lack, nothing else." if not texts else
+            f"Updating adds the attached files {'it lacks' if count == 1 else 'they lack'}, "
+            "nothing else." if not texts else
             f"Updating replaces this device's copies (each can be undone with "
-            f"\u201c\u21a9 Restore previous\u201d); {len(filed)} of them only lack "
-            f"attached files, which it adds.")
+            f"\u201c\u21a9 Restore previous\u201d); {len(filed)} of them only "
+            f"{'lacks' if len(filed) == 1 else 'lack'} attached files, which it adds.")
         # "All" only when it is all: the unchanged notes are counted in the
         # batch too, and are asked about straight after this question.
         if fresh or same:
@@ -10785,11 +10787,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             lead = (f"{count} of the {total} notes in this {source} "
                     f"{'is' if one else 'are'}")
         skip = "Skip it" if one else f"Skip the {count}"
-        # Said as what was compared (for a code, not its days or files). A
-        # newer version's fields are no change for an Update (D2), but the
-        # device lacks them: said, or "nothing" was untrue.
+        # Said as what was compared (for a code, not its days or files). A newer
+        # version's fields the import brings are no change for an Update (D2):
+        # said, or "nothing" was untrue. A code holds none; the device's stay.
         newer = sum(1 for mine, theirs in same
-                    if unknown_signature(normalize_note(dict(theirs))) != unknown_signature(mine))
+                    if unknown_fields_lacked(normalize_note(dict(theirs)), mine))
         if newer:
             held = (f"nothing about {'it' if one else 'them'} that this version shows and "
                     f"this device lacks; {'it' if one else f'{newer} of them'} also "
@@ -12193,8 +12195,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 state["files_given"] = files_given
 
         # Agreed to: only now do the categories reach disk and the sidebar.
+        # What the result says restored and the disk refused, said so: it was
+        # "Also restored" over files that were not written.
+        unwritten = []
         if added_categories:
-            persist_categories()
+            if not persist_categories():
+                unwritten.append("the categories")
             self.refresh_category_widgets()
         # ...then the updates, before the file scan (they bring files). Files
         # alone make no rescue copy, so are counted apart, as the phone does.
@@ -12208,9 +12214,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # own) and validated as the start's are (_take_day_decorations).
         restored_decor = self._take_day_decorations(
             state.get("imported_day_colors"), state.get("imported_day_emoji"))
-        # What the result says restored and the disk refused, said so: it was
-        # "Also restored" over files that were not written.
-        unwritten = []
         if restored_decor:
             wrote = [save_setting("day_colors", dict(self.day_colors)),
                      save_setting("day_emoji", dict(self.day_emoji))]
@@ -21098,9 +21101,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # If the calendar day panel is showing, reflect the edit there too.
         if self._day_panel_mode != "empty":
             self.refresh_day_panel()
-        # What was left out waits on screen: said by the status line, aloud
-        # on Save (which then sends no one to the calendar). The words less
-        # "except" are kept for _say_nothing_is_left_out.
+        # What was left out waits on screen: said by the status line, aloud on
+        # Save (which then sends no one to the calendar), the words less "except"
+        # kept for _say_nothing_is_left_out -- none over a refused write.
         if left_out and written:
             self.set_status(("Auto-saved " if auto else "Saved at ") + show_stamp(now)
                             + " — except " + "; ".join(left_out)
@@ -21108,16 +21111,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._status_names_left_out = (
             ("Auto-saved " if auto else "Saved at ") + show_stamp(now)
             + (self._repeat_off_line(note) if repeat_off_kept else "")
-            if left_out else None)
-        if left_out:
+            if left_out and written else None)
+        if left_out and written:
             if not auto:
                 self.show_warning("Part of this note isn't saved",
                                   self._left_out_message(left_out))
                 return
         # Only Save on a note added for a day goes back; an EXISTING note's
-        # Save stays (field feedback), with Back to Calendar.
+        # Save stays (field feedback), with Back to Calendar. A refused one
+        # stays where the status line says so.
         _pending = getattr(self, "_pending_calendar_return", None)
-        if not auto and not getattr(self, "_save_stays", False) and _pending and _pending.get("origin") == "add":
+        if written and not auto and not getattr(self, "_save_stays", False) and _pending and _pending.get("origin") == "add":
             self._return_to_calendar()
 
     # ---------- Trash / recently deleted ----------

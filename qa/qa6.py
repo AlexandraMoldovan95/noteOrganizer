@@ -1895,6 +1895,20 @@ check('retention: answering Yes moves the label',
       str(app.trash_retention_var.get()) == '7 days')
 check('retention: answering Yes moves the subtitle',
       'Kept for 7 days' in str(app._trash_subtitle_lbl.cget('text')))
+# ...and a window the disk refuses puts the label back: it read the new one
+# while the subtitle, the "days left" and the start's purge kept the old.
+_rt_store = sys.modules['noteorganizer.core.storage']
+_rt_save_was = _rt_store.save_settings
+_rt_store.save_settings = lambda _s: (False, OSError(28, 'No space left on device'))
+try:
+    _rt_pick('14 days')
+finally:
+    _rt_store.save_settings = _rt_save_was
+check(f"retention: a window the disk refuses leaves the label on the kept one "
+      f"({app.trash_retention_var.get()!r})",
+      NO.trash_retention_days() == 7 and str(app.trash_retention_var.get()) == '7 days'
+      and 'Kept for 7 days' in str(app._trash_subtitle_lbl.cget('text')))
+app._hide_toast()
 
 
 def _rt_row_lines():
@@ -4489,6 +4503,26 @@ NO.save_setting(_sp_rules.SPELLING_SETTING, None)
 _sp_new = app._spell_on()
 NO.save_setting(_sp_rules.SPELLING_SETTING, True)
 check(f'...and someone new, with nothing stored, has it on ({_sp_new})', _sp_new is True)
+# ...and Off the disk refuses puts the dropdown back on On, said: it read Off
+# while the underlines, read from the file, stayed.
+_sp_ui = sys.modules['noteorganizer.ui.spelling']
+_sp_save_was, _sp_var_was = _sp_ui.save_setting, getattr(app, 'spelling_var', None)
+if _sp_var_was is None:
+    app.spelling_var = tk.StringVar(app, value='On')
+_sp_toasts, _sp_toast_was = [], app._show_toast
+app._show_toast = lambda text, *a, **k: _sp_toasts.append(text)
+_sp_ui.save_setting = lambda *a, **k: False
+try:
+    app.spelling_var.set('Off')               # as the dropdown sets it first
+    app._set_spelling('Off')
+finally:
+    _sp_ui.save_setting, app._show_toast = _sp_save_was, _sp_toast_was
+_sp_shown = app.spelling_var.get()
+if _sp_var_was is None:
+    del app.spelling_var
+check(f"...and Off the disk refuses leaves the dropdown on On, said ({_sp_shown!r}, {_sp_toasts})",
+      _sp_shown == 'On' and NO.get_setting(_sp_rules.SPELLING_SETTING, True, expect=bool) is True
+      and any('Not saved' in t for t in _sp_toasts))
 
 # A long note is read in slices, and a long line in pieces: the editor is
 # never held up for the whole of it at once.

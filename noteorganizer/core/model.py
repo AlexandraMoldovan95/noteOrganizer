@@ -203,6 +203,15 @@ def unknown_signature(note):
     return _typed(unknown_fields(note))
 
 
+def unknown_fields_lacked(theirs, mine):
+    """Whether *theirs* holds a field this version does not know that *mine*
+    lacks or holds otherwise, kinds told apart: what taking *theirs* would
+    bring that *mine* has not. A share code holds none (SHAREABLE_FIELDS)."""
+    held = unknown_fields(mine)
+    return any(name not in held or _typed(held[name]) != _typed(value)
+               for name, value in unknown_fields(theirs).items())
+
+
 def unknown_fields(note):
     """The fields of *note* this version does not know, as normalize_note
     keeps them: copies, at most MAX_UNKNOWN_FIELDS of them and

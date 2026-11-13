@@ -60,10 +60,11 @@ def load_categories():
 
 
 def persist_categories():
-    """Write the current category map back to settings."""
+    """Write the current category map back to settings; True when the file
+    took it (a refusal reaches the write-failure banner either way)."""
     settings = load_settings()
     settings["categories"] = dict(CATEGORY_COLORS)
-    save_settings(settings)
+    return save_settings(settings)[0]
 
 
 def category_name_refusal(name, adding=True):

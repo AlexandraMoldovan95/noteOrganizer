@@ -3374,6 +3374,27 @@ _rn_said_after = str(app.status_lbl.cget('text'))
 check(f'putting the stored date back puts the status line right at once '
       f'({_rn_said_before!r} -> {_rn_said_after!r})',
       'except the date' in _rn_said_before and 'except' not in _rn_said_after)
+# ...but a save the disk refused keeps no words to put back: once the date
+# was, "Auto-saved" came back over "Not saved".
+_rn_series(interval=3)
+app.body_text.insert('end', ' more')
+app.date_entry.delete(0, 'end')
+app.date_entry.insert(0, '31/09/2026')
+_rn_store_was, _rn_err_was = NO.core_save_notes, app.show_error
+NO.core_save_notes = lambda notes: (False, OSError(28, 'No space left on device'))
+app.show_error = lambda *a, **k: None
+try:
+    app.save_current_note(auto=True); app.update()
+    _rn_refused = str(app.status_lbl.cget('text'))
+    app._put_back_stored_date_and_repeat()
+    app._cancel_pending_autosave()
+    _rn_refused_after = str(app.status_lbl.cget('text'))
+finally:
+    NO.core_save_notes, app.show_error = _rn_store_was, _rn_err_was
+app.save_notes(); app.update()
+check(f'a refused save keeps saying so once the date is put back '
+      f'({_rn_refused!r} -> {_rn_refused_after!r})',
+      _rn_refused.startswith('Not saved') and _rn_refused_after.startswith('Not saved'))
 # ...and a day of a series never leaves its date out at all: the date is the
 # series', a day puts it back, and its save says so in its own words. (Saved
 # to the series from a day, it once left the date out, and a put-right wrote
