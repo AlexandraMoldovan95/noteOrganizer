@@ -30,7 +30,8 @@ what dead runs left. This gate holds it:
    -- os.system, os.popen, os.startfile, multiprocessing, process pools,
    asyncio's and pty's children, runpy, webbrowser -- are not used.
 3. No document or tool starts a container of its own -- docker run,
-   start, create or compose, typed or as a list for subprocess:
+   start, create, restart, unpause or compose's up, in the shapes
+   DOCKER_SHAPES lists (the gate proves its pattern on them):
    tools/linux_ci.py is the one door to the Linux image, bounded, named,
    and removed on every way out. A killed docker client leaves its
    container running.
@@ -965,15 +966,38 @@ def docker_runs_outside_the_door():
     return hits
 
 
-# The shapes a container is started in: typed, as a list for subprocess or a
-# helper's arguments, through a name of its own (DOCKER, docker_exe), with
-# docker.exe or flags before the verb, and docker-compose up. Lower case as
-# commands are written: "keep Docker up to date" in prose is not one.
+# The shapes a container is started in: typed, in an f-string, as a list for
+# subprocess or a helper's arguments, through a name of its own (DOCKER,
+# docker_exe, run_docker), docker.exe, global flags before the verb, and
+# compose's own verbs, up among them. Lower case as commands are written:
+# "keep Docker up to date" in prose is not one. A rewrite once dropped
+# compose's middle word; every shape seen since is in its self-test below.
+_D_NAME = r"""(?:\b\w*docker\w*(?:\.exe)?|\bDOCKER\w*)"""
+_D_GAP = r"""[}"']?\s*[,(]?\s*[{"']?"""
+_D_FLAG = (r"""--?[a-zA-Z][\w-]*""" + _D_GAP
+           + r"""(?:[^\s"',()\[\]{}-][^\s"',()\[\]{}]*""" + _D_GAP + r""")?""")
+_D_VERB = r"""(?:run|start|create|restart|unpause)"""
 DOCKER_STARTS = re.compile(
-    r"""(?:\bdocker(?:\.exe)?|\bDOCKER\w*|\bdocker_\w+)["']?\s*[,(]?\s*["']?"""
-    r"""(?:--?[a-zA-Z][\w-]*(?:[ =]["']?[^\s"',]+["']?)?\s*,?\s*["']?)*"""
-    r"""(?:container["']?\s*,?\s*["']?)?(?:run|start|create|restart|unpause)\b"""
-    r"""|\bdocker[-_ ]compose["']?\s*,?\s*["']?(?:--?[a-zA-Z][\w-]*\s+)*up\b""")
+    _D_NAME + _D_GAP + "(?:" + _D_FLAG + ")*(?:container" + _D_GAP + "(?:" + _D_FLAG + ")*)?"
+    + _D_VERB + r"\b"
+    + "|" + _D_NAME + r"(?:[-_]|" + _D_GAP + ")" + "(?:" + _D_FLAG + ")*compose" + _D_GAP
+    + "(?:" + _D_FLAG + ")*(?:" + _D_VERB + r"|up)\b")
+
+# Shapes the pattern must see, and prose it must not take for a command.
+DOCKER_SHAPES = [
+    "docker run x", "docker start web", "docker create img", "docker restart a", "docker unpause a",
+    "docker container restart a", "docker.exe run img", "docker --context x run img",
+    "docker -H tcp://h:2375 run img", "docker-compose up", "docker-compose -f ci.yml up",
+    "docker compose up", "docker compose run --rm app", "docker compose start", "docker compose -f x.yml up",
+    '["docker", "run", "-it"]', '[DOCKER, "run", "-it"]', '[docker,\n   "run"]', '[docker_exe, "run"]',
+    '["docker", "compose", "up", "-d"]', '["docker", "compose", "run", "app"]',
+    '["docker", "--context", ctx, "run"]', '["docker", "-H", host, "start"]', 'docker("run", "img")',
+    '_docker("run")', 'run_docker("run")', 'f"{docker} run"', 'subprocess.run(["docker", "start", name])',
+]
+DOCKER_PROSE = [
+    "keep Docker up to date", "Open Docker, start the app", "Docker\nStart it", "docker ps", "docker build .",
+    "docker exec it", "docker images", "the docker image is started by linux_ci", "docker compose ps",
+]
 
 
 # -- 8: the walk sees what it is shown --
@@ -2020,6 +2044,11 @@ def main():
     doors = docker_runs_outside_the_door()
     print("%s the Linux image is run only through %s%s"
           % ("PASS" if not doors else "FAIL", DOOR, "" if not doors else ": " + ", ".join(doors)))
+    unseen = [s for s in DOCKER_SHAPES if not DOCKER_STARTS.search(s)]
+    taken = [s for s in DOCKER_PROSE if DOCKER_STARTS.search(s)]
+    print("%s the door's pattern sees each of its %d shapes and takes none of its %d prose lines%s"
+          % ("PASS" if not (unseen or taken) else "FAIL", len(DOCKER_SHAPES), len(DOCKER_PROSE),
+             "" if not (unseen or taken) else ": missed %r, taken %r" % (unseen, taken)))
     shown, where = door_shows_only_tracked()
     print("%s the Linux image sees only what git tracks (%s)"
           % ("PASS" if shown else "FAIL", where))
@@ -2041,8 +2070,8 @@ def main():
           % ("PASS" if alone else "FAIL", " (%s)" % how[0] if alone else ":"))
     for line in ([] if alone else how):
         print("       " + line)
-    return 1 if (missing or doorless or not cases or doors or not shown or not ok or not turn
-                 or not homes or ended is False or floor is False or not alone) else 0
+    return 1 if (missing or doorless or not cases or doors or unseen or taken or not shown or not ok
+                 or not turn or not homes or ended is False or floor is False or not alone) else 0
 
 
 if __name__ == "__main__":

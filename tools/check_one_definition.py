@@ -261,14 +261,31 @@ RULES = [
         # only, before any "#".
         pattern=re.compile(
             (r'(?m)^[^#\n]*(?:(?:==|!=|\bnot in\b|\bin\s*[(\[{]|\.(?:startswith|endswith)\s*\()'
-             r'[^#\n]*{h}|{h}[^#\n]*(?:==|!=)|\bis\s+(?:not\s+)?{h}|{h}\s+is\b'
-             r'|(?:\bif|\bwhile|\band|\bor|\bnot|\breturn|=|\()\s*{h}\s+(?:not\s+)?in\b)').replace(
-                "{h}", r'''(?:SEARCH_PLACEHOLDER|["']Note title\.\.\.["']'''
+             r'[^#\n]*{h}|{h}[^#\n]*(?:==|!=)|\bis\s+(?:not\s+)?{h}'
+             r'|{c}\s*{h}\s+(?:(?:not\s+)?in|is)\b)').replace(
+                "{c}", r'(?:\b(?:el)?if|\bwhile|\band|\bor|\bnot|\breturn|\bassert|\blambda\b[^:\n]*:|=|\()'
+            ).replace(
+                "{h}", r'''(?:(?:self\.|NO\.)?SEARCH_PLACEHOLDER|["']Note title\.\.\.["']'''
                        r'''|["']Search all calendar entries\.\.\.["']'''
-                       r'|\bDATE_FORM\b|\bplaceholder\b|\bhint_text\b)')),
+                       r'|(?:self\.|NO\.)?\bDATE_FORM\b|\bplaceholder\b|\bhint_text\b)')),
         allowed={"_hint_shown": "the single answer"},
         window=1,
     ),
+]
+
+# The ninth rule's shapes, proved on every run: comparisons it must see, and
+# lines it must leave alone (a loop over the hints, a docstring's prose).
+HINT_SHAPES = [
+    "    if t == 'Note title...':", "    if typed in {'', self.SEARCH_PLACEHOLDER}:",
+    "    if x in [DATE_FORM, '']:", "    if t.startswith('Note title...'):", "    ok = entry.get() != hint_text",
+    "    if SEARCH_PLACEHOLDER in text:", "    elif placeholder in text:", "    if q is self.SEARCH_PLACEHOLDER:",
+    "    if q is DATE_FORM:", "    assert SEARCH_PLACEHOLDER not in t", "    keep = lambda t: SEARCH_PLACEHOLDER in t",
+]
+HINT_PROSE = [
+    "    for entry, placeholder in self._placeholders:", "    entry.hint_text = placeholder",
+    '        """\'Note title...\' is the person\'s, whatever its words."""',
+    '    self.add_placeholder(search, "Search all calendar entries...")',
+    "    # x == placeholder",
 ]
 
 
@@ -331,6 +348,15 @@ def main():
                     continue
                 seen_funcs.add(func)
                 problems.append((rel, i + 1, func, rule))
+
+    # The ninth rule proved on its own shapes first: a rewrite that drops one
+    # is said here, not found by the next review.
+    hint_rule = RULES[-1].pattern
+    unseen = [s for s in HINT_SHAPES if not hint_rule.search(s)]
+    taken = [s for s in HINT_PROSE if hint_rule.search(s)]
+    if unseen or taken:
+        print("one-definition gate: the ninth rule misses %r and takes %r" % (unseen, taken))
+        return 1
 
     # An allowance that matches nothing is a comment, not a reviewed
     # exception: it once hid that its function had changed shape.
