@@ -4514,10 +4514,26 @@ moved and the bounded series' off-schedule days left out given checks of their o
 Spelling's put-back and a template Save refused after a cancelled sign-out (SN82, SN83); and,
 from the second reader of ARCHITECTURE and CODE_TOUR, an old notebook adopted over this folder's
 readable settings.json with no copy kept, now copied aside first as the other road does (SN84).
-Left, with its reason: a backup's note that differs by a file alone is asked about before the
-editor's last words are saved, so typing in it just before the question, then Update, replaces
-those words the question said it would not touch; the result says "Updated" and Restore previous
-brings them back, and saving first would move "Go back and fix it" before the question.
+Left that round, with a reason the next one undid: a backup's note that differs by a file alone
+is asked about before the editor's last words are saved, so typing in it just before the
+question, then Update, replaced those words the question said it would not touch. The reason
+given, that Restore previous brings them back, left out that the Update's copy took the place
+of an earlier one the note still held.
+
+**The eighteenth round** found nothing of medium severity on the desktop, the wave's first such
+round. Its first reader fuzzed History's counts and probed every road of the seventeenth's
+fixes; its second checked, on the desktop, each rule the phone had just learned in the
+desktop's name. The lows: the low above, asked again now once the flush has saved those words
+(SN92); a settings file held at the start, its defaults said to stand all run, read for real
+once the hold ended, the Trash then purged by the real window (SN85); advice to choose a Trash
+window over a settings file that refuses the choice, and a delete for good promising files the
+run keeps (SN86, SN87); an import's "could not be written to disk yet" of a file held, which no
+later write reaches (SN88); categories brought back at a start over a refused write, said again
+at every start without why (SN89); "Note updated" in green before a write the hold refuses; an
+old notebook adopted at each start that went no further, leaving one more copy of its own
+settings each time, and, the copy aside failing, bringing its Trash under this folder's window
+(SN90, SN91). Left: on a full disk the error banner of a refused setting takes the place of the
+put-back's own word within a frame; it says the file was not saved, so nobody is misled.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.

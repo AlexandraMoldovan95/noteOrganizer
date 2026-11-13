@@ -1175,8 +1175,10 @@ one habit applied consistently, not three separate tricks.
 notebook gets on its first load (`clean_notes`, run once and then marked
 `cleanup_done` in settings): blank notes dropped, and only exact duplicates
 merged. Richness decides *which copy to keep*, the one carrying the most
-actual content; since `content_signature` already holds everything it
-scores, copies of one group tie, and the first is kept. It reports what it did
+actual content; since `content_signature` already holds nearly everything
+it scores, copies of one group almost always tie and the first is kept
+(comments of spaces alone are one exception: signed as none, they still
+score). It reports what it did
 so the app can tell you rather than silently changing your notebook.
 Settings → Duplicates is a different, later clean-up: it keeps the first
 copy of each group.

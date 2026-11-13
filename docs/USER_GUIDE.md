@@ -718,7 +718,9 @@ them.
 
 If the settings file can't be read (a bad shutdown or a disk problem can do that), the app no
 longer knows how long you chose, so it removes nothing from the Trash until you choose again. It
-says so once when it starts, and the selector shows **Choose…** until you do.
+says so once when it starts, and the selector shows **Choose…** until you do. If the file can't
+be opened at all (another program holding it), nothing can be chosen until the app is opened
+again: it uses its own defaults all that time, saves no setting, and removes nothing.
 
 Each row also carries a tick box, so getting a batch back is one gesture rather than forty: tick
 what you want — or **Select all** above the rows, which ticks the whole Trash, the rows not
