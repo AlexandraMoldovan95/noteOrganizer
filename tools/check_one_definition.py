@@ -266,7 +266,8 @@ RULES = [
                 "{c}", r'(?:\b(?:el)?if|\bwhile|\band|\bor|\bnot|\breturn|\bassert|\blambda\b[^:\n]*:|=|\()'
             ).replace(
                 "{h}", r'''(?:(?:self\.|NO\.)?SEARCH_PLACEHOLDER|["']Note title\.\.\.["']'''
-                       r'''|["']Search all calendar entries\.\.\.["']'''
+                       r'''|["']Search all calendar entries\.\.\.["']|["']Search notes\.\.\.["']'''
+                       r'''|["']DD\.MM\.YYYY["']'''
                        r'|(?:self\.|NO\.)?\bDATE_FORM\b|\bplaceholder\b|\bhint_text\b)')),
         allowed={"_hint_shown": "the single answer"},
         window=1,
@@ -280,11 +281,13 @@ HINT_SHAPES = [
     "    if x in [DATE_FORM, '']:", "    if t.startswith('Note title...'):", "    ok = entry.get() != hint_text",
     "    if SEARCH_PLACEHOLDER in text:", "    elif placeholder in text:", "    if q is self.SEARCH_PLACEHOLDER:",
     "    if q is DATE_FORM:", "    assert SEARCH_PLACEHOLDER not in t", "    keep = lambda t: SEARCH_PLACEHOLDER in t",
+    '    if q == "Search notes...":', "    if d == 'DD.MM.YYYY':", '    if s in ("", "Search notes..."):',
 ]
 HINT_PROSE = [
     "    for entry, placeholder in self._placeholders:", "    entry.hint_text = placeholder",
     '        """\'Note title...\' is the person\'s, whatever its words."""',
     '    self.add_placeholder(search, "Search all calendar entries...")',
+    '    SEARCH_PLACEHOLDER = "Search notes..."', 'DATE_FORM = "DD.MM.YYYY"',
     "    # x == placeholder",
 ]
 

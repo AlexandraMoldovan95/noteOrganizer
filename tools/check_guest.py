@@ -943,9 +943,9 @@ def scripts_without_a_door(root=ROOT):
 DOOR = os.path.join("tools", "linux_ci.py")
 # The history may quote the commands it replaced, and this file names them.
 EXEMPT = (DOOR, os.path.join("docs", "ISSUES_LOG.md"), os.path.join("tools", "check_guest.py"))
-WRITTEN = ("*.md", "docs/**/*.md", "qa/**/*.md", "qa/**/*.py", "tools/**/*.py",
-           "tools/**/Dockerfile", "tools/**/*.ps1", ".github/**/*.yml", "site/*.md",
-           "site/tools/**/*")
+WRITTEN = ("*.md", "*.py", "docs/**/*.md", "qa/**/*.md", "qa/**/*.py", "tools/**/*.py",
+           "tools/**/Dockerfile", "tools/**/*.ps1", ".github/**/*.yml", ".github/**/*.yaml",
+           "site/*.md", "site/**/*.py", "site/tools/**/*", "**/*.sh", "**/*.bat", "**/*.cmd")
 
 
 def docker_runs_outside_the_door():
@@ -973,15 +973,23 @@ def docker_runs_outside_the_door():
 # "keep Docker up to date" in prose is not one. A rewrite once dropped
 # compose's middle word; every shape seen since is in its self-test below.
 _D_NAME = r"""(?:\b\w*docker\w*(?:\.exe)?|\bDOCKER\w*)"""
-_D_GAP = r"""[}"']?\s*[,(]?\s*[{"']?"""
-_D_FLAG = (r"""--?[a-zA-Z][\w-]*""" + _D_GAP
-           + r"""(?:[^\s"',()\[\]{}-][^\s"',()\[\]{}]*""" + _D_GAP + r""")?""")
+# A comma or a bracket after a closing quote or before an opening one, as
+# code writes it: "docker, run it" and "docker (start it first)" are prose.
+# A shell's line continuation.
+_D_GAP = r"""(?:[}"']\s*[\\`]?\s*[,(]?\s*[{"']?|\s*[\\`]?\s*(?:[,(]\s*[{"']|[{"']?))"""
+_D_FLAG = (r"""(?:--?[a-zA-Z][\w-]*""" + _D_GAP
+           + r"""(?:[^\s"',()\[\]{}-][^\s"',()\[\]{}]*""" + _D_GAP + r""")?"""
+           + r"""|\{[^{}\n]*\}\s*)""")
 _D_VERB = r"""(?:run|start|create|restart|unpause)"""
 DOCKER_STARTS = re.compile(
     _D_NAME + _D_GAP + "(?:" + _D_FLAG + ")*(?:container" + _D_GAP + "(?:" + _D_FLAG + ")*)?"
     + _D_VERB + r"\b"
     + "|" + _D_NAME + r"(?:[-_]|" + _D_GAP + ")" + "(?:" + _D_FLAG + ")*compose" + _D_GAP
-    + "(?:" + _D_FLAG + ")*(?:" + _D_VERB + r"|up)\b")
+    + "(?:" + _D_FLAG + ")*(?:" + _D_VERB + r"|up)\b"
+    # A list built in pieces (DOCKER + ["run"], [docker, *flags, "run"]):
+    # the verb quoted, later in the same expression.
+    + "|" + _D_NAME + r"""["']?\]?\s*(?:\+|,\s*\*)[^\n;]{0,60}?["'](?:""" + _D_VERB + r"|up)[\"']"
+    + "|" + _D_NAME + r"""["']?,\s*f["'][^"'\n]*["'],\s*["']""" + _D_VERB + r"[\"']")
 
 # Shapes the pattern must see, and prose it must not take for a command.
 DOCKER_SHAPES = [
@@ -993,10 +1001,14 @@ DOCKER_SHAPES = [
     '["docker", "compose", "up", "-d"]', '["docker", "compose", "run", "app"]',
     '["docker", "--context", ctx, "run"]', '["docker", "-H", host, "start"]', 'docker("run", "img")',
     '_docker("run")', 'run_docker("run")', 'f"{docker} run"', 'subprocess.run(["docker", "start", name])',
+    'subprocess.run(DOCKER + ["run", img])', '["docker"] + ["run", img]', '[docker, *flags, "run"]',
+    '["docker", f"--context={ctx}", "run"]', 'f"docker {flags} run"', "docker \\\n    run img",
+    "docker `\n    run img",
 ]
 DOCKER_PROSE = [
     "keep Docker up to date", "Open Docker, start the app", "Docker\nStart it", "docker ps", "docker build .",
     "docker exec it", "docker images", "the docker image is started by linux_ci", "docker compose ps",
+    "with docker, run tools/linux_ci.py", "needs docker (start Docker Desktop first)",
 ]
 
 
