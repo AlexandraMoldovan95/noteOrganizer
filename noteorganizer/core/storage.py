@@ -555,7 +555,7 @@ def backup_notes_file():
     if not os.path.exists(paths.DATA_FILE):
         return None
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_path = os.path.join(os.path.dirname(paths.DATA_FILE), f"notes_data_backup_{stamp}.json")
+    backup_path = paths.unused_path(os.path.dirname(paths.DATA_FILE), f"notes_data_backup_{stamp}", ".json")
     # Whole or not at all: on a full disk copy2 left a cut-off copy, unreadable,
     # under the name the update's notice was about to give as the safety net.
     part = backup_path + ".part"
@@ -716,6 +716,14 @@ def load_notes(version_change=None):
             minted_any = False
             ids_repaired = False
             aside_made = 0
+        elif backup_path is not None:
+            # The file is as it was, so its copy is no safety net: kept, a
+            # file held open by another program left one more full copy at
+            # every launch until it was let go.
+            try:
+                os.remove(backup_path)
+            except OSError:
+                pass
 
     if (minted_any or ids_repaired or aside_made) and not report["notes_file_corrupt"]:
         # Guarded like the cleanup: never over a file just declared

@@ -309,6 +309,18 @@ def _copy_attachments(src_dir, dest_dir):
     return failed
 
 
+def unused_path(folder, stem, extension):
+    """``<stem><extension>`` in *folder*, or ``<stem>_1<extension>`` and so on
+    when that is taken: a copy stamped by the second wrote over one made the
+    same second, and removed after, took it with it."""
+    candidate = os.path.join(folder, stem + extension)
+    number = 0
+    while os.path.exists(candidate):
+        number += 1
+        candidate = os.path.join(folder, "%s_%d%s" % (stem, number, extension))
+    return candidate
+
+
 def _timestamped_backup(path, label):
     """Copy a file aside before it gets overwritten, as
     ``<name>_<label>_<stamp>.json`` beside it. Returns the new path, or None
@@ -318,7 +330,7 @@ def _timestamped_backup(path, label):
     folder = os.path.dirname(path)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     name = os.path.splitext(os.path.basename(path))[0]
-    backup_path = os.path.join(folder, f"{name}_{label}_{stamp}.json")
+    backup_path = unused_path(folder, f"{name}_{label}_{stamp}", ".json")
     try:
         shutil.copy2(path, backup_path)
         return backup_path
@@ -356,7 +368,8 @@ def preserve_corrupt_file(path):
                         return kept
     except (IOError, OSError):
         pass
-    backup_path = f"{root}_corrupt_{stamp}{ext}"
+    backup_path = unused_path(os.path.dirname(path) or ".",
+                              f"{os.path.basename(root)}_corrupt_{stamp}", ext)
     try:
         shutil.copy2(path, backup_path)
         return backup_path

@@ -9,6 +9,7 @@ directories (not the app's real data folder) for extra isolation, since
 this file specifically exercises backup/migration code."""
 import sys
 import os
+import glob
 import json
 import shutil
 import tempfile
@@ -2229,6 +2230,8 @@ def _held_notes_file(path, value):
     return _writeW(path, value)
 
 
+_backupsW = os.path.join(os.path.dirname(_paths.DATA_FILE), "notes_data_backup_*.json")
+_beforeW = set(glob.glob(_backupsW))
 _storage._write_json_atomic = _held_notes_file
 try:
     _notesW, _reportW = _storage.load_notes(None)
@@ -2237,6 +2240,33 @@ finally:
 _afterW = _storage.load_settings()
 check("a cleanup whose write does not land is not marked done, and says nothing",
       not _afterW.get("cleanup_done") and _reportW.get("cleanup_report") is None)
+# Its copy went too: the file was untouched, and a file held for a week
+# left a full copy of the notebook at every launch.
+check("...and leaves no copy of the notes behind, the file being as it was",
+      set(glob.glob(_backupsW)) == _beforeW)
+# Stamped by the second, a copy made the same second wrote over the one
+# before it -- and the copy above, removed, took that one with it.
+_clockW = _storage.datetime
+
+
+class _OneSecond(_clockW):
+    """The same second for both copies, whatever the machine's speed."""
+    @classmethod
+    def now(cls, tz=None):
+        return _clockW(2026, 11, 13, 9, 0, 0)
+
+
+_storage.datetime = _OneSecond
+try:
+    _twiceA, _twiceB = _storage.backup_notes_file(), _storage.backup_notes_file()
+finally:
+    _storage.datetime = _clockW
+check(f"two copies of the notes in the same second are two files ({_twiceA!r}, {_twiceB!r})",
+      _twiceA and _twiceB and _twiceA != _twiceB
+      and os.path.isfile(_twiceA) and os.path.isfile(_twiceB))
+for _p in (_twiceA, _twiceB):
+    if _p and os.path.isfile(_p):
+        os.remove(_p)
 check("...the notes keep the ids their file and the remembered note still name",
       [n["id"] for n in _notesW] == [3, 7] and _afterW.get("last_open_note_id") == 7)
 _notesW2, _reportW2 = _storage.load_notes(None)
