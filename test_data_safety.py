@@ -3462,7 +3462,22 @@ try:
     check("...the category is saved back into the settings",
           "Clients 2026" in (_storage.load_settings().get("categories") or {}))
     check("...and the load reports it, so the app can say what happened",
-          _rt_report.get("categories_adopted") == ["Clients 2026"])
+          _rt_report.get("categories_adopted") == ["Clients 2026"]
+          and _rt_report.get("categories_unsaved") is False)
+    # ...and a settings file that refuses them is reported too: "added back"
+    # came again at every start, with no word of why.
+    os.remove(_paths.SETTINGS_FILE)
+    _cats2.CATEGORY_COLORS.clear()
+    _cats2.CATEGORY_COLORS.update(_cats2.load_categories())
+    _rt_save_was = _cats2.save_settings
+    _cats2.save_settings = lambda _s: (False, OSError(28, "No space left on device"))
+    try:
+        _rt_notes, _rt_report = _storage.load_notes(None)
+    finally:
+        _cats2.save_settings = _rt_save_was
+    check("...and when the settings file refuses them, the load says they were not saved",
+          _rt_report.get("categories_adopted") == ["Clients 2026"]
+          and _rt_report.get("categories_unsaved") is True)
 finally:
     _paths.configure(_rt_prev_dir)
     _cats2.CATEGORY_COLORS.clear()
@@ -4947,6 +4962,37 @@ try:
     check("an old notebook adopted keeps this folder's own readable settings aside first "
           "(%s, now %s)" % (_ks_kept, _ks_now),
           _ks_held.get("username") == "Ana" and _ks_now.get("theme") == "dark")
+    # ...not again when they are already the old notebook's own bytes (a start
+    # that went no further): each start left one more copy, of those.
+    os.remove(os.path.join(_ks_app, "notes_data.json"))
+    for _p in _ks_kept:
+        os.remove(os.path.join(_ks_app, _p))
+    _paths.run_migrations(_ks_app)
+    _ks_again = [p for p in os.listdir(_ks_app) if p.startswith("settings_replaced_")]
+    check("...and keeps no copy of settings that are already the old notebook's (%s)" % _ks_again,
+          _ks_again == [] and os.path.isfile(os.path.join(_ks_app, "notes_data.json")))
+    # ...and, that copy failing, the settings stay, and the old Trash stays where
+    # it is, said: brought under this folder's window, it would be emptied by it.
+    shutil.rmtree(_ks_app)
+    os.makedirs(_ks_app)
+    with open(os.path.join(_ks_app, "settings.json"), "w", encoding="utf-8") as _f:
+        json.dump({"theme": "light", "username": "Ana"}, _f)
+    with open(os.path.join(_ks_old, "trash.json"), "w", encoding="utf-8") as _f:
+        json.dump([{"id": 9, "title": "Old trashed", "deleted_at": "2026-01-01 10:00:00"}], _f)
+    _ks_backup_was = _paths._timestamped_backup
+    _paths._timestamped_backup = lambda *a, **k: None
+    try:
+        _ks_msg = _paths.run_migrations(_ks_app) or ""
+    finally:
+        _paths._timestamped_backup = _ks_backup_was
+    with open(os.path.join(_ks_app, "settings.json"), encoding="utf-8") as _f:
+        _ks_stayed = json.load(_f)
+    check("an old notebook whose settings could not be copied aside leaves this folder's, and "
+          "its Trash where it is, said (%s)" % _ks_msg.replace("\n", " ")[-120:],
+          _ks_stayed.get("username") == "Ana"
+          and not os.path.exists(os.path.join(_ks_app, "trash.json"))
+          and "trash.json" in _ks_msg
+          and os.path.isfile(os.path.join(_ks_app, "notes_data.json")))
 finally:
     _paths.get_legacy_dirs = _ad_real_legacy
     _paths.get_appdata_dir = _ad_real_appdata
@@ -5494,6 +5540,24 @@ try:
                   and _hs_saved and not _hs_aside
                   and _hs_disk() == dict(_hs_real, last_open_note_id=7))
         _paths.WRITES_HELD.clear()
+    # ...and a hold that ends later in the run changes nothing: the defaults
+    # it said stand all run. Read once the hold ended, the real window purged
+    # a Trash the start said it would keep whole.
+    _hs_dirs.append(tempfile.mkdtemp(prefix="nd_heldset_"))
+    _paths.configure(_hs_dirs[-1])
+    with _hs_real_open(_paths.SETTINGS_FILE, "w", encoding="utf-8") as f:
+        json.dump(dict(_hs_real, trash_retention_days=7), f)
+    _storage.open = _hs_refusing(-1)
+    try:
+        _storage.load_settings()
+    finally:
+        del _storage.open
+    _hs_after = _storage.load_settings()
+    _hs_window = _storage.trash_retention_days()
+    _paths.WRITES_HELD.clear()
+    check("a settings file held at the start keeps the run on its defaults once "
+          "the hold ends (%s, window %s)" % (sorted(_hs_after), _hs_window),
+          _hs_after == {_storage.TRASH_WINDOW_UNKNOWN: True} and _hs_window is None)
 finally:
     _storage.time.sleep = _hs_sleep
     NO.CATEGORY_COLORS.pop("Held-start client", None)

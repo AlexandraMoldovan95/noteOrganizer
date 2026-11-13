@@ -2936,6 +2936,27 @@ check(f"a note differing by a file alone is said to take the file, no Restore pr
       f"({_nf_said[-120:]!r})",
       'adds the attached files it lacks, nothing else' in _nf_said
       and 'Restore previous' not in _nf_said and 'OLDER' not in _nf_said)
+# ...and words typed in it just before, saved by Update's own flush, make it a
+# note Update rewrites: asked again, in those words, not updated on a promise
+# of "nothing else" (its rescue copy replaced without a word).
+_nw_mine = NO.normalize_note({'id': 7, 'title': 'Ticket two', 'body': 'trip',
+                              'updated': '2026-11-10 10:00:00'})
+_nw_theirs = dict(_nw_mine, updated='2026-11-01 10:00:00',
+                  attachments=[{'filename': 'ticket.pdf', 'stored_as': '20261101_ticket.pdf'}])
+app.notes = [_nw_mine]; app.save_notes()
+app.open_note_in_tab(app.find_note(7)); app.update()
+app.body_text.insert('end', ' and the hotel')
+_nw_asked = []
+app._themed_dialog = lambda *a, **k: (_nw_asked.append(a[1]), 'update')[1]
+try:
+    app._take_known_notes([_nw_theirs], 'backup')
+finally:
+    app._themed_dialog = _real_dialog
+app.open_blank_tab(); app.update()
+check(f"words typed in a file-alone note before Update are asked about again "
+      f"({len(_nw_asked)} asked, {[s[-60:] for s in _nw_asked]})",
+      len(_nw_asked) == 2 and 'nothing else' in _nw_asked[0]
+      and 'Restore previous' in _nw_asked[1])
 # ...and one differing by a field a newer version wrote alone is no Update
 # (D2), but the question says the backup holds it: "nothing" was untrue.
 _nu_mine = NO.normalize_note({'id': 4, 'title': 'Plan', 'body': 'b'})
@@ -4563,7 +4584,7 @@ NO.CATEGORY_COLORS.pop('Garden qa3', None)
 check(f"a backup's categories the settings file refused are said not written "
       f"({(_cw_said or [''])[-1][-140:]!r})",
       bool(_cw_said) and 'Also restored 1 category' in _cw_said[-1]
-      and 'The categories could not be written to disk yet' in _cw_said[-1])
+      and 'The categories could not be written to disk; the backup still holds them' in _cw_said[-1])
 
 app.open_blank_tab(); app.update()
 app.notes = [NO.normalize_note({'id': 1, 'title': 'Groceries', 'body': 'milk'})]

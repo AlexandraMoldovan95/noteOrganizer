@@ -40,6 +40,7 @@ from ..core.storage import (
     # so the confirmation cannot promise another number.
     trash_entries_past_window,
     _delete_attachment_files,
+    attached_files_kept,
     attachment_names_in,
     attachments_of,
     copy_attachment_file,
@@ -1500,7 +1501,7 @@ class SettingsPageMixin:
         """
         count = len(doomed)
         noun = "note" if count == 1 else "notes"
-        attached = self._attached_files_words(doomed)
+        attached = self._attached_files_words(doomed, now=False)
         # `current` is None while the window before could not be read:
         # there is no "instead of" to name, and nothing was going before.
         instead = "" if current is None else f" instead of {current}"
@@ -1513,11 +1514,13 @@ class SettingsPageMixin:
         )
 
     @staticmethod
-    def _attached_files_words(entries):
+    def _attached_files_words(entries, now=True):
         """", along with N attached files" for Trash entries about to go
-        for good, or "" when they carry none: the files leave the disk too."""
+        for good, or "" when they carry none: the files leave the disk too.
+        Gone *now*, and this run keeps every file (attached_files_kept), the
+        files are not promised gone either."""
         files = sum(len(attachments_of(entry)) for entry in entries)
-        if not files:
+        if not files or (now and attached_files_kept()):
             return ""
         return f", along with {files} attached {'file' if files == 1 else 'files'}"
 
@@ -1538,6 +1541,11 @@ class SettingsPageMixin:
         """The trash panel's subtitle: the window, or -- while it is not
         known -- that nothing leaves the Trash until one is chosen."""
         days = trash_retention_days()
+        if days is None and paths.writes_held(paths.SETTINGS_FILE):
+            # No choice is kept this run: advice it would refuse.
+            return ("The settings file couldn't be opened, so nothing is removed "
+                    "automatically. A length can be chosen once Note Organizer "
+                    "is opened again.")
         if days is None:
             return ("The length chosen before couldn't be read, so nothing "
                     "is removed automatically until you choose one below.")

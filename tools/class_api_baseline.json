@@ -36,7 +36,7 @@
   "_astral_span_at": "(s, iu, before)",
   "_attach_dup_preview": "(self, widget, note)",
   "_attach_tooltip": "(self, widget, title, detail='')",
-  "_attached_files_words": "(entries)",
+  "_attached_files_words": "(entries, now=True)",
   "_autosave_now": "(self)",
   "_backup_brings_more": "(self, state, added_names)",
   "_banner_after_undo": "(self, text, show)",

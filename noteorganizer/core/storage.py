@@ -114,6 +114,10 @@ def load_settings():
     known = _settings_read[1] if _settings_read[0] == paths.SETTINGS_FILE else None
     first = _settings_tried != paths.SETTINGS_FILE
     _settings_tried = paths.SETTINGS_FILE
+    # Held, the defaults stand for the whole run, as its notice says: read
+    # once the hold ended, the real window purged a Trash said to keep all.
+    if known is None and paths.writes_held(paths.SETTINGS_FILE):
+        return {TRASH_WINDOW_UNKNOWN: True}
     if os.path.exists(paths.SETTINGS_FILE):
         try:
             if known is None and first:
@@ -388,16 +392,21 @@ def attachment_names_in(notes_or_entries):
             for att in attachments_of(note)}
 
 
+def attached_files_kept():
+    """Whether deleting for good keeps every attached file this run: a run
+    that could not read the notes file -- held, or set aside unreadable --
+    holds notes it never saw, and a file may be theirs, until a run that has
+    read them. The questions that name the files go with it."""
+    return paths.writes_held(paths.DATA_FILE) or paths.DATA_FILE in _UNREAD_AT_LOAD
+
+
 def _delete_attachment_files(notes_or_entries, spare=()):
     """Remove the files of every attachment these notes or trash entries use
     -- only for PERMANENT deletion (purge, delete forever, empty trash): a
     note moved to the Trash may still come back. *spare* names files that
     must survive, those the notes in the app still use, in case a stale row
     acts. ISSUES_LOG: "The Trash that gave notes back one at a time"."""
-    # A run that could not read the notes file -- held, or set aside
-    # unreadable -- holds notes it never saw: every file is kept, until a run
-    # that has read them.
-    if paths.writes_held(paths.DATA_FILE) or paths.DATA_FILE in _UNREAD_AT_LOAD:
+    if attached_files_kept():
         return
     for note in notes_or_entries:
         for att in attachments_of(note):
@@ -653,7 +662,8 @@ def load_notes(version_change=None):
     held = paths.writes_held(paths.SETTINGS_FILE)
     report["categories_adopted"] = [] if held else adopted
     if adopted and not held:
-        persist_categories()
+        # Refused, said so: "added back" came again at every start, unsaid why.
+        report["categories_unsaved"] = not persist_categories()
 
     # Every note gets the full set of fields, so no later code has to
     # guess whether an old note has 'comments' or 'attachments'.

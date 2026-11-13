@@ -253,6 +253,15 @@ def count_notes_in(path):
 NOTEBOOK_COMPANIONS = ("trash.json", "templates.json")
 
 
+def _same_bytes(a, b):
+    """Whether files *a* and *b* hold the same bytes; False when either cannot
+    be read, which then counts as different."""
+    try:
+        return filecmp.cmp(a, b, shallow=False)
+    except OSError:
+        return False
+
+
 def _copy_whole(src, dst, tries=1):
     """Copy *src* to *dst* whole or not at all: beside it first, then
     replaced in one step. Copied in place, a start killed mid-copy left a
@@ -507,14 +516,19 @@ def run_migrations(app_dir):
     # unpacked, and another program's settings.json there was once adopted.
     ours = os.path.exists(legacy_settings) and _looks_like_our_settings(legacy_settings)
     settings_came = True
+    settings_stayed = False
     if ours:
-        # This folder's own settings copied aside first, readable or not, as
-        # case 1's are: a readable one was replaced with no copy. If that
-        # copy fails they stay, and the notes come in alone.
-        if (not os.path.exists(settings_path)
+        # This folder's settings copied aside first, readable or not, as case
+        # 1's are; that copy failing, they stay. Already the old notebook's own
+        # bytes (a start that went no further), neither: each left a copy.
+        if os.path.exists(settings_path) and _same_bytes(settings_path, legacy_settings):
+            pass
+        elif (not os.path.exists(settings_path)
                 or _preserve_settings_if_unreadable(settings_path)
                 or _timestamped_backup(settings_path, "replaced")):
             settings_came = _copy_whole(legacy_settings, settings_path, tries=3)
+        else:
+            settings_stayed = True
     elif (durable and os.path.exists(legacy_settings)
           and not os.path.exists(settings_path)):
         # The old app's own settings, unreadable: copied as they are, the start
@@ -525,7 +539,12 @@ def run_migrations(app_dir):
     # program's notes is not ours to bring in. The old app's own store needs
     # no evidence -- its settings.json may be the file that cannot be read.
     missing = []
-    if ours or durable:
+    if settings_stayed:
+        # Under this folder's settings the old Trash would be emptied by this
+        # folder's window: left where it is, and said, as a file not copied.
+        missing += [name for name in NOTEBOOK_COMPANIONS
+                    if os.path.exists(os.path.join(best_dir, name))]
+    elif ours or durable:
         missing += _copy_companions(best_dir, app_dir)
 
     for d in get_legacy_dirs(app_dir):

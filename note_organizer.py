@@ -1759,13 +1759,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Set by load_settings on an unreadable settings.json; said once,
         # and the Trash keeps everything until a window is chosen again.
         if _core_paths.writes_held(SETTINGS_FILE):
-            # Not damaged: refused, most likely held by another program. Its
-            # defaults stand in, and none of them is written over the file.
+            # Refused (most likely held by another program), or damaged and not
+            # kept aside: defaults stand in all run, none written over the file.
             lines.append(
-                "Your settings file couldn't be opened — another program may "
-                "be holding it. Note Organizer uses its own defaults this "
-                "time, saves no setting until it is opened again, and removes "
-                "nothing from the Trash.")
+                "Your settings file couldn't be opened, or couldn't be read and "
+                "kept aside — another program may be holding it, or the disk may "
+                "be full. Note Organizer uses its own defaults this time, saves "
+                "no setting until it is opened again, and removes nothing from "
+                "the Trash.")
         elif get_setting(TRASH_WINDOW_UNKNOWN) is True:
             save_setting(TRASH_WINDOW_UNKNOWN, "told")
             lines.append(
@@ -1930,7 +1931,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "with default colours:\n"
                 f"{listed}\n\n"
                 "Your notes stayed where you filed them. Settings → "
-                "Categories changes the colours.")
+                "Categories changes the colours."
+                + (" The settings file could not be written, so this is said "
+                   "again at the next start." if getattr(self, "_categories_unsaved", False)
+                   else ""))
 
         if PURGED_DIRS:
             listed = "\n".join(f"  • {d}" for d in PURGED_DIRS)
@@ -1983,6 +1987,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if report["cleanup_report"]:
             self._cleanup_report = report["cleanup_report"]
         self._categories_adopted = report.get("categories_adopted") or []
+        self._categories_unsaved = bool(report.get("categories_unsaved"))
         # Notes made of days a series' copy set aside, said with the start's
         # other news (written by the load itself).
         self._set_aside_at_start = report.get("set_aside_made", 0)
@@ -10750,6 +10755,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if self._flush_autosave(leaving=self.selected_note_id in {
                     mine.get("id") for mine, _theirs in known}) is False:
                 return False, [], [], unchanged, []
+            # Words typed in one of them just before, saved by that flush, make
+            # a note that differed by a file alone one Update rewrites (and whose
+            # rescue copy it replaces): promised nothing else, so asked again.
+            if any(shared_update_changes(self.find_note(mine.get("id")) or mine, theirs,
+                                         UPDATABLE_FROM_BACKUP) for mine, theirs in filed):
+                return self._take_known_notes(incoming, source)
             return finish(fresh, known)
         # "add": new notes without the identity they came with (one uid on two
         # notes), as copies asked for: put to the look-alike question again,
@@ -12342,8 +12353,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if parts:
             extras_note = " Also restored " + " and ".join(parts) + "."
         if unwritten:
+            # Not "yet": a file held is written by nothing this run.
             extras_note += (" " + " and ".join(unwritten).capitalize()
-                            + " could not be written to disk yet.")
+                            + " could not be written to disk; the backup still holds them.")
         if earlier > 0:
             extras_note += (f" Earlier text of {earlier} day{'s' if earlier != 1 else ''} "
                             "of a repeating note kept as notes of their own.")
@@ -21035,7 +21047,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # out moved the note up "Recently updated".
                 note["updated"] = stored_before[1]
                 announce = False
-            if announce:
+            # Not over a held notes file: no write follows, and the green
+            # "Note updated" stood against the status line's "Not saved".
+            if announce and not _core_paths.writes_held(DATA_FILE):
                 self._show_toast("Note updated", yield_to_action=True)
             # The note holds again what its rescue copy kept -- Undo after
             # a big deletion -- so the copy is spent, and the button with it.

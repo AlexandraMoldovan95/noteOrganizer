@@ -1909,6 +1909,30 @@ check(f"retention: a window the disk refuses leaves the label on the kept one "
       NO.trash_retention_days() == 7 and str(app.trash_retention_var.get()) == '7 days'
       and 'Kept for 7 days' in str(app._trash_subtitle_lbl.cget('text')))
 app._hide_toast()
+# ...over a settings file held, the subtitle gives no advice the choice would
+# refuse; and with the notes file unread, a delete for good keeps every file,
+# so its question does not promise them gone.
+_rt_page = sys.modules['noteorganizer.ui.settings_page']
+_rt_days_was = _rt_page.trash_retention_days
+_rt_page.trash_retention_days = lambda: None
+NO._core_paths.hold_writes(NO.SETTINGS_FILE)
+try:
+    _rt_line = app._trash_window_line()
+finally:
+    _rt_page.trash_retention_days = _rt_days_was
+    # The set holds each path as hold_writes spells it: normcase, abspath.
+    NO._core_paths.WRITES_HELD.discard(os.path.normcase(os.path.abspath(NO.SETTINGS_FILE)))
+_rt_entry = {'title': 'x', 'attachments': [{'filename': 'a.txt', 'stored_as': 'a.txt'}]}
+_rt_store.attached_files_kept.__globals__['_UNREAD_AT_LOAD'].add(NO.DATA_FILE)
+try:
+    _rt_words = (app._attached_files_words([_rt_entry]),
+                 app._attached_files_words([_rt_entry], now=False))
+finally:
+    _rt_store.attached_files_kept.__globals__['_UNREAD_AT_LOAD'].discard(NO.DATA_FILE)
+check(f"over a held settings file the Trash's line asks for no choice, and with the notes "
+      f"unread a delete for good names no files ({_rt_line!r}, {_rt_words})",
+      'once Note Organizer is opened again' in _rt_line and 'choose one below' not in _rt_line
+      and _rt_words[0] == '' and 'along with 1 attached file' in _rt_words[1])
 
 
 def _rt_row_lines():
