@@ -3272,15 +3272,14 @@ def _fx_session_then_poll(fail_after):
     NO.save_setting('backup_cut_short', None)
     with _fx_no_import():
         _fx_start_export()
-        if not fail_after:
-            for _t in getattr(app, '_io_workers', []):
-                _t.join(25)
-        else:
+        # Finished before "still writing" is faked: a live worker could set
+        # done between the mark and the settle, and the settle saw it done.
+        for _t in getattr(app, '_io_workers', []):
+            _t.join(25)
+        if fail_after:
             app._export_state['done'] = False       # still writing at the question
         app._settle_backups_at_session_end()
     if fail_after:
-        for _t in getattr(app, '_io_workers', []):
-            _t.join(25)
         app._export_state['done'] = True
     said, err_was = [], app.show_error
     app.show_error = lambda *a, **k: said.append(
@@ -3359,10 +3358,10 @@ app._export_state = None
 NO.save_setting('backup_cut_short', None)
 with _fx_no_import():
     _fx_start_export()
+    for _t in getattr(app, '_io_workers', []):
+        _t.join(25)                          # finished first, as above
     app._export_state['done'] = False        # still writing at the question
     app._settle_backups_at_session_end()
-for _t in getattr(app, '_io_workers', []):
-    _t.join(25)
 app._export_state['done'] = True
 app._export_state['left_out'] = ['20261113090000000002_held.bin']
 _fx_info, _fx_info_was = [], app.show_info
@@ -3386,7 +3385,18 @@ app._export_state = None
 # Responding, a forced shut-down) said nothing, and the .tmp stayed.
 NO.save_setting('backup_cut_short', None)
 _fx_long = threading.Event()
-_fx_worker = threading.Thread(target=_fx_long.wait, args=(3.0,), daemon=True)
+_fx_at_wait = {}
+
+
+class _FxWorker(threading.Thread):
+    def join(self, timeout=None):
+        # Read as the wait begins: what a window ended inside it leaves.
+        # Read after the wait, a word written after it passed too.
+        _fx_at_wait.setdefault('word', NO.get_setting('backup_cut_short'))
+        return super().join(timeout)
+
+
+_fx_worker = _FxWorker(target=_fx_long.wait, args=(3.0,), daemon=True)
 _fx_worker.start()
 _fx_workers_was = getattr(app, '_io_workers', [])
 app._io_workers = [_fx_worker]
@@ -3394,7 +3404,7 @@ app._export_state = {'done': False, 'stop': False, 'error': None, 'current': 0, 
                      'save_path': os.path.join(os.getcwd(), 'qa3_close_wait.zip')}
 try:
     app._wait_for_io_workers(cap_s=0.2)
-    _fx_cut = NO.get_setting('backup_cut_short') or {}
+    _fx_cut = _fx_at_wait.get('word') or {}
 finally:
     _fx_long.set()
     app._io_workers = _fx_workers_was
@@ -3414,6 +3424,14 @@ NO.save_setting('backup_cut_short', {'kind': 'export', 'file': os.path.join(os.g
 _fx_words = _next_start_says()
 check(f'...while one whose file did not change is said cut short ({_fx_words[:120]!r})',
       'qa3_close_wait.zip was cut short when Note Organizer closed' in _fx_words)
+# The usual case: an older backup of the same name, replaced by the export
+# that landed (its time changed since the word), is said finished too.
+_fx_cw = os.path.join(os.getcwd(), 'qa3_close_wait.zip')
+NO.save_setting('backup_cut_short', {'kind': 'export', 'file': _fx_cw,
+                                     'before': os.path.getmtime(_fx_cw) - 60})
+_fx_words = _next_start_says()
+check(f'...as is one that replaced an older backup of the same name ({_fx_words[:120]!r})',
+      'qa3_close_wait.zip finished as Note Organizer closed' in _fx_words)
 fd.asksaveasfilename = lambda **k: _fx_zip
 # An error without words (a MemoryError's) read as none: "Export complete",
 # "Last exported" stamped, and no file written.
@@ -5399,6 +5417,11 @@ check(f"a template saved after a cancelled sign-out refused it takes back the wo
       f"was not kept ({_tk_word!r}, {_tk_said[:60]!r})",
       _tk_word == 'Packing' and any(t.get('name') == 'Packing' for t in app.templates)
       and 'was not kept' not in _tk_said)
+# Said with "began to": true too of a sign-out the person cancelled.
+NO.save_setting('template_not_kept', 'Packing list')
+_tk_next = _next_start_says()
+check(f'a template not kept is said as written when Windows began to sign out ({_tk_next[:120]!r})',
+      'being written when Windows began to sign out or shut down, was not kept' in _tk_next)
 app.templates = []; NO.save_templates(app.templates)
 
 # A backup's Trash brings its window when this notebook never chose one:

@@ -1765,13 +1765,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "nothing is saved there until Note Organizer is opened again. "
                 "Nothing is lost.")
 
-        # A template written when Windows signed out, past the most kept.
+        # A template written as Windows began to sign out, past the most
+        # kept: "began to", true too of a sign-out the person cancelled.
         not_kept = get_setting("template_not_kept", None, expect=str)
         if not_kept:
             save_setting("template_not_kept", None)
             lines.append(
                 f"The template “{one_line(not_kept, 80)}”, being written when "
-                f"Windows signed out or shut down, was not kept: you already "
+                f"Windows began to sign out or shut down, was not kept: you already "
                 f"had {MAX_TEMPLATES:,} templates, which is the most Note "
                 "Organizer keeps.")
 
@@ -1826,9 +1827,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # cut short, "export again" offered to replace the only copy
                 # of a session's notes under the same day's name.
                 lines.append(
-                    f"The export to {name} finished as {when}, before its own "
-                    "message could be shown. Open it to check it holds what "
-                    "you expect (Settings → Backup → Import shows what it brings).")
+                    f"The export to {name} finished as {when}. Open it to "
+                    "check it holds what you expect (Settings → Backup → "
+                    "Import shows what it brings).")
             else:
                 # A process ended mid-export leaves its unfinished file
                 # beside the target (export_data writes there first).
