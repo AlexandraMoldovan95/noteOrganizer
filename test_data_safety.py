@@ -5146,6 +5146,25 @@ check("a backup the disk has no room for is refused, saying what it needs -- "
 check("...and with the attachments on another disk, each disk is asked for its own share",
       _sh.backup_space_problem(_backup, 1 * _GB, 1 * _GB) is None
       and _sh.backup_space_problem(_backup, 1 * _GB, 500_000_000) is not None)
+# Refused for no room, the backup is sound: its own kind, so the import says
+# that alone, not "couldn't be read". A hostile archive stays a plain refusal.
+_room_was = _sh._disk_of
+_sh._disk_of = lambda _p: (1000, "one-disk")
+try:
+    _zroom = tempfile.mkdtemp(prefix="zip-room-")
+    with _zipfile.ZipFile(os.path.join(_zroom, "r.zip"), "w") as _zf:
+        _zf.writestr("notes_data.json", "[]")
+    try:
+        with _zipfile.ZipFile(os.path.join(_zroom, "r.zip")) as _zf:
+            _sh._safe_extract_zip(_zf, os.path.join(_zroom, "out"))
+        _room_answer = None
+    except ValueError as _exc:
+        _room_answer = _exc
+finally:
+    _sh._disk_of = _room_was
+    shutil.rmtree(_zroom, ignore_errors=True)
+check("a backup refused for no room is refused as a sound one with no room, its own kind",
+      isinstance(_room_answer, _sh.BackupRefused) and "free space" in str(_room_answer))
 check("an entry expanding a thousand times past its packed size is refused as a zip bomb",
       "hostile" in (_sh.backup_entries_problem(
           [_entry("attachments/x.bin", 3 * _GB, 3_000_000)]) or ""))

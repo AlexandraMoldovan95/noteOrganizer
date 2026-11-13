@@ -1357,6 +1357,34 @@ check('an imported trash attachment never shares a LOCAL TRASH file',
           NO.ATTACHMENTS_DIR, _ft['attachments'][0]['stored_as'])))
 os.remove(_cz)
 
+# A sound backup with no room for it on a nearly full disk: said as that
+# alone. It opened with "That file couldn't be read as a backup".
+_nr_zip = os.path.join(tempfile.gettempdir(), 'qa3_no_room.zip')
+with zipfile.ZipFile(_nr_zip, 'w') as zf:
+    zf.writestr('notes_data.json', '[]')
+_nr_said, _nr_err_was, _nr_unpack_was = [], app.show_error, NO._safe_extract_zip
+
+
+def _nr_no_room(*_a, **_k):
+    raise NO.BackupRefused("There isn't enough free space to import this backup: it needs about 9 GB.")
+
+
+app.show_error = lambda *a, **k: _nr_said.append(' '.join(map(str, a)))
+NO._safe_extract_zip = _nr_no_room
+fd.askopenfilename = lambda **k: _nr_zip
+try:
+    app.import_data()
+    t0 = time.time()
+    while app._import_state is not None and time.time() - t0 < 30:
+        app.update()
+finally:
+    NO._safe_extract_zip = _nr_unpack_was
+    app.show_error = _nr_err_was
+os.remove(_nr_zip)
+check(f"a sound backup with no room for it is said as that alone, not as a file that could not be read "
+      f"({_nr_said!r})",
+      any('enough free space' in s for s in _nr_said) and not any("couldn't be read" in s for s in _nr_said))
+
 # A CRAFTED backup's settings.json: a million day colours under keys that are
 # no dates, and markers 100,000 characters long. Adopted whole, every note
 # then took three seconds to open -- each open rewrote the 62 MB file -- and

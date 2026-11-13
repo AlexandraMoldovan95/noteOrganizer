@@ -6,6 +6,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog
 import tkinter.font as tkfont
 import copy
+import errno
 import json
 import os
 import sys
@@ -434,6 +435,7 @@ from noteorganizer.core.sharing import (
     SHAREABLE_FIELDS,
     ShareCodeTooLarge,
     StoppableFile,
+    BackupRefused,
     backup_entries_problem,
     copy_file_until_stopped,
     encode_share_code,
@@ -2494,7 +2496,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return False
         try:
             now = os.path.getmtime(path)
-        except OSError:
+        except (OSError, ValueError):   # ValueError: a NUL another program wrote
             return False
         before = cut.get("before")
         if before is None:
@@ -2609,7 +2611,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """
         in_use = attachment_names_in(self.notes + self.trash)
         for named in state.get("copied") or []:
-            if not isinstance(named, str) or os.path.basename(named) != named:
+            # A bare name only; ":" would name a file's stream (N::$DATA).
+            if not isinstance(named, str) or os.path.basename(named) != named or ":" in named:
                 continue
             # A ".part" still flushing when the word was written was renamed
             # to its own name after: the import copies only names not there.
@@ -2618,7 +2621,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     continue
                 try:
                     os.remove(os.path.join(ATTACHMENTS_DIR, name))
-                except OSError:
+                except (OSError, ValueError):
                     pass
 
     # ---------- Share codes ----------
@@ -11847,8 +11850,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     with open(zip_path, "rb") as raw, \
                             zipfile.ZipFile(StoppableFile(raw, stop), "r") as zf:
                         _safe_extract_zip(zf, temp_dir, ATTACHMENTS_DIR)
+                except BackupRefused as e:
+                    # A sound backup with no room for it: said as that alone.
+                    state["error"] = str(e)
+                    state["done"] = True
+                    return
                 except (zipfile.BadZipFile, IOError, OSError, ValueError) as e:
-                    state["error"] = f"That file couldn't be read as a backup:\n{e}"
+                    state["error"] = (
+                        "The disk filled up while the backup was unpacked, so "
+                        "nothing from it was kept. Free up some space and try "
+                        "again." if getattr(e, "errno", None) == errno.ENOSPC
+                        else f"That file couldn't be read as a backup:\n{e}")
                     state["done"] = True
                     return
 

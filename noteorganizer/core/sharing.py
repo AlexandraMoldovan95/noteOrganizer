@@ -264,6 +264,11 @@ def _disk_of(path):
     return shutil.disk_usage(path).free, os.stat(path).st_dev
 
 
+class BackupRefused(ValueError):
+    """A sound backup refused for a reason said whole: no room for it. Said
+    as it is, not as a file that could not be read."""
+
+
 def _safe_extract_zip(zf, dest_dir, attachments_dir=None):
     """Extract a zip safely: block path-traversal ('../' escapes), zip bombs
     and a full disk. extractall() guards against none of them, so a
@@ -272,16 +277,17 @@ def _safe_extract_zip(zf, dest_dir, attachments_dir=None):
     dest_root = os.path.abspath(dest_dir)
     infos = zf.infolist()
     problem = backup_entries_problem(infos)
-    if problem is None:
-        free_unpack, unpack_disk = _disk_of(dest_root)
-        free_attach = None
-        if attachments_dir is not None:
-            attach_free, attach_disk = _disk_of(attachments_dir)
-            if attach_disk != unpack_disk:
-                free_attach = attach_free
-        problem = backup_space_problem(infos, free_unpack, free_attach)
     if problem:
         raise ValueError(problem)
+    free_unpack, unpack_disk = _disk_of(dest_root)
+    free_attach = None
+    if attachments_dir is not None:
+        attach_free, attach_disk = _disk_of(attachments_dir)
+        if attach_disk != unpack_disk:
+            free_attach = attach_free
+    room = backup_space_problem(infos, free_unpack, free_attach)
+    if room:
+        raise BackupRefused(room)
 
     for info in infos:
         # Reject absolute paths and anything that escapes the destination.
