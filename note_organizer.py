@@ -1776,7 +1776,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 f"had {MAX_TEMPLATES:,} templates, which is the most Note "
                 "Organizer keeps.")
 
-        # Recorded by _settle_background_work_at_close, said once.
+        # Left by the close (before its wait and after) or a session's end; said once.
         cut = get_setting("backup_cut_short", None, expect=dict)
         if cut:
             save_setting("backup_cut_short", None)
@@ -2213,10 +2213,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _wait_for_io_workers(self, cap_s=30.0):
         """Let an export finish before the process goes, and stop an import
         at once (the close drops it anyway: past the cap it died mid-file).
-        Hard-capped, the threads daemon, so a hung worker cannot hold the
-        close; an export stopped at the cap takes its unfinished file away,
-        and the tmp-then-replace keeps the old backup. Each answers within
-        one chunk (StoppableFile)."""
+        Capped (cap_s, 5 s more for an export told to stop), the threads
+        daemon; an export stopped at the cap takes its unfinished file away,
+        the old backup kept. A stop is answered within one chunk
+        (StoppableFile), but not inside a stalled read or a flush."""
         workers = [t for t in getattr(self, "_io_workers", [])
                    if t.is_alive()]
         if not workers:
@@ -2560,14 +2560,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "before": self._target_mtime(state.get("save_path"))})
         state = self._import_state
         if state is not None:
-            word = {"kind": "import", "file": state.get("zip") or ""}
-            if not state.get("done"):
-                # Still running past the wait's cap: what it copied and
-                # unpacked named for the next start, as a session's end names
-                # them -- unnamed, they stayed behind for good.
-                word.update(copied=list(state.get("copied") or []),
-                            temp_dir=state.get("temp_dir") or "")
-            save_setting("backup_cut_short", word)
+            # What it copied and unpacked named, done or not: a process ended
+            # in the cleanup below left them unnamed for good. The start takes
+            # out only files no note uses.
+            save_setting("backup_cut_short", {
+                "kind": "import", "file": state.get("zip") or "",
+                "copied": list(state.get("copied") or []),
+                "temp_dir": state.get("temp_dir") or ""})
         if state is None or not state.get("done"):
             # Still running past the wait's cap: leave it alone.
             return
@@ -21717,9 +21716,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if state is None:
             return
         state["stop"] = True
+        # Named before the join, and kept through the cleanup below: a large
+        # file's flush to disk can hold the stop for seconds, and a session
+        # ended there left the files it copied unnamed.
         save_setting("backup_cut_short", {
-            "kind": "import", "file": state.get("zip") or "", "when": "session"})
-        # Stopped between two chunks of a megabyte (StoppableFile): moments.
+            "kind": "import", "file": state.get("zip") or "", "when": "session",
+            "copied": list(state.get("copied") or []),
+            "temp_dir": state.get("temp_dir") or ""})
         deadline = time.time() + 2.0
         for t in [t for t in getattr(self, "_io_workers", []) if t.is_alive()]:
             t.join(timeout=max(0.0, deadline - time.time()))

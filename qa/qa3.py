@@ -3126,9 +3126,13 @@ try:
         check(f'...and nothing of it among the attachments ({_hb_phase})',
               not os.path.exists(_hb_part)
               and not os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _hb_name)))
-        check(f'...and it leaves word for the next start ({_hb_phase})',
-              NO.get_setting('backup_cut_short') == {'kind': 'import',
-                                                     'file': _hb_zip})
+        # Done or not, the word names what it copied and unpacked: the cleanup
+        # after it takes time too.
+        _hb_word = dict(NO.get_setting('backup_cut_short') or {})
+        check(f'...and it leaves word for the next start, naming what it unpacked ({_hb_phase}, {_hb_word!r})',
+              _hb_word.get('kind') == 'import' and _hb_word.get('file') == _hb_zip
+              and 'when' not in _hb_word and isinstance(_hb_word.get('copied'), list)
+              and _hb_word.get('temp_dir') == _hb_temp)
         _words = _next_start_says()
         check(f'the next start says the import was cut short, nothing kept, '
               f'and to import it again ({_words[:140]!r})',
@@ -3456,6 +3460,21 @@ check(f'a close that waits for an import writes its word before the wait, what i
       _fx_cut.get('kind') == 'import' and _fx_cut.get('copied') == _fx_copied
       and str(_fx_cut.get('temp_dir', '')).endswith('notes_import_qa3_wait'))
 NO.save_setting('backup_cut_short', None)
+# Done but not merged when the window closes, no worker left to wait for:
+# only the close's settle names it, and takes its unpacked folder out.
+_fx_import_was = app._import_state
+_fx_dir = tempfile.mkdtemp(prefix='notes_import_qa3_done_')
+app._import_state = {'done': True, 'stop': False, 'copied': ['20261113110000000001_c.bin'],
+                     'zip': os.path.join(os.getcwd(), 'qa3_done_import.zip'), 'temp_dir': _fx_dir}
+try:
+    app._settle_background_work_at_close()
+    _fx_cut = dict(NO.get_setting('backup_cut_short') or {})
+finally:
+    app._import_state = _fx_import_was
+check(f'an import done but not merged at the close leaves word naming what it copied ({_fx_cut!r})',
+      _fx_cut.get('kind') == 'import' and _fx_cut.get('copied') == ['20261113110000000001_c.bin']
+      and not os.path.exists(_fx_dir))
+NO.save_setting('backup_cut_short', None)
 fd.asksaveasfilename = lambda **k: _fx_zip
 # An error without words (a MemoryError's) read as none: "Export complete",
 # "Last exported" stamped, and no file written.
@@ -3568,9 +3587,12 @@ try:
           not (_sx_temp and os.path.exists(_sx_temp))
           and not os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _hb_name))
           and not any(n.get('title') == 'Film' for n in app.notes))
-    check('...and word for the next start',
-          NO.get_setting('backup_cut_short')
-          == {'kind': 'import', 'file': _hb_zip, 'when': 'session'})
+    # Named what it copied and unpacked, kept through the cleanup.
+    _sx_word = dict(NO.get_setting('backup_cut_short') or {})
+    check(f'...and word for the next start, naming what it copied and unpacked ({_sx_word!r})',
+          {k: _sx_word.get(k) for k in ('kind', 'file', 'when')}
+          == {'kind': 'import', 'file': _hb_zip, 'when': 'session'}
+          and isinstance(_sx_word.get('copied'), list) and _sx_word.get('temp_dir') == _sx_temp)
     _words = _next_start_says()
     check(f'the next start says Windows cut it short ({_words[:120]!r})',
           'qa3_held_import.zip' in _words and 'when Windows began to sign out' in _words)
