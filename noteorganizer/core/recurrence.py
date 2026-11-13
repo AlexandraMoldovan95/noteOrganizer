@@ -893,24 +893,22 @@ def history_entries(notes, query="", year_bucket="All", today=None, memo=None):
 
             children = []
             any_child_match = False
-            # Edited days the search or the year leaves out, counted: the row
-            # said "1 edited day" and "every other day shows the series content"
-            # over a series with three.
-            left_out = 0
+            # Edited days, days off the schedule and moved ones the search or the
+            # year leaves out, counted: the row said "1 edited day" of a series
+            # with three, and every other day showing the series content.
+            left_out = off_left = moved_left = 0
             if occ_days is not None:
                 children_kind = "occurrences"
                 for day in sorted(occ_days, reverse=True):
                     override = overrides.get(day)
                     edited = isinstance(override, dict)
-                    if not bucket_ok(day):
-                        left_out += edited
-                        continue
                     ov = override if edited else {}
-                    child_match = edited and _history_match(
+                    child_match = edited and bucket_ok(day) and _history_match(
                         query, ov.get("title"), ov.get("body"),
                         ov.get("comments"))
-                    if not (child_match or base_matches):
+                    if not bucket_ok(day) or not (child_match or base_matches):
                         left_out += edited
+                        moved_left += bool(came.get(day))
                         continue
                     if query and child_match:
                         any_child_match = True
@@ -925,6 +923,7 @@ def history_entries(notes, query="", year_bucket="All", today=None, memo=None):
                 # no longer has was in no row at all: listed here too, marked.
                 for day in off:
                     if not bucket_ok(day):
+                        off_left += 1
                         continue
                     ov = overrides.get(day)
                     ov = ov if isinstance(ov, dict) else {}
@@ -932,6 +931,7 @@ def history_entries(notes, query="", year_bucket="All", today=None, memo=None):
                         query, ov.get("title"), ov.get("body"),
                         ov.get("comments"))
                     if not (child_match or base_matches):
+                        off_left += 1
                         continue
                     if query and child_match:
                         any_child_match = True
@@ -951,16 +951,15 @@ def history_entries(notes, query="", year_bucket="All", today=None, memo=None):
                         # A deleted day's stray override stays hidden -- but
                         # a day moved onto that date keeps its words.
                         continue
-                    if not bucket_ok(day):
-                        left_out += day not in off
-                        continue
                     if not isinstance(override, dict):
                         override = {}
-                    child_match = _history_match(
+                    child_match = bucket_ok(day) and _history_match(
                         query, override.get("title"), override.get("body"),
                         override.get("comments"))
-                    if not (child_match or base_matches):
+                    if not bucket_ok(day) or not (child_match or base_matches):
                         left_out += day not in off
+                        off_left += day in off
+                        moved_left += day not in off and bool(came.get(day))
                         continue
                     if query and child_match:
                         any_child_match = True
@@ -976,8 +975,10 @@ def history_entries(notes, query="", year_bucket="All", today=None, memo=None):
                 # A day moved to another date is listed too, edited or not,
                 # while the calendar draws it there (drawn_moves, kept in memo).
                 for orig, new in known["drawn"]:
-                    if (new in overrides or not is_date(new) or not bucket_ok(new)
-                            or not base_matches):
+                    if new in overrides or not is_date(new):
+                        continue
+                    if not bucket_ok(new) or not base_matches:
+                        moved_left += 1
                         continue
                     children.append({
                         "date": new,
@@ -1006,7 +1007,9 @@ def history_entries(notes, query="", year_bucket="All", today=None, memo=None):
                                     if c["edited"] and not c["off_schedule"]),
                     "n_edited_left_out": left_out,
                     "n_off": sum(1 for c in children if c["off_schedule"]),
+                    "n_off_left_out": off_left,
                     "n_moved": sum(1 for c in children if c["moved_from"]),
+                    "n_moved_left_out": moved_left,
                     "auto_expand": any_child_match,
                     "_sort": sort_date,
                 }
@@ -1177,7 +1180,8 @@ def describe_recurrence(note):
         base += " on day " + ", ".join(str(d) for d in rec["month_days"])
 
     if rec["count"]:
-        base += f", {rec['count']} times"
+        n = rec["count"]
+        base += f", {n} time{'' if n == 1 else 's'}"
     elif rec["end"]:
         base += f", until {show_date(rec['end'])}"
 

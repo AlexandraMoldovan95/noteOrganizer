@@ -248,6 +248,20 @@ check(f"the edited days a search or a year leaves out are counted "
       _s3.get('n_edited_left_out') == 0
       and [(e['n_edited'], e.get('n_edited_left_out')) for e in (_lb, _lr, _ly)]
       == [(1, 0), (0, 1), (0, 1)])
+check(f"...and the days off the schedule the same "
+      f"({[(e['n_off'], e.get('n_off_left_out')) for e in (_s3, _lb, _lr, _ly)]})",
+      [(e['n_off'], e.get('n_off_left_out')) for e in (_s3, _lb, _lr, _ly)]
+      == [(1, 0), (0, 1), (1, 0), (1, 0)])
+# ...a bounded series too, which lists every one of its days.
+_hb = _hist([{'id': 8, 'title': 'Bounded', 'body': 'base', 'date': '2026-06-01',
+              'recurrence': {'freq': 'monthly', 'count': 3},
+              'overrides': {'2026-07-01': {'title': 'Jul', 'body': 'alpha'},
+                            '2026-08-01': {'title': 'Aug', 'body': 'beta'}}}],
+            query='alpha', today=_H_TODAY)
+check(f"...and of a bounded series, every day of which it lists "
+      f"({[(e['children_kind'], e['n_edited'], e.get('n_edited_left_out')) for e in _hb]})",
+      [(e['children_kind'], e['n_edited'], e.get('n_edited_left_out')) for e in _hb]
+      == [('occurrences', 1, 1)])
 
 _q = _hist(_h_notes, query='budget', today=_H_TODAY)
 check('search reaches into a day\'s own override content',
@@ -651,6 +665,11 @@ check('the "until" of a repeat is shown day first',
       NO.describe_recurrence({'recurrence': {'freq': 'weekly', 'interval': 2,
                                              'end': '2026-12-31'}})
       == 'Every 2 weeks, until 31.12.2026')
+check('a series of one is "1 time", not "1 times", and more are "times"',
+      NO.describe_recurrence({'recurrence': {'freq': 'daily', 'count': 1}})
+      == 'Every day, 1 time'
+      and NO.describe_recurrence({'recurrence': {'freq': 'daily', 'count': 2}})
+      == 'Every day, 2 times')
 
 
 # ---- moved days at the cap: the per-day questions asked of all at once ----

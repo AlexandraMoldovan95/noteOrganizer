@@ -1723,10 +1723,11 @@ class CalendarViewMixin:
                     suffix = (f" · {edited_of} edited day"
                               f"{'s' if n_kids != 1 else ''} (✎)"
                               if n_kids else "")
-                if entry.get("n_off"):
-                    suffix += f" · {entry['n_off']} off the schedule"
-                if entry.get("n_moved"):
-                    suffix += f" · {entry['n_moved']} moved (↷)"
+                # ...and the days off the schedule and the moved ones the same.
+                for key, said in (("n_off", "off the schedule"), ("n_moved", "moved (↷)")):
+                    shown, out = entry.get(key, 0), entry.get(key + "_left_out", 0)
+                    if shown or out:
+                        suffix += f" · {f'{shown} of {shown + out}' if out else shown} {said}"
                 if expandable:
                     glyph = "▾" if expanded else "▸"
                     row_cmd = (lambda i=entry["note_id"]:
