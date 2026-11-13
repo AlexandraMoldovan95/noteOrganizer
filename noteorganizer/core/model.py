@@ -871,6 +871,18 @@ def _copy_field_held(note, prev, key):
     return prev[key] == note.get(key, NOTE_DEFAULTS.get(key))
 
 
+def _unknown_kept_by_restore(note, prev):
+    """Whether "↩ Restore previous" keeps each field this version does not
+    know that *note* holds now. The restore puts back the copy's alone, so
+    each must be the copy's, kinds told apart: the reverse of the spending
+    rule above, where a field the backup added does not count."""
+    theirs = prev.get("_unknown")
+    if not isinstance(theirs, dict):
+        return True
+    return all(name in theirs and _typed(theirs[name]) == _typed(value)
+               for name, value in unknown_fields(note).items())
+
+
 def text_lost(old, new):
     """How many characters of *old* *new* does not keep at either end: its
     length less the longest start the two share and, of what follows, the
@@ -973,7 +985,8 @@ def copy_replaced_by_restore(note, prev):
                     and (note.get("comments") or "").strip() in (prev.get("comments") or "")
                     and styles_kept
                     and all(_copy_field_held(note, prev, key)
-                            for key in prev if key not in PREV_TEXT_FIELDS)
+                            for key in prev if key not in PREV_TEXT_FIELDS and key != "_unknown")
+                    and _unknown_kept_by_restore(note, prev)
                     and not taken)
     if nothing_lost:
         return None

@@ -5632,6 +5632,11 @@ check("...true and 1 in such a field are two notes, as on the phone (1 and 1.0 o
 check("...an empty object and an empty list in such a field are two notes too",
       _d2.content_signature(_d2.normalize_note({'id': 1, 'x': {}}))
       != _d2.content_signature(_d2.normalize_note({'id': 1, 'x': []})))
+check("...and true is not the list [\"bool\", 1], nor an empty object the list [\"dict\"]",
+      _d2.content_signature(_d2.normalize_note({'id': 1, 'x': True}))
+      != _d2.content_signature(_d2.normalize_note({'id': 1, 'x': ['bool', 1]}))
+      and _d2.content_signature(_d2.normalize_note({'id': 1, 'x': {}}))
+      != _d2.content_signature(_d2.normalize_note({'id': 1, 'x': ['dict']})))
 # The copy is spent only when the note holds its own fields again, kinds told
 # apart: its 1 is not the backup's true, and the field the backup added (which
 # no person can remove) does not keep it from being spent.
@@ -5644,6 +5649,23 @@ _d2_added['title'] = 'Old'
 check(f"...a copy whose own 1 the backup wrote over as true is not spent; one whose only new field "
       f"the backup added is ({_d2.rescue_copy_spent(_d2_spend)}, {_d2.rescue_copy_spent(_d2_added)})",
       not _d2.rescue_copy_spent(_d2_spend) and _d2.rescue_copy_spent(_d2_added))
+# Restore previous puts back the copy's own alone: a field the backup added,
+# or the backup's true over this note's 1, is what the restored version lacks,
+# so it becomes the copy in its turn (an older backup, its words held in
+# this note's). The same fields as the copy's leave nothing to keep.
+def _d2_restore_turn(own, theirs):
+    note = _d2.normalize_note(dict({'id': 1, 'title': 'T', 'body': 'Hello world'}, **own))
+    _d2.apply_shared_update(note, dict({'title': 'T', 'body': 'Hello'}, **theirs),
+                            _d2.UPDATABLE_FROM_BACKUP)
+    return _d2.copy_replaced_by_restore(note, note['_prev'])
+_d2_turns = (_d2_restore_turn({}, {'x_new': 'v'}), _d2_restore_turn({'own': 1}, {'own': True}),
+             _d2_restore_turn({'own': 1}, {'own': 1}))
+check(f"...Restore previous keeps in its turn the field the backup added and the true it wrote "
+      f"over a 1; with the copy's own alone it keeps nothing "
+      f"({[t if t is None else t.get('_unknown') for t in _d2_turns]})",
+      _d2_turns[0] is not None and _d2_turns[0].get('_unknown') == {'x_new': 'v'}
+      and _d2_turns[1] is not None and _d2_turns[1].get('_unknown') == {'own': True}
+      and _d2_turns[2] is None)
 check("...and a list longer than the allowance is left out unwalked",
       'huge' not in _d2.normalize_note({'id': 1, 'huge': [0] * (_d2.MAX_UNKNOWN_UNITS + 1)}))
 # Out of the Trash: kept, the Trash's own stamp left there.

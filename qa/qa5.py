@@ -4193,6 +4193,27 @@ _rn_own = ((app.find_note(1) or {}).get('title'), (app.find_note(1) or {}).get('
 app._cancel_pending_autosave()
 check(f"Restore previous after a backup's Update puts back a field this version does not know ({_rn_own})",
       _rn_own == ('Mine', '10:00'))
+# ...and the field the backup added, which the restored version lacks, is kept
+# in its turn: an older backup's words held in this note's left nothing else
+# to keep, and the field went in no copy.
+app.new_note(); app.update()
+app.notes = [NO.normalize_note({'id': 1, 'title': 'T', 'body': 'Hello world'}),
+             NO.normalize_note({'id': 2, 'title': 'Other', 'body': 'y'})]
+NO.apply_shared_update(app.notes[0], {'title': 'T', 'body': 'Hello', 'x_new': 'v'},
+                       NO.UPDATABLE_FROM_BACKUP)
+app.save_notes()
+app.open_note_in_tab(app.find_note(1)); app.update()
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.restore_previous_version(); app.update()
+finally:
+    app.ask_yes_no = _ro_yes
+_rn_turn = app.find_note(1) or {}
+app._cancel_pending_autosave()
+check(f"...and keeps in its turn the field the backup added, which the restored version lacks "
+      f"({_rn_turn.get('body')!r}, {'x_new' in _rn_turn}, {(_rn_turn.get('_prev') or {}).get('_unknown')})",
+      _rn_turn.get('body') == 'Hello world' and 'x_new' not in _rn_turn
+      and (_rn_turn.get('_prev') or {}).get('_unknown') == {'x_new': 'v'})
 # The Undo of a day clicked with THAT day open -- a repeat picked anew has it
 # again, the series' text on it -- saves the editor before it writes the
 # day, and opens it without a second save. Saved after, the editor's view
