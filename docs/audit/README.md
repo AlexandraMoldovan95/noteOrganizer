@@ -309,6 +309,7 @@ totals above are waves 1 to 5's.
 | [r12-desktop.txt](wave6/r12-desktop.txt) | Desktop | 2026-11-13 16:02 | 2 | 0.53 |
 | [r13-desktop.txt](wave6/r13-desktop.txt) | Desktop | 2026-11-13 16:42 | 2 | 0.45 |
 | [r10-phone.txt](wave6/r10-phone.txt) | Phone | 2026-11-13 16:42 | 2 | 0.54 |
+| [r14-desktop.txt](wave6/r14-desktop.txt) | Desktop | 2026-11-13 17:28 | 2 | 0.57 |
 
 From the third round, both agents of an app read one file; the line that started each named
 where to begin, one at each fix by name, the other at the person's roads and the documents.

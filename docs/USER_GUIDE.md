@@ -467,8 +467,8 @@ just the answer) into the note body — repeated inserts stack cleanly below eac
 collapsible history keeps the calculations made since the note was opened, with a Clear button
 and click-to-insert on any past entry. The calculator closes and its history starts empty each
 time a note is opened again: another note, a new note or a template, but also this note reloaded
-— another day of a repeating note, **↩ Restore previous**, resetting or moving a day, or an
-import that updates it.
+— for example another day of a repeating note, **↩ Restore previous**, resetting or moving a
+day, or an import that updates it.
 
 ![Calculator](screenshots/calculator.png)
 
@@ -738,8 +738,9 @@ A table in the note is named there (**▦ 1 table**) rather than drawn as rows o
 
 Settings → **Duplicates** groups notes that match on title, body, comments, category, checklist,
 repeat rule and, for a repeating note, the days it keeps of its own (deleted, edited or moved).
-Case, spacing and a “(copy)” after the title are ignored, and so are the text's
-styling, the date, the colour and the pin — so when one copy is styled differently, look before
+In the title, body and comments case and spacing are ignored (a checklist's rows must match as
+written, their ticks too); a “(copy)” after the title is ignored, and so are the text's styling, the date, the
+colour and the pin — so when one copy is styled differently, look before
 you choose which to keep. Within a
 group, tick specific copies to remove (the rest are kept — nothing forces "keep exactly one"), or
 use **Clean up ALL groups** to apply "keep the first, remove the rest" across every group in one
@@ -978,9 +979,9 @@ look identical to ones you already have, you'll be asked whether to skip the dup
 everything anyway, or cancel — nothing is silently duplicated.
 
 A code made from a note you have — or a backup made on this computer — holds some notes exactly
-as they are here. Those are recognised as the same notes, and you are asked once: **Skip** them
-(the answer Enter and Escape give, and nothing changes) or **Add copies anyway**, as second,
-separate notes.
+as they are here. Those are recognised as the same notes, and you are asked once: **Skip it** (or
+**Skip the 3**, for three; the answer Enter and Escape give, and nothing changes) or **Add a copy
+anyway** (**Add copies anyway**), as second, separate notes.
 
 ![Import code](screenshots/import-code.png)
 
@@ -1071,9 +1072,9 @@ per-day edits, its pin, and any files attached on the other device. Files alread
 stay attached; an update only ever adds them. **↩ Restore previous** takes the rest back.
 
 A note the backup holds exactly as you have it is never updated, and you are asked once about
-all such notes: **Skip** them — the answer Enter and Escape give, so importing the same backup
-twice changes nothing — or **Add copies anyway**, as second, separate notes with files of their
-own. The result says how many were skipped. If the backup's copy is **older** than yours (a
+all such notes: **Skip it** or **Skip the 3** — the answer Enter and Escape give, so importing
+the same backup twice changes nothing — or **Add a copy anyway** (**Add copies anyway**), as
+second, separate notes with files of their own. The result says how many were skipped. If the backup's copy is **older** than yours (a
 backup from last month, say), the question says so before you choose to update.
 
 Every question is asked before anything changes: **Cancel**, on any question that offers it,
@@ -1221,7 +1222,8 @@ it that can be read on the card
 ([how the colours were chosen](ARCHITECTURE.md#contrast-measured)).
 
 At the end of the formatting toolbar sits a small **light/dark switch** (☀ / 🌙): one press flips
-between your last light and last dark theme without leaving the note. The full theme picker, with
+between your last light and last dark theme, remembered from one start to the next, without
+leaving the note. The full theme picker, with
 all eight variants, stays in **Settings → Appearance**.
 
 ![Theme picker](screenshots/theme-picker.png)

@@ -65,7 +65,7 @@ The Microsoft Store expects the app packaged as MSIX. MSIX packages use a 4-part
 - The last part (Revision) **must be left as `0`** when building the package — it's reserved for the Store's own use.
 - The middle two parts (Minor, Build) must each be an integer between 0 and 65535.
 
-`build_msix.py` packs `APP_VERSION`'s three numbers with a last `0` (0.100.524 is 0.100.524.0) and refuses an `.exe` of another version, so the package's version is always the app's own.
+`build_msix.py` packs `APP_VERSION`'s three numbers with a last `0` (0.100.524 is 0.100.524.0) and refuses an `.exe` of another version, so the package's version is always the app's own (`--update` packs a second one, its last number before the `0` one higher, for the Sandbox's update test only).
 
 Source: [Microsoft Learn — App package requirements for MSIX apps](https://learn.microsoft.com/en-us/windows/apps/publish/publish-your-app/msix/app-package-requirements)
 
@@ -88,8 +88,9 @@ certificate made there. Only `dist/msix/out` leaves it; a message says when it i
 closing the window throws the rest away. Nothing touches this machine's certificates or
 notebooks. The identity is a test one (`NoteOrganizer.Test`) until Partner Center reserves the
 Store's, given then to `build_msix.py` as `--name` and `--publisher`; the sandbox scripts read the
-identity from the package itself, so the package with the Store's identity is the one signed and
-proved. A Major of `0` is for Sandbox only. The sandboxes run without a network, and without
+identity from the package itself, so the package with the Store's identity can be the one signed
+and proved (they read it since 2026-11-13; the runs below are of the test identity, before that).
+A Major of `0` is for Sandbox only. The sandboxes run without a network, and without
 a virtual GPU: started from the Start menu, one lost its connection on this machine.
 
 | `.wsb` | What it proves | Last run |
@@ -226,7 +227,7 @@ None of these are decided on — just what exists, for when the choice comes up:
 - **Chocolatey** — a long-standing community package manager, similar spirit to Winget.
 - **Direct download from our own site/GitHub** — an MSIX package plus a `.appinstaller` file gives users real auto-update support without going through any store at all.
 - **GitHub Releases** / **SourceForge** — plain, direct hosting of the built `.exe` (or a zip of `dist/NoteOrganizer/`), no packaging format requirements at all.
-- **PortableApps.com** — a curated catalog of no-install, portable software. The app needs no installer and no registry entries, but it is not portable yet: the built `.exe` keeps its notebook in the profile's `Note Organizer` folder, never beside itself, so a portable edition would first need the notebook kept beside the `.exe`.
+- **PortableApps.com** — a curated catalog of no-install, portable software. The app needs no installer and no registry entries, but it is not portable yet: the built `.exe` keeps its notebook in the profile's `Note Organizer` folder (beside itself only when the profile cannot be written), so a portable edition would first need the notebook kept beside the `.exe` by choice.
 - **itch.io** — low-friction submission, commonly used by small/indie desktop apps; not particularly notes-app-specific, but a real option.
 
 Source: [Microsoft Learn — Choose a distribution path for your Windows app](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/choose-distribution-path)

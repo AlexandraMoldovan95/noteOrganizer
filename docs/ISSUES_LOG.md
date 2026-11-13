@@ -4452,6 +4452,23 @@ app's own; the screenshots' README dated retakes that did not happen and missed 
 the calculator history, said to last while the note is open, empties whenever the note is loaded
 again (Restore previous, another day of a series, an import's Update).
 
+**The fourteenth round** found the thirteenth's fixes held (seven thousand restores fuzzed, two
+thousand damaged codes read against the phone's rule), and the rule for a hidden prefix too wide:
+words saying "NOTE 1:" were called a damaged code to send again, and on the phone, shared in,
+refused with no note made. A hidden prefix counts now only when the code it leads to reads (SN46).
+One medium older than the wave: Restore previous asked "as it was before it was updated" of every
+copy holding more than text, and asked it again over the copy a restore keeps, the updated
+version itself, the reverse of what the button then did; it names the previous version now, as
+the button does, on both apps (SN47). Its second reader read the screens of Settings and the
+dialogs, the first time: the name said "Saved automatically" when a full disk refused it, the
+sidebar keeping the old one (said not saved now, SN44, SN45); the light/dark switch promised the
+last theme used, which it remembered only while the app was open (kept across starts now, with
+the owner's yes, in two settings of its own; SN50, SN51); and lows: messages said on the status
+line alone, behind Settings (on the banner now, SN48), a Trash held since the start refused as a
+full disk (SN49), Appearance's "instantly" over Sharp text's next start, a template's pencil
+called Rename, Duplicates said to ignore case in a checklist, and "up to N could be removed" where
+a group ticked whole goes whole.
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.
 

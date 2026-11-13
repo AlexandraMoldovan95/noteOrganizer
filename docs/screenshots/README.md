@@ -68,7 +68,8 @@ Rules that keep the set reading as one app:
   produces a mixed set.
 
 **Current set:** retaken 2026-10-08 in the default dark (purple) theme, all
-twenty-two and the demo GIF by `tools/doc_screenshots.py`, on app version
+but `tables.png` (kept from 2026-09-14) and the demo GIF by
+`tools/doc_screenshots.py`, on app version
 0.89.371 — the open tab raised, the open note's card ringed, dates shown
 day first, both calendar pictures on the month they stage and nothing cut
 at the bottom edge. On 2026-10-09 the search picture was retaken with three
