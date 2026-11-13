@@ -700,6 +700,7 @@ def load_notes(version_change=None):
             was_open = next(
                 (c for c, n in zip(copies, notes) if n.get("id") == remembered), None)
         cleaned, stats = clean_notes(copies)
+        unchanged = cleaned == notes
         written, _error = _write_json_atomic(paths.DATA_FILE, cleaned)
         if written:
             notes = cleaned
@@ -708,7 +709,7 @@ def load_notes(version_change=None):
                     was_open["id"]
                     if was_open is not None and any(n is was_open for n in notes)
                     else None)
-            report["cleanup_report"] = (stats, backup_path)
+            report["cleanup_report"] = (stats, None if unchanged else backup_path)
             settings["cleanup_done"] = True
             save_settings(settings)
             # That write already carries the new identities, and numbers
@@ -716,10 +717,10 @@ def load_notes(version_change=None):
             minted_any = False
             ids_repaired = False
             aside_made = 0
-        elif backup_path is not None:
-            # The file is as it was, so its copy is no safety net: kept, a
-            # file held open by another program left one more full copy at
-            # every launch until it was let go.
+        if backup_path is not None and (unchanged or not written):
+            # The file is as it was (its write failed, or nothing to change:
+            # a settings file refusing the mark ran it at every start), so
+            # its copy is no safety net, and one more piled up each launch.
             try:
                 os.remove(backup_path)
             except OSError:

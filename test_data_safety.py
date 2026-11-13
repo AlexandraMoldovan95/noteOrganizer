@@ -2275,6 +2275,17 @@ check("...and the next launch that can write does the cleanup, the open note fol
       and [n["id"] for n in _notesW2] == [1]
       and _storage.load_settings().get("last_open_note_id") == 1
       and _storage.load_settings().get("cleanup_done") is True)
+# A settings file that refused the mark ran the cleanup at every start,
+# each keeping a full copy of a notebook it had nothing left to change.
+_setR = _storage.load_settings()
+_setR.pop("cleanup_done", None)
+_storage.save_settings(_setR)
+_beforeR = set(glob.glob(_backupsW))
+_notesR, _reportR = _storage.load_notes(None)
+check(f"a cleanup run again with nothing to change leaves no copy behind "
+      f"({sorted(set(glob.glob(_backupsW)) - _beforeR)!r})",
+      set(glob.glob(_backupsW)) == _beforeR and [n["id"] for n in _notesR] == [1]
+      and (_reportR.get("cleanup_report") or (None, "kept"))[1] is None)
 
 # The two loaders without a corrupt fixture yet: settings (unparsable)
 # and trash (wrong shape). Content-matched rather than counted, so a
