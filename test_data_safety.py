@@ -5629,6 +5629,21 @@ check("...true and 1 in such a field are two notes, as on the phone (1 and 1.0 o
       != _d2.content_signature(_d2.normalize_note({'id': 1, 'flag': 1}))
       and _d2.content_signature(_d2.normalize_note({'id': 1, 'flag': 1}))
       == _d2.content_signature(_d2.normalize_note({'id': 1, 'flag': 1.0})))
+check("...an empty object and an empty list in such a field are two notes too",
+      _d2.content_signature(_d2.normalize_note({'id': 1, 'x': {}}))
+      != _d2.content_signature(_d2.normalize_note({'id': 1, 'x': []})))
+# The copy is spent only when the note holds its own fields again, kinds told
+# apart: its 1 is not the backup's true, and the field the backup added (which
+# no person can remove) does not keep it from being spent.
+_d2_spend = _d2.normalize_note({'id': 1, 'title': 'Old', 'flag': 1})
+_d2.apply_shared_update(_d2_spend, {'title': 'New', 'flag': True}, _d2.UPDATABLE_FROM_BACKUP)
+_d2_spend['title'] = 'Old'
+_d2_added = _d2.normalize_note({'id': 1, 'title': 'Old'})
+_d2.apply_shared_update(_d2_added, {'title': 'New', 'extra': 'x'}, _d2.UPDATABLE_FROM_BACKUP)
+_d2_added['title'] = 'Old'
+check(f"...a copy whose own 1 the backup wrote over as true is not spent; one whose only new field "
+      f"the backup added is ({_d2.rescue_copy_spent(_d2_spend)}, {_d2.rescue_copy_spent(_d2_added)})",
+      not _d2.rescue_copy_spent(_d2_spend) and _d2.rescue_copy_spent(_d2_added))
 check("...and a list longer than the allowance is left out unwalked",
       'huge' not in _d2.normalize_note({'id': 1, 'huge': [0] * (_d2.MAX_UNKNOWN_UNITS + 1)}))
 # Out of the Trash: kept, the Trash's own stamp left there.

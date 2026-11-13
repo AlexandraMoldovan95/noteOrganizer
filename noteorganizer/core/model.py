@@ -186,19 +186,21 @@ def _json_units(value):
     return total
 
 
+def _typed(value):
+    """A JSON value as something hashable that tells its kinds apart, as the
+    phone's stable does: true is not 1, {} is not [] (1 and 1.0 are one number)."""
+    if isinstance(value, bool):
+        return ("bool", value)
+    if isinstance(value, dict):
+        return ("dict",) + tuple(sorted((str(k), _typed(v)) for k, v in value.items()))
+    if isinstance(value, list):
+        return ("list",) + tuple(_typed(v) for v in value)
+    return value
+
+
 def unknown_signature(note):
-    """*note*'s fields this version does not know, signed for the two
-    signatures: as _stable, but true is not 1, as the phone's stable tells
-    them apart (1 and 1.0 are one number on both)."""
-    def typed(value):
-        if isinstance(value, bool):
-            return ("bool", value)
-        if isinstance(value, dict):
-            return tuple(sorted((str(k), typed(v)) for k, v in value.items()))
-        if isinstance(value, list):
-            return tuple(typed(v) for v in value)
-        return value
-    return typed(unknown_fields(note))
+    """*note*'s fields this version does not know, signed for the two signatures."""
+    return _typed(unknown_fields(note))
 
 
 def unknown_fields(note):
@@ -861,7 +863,11 @@ def _copy_field_held(note, prev, key):
         day = note.get("date")
         return _same_series(prev.get("date", day), prev[key], day, note.get(key, NOTE_DEFAULTS.get(key)))
     if key == "_unknown":
-        return prev[key] == unknown_fields(note)
+        # Held when the note holds each of its own again, kinds told apart; a
+        # field the backup added it cannot remove by hand, so it does not count.
+        mine = unknown_fields(note)
+        return all(name in mine and _typed(mine[name]) == _typed(value)
+                   for name, value in prev[key].items())
     return prev[key] == note.get(key, NOTE_DEFAULTS.get(key))
 
 
