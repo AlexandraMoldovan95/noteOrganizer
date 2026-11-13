@@ -6464,8 +6464,8 @@
     "id": "MG04",
     "about": "the old store's Trash and templates wait on a settings file that may be unreadable",
     "edits": [{"file": "noteorganizer/core/paths.py",
-               "find": "    if ours or durable:\n        missing += _copy_companions(best_dir, app_dir)\n",
-               "replace": "    if ours:\n        missing += _copy_companions(best_dir, app_dir)\n"}],
+               "find": "    elif ours or durable:\n        missing += _copy_companions(best_dir, app_dir)\n",
+               "replace": "    elif ours:\n        missing += _copy_companions(best_dir, app_dir)\n"}],
     "must_fail": ["an empty old notebook is brought in with its Trash and templates"],
     "suites": ["test_data_safety"],
     "expect": "killed",
@@ -10071,8 +10071,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/storage.py",
-        "find": "    if paths.writes_held(paths.DATA_FILE) or paths.DATA_FILE in _UNREAD_AT_LOAD:\n",
-        "replace": "    if paths.DATA_FILE in _UNREAD_AT_LOAD:\n"
+        "find": "    return paths.writes_held(paths.DATA_FILE) or paths.DATA_FILE in _UNREAD_AT_LOAD\n",
+        "replace": "    return paths.DATA_FILE in _UNREAD_AT_LOAD\n"
       }
     ],
     "must_fail": [
@@ -12200,8 +12200,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/storage.py",
-        "find": "    if paths.writes_held(paths.DATA_FILE) or paths.DATA_FILE in _UNREAD_AT_LOAD:\n",
-        "replace": "    if paths.writes_held(paths.DATA_FILE):\n"
+        "find": "    return paths.writes_held(paths.DATA_FILE) or paths.DATA_FILE in _UNREAD_AT_LOAD\n",
+        "replace": "    return paths.writes_held(paths.DATA_FILE)\n"
       }
     ],
     "must_fail": [
@@ -18689,10 +18689,90 @@
     "id": "SN84",
     "about": "An old notebook adopted replaces this folder's readable settings with no copy",
     "edits": [{"file": "noteorganizer/core/paths.py",
-               "find": "        if (not os.path.exists(settings_path)\n                or _preserve_settings_if_unreadable(settings_path)\n                or _timestamped_backup(settings_path, \"replaced\")):\n            settings_came = _copy_whole(legacy_settings, settings_path, tries=3)\n",
-               "replace": "        _preserve_settings_if_unreadable(settings_path)\n        settings_came = _copy_whole(legacy_settings, settings_path, tries=3)\n"}],
+               "find": "        elif (not os.path.exists(settings_path)\n                or _preserve_settings_if_unreadable(settings_path)\n                or _timestamped_backup(settings_path, \"replaced\")):\n            settings_came = _copy_whole(legacy_settings, settings_path, tries=3)\n",
+               "replace": "        elif True:\n            _preserve_settings_if_unreadable(settings_path)\n            settings_came = _copy_whole(legacy_settings, settings_path, tries=3)\n"}],
     "must_fail": ["an old notebook adopted keeps this folder's own readable settings aside first"],
     "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN85",
+    "about": "A settings file held at the start is read for real once the hold ends",
+    "edits": [{"file": "noteorganizer/core/storage.py",
+               "find": "    if known is None and paths.writes_held(paths.SETTINGS_FILE):\n        return {TRASH_WINDOW_UNKNOWN: True}\n",
+               "replace": ""}],
+    "must_fail": ["a settings file held at the start keeps the run on its defaults once the hold ends"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN86",
+    "about": "Over a held settings file the Trash's line asks for a choice it would refuse",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "        if days is None and paths.writes_held(paths.SETTINGS_FILE):\n",
+               "replace": "        if False:\n"}],
+    "must_fail": ["over a held settings file the Trash's line asks for no choice"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN87",
+    "about": "With the notes unread, a delete for good promises files the run keeps",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "        if not files or (now and attached_files_kept()):\n",
+               "replace": "        if not files:\n"}],
+    "must_fail": ["over a held settings file the Trash's line asks for no choice"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN88",
+    "about": "An import says a held file's extras will be written yet",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                            + \" could not be written to disk; the backup still holds them.\")\n",
+               "replace": "                            + \" could not be written to disk yet.\")\n"}],
+    "must_fail": ["a backup's categories the settings file refused are said not written"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN89",
+    "about": "Categories brought back over a refused settings write are not reported unsaved",
+    "edits": [{"file": "noteorganizer/core/storage.py",
+               "find": "        report[\"categories_unsaved\"] = not persist_categories()\n",
+               "replace": "        persist_categories()\n"}],
+    "must_fail": ["...and when the settings file refuses them, the load says they were not saved"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN90",
+    "about": "An old notebook's settings already here are copied aside again at each start",
+    "edits": [{"file": "noteorganizer/core/paths.py",
+               "find": "        if os.path.exists(settings_path) and _same_bytes(settings_path, legacy_settings):\n            pass\n        elif (not os.path.exists(settings_path)\n",
+               "replace": "        if (not os.path.exists(settings_path)\n"}],
+    "must_fail": ["...and keeps no copy of settings that are already the old notebook's"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN91",
+    "about": "This folder's settings staying, an old notebook's Trash comes in under its window",
+    "edits": [{"file": "noteorganizer/core/paths.py",
+               "find": "    if settings_stayed:\n",
+               "replace": "    if False:\n"}],
+    "must_fail": ["an old notebook whose settings could not be copied aside leaves this folder's"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN92",
+    "about": "Words typed in a file-alone note before Update are updated on a promise of nothing else",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            if any(shared_update_changes(self.find_note(mine.get(\"id\")) or mine, theirs,\n",
+               "replace": "            if False and any(shared_update_changes(self.find_note(mine.get(\"id\")) or mine, theirs,\n"}],
+    "must_fail": ["words typed in a file-alone note before Update are asked about again"],
+    "suites": ["qa3"],
     "expect": "killed"
   }
 ]
