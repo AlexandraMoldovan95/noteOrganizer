@@ -856,11 +856,11 @@
     "edits": [
       {
         "file": "noteorganizer/core/sharing.py",
-        "find": "            \"sender to send it again, or to send a backup instead (Settings → \"\n            \"Backup → Export).\"",
+        "find": "            \"sender to send it again, or to send a backup instead (Settings → \"\n            \"Backup).\"",
         "replace": "            \"sender to send it again, or use Import (ZIP) for large transfers.\""
       }
     ],
-    "must_fail": ["the backup is named as Settings → Backup → Export, which exists"],
+    "must_fail": ["the backup is named by a place that exists"],
     "suites": ["qa1"],
     "expect": "killed"
   },
@@ -4703,8 +4703,8 @@
     "id": "DPI12",
     "about": "choosing Sharp text On or Off in Settings is never kept",
     "edits": [{"file": "noteorganizer/ui/settings_page.py",
-               "find": "        save_setting(SHARP_TEXT_SETTING, on)\n",
-               "replace": "        pass\n"}],
+               "find": "        if save_setting(SHARP_TEXT_SETTING, on):\n",
+               "replace": "        if True:\n"}],
     "must_fail": ["on Windows, Settings -> Appearance offers Sharp text"],
     "suites": ["qa6"],
     "expect": "killed",
@@ -15562,7 +15562,7 @@
     "edits": [
       {
         "file": "noteorganizer/ui/note_list.py",
-        "find": "        if query and (note is None or not self._query_matches_note(query, note)):\n",
+        "find": "        if query and (note is None or any(not self._query_matches_note(query, n) for n in group)):\n",
         "replace": "        if query:\n"
       }
     ],
@@ -15742,7 +15742,7 @@
     "edits": [
       {
         "file": "noteorganizer/ui/note_list.py",
-        "find": "        if note is not None:\n            self._bring_card_into_view(note.get(\"id\"))\n",
+        "find": "        if targets:\n            self._bring_card_into_view(targets[0].get(\"id\"))\n",
         "replace": ""
       }
     ],
@@ -18347,8 +18347,8 @@
     "id": "SN50",
     "about": "The light/dark switch's last themes are not written, and a restart gives the defaults",
     "edits": [{"file": "note_organizer.py",
-               "find": "        settings.update(theme=self.theme_name, last_dark_theme=self._last_dark_theme,\n                        last_light_theme=self._last_light_theme)\n",
-               "replace": "        settings.update(theme=self.theme_name)\n"}],
+               "find": "                settings[key] = last\n",
+               "replace": "                pass\n"}],
     "must_fail": ["the switch's last dark and light themes are written for the next start"],
     "suites": ["qa4"],
     "expect": "killed"
@@ -18361,6 +18361,106 @@
                "replace": "    dark = theme if theme in DARK_THEMES else \"dark\"\n"}],
     "must_fail": ["...and read back at a start"],
     "suites": ["qa4"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN52",
+    "about": "A dark theme a newer version named is written over with the default while a light one is chosen",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            if self.theme_name in names or not isinstance(kept, str) or kept in names:\n",
+               "replace": "            if True:\n"}],
+    "must_fail": ["...and a newer version's dark theme stays while a light one is chosen"],
+    "suites": ["qa4"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN53",
+    "about": "Show all unfolds the first arrival's group alone, the others' arrivals still hidden",
+    "edits": [{"file": "noteorganizer/ui/note_list.py",
+               "find": "        unfold = {self._list_group_of(n) for n in targets} & self.collapsed_groups\n",
+               "replace": "        unfold = {self._list_group_of(n) for n in targets[:1]} & self.collapsed_groups\n"}],
+    "must_fail": ["...and arrivals in two folded groups are said of both, and Show all unfolds both"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN54",
+    "about": "Arrivals hidden in different folded groups are said by the first one's cause alone",
+    "edits": [{"file": "noteorganizer/ui/note_list.py",
+               "find": "                    hides_now = self._what_hides_notes(still)\n",
+               "replace": "                    hides_now = self._what_hides_notes(still[:1])\n"}],
+    "must_fail": ["...and arrivals in two folded groups are said of both, and Show all unfolds both"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN55",
+    "about": "An edited day outside the year chosen goes uncounted, History saying the series has fewer",
+    "edits": [{"file": "noteorganizer/core/recurrence.py",
+               "find": "                        left_out += day not in off\n                        continue\n                    if not isinstance(override, dict):\n",
+               "replace": "                        continue\n                    if not isinstance(override, dict):\n"}],
+    "must_fail": ["the edited days a search or a year leaves out are counted"],
+    "suites": ["test_recurrence"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN56",
+    "about": "The calendar's quick look calls a note holding only a checklist empty",
+    "edits": [{"file": "noteorganizer/ui/calendar_view.py",
+               "find": "        txt.insert(\"1.0\", text_only or (\"(no text)\" if carries else \"(empty note)\"))\n",
+               "replace": "        txt.insert(\"1.0\", text_only or \"(empty note)\")\n"}],
+    "must_fail": ["the calendar's quick look calls a checklist-only note no text"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN57",
+    "about": "The reminder bar keeps the count it was drawn with, notes added or deleted since",
+    "edits": [{"file": "noteorganizer/ui/calendar_view.py",
+               "find": "                    self._reminder_msg.configure(text=_reminder_words(due, today))\n",
+               "replace": "                    pass\n"}],
+    "must_fail": ["...and on the same day it counts again"],
+    "suites": ["qa8"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN58",
+    "about": "Sharp text the disk refused is said saved",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "        if save_setting(SHARP_TEXT_SETTING, on):\n",
+               "replace": "        if save_setting(SHARP_TEXT_SETTING, on) or True:\n"}],
+    "must_fail": ["...and Sharp text the disk refused is said not saved"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN59",
+    "about": "The name card's preview shows the refused name above Not saved",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "                kept = self.load_username()\n",
+               "replace": "                kept = self.username_var.get().strip()\n"}],
+    "must_fail": ["a name the disk refused is said not saved"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN60",
+    "about": "A newer version's code behind a hidden prefix is called no share code",
+    "edits": [{"file": "noteorganizer/core/sharing.py",
+               "find": "    except _Unreadable:\n",
+               "replace": "    except ValueError:\n"}],
+    "must_fail": ["...and a newer version's code behind a hidden prefix says so"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN61",
+    "about": "A day colour put back from the Calendar is said on the status line alone, out of sight",
+    "edits": [{"file": "noteorganizer/ui/calendar_view.py",
+               "find": "        self._say_by_the_box(self, done)\n",
+               "replace": "        self.set_status(done)\n"}],
+    "must_fail": ["a day colour put back from the Calendar is said on the banner"],
+    "suites": ["qa7"],
     "expect": "killed"
   }
 ]
