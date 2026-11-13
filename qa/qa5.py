@@ -4151,6 +4151,28 @@ app._cancel_pending_autosave()
 check(f'an open series\' banner counts its days\' own edits after a day is '
       f'deleted, put back or reset ({_rn_bn})',
       _rn_ok and _rn_bn == [True, False, True, False])
+# The series open, holding a date its save cannot store: a day's Undo asks
+# about it first, and going back keeps the person on the note -- and the
+# Undo with them, the day's own text kept nowhere else. Checked on a day's
+# save question until day mode took that question away.
+_rn_day_fresh()
+_rn_day_delete()
+app.date_entry.delete(0, 'end')
+app.date_entry.insert(0, '31/09/2026')
+app.update()
+_rn_asked, _rn_dialog_was = [], app._themed_dialog
+app._themed_dialog = lambda title, *a, **k: (_rn_asked.append(title), False)[1]
+try:
+    app._undo_occurrence_delete(1, '2026-09-14', {'body': 'DAY 14'}); app.update()
+finally:
+    app._themed_dialog = _rn_dialog_was
+_rn_gb = (_rn_asked[:1], str(app.toast_lbl.cget('text')), app._toast_action is not None,
+          '2026-09-14' in (app.find_note(1).get('exceptions') or []), app.selected_note_id)
+app._put_back_stored_date_and_repeat()
+app._cancel_pending_autosave()
+check(f"going back on the question a day's Undo asks first keeps the Undo on offer ({_rn_gb})",
+      _rn_gb[0] == ["Part of this note isn't saved"] and 'Day removed' in _rn_gb[1]
+      and _rn_gb[2] and _rn_gb[3] and _rn_gb[4] == 1)
 # The Undo of a day clicked with THAT day open -- a repeat picked anew has it
 # again, the series' text on it -- saves the editor before it writes the
 # day, and opens it without a second save. Saved after, the editor's view
