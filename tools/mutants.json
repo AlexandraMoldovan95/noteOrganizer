@@ -4411,8 +4411,8 @@
     "id": "MV13",
     "about": "History leaves out a moved day of an endless series",
     "edits": [{"file": "noteorganizer/core/recurrence.py",
-               "find": "                    if (new in overrides or not is_date(new) or not bucket_ok(new)\n",
-               "replace": "                    if (True or new in overrides or not is_date(new) or not bucket_ok(new)\n"}],
+               "find": "                    if new in overrides or not is_date(new):\n",
+               "replace": "                    if True or new in overrides or not is_date(new):\n"}],
     "must_fail": ["History lists a moved day of an endless series, saying where it came from"],
     "suites": ["test_recurrence"],
     "expect": "killed"
@@ -6985,7 +6985,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                elif getattr(self, \"_version_backup_failed\", False):\n",
+        "find": "                elif getattr(self, \"_version_backup_failed\", False) and not unread:\n",
         "replace": "                elif False:\n"
       }
     ],
@@ -18397,8 +18397,8 @@
     "id": "SN55",
     "about": "An edited day outside the year chosen goes uncounted, History saying the series has fewer",
     "edits": [{"file": "noteorganizer/core/recurrence.py",
-               "find": "                        left_out += day not in off\n                        continue\n                    if not isinstance(override, dict):\n",
-               "replace": "                        continue\n                    if not isinstance(override, dict):\n"}],
+               "find": "                        left_out += day not in off\n                        off_left += day in off\n",
+               "replace": "                        off_left += day in off\n"}],
     "must_fail": ["the edited days a search or a year leaves out are counted"],
     "suites": ["test_recurrence"],
     "expect": "killed"
@@ -18461,6 +18461,128 @@
                "replace": "        self.set_status(done)\n"}],
     "must_fail": ["a day colour put back from the Calendar is said on the banner"],
     "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN62",
+    "about": "Back to Calendar leaves the note when Go back and fix it is answered",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if self._flush_autosave() is False:\n            return\n        # STILL dirty",
+               "replace": "        self._flush_autosave()\n        # STILL dirty"}],
+    "must_fail": ["Back to Calendar stays when Go back and fix it is answered"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN63",
+    "about": "The update's notice says the notes came through over a notes file the start could not read",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                if not unread:\n                    msg += \"\\n\\nYour notes came through the update.\"\n",
+               "replace": "                msg += \"\\n\\nYour notes came through the update.\"\n"}],
+    "must_fail": ["...nor, over a notes file it could not read, that the notes came through"],
+    "suites": ["qa1"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN64",
+    "about": "A backup's note differing by a file alone is promised Restore previous and called OLDER",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        filed = [] if source != \"backup\" else [\n",
+               "replace": "        filed = [] if True else [\n"}],
+    "must_fail": ["a note differing by a file alone is said to take the file"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN65",
+    "about": "A template the disk refused is said saved",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            if save_templates(self.templates)[0]:\n",
+               "replace": "            if True:\n"}],
+    "must_fail": ["a template the disk refuses is said not saved"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN66",
+    "about": "A note differing by a newer version's field alone is said to hold nothing the device lacks",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if newer:\n            held = (",
+               "replace": "        if False:\n            held = ("}],
+    "must_fail": ["a note differing by a newer version's field alone is said so"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN67",
+    "about": "A category Undo over a category gone since says nothing is left, the notes still there",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                if homeless else \"Nothing left to put back\", kind=\"info\")\n",
+               "replace": "                if False else \"Nothing left to put back\", kind=\"info\")\n"}],
+    "must_fail": ["a category move's Undo over a category gone since says so"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN68",
+    "about": "A save the disk refused keeps Saved at on the status line under the red banner",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if not written and not _core_paths.writes_held(DATA_FILE):\n            self.set_status(\"Not saved — your notes could not be written\")\n",
+               "replace": ""}],
+    "must_fail": ["a save the disk refuses says Not saved on the status line"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN69",
+    "about": "Sharp text the disk refused leaves its dropdown on the refused choice",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "                self.sharp_text_var.set(\"Off\" if on else \"On\")\n",
+               "replace": "                pass\n"}],
+    "must_fail": ["...and Off the disk refused leaves the dropdown on On"],
+    "suites": ["qa6"],
+    "expect": "killed",
+    "only_on": "win32",
+    "note": "Killed on Windows, the only system whose Settings carry the Sharp text row."
+  },
+  {
+    "id": "SN70",
+    "about": "A list in the theme setting raises at every start",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        theme = get_setting(\"theme\", expect=str)\n",
+               "replace": "        theme = get_setting(\"theme\")\n"}],
+    "must_fail": ["a list in the theme setting is read as the default"],
+    "suites": ["qa4"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN71",
+    "about": "The reminder bar stays with none of today's notes left",
+    "edits": [{"file": "noteorganizer/ui/calendar_view.py",
+               "find": "                if not due:\n                    self.dismiss_reminder()\n",
+               "replace": "                if False:\n                    self.dismiss_reminder()\n"}],
+    "must_fail": ["...and on the same day it counts again"],
+    "suites": ["qa8"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN72",
+    "about": "A day off the schedule a search or a year leaves out goes uncounted",
+    "edits": [{"file": "noteorganizer/core/recurrence.py",
+               "find": "                        off_left += day in off\n",
+               "replace": ""}],
+    "must_fail": ["...and the days off the schedule the same"],
+    "suites": ["test_recurrence"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN73",
+    "about": "A series of one is described as \"1 times\"",
+    "edits": [{"file": "noteorganizer/core/recurrence.py",
+               "find": "        base += f\", {n} time{'' if n == 1 else 's'}\"\n",
+               "replace": "        base += f\", {n} times\"\n"}],
+    "must_fail": ["a series of one is \"1 time\", not \"1 times\", and more are \"times\""],
+    "suites": ["test_recurrence"],
     "expect": "killed"
   }
 ]
