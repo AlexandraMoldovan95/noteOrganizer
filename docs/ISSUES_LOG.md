@@ -4230,10 +4230,10 @@ compose's middle word (`docker compose run`, `["docker", "compose", "up"]`), and
 missed `elif`, `assert`, `lambda` and `self.SEARCH_PLACEHOLDER` while taking a docstring for a
 comparison: each now proves itself on a list of the shapes seen so far, at every run, so a
 rewrite that drops one fails the gate. A partial export's word was taken back before its message,
-the flaw the second round fixed for failures; it is kept the same way. And from 0.94.382: closing
-the app during a big export holds the window up to half a minute (Windows shows it Not
-Responding), and the close wrote its word only after the wait, so a close ended there said
-nothing and left the unfinished `.tmp` for good. The word is written before the wait, with the
+the flaw the second round fixed for failures; it is kept the same way. And closing the app
+during a big export holds the window about half a minute (a wait since September; Windows shows
+it Not Responding), while the word 0.94.382 leaves for the next start was written only after the
+wait, so a close ended there said nothing and left the unfinished `.tmp` for good. The word is written before the wait, with the
 file's state at that moment, so the next start also tells an export that landed after all
 (said finished, where "export again" would have offered to replace the only copy of a session's
 notes). A file an import was copying when the process ended is named while it is written, and a
@@ -4241,6 +4241,27 @@ session's word says Windows "began to" sign out, true too of one the person canc
 `backup_cut_short` word at a time, so in a run that could not read the notes, a kept import's word
 can be written over by an export's, its copied files orphaned; and the cleanup, rerun while
 `settings.json` refuses its mark, keeps a copy whenever a delete since has renumbered the ids.
+
+**The fourth round** found the third's checks weaker than their names. The check that the close
+writes its word before the wait read the word only after the wait returned, so a word written
+after it passed too: it is read as the wait begins now, and SN25 moves the write after the wait,
+as its name says. Two checks faked "still writing" on a live worker, which could finish between
+that line and the settle; the worker is finished first. The landed checks lacked the usual case,
+an older backup of the same name replaced (SN30). In the test plan, cases 1063 and 1065 still
+expected "Windows signed out", and case 1067's automation named the check that could not see the
+wait; both are true now, case 1067's steps say "Sign out anyway", and the wait is said as about
+half a minute (30 seconds, then up to 5 more while the export answers its stop). A template not
+kept still said "signed out" (SN31). The ninth rule also sees the hints' own words written out
+("Search notes...", "DD.MM.YYYY"), and `check_guest` a list built in pieces, a placeholder among
+the flags and a shell's line continuation, while "with docker, run ..." in prose is no longer a
+command. The start's sentence for an export that landed no longer says its message went unshown,
+untrue of a session ended with the message up. Left: a file holding a key twice loses the first
+value when the cleanup rewrites it (the read keeps the last; only a hand edit writes one); an
+export that landed unseen leaves "Last exported" at the older date; an import gets no word before
+the close's wait (its stop answers within one chunk, in milliseconds, so no window shows Not
+Responding there); an import stopped by a sign-out then cancelled is said at once and again at
+the next start; an export to a stick unplugged before the next start is said cut short; and a
+docker command run through a name that does not say docker passes `check_guest`.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.

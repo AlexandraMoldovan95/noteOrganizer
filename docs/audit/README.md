@@ -245,7 +245,8 @@ panel met three times.
 Ten read-only readers on 11 November, each given a part of one app, then a mini-audit that
 attacked each fix by name: two agents for the desktop's first round, one for every round after.
 The phone's rounds 3 to 8 attacked the runner for the emulator walk, written in the same wave.
-No sceptic ran in this wave: I checked each finding in the code before it counted.
+No sceptic ran in this wave: the agent leading the audit checked each finding in the code
+before it counted.
 
 | Prompt | App | Started (UTC) | Agents | Tokens (millions) |
 |---|---|---|---|---|
@@ -275,9 +276,9 @@ No sceptic ran in this wave: I checked each finding in the code before it counte
 
 The full reading's findings of low severity, fixed on 12 and 13 November, then attacked by two
 agents for each app in each round: one going after each fix by name, one taking an ordinary
-person's side and reading the wave's documents against the code. No sceptic ran: each finding of
-medium severity was a sentence in a document, checked in the code before it counted. The totals
-above are waves 1 to 5's.
+person's side and reading the wave's documents against the code. No sceptic ran: the agent
+leading the audit checked each finding of medium severity in the code before it counted. The
+totals above are waves 1 to 5's.
 
 | Prompt | App | Started (UTC) | Agents | Tokens (millions) |
 |---|---|---|---|---|
