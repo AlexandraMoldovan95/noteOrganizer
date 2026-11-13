@@ -31,8 +31,25 @@ function WriteJson($path, $text) { [IO.File]::WriteAllText($path, $text, $utf8) 
 New-Item -ItemType Directory -Force C:\work | Out-Null
 Log "== start: user $env:USERNAME, profile $env:USERPROFILE"
 
+# The packages' own identity, read from the manifest: the test one until
+# Partner Center reserves the Store's, then that one (build_msix.py --name and
+# --publisher), so the package that ships is the one signed and proved. The
+# same lines are in each sandbox script: each runs alone in its sandbox.
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+function PackageIdentity($path) {
+    $zip = [IO.Compression.ZipFile]::OpenRead($path)
+    try {
+        $reader = New-Object IO.StreamReader($zip.GetEntry('AppxManifest.xml').Open())
+        try { $manifest = [xml]$reader.ReadToEnd() } finally { $reader.Dispose() }
+    } finally { $zip.Dispose() }
+    $element = $manifest.DocumentElement.Item('Identity')
+    @{ Name = $element.GetAttribute('Name'); Publisher = $element.GetAttribute('Publisher') }
+}
+$identity = PackageIdentity (@(Get-ChildItem C:\pkg\NoteOrganizer_*.msix)[0].FullName)
+Log "identity: $($identity.Name), $($identity.Publisher)"
+
 # 1. A test certificate, made and trusted only inside this sandbox.
-$cert = New-SelfSignedCertificate -Type Custom -Subject 'CN=NoteOrganizerTest' -KeyUsage DigitalSignature `
+$cert = New-SelfSignedCertificate -Type Custom -Subject $identity.Publisher -KeyUsage DigitalSignature `
     -FriendlyName 'NoteOrganizer test' -CertStoreLocation 'Cert:\CurrentUser\My' `
     -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3', '2.5.29.19={text}')
 Export-Certificate -Cert $cert -FilePath C:\work\test.cer | Out-Null
@@ -69,7 +86,7 @@ $writtenHash = $null
 
 function Report($label) {
     Log "$label | profile notebook: $(Titles)"
-    $pkg = Get-AppxPackage -Name NoteOrganizer.Test
+    $pkg = Get-AppxPackage -Name $identity.Name
     if ($pkg) {
         $priv = Join-Path $env:LOCALAPPDATA ("Packages\" + $pkg.PackageFamilyName + "\LocalCache")
         if (Test-Path $priv) {
@@ -82,7 +99,7 @@ function Report($label) {
 }
 
 function RunApp($label) {
-    $pkg = Get-AppxPackage -Name NoteOrganizer.Test
+    $pkg = Get-AppxPackage -Name $identity.Name
     Start-Process ("shell:AppsFolder\" + $pkg.PackageFamilyName + "!NoteOrganizer")
     Start-Sleep -Seconds 25
     $p = Get-Process NoteOrganizer -ErrorAction SilentlyContinue
@@ -95,7 +112,7 @@ function Install($v) {
     try { Add-AppxPackage -Path "C:\work\NoteOrganizer_$v.msix" -ErrorAction Stop; Log "installed $v" }
     catch { Log "INSTALL FAILED $v : $($_.Exception.Message)"; return }
     # The licenses About opens, where the app looks for them (sys._MEIPASS).
-    $pkg = Get-AppxPackage -Name NoteOrganizer.Test
+    $pkg = Get-AppxPackage -Name $identity.Name
     $notices = Join-Path $pkg.InstallLocation '_internal\THIRD_PARTY_NOTICES.txt'
     Log "$v | the licenses ship inside the package: $(Test-Path $notices)"
 }
@@ -120,7 +137,7 @@ Install $later
 RunApp 'start after the update'
 Report "after the update to $later"
 
-$pkg = Get-AppxPackage -Name NoteOrganizer.Test
+$pkg = Get-AppxPackage -Name $identity.Name
 Remove-AppxPackage -Package $pkg.PackageFullName
 Log "uninstalled"
 Start-Sleep -Seconds 3

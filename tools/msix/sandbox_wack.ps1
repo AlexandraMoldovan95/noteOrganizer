@@ -65,9 +65,26 @@ foreach ($f in $regs) {
 $appcert = Join-Path $kit 'appcert.exe'
 Log "kit: $(Test-Path $appcert); TAEF: $(Test-Path (Join-Path $root 'Testing\Runtimes\TAEF\x64\TE.exe')); SDK $version; COM keys imported: $imported of $($regs.Count)"
 
+# The packages' own identity, read from the manifest: the test one until
+# Partner Center reserves the Store's, then that one (build_msix.py --name and
+# --publisher), so the package that ships is the one signed and proved. The
+# same lines are in each sandbox script: each runs alone in its sandbox.
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+function PackageIdentity($path) {
+    $zip = [IO.Compression.ZipFile]::OpenRead($path)
+    try {
+        $reader = New-Object IO.StreamReader($zip.GetEntry('AppxManifest.xml').Open())
+        try { $manifest = [xml]$reader.ReadToEnd() } finally { $reader.Dispose() }
+    } finally { $zip.Dispose() }
+    $element = $manifest.DocumentElement.Item('Identity')
+    @{ Name = $element.GetAttribute('Name'); Publisher = $element.GetAttribute('Publisher') }
+}
+$identity = PackageIdentity (@(Get-ChildItem C:\pkg\NoteOrganizer_*.msix)[0].FullName)
+Log "identity: $($identity.Name), $($identity.Publisher)"
+
 # 2. The package to ship (the lower of the pair), signed here.
 New-Item -ItemType Directory -Force C:\work | Out-Null
-$cert = New-SelfSignedCertificate -Type Custom -Subject 'CN=NoteOrganizerTest' -KeyUsage DigitalSignature `
+$cert = New-SelfSignedCertificate -Type Custom -Subject $identity.Publisher -KeyUsage DigitalSignature `
     -FriendlyName 'NoteOrganizer test' -CertStoreLocation 'Cert:\CurrentUser\My' `
     -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3', '2.5.29.19={text}')
 Export-Certificate -Cert $cert -FilePath C:\work\test.cer | Out-Null
