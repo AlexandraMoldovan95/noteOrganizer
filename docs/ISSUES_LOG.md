@@ -4485,6 +4485,22 @@ words now send a code's sender to Settings → Backup, the place both apps have,
 phone lacks. And the turn-off line said "not the series" of a copy that keeps the series when the
 note repeated before the Update: it says the version it kept before, nothing more.
 
+**The sixteenth round** found the fifteenth's fixes held (twenty thousand banners and fifteen
+hundred series fuzzed, none told differently), and its second reader read the words written in
+the entry file itself, the last of the screens: Back to Calendar went to the Calendar after "Go
+back and fix it" was answered, the one caller that read no answer (SN62); the notice after an
+update said the notes came through, and sent the person to an Export of nothing, over a notes file
+that start could not read (SN63); the Update question promised Restore previous, and warned OLDER,
+of a note that differs by a file alone, which takes the file and keeps no copy (SN64); "Saved
+template" over a refused write (SN65), and an import's "Also restored" over files not written;
+"Already here, unchanged" said the backup holds nothing the device lacks, where it holds a field
+a newer version wrote (SN66); a category Undo said nothing was left with the notes still there
+(SN67); and the save's "Saved at", written before the write, stayed over a refused one (SN68).
+The lows: Sharp text's and Spelling's dropdowns kept the refused choice (SN69), the days off the
+schedule and the moved ones counted only from the rows listed (SN72), checks for "theme" read
+as text and the reminder bar going with the last note (SN70, SN71), and "Every week, 1 times",
+which the phone's reader found on both apps (SN73).
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.
 
