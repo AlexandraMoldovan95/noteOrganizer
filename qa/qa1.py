@@ -2957,8 +2957,35 @@ check(f'a date typed as the form is what was typed ({app._typed_date()!r})',
 app.date_entry.delete(0, 'end')
 take_focus(app.body_text)
 check('...and the form the field shows again is not', app._typed_date() == '')
+# An untitled note's state put back over a long title (the close's per-tab
+# save restores a state so) shows the hint, and not the counter the long
+# title showed: show_hint, unlike the _insert_title it replaced, refreshed
+# no counter.
+app.notes.append(NO.normalize_note({'id': 8803, 'title': 'L' * 175, 'body': 'long'}))
+app.notes.append(NO.normalize_note({'id': 8804, 'title': '', 'body': 'untitled'}))
+app.open_note_in_tab(app.find_note(8804)); app.update()
+_ph_untitled = app.capture_editor_state()
+app.open_note_in_tab(app.find_note(8803)); app.update()
+_ph_counted = app._is_placed(app.title_count_lbl)
+app.restore_editor_state(_ph_untitled); app.update()
+check(f'an untitled note\'s state put back over a long title leaves no counter '
+      f'({_ph_counted}, {app._is_placed(app.title_count_lbl)})',
+      _ph_counted and app._title_is_placeholder()
+      and not app._is_placed(app.title_count_lbl))
+app.open_note_in_tab(app.find_note(8804)); app.update()
+# A search sent to the History with the History box's own hint for words is
+# a search there too: written over the hint, the box kept its mark.
+_ph_history = 'Search all calendar entries...'
+app._search_history_for(_ph_history); app.update(); app.update()
+check(f'...and the list\'s search sent to the History as its hint\'s words is a search '
+      f'({app._history_query() if getattr(app, "_history_built", False) else None!r})',
+      getattr(app, '_history_built', False) and app._history_query() == _ph_history)
+if getattr(app, '_history_visible', False):
+    app._hide_calendar_history()
+app.notebook.select(app.TAB_NOTES)
+app.update()
 app.notes = [n for n in app.notes
-             if n.get('id') != 8802 and n.get('title') != _PH_TITLE]
+             if n.get('id') not in (8802, 8803, 8804) and n.get('title') != _PH_TITLE]
 app.save_notes()
 app.new_note(); app.update()
 

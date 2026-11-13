@@ -1591,6 +1591,8 @@ class CalendarViewMixin:
         if not getattr(self, "_history_visible", False):
             self._show_calendar_history()
         entry = self._history_search_entry
+        # The list's words, even if they are the hint's own.
+        entry.hint_shown = False
         entry.delete(0, "end")
         entry.insert(0, query)
         entry.config(fg=self.colors["text"])

@@ -16111,6 +16111,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self._dismiss_mini_popup()
                 on_pick(date_str)
                 return
+            # A day picked is a date, whatever the field showed before.
+            target_entry.hint_shown = False
             target_entry.delete(0, "end")
             target_entry.insert(0, show_date(date_str))
             target_entry.config(fg=self.colors["text"])
@@ -17668,6 +17670,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.title_entry.config(fg=self.colors["text"])
         else:
             self.title_entry.show_hint()
+            # The hint is no title: the last tab's "170/200" goes.
+            self._refresh_title_count()
 
         # Restore this tab's own pending style (if any) before inserting
         # its body — set after the insert instead, a leftover pending style
