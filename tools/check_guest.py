@@ -1000,7 +1000,9 @@ _D_ELEM = (r"""(?:f?["']-[^"'\n]*["'](?:\s*,\s*(?:f?["'][^-"'\n][^"'\n]*["']|"""
 # A list joined on before the verb's: flags, names, container or compose,
 # each after a comma -- a value there would take "volume" for a flag's.
 _D_LELEM = r"""(?:f?["']-[^"'\n]*["']|["'](?:container|compose)["']|""" + _D_NAMED + ")"
-_D_LIST = r"""\[\s*(?:""" + _D_LELEM + r"""(?:\s*,\s*""" + _D_LELEM + r"""){0,8}\s*,?\s*)?\]"""
+# Its spaces possessive: two runs side by side split a long one every way,
+# the square of its length when no "]" came.
+_D_LIST = r"""\[\s*+(?:""" + _D_LELEM + r"""(?:\s*+,\s*+""" + _D_LELEM + r"""){0,8}\s*+,?\s*+)?\]"""
 # At most 24 flags: a line of thousands, each a "docker", began a chain at
 # every one and cost the square of its length.
 _D_FLAGS = "(?:" + _D_FLAG + "){0,24}"
@@ -1051,7 +1053,7 @@ DOCKER_PROSE = [
     'DOCKER + ["--tls", "volume"] + ["create", name]', "use docker\\\nrun nothing by hand",
     "C:\\Program Files\\docker\\\nstart.ps1", 'DOCKER + [' + 'a' * 36 + ']',
     "out = docker_cmd + [ps_format_string] + [filter_by_label]",
-    "DOCKER + [" + " " * 3000 + "," + " " * 3000,
+    "DOCKER + [" + " " * 3000 + "," + " " * 3000, "DOCKER + [a" + " " * 20000,
     # Quoted flags each read as the one before's value too: twice the work a flag.
     '["docker", ' + '"--tls", ' * 40 + '"ps"]',
     # Many hyphenated flags and no verb: each once took the gate seconds to minutes.
