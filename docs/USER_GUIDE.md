@@ -164,12 +164,13 @@ Whatever you typed, the notes file keeps the date as `2026-10-17`, as it always 
 
 ### Formatting
 
-A small toolbar above the note body is split into four groups, separated by thin dividers. If the
+A small toolbar above the note body is split into five groups, separated by thin dividers. If the
 window is too narrow to hold them all on one line, the toolbar wraps onto a second rather than
 hiding anything.
 
 - The first three — the style toggles, the font dropdowns, and the two colour buttons — change the
-  characters you select. The last changes whole lines.
+  characters you select. The fourth changes whole lines (lists, indent, alignment); the last holds
+  the table button, the emoji button and the light/dark switch.
 - Hover any button and it tells you what it does.
 - **Style**: **Bold**, *Italic*, <u>Underline</u>, and ~~Strikethrough~~ — also on the right-click
   menu, and available as keyboard shortcuts (**Ctrl+B**, **Ctrl+I**, **Ctrl+U**, **Ctrl+D**).
@@ -463,8 +464,8 @@ thousand in some languages and one in others, so it says Error rather than guess
 or **Enter** while typing in the
 display, to see the result, then **Insert into note** to drop the whole formula (not
 just the answer) into the note body — repeated inserts stack cleanly below each other. A
-collapsible history keeps every calculation from the session, with a Clear button and
-click-to-insert on any past entry.
+collapsible history keeps every calculation made while this note is open, with a Clear button and
+click-to-insert on any past entry; opening another note, a new note or a template starts it empty.
 
 ![Calculator](screenshots/calculator.png)
 
@@ -959,7 +960,8 @@ The notes come in the same order as the note list (your **Sort** choice, pinned 
 and keep to it while the panel is open: change the sort or pin a note and the panel follows at
 once, ticks kept. The
 🔍 box under the heading narrows them as you type, by the same rule as the sidebar search: titles,
-text (a word inside a table counts) and comments, upper or lower case alike. Ticks stay when you
+text (a word inside a table counts), comments and checklist rows, upper or lower case and letters
+with or without accents alike. Ticks stay when you
 search again, so you can gather notes from several searches into one code. When a search hides
 some of the notes you picked, a line above the list says how many — **Generate code** includes
 them too. The **✕** in the box clears the search.

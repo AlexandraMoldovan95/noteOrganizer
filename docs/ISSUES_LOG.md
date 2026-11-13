@@ -4393,7 +4393,7 @@ own failure (export keeps the two apart); and a disk filling during the copy pha
 silence, said only as "File missing" when one is opened.
 
 **The eleventh round** attacked the owner's new contract first: a note keeps the fields this version
-does not know (D2, approved on 13 November). It held on every road a note takes, but on four edges.
+does not know (D2, approved on 13 November). It held on every road a note takes, but on five edges.
 A backup's Update wrote over a field of the same name, and Restore previous could not put the
 note's own value back, which by the owner's rule is a loss, if on a rare road: the rescue copy
 keeps the note's own under `_unknown` now, and Restore previous puts them back as they were (UF10,
@@ -4415,6 +4415,22 @@ where it asks nothing (240), and Ctrl+S in the template editor said to save the 
 now, with the lows. Left: an Update's question never offers a note whose only change is such a
 field (it cannot say what the field means), so an older desktop keeps its own value until a real
 change brings the backup's; and the tenth round's three.
+
+**The twelfth round** found the rescue copy's record held through every chain it tried (an Update, a
+load, Restore previous and back, the Trash, a turn-off, a big delete), and lows at its edges: the
+signature told true from 1 but not an empty object from an empty list (both kinds tagged now,
+UF15); a copy whose own 1 the backup wrote over as true counted as spent once the words were put
+back, so that 1 went with it, and a copy the backup only added a field to could never be spent,
+Restore previous offered for good (a copy is held now when the note holds each of its own fields
+again, kinds told apart, UF16; the phone the same, AS731). Its second reader read the user guide,
+the privacy policy and the README whole against the code, the first time since the wave began,
+and found three untrue sentences: a toolbar of four groups that has five, a calculator history
+said to keep the session's sums where opening another note empties it, and "headings" (README and
+the site's page), a style the app does not have; and the Share panel's search, which reads
+checklists and folds accents, said to read less. The plan's 329 compared Clean up ALL's outline to
+the selection bar's Trash, which is flat; it is Empty trash's. Left: own fields pushed out at the
+bounds live in the rescue copy alone until another Update replaces it (more than 32 such fields);
+and the import calls a note whose only change is such a field "already here, unchanged".
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.

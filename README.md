@@ -31,7 +31,7 @@ cloud, no network calls — it opens a page in your browser only when you
 ask. For people who want their notes, lists and dates in one place
 they control.
 
-- Notes with bold, italic, colours, headings and lists; tables you edit in
+- Notes with bold, italic, colours, sizes and lists; tables you edit in
   place; checklists; spelling checked with Windows' own dictionaries, and
   left alone in a language your computer has none for.
 - Notes that repeat — daily, weekly, monthly, yearly — and a calendar that
