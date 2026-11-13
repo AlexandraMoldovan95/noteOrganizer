@@ -9,6 +9,8 @@ _qa_seed()
 
 import sys
 import note_organizer as NO, tkinter as tk, tkinter.filedialog as fd, os, tempfile, time, zipfile, json
+import contextlib
+import threading
 # A generated click is DISCARDED in silence when its widget is not
 # viewable, and the app hides popups whenever another program holds the
 # Windows foreground -- which a test process never owns. See
@@ -3155,9 +3157,12 @@ try:
         check('...and the earlier backup is left as it was',
               _fh.read() == b'OLD-BACKUP-BYTES')
     app._settle_background_work_at_close()
-    check('...and the export cut short leaves word for the next start',
-          NO.get_setting('backup_cut_short') == {'kind': 'export',
-                                                 'file': _he_zip})
+    # With the file's state as it was ("before"), to tell at the next start
+    # an export that landed after all.
+    _he_cut = dict(NO.get_setting('backup_cut_short') or {})
+    _he_before = _he_cut.pop('before', 'none kept')
+    check(f'...and the export cut short leaves word for the next start ({_he_cut!r}, {_he_before!r})',
+          _he_cut == {'kind': 'export', 'file': _he_zip} and _he_before != 'none kept')
     _words = _next_start_says()
     check(f'the next start says no new backup was made, and to export again '
           f'({_words[:140]!r})',
@@ -3175,16 +3180,45 @@ for _p in (_he_zip, _he_zip + '.tmp'):
         os.remove(_p)
 app.notes = []; app.save_notes()
 
+
+@contextlib.contextmanager
+def _fx_no_import():
+    """No import in the way while the export checks below run: export_data
+    refuses one while an import's state is held, and the settles they call
+    read an import's state as well as the export's."""
+    was = (getattr(app, '_import_asking', None), app._import_state)
+    app._import_asking, app._import_state = None, None
+    try:
+        yield
+    finally:
+        app._import_asking, app._import_state = was
+
+
+def _fx_start_export():
+    """export_data, its own first look at the worker held back: the checks
+    below drive the poll themselves. A worker that failed or finished in
+    that instant was seen done there, its message shown and its state gone
+    before a check could read it -- red, or a crash, one run in three."""
+    app._poll_export_progress = lambda: None
+    try:
+        app.export_data()
+    finally:
+        del app._poll_export_progress
+
+
 # An export that FAILED on its own as the window closed, its error never
 # shown, was said at the next start as one the close had cut short.
 # Here it fails as a folder gone does: the worker cannot open its file.
 NO.save_setting('backup_cut_short', None)
 _fx_zip = os.path.join(os.getcwd(), 'qa3_no_such_folder', 'qa3_failed_export.zip')
 fd.asksaveasfilename = lambda **k: _fx_zip
-app.export_data()
+_fx_start_export()
 for _t in getattr(app, '_io_workers', []):
     _t.join(25)
-check('fixture: the export failed on its own, not stopped by a close',
+_fx_seen = {k: v for k, v in (app._export_state or {}).items()
+            if k in ('done', 'error', 'stop', 'phase')}
+check(f'fixture: the export failed on its own, not stopped by a close ({_fx_seen!r}, '
+      f'import {app._import_state is not None}, status {app.status_lbl.cget("text")[:60]!r})',
       bool(app._export_state and app._export_state.get('done')
            and app._export_state.get('error') and not app._export_state.get('stop')))
 app._settle_background_work_at_close()
@@ -3205,26 +3239,24 @@ try:
 except (tk.TclError, ValueError, AttributeError):
     pass
 app._export_state = None
+
+
 # The same failure just before Windows ends the session: the session's own
 # settle recorded only an export still writing, and this one went unsaid.
 NO.save_setting('backup_cut_short', None)
-app.export_data()
-for _t in getattr(app, '_io_workers', []):
-    _t.join(25)
-_fx_session_ready = bool(app._export_state and app._export_state.get('done')
-                         and app._export_state.get('error'))
-_fx_import_was = (getattr(app, '_import_asking', None), app._import_state)
-app._import_asking, app._import_state = None, None
-try:
+with _fx_no_import():
+    _fx_start_export()
+    for _t in getattr(app, '_io_workers', []):
+        _t.join(25)
+    _fx_session_ready = bool(app._export_state and app._export_state.get('done')
+                             and app._export_state.get('error'))
     app._settle_backups_at_session_end()
-finally:
-    app._import_asking, app._import_state = _fx_import_was
 _fx_cut = NO.get_setting('backup_cut_short') or {}
 _fx_words = _next_start_says()
 check(f'an export that failed just before the session ended is said at the next start '
       f'({_fx_session_ready}, {_fx_cut!r}, {_fx_words[:120]!r})',
       _fx_session_ready and _fx_cut.get('kind') == 'export_failed'
-      and 'qa3_failed_export.zip failed as Windows signed out or shut down' in _fx_words
+      and 'qa3_failed_export.zip failed as Windows began to sign out or shut down' in _fx_words
       and 'cut short' not in _fx_words)
 try:
     app.after_cancel(app._export_poll_job)
@@ -3238,18 +3270,14 @@ def _fx_session_then_poll(fail_after):
     cancelled, then the export's own poll: what the poll said, with the word
     for the next start as it stood when the poll spoke."""
     NO.save_setting('backup_cut_short', None)
-    app.export_data()
-    if not fail_after:
-        for _t in getattr(app, '_io_workers', []):
-            _t.join(25)
-    else:
-        app._export_state['done'] = False       # still writing at the question
-    _was = (getattr(app, '_import_asking', None), app._import_state)
-    app._import_asking, app._import_state = None, None
-    try:
+    with _fx_no_import():
+        _fx_start_export()
+        if not fail_after:
+            for _t in getattr(app, '_io_workers', []):
+                _t.join(25)
+        else:
+            app._export_state['done'] = False       # still writing at the question
         app._settle_backups_at_session_end()
-    finally:
-        app._import_asking, app._import_state = _was
     if fail_after:
         for _t in getattr(app, '_io_workers', []):
             _t.join(25)
@@ -3292,18 +3320,14 @@ app._export_state = None
 NO.save_setting('backup_cut_short', None)
 NO.save_setting('last_export_at', None)
 fd.asksaveasfilename = lambda **k: os.path.join(os.getcwd(), 'qa3_session_done.zip')
-app.export_data()
-for _t in getattr(app, '_io_workers', []):
-    _t.join(25)
-_fx_done = bool(app._export_state and app._export_state.get('done') and not app._export_state.get('error'))
-if _fx_done:
-    app._export_state['left_out'] = ['20261113090000000001_held.bin']
-_fx_was = (getattr(app, '_import_asking', None), app._import_state)
-app._import_asking, app._import_state = None, None
-try:
+with _fx_no_import():
+    _fx_start_export()
+    for _t in getattr(app, '_io_workers', []):
+        _t.join(25)
+    _fx_done = bool(app._export_state and app._export_state.get('done') and not app._export_state.get('error'))
+    if _fx_done:
+        app._export_state['left_out'] = ['20261113090000000001_held.bin']
     app._settle_backups_at_session_end()
-finally:
-    app._import_asking, app._import_state = _fx_was
 _fx_cut = NO.get_setting('backup_cut_short') or {}
 _fx_stamped = NO.get_setting('last_export_at')
 _fx_info, _fx_info_was = [], app.show_info
@@ -3322,12 +3346,74 @@ NO.save_setting('backup_cut_short', dict(_fx_cut))
 _fx_words = _next_start_says()
 check(f'...and said at the next start as Windows signing out, not as the window closing '
       f'({_fx_words[:140]!r})',
-      'qa3_session_done.zip finished as Windows signed out or shut down, but not all of it' in _fx_words)
+      'qa3_session_done.zip finished as Windows began to sign out or shut down, but not all of it'
+      in _fx_words)
 try:
     app.after_cancel(app._export_poll_job)
 except (tk.TclError, ValueError, AttributeError):
     pass
 app._export_state = None
+# ...and a partial export's word, like a failure's, is kept until its message
+# is read: taken back first, the session's end that followed said nothing of
+# the files left out.
+NO.save_setting('backup_cut_short', None)
+with _fx_no_import():
+    _fx_start_export()
+    app._export_state['done'] = False        # still writing at the question
+    app._settle_backups_at_session_end()
+for _t in getattr(app, '_io_workers', []):
+    _t.join(25)
+app._export_state['done'] = True
+app._export_state['left_out'] = ['20261113090000000002_held.bin']
+_fx_info, _fx_info_was = [], app.show_info
+app.show_info = lambda *a, **k: _fx_info.append(
+    (a[0] if a else '', (NO.get_setting('backup_cut_short') or {}).get('kind')))
+try:
+    app._poll_export_progress()
+finally:
+    app.show_info = _fx_info_was
+check(f'a partial export\'s word is kept, as a partial one, while its message is up, and goes once read '
+      f'({_fx_info!r}, {NO.get_setting("backup_cut_short")!r})',
+      _fx_info == [('Export complete, but not all of it', 'export_partial')]
+      and NO.get_setting('backup_cut_short') is None)
+try:
+    app.after_cancel(app._export_poll_job)
+except (tk.TclError, ValueError, AttributeError):
+    pass
+app._export_state = None
+# The close waits up to half a minute for an export, the window held: its
+# word was written only after the wait, so a close ended there (Not
+# Responding, a forced shut-down) said nothing, and the .tmp stayed.
+NO.save_setting('backup_cut_short', None)
+_fx_long = threading.Event()
+_fx_worker = threading.Thread(target=_fx_long.wait, args=(3.0,), daemon=True)
+_fx_worker.start()
+_fx_workers_was = getattr(app, '_io_workers', [])
+app._io_workers = [_fx_worker]
+app._export_state = {'done': False, 'stop': False, 'error': None, 'current': 0, 'total': 1,
+                     'save_path': os.path.join(os.getcwd(), 'qa3_close_wait.zip')}
+try:
+    app._wait_for_io_workers(cap_s=0.2)
+    _fx_cut = NO.get_setting('backup_cut_short') or {}
+finally:
+    _fx_long.set()
+    app._io_workers = _fx_workers_was
+    app._export_state = None
+check(f'a close that waits for an export writes its word before the wait ({_fx_cut!r})',
+      _fx_cut.get('kind') == 'export' and _fx_cut.get('file', '').endswith('qa3_close_wait.zip')
+      and 'before' in _fx_cut)
+# The word's file changed since (the export landed after all): said finished,
+# not "no new backup was made" -- export again would have replaced the only copy.
+with open(os.path.join(os.getcwd(), 'qa3_close_wait.zip'), 'wb') as _fh:
+    _fh.write(b'landed')
+_fx_words = _next_start_says()
+check(f'...and an export that landed after the word is said finished, not cut short ({_fx_words[:140]!r})',
+      'qa3_close_wait.zip finished as Note Organizer closed' in _fx_words and 'cut short' not in _fx_words)
+NO.save_setting('backup_cut_short', {'kind': 'export', 'file': os.path.join(os.getcwd(), 'qa3_close_wait.zip'),
+                                     'before': os.path.getmtime(os.path.join(os.getcwd(), 'qa3_close_wait.zip'))})
+_fx_words = _next_start_says()
+check(f'...while one whose file did not change is said cut short ({_fx_words[:120]!r})',
+      'qa3_close_wait.zip was cut short when Note Organizer closed' in _fx_words)
 fd.asksaveasfilename = lambda **k: _fx_zip
 # An error without words (a MemoryError's) read as none: "Export complete",
 # "Last exported" stamped, and no file written.
@@ -3343,9 +3429,10 @@ def _fx_out_of_memory(_infos):
 
 NO.backup_entries_problem = _fx_out_of_memory
 try:
-    app.export_data()
-    for _t in getattr(app, '_io_workers', []):
-        _t.join(25)
+    with _fx_no_import():
+        _fx_start_export()
+        for _t in getattr(app, '_io_workers', []):
+            _t.join(25)
 finally:
     NO.backup_entries_problem = _fx_check_was
 _fx_error = (app._export_state or {}).get('error')
@@ -3406,9 +3493,10 @@ try:
     check(f'the end of a Windows session leaves an export writing, and does not '
           f'wait for it ({_sx_took:.1f} s)',
           _sx['seen'] and app._export_state is not None and _sx_took < 2)
-    check('...leaving word for the next start in case the session does end',
-          NO.get_setting('backup_cut_short')
-          == {'kind': 'export', 'file': _he_zip, 'when': 'session'})
+    _he_cut = dict(NO.get_setting('backup_cut_short') or {})
+    _he_before = _he_cut.pop('before', 'none kept')
+    check(f'...leaving word for the next start in case the session does end ({_he_cut!r})',
+          _he_cut == {'kind': 'export', 'file': _he_zip, 'when': 'session'} and _he_before != 'none kept')
     _sx['go'] = True
     _sx_wait(lambda: app._export_state is None)
     check(f'...and a session that goes on sees it finish: said, and the word for '
@@ -3443,7 +3531,7 @@ try:
           == {'kind': 'import', 'file': _hb_zip, 'when': 'session'})
     _words = _next_start_says()
     check(f'the next start says Windows cut it short ({_words[:120]!r})',
-          'qa3_held_import.zip' in _words and 'when Windows signed out' in _words)
+          'qa3_held_import.zip' in _words and 'when Windows began to sign out' in _words)
     # ...and a re-import that finishes takes that word back: it said "nothing
     # was kept" after the person had done just what it asked.
     NO.save_setting('backup_cut_short',
@@ -3469,7 +3557,7 @@ try:
     _words = _next_start_says()
     check('the next start says an export was cut short by Windows, and takes '
           'its unfinished file away',
-          'when Windows signed out' in _words and not os.path.exists(_he_zip + '.tmp'))
+          'when Windows began to sign out' in _words and not os.path.exists(_he_zip + '.tmp'))
     # A session that ends while an import's question waits found no import
     # running: the files it had copied and its unpacked backup stayed, and
     # nothing was said. Word for the next start, which takes them out.
@@ -3492,13 +3580,24 @@ try:
         return 'cancel'
     app._themed_dialog = _sq_dialog
     app._ending_session = False
+    _sq_real_copy = NO.copy_file_until_stopped
+
+    def _sq_copy(src, dst, stop):
+        # What a process ended inside the copy would leave named.
+        _sq_seen.setdefault('during', list((app._import_state or {}).get('copied') or []))
+        return _sq_real_copy(src, dst, stop)
+    NO.copy_file_until_stopped = _sq_copy
     try:
         app.import_data()
         _sx_wait(lambda: app._import_state is None, 15)
         app.update()
     finally:
+        NO.copy_file_until_stopped = _sq_real_copy
         app._themed_dialog = _sx_real_dlg
         app._ending_session = False
+    check(f'an import names the file it is copying while the copy runs '
+          f'({_sq_seen.get("during")})',
+          _sq_seen.get('during') == [_sq_name + '.part'])
     _sq_said = _sq_seen.get('said') or {}
     check(f'a session ending while an import asks leaves word naming what it copied, '
           f'and keeps the files for the answer ({sorted(_sq_said)}, {_sq_seen.get("file")})',
@@ -3520,7 +3619,7 @@ try:
     _words = _next_start_says()
     check(f'...and when it ended, the next start takes them out and says so '
           f'({_words[:60]!r})',
-          'when Windows signed out' in _words
+          'when Windows began to sign out' in _words
           and not os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _sq_name))
           and not os.path.exists(_sq_temp)
           and os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _hb_name)))

@@ -1043,7 +1043,8 @@ previous backup file (the zip is written beside it and swapped in only when whol
 the app mid-export waits for the file to finish instead of cutting it off. The wait lasts up to
 half a minute; an export still writing after that is stopped, and its unfinished file is removed.
 The previous backup stays as it was, and the next time you open the app it tells you no new
-backup was made, so you know to export again.
+backup was made, so you know to export again — even if Windows ended the app while it waited.
+(If the export did finish in that moment, it says that instead.)
 
 ### Full backup: import
 

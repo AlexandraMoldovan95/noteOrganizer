@@ -1780,7 +1780,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if cut:
             save_setting("backup_cut_short", None)
             name = os.path.basename(str(cut.get("file") or "")) or "the backup"
-            when = ("Windows signed out or shut down"
+            # "Began to": true too of a sign-out the person then cancelled,
+            # which stops an import all the same.
+            when = ("Windows began to sign out or shut down"
                     if cut.get("when") == "session" else "Note Organizer closed")
             if cut.get("kind") == "import":
                 # Ended while its questions waited: what it copied goes now --
@@ -1819,6 +1821,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     "was made" + (f": {reason}" if reason else "") + ". A file "
                     "already there under that name is as it was. To make one, "
                     "export again (Settings → Backup → Export).")
+            elif self._export_landed_after(cut):
+                # Finished between the word and the process ending: said as
+                # cut short, "export again" offered to replace the only copy
+                # of a session's notes under the same day's name.
+                lines.append(
+                    f"The export to {name} finished as {when}, before its own "
+                    "message could be shown. Open it to check it holds what "
+                    "you expect (Settings → Backup → Import shows what it brings).")
             else:
                 # A process ended mid-export leaves its unfinished file
                 # beside the target (export_data writes there first).
@@ -2212,6 +2222,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         if self._import_state is not None:
             self._import_state["stop"] = True
+        export = self._export_state
+        if export is not None and not export.get("done"):
+            # Written before the wait (up to half a minute): a window ended
+            # there left no word and its .tmp for good. The close's settle
+            # replaces it with what really happened.
+            save_setting("backup_cut_short", {
+                "kind": "export", "file": export.get("save_path") or "",
+                "before": self._target_mtime(export.get("save_path"))})
         try:
             self.set_status("Finishing the file operation in progress…")
             self.update_idletasks()
@@ -2399,7 +2417,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                f"Couldn't create the backup file:\n{state['error']}")
                 self._take_back_cut_short("export")
                 return
-            self._take_back_cut_short("export")
+            if state.get("session_only") is not None or left:
+                # What this message says is kept for the next start until it is
+                # read, as a failure's is: taken back first, the session's end
+                # that followed said nothing of the files left out.
+                cut = get_setting("backup_cut_short", None, expect=dict)
+                if cut and str(cut.get("kind") or "").startswith("export"):
+                    save_setting("backup_cut_short", dict(
+                        cut, kind="export_partial", session_only=state.get("session_only"),
+                        left_out=list(left)))
             if state.get("session_only") is not None:
                 # Not remembered as the notebook's backup: it holds none of it.
                 self.show_info(
@@ -2419,6 +2445,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     "Copy or email this single file to another device; there, "
                     "Settings → Backup → Import brings your notes in." + left_said
                 )
+            self._take_back_cut_short("export")
             return
         self._export_poll_job = self.after(100, self._poll_export_progress)
 
@@ -2431,6 +2458,36 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 + ", ".join(left[:5])
                 + (f" and {len(left) - 5} more" if len(left) > 5 else "")
                 + f". Close that program and export again to include {them}.")
+
+    @staticmethod
+    def _target_mtime(path):
+        """When the file an export writes to last changed, or None when there
+        is none: kept with a "cut short" word, to tell at the next start
+        whether the export landed after all."""
+        try:
+            return os.path.getmtime(path) if path else None
+        except OSError:
+            return None
+
+    @staticmethod
+    def _export_landed_after(cut):
+        """Whether the export a "cut short" word names finished after all:
+        its file there and changed since the word ("before"), no unfinished
+        .tmp beside it. A word without "before" (an older version's) is
+        believed as it is."""
+        path = str(cut.get("file") or "")
+        if not path or "before" not in cut or os.path.exists(path + ".tmp"):
+            return False
+        try:
+            now = os.path.getmtime(path)
+        except OSError:
+            return False
+        before = cut.get("before")
+        if before is None:
+            return True
+        if isinstance(before, bool) or not isinstance(before, (int, float)):
+            return False
+        return now != before
 
     @staticmethod
     def _take_back_cut_short(kind):
@@ -2490,7 +2547,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # Stopped past the wait, or still running: no new backup. A
             # window that is closing cannot say so; the next start does.
             save_setting("backup_cut_short", {
-                "kind": "export", "file": state.get("save_path") or ""})
+                "kind": "export", "file": state.get("save_path") or "",
+                "before": self._target_mtime(state.get("save_path"))})
         state = self._import_state
         if state is not None:
             word = {"kind": "import", "file": state.get("zip") or ""}
@@ -11851,6 +11909,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                             # Copy beside, replace whole: a copy cut short
                             # left a truncated file this guard then kept.
                             part = dest + ".part"
+                            # Named while it is written: a process ended in
+                            # the copy (a close past its wait) left it unnamed.
+                            state["copied"].append(filename + ".part")
                             try:
                                 copy_file_until_stopped(
                                     os.path.join(imported_attachments_dir, filename),
@@ -11859,8 +11920,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                 # there unmarked; the rename keeps the mark.
                                 put_zone_mark(part, zone_mark)
                                 os.replace(part, dest)
-                                state["copied"].append(filename)
+                                state["copied"][-1] = filename
                             except (IOError, OSError):
+                                state["copied"].pop()
                                 try:
                                     os.remove(part)
                                 except OSError:
@@ -21616,7 +21678,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if export is not None and not export.get("done"):
             save_setting("backup_cut_short", {
                 "kind": "export", "file": export.get("save_path") or "",
-                "when": "session"})
+                "when": "session", "before": self._target_mtime(export.get("save_path"))})
         elif export is not None and export.get("error") and not export.get("stop"):
             # Failed moments before, unsaid: the next start says it. Its poll
             # stays, to say it and take the word back if the session goes on.
