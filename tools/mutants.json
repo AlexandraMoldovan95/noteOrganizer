@@ -6573,8 +6573,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        if export is not None and not export.get(\"done\"):\n",
-        "replace": "        if export is not None:\n            export[\"stop\"] = True\n        if export is not None and not export.get(\"done\"):\n"
+        "find": "        if export is not None and not export.get(\"done\"):\n            save_setting(\"backup_cut_short\", {\n",
+        "replace": "        if export is not None:\n            export[\"stop\"] = True\n        if export is not None and not export.get(\"done\"):\n            save_setting(\"backup_cut_short\", {\n"
       }
     ],
     "must_fail": [
@@ -6609,8 +6609,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                return\n            self._take_back_cut_short(\"export\")\n            if state.get(\"session_only\") is not None:\n",
-        "replace": "                return\n            if state.get(\"session_only\") is not None:\n"
+        "find": "                )\n            self._take_back_cut_short(\"export\")\n            return\n        self._export_poll_job",
+        "replace": "                )\n            return\n        self._export_poll_job"
       }
     ],
     "must_fail": [
@@ -17809,8 +17809,8 @@
     "id": "SN18",
     "about": "An export failing after the session's question keeps its word as cut short while its message is up",
     "edits": [{"file": "note_organizer.py",
-               "find": "                if cut and str(cut.get(\"kind\") or \"\").startswith(\"export\"):\n                    save_setting(\"backup_cut_short\", dict(\n",
-               "replace": "                if False:\n                    save_setting(\"backup_cut_short\", dict(\n"}],
+               "find": "                if cut and str(cut.get(\"kind\") or \"\").startswith(\"export\"):\n                    save_setting(\"backup_cut_short\", dict(\n                        cut, kind=\"export_failed\"",
+               "replace": "                if False:\n                    save_setting(\"backup_cut_short\", dict(\n                        cut, kind=\"export_failed\""}],
     "must_fail": ["an export that fails after the session's question is a failure in the word while its message is up"],
     "suites": ["qa3"],
     "expect": "killed"
@@ -17862,6 +17862,72 @@
                "find": "                word.update(copied=list(state.get(\"copied\") or []),\n                            temp_dir=state.get(\"temp_dir\") or \"\")\n",
                "replace": "                pass\n"}],
     "must_fail": ["a close while an import still runs past its wait names what it copied and unpacked"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN24",
+    "about": "The cleanup judges 'changes nothing' by the notes as read, and removes the one copy of a field the read drops",
+    "edits": [{"file": "noteorganizer/core/storage.py",
+               "find": "        unchanged = cleaned == raw\n",
+               "replace": "        unchanged = cleaned == notes\n"}],
+    "must_fail": ["...but one whose file held what the read drops keeps its copy"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN25",
+    "about": "The close writes its word for an export only after the wait, so a close ended there says nothing",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if export is not None and not export.get(\"done\"):\n            # Written before the wait",
+               "replace": "        if False:\n            # Written before the wait"}],
+    "must_fail": ["a close that waits for an export writes its word before the wait"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN26",
+    "about": "An export that landed after its word is said cut short, and export again offered over the only copy",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if not path or \"before\" not in cut or os.path.exists(path + \".tmp\"):\n            return False\n",
+               "replace": "        if True:\n            return False\n"}],
+    "must_fail": ["...and an export that landed after the word is said finished, not cut short"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN27",
+    "about": "A partial export's word is taken back before its message, and the files left out never said",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                if cut and str(cut.get(\"kind\") or \"\").startswith(\"export\"):\n                    save_setting(\"backup_cut_short\", dict(\n                        cut, kind=\"export_partial\"",
+               "replace": "                if False:\n                    save_setting(\"backup_cut_short\", dict(\n                        cut, kind=\"export_partial\""}],
+    "must_fail": ["a partial export's word is kept, as a partial one, while its message is up"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN28",
+    "about": "A session's word says Windows signed out, untrue of a sign-out the person cancelled",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            when = (\"Windows began to sign out or shut down\"\n",
+               "replace": "            when = (\"Windows signed out or shut down\"\n"}],
+    "must_fail": ["an export that failed just before the session ended is said at the next start"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN29",
+    "about": "An import names a file only once it is copied, so a process ended inside the copy leaves its .part unnamed for good",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                            state[\"copied\"].append(filename + \".part\")\n",
+               "replace": ""},
+              {"file": "note_organizer.py",
+               "find": "                                state[\"copied\"][-1] = filename\n",
+               "replace": "                                state[\"copied\"].append(filename)\n"},
+              {"file": "note_organizer.py",
+               "find": "                                state[\"copied\"].pop()\n",
+               "replace": "                                pass\n"}],
+    "must_fail": ["an import names the file it is copying while the copy runs"],
     "suites": ["qa3"],
     "expect": "killed"
   }
