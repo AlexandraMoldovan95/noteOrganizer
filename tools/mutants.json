@@ -5403,9 +5403,9 @@
     "id": "CN02",
     "about": "an import dropped by the close leaves no word",
     "edits": [{"file": "note_organizer.py",
-               "find": "        if state is not None:\n            word = {\"kind\": \"import\"",
-               "replace": "        if False:\n            word = {\"kind\": \"import\""}],
-    "must_fail": ["...and it leaves word for the next start (unpacking)"],
+               "find": "        if state is not None:\n            # What it copied and unpacked named, done or not",
+               "replace": "        if False:\n            # What it copied and unpacked named, done or not"}],
+    "must_fail": ["an import done but not merged at the close leaves word naming what it copied"],
     "suites": ["qa3"],
     "expect": "killed"
   },
@@ -17859,9 +17859,10 @@
     "id": "SN23",
     "about": "An import still running past the close's wait is recorded without what it copied and unpacked",
     "edits": [{"file": "note_organizer.py",
-               "find": "                word.update(copied=list(state.get(\"copied\") or []),\n                            temp_dir=state.get(\"temp_dir\") or \"\")\n",
-               "replace": "                pass\n"}],
-    "must_fail": ["a close while an import still runs past its wait names what it copied and unpacked"],
+               "find": "                \"kind\": \"import\", \"file\": state.get(\"zip\") or \"\",\n                \"copied\": list(state.get(\"copied\") or []),\n                \"temp_dir\": state.get(\"temp_dir\") or \"\"})\n        if state is None or not state.get(\"done\"):",
+               "replace": "                \"kind\": \"import\", \"file\": state.get(\"zip\") or \"\"})\n        if state is None or not state.get(\"done\"):"}],
+    "must_fail": ["a close while an import still runs past its wait names what it copied and unpacked",
+                  "...and it leaves word for the next start, naming what it unpacked (copying"],
     "suites": ["qa3"],
     "expect": "killed"
   },
@@ -17971,6 +17972,16 @@
                "find": "            if not state.get(\"done\"):\n                # Before the wait, as an export's",
                "replace": "            if False:\n                # Before the wait, as an export's"}],
     "must_fail": ["a close that waits for an import writes its word before the wait, what it copied named"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN34",
+    "about": "The session's end names no copied files before its join, so a session ended inside it leaves them unnamed",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            \"kind\": \"import\", \"file\": state.get(\"zip\") or \"\", \"when\": \"session\",\n            \"copied\": list(state.get(\"copied\") or []),\n            \"temp_dir\": state.get(\"temp_dir\") or \"\"})\n        deadline = time.time() + 2.0",
+               "replace": "            \"kind\": \"import\", \"file\": state.get(\"zip\") or \"\", \"when\": \"session\"})\n        deadline = time.time() + 2.0"}],
+    "must_fail": ["...and word for the next start, naming what it copied and unpacked"],
     "suites": ["qa3"],
     "expect": "killed"
   }
