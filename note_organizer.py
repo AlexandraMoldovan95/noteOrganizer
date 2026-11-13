@@ -1799,7 +1799,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 count = cut.get("session_only")
                 if isinstance(count, int) and not isinstance(count, bool):
                     lines.append(
-                        f"The backup saved to {name} as Note Organizer closed "
+                        f"The backup saved to {name} as {when} "
                         f"holds only the {count} note(s) written in that "
                         "session, not your notes file, which could not be "
                         "opened then. Settings → Backup → Import brings its "
@@ -1809,8 +1809,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         if isinstance(named, list) else [])
                 if left:
                     lines.append(
-                        f"The export to {name} finished as Note Organizer "
-                        "closed, but not all of it. " + self._left_out_said(left))
+                        f"The export to {name} finished as {when}, but not "
+                        "all of it. " + self._left_out_said(left))
             elif cut.get("kind") == "export_failed":
                 # Its own error, unsaid because the window closed first.
                 reason = one_line(str(cut.get("error") or ""), 200)
@@ -2386,13 +2386,21 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if state["done"]:
             self.export_progress_frame.place_forget()
             self._export_state = None
-            self._take_back_cut_short("export")
             left = state.get("left_out") or []
             left_said = ("\n\n" + self._left_out_said(left)) if left else ""
             if state["error"]:
+                # A word a session's end left stays until the failure is read,
+                # as a failure: the session may end with this message up.
+                cut = get_setting("backup_cut_short", None, expect=dict)
+                if cut and str(cut.get("kind") or "").startswith("export"):
+                    save_setting("backup_cut_short", dict(
+                        cut, kind="export_failed", error=str(state["error"])[:300]))
                 self.show_error("Export failed",
                                f"Couldn't create the backup file:\n{state['error']}")
-            elif state.get("session_only") is not None:
+                self._take_back_cut_short("export")
+                return
+            self._take_back_cut_short("export")
+            if state.get("session_only") is not None:
                 # Not remembered as the notebook's backup: it holds none of it.
                 self.show_info(
                     "Backup of this session saved",
@@ -2431,7 +2439,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         goes on, in case the session does end, and work that then finishes
         makes it untrue."""
         cut = get_setting("backup_cut_short", None, expect=dict)
-        if cut and cut.get("kind") == kind:
+        # Its own kinds too ("export_failed", "export_partial"): the poll
+        # took back only "export", and a failure recorded stayed for good.
+        if cut and str(cut.get("kind") or "").split("_")[0] == kind:
             save_setting("backup_cut_short", None)
 
     def _remember_finished_export(self):
@@ -21602,12 +21612,20 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "kind": "export", "file": export.get("save_path") or "",
                 "when": "session"})
         elif export is not None and export.get("error") and not export.get("stop"):
-            # Failed on its own moments before, its message not yet shown:
-            # said at the next start, as the close says it.
-            self._export_state = None
+            # Failed moments before, unsaid: the next start says it. Its poll
+            # stays, to say it and take the word back if the session goes on.
             save_setting("backup_cut_short", {
                 "kind": "export_failed", "file": export.get("save_path") or "",
                 "error": str(export.get("error") or "")[:300], "when": "session"})
+        elif export is not None and not export.get("stop"):
+            # Finished, its poll not yet run: recorded as the close records it.
+            if export.get("session_only") is None:
+                self._remember_finished_export()
+            if export.get("session_only") is not None or export.get("left_out"):
+                save_setting("backup_cut_short", {
+                    "kind": "export_partial", "file": export.get("save_path") or "",
+                    "session_only": export.get("session_only"),
+                    "left_out": list(export.get("left_out") or []), "when": "session"})
         asking = getattr(self, "_import_asking", None)
         if asking is not None:
             # Its questions on screen, its files copied: what a session that

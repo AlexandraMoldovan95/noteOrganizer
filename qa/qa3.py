@@ -3231,6 +3231,104 @@ try:
 except (tk.TclError, ValueError, AttributeError):
     pass
 app._export_state = None
+
+
+def _fx_session_then_poll(fail_after):
+    """An export, Windows' question about ending the session, the question
+    cancelled, then the export's own poll: what the poll said, with the word
+    for the next start as it stood when the poll spoke."""
+    NO.save_setting('backup_cut_short', None)
+    app.export_data()
+    if not fail_after:
+        for _t in getattr(app, '_io_workers', []):
+            _t.join(25)
+    else:
+        app._export_state['done'] = False       # still writing at the question
+    _was = (getattr(app, '_import_asking', None), app._import_state)
+    app._import_asking, app._import_state = None, None
+    try:
+        app._settle_backups_at_session_end()
+    finally:
+        app._import_asking, app._import_state = _was
+    if fail_after:
+        for _t in getattr(app, '_io_workers', []):
+            _t.join(25)
+        app._export_state['done'] = True
+    said, err_was = [], app.show_error
+    app.show_error = lambda *a, **k: said.append(
+        (a[0] if a else '', (NO.get_setting('backup_cut_short') or {}).get('kind')))
+    try:
+        app._poll_export_progress()
+    finally:
+        app.show_error = err_was
+    try:
+        app.after_cancel(app._export_poll_job)
+    except (tk.TclError, ValueError, AttributeError):
+        pass
+    return said
+
+
+# The session's question cancelled after the export failed: the settle had
+# dropped the export, so its bar stayed frozen, "Export failed" was never
+# said, and the next start told of a sign-out that never came.
+_fx_said = _fx_session_then_poll(fail_after=False)
+check(f'a session that goes on after a failed export still says it, hides the bar and leaves '
+      f'no word for the next start ({_fx_said!r}, {NO.get_setting("backup_cut_short")!r})',
+      _fx_said == [('Export failed', 'export_failed')]
+      and not app._is_placed(app.export_progress_frame)
+      and NO.get_setting('backup_cut_short') is None)
+# Still writing at the question, failed after it: the poll took the word back
+# before it looked at the error, and the failure, shown as Windows signed
+# out, was said by nobody at the next start.
+_fx_said = _fx_session_then_poll(fail_after=True)
+check(f'an export that fails after the session\'s question is a failure in the word while its '
+      f'message is up, and the word goes once it is read ({_fx_said!r})',
+      _fx_said == [('Export failed', 'export_failed')]
+      and NO.get_setting('backup_cut_short') is None)
+app._export_state = None
+# Finished just before the question, its poll not yet run, a file left out:
+# the session's settle recorded nothing, where the close stamps "Last
+# exported" and names what was left out.
+NO.save_setting('backup_cut_short', None)
+NO.save_setting('last_export_at', None)
+fd.asksaveasfilename = lambda **k: os.path.join(os.getcwd(), 'qa3_session_done.zip')
+app.export_data()
+for _t in getattr(app, '_io_workers', []):
+    _t.join(25)
+_fx_done = bool(app._export_state and app._export_state.get('done') and not app._export_state.get('error'))
+if _fx_done:
+    app._export_state['left_out'] = ['20261113090000000001_held.bin']
+_fx_was = (getattr(app, '_import_asking', None), app._import_state)
+app._import_asking, app._import_state = None, None
+try:
+    app._settle_backups_at_session_end()
+finally:
+    app._import_asking, app._import_state = _fx_was
+_fx_cut = NO.get_setting('backup_cut_short') or {}
+_fx_stamped = NO.get_setting('last_export_at')
+_fx_info, _fx_info_was = [], app.show_info
+app.show_info = lambda *a, **k: _fx_info.append(a[0] if a else '')
+try:
+    app._poll_export_progress()
+finally:
+    app.show_info = _fx_info_was
+check(f'an export finished just before the session\'s question is recorded as the close records '
+      f'it, and the poll takes the word back if the session goes on ({_fx_done}, {_fx_cut.get("kind")!r}, '
+      f'{_fx_stamped!r}, {_fx_info!r})',
+      _fx_done and _fx_cut.get('kind') == 'export_partial' and _fx_cut.get('when') == 'session'
+      and bool(_fx_stamped) and _fx_info == ['Export complete, but not all of it']
+      and NO.get_setting('backup_cut_short') is None)
+NO.save_setting('backup_cut_short', dict(_fx_cut))
+_fx_words = _next_start_says()
+check(f'...and said at the next start as Windows signing out, not as the window closing '
+      f'({_fx_words[:140]!r})',
+      'qa3_session_done.zip finished as Windows signed out or shut down, but not all of it' in _fx_words)
+try:
+    app.after_cancel(app._export_poll_job)
+except (tk.TclError, ValueError, AttributeError):
+    pass
+app._export_state = None
+fd.asksaveasfilename = lambda **k: _fx_zip
 # An error without words (a MemoryError's) read as none: "Export complete",
 # "Last exported" stamped, and no file written.
 NO.save_setting('backup_cut_short', None)
