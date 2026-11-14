@@ -16731,8 +16731,8 @@
     "id": "WS102",
     "about": "A backup of look-alikes that brings a template gets no Skip, and its default Cancel drops the template",
     "edits": [{"file": "note_organizer.py",
-               "find": "        names = {t.get(\"name\") for t in self.templates}\n        if any(isinstance(t, dict)",
-               "replace": "        names = {t.get(\"name\") for t in self.templates}\n        if False and any(isinstance(t, dict)"}],
+               "find": "        if not _core_paths.writes_held(TEMPLATES_FILE) and any(\n",
+               "replace": "        if False and not _core_paths.writes_held(TEMPLATES_FILE) and any(\n"}],
     "must_fail": ["a backup of look-alikes that brings a template offers Skip them, and the template comes"],
     "suites": ["qa3"],
     "expect": "killed"
@@ -19445,6 +19445,26 @@
                "find": "            signed.setdefault(_loose_signature(shaped), []).append(shaped)\n",
                "replace": "            signed.setdefault(_loose_signature(shaped), []).append(e)\n"}],
     "must_fail": ["a trashed note here under an older writer's raw label is known beside the backup's shaped one"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN159",
+    "about": "Over held settings a backup's trashed notes are said to bring more, though none comes in",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        takes_trash = not (_core_paths.writes_held(TRASH_FILE) or _core_paths.writes_held(SETTINGS_FILE))\n",
+               "replace": "        takes_trash = not _core_paths.writes_held(TRASH_FILE)\n"}],
+    "must_fail": ["over held settings or a held templates file a backup is not said to bring more"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN160",
+    "about": "Over a held templates file a backup's template is said to bring more, though it is put back",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if not _core_paths.writes_held(TEMPLATES_FILE) and any(\n",
+               "replace": "        if any(\n"}],
+    "must_fail": ["over held settings or a held templates file a backup is not said to bring more"],
     "suites": ["qa3"],
     "expect": "killed"
   }

@@ -4746,11 +4746,21 @@ counted its trashed notes over a held Trash or held settings, where the merge br
 (SN157); and, the phone's round showed, this Trash's entries were matched loosely in their raw
 shape, so an older writer's label ("photo.jpg" over a .png) never met the backup's shaped one
 (shaped now, SN158). Left, each with its reason: that question still counts a trashed note past
-this computer's Trash length, and one under a name only adoption would bring, as more (the
-result says what stayed in the backup; both rare); a read refused between the question and the
+this computer's Trash length as more (the result says it stayed in the backup), and does not
+count one whose category only the merge's adoption would add beside a General twin here (Cancel
+then keeps it in the backup; both rare, nothing lost); a read refused between the question and the
 Update can make them disagree about a file (nothing is lost); and the count of notes that "took
 attached files" is made from the files to adopt, not from the copies made, so a copy refused on
 a full disk is counted (as the phone counts it).
+
+**The thirtieth round**, one agent, found nothing of medium or high severity either: with the
+twenty-ninth, two clean rounds in a row, and the desktop's loop ended by the owner's rule. Its
+lows were fixed: the question whether a backup brings more still counted a template over a
+templates file held this run, which the merge puts back (SN160), and only the Trash half of the
+held test had a check (the settings half has one now, SN159); and the twenty-ninth's "Left" had
+one case backwards (corrected above). Left, with its reason: a hand-edited template with no name,
+or day marks on a date that does not exist, are counted by the question differently from what
+the merge takes (only hand-edited files reach it; nothing is lost).
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.
