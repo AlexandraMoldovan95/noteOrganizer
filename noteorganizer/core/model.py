@@ -212,14 +212,17 @@ def unknown_fields_lacked(theirs, mine):
                for name, value in unknown_fields(theirs).items())
 
 
-def unknown_fields(note):
+def unknown_fields(note, known=None):
     """The fields of *note* this version does not know, as normalize_note
     keeps them: copies, at most MAX_UNKNOWN_FIELDS of them and
-    MAX_UNKNOWN_UNITS in all, names and values counted together."""
+    MAX_UNKNOWN_UNITS in all, names and values counted together. *known* is
+    the names a version knows (a note's by default; a template's for
+    normalize_template, by the owner's decision of 14 November)."""
     if not isinstance(note, dict):
         return {}
+    known = KNOWN_NOTE_FIELDS if known is None else known
     names = sorted((name for name in note if isinstance(name, str)
-                    and name not in KNOWN_NOTE_FIELDS and not name.startswith("_")),
+                    and name not in known and not name.startswith("_")),
                    key=lambda name: name.encode("utf-16-be", "surrogatepass"))
     kept, units = {}, 0
     for name in names:

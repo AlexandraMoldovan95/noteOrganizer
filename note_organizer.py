@@ -12544,8 +12544,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.trash.append(entry)
             existing_loose.setdefault(loose(entry), []).append(entry)
             added_trash += 1
+        # Refused for a moment (a sync tool, a full disk), put back as the templates are:
+        # listed for the session, they were gone at the next start.
         if added_trash and not save_trash(self.trash)[0]:
             unwritten.append("the trashed notes")
+            self.trash = self.trash[:len(self.trash) - added_trash]
+            added_trash = 0
         if len(added_names) > added_categories:
             added_categories = len(added_names)
             # The whole map, written: landed, the first write's refusal is no longer true.

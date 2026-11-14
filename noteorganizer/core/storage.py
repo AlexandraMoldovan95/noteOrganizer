@@ -170,21 +170,26 @@ def save_settings(settings):
 MAX_TEMPLATES = 1_000
 
 
+KNOWN_TEMPLATE_FIELDS = frozenset({
+    "name", "title", "body", "formatting", "paragraphs", "comments", "category", "checklist"})
+
+
 def normalize_template(tpl):
     """Coerce a template dict into a known shape so bad/old data can't crash the
     manager or the 'use template' flow. A template holds a name plus the note
-    fields it fills in: title, body, comments, category."""
+    fields it fills in: title, body, comments, category. A field a newer
+    version wrote rides along, bounded as a note's (unknown_fields)."""
     if not isinstance(tpl, dict):
         tpl = {}
     # Lazy, like this module's other model imports: model -> categories ->
     # storage at import time, so a top-level import here closes the loop.
-    from .model import MAX_CHECKLIST_ITEMS
+    from .model import MAX_CHECKLIST_ITEMS, unknown_fields
 
     def _s(key, default=""):
         v = tpl.get(key, default)
         return v if isinstance(v, str) else default
 
-    return {
+    shaped = {
         "name": _s("name") or "Untitled template",
         "title": _s("title"),
         "body": _s("body"),
@@ -214,6 +219,10 @@ def normalize_template(tpl):
             if isinstance(it, dict)
         ],
     }
+    # Kept as they came: rebuilt from the known fields alone, a newer version's
+    # field was gone at the next template saved or imported.
+    shaped.update(unknown_fields(tpl, KNOWN_TEMPLATE_FIELDS))
+    return shaped
 
 
 #: What Settings → Templates and Use template say over a templates file held

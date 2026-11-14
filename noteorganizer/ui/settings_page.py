@@ -29,7 +29,7 @@ from ..core.recurrence import describe_recurrence, is_recurring, show_date
 # characters with nothing to show for it is the same defect as a
 # sentence clipped by a layout, only cheaper to make.
 from ..core.model import (MAX_ATTACHMENTS, MAX_CHECKLIST_ITEM_CHARS, MAX_CHECKLIST_ITEMS,
-                          _truncate, checklist_shown, normalize_note)
+                          _truncate, checklist_shown, normalize_note, unknown_fields)
 from ..core.storage import (
     CATEGORIES_HELD_WORDS,
     CATEGORIES_UNSAVED_WORDS,
@@ -51,6 +51,7 @@ from ..core.storage import (
     save_setting,
     save_settings,
     load_settings,
+    KNOWN_TEMPLATE_FIELDS,
     normalize_template,
     same_attached_file,
     save_templates,
@@ -1209,7 +1210,10 @@ class SettingsPageMixin:
             # An item typed and not yet added is part of the template, as of
             # a note (_take_pending_checklist_item); every save reads this.
             pending = cl_add_var.get().strip()[:MAX_CHECKLIST_ITEM_CHARS]
+            # A newer version's fields of the template edited ride along: built
+            # from the boxes alone, the edit erased them.
             return normalize_template({
+                **unknown_fields(tpl or {}, KNOWN_TEMPLATE_FIELDS),
                 "name": name_var.get(),
                 "title": title_var.get(),
                 "body": body_txt.get("1.0", "end").rstrip("\n"),
