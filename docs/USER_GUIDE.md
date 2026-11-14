@@ -1072,9 +1072,11 @@ templates and the Trash together, and from its settings your categories (and any
 notes or trashed notes are filed under; a name longer than 80 characters, or one past 200
 categories, stays out, said, and its notes go under General) and the calendar's day colours and
 marks. The theme, your name, the text size, the list's order and the rest stay as this computer
-has them; so does how long the Trash keeps notes, unless you never chose it here and the
-backup's is longer. A trashed note older than this computer's Trash will keep stays in the
-backup, and the import says so. When Windows would not let Note Organizer open its settings this
+has them; so does how long the Trash keeps notes, unless you never chose it here, the
+backup's is longer and the backup brings trashed notes to keep by it (a backup with an empty
+Trash leaves this computer's as it is). A trashed note older than this computer's Trash will
+keep stays in the backup, and the import says so. When Windows would not let Note Organizer
+open its settings this
 time, every trashed note stays there, as how long they would be kept is not known; when the
 settings were damaged and set aside, the trashed notes come in, and none is removed until you
 choose how long the Trash keeps notes. Just like

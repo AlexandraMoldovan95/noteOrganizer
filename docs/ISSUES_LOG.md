@@ -4800,6 +4800,15 @@ by the question (SN170; TW18, TW19 and DR10 re-aimed at it). Left, with its reas
 already holding 200 files is offered Skip and said to take files it cannot (the phone the same,
 very rare, nothing lost).
 
+**The thirty-third round** found the code true and the user guide not: since 27 October it said
+the backup's Trash length comes along whenever none was chosen here and the backup's is longer,
+where the import takes it only when the backup also brings trashed notes to keep by it (a
+computer set to keep 90 days, its Trash empty at the export, restored onto a fresh one, keeps 30
+here). The sentence says so now. Left, with its reason: when the window's own write is refused
+at that moment, the question has offered Skip by the backup's length and the merge keeps by this
+computer's, so Skip may bring nothing (the harmless way only; the result says what stayed in
+the backup).
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.
 
