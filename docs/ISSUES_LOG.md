@@ -4872,19 +4872,35 @@ and 12 November, which were made; 1039 and 904 quoted what prints differently.
 of round 38's own range (936, 954, 972, 989, 1046) and ten of cases 550 to 799 (554, 584, 630, 632,
 669, 696, 726, 756, 783, 797) said "Automated" naming only unit suites, some "No hand check
 needed" or "Optional hand check", over steps that press the app's buttons. So the class was swept
-across the whole plan by a scan, not a block at a time: every case saying "Automated" while naming
-no qa suite, no story and no gate was read, those cases 1 to 549 included, and each one whose steps
-a person can take says "Automated in part" now, with its hand check named. A case no person can
+across the whole plan by a scan, not a block at a time: every case whose first line said
+"Automated" while naming no qa suite, no story and no gate was read, those cases 1 to 549 included,
+and each one whose steps a person can take says "Automated in part" now, with its hand check named
+(the scan read first lines; three such lines below them, found the round after, say so too). A case no person can
 set up keeps "Automated", which the How to use tab now defines there: the suites check the rule,
 and the app's own half is walked by no one. The lows: eleven labels over a sentence leaving a part
-to the hand, and labels the tab did not define ("Partly automated", "Automated with a stand-in",
+to the hand (557, 566, 590, 707, 719, 720, 745, 762, 779, 785, 790), and labels the tab did not define ("Partly automated", "Automated with a stand-in",
 "Automated for ...", "Held in", "Walked by script", cases 909 to 920 with no label at all), say
 "Automated in part" or "Automated"; the tab defines "Walked by" a story, the other words for
 "Manual only", and the eye's part; 590 no longer says no qa script restarts the app; 602 no longer
 says the Sandbox plays a first start (its runs seed the welcome as offered); 632 counts twelve
-icons; 667 says the app's own details line is read by no check; 704 names its Sandbox runs of 9
-and 12 November and that they are made by hand; 712 and 783 name the suites their mutants are
-judged in; 815 and 1038 say what is left to the hand.
+icons; 667 named its stand-in for the app's details (and said no check reads the real line, which
+was untrue: qa6 reads it from the running app, as it says since the round after); 704 names its
+Sandbox runs of 9 and 12 November and that they are made by hand; 712 and 783 name the suites
+their mutants are judged in; 815 and 1038 say what is left to the hand.
+
+**The fortieth round** found the sweep holding and two cases, read against their checks, claiming
+a restart no check walks (mediums): 81 (a group still folded after the app is reopened: qa6 folds
+it and reads settings.json, and no suite builds an app over it) and 133 (the default font kept
+after a restart: no suite reads it back). Both say "Automated in part" now, the restart left to the
+hand. The lows: lines saying "Automated" over a part their own words left to the hand ("partial",
+"the manual half", "is yours", a real mouse, clipboard, wheel or keyboard) in 128 to 539 say "in
+part"; "no qa script restarts the process" (305, 306, 312) was untrue, as round 39 found of 590;
+three lines below a first line the scan skipped; "Already automated" in 186 and 250; old
+instructions to field-check the 0.71 and 0.73 builds on rows passed on 0.84.341; and 258, 260,
+667 and 276 understated what is walked (qa3's backup import, qa7's emptied note, qa6's details
+line, the travel story's restart), as they say now. Left, with its reason: the cases whose steps
+restart the app and whose checks were not read for a restart, and the plain "Automated (qaN)"
+rows of cases 1 to 231, were not read against their code; the next round reads each.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays
