@@ -4821,6 +4821,17 @@ just deleted on purpose; the backup keeps it, and a second import puts it back);
 newer version wrote loses the fields this one does not know, on both apps, which is the owner's
 question about fields a newer version wrote, put to her.
 
+**The thirty-fifth round** found case 1076's precondition still in the guide's old words ("never
+chose how long the Trash keeps notes"), which a notebook whose length an import set fits, and
+there Skip is not offered: it says "no Trash length ever set here (by you, or by a backup's
+import)" now, and how to have a note deleted 31 to 90 days ago. A backup's trashed notes whose
+Trash write was refused for a moment stayed listed for the session and were gone at the next
+start, where its templates are put back: they are put back too (SN171). The owner answered the
+templates question the same day: a template keeps the fields a newer version wrote, bounded as a
+note's (`KNOWN_TEMPLATE_FIELDS`; `normalize_template`, SN172), and the templates editor's save
+carries them over from the template it edits (SN173); case 1084 walks it by hand, and the phone
+does the same.
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.
 

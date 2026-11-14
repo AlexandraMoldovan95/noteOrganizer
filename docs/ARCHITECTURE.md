@@ -183,8 +183,10 @@ erased it. Since 13 November 2026 any other top-level field rides along as it ca
 fields, 65,536 units, 20 levels deep) and chosen by the same rule as on the phone
 (`unknown_fields`), except a name starting "_", the Trash's `deleted_at` and the removed `tags`.
 A field a newer version adds INSIDE a checklist item, an attachment, the repeat rule or a day's
-edit is still shaped away. The contract is in the phone's repository, DATA_FORMAT, "Fields a
-version does not know".
+edit is still shaped away. A template's own fields follow the same rule since 14 November (the
+owner's decision): `normalize_template` keeps any it does not know, bounded alike, on load, on
+import and through the templates editor's save. The contract is in the phone's repository,
+DATA_FORMAT, "Fields a version does not know".
 
 ### Ceilings live at the data door, not at the render
 

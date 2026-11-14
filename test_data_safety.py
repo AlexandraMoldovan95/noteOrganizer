@@ -5878,6 +5878,28 @@ check(f"...at most {_d2.MAX_UNKNOWN_FIELDS}, the first by name",
 _d2_big = _d2.normalize_note({'id': 1, 'big': 'x' * _d2.MAX_UNKNOWN_UNITS, 'small': 'y'})
 check("...a field past the allowance left out, the rest kept",
       'big' not in _d2_big and _d2_big.get('small') == 'y')
+# ...and a template's, by the owner's decision of 14 November: rebuilt from its known fields,
+# a newer version's field was gone at the next template saved or imported.
+_d2_tpl = NO.normalize_template({'name': 'Weekly', 'body': 'b', 'reminder_time': '09:00', '_mark': 1,
+                                 'many': {'deep': [1, 2]}})
+check(f"a template keeps a field this version does not know "
+      f"({ {k: _d2_tpl.get(k) for k in ('reminder_time', 'many', '_mark')} })",
+      _d2_tpl.get('reminder_time') == '09:00' and _d2_tpl.get('many') == {'deep': [1, 2]}
+      and '_mark' not in _d2_tpl)
+_d2_tpls = NO.normalize_template(dict({'name': 'T'}, **{'f%02d' % i: i for i in range(40)}))
+check(f"...at most {_d2.MAX_UNKNOWN_FIELDS} of them, the first by name, as a note's",
+      sorted(k for k in _d2_tpls if re.fullmatch(r'f\d\d', k))
+      == ['f%02d' % i for i in range(_d2.MAX_UNKNOWN_FIELDS)])
+_d2_tpl_file = os.path.abspath(NO.TEMPLATES_FILE)
+_d2_tpl_had = os.path.exists(_d2_tpl_file)
+_d2_tpl_was = NO.load_templates()
+NO.save_templates([_d2_tpl])
+check(f"...through a save and a load ({[t.get('reminder_time') for t in NO.load_templates()]})",
+      [t.get('reminder_time') for t in NO.load_templates()] == ['09:00'])
+if _d2_tpl_had:
+    NO.save_templates(_d2_tpl_was)
+else:
+    os.remove(_d2_tpl_file)
 
 
 def _d2_nest(depth):

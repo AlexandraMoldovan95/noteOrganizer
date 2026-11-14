@@ -18143,8 +18143,8 @@
     "id": "UF07",
     "about": "A field named with a leading '_', an app's own mark, is kept as unknown",
     "edits": [{"file": "noteorganizer/core/model.py",
-               "find": "                    and name not in KNOWN_NOTE_FIELDS and not name.startswith(\"_\")),\n",
-               "replace": "                    and name not in KNOWN_NOTE_FIELDS),\n"}],
+               "find": "                    and name not in known and not name.startswith(\"_\")),\n",
+               "replace": "                    and name not in known),\n"}],
     "must_fail": ["...but not a name starting '_', the Trash's deleted_at, nor the removed tags"],
     "suites": ["test_data_safety"],
     "expect": "killed"
@@ -19566,6 +19566,36 @@
                "replace": "        keep_days = trash_retention_days()\n"}],
     "must_fail": ["a backup's longer Trash window, taken where none was chosen here, is the length its trashed notes are asked by"],
     "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN171",
+    "about": "A backup's trashed notes the Trash would not take stay listed for the session, and are gone at the next start",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            self.trash = self.trash[:len(self.trash) - added_trash]\n            added_trash = 0\n",
+               "replace": ""}],
+    "must_fail": ["a backup's trashed notes the Trash would not take are put back, and said"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN172",
+    "about": "A template drops every field a newer version wrote, at the next template saved or imported",
+    "edits": [{"file": "noteorganizer/core/storage.py",
+               "find": "    shaped.update(unknown_fields(tpl, KNOWN_TEMPLATE_FIELDS))\n",
+               "replace": ""}],
+    "must_fail": ["a template keeps a field this version does not know"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN173",
+    "about": "An edit saved in the template editor erases a field a newer version wrote on the template",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "                **unknown_fields(tpl or {}, KNOWN_TEMPLATE_FIELDS),\n",
+               "replace": ""}],
+    "must_fail": ["...and a field a newer version wrote on it, through the edit's save"],
+    "suites": ["qa6"],
     "expect": "killed"
   }
 ]

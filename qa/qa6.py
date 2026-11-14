@@ -757,6 +757,20 @@ _tf_bold = [_tf_saved['body'][s['start']:s['end']]
             for s in _tf_saved.get('formatting') or [] if s.get('style') == 'bold']
 check(f'an edit in the template editor keeps the bold on the words it was on '
       f'({_tf_bold})', _tf_bold == ['Decisions are final'])
+# ...and a field a newer version wrote on it (the owner's decision of 14 November): built from
+# the editor's boxes alone, the edit erased it.
+app.templates = [NO.normalize_template({'name': 'Minutes', 'body': 'b', 'reminder_time': '09:00'})]
+NO.save_templates(app.templates)
+app._refresh_templates_panel(); app.update()
+app._edit_template(app.templates[0], app._refresh_templates_panel)
+app.update()
+find_all2(app._mini_popup, tk.Text)[0].insert('1.0', 'More ')
+next(b for b in find_all2(app._mini_popup, tk.Button)
+     if str(b.cget('text')) == 'Save').invoke()
+app.update()
+_tf_newer = [t.get('reminder_time') for t in NO.load_templates() if t.get('name') == 'Minutes']
+check(f"...and a field a newer version wrote on it, through the edit's save ({_tf_newer})",
+      _tf_newer == ['09:00'])
 app.templates = []
 NO.save_templates(app.templates)
 app._refresh_templates_panel(); app.update()

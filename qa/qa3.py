@@ -6499,6 +6499,21 @@ finally:
         NO.save_settings(_rf_settings)
 check(f"a backup's longer Trash window, taken where none was chosen here, is the length its trashed "
       f"notes are asked by ({_rf_window})", _rf_window == (True, False))
+# A backup's trashed notes whose Trash write is refused for a moment are put back, as its templates
+# are: listed for the session, they were gone at the next start.
+_pb_real, _pb_real_info = NO.save_trash, app.show_info
+_pb_said = []
+NO.save_trash = lambda *a, **k: (False, 'refused')
+app.show_info = lambda *a, **k: (_pb_said.append(' '.join(str(x) for x in a)), True)[1]
+try:
+    _dz_import({'notes_data.json': b'[]', 'trash.json': json.dumps(
+        [dict(_rf_new, uid='pb-1', title='Put back', deleted_at=_tr_days_ago(1))]).encode()})
+finally:
+    NO.save_trash, app.show_info = _pb_real, _pb_real_info
+_pb_listed = [e.get('title') for e in app.trash if e.get('title') == 'Put back']
+check(f"a backup's trashed notes the Trash would not take are put back, and said "
+      f"({_pb_listed}, {_pb_said[-1:]})",
+      not _pb_listed and any('trashed notes could not be written' in s for s in _pb_said))
 app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
 
 # A backup's note whose file is held by this Trash came in on a copy of it; matched by its
