@@ -244,6 +244,7 @@ from noteorganizer.core.storage import (
     _delete_attachment_files,
     attachment_names_in,
     copy_attachment_file,
+    same_attached_file,
     purge_expired_trash,
     # The same question the purge acts on, asked without acting: what a
     # retention window has already outlived. Re-exported here because the
@@ -12408,6 +12409,25 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # or files was dropped, its only copy.
         existing_trash_keys = {content_signature(normalize_note(e))
                                for e in self.trash if isinstance(e, dict)}
+
+        def loose(e):
+            """Its signature, its files' stored names left out (matched by bytes below)."""
+            return content_signature(dict(e, attachments=[
+                dict(a, stored_as="") for a in (e.get("attachments") or []) if isinstance(a, dict)]))
+
+        def same_files(one, other):
+            x = [a for a in (one.get("attachments") or []) if isinstance(a, dict)]
+            y = [a for a in (other.get("attachments") or []) if isinstance(a, dict)]
+            return len(x) == len(y) and all(
+                a.get("stored_as") == b.get("stored_as") or same_attached_file(a, b)
+                for a, b in zip(x, y))
+
+        # A backup's trashed note whose file a note here used came in on a copy of it,
+        # signed under the copy's name: every import of that backup brought it again.
+        existing_loose = {}
+        for e in self.trash:
+            if isinstance(e, dict):
+                existing_loose.setdefault(loose(normalize_note(e)), []).append(e)
         for entry in incoming_trash:
             if not isinstance(entry, dict):
                 continue
@@ -12418,7 +12438,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             entry["deleted_at"] = (raw_deleted
                                    if isinstance(raw_deleted, str) else "")
             key = content_signature(entry)
-            if key in existing_trash_keys:
+            if key in existing_trash_keys or any(
+                    same_files(entry, e) for e in existing_loose.get(loose(entry), ())):
                 # Re-importing your own backup must not double the trash.
                 continue
             if settings_held or (keep_days is not None
@@ -12447,6 +12468,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 atts.append(a)
             entry["attachments"] = atts
             self.trash.append(entry)
+            existing_loose.setdefault(loose(entry), []).append(entry)
             added_trash += 1
         if added_trash and not save_trash(self.trash)[0]:
             unwritten.append("the trashed notes")
