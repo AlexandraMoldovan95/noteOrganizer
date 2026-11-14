@@ -4868,9 +4868,28 @@ its probe ran once and its story by hand; 985 named WS22, which guards another q
 (no kept mutant guards this one's, it says now); 865 and 891 still asked for the Sandbox runs of 9
 and 12 November, which were made; 1039 and 904 quoted what prints differently.
 
+**The thirty-ninth round** found those fixes holding and the class still open (mediums): five cases
+of round 38's own range (936, 954, 972, 989, 1046) and ten of cases 550 to 799 (554, 584, 630, 632,
+669, 696, 726, 756, 783, 797) said "Automated" naming only unit suites, some "No hand check
+needed" or "Optional hand check", over steps that press the app's buttons. So the class was swept
+across the whole plan by a scan, not a block at a time: every case saying "Automated" while naming
+no qa suite, no story and no gate was read, those cases 1 to 549 included, and each one whose steps
+a person can take says "Automated in part" now, with its hand check named. A case no person can
+set up keeps "Automated", which the How to use tab now defines there: the suites check the rule,
+and the app's own half is walked by no one. The lows: eleven labels over a sentence leaving a part
+to the hand, and labels the tab did not define ("Partly automated", "Automated with a stand-in",
+"Automated for ...", "Held in", "Walked by script", cases 909 to 920 with no label at all), say
+"Automated in part" or "Automated"; the tab defines "Walked by" a story, the other words for
+"Manual only", and the eye's part; 590 no longer says no qa script restarts the app; 602 no longer
+says the Sandbox plays a first start (its runs seed the welcome as offered); 632 counts twelve
+icons; 667 says the app's own details line is read by no check; 704 names its Sandbox runs of 9
+and 12 November and that they are made by hand; 712 and 783 name the suites their mutants are
+judged in; 815 and 1038 say what is left to the hand.
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
-is fixed, with its class closed, or answered in writing; at the thirty-eighth round the class of
-the plan's automation claims was still being read, a block of cases at a time.
+is fixed, with its class closed, or answered in writing. A class swept a block at a time stays
+open behind the block: at the thirty-ninth round the plan's automation claims were read all at
+once, by a scan, and the rounds after it read what the scan cannot judge.
 
 ## Tk & platform gotchas
 
