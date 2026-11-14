@@ -12537,6 +12537,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     if new_name:
                         a["stored_as"] = new_name
                         claimed.add(new_name)
+                        # The import's own copy: put back with its entry, nothing named it.
+                        state["copied"] = list(state.get("copied") or []) + [new_name]
                 elif name:
                     claimed.add(name)
                 atts.append(a)
