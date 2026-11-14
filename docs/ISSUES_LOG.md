@@ -4947,6 +4947,20 @@ use tab and the excerpt now say "Automated in part" names what the checks are kn
 reach, and the hand check walks the case whole: a list of what is left can be shown incomplete,
 never complete, so it no longer promises to be whole.
 
+**The forty-fifth round** read the 172 cases below 450 still called whole a second time, by a
+stricter rule (a step walked only when its control is pressed), and found 102 short of it. The
+qa suite calls the app's own functions far more than it presses controls, so the owner decided
+on 14 November what a walked step is: a check walks a step when it presses the control or its
+key, or runs the very command that control runs; a case is "in part" where the check stubs a
+question the case reads, seeds a state the case makes, skips a step or leaves a result unread.
+By that rule ninety-three of the 102 say "Automated in part" now and name what the checks are
+known not to reach (a card or a cell no check reads, a question stubbed, a selection or a fold
+seeded, a step skipped); the rest, short only of the press, stay whole. Seven said more than
+their checks do in so many words (2 "read back off the note list", 19 "under 5s" for a bound of
+30, 36 "the section's own button", 71 "asked once" where none passes too, 369 "the real import
+box", 377 "presses both shortcuts", 407 the travel story's keys), and say what is true; the How
+to use tab states the rule.
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays
 open behind the block: at the thirty-ninth round the plan's automation claims were read all at
