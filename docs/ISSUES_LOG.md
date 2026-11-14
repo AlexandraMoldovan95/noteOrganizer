@@ -4825,12 +4825,25 @@ question about fields a newer version wrote, put to her.
 chose how long the Trash keeps notes"), which a notebook whose length an import set fits, and
 there Skip is not offered: it says "no Trash length ever set here (by you, or by a backup's
 import)" now, and how to have a note deleted 31 to 90 days ago. A backup's trashed notes whose
-Trash write was refused for a moment stayed listed for the session and were gone at the next
-start, where its templates are put back: they are put back too (SN171). The owner answered the
+Trash write was refused for a moment stayed listed for the session, and were gone at the next
+start unless a later delete or restore that session wrote them, where its templates are put
+back: they are put back too (SN171). The owner answered the
 templates question the same day: a template keeps the fields a newer version wrote, bounded as a
 note's (`KNOWN_TEMPLATE_FIELDS`; `normalize_template`, SN172), and the templates editor's save
 carries them over from the template it edits (SN173); case 1084 walks it by hand, and the phone
 does the same.
+
+**The thirty-sixth round** found the decision holding on every road, and case 1084 calling itself
+"Automated" where no check carries such a field through its export and import (a medium, in a
+document the release relies on): it says "Automated in part" now, with what to answer when the
+welcome notes are asked about. The lows: a put-back entry whose file a note here used had been
+given a copy that nothing named after (recorded now among the import's own copies, which its
+end removes when unused; SN174); qa6's check read only the kept field, not the edit; the put-back
+had no case (1085). Left, with their reasons: categories adopted for put-back entries are kept
+and counted (the phone writes settings first and does the same); day markings over a refused
+settings write stay for the session (round 24 left it); and a template replaced by name, on the
+person's Replace, takes its newer fields with it on both apps, as "Replace the old template with
+this one" says.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.

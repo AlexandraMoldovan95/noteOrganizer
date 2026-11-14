@@ -6503,17 +6503,30 @@ check(f"a backup's longer Trash window, taken where none was chosen here, is the
 # are: listed for the session, they were gone at the next start.
 _pb_real, _pb_real_info = NO.save_trash, app.show_info
 _pb_said = []
+# Its file used by a note here, the entry was given a copy: put back, nothing named the copy.
+os.makedirs(NO.ATTACHMENTS_DIR, exist_ok=True)
+with open(os.path.join(NO.ATTACHMENTS_DIR, 'qa3_pb_shared.txt'), 'w') as _fh:
+    _fh.write('shared')
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Holder', 'body': 'h', 'attachments': [
+    {'filename': 'shared.txt', 'stored_as': 'qa3_pb_shared.txt'}]})]
+app.save_notes()
+_pb_files = sorted(os.listdir(NO.ATTACHMENTS_DIR))
 NO.save_trash = lambda *a, **k: (False, 'refused')
 app.show_info = lambda *a, **k: (_pb_said.append(' '.join(str(x) for x in a)), True)[1]
 try:
     _dz_import({'notes_data.json': b'[]', 'trash.json': json.dumps(
-        [dict(_rf_new, uid='pb-1', title='Put back', deleted_at=_tr_days_ago(1))]).encode()})
+        [dict(_rf_new, uid='pb-1', title='Put back', deleted_at=_tr_days_ago(1), attachments=[
+            {'filename': 'shared.txt', 'stored_as': 'qa3_pb_shared.txt'}])]).encode()})
 finally:
     NO.save_trash, app.show_info = _pb_real, _pb_real_info
 _pb_listed = [e.get('title') for e in app.trash if e.get('title') == 'Put back']
-check(f"a backup's trashed notes the Trash would not take are put back, and said "
-      f"({_pb_listed}, {_pb_said[-1:]})",
-      not _pb_listed and any('trashed notes could not be written' in s for s in _pb_said))
+_pb_left = sorted(os.listdir(NO.ATTACHMENTS_DIR))
+check(f"a backup's trashed notes the Trash would not take are put back, said, and leave no copy "
+      f"of a file behind ({_pb_listed}, {_pb_said[-1:]}, {set(_pb_left) - set(_pb_files)})",
+      not _pb_listed and any('trashed notes could not be written' in s for s in _pb_said)
+      and _pb_left == _pb_files)
+app.notes = []; app.save_notes()
+os.remove(os.path.join(NO.ATTACHMENTS_DIR, 'qa3_pb_shared.txt'))
 app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
 
 # A backup's note whose file is held by this Trash came in on a copy of it; matched by its

@@ -19574,7 +19574,7 @@
     "edits": [{"file": "note_organizer.py",
                "find": "            self.trash = self.trash[:len(self.trash) - added_trash]\n            added_trash = 0\n",
                "replace": ""}],
-    "must_fail": ["a backup's trashed notes the Trash would not take are put back, and said"],
+    "must_fail": ["a backup's trashed notes the Trash would not take are put back, said, and leave no copy of a file behind"],
     "suites": ["qa3"],
     "expect": "killed"
   },
@@ -19596,6 +19596,16 @@
                "replace": ""}],
     "must_fail": ["...and a field a newer version wrote on it, through the edit's save"],
     "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN174",
+    "about": "A copy of a file made for a backup's trashed note stays in attachments when the entry is put back",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                        state[\"copied\"] = list(state.get(\"copied\") or []) + [new_name]\n",
+               "replace": ""}],
+    "must_fail": ["a backup's trashed notes the Trash would not take are put back, said, and leave no copy of a file behind"],
+    "suites": ["qa3"],
     "expect": "killed"
   }
 ]

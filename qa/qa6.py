@@ -768,9 +768,9 @@ find_all2(app._mini_popup, tk.Text)[0].insert('1.0', 'More ')
 next(b for b in find_all2(app._mini_popup, tk.Button)
      if str(b.cget('text')) == 'Save').invoke()
 app.update()
-_tf_newer = [t.get('reminder_time') for t in NO.load_templates() if t.get('name') == 'Minutes']
+_tf_newer = [(t.get('reminder_time'), t.get('body')) for t in NO.load_templates() if t.get('name') == 'Minutes']
 check(f"...and a field a newer version wrote on it, through the edit's save ({_tf_newer})",
-      _tf_newer == ['09:00'])
+      _tf_newer == [('09:00', 'More b')])
 app.templates = []
 NO.save_templates(app.templates)
 app._refresh_templates_panel(); app.update()
