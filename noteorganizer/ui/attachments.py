@@ -23,7 +23,7 @@ from ..core import paths
 from ..core.model import (MAX_ATTACHMENTS, attachment_display_name,
                           file_type_of, how_to_open)
 from ..core.storage import (_attachment_path_within, _delete_attachment_files,
-                            attachment_names_in)
+                            attached_files_kept, attachment_names_in)
 from .calendar_view import _fit_title
 from .dialogs import one_line
 
@@ -113,12 +113,15 @@ class AttachmentsMixin:
         target = self.current_attachments[index]
         files = self.current_attachments
         # Deletes the STORED FILE for good: asked as every irreversible step
-        # is -- the warning glyph, No chosen, Escape backs out.
+        # is -- the warning glyph, No chosen, Escape backs out. A run that keeps
+        # every file (attached_files_kept) does not promise this one gone.
         if not self.ask_yes_no(
                 "Remove attachment",
                 f"Remove “{_quoted(attachment_display_name(target.get('filename'), target.get('stored_as'))) or 'this file'}” from the "
-                "note?\n\nThe stored copy is deleted with it — this can't "
-                "be undone.",
+                "note?\n\n" + ("Its stored copy stays on the disk this time: the notes "
+                               "file could not be read when Note Organizer started."
+                               if attached_files_kept() else
+                               "The stored copy is deleted with it — this can't be undone."),
                 icon="warning", default="no"):
             return
         # The file found again: under the question the editor can move on,

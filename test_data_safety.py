@@ -4979,6 +4979,8 @@ try:
         json.dump({"theme": "light", "username": "Ana"}, _f)
     with open(os.path.join(_ks_old, "trash.json"), "w", encoding="utf-8") as _f:
         json.dump([{"id": 9, "title": "Old trashed", "deleted_at": "2026-01-01 10:00:00"}], _f)
+    with open(os.path.join(_ks_old, "templates.json"), "w", encoding="utf-8") as _f:
+        json.dump([{"name": "Weekly", "title": "w"}], _f)
     _ks_backup_was = _paths._timestamped_backup
     _paths._timestamped_backup = lambda *a, **k: None
     try:
@@ -4993,6 +4995,9 @@ try:
           and not os.path.exists(os.path.join(_ks_app, "trash.json"))
           and "trash.json" in _ks_msg
           and os.path.isfile(os.path.join(_ks_app, "notes_data.json")))
+    check("...its templates, which no window empties, still come in",
+          os.path.isfile(os.path.join(_ks_app, "templates.json"))
+          and "templates.json" not in _ks_msg)
 finally:
     _paths.get_legacy_dirs = _ad_real_legacy
     _paths.get_appdata_dir = _ad_real_appdata
@@ -5564,6 +5569,39 @@ finally:
     _paths.configure(_hs_prev)
     for _d in _hs_dirs:
         shutil.rmtree(_d, ignore_errors=True)
+
+# ...and a notes file the system refuses at the start is held the same, never
+# copied aside: a copy made the moment it let go took a good file aside, and
+# the empty list's first save went over it.
+_hn_dir = tempfile.mkdtemp(prefix="nd_heldnotes_")
+_hn_prev = _paths.APP_DIR
+try:
+    _paths.configure(_hn_dir)
+    with _hs_real_open(_paths.DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump([{"id": 1, "title": "kept"}], f)
+
+    def _hn_open(path, *a, **k):
+        if os.path.abspath(str(path)) == os.path.abspath(_paths.DATA_FILE):
+            raise PermissionError(13, "held by another program")
+        return _hs_real_open(path, *a, **k)
+    _storage.open = _hn_open
+    _storage.time.sleep = lambda _s: None
+    try:
+        _hn_notes, _hn_report = _storage.load_notes(None)
+    finally:
+        del _storage.open
+        _storage.time.sleep = _hs_sleep
+    _hn_aside = [p for p in os.listdir(_hn_dir) if p.startswith("notes_data_corrupt_")]
+    _hn_held = _paths.writes_held(_paths.DATA_FILE)
+    with _hs_real_open(_paths.DATA_FILE, encoding="utf-8") as f:
+        _hn_disk = json.load(f)
+finally:
+    _paths.WRITES_HELD.clear()
+    _paths.configure(_hn_prev)
+    shutil.rmtree(_hn_dir, ignore_errors=True)
+check("a notes file held at the start is held, never copied aside (%s, held %s)" % (_hn_aside, _hn_held),
+      _hn_aside == [] and _hn_held and _hn_report.get("notes_file_corrupt") is True
+      and _hn_notes == [] and _hn_disk == [{"id": 1, "title": "kept"}])
 
 # A held file's refused write is reported once a run: a setting is written at
 # every note opened, and its banner took the place of a delete's Undo.

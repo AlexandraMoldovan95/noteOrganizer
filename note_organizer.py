@@ -1746,27 +1746,26 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # said so, with the likeliest cause, a file another program
                 # holds, which opening the app again usually cures.
                 msg += (
-                    "\n\nA copy of it could not be kept either — another "
-                    "program may be holding the file. Note Organizer will "
-                    "not save anything over it in this session: anything "
-                    "you write now is kept only by Settings → Backup → "
-                    "Export. Close Note Organizer and open it again; if "
-                    "this comes back, back up notes_data.json from the data "
-                    "folder first."
+                    "\n\nAnother program may be holding the file, so no copy "
+                    "of it was kept, and Note Organizer will not save "
+                    "anything over it in this session: anything you write "
+                    "now is kept only by Settings → Backup → Export. Close "
+                    "Note Organizer and open it again; if this comes back, "
+                    "back up notes_data.json from the data folder first."
                 )
             lines.append(msg)
 
         # Set by load_settings on an unreadable settings.json; said once,
         # and the Trash keeps everything until a window is chosen again.
         if _core_paths.writes_held(SETTINGS_FILE):
-            # Refused (most likely held by another program), or damaged and not
-            # kept aside: defaults stand in all run, none written over the file.
+            # Refused (most likely held by another program), damaged and not kept
+            # aside, or held by a notebook move that went no further: defaults
+            # stand in all run, none written over the file.
             lines.append(
-                "Your settings file couldn't be opened, or couldn't be read and "
-                "kept aside — another program may be holding it, or the disk may "
-                "be full. Note Organizer uses its own defaults this time, saves "
-                "no setting until it is opened again, and removes nothing from "
-                "the Trash.")
+                "Your settings file couldn't be used this time — another program "
+                "may be holding it, or the disk may be full. Note Organizer uses "
+                "its own defaults this time, saves no setting until it is opened "
+                "again, and removes nothing from the Trash.")
         elif get_setting(TRASH_WINDOW_UNKNOWN) is True:
             save_setting(TRASH_WINDOW_UNKNOWN, "told")
             lines.append(
@@ -2031,15 +2030,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.notes.append(note)
         self.save_notes()
         save_setting("welcome_note_uid", note["uid"])
+        # Kept here too: over a held settings file the setting is refused, and
+        # every Show added another welcome note.
+        self._welcome_uid_run = note["uid"]
         return note
 
     def show_welcome_note(self):
         """Settings -> About's Show, beside the welcome note: the one in the
         notebook if it is still there, a new one if it was deleted, opened
         in the editor either way."""
-        uid = load_settings().get("welcome_note_uid")
-        note = next((n for n in self.notes
-                     if uid and n.get("uid") == uid), None)
+        uids = {load_settings().get("welcome_note_uid"),
+                getattr(self, "_welcome_uid_run", None)} - {None, ""}
+        note = next((n for n in self.notes if n.get("uid") in uids), None)
         if not self._leave_settings_for_the_editor():
             return
         if note is None:
@@ -10755,11 +10757,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if self._flush_autosave(leaving=self.selected_note_id in {
                     mine.get("id") for mine, _theirs in known}) is False:
                 return False, [], [], unchanged, []
-            # Words typed in one of them just before, saved by that flush, make
-            # a note that differed by a file alone one Update rewrites (and whose
-            # rescue copy it replaces): promised nothing else, so asked again.
-            if any(shared_update_changes(self.find_note(mine.get("id")) or mine, theirs,
-                                         UPDATABLE_FROM_BACKUP) for mine, theirs in filed):
+            # Words typed in one of them just before, saved by that flush, can
+            # change what was said (a file-alone note now rewritten, a note now
+            # OLDER, a rescue copy Update replaces): asked again, as it is now.
+            def _now(mine):
+                return self.find_note(mine.get("id")) or mine
+            if (any(shared_update_changes(_now(mine), theirs, UPDATABLE_FROM_BACKUP)
+                    for mine, theirs in filed)
+                    or sum(1 for mine, theirs in texts if source == "backup"
+                           and str(theirs.get("updated") or "")
+                           < str(_now(mine).get("updated") or "")) > older
+                    or sum(1 for mine, _t in texts if self._holds_unspent_rescue(_now(mine))) > rescued):
                 return self._take_known_notes(incoming, source)
             return finish(fresh, known)
         # "add": new notes without the identity they came with (one uid on two
@@ -10994,31 +11002,37 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 incoming, asked_about = copies[0], mine
                 valid = [incoming]
             elif mine is not None:
-                choice = self._themed_dialog(
-                    "Same note, a different version",
-                    "This note is already here, and the two differ.\n\n"
-                    "Updating replaces what is on this device; you can undo "
-                    "it with “↩ Restore previous”."
-                    + (self._REPLACES_EARLIER_RESCUE
-                       if self._holds_unspent_rescue(mine) else "")
-                    + "\nAdding leaves both, so you can compare them and "
-                    "delete one.",
-                    kind="question",
-                    buttons=[("Cancel", "cancel"),
-                             ("Add as a new note", "add"),
-                             ("Update this note", "update")],
-                    default="Cancel",
-                )
-                if choice is None or choice == "cancel":
-                    return
-                if choice == "update":
+                while True:
+                    rescue_said = self._holds_unspent_rescue(mine)
+                    choice = self._themed_dialog(
+                        "Same note, a different version",
+                        "This note is already here, and the two differ.\n\n"
+                        "Updating replaces what is on this device; you can undo "
+                        "it with “↩ Restore previous”."
+                        + (self._REPLACES_EARLIER_RESCUE if rescue_said else "")
+                        + "\nAdding leaves both, so you can compare them and "
+                        "delete one.",
+                        kind="question",
+                        buttons=[("Cancel", "cancel"),
+                                 ("Add as a new note", "add"),
+                                 ("Update this note", "update")],
+                        default="Cancel",
+                    )
+                    if choice is None or choice == "cancel":
+                        return
+                    if choice != "update":
+                        break
                     # The editor's unsaved edits saved FIRST, for the rescue
                     # copy "↩ Restore previous" gives back; Cancel on a day's
                     # question stops here, nothing replaced.
                     if self._flush_autosave() is False:
                         return
+                    # A rescue copy that flush made of words cut just before is
+                    # one the Update replaces: asked again, saying so.
+                    if self._holds_unspent_rescue(mine) and not rescue_said:
+                        continue
                     apply_shared_update(mine, incoming)
-                    self.save_notes()
+                    written = self.save_notes()
                     self.import_box.delete("1.0", "end")
                     self.toggle_import_panel()
                     self.refresh_note_list()
@@ -11030,8 +11044,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         self._editor_follows_external_change({mine.get("id")})
                     else:
                         self.open_note_in_tab(mine, flush=False)
-                    self.set_status("Note updated from the code "
-                                    "— ↩ Restore previous undoes it")
+                    # Not over a refused write: "Not saved" stood there.
+                    if written:
+                        self.set_status("Note updated from the code "
+                                        "— ↩ Restore previous undoes it")
                     return
                 # "add" falls through to the import below, as a new note; its
                 # uid dropped here, where the intent is (the review editor
@@ -20343,7 +20359,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Seconds, as save_current_note stamps: by the minute it sorted
         # below notes touched earlier that minute.
         note["updated"] = now_stamp()
-        self.save_notes()
+        written = self.save_notes()
         # Reload from the note so the editor and the dirty machinery agree
         # with what is now on disk (the widgets above were filled for the
         # user to see; this makes them the note's official state).
@@ -20355,9 +20371,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # category and a series' days -- all of them drawn on the calendar,
         # which this was the one note-writing route never to redraw.
         self.render_calendar()
-        self.set_status(
-            "Restored the previous version of the whole note"
-            if viewing_occurrence else "Restored the previous version")
+        # Not over a refused write, whose "Not saved" stands.
+        if written:
+            self.set_status(
+                "Restored the previous version of the whole note"
+                if viewing_occurrence else "Restored the previous version")
         self.update_word_count()
         self._update_restore_button()
 

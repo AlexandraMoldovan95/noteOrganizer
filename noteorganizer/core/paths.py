@@ -288,11 +288,12 @@ def _copy_whole(src, dst, tries=1):
     return False
 
 
-def _copy_companions(src_dir, dest_dir):
-    """The Trash and the templates, copied only where the notebook has none:
-    never over a file of its own. Returns the names that could not be."""
+def _copy_companions(src_dir, dest_dir, names=NOTEBOOK_COMPANIONS):
+    """The Trash and the templates (or *names* of them), copied only where
+    the notebook has none: never over a file of its own. Returns the names
+    that could not be."""
     failed = []
-    for name in NOTEBOOK_COMPANIONS:
+    for name in names:
         src = os.path.join(src_dir, name)
         dst = os.path.join(dest_dir, name)
         if (os.path.isfile(src) and not os.path.exists(dst)
@@ -542,8 +543,10 @@ def run_migrations(app_dir):
     if settings_stayed:
         # Under this folder's settings the old Trash would be emptied by this
         # folder's window: left where it is, and said, as a file not copied.
-        missing += [name for name in NOTEBOOK_COMPANIONS
-                    if os.path.exists(os.path.join(best_dir, name))]
+        # The templates have no window, and come.
+        missing += ["trash.json"] if os.path.exists(os.path.join(best_dir, "trash.json")) else []
+        missing += _copy_companions(best_dir, app_dir,
+                                    tuple(n for n in NOTEBOOK_COMPANIONS if n != "trash.json"))
     elif ours or durable:
         missing += _copy_companions(best_dir, app_dir)
 

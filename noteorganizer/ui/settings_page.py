@@ -1543,9 +1543,9 @@ class SettingsPageMixin:
         days = trash_retention_days()
         if days is None and paths.writes_held(paths.SETTINGS_FILE):
             # No choice is kept this run: advice it would refuse.
-            return ("The settings file couldn't be opened, so nothing is removed "
-                    "automatically. A length can be chosen once Note Organizer "
-                    "is opened again.")
+            return ("The settings file couldn't be used this time, so nothing is "
+                    "removed automatically. A length can be chosen once Note "
+                    "Organizer is opened again.")
         if days is None:
             return ("The length chosen before couldn't be read, so nothing "
                     "is removed automatically until you choose one below.")
@@ -1574,6 +1574,16 @@ class SettingsPageMixin:
             except (ValueError, IndexError):
                 return
             current = trash_retention_days()
+            # Over a held settings file no choice is kept: put back and said at
+            # once, not after a question whose Yes it would refuse.
+            if paths.writes_held(paths.SETTINGS_FILE):
+                try:
+                    self.trash_retention_var.set(shown(current))
+                except tk.TclError:
+                    pass
+                self._show_toast("Not saved: a length can be chosen once Note "
+                                 "Organizer is opened again", kind="info")
+                return
             # Only a SHORTER window with something old enough to lose asks: a
             # needless question teaches dismissing them. One not known is
             # longer than any.

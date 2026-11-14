@@ -228,7 +228,11 @@ def load_templates():
                     # keep the bytes before a save replaces them.
                     _preserve_corrupt(paths.TEMPLATES_FILE)
                 return kept
-        except (*paths.JSON_UNREADABLE, IOError, OSError):
+        except OSError:
+            # Refused, not damaged: held, never copied aside (as load_notes).
+            paths.hold_writes(paths.TEMPLATES_FILE)
+            return []
+        except paths.JSON_UNREADABLE:
             pass
         # Reached only when the file exists but held nothing usable —
         # keep its bytes before the next save replaces them.
@@ -271,7 +275,11 @@ def load_trash():
                 if len(kept) != len(data):
                     _preserve_corrupt(paths.TRASH_FILE)
                 return kept
-        except (*paths.JSON_UNREADABLE, IOError, OSError):
+        except OSError:
+            # Refused, not damaged: held, never copied aside (as load_notes).
+            paths.hold_writes(paths.TRASH_FILE)
+            return []
+        except paths.JSON_UNREADABLE:
             pass
         # Reached only when the file exists but held nothing usable —
         # keep its bytes before the next save replaces them.
@@ -639,11 +647,22 @@ def load_notes(version_change=None):
             # Said at the start (announce_startup_changes): a safety net that
             # could not be made read the same as one never promised.
             report["version_backup_failed"] = report["version_backup_path"] is None
+        refused = False
         try:
             raw = json_from_text(_read_data_file(paths.DATA_FILE))
-        except (*paths.JSON_UNREADABLE, IOError, OSError):
+        except OSError:
+            # Refused, not damaged (another program holding it): held, never
+            # copied aside -- a copy made the moment it let go took a good file
+            # aside, and the empty list's first save went over it.
+            raw, refused = None, True
+        except paths.JSON_UNREADABLE:
             raw = None
-        if not isinstance(raw, list):
+        if refused:
+            paths.hold_writes(paths.DATA_FILE)
+            report["notes_file_corrupt"] = True
+            report["corrupt_backup_path"] = None
+            raw = []
+        elif not isinstance(raw, list):
             # There, but nothing usable: its bytes are kept before an empty
             # list can be saved over them (once the moment a corrupt notebook
             # was lost for good), and the caller is told to TELL the user.

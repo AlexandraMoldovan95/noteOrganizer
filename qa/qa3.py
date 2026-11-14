@@ -2957,6 +2957,68 @@ check(f"words typed in a file-alone note before Update are asked about again "
       f"({len(_nw_asked)} asked, {[s[-60:] for s in _nw_asked]})",
       len(_nw_asked) == 2 and 'nothing else' in _nw_asked[0]
       and 'Restore previous' in _nw_asked[1])
+# ...and a note whose words differ, most of them cut just before: the flush's
+# rescue copy of them is one Update replaces, asked again saying so.
+_nc_mine = NO.normalize_note({'id': 8, 'title': 'Long one', 'body': 'word ' * 120,
+                              'updated': '2026-11-01 10:00:00'})
+_nc_theirs = dict(_nc_mine, body='the backup\'s short version', updated='2099-01-01 10:00:00')
+app.notes = [_nc_mine]; app.save_notes()
+app.open_note_in_tab(app.find_note(8)); app.update()
+app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'kept')
+_nc_asked = []
+app._themed_dialog = lambda *a, **k: (_nc_asked.append(a[1]), 'update')[1]
+try:
+    app._take_known_notes([_nc_theirs], 'backup')
+finally:
+    app._themed_dialog = _real_dialog
+app.open_blank_tab(); app.update()
+check(f"a rescue copy made by Update's flush is asked about again ({len(_nc_asked)} asked)",
+      len(_nc_asked) == 2 and 'earlier version' not in _nc_asked[0]
+      and 'earlier version' in _nc_asked[1])
+# ...and one a word typed just before makes newer than the backup's: asked
+# again, the backup's version now OLDER.
+_no_mine = NO.normalize_note({'id': 9, 'title': 'Short one', 'body': 'plain',
+                              'updated': '2026-11-01 10:00:00'})
+_no_theirs = dict(_no_mine, body='plain, from the backup', updated='2026-11-10 10:00:00')
+app.notes = [_no_mine]; app.save_notes()
+app.open_note_in_tab(app.find_note(9)); app.update()
+app.body_text.insert('end', ' and more')
+_no_asked = []
+app._themed_dialog = lambda *a, **k: (_no_asked.append(a[1]), 'update')[1]
+try:
+    app._take_known_notes([_no_theirs], 'backup')
+finally:
+    app._themed_dialog = _real_dialog
+app.open_blank_tab(); app.update()
+check(f"a backup made OLDER by Update's flush is asked about again ({len(_no_asked)} asked)",
+      len(_no_asked) == 2 and 'OLDER' not in _no_asked[0] and 'OLDER' in _no_asked[1])
+# ...and a share code's Update the same: words cut just before, kept by the
+# flush as a rescue copy, are said replaced, asked again.
+_sc_note = NO.normalize_note({'id': 10, 'title': 'Coded', 'body': 'word ' * 120})
+app.notes = [_sc_note]; app.save_notes()
+app.load_note(app.find_note(10)); app.update()
+app.share_current_note_as_code(); app.update()
+_sc_code = find_text_widget(app.editor_code_area).get('1.0', 'end-1c')
+# Changed here through the editor, so the code differs from the note (changed
+# behind the open editor, the panel's own save put the old version back).
+app.title_entry.insert('end', ' here')
+app.save_current_note(); app.update()
+_sc_asked = []
+app._themed_dialog = lambda *a, **k: (_sc_asked.append(a[1]), 'update')[1]
+try:
+    # The panel opened first (opening it saves the editor), the words cut after.
+    app.toggle_import_panel(); app.update()
+    app.import_box.delete('1.0', 'end')
+    app.import_box.insert('1.0', _sc_code)
+    app.body_text.delete('1.0', 'end'); app.body_text.insert('1.0', 'kept')
+    app._do_inline_import(); app.update()
+finally:
+    app._themed_dialog = _real_dialog
+app.open_blank_tab(); app.update()
+check(f"a share code's Update whose flush made a rescue copy is asked about again "
+      f"({len(_sc_asked)} asked)",
+      len(_sc_asked) == 2 and 'is replaced by the one from before' not in _sc_asked[0]
+      and 'is replaced by the one from before' in _sc_asked[1])
 # ...and one differing by a field a newer version wrote alone is no Update
 # (D2), but the question says the backup holds it: "nothing" was untrue.
 _nu_mine = NO.normalize_note({'id': 4, 'title': 'Plan', 'body': 'b'})

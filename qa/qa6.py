@@ -1933,6 +1933,34 @@ check(f"over a held settings file the Trash's line asks for no choice, and with 
       f"unread a delete for good names no files ({_rt_line!r}, {_rt_words})",
       'once Note Organizer is opened again' in _rt_line and 'choose one below' not in _rt_line
       and _rt_words[0] == '' and 'along with 1 attached file' in _rt_words[1])
+# ...and the dropdown over it puts the choice back at once, said, asking no
+# question first whose Yes it would refuse; and Remove attachment, with the
+# notes unread, does not promise the stored copy gone.
+_rt_toasts, _rt_toast_was = [], app._show_toast
+app._show_toast = lambda text, *a, **k: _rt_toasts.append(text)
+NO._core_paths.hold_writes(NO.SETTINGS_FILE)
+try:
+    _rt_pick('14 days')
+finally:
+    NO._core_paths.WRITES_HELD.discard(os.path.normcase(os.path.abspath(NO.SETTINGS_FILE)))
+    app._show_toast = _rt_toast_was
+_rt_asked_was, _rt_said = app.ask_yes_no, []
+app.ask_yes_no = lambda title, msg='', **k: (_rt_said.append(msg), False)[1]
+app.current_attachments = [{'filename': 'a.txt', 'stored_as': 'a.txt'}]
+_rt_store.attached_files_kept.__globals__['_UNREAD_AT_LOAD'].add(NO.DATA_FILE)
+try:
+    app.remove_attachment(0)
+finally:
+    _rt_store.attached_files_kept.__globals__['_UNREAD_AT_LOAD'].discard(NO.DATA_FILE)
+    app.ask_yes_no = _rt_asked_was
+    app.current_attachments = []
+check(f"over held settings the Trash dropdown puts the choice back at once, and Remove "
+      f"attachment keeps its promise ({app.trash_retention_var.get()!r}, {_rt_toasts}, "
+      f"{(_rt_said or [''])[-1][-70:]!r})",
+      str(app.trash_retention_var.get()) == '7 days' and NO.trash_retention_days() == 7
+      and any('once Note Organizer is opened again' in t for t in _rt_toasts)
+      and bool(_rt_said) and 'stays on the disk' in _rt_said[-1]
+      and "can't be undone" not in _rt_said[-1])
 
 
 def _rt_row_lines():
@@ -2984,6 +3012,21 @@ check(f'the welcome note brought back under Show is on the list it opens over '
       f'({app.filter_var.get()!r}, {_wn_id}, {app.selected_note_id})',
       app.filter_var.get() == 'All' and _wn_id is not None and app.selected_note_id == _wn_id)
 app.filter_var.set('All')
+app.notes = _wn_notes; app.save_notes(); app.new_note(); app.update()
+# ...and over a settings file that refuses its uid, a second Show opens the one
+# the first brought back: every press added another welcome note.
+_wn_settings = NO.load_settings(); _wn_settings.pop('welcome_note_uid', None); NO.save_settings(_wn_settings)
+app.__dict__.pop('_welcome_uid_run', None)
+_wn_save_was = NO.save_setting
+NO.save_setting = lambda *a, **k: False
+try:
+    app.show_welcome_note(); app.update()
+    app.show_welcome_note(); app.update()
+    _wn_count = sum(1 for n in app.notes if n.get('title') == app.find_note(app.selected_note_id).get('title'))
+finally:
+    NO.save_setting = _wn_save_was
+check(f"over a settings file that refuses its uid, a second Show opens the same welcome note ({_wn_count})",
+      _wn_count == 1)
 app.notes = _wn_notes; app.save_notes(); app.new_note(); app.update()
 
 # A long category name is cut with "…" in the note's category list and on
