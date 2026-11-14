@@ -6365,6 +6365,19 @@ finally:
     NO._core_paths.WRITES_HELD.discard(os.path.normcase(os.path.abspath(NO.TRASH_FILE)))
 check(f"over a held Trash a backup's trashed notes are not said to bring more ({_rf_free}, {_rf_held})",
       _rf_free is True and _rf_held is False)
+# ...nor over held settings (none comes in, the length not known), nor a template over a held
+# templates file (put back, said unwritten): Skip promised "the rest" of nothing.
+_rf_more = {}
+for _rf_path, _rf_state in ((NO.SETTINGS_FILE, {'imported_trash': [_rf_new]}),
+                            (NO.TEMPLATES_FILE, {'imported_templates': [{'name': 'Qa weekly'}]})):
+    _rf_open = app._backup_brings_more(_rf_state, [])
+    NO._core_paths.hold_writes(_rf_path)
+    try:
+        _rf_more[os.path.basename(_rf_path)] = (_rf_open, app._backup_brings_more(_rf_state, []))
+    finally:
+        NO._core_paths.WRITES_HELD.discard(os.path.normcase(os.path.abspath(_rf_path)))
+check(f"over held settings or a held templates file a backup is not said to bring more ({_rf_more})",
+      _rf_more == {'settings.json': (True, False), 'templates.json': (True, False)})
 app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
 
 # A backup's note whose file is held by this Trash came in on a copy of it; matched by its

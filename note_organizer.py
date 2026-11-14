@@ -10980,8 +10980,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if added_names:
             return True
         names = {t.get("name") for t in self.templates}
-        if any(isinstance(t, dict) and t.get("name") and t.get("name") not in names
-               for t in state.get("imported_templates") or []):
+        # Over a held templates file the merge brings none either (put back, said unwritten).
+        if not _core_paths.writes_held(TEMPLATES_FILE) and any(
+                isinstance(t, dict) and t.get("name") and t.get("name") not in names
+                for t in state.get("imported_templates") or []):
             return True
         here = {content_signature(normalize_note(e)) for e in self.trash if isinstance(e, dict)}
         # Known as the merge knows it: one on a copy of a file brought "the rest" that was nothing,
