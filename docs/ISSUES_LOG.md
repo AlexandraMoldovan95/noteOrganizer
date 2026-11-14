@@ -4953,13 +4953,22 @@ qa suite calls the app's own functions far more than it presses controls, so the
 on 14 November what a walked step is: a check walks a step when it presses the control or its
 key, or runs the very command that control runs; a case is "in part" where the check stubs a
 question the case reads, seeds a state the case makes, skips a step or leaves a result unread.
-By that rule ninety-three of the 102 say "Automated in part" now and name what the checks are
+By that rule ninety-seven of the 172 say "Automated in part" now and name what the checks are
 known not to reach (a card or a cell no check reads, a question stubbed, a selection or a fold
 seeded, a step skipped); the rest, short only of the press, stay whole. Seven said more than
 their checks do in so many words (2 "read back off the note list", 19 "under 5s" for a bound of
 30, 36 "the section's own button", 71 "asked once" where none passes too, 369 "the real import
 box", 377 "presses both shortcuts", 407 the travel story's keys), and say what is true; the How
 to use tab states the rule.
+
+**The forty-sixth round** read the cases 450 to 799 still called whole a second time, by the
+owner's rule, and found the most of them short of it: the checks answer the steps' questions in
+code (Yes, "Only this day", the scope), lay in code the states the steps make (an order, a
+selection, a tick, a style, a banner), stand in for a step (the autosave's call for leaving the
+note, the stored copy read for Restore previous pressed), or leave a result unread. Ninety-two
+more say "Automated in part" now and name what the checks are known not to reach; 377's question
+title, 995's delete and typing, 571's "pixels", 690's "types a search" and 536's "real Ctrl+X"
+say what is true.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays
