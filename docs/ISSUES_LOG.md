@@ -4762,6 +4762,17 @@ one case backwards (corrected above). Left, with its reason: a hand-edited templ
 or day marks on a date that does not exist, are counted by the question differently from what
 the merge takes (only hand-edited files reach it; nothing is lost).
 
+The phone's twenty-eighth round, reading this app for parity, then found a medium here, so the
+loop opened again: one import that updates a note and skips a look-alike of that note as
+updated (edit a note on the other computer, Duplicate it, attach a photo to the copy, back it up)
+dropped the photo. The question about look-alikes asks of the notebook the updates will leave,
+but the note each one looks like was found in the notebook before them, so there was none; the
+phone, finding it after, gave the photo to the updated note. The note each key finds is now
+worked out as the updates will leave it (`_twins_after`), the first in the file winning as on
+the phone (the desktop gave a file to the last of two look-alikes, the phone to the first;
+SN162), and the files go after the updates, so a file an update brings is not given twice and
+the counts are the phone's (SN161). The backup still held the photo; nothing else was lost.
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.
 

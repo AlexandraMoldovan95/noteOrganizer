@@ -16541,8 +16541,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                    files_given += len(self._files_to_adopt(twin, n))\n                    self._adopt_backup_attachments(twin, n)\n",
-        "replace": "                    files_given += len(self._files_to_adopt(twin, n))\n"
+        "find": "                files_given += len(self._files_to_adopt(twin, n))\n                self._adopt_backup_attachments(twin, n)\n",
+        "replace": "                files_given += len(self._files_to_adopt(twin, n))\n"
       }
     ],
     "must_fail": [
@@ -16882,7 +16882,7 @@
     "id": "WS117",
     "about": "A skipped look-alike's files given to the note open in the editor are put back out by its next save",
     "edits": [{"file": "note_organizer.py",
-               "find": "                self._editor_follows_external_change({twin.get(\"id\") for twin, _n in adopting})\n",
+               "find": "            self._editor_follows_external_change({twin.get(\"id\") for twin, _n in adopting})\n",
                "replace": ""}],
     "must_fail": ["...and to the note open in the editor, still there once it is left"],
     "suites": ["qa3"],
@@ -19465,6 +19465,26 @@
                "find": "        if not _core_paths.writes_held(TEMPLATES_FILE) and any(\n",
                "replace": "        if any(\n"}],
     "must_fail": ["over held settings or a held templates file a backup is not said to bring more"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN161",
+    "about": "A skipped look-alike's twin looked for before the updates: a look-alike of a note as updated drops its file",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            twins.setdefault(_dup_key(normalize_note(theirs)) if theirs is not None else _dup_key(n), n)\n",
+               "replace": "            twins.setdefault(_dup_key(n), n)\n"}],
+    "must_fail": ["...and a skipped look-alike of the note as the Update leaves it gives that note its file"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN162",
+    "about": "Of two look-alikes here the last takes a skipped one's file, where the phone gives it to the first",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            twins.setdefault(_dup_key(normalize_note(theirs)) if theirs is not None else _dup_key(n), n)\n",
+               "replace": "            twins.__setitem__(_dup_key(normalize_note(theirs)) if theirs is not None else _dup_key(n), n)\n"}],
+    "must_fail": ["...and of two look-alikes here the first in the file takes the file"],
     "suites": ["qa3"],
     "expect": "killed"
   }
