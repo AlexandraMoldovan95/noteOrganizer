@@ -5049,7 +5049,7 @@ try:
     _xs_refused_was = getattr(app, '_notes_file_refused', False)
     for _xs_case, _xs_report, _xs_refused, _xs_held in (
             ('held', '', True, True), ('copied', 'notes_data_corrupt_qa3.json', False, False),
-            ('not copied', '', False, True)):
+            ('not copied', '', False, True), ('older notebook', None, False, True)):
         _xs_got = []
         app.show_info = lambda *a, **k: _xs_got.append(' '.join(map(str, a)))
         app._corrupt_notes_report, app._notes_file_refused = _xs_report, _xs_refused
@@ -5066,11 +5066,12 @@ try:
             app.show_info = _xs_info
         _xs_got = ' '.join(_xs_got)
         _xs_words[_xs_case] = ('open it again' in _xs_got, 'copy kept aside' in _xs_got,
-                               'will not bring those notes back' in _xs_got)
+                               'will not bring those notes back' in _xs_got
+                               and 'Import brings them in' in _xs_got)
     check(f"...and its advice is true of how the notes file was lost: reopen for one held, "
           f"never for one damaged ({_xs_words})",
           _xs_words == {'held': (True, False, False), 'copied': (False, True, False),
-                        'not copied': (False, False, True)})
+                        'not copied': (False, False, True), 'older notebook': (True, False, False)})
 finally:
     os.rmdir(NO.DATA_FILE + '.tmp')
     app.show_error, app.show_info = _xf_real
@@ -6105,9 +6106,17 @@ _tc_backup = dict(_tw_backup, **{
         {'id': 8, 'uid': 'tc-8', 'title': 'Twin', 'body': 'same', 'deleted_at': _tr_days_ago(200)},
         {'id': 9, 'uid': 'tc-9', 'title': 'Twin', 'body': 'same', 'deleted_at': _tr_days_ago(2)},
         {'id': 10, 'uid': 'tc-10', 'title': 'Shed', 'body': 'y', 'category': 'OnlyInTrash',
-         'deleted_at': _tr_days_ago(3)}]).encode(),
-    'settings.json': json.dumps({'app_version': '0.97.405'}).encode()})
-NO.CATEGORY_COLORS.pop('OnlyInTrash', None); NO.persist_categories()
+         'deleted_at': _tr_days_ago(3)},
+        # Twins under a category it adopts: signed under General before it, both came in.
+        {'id': 11, 'uid': 'tc-11', 'title': 'Pair', 'body': 'p', 'category': 'QaPairCat',
+         'deleted_at': _tr_days_ago(4)},
+        {'id': 12, 'uid': 'tc-12', 'title': 'Pair', 'body': 'p', 'category': 'QaPairCat',
+         'deleted_at': _tr_days_ago(5)}]).encode(),
+    # The long name refused in its settings and on its note: counted once.
+    'settings.json': json.dumps({'app_version': '0.97.405',
+                                 'categories': {_tc_long: '#3a7d44'}}).encode()})
+NO.CATEGORY_COLORS.pop('OnlyInTrash', None); NO.CATEGORY_COLORS.pop('QaPairCat', None)
+NO.persist_categories()
 _tc_settings = NO.load_settings()
 _tc_window_was = _tc_settings.pop('trash_retention_days', None)   # this computer's 30 days
 NO.save_settings(_tc_settings)
@@ -6130,11 +6139,92 @@ check(f"a backup's trashed note keeps a category only the Trash uses, the newer 
       f"{_tc_trash.get('Shed', {}).get('category')!r}; {_tc_msgs[-260:]!r})",
       _tc_trash.get('Shed', {}).get('category') == 'OnlyInTrash' and 'OnlyInTrash' in _tc_saved
       and 'Twin' in _tc_trash and "1 of the backup's trashed note(s) were not brought in" in _tc_msgs
-      and "1 of the backup's categories could not be added" in _tc_msgs)
-NO.CATEGORY_COLORS.pop('OnlyInTrash', None); NO.persist_categories()
+      and "1 of the backup's categories could not be added" in _tc_msgs
+      and [e.get('category') for e in app.trash if e.get('title') == 'Pair'] == ['QaPairCat'])
+NO.CATEGORY_COLORS.pop('OnlyInTrash', None); NO.CATEGORY_COLORS.pop('QaPairCat', None)
+NO.persist_categories()
 if _tc_window_was is not None:
     NO.choose_trash_window(_tc_window_was)
 app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
+
+# The map written again after the Trash, landed, takes back the first write's refusal: it
+# writes the whole map. "The categories could not be written" stood over a file holding them.
+_mw_backup = dict(_tw_backup, **{
+    'notes_data.json': json.dumps([{'title': 'Peas', 'body': 'x', 'category': 'QaFirstCat'}]).encode(),
+    'trash.json': json.dumps([{'id': 13, 'uid': 'mw-13', 'title': 'Hoe', 'body': 'h',
+                               'category': 'QaSecondCat', 'deleted_at': _tr_days_ago(2)}]).encode(),
+    'settings.json': json.dumps({'app_version': '0.97.405'}).encode()})
+_mw_calls, _mw_persist_was = [], NO.persist_categories
+NO.persist_categories = lambda: (_mw_calls.append(1), len(_mw_calls) > 1 and _mw_persist_was())[1]
+_mw_ask_was, _mw_info_was = app.__dict__.get('ask_yes_no'), app.__dict__.get('show_info')
+_mw_infos = []
+app.ask_yes_no = lambda *a, **k: True
+app.show_info = lambda title, msg='', *a, **k: _mw_infos.append((title, msg))
+try:
+    _mw_msgs = ' '.join(m for _t, m in _dz_import(_mw_backup) + _mw_infos)
+finally:
+    NO.persist_categories = _mw_persist_was
+    for _mw_name, _mw_was in (('ask_yes_no', _mw_ask_was), ('show_info', _mw_info_was)):
+        if _mw_was is None:
+            app.__dict__.pop(_mw_name, None)
+        else:
+            setattr(app, _mw_name, _mw_was)
+_mw_saved = NO.load_settings().get('categories') or {}
+check(f"a backup's categories written by the map's second write are not said unwritten "
+      f"({len(_mw_calls)} writes; {_mw_msgs[-160:]!r})",
+      len(_mw_calls) == 2 and 'categories could not be written' not in _mw_msgs
+      and 'QaFirstCat' in _mw_saved and 'QaSecondCat' in _mw_saved)
+for _mw_cat in ('QaFirstCat', 'QaSecondCat'):
+    NO.CATEGORY_COLORS.pop(_mw_cat, None)
+NO.persist_categories()
+app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
+
+# A category renamed or deleted over settings held this run moved every note, then the
+# map's write was refused: the old name came back empty at the next start, a deleted one too.
+NO.CATEGORY_COLORS['QaHeldCat'] = '#3a7d44'; NO.persist_categories()
+app.notes = [NO.normalize_note({'id': 9301, 'title': 'Held cat', 'body': 'x', 'category': 'QaHeldCat'})]
+app.save_notes()
+_hc_warned = []
+_hc_patched = ('show_warning', '_show_inline_rename', '_ask_category_deletion', 'ask_yes_no')
+_hc_was = {_hc_name: app.__dict__.get(_hc_name) for _hc_name in _hc_patched}
+app.show_warning = lambda title, *a, **k: _hc_warned.append(title)
+app._show_inline_rename = lambda _anchor, _default, on_name, **_limit: on_name('QaHeldCat2')
+# Asked nothing when refused; answered here should a broken guard ask (it would wait for a click).
+app._ask_category_deletion = lambda *a, **k: 'move'
+app.ask_yes_no = lambda *a, **k: True
+_hc_frame = tk.Frame(app)
+_hc_frame.pack()
+
+
+def _hc_walk(widget):
+    yield widget
+    for child in widget.winfo_children():
+        yield from _hc_walk(child)
+
+
+NO._core_paths.hold_writes(NO.SETTINGS_FILE)
+try:
+    app._delete_category('QaHeldCat', lambda: None)
+    app._build_category_row(_hc_frame, 'QaHeldCat', lambda: None)
+    app.update()
+    _hc_pencil = next(w for w in _hc_walk(_hc_frame) if getattr(w, '_icon_kind', None) == 'pencil')
+    _hc_pencil.event_generate('<Button-1>')
+    app.update()
+finally:
+    NO._core_paths.WRITES_HELD.discard(os.path.normcase(os.path.abspath(NO.SETTINGS_FILE)))
+    for _hc_name in _hc_patched:
+        if _hc_was[_hc_name] is None:
+            app.__dict__.pop(_hc_name, None)
+        else:
+            setattr(app, _hc_name, _hc_was[_hc_name])
+    _hc_frame.destroy()
+check(f"over settings held this run a category is neither deleted nor renamed, and that is said "
+      f"({_hc_warned}, {[n.get('category') for n in app.notes]})",
+      _hc_warned == ["Can't delete it now", "Can't rename it now"]
+      and [n.get('category') for n in app.notes] == ['QaHeldCat']
+      and 'QaHeldCat' in NO.CATEGORY_COLORS and 'QaHeldCat2' not in NO.CATEGORY_COLORS)
+NO.CATEGORY_COLORS.pop('QaHeldCat', None); NO.persist_categories()
+app.notes = []; app.save_notes()
 
 # A Trash entry is kept as the file held it, and four readers still read its
 # fields raw: a title of 7 kept Recently deleted from opening, comments or

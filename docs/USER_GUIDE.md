@@ -1069,8 +1069,10 @@ categories, stays out, said, and its notes go under General) and the calendar's 
 marks. The theme, your name, the text size, the list's order and the rest stay as this computer
 has them; so does how long the Trash keeps notes, unless you never chose it here and the
 backup's is longer. A trashed note older than this computer's Trash will keep stays in the
-backup, and the import says so; when this computer's settings could not be read this time, every
-trashed note stays there, as how long they would be kept is not known. Just like
+backup, and the import says so. When Windows would not let Note Organizer open its settings this
+time, every trashed note stays there, as how long they would be kept is not known; when the
+settings were damaged and set aside, the trashed notes come in, and none is removed until you
+choose how long the Trash keeps notes. Just like
 importing a code, you'll be asked
 about any notes that look identical to what you already have before anything is added. Skipped,
 such a note's attached files still come in, onto the note it looks like, as an update's do. A

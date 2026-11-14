@@ -19256,7 +19256,7 @@
     "id": "SN140",
     "about": "Of two twins in a backup's Trash, the older left out takes the newer with it, uncounted",
     "edits": [{"file": "note_organizer.py",
-               "find": "            # Only one brought in is the duplicate's original: an older twin left out\n            # took its newer one, unsaid, with it.\n            existing_trash_keys.add(key)\n",
+               "find": "            existing_trash_keys.add(content_signature(entry))\n",
                "replace": ""},
               {"file": "note_organizer.py",
                "find": "                continue\n            if settings_held or (keep_days is not None\n",
@@ -19272,6 +19272,66 @@
                "find": "        added_names.extend(adopt_categories_of(valid_notes, refused_names))\n",
                "replace": "        added_names.extend(adopt_categories_of(valid_notes))\n"}],
     "must_fail": ["a backup's trashed note keeps a category only the Trash uses"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN142",
+    "about": "A name a backup's settings and its notes both use, refused by a ceiling, is counted twice",
+    "edits": [{"file": "noteorganizer/core/categories.py",
+               "find": "                if refused is not None and name not in refused:\n",
+               "replace": "                if refused is not None:\n"}],
+    "must_fail": ["a backup's trashed note keeps a category only the Trash uses"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN143",
+    "about": "A backup of the session over an older notebook not brought in says reopening brings nothing back",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                damaged = (self._corrupt_notes_report is not None\n",
+               "replace": "                damaged = (True\n"}],
+    "must_fail": ["...and its advice is true of how the notes file was lost"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN144",
+    "about": "Twins in a backup's Trash under a category it adopts both come in, the first signed under General",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            existing_trash_keys.add(content_signature(entry))\n",
+               "replace": "            existing_trash_keys.add(key)\n"}],
+    "must_fail": ["a backup's trashed note keeps a category only the Trash uses"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN145",
+    "about": "A backup's categories the map's second write landed are said not written",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                if \"the categories\" in unwritten:\n                    unwritten.remove(\"the categories\")\n",
+               "replace": "                if False:\n                    pass\n"}],
+    "must_fail": ["a backup's categories written by the map's second write are not said unwritten"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN146",
+    "about": "A category deleted over held settings moves its notes, then the map's write is refused",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "        if paths.writes_held(paths.SETTINGS_FILE):\n            self.show_warning(\"Can't delete it now\", CATEGORIES_HELD_WORDS)\n",
+               "replace": "        if False:\n            self.show_warning(\"Can't delete it now\", CATEGORIES_HELD_WORDS)\n"}],
+    "must_fail": ["over settings held this run a category is neither deleted nor renamed"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN147",
+    "about": "A category renamed over held settings moves its notes, then the map's write is refused",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "                if paths.writes_held(paths.SETTINGS_FILE):\n                    self.show_warning(\"Can't rename it now\", CATEGORIES_HELD_WORDS)\n",
+               "replace": "                if False:\n                    self.show_warning(\"Can't rename it now\", CATEGORIES_HELD_WORDS)\n"}],
+    "must_fail": ["over settings held this run a category is neither deleted nor renamed"],
     "suites": ["qa3"],
     "expect": "killed"
   }

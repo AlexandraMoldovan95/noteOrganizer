@@ -4668,6 +4668,27 @@ or trashed notes beside the line saying they could not be written to disk, true 
 the theme's refused choice is; and day markings taken over held settings show on the calendar
 this run, said not written.
 
+**The twenty-fifth round**, one agent again, found nothing of high severity in the code; its
+medium was a sentence of USER_GUIDE, which said every trashed note stays in the backup when this
+computer's settings "could not be read". True of a settings file Windows would not let the app
+open; of one damaged and set aside, the trashed notes come in, and none is removed until a length
+is chosen. It says both now. The lows: twins in a backup's Trash under a category only the Trash
+uses were signed under General before the name was adopted, and both came in, as the phone's did
+(each is signed as it is kept now, SN144); a name refused both by a backup's settings and on its
+notes could have been counted twice (watched now, SN142); the map written again after the Trash,
+landed, left "the categories could not be written" standing (taken back, SN145); the session-only
+export over a damaged notes file whose copy aside failed no longer pointed to the backup that
+alone holds the session's notes (it says Import brings them in), and its advice for an older
+notebook not brought in had no check (SN143); and, the phone's round showed, a category renamed
+or deleted over settings held this run moved every note before the list of categories was
+refused, so the old name came back empty at the next start, and a deleted one too (refused before
+anything moves now, and said, SN146, SN147; case 1080). Left, each with its reason: a trashed
+note whose category the map's second write failed to keep comes in under that name and, the
+backup imported again, is skipped as already here (restored, it files under General; very rare,
+and nothing is lost); and a name refused by a ceiling on a note that is then skipped as unchanged
+is still counted among those that could not be added (true of the backup; it needs a name over 80
+characters).
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.
 
