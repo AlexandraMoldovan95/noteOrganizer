@@ -266,6 +266,32 @@ from noteorganizer.core.storage import (
 )
 
 
+def _loose_signature(note):
+    """A note's signature with its files' stored names left out, those matched by
+    _same_files instead: one that came in on a copy of a file is the same note."""
+    return content_signature(dict(note, attachments=[
+        dict(a, stored_as="") for a in (note.get("attachments") or []) if isinstance(a, dict)]))
+
+
+def _same_files(one, other):
+    """Whether two notes hold the same files: each pair the same stored name, or the
+    same name shown and the same bytes."""
+    x = [a for a in (one.get("attachments") or []) if isinstance(a, dict)]
+    y = [a for a in (other.get("attachments") or []) if isinstance(a, dict)]
+    return len(x) == len(y) and all(
+        a.get("stored_as") == b.get("stored_as") or same_attached_file(a, b)
+        for a, b in zip(x, y))
+
+
+def _loosely_signed(trash):
+    """This Trash by _loose_signature: the entries each loose signature names."""
+    signed = {}
+    for e in trash:
+        if isinstance(e, dict):
+            signed.setdefault(_loose_signature(normalize_note(e)), []).append(e)
+    return signed
+
+
 def detect_version_change():
     """Compare the version in settings with the running app's, and record
     the running one. ('up', old, new) after an update; None otherwise -- the
@@ -10956,7 +10982,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                for t in state.get("imported_templates") or []):
             return True
         here = {content_signature(normalize_note(e)) for e in self.trash if isinstance(e, dict)}
+        # Known as the merge knows it: one on a copy of a file brought "the rest" that was nothing.
+        loosely = _loosely_signed(self.trash)
         if any(isinstance(e, dict) and content_signature(normalize_note(e)) not in here
+               and not any(_same_files(normalize_note(e), h)
+                           for h in loosely.get(_loose_signature(normalize_note(e)), ()))
                for e in state.get("imported_trash") or []):
             return True
         return any(isinstance(state.get(key), dict)
@@ -10975,11 +11005,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return source == "backup" and bool(self._files_to_adopt(mine, theirs))
 
     def _files_to_adopt(self, mine, theirs):
-        """The attachments a backup's copy of a note has and *mine* lacks."""
-        have = {a.get("stored_as") for a in mine.get("attachments") or []
-                if isinstance(a, dict)}
+        """The attachments a backup's copy of a note has and *mine* lacks: by stored
+        name, or under another one by the name shown and the bytes. A note that came
+        in on a copy of a file was asked about as edited elsewhere at every import,
+        and its Update added one more copy."""
+        own = [a for a in mine.get("attachments") or [] if isinstance(a, dict)]
+        have = {a.get("stored_as") for a in own}
         return [att for att in normalize_note(dict(theirs)).get("attachments") or []
-                if att.get("stored_as") and att.get("stored_as") not in have]
+                if att.get("stored_as") and att.get("stored_as") not in have
+                and not any(same_attached_file(att, a) for a in own)]
 
     def _adopt_backup_attachments(self, mine, theirs):
         """Add the files a backup's copy of a note has and this one lacks --
@@ -12410,24 +12444,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         existing_trash_keys = {content_signature(normalize_note(e))
                                for e in self.trash if isinstance(e, dict)}
 
-        def loose(e):
-            """Its signature, its files' stored names left out (matched by bytes below)."""
-            return content_signature(dict(e, attachments=[
-                dict(a, stored_as="") for a in (e.get("attachments") or []) if isinstance(a, dict)]))
-
-        def same_files(one, other):
-            x = [a for a in (one.get("attachments") or []) if isinstance(a, dict)]
-            y = [a for a in (other.get("attachments") or []) if isinstance(a, dict)]
-            return len(x) == len(y) and all(
-                a.get("stored_as") == b.get("stored_as") or same_attached_file(a, b)
-                for a, b in zip(x, y))
-
         # A backup's trashed note whose file a note here used came in on a copy of it,
         # signed under the copy's name: every import of that backup brought it again.
-        existing_loose = {}
-        for e in self.trash:
-            if isinstance(e, dict):
-                existing_loose.setdefault(loose(normalize_note(e)), []).append(e)
+        existing_loose = _loosely_signed(self.trash)
+        loose, same_files = _loose_signature, _same_files
         for entry in incoming_trash:
             if not isinstance(entry, dict):
                 continue
