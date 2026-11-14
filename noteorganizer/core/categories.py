@@ -92,6 +92,21 @@ def adopt_categories_of(raw_notes, refused=None):
     normalize_note; returns the names added, unsaved."""
     palette = list(DEFAULT_CATEGORY_COLORS.values())
     added = []
+    for name in _unknown_names(raw_notes):
+        if category_name_refusal(name) is not None:
+            if refused is not None and name not in refused:
+                refused.append(name)
+            continue
+        CATEGORY_COLORS[name] = palette[len(CATEGORY_COLORS) % len(palette)]
+        added.append(name)
+    return added
+
+
+def _unknown_names(raw_notes):
+    """The names *raw_notes* (or one day of a series) are filed under that the live map
+    lacks, in order, as adopt_categories_of meets them -- only a name normalize_note
+    would match exactly: it compares the stored string as it is, so a padded name
+    adopted in stripped form would still miss."""
     for note in raw_notes:
         if not isinstance(note, dict):
             continue
@@ -101,16 +116,12 @@ def adopt_categories_of(raw_notes, refused=None):
             names.extend(patch.get("category") for patch in overrides.values()
                          if isinstance(patch, dict))
         for name in names:
-            # Only a name normalize_note would match exactly: it compares
-            # the stored string as it is, so a padded name adopted here in
-            # stripped form would still miss.
-            if (not isinstance(name, str) or not name
-                    or name != name.strip() or name in CATEGORY_COLORS):
-                continue
-            if category_name_refusal(name) is not None:
-                if refused is not None and name not in refused:
-                    refused.append(name)
-                continue
-            CATEGORY_COLORS[name] = palette[len(CATEGORY_COLORS) % len(palette)]
-            added.append(name)
-    return added
+            if isinstance(name, str) and name and name == name.strip() and name not in CATEGORY_COLORS:
+                yield name
+
+
+def would_adopt(raw_notes):
+    """Whether adopt_categories_of would add a name for *raw_notes*, the map left as it
+    is: the import's question whether a backup brings more asks it of the Trash it
+    would take, whose names the merge adopts before it signs."""
+    return any(category_name_refusal(name) is None for name in _unknown_names(raw_notes))

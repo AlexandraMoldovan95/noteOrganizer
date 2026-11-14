@@ -4866,6 +4866,51 @@ _bk_where = [n.get('id') for n in app.notes
              if any(a.get('stored_as') == 'qa3_ic_skip.txt' for a in n.get('attachments') or [])]
 check(f"...and of two look-alikes here the first in the file takes the file ({_bk_asked}, {_bk_where})",
       any('Skip them' in labels for labels in _bk_asked) and _bk_where == [1] and len(app.notes) == 2)
+# ...and the files go after the updates: a photo the update brings and its Duplicate's copy (another
+# stored name, the same bytes) is given once, by the update, which took files alone. Given first,
+# the update read as "Updated 1 ... Restore previous undoes" for a note with no rescue copy.
+for _ic_name in _ic_names:
+    if os.path.exists(_ic_path(_ic_name)):
+        os.remove(_ic_path(_ic_name))
+app.notes = [NO.normalize_note({'id': 1, 'uid': 'bk-known', 'title': 'Trip', 'body': 'plan'})]
+app.save_notes()
+_bk_asked = []
+_bk_said = []
+_bk_real_info = app.show_info
+app.show_info = lambda *a, **k: (_bk_said.append(' '.join(str(x) for x in a)), True)[1]
+_ic_import([{'uid': 'bk-known', 'title': 'Trip', 'body': 'plan',
+             'attachments': [{'filename': 'p.txt', 'stored_as': 'qa3_ic_known.txt'}]},
+            {'title': 'Trip (copy)', 'body': 'plan',
+             'attachments': [{'filename': 'p.txt', 'stored_as': 'qa3_ic_skip.txt'}]}],
+           ['qa3_ic_known.txt', 'qa3_ic_skip.txt'], _bk_answer)
+app.show_info = _bk_real_info
+_bk_files = [a.get('stored_as') for a in (app.find_note(1) or {}).get('attachments') or []]
+check(f"...and a file the update brings is given once, by the update, said as files alone "
+      f"({_bk_asked}, {_bk_files}, {_bk_said[-1:]})",
+      _bk_files == ['qa3_ic_known.txt']
+      and any('1 note(s) you already had took attached files' in s for s in _bk_said)
+      and not any('Updated 1 note(s)' in s or 'went to the notes' in s for s in _bk_said))
+# ...and a note typed into while the question waits (its autosave runs) still takes the file it was
+# offered for: its twin worked out after the question had another key, and the file was dropped.
+for _ic_name in _ic_names:
+    if os.path.exists(_ic_path(_ic_name)):
+        os.remove(_ic_path(_ic_name))
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Trip', 'body': 'plan'})]
+app.save_notes()
+
+
+def _bk_type_then_skip(*a, **k):
+    labels = [label for label, _v in k.get('buttons') or []]
+    app.find_note(1)['body'] = 'plan, and words typed while it asked'
+    return 'skip' if 'Skip them' in labels else 'cancel'
+
+
+_ic_import([{'title': 'Trip', 'body': 'plan',
+             'attachments': [{'name': 'p.txt', 'stored_as': 'qa3_ic_skip.txt'}]}],
+           ['qa3_ic_skip.txt'], _bk_type_then_skip)
+_bk_files = [a.get('stored_as') for a in (app.find_note(1) or {}).get('attachments') or []]
+check(f"...and a note typed into while the question waits still takes the file offered for it ({_bk_files})",
+      _bk_files == ['qa3_ic_skip.txt'])
 for _ic_name in _ic_names:
     if os.path.exists(_ic_path(_ic_name)):
         os.remove(_ic_path(_ic_name))
@@ -6416,6 +6461,29 @@ for _rf_path, _rf_state in ((NO.SETTINGS_FILE, {'imported_trash': [_rf_new]}),
         NO._core_paths.WRITES_HELD.discard(os.path.normcase(os.path.abspath(_rf_path)))
 check(f"over held settings or a held templates file a backup is not said to bring more ({_rf_more})",
       _rf_more == {'settings.json': (True, False), 'templates.json': (True, False)})
+# ...and each part asked as the merge takes it, as the phone's question asks: a template with no
+# name comes in "Untitled template", none past the cap; a trashed note older than this computer
+# keeps stays in the backup; a name only the backup's Trash uses is adopted before it is signed
+# (here beside a General twin); a day's mark only on a real day, in a colour kept.
+_rf_ask = {
+    'unnamed template': {'imported_templates': [{'name': '', 'title': 'x'}]},
+    'trashed long ago': {'imported_trash': [dict(_rf_new, deleted_at=_tr_days_ago(400))]},
+    'no real day': {'imported_day_colors': {'not a day': '#ff0000', '2026-11-14': 'not a colour'}},
+}
+_rf_said = {k: app._backup_brings_more(v, []) for k, v in _rf_ask.items()}
+_rf_templates_was, _rf_trash_was = app.templates, app.trash
+app.templates = [{'name': f'Qa T{_i}'} for _i in range(NO.MAX_TEMPLATES)]
+app.trash = [dict(_rf_new, category='General')]
+try:
+    _rf_said['a template past the cap'] = app._backup_brings_more(
+        {'imported_templates': [{'name': 'Qa new'}]}, [])
+    _rf_said['a name only its Trash uses'] = app._backup_brings_more(
+        {'imported_trash': [dict(_rf_new, category='QaTrashOnly')]}, [])
+finally:
+    app.templates, app.trash = _rf_templates_was, _rf_trash_was
+check(f"the question whether a backup brings more asks each part as the merge takes it ({_rf_said})",
+      _rf_said == {'unnamed template': True, 'trashed long ago': False, 'no real day': False,
+                   'a template past the cap': False, 'a name only its Trash uses': True})
 app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
 
 # A backup's note whose file is held by this Trash came in on a copy of it; matched by its

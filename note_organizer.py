@@ -357,6 +357,7 @@ from noteorganizer.core.categories import (
     load_categories,
     persist_categories,
     category_name_refusal,
+    would_adopt,
     MAX_CATEGORIES,
     MAX_CATEGORY_NAME,
 )
@@ -10987,30 +10988,46 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
     def _backup_brings_more(self, state, added_names):
         """Whether a backup brings anything beside its notes -- a category, a
         template or a Trash entry not here, a day's marks: what Skip goes on
-        with. Unseen, its look-alike question's default Cancel dropped them
+        with, each asked as the merge takes it (the phone's bringsMore asks the
+        same). Unseen, its look-alike question's default Cancel dropped them
         all."""
         if added_names:
             return True
         names = {t.get("name") for t in self.templates}
-        # Over a held templates file the merge brings none either (put back, said unwritten).
-        if not _core_paths.writes_held(TEMPLATES_FILE) and any(
-                isinstance(t, dict) and t.get("name") and t.get("name") not in names
-                for t in state.get("imported_templates") or []):
+        # Over a held templates file the merge brings none either (put back, said unwritten);
+        # shaped as it takes them (one with no name is "Untitled template"), up to the cap.
+        if not _core_paths.writes_held(TEMPLATES_FILE) and len(self.templates) < MAX_TEMPLATES:
+            for tpl in state.get("imported_templates") or []:
+                name = normalize_template(tpl).get("name") if isinstance(tpl, dict) else None
+                if name and name not in names:
+                    return True
+        # Known as the merge knows it: one on a copy of a file brought "the rest" that was nothing,
+        # and over a held Trash or held settings the merge brings none; nor one past the length
+        # this computer keeps the Trash, which stays in the backup.
+        takes_trash = not (_core_paths.writes_held(TRASH_FILE) or _core_paths.writes_held(SETTINGS_FILE))
+        keep_days = trash_retention_days()
+        incoming = [e for e in (state.get("imported_trash") or []) if takes_trash and isinstance(e, dict)
+                    and not (keep_days is not None and trash_entries_past_window([{"deleted_at": (
+                        e.get("deleted_at") if isinstance(e.get("deleted_at"), str) else "")}], keep_days))]
+        # A name only those entries are filed under, adopted by the merge before it signs.
+        if would_adopt(incoming):
             return True
         here = {content_signature(normalize_note(e)) for e in self.trash if isinstance(e, dict)}
-        # Known as the merge knows it: one on a copy of a file brought "the rest" that was nothing,
-        # and over a held Trash or held settings the merge brings none.
         loosely = _loosely_signed(self.trash)
-        takes_trash = not (_core_paths.writes_held(TRASH_FILE) or _core_paths.writes_held(SETTINGS_FILE))
-        if takes_trash and any(isinstance(e, dict) and content_signature(normalize_note(e)) not in here
+        if any(content_signature(normalize_note(e)) not in here
                and not any(_same_files(normalize_note(e), h)
                            for h in loosely.get(_loose_signature(normalize_note(e)), ()))
-               for e in state.get("imported_trash") or []):
+               for e in incoming):
             return True
-        return any(isinstance(state.get(key), dict)
-                   and any(day not in (getattr(self, attr, None) or {}) for day in state.get(key))
-                   for key, attr in (("imported_day_colors", "day_colors"),
-                                     ("imported_day_emoji", "day_emoji")))
+        # A real day with none here, its colour or markers as _take_day_decorations keeps them.
+        for raw, store, clean in ((state.get("imported_day_colors"), self.day_colors, sanitize_color),
+                                  (state.get("imported_day_emoji"), self.day_emoji,
+                                   self._clean_day_markers)):
+            if isinstance(raw, dict) and len(store) < MAX_DAY_DECORATIONS and any(
+                    day not in store and is_calendar_day(day) and clean(value)
+                    for day, value in raw.items()):
+                return True
+        return False
 
     def _known_note_differs(self, mine, theirs, source):
         """Whether importing *theirs* over *mine* would change anything: a
@@ -12291,6 +12308,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._say_import_cancelled()
             return
         existing_keys = self._dup_keys_after(updates)
+        # Taken with the keys: worked out after the question, a note typed into while it
+        # waited (its autosave runs) no longer had the key the skip was decided by.
+        twins = self._twins_after(updates)
         fresh = [n for n in valid_notes if _dup_key(normalize_note(n)) not in existing_keys]
         dupe_count = len(valid_notes) - len(fresh)
         to_import = valid_notes
@@ -12310,7 +12330,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             else:
                 # A look-alike's files its twin lacks are what Skip goes on
                 # with too: offered no Skip, the default Cancel deleted them.
-                twins = self._twins_after(updates)
                 files_too = any(twin is not None and self._files_to_adopt(twin, n) for twin, n in
                                 ((twins.get(_dup_key(normalize_note(n))), n) for n in valid_notes))
                 choice = self._all_lookalike_choice(
@@ -12325,10 +12344,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if choice == "skip":
                 to_import = fresh
                 # A look-alike's files go to the note it looks like: skipped
-                # whole, they were deleted with it.
-                twins = self._twins_after(updates)
-                adopting = [(twins.get(_dup_key(normalize_note(n))), n) for n in valid_notes
-                            if not any(n is f for f in fresh)]
+                # whole, they were deleted with it. Found again by its id: one
+                # deleted while the question waited takes none.
+                adopting = [(self.find_note(twin.get("id")), n) for twin, n in
+                            ((twins.get(_dup_key(normalize_note(n))), n) for n in valid_notes
+                             if not any(n is f for f in fresh)) if twin is not None]
                 # Only those that gain a file: read back for none, the open
                 # note lost its Ctrl+Z and its place.
                 adopting = [(twin, n) for twin, n in adopting
