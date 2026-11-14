@@ -4931,10 +4931,21 @@ fourteen mediums of the kind (562, 592, 613, 619, 633, 634, 640, 660, 706, 708, 
 a summary, a window widened again, a fill or a banner no check reads; a rename re-made inside the
 check rather than pressed in Settings; a note seeded already changed rather than changed in the
 editor; a page of 1,000 rows where the case presses Show more; an export's end put in place by
-hand. Four of them said more than their checks do in so many words (619 named mutants that guard
-other buttons; 633 "walks this end to end"; 640 "a restart" that is a file read back; 560 "each
-form", where qa5 types six). Each says "Automated in part" now and names what is left to the
-hand, as do twenty lows; 239 names the check that round-trips its code at the core.
+hand. Three of them said more than their checks do in so many words (619 named mutants that guard
+other buttons; 633 "walks this end to end"; 640 "a restart" that is a file read back), as did a
+low, 560 ("each form", where qa5 types six). Each says "Automated in part" now and names what is
+left to the hand, as do nineteen lows; 239 names the check that round-trips its code at the core.
+
+**The forty-fourth round** read cases 830 to 1083 (196) against their checks' code and found
+thirty-seven mediums of the kind: steps no check walks (831, 832, 840, 850, 940, 961, 963, 965,
+994, 998, 1004, 1006, 1045, 1047, 1071, 1074, 1076), results no check reads (835, 852, 881, 932,
+969, 975, 1002, 1023, 1029, 1051, 1073, 1075, 1083), and a state the checks seed before the part
+they read (844, 908, 934, 955, 958, 1070); and 995's expected result promised Ctrl+Z undoes typing
+in a title, which keeps no undo. Each says "Automated in part" now and names what the checks are
+known not to reach, as do the lows (102 rows in all); 995 expects what the app does. The How to
+use tab and the excerpt now say "Automated in part" names what the checks are known not to
+reach, and the hand check walks the case whole: a list of what is left can be shown incomplete,
+never complete, so it no longer promises to be whole.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays
