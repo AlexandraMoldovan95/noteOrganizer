@@ -3280,7 +3280,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                if att.get(\"stored_as\") and att.get(\"stored_as\") not in have]\n",
+        "find": "                if att.get(\"stored_as\") and att.get(\"stored_as\") not in have\n                and not any(same_attached_file(att, a) for a in own)]\n",
         "replace": "                if att.get(\"stored_as\")]\n"
       },
       {
@@ -19299,8 +19299,8 @@
     "id": "SN144",
     "about": "This Trash signed before a backup's names are adopted: one already here under such a name comes again",
     "edits": [{"file": "note_organizer.py",
-               "find": "        existing_trash_keys = {content_signature(normalize_note(e))\n                               for e in self.trash if isinstance(e, dict)}\n\n        def loose(e):\n",
-               "replace": "\n        def loose(e):\n"},
+               "find": "        existing_trash_keys = {content_signature(normalize_note(e))\n                               for e in self.trash if isinstance(e, dict)}\n\n        # A backup's trashed note whose file a note here used came in on a copy of it,\n",
+               "replace": "\n        # A backup's trashed note whose file a note here used came in on a copy of it,\n"},
               {"file": "note_organizer.py",
                "find": "        trash_left_out = 0\n        settings_held = _core_paths.writes_held(SETTINGS_FILE)\n",
                "replace": "        existing_trash_keys = {content_signature(normalize_note(e))\n                               for e in self.trash if isinstance(e, dict)}\n        trash_left_out = 0\n        settings_held = _core_paths.writes_held(SETTINGS_FILE)\n"}],
@@ -19405,6 +19405,26 @@
                "find": "            if key in existing_trash_keys or any(\n                    same_files(entry, e) for e in existing_loose.get(loose(entry), ())):\n",
                "replace": "            if key in existing_trash_keys:\n"}],
     "must_fail": ["a backup's trashed note on a copy of a file a note here uses is not brought in again"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN155",
+    "about": "A backup's note that came in on a copy of a file is asked about as edited elsewhere at every import, and given another copy",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                and not any(same_attached_file(att, a) for a in own)]\n",
+               "replace": "                ]\n"}],
+    "must_fail": ["a backup's note that came in on a copy of a file is not asked about again"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN156",
+    "about": "A backup whose only trashed note is here on a copy of its file is said to bring more",
+    "edits": [{"file": "note_organizer.py",
+               "find": "               and not any(_same_files(normalize_note(e), h)\n                           for h in loosely.get(_loose_signature(normalize_note(e)), ()))\n",
+               "replace": ""}],
+    "must_fail": ["a backup whose only trashed note is here on a copy of its file brings nothing more"],
     "suites": ["qa3"],
     "expect": "killed"
   }

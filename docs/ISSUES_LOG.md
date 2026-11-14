@@ -4718,11 +4718,25 @@ the refusal alone (SN151); and a delete whose notes the Trash refuses, putting t
 the length's filter on a backup's trashed notes' categories had no check (SN152, SN153). Left,
 each with its reason: after the list lands, a refused write of the notes, the Trash or the
 templates leaves that file with the old name until its next save lands, said by the save's own
-words (the phone puts every holder back instead; nothing is lost either way); at a start, a name
+words (the phone puts every holder back instead, but for a delete that has already sent its notes
+to the Trash; nothing is lost either way); at a start, a name
 past the ceilings goes to General as it always has, only a newer version raising them would
 meet it; and a day's own category, put back by "Day removed"'s Undo after that category was
 deleted meanwhile, brings the name back, as it does on the phone (seconds-wide, and no note is
 lost).
+
+**The twenty-eighth round**, one agent, found the twenty-seventh's medium again on the notes'
+road, also older than the wave: a backup's note whose file this Trash held came in on a copy of
+it, and at the next import, matched by its identity, its files were compared by stored name, so
+it was asked about as "edited elsewhere" at every import and each Update added one more copy.
+A file is lacking now only when no file of the note here has its stored name, or its shown name
+and bytes (SN155). The lows: the question whether a backup of look-alikes brings anything more
+still asked by stored name, offering "the rest of this import" of nothing (SN156); and SN144 had
+no case to fail, its road needing a twin under General beside one here under a name the map
+lacked (the check has that twin now). Left, each with its reason: a file opened from its note and
+saved over in another program, or read refused for a moment, makes the next import bring the
+Trash entry again on another copy (the bytes no longer match; nothing is lost); and the bytes are
+compared on the window's own thread after the progress bar, slow only for very large files.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.

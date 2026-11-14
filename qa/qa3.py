@@ -6275,6 +6275,8 @@ _sg_backup = dict(_tw_backup, **{
          'deleted_at': _tr_days_ago(2)},
         {'id': 24, 'uid': 'sg-h', 'title': 'Here', 'body': 'h', 'category': 'QaSigned',
          'deleted_at': _tr_days_ago(1)},
+        # Its General twin is another note: this Trash signed before the adoption took it for one.
+        {'id': 26, 'uid': 'sg-hg', 'title': 'Here', 'body': 'h', 'deleted_at': _tr_days_ago(1)},
         # Left in the backup by the length: its category is not adopted, an empty one said restored.
         {'id': 25, 'uid': 'sg-o', 'title': 'Long gone', 'body': 'g', 'category': 'QaOldCat',
          'deleted_at': _tr_days_ago(400)}]).encode(),
@@ -6294,7 +6296,7 @@ _sg_trash = sorted((e.get('title'), e.get('category')) for e in app.trash)
 check(f"a backup's trashed notes are signed under the names they are kept by: a twin under "
       f"another name comes in, one already here does not come again, and one left out adopts "
       f"nothing ({_sg_trash}, {'QaOldCat' in NO.CATEGORY_COLORS})",
-      _sg_trash == [('Here', 'QaSigned'), ('Pea', 'General'), ('Pea', 'QaSigned')]
+      _sg_trash == [('Here', 'General'), ('Here', 'QaSigned'), ('Pea', 'General'), ('Pea', 'QaSigned')]
       and 'QaOldCat' not in NO.CATEGORY_COLORS)
 NO.CATEGORY_COLORS.pop('QaSigned', None); NO.CATEGORY_COLORS.pop('QaOldCat', None)
 NO.persist_categories()
@@ -6332,6 +6334,46 @@ _rf_again = sum(1 for e in app.trash if e.get('title') == 'Recipe')
 check(f"a backup's trashed note on a copy of a file a note here uses is not brought in again by "
       f"a second import ({_rf_first}, {_rf_again})",
       _rf_first == 1 and _rf_again == 1)
+# ...and the question whether a backup of look-alikes brings anything more knows it the same way:
+# "the rest of this import still happens" was said of nothing.
+_rf_entry = json.loads(_rf_backup['trash.json'].decode())[0]
+check(f"a backup whose only trashed note is here on a copy of its file brings nothing more "
+      f"({app._backup_brings_more({'imported_trash': [_rf_entry]}, [])})",
+      app._backup_brings_more({'imported_trash': [_rf_entry]}, []) is False)
+app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
+
+# A backup's note whose file is held by this Trash came in on a copy of it; matched by its
+# identity at the next import, its files were compared by stored name, so it was asked about
+# as "edited elsewhere" at every import, and each Update added one more copy.
+_nf_name = '20261114130000000000_n.pdf'
+with open(os.path.join(NO.ATTACHMENTS_DIR, _nf_name), 'wb') as _fh:
+    _fh.write(b'qa3 note file')
+app.trash = [{'id': 41, 'uid': 'nf-t', 'title': 'Gone', 'body': 'g', 'deleted_at': _tr_days_ago(1),
+              'attachments': [{'stored_as': _nf_name, 'filename': 'n.pdf'}]}]
+NO.save_trash(app.trash)
+_nf_backup = dict(_tw_backup, **{
+    'notes_data.json': json.dumps([{'id': 42, 'uid': 'nf-n', 'title': 'Kept', 'body': 'k',
+                                    'attachments': [{'stored_as': _nf_name, 'filename': 'n.pdf'}]}]).encode(),
+    'trash.json': json.dumps([]).encode(),
+    'attachments/' + _nf_name: b'qa3 note file',
+    'settings.json': json.dumps({'app_version': '0.97.405'}).encode()})
+_nf_ask_was, _nf_info_was = app.__dict__.get('ask_yes_no'), app.__dict__.get('show_info')
+app.ask_yes_no = lambda *a, **k: True
+app.show_info = lambda *a, **k: None
+try:
+    _dz_import(_nf_backup)
+    _nf_said = _dz_import(_nf_backup)
+finally:
+    for _nf_name_was, _nf_was in (('ask_yes_no', _nf_ask_was), ('show_info', _nf_info_was)):
+        if _nf_was is None:
+            app.__dict__.pop(_nf_name_was, None)
+        else:
+            setattr(app, _nf_name_was, _nf_was)
+_nf_note = next((n for n in app.notes if n.get('uid') == 'nf-n'), {})
+_nf_files = [a.get('filename') for a in _nf_note.get('attachments') or []]
+check(f"a backup's note that came in on a copy of a file is not asked about again, nor given "
+      f"another copy ({_nf_files}; {[t for t, _m in _nf_said]})",
+      _nf_files == ['n.pdf'] and not any('edited elsewhere' in (t + m) for t, m in _nf_said))
 app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
 
 # A Trash entry is kept as the file held it, and four readers still read its
