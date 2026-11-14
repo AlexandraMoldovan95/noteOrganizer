@@ -4536,8 +4536,8 @@ settings each time, and, the copy aside failing, bringing its Trash under this f
 put-back's own word within a frame; it says the file was not saved, so nobody is misled.
 
 **The nineteenth round** found nothing of medium severity either, the second such round in a row,
-which by the owner's rule ends the desktop's loop; its lows were fixed and given a round of
-their own to be attacked. Its second reader checked every claim of rounds one to eighteen
+which by the owner's rule would have ended the desktop's loop; its lows were fixed and given a
+round of their own to be attacked, which reopened it (below). Its second reader checked every claim of rounds one to eighteen
 against the code and found all of them still true; both readers found the neighbours of the
 eighteenth's fixes. The re-ask after Update's flush now also asks again when that flush made
 the backup's version OLDER, or made a rescue copy the Update would replace, and a share code's
@@ -4545,8 +4545,9 @@ Update the same (SN93, SN94, SN95); Remove attachment no longer promises a store
 run that keeps every file (SN96); over a held settings file, the Trash window's dropdown puts the
 choice back at once instead of asking first and refusing after (SN97), the welcome note's Show
 opens the one it brought back instead of adding another (SN98), and the start's line names no
-one cause where three can hold the file; Restore previous and a share code's Update leave
-"Not saved" standing over a refused write; and the old notebook's templates still come in when
+one cause where three can hold the file; Restore previous and a share code's Update were to
+leave "Not saved" standing over a refused write (the editor's reload wrote over it, found by the
+twentieth round); and the old notebook's templates still come in when
 only its Trash must wait (SN99). Left: from source only, the reclaim's own road (case 1) still
 brings an old Trash in when this folder's settings could not be copied aside; the built app never
 takes that road.
@@ -4559,6 +4560,23 @@ moment) a good notes file was set aside, the app started empty, and its first sa
 good file. A refused read holds those three as well now, never copying them aside, and the start
 says another program may be holding the file (SN100). Rare (the hold has to end between the third
 try and the copy), but the same mechanism the phone had just fixed, so fixed here too.
+
+**The twentieth round**, attacking the nineteenth's fixes, found one of high severity on a rare
+road, so the loop goes on. With the Trash file held at the start (its read refused three times,
+the rule above), the Trash shows empty, so a shorter "Keep deleted notes for" asked nothing, and
+the next start removed the old notes and their attached files without a word. A failed copy
+aside led there before; since the rule above, every refused Trash read did. While the Trash is
+held its length cannot be changed now: the choice is put back at once, with the reason (SN101).
+The lows: the editor's reload wrote "Last updated" over Restore previous's "Not saved", and
+every other change that writes the notes and then says what it did (Pin, Duplicate, Move, Put
+back, the code and backup imports among them) said it over a refused write; each says "Not
+saved" there now, and a check reads the source so that no method can throw the save's answer
+away and then speak (SN102, SN103, SN104). A welcome note uid that is not text stopped Show
+(SN108); a number of more than 4,300 digits in the notes, Trash or templates file stopped the
+start instead of being copied aside as damage (SN105); and the Trash and the templates held
+after a refused read had no check (SN106, SN107). Left: a toast with an Undo ("Day moved", "Note
+moved to Trash") still shows over a refused write; a toast does not take the status line's
+place, and that line says "Not saved" beside it.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.

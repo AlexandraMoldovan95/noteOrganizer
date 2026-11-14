@@ -175,8 +175,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/paths.py",
-        "find": "JSON_UNREADABLE = (json.JSONDecodeError, UnicodeDecodeError, RecursionError)\n",
-        "replace": "JSON_UNREADABLE = (json.JSONDecodeError, UnicodeDecodeError)\n"
+        "find": "JSON_UNREADABLE = (json.JSONDecodeError, UnicodeDecodeError, ValueError,\n                   RecursionError)\n",
+        "replace": "JSON_UNREADABLE = (json.JSONDecodeError, UnicodeDecodeError, ValueError)\n"
       }
     ],
     "must_fail": [
@@ -194,7 +194,7 @@
     "edits": [
       {
         "file": "noteorganizer/core/paths.py",
-        "find": "JSON_UNREADABLE = (json.JSONDecodeError, UnicodeDecodeError, RecursionError)\n",
+        "find": "JSON_UNREADABLE = (json.JSONDecodeError, UnicodeDecodeError, ValueError,\n                   RecursionError)\n",
         "replace": "JSON_UNREADABLE = (json.JSONDecodeError, RecursionError)\n"
       }
     ],
@@ -5158,8 +5158,8 @@
     "id": "MN04",
     "about": "pinning a note rebuilds the whole list, every row above a deep view",
     "edits": [{"file": "note_organizer.py",
-               "find": "        self._show_note_moved(real[\"id\"])\n        self.set_status(\"Pinned to top\"",
-               "replace": "        self.refresh_note_list()\n        self.set_status(\"Pinned to top\""}],
+               "find": "        self._show_note_moved(real[\"id\"])\n        self._say_if_saved(written, \"Pinned to top\"",
+               "replace": "        self.refresh_note_list()\n        self._say_if_saved(written, \"Pinned to top\""}],
     "must_fail": ["pinning a note from the end of the list redraws its card alone"],
     "suites": ["qa4"],
     "expect": "killed"
@@ -8502,8 +8502,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        if _core_paths.writes_held(DATA_FILE):\n            # A held run saves nothing, so \"make a change\" is false there: said\n",
-        "replace": "        if False:\n            # A held run saves nothing, so \"make a change\" is false there: said\n"
+        "find": "        if _core_paths.writes_held(DATA_FILE):\n            # A held run saves nothing, so \"make a change\" is false there: the\n",
+        "replace": "        if False:\n            # A held run saves nothing, so \"make a change\" is false there: the\n"
       }
     ],
     "must_fail": [
@@ -8538,8 +8538,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "        if getattr(self, \"_ending_session\", False):\n            return False\n        if _core_paths.writes_held(DATA_FILE):\n",
-        "replace": "        if _core_paths.writes_held(DATA_FILE):\n"
+        "find": "        if getattr(self, \"_ending_session\", False):\n            return False\n        # Every refused write says so on the status line, over a save's\n",
+        "replace": "        # Every refused write says so on the status line, over a save's\n"
       }
     ],
     "must_fail": [
@@ -9312,8 +9312,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "            self.set_status(\"Not saved — nothing is saved in this session; \"\n                            \"Settings → Backup → Export keeps what you wrote\")\n            if getattr(self, \"_held_save_said\", False):\n                return False\n",
-        "replace": "            if getattr(self, \"_held_save_said\", False):\n                self.set_status(\"Not saved — nothing is saved in this session; \"\n                                \"Settings → Backup → Export keeps what you wrote\")\n                return False\n"
+        "find": "        self._say_not_saved()\n        if _core_paths.writes_held(DATA_FILE):\n",
+        "replace": "        if _core_paths.writes_held(DATA_FILE) and getattr(self, \"_held_save_said\", False):\n            self._say_not_saved()\n        if _core_paths.writes_held(DATA_FILE):\n"
       }
     ],
     "must_fail": [
@@ -18527,8 +18527,8 @@
     "id": "SN68",
     "about": "A save the disk refused keeps Saved at on the status line under the red banner",
     "edits": [{"file": "note_organizer.py",
-               "find": "        if not written and not _core_paths.writes_held(DATA_FILE):\n            self.set_status(\"Not saved — your notes could not be written\")\n",
-               "replace": ""}],
+               "find": "        self._say_not_saved()\n        if _core_paths.writes_held(DATA_FILE):\n",
+               "replace": "        if _core_paths.writes_held(DATA_FILE):\n            self._say_not_saved()\n"}],
     "must_fail": ["a save the disk refuses says Not saved on the status line"],
     "suites": ["qa6"],
     "expect": "killed"
@@ -18819,8 +18819,8 @@
     "id": "SN97",
     "about": "Over held settings the Trash dropdown asks first and refuses after",
     "edits": [{"file": "noteorganizer/ui/settings_page.py",
-               "find": "            if paths.writes_held(paths.SETTINGS_FILE):\n                try:\n                    self.trash_retention_var.set(shown(current))\n",
-               "replace": "            if False:\n                try:\n                    self.trash_retention_var.set(shown(current))\n"}],
+               "find": "            if paths.writes_held(paths.SETTINGS_FILE) or trash_held:\n                try:\n                    self.trash_retention_var.set(shown(current))\n",
+               "replace": "            if trash_held:\n                try:\n                    self.trash_retention_var.set(shown(current))\n"}],
     "must_fail": ["over held settings the Trash dropdown puts the choice back at once"],
     "suites": ["qa6"],
     "expect": "killed"
@@ -18853,6 +18853,87 @@
                "replace": "            raw = None\n"}],
     "must_fail": ["a notes file held at the start is held, never copied aside"],
     "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN101",
+    "about": "Over a held Trash, shown empty, a shorter length is kept unasked and the next start purges",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "            if paths.writes_held(paths.SETTINGS_FILE) or trash_held:\n",
+               "replace": "            if paths.writes_held(paths.SETTINGS_FILE):\n"}],
+    "must_fail": ["over a held Trash file the dropdown keeps no new length"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN102",
+    "about": "A change's own words go on the status line over a refused notes write",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if written:\n            self.set_status(text)\n        else:\n            self._say_not_saved()\n",
+               "replace": "        self.set_status(text)\n"}],
+    "must_fail": ["Restore previous and Pin over a refused write say Not saved"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN103",
+    "about": "Restore previous says it restored over a refused write, after the reload's Last updated",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self._say_if_saved(written,\n                           \"Restored the previous version of the whole note\"\n",
+               "replace": "        self._say_if_saved(True,\n                           \"Restored the previous version of the whole note\"\n"}],
+    "must_fail": ["Restore previous and Pin over a refused write say Not saved"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN104",
+    "about": "Pin throws save_notes' answer away and says Pinned to top over a refused write",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        written = self.save_notes()\n        self._show_note_moved(real[\"id\"])\n        self._say_if_saved(written, \"Pinned to top\" if real[\"pinned\"] else \"Unpinned\")\n",
+               "replace": "        self.save_notes()\n        self._show_note_moved(real[\"id\"])\n        self.set_status(\"Pinned to top\" if real[\"pinned\"] else \"Unpinned\")\n"}],
+    "must_fail": ["Restore previous and Pin over a refused write say Not saved",
+                  "no method sets the status line after a notes write whose answer it threw away"],
+    "suites": ["qa6", "test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN105",
+    "about": "A number of over 4,300 digits in the notes, Trash or templates file stops the start",
+    "edits": [{"file": "noteorganizer/core/paths.py",
+               "find": "JSON_UNREADABLE = (json.JSONDecodeError, UnicodeDecodeError, ValueError,\n                   RecursionError)\n",
+               "replace": "JSON_UNREADABLE = (json.JSONDecodeError, UnicodeDecodeError,\n                   RecursionError)\n"}],
+    "must_fail": ["a number of 5,000 digits reads as a damaged file"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN106",
+    "about": "A Trash file the system refuses at the start is copied aside, not held",
+    "edits": [{"file": "noteorganizer/core/storage.py",
+               "find": "            paths.hold_writes(paths.TRASH_FILE)\n            return []\n",
+               "replace": "            pass\n"}],
+    "must_fail": ["a trash file refused at the start is held, never copied aside"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN107",
+    "about": "A templates file the system refuses at the start is copied aside, not held",
+    "edits": [{"file": "noteorganizer/core/storage.py",
+               "find": "            paths.hold_writes(paths.TEMPLATES_FILE)\n            return []\n",
+               "replace": "            pass\n"}],
+    "must_fail": ["a templates file refused at the start is held, never copied aside"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN108",
+    "about": "A welcome uid that is not text goes into a set, and Show stops with Something went wrong",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        uids = {get_setting(\"welcome_note_uid\", None, expect=str),\n",
+               "replace": "        uids = {load_settings().get(\"welcome_note_uid\"),\n"}],
+    "must_fail": ["a welcome uid that is not text is no uid"],
+    "suites": ["qa6"],
     "expect": "killed"
   }
 ]

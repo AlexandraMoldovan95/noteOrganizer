@@ -1109,9 +1109,11 @@ over that: it preserves the unreadable file beside the original (named
 `notes_data_corrupt_<date>.json`, kept forever), starts with an empty list, and tells you at
 startup exactly what happened and where the preserved copy sits — so you can restore your most
 recent backup while the broken file stays available for repair. The same quiet preserve-aside
-protects the trash, templates and settings files. A file another program holds open when the app
-starts is different: it is not broken, so no copy is made; the app says so, starts with what it
-has, and saves nothing over that file until it is opened again.
+protects the trash, templates and settings files. A file Windows refuses to read when the app
+starts, most often because another program holds it open, is different: no copy is made, the
+notice says another program may be holding it, and the app starts with what it has and saves
+nothing over that file until it is opened again. While the Trash file is held that way, the time
+deleted notes are kept cannot be changed either.
 
 Failed *saves* speak up too: if a data file can't be written (a full disk, a file another program
 holds), an error message names the file instead of pretending the save worked, and a technical

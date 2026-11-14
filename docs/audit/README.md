@@ -322,6 +322,8 @@ totals above are waves 1 to 5's.
 | [r19-desktop.txt](wave6/r19-desktop.txt) | Desktop | 2026-11-13 23:32 | 2 | 0.48 |
 | [r16-phone.txt](wave6/r16-phone.txt) | Phone | 2026-11-13 23:39 | 2 | 0.56 |
 | [r17-phone.txt](wave6/r17-phone.txt) | Phone | 2026-11-14 00:09 | 2 | 0.46 |
+| [r20-desktop.txt](wave6/r20-desktop.txt) | Desktop | 2026-11-14 00:51 | 1 | 0.22 |
+| [r18-phone.txt](wave6/r18-phone.txt), [r18-phone-b.txt](wave6/r18-phone-b.txt) | Phone | 2026-11-14 00:51 | 2 | 0.46 |
 
 From the third round, both agents of an app read one file; the line that started each named
 where to begin, one at each fix by name, the other at the person's roads and the documents.
@@ -329,4 +331,7 @@ From the desktop's seventh round and the phone's sixth, the second agent's line 
 test plan instead, to read case by case against the code: the mediums of the rounds before were
 sentences in it. Once the plan had been read whole (the desktop's twelfth round, the phone's
 tenth), it was given the texts a person reads instead: the user guide, the privacy policy and
-the READMEs, the welcome notes, the screen texts, and the steps of a release.
+the READMEs, the welcome notes, the screen texts, and the steps of a release. The desktop's
+twentieth round was one agent, attacking the fixes of a round that had found nothing of medium
+severity; the phone's eighteenth gave its second agent a file of its own, on the rules for a
+file the phone cannot read.
