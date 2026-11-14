@@ -284,11 +284,13 @@ def _same_files(one, other):
 
 
 def _loosely_signed(trash):
-    """This Trash by _loose_signature: the entries each loose signature names."""
+    """This Trash by _loose_signature: the entries each loose signature names, shaped as
+    the backup's are (a raw label beside a shaped one never matched)."""
     signed = {}
     for e in trash:
         if isinstance(e, dict):
-            signed.setdefault(_loose_signature(normalize_note(e)), []).append(e)
+            shaped = normalize_note(e)
+            signed.setdefault(_loose_signature(shaped), []).append(shaped)
     return signed
 
 
@@ -10982,9 +10984,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                for t in state.get("imported_templates") or []):
             return True
         here = {content_signature(normalize_note(e)) for e in self.trash if isinstance(e, dict)}
-        # Known as the merge knows it: one on a copy of a file brought "the rest" that was nothing.
+        # Known as the merge knows it: one on a copy of a file brought "the rest" that was nothing,
+        # and over a held Trash or held settings the merge brings none.
         loosely = _loosely_signed(self.trash)
-        if any(isinstance(e, dict) and content_signature(normalize_note(e)) not in here
+        takes_trash = not (_core_paths.writes_held(TRASH_FILE) or _core_paths.writes_held(SETTINGS_FILE))
+        if takes_trash and any(isinstance(e, dict) and content_signature(normalize_note(e)) not in here
                and not any(_same_files(normalize_note(e), h)
                            for h in loosely.get(_loose_signature(normalize_note(e)), ()))
                for e in state.get("imported_trash") or []):
