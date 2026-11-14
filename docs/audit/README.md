@@ -349,6 +349,8 @@ totals above are waves 1 to 5's.
 | [r29-phone.txt](wave6/r29-phone.txt) | Phone | 2026-11-14 09:52 | 2 | 0.48 |
 | [r32-desktop.txt](wave6/r32-desktop.txt) | Desktop | 2026-11-14 10:37 | 1 | 0.21 |
 | [r30-phone.txt](wave6/r30-phone.txt) | Phone | 2026-11-14 10:37 | 2 | 0.47 |
+| [r33-desktop.txt](wave6/r33-desktop.txt) | Desktop | 2026-11-14 11:18 | 1 | 0.19 |
+| [r31-phone.txt](wave6/r31-phone.txt) | Phone | 2026-11-14 11:18 | 2 | 0.47 |
 
 From the third round, both agents of an app read one file; the line that started each named
 where to begin, one at each fix by name, the other at the person's roads and the documents.
