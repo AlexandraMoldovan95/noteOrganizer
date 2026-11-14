@@ -222,11 +222,15 @@ TEMPLATES_HELD_WORDS = (
     "Your templates couldn't be read this time, so none are shown. Nothing is "
     "lost: close Note Organizer and open it again.")
 
-# A rename or delete over held settings moved every note, then the list of categories
-# was refused: the old name came back empty at the next start, a deleted one too.
+# A rename or delete over held settings or notes moved one and not the other: the old name
+# came back empty at the next start, a deleted one too.
 CATEGORIES_HELD_WORDS = (
-    "Your settings couldn't be read this time, so a category can't be renamed or "
-    "deleted until Note Organizer is closed and opened again. Nothing was changed.")
+    "Your settings or your notes couldn't be read this time, so a category can't be "
+    "renamed or deleted until Note Organizer is closed and opened again. Nothing was "
+    "changed.")
+CATEGORIES_UNSAVED_WORDS = (
+    "The list of categories couldn't be saved just now, so nothing was changed. Try "
+    "again in a moment.")
 
 
 def load_templates():

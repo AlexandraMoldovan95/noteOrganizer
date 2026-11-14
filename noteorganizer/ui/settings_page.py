@@ -32,6 +32,7 @@ from ..core.model import (MAX_ATTACHMENTS, MAX_CHECKLIST_ITEM_CHARS, MAX_CHECKLI
                           _truncate, checklist_shown, normalize_note)
 from ..core.storage import (
     CATEGORIES_HELD_WORDS,
+    CATEGORIES_UNSAVED_WORDS,
     MAX_TEMPLATES,
     TEMPLATES_HELD_WORDS,
     TRASH_RETENTION_DAYS,
@@ -3202,17 +3203,24 @@ class SettingsPageMixin:
                 if refusal:
                     self.show_warning("Can't rename it to that", refusal)
                     return False
-                if paths.writes_held(paths.SETTINGS_FILE):
+                if paths.writes_held(paths.SETTINGS_FILE) or paths.writes_held(paths.DATA_FILE):
                     self.show_warning("Can't rename it now", CATEGORIES_HELD_WORDS)
                     return False
                 # Renamed where it stands: pop-and-insert moved the
                 # category to the end of the list's groups.
+                before = list(CATEGORY_COLORS.items())
                 in_order = [(new if key == name else key, colour)
-                            for key, colour in CATEGORY_COLORS.items()]
+                            for key, colour in before]
                 CATEGORY_COLORS.clear()
                 CATEGORY_COLORS.update(in_order)
+                # The list first: refused after the notes moved, the old name came
+                # back empty at the next start beside the new one.
+                if not persist_categories():
+                    CATEGORY_COLORS.clear()
+                    CATEGORY_COLORS.update(before)
+                    self.show_warning("Can't rename it now", CATEGORIES_UNSAVED_WORDS)
+                    return False
                 self.rename_category_everywhere(name, new)
-                persist_categories()
                 self.save_notes()
                 redraw()
                 self.refresh_category_widgets()
@@ -3235,22 +3243,34 @@ class SettingsPageMixin:
 
     def _delete_category(self, name, redraw):
         """Delete a category, asking what to do with any notes it holds."""
-        if paths.writes_held(paths.SETTINGS_FILE):
+        if paths.writes_held(paths.SETTINGS_FILE) or paths.writes_held(paths.DATA_FILE):
             self.show_warning("Can't delete it now", CATEGORIES_HELD_WORDS)
             return
         count = self.count_notes_in_category(name)
+        before = list(CATEGORY_COLORS.items())
+
+        def map_without():
+            """The list written without it first, or put back and said: refused after
+            the notes moved, the deleted category came back at the next start."""
+            CATEGORY_COLORS.pop(name, None)
+            if persist_categories():
+                return True
+            CATEGORY_COLORS.clear()
+            CATEGORY_COLORS.update(before)
+            self.show_warning("Can't delete it now", CATEGORIES_UNSAVED_WORDS)
+            return False
 
         if count == 0:
             if not self.ask_yes_no("Delete category",
                                        f"Delete “{name}”? It has no notes.",
                                        icon="warning", default="no"):
                 return
+            if not map_without():
+                return
             # No notes, but templates, the Trash and a folded group can
             # still hold the name -- and a note restored from the Trash
             # would bring the category straight back.
             self.reassign_category_everywhere(name, PROTECTED_CATEGORY)
-            CATEGORY_COLORS.pop(name, None)
-            persist_categories()
             redraw()
             self.refresh_category_widgets()
             return
@@ -3270,7 +3290,7 @@ class SettingsPageMixin:
         named = {n["id"] for n in self.notes if n.get("category") == name}
         choice = self._ask_category_deletion(name, len(named),
                                              days_only=count - len(named))
-        if choice is None:
+        if choice is None or not map_without():
             return
         if choice == "move":
             self.reassign_category_everywhere(name, PROTECTED_CATEGORY)
@@ -3281,15 +3301,17 @@ class SettingsPageMixin:
                       if n["id"] in named and n.get("category") == name]
             gone = {n["id"] for n in doomed}
             if self._move_notes_to_trash(doomed) is None:
-                return   # trash.json refused them: the category and its notes stay
+                # trash.json refused them: the category and its notes stay.
+                CATEGORY_COLORS.clear()
+                CATEGORY_COLORS.update(before)
+                persist_categories()
+                return
             self.notes = [n for n in self.notes if n["id"] not in gone]
             # A series' day filed here is re-filed under General, never
             # deleted (it was, under "restorable"); so are the templates and
             # a folded group. A trashed note restored brings the name back.
             self.reassign_category_everywhere(name, PROTECTED_CATEGORY)
 
-        CATEGORY_COLORS.pop(name, None)
-        persist_categories()
         self.save_notes()
         redraw()
         self.refresh_category_widgets()

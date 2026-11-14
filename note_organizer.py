@@ -12384,11 +12384,6 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.templates = self.templates[:len(self.templates) - added_templates]
             added_templates = 0
         added_trash = 0
-        # Skipped unasked, so the test is identity (content_signature), not
-        # _dup_key's resemblance: a trashed note differing only in its date
-        # or files was dropped, its only copy.
-        existing_trash_keys = {content_signature(normalize_note(e))
-                               for e in self.trash if isinstance(e, dict)}
         # None into a held Trash (its write refused), and each entry only if the
         # length this computer's next start purges by keeps it: past it, it was
         # removed with its files. Over held settings that length is not known: none.
@@ -12399,11 +12394,24 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if incoming_trash and _core_paths.writes_held(TRASH_FILE):
             unwritten.append("the trashed notes")
             incoming_trash = []
+        # The categories of the entries that length keeps, believed as the notes' are
+        # above, adopted before any entry here or there is signed: signed first, under
+        # General, a twin came in twice, or one under another name was taken for it.
+        if not settings_held:
+            added_names.extend(adopt_categories_of(
+                [e for e in incoming_trash if isinstance(e, dict) and not (
+                    keep_days is not None and trash_entries_past_window([{"deleted_at": (
+                        e.get("deleted_at") if isinstance(e.get("deleted_at"), str) else "")}],
+                        keep_days))], refused_names))
+        # Skipped unasked, so the test is identity (content_signature), not
+        # _dup_key's resemblance: a trashed note differing only in its date
+        # or files was dropped, its only copy.
+        existing_trash_keys = {content_signature(normalize_note(e))
+                               for e in self.trash if isinstance(e, dict)}
         for entry in incoming_trash:
             if not isinstance(entry, dict):
                 continue
             raw_deleted = entry.get("deleted_at")
-            raw_entry = entry
             # Through normalize_note (a deleted_at=5 crashed the Trash's
             # sort); deleted_at, which it drops, comes back as a str only.
             entry = normalize_note(entry)
@@ -12417,15 +12425,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                  and trash_entries_past_window([entry], keep_days)):
                 trash_left_out += 1
                 continue
-            # Its category believed as the notes' are above, not filed under General.
-            trash_cats = adopt_categories_of([raw_entry], refused_names)
-            if trash_cats:
-                added_names.extend(trash_cats)
-                entry = normalize_note(raw_entry)
-                entry["deleted_at"] = raw_deleted if isinstance(raw_deleted, str) else ""
-            # Only one brought in is the duplicate's original (an older twin left out took
-            # its newer one, unsaid), signed as kept: signed under General, its twin came too.
-            existing_trash_keys.add(content_signature(entry))
+            # Only one brought in is the duplicate's original: an older twin left out
+            # took its newer one, unsaid, with it.
+            existing_trash_keys.add(key)
             # Same claimed-file discipline as the notes above: a trashed
             # entry pointing at a file an ACTIVE note owns would, on its
             # later purge, delete that file out from under the note.
