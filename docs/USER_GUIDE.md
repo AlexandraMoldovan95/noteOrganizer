@@ -641,9 +641,13 @@ remembered.
   repeating note it reads **🗂 Move the series to category**, as it moves every day of it.
 - **Categories** act as folders — create, rename, recolour, or delete them from Settings →
   Categories. Renaming one keeps its place in the list and its folded group, and reaches every
-  note, repeating day, template and Trash entry filed under it. Deleting a category with notes in
-  it asks what should happen to them: move them to General, or move them to the Trash with the
-  category — just the notes the question counted, restorable like any other delete. A day of a
+  note, repeating day, template and Trash entry filed under it (a Trash or templates file that
+  couldn't be read this time keeps the old name, and what it holds comes back under General).
+  When your settings or your notes couldn't be read this time, a category can't be renamed or
+  deleted until Note Organizer is opened again; it says so, and nothing changes. Deleting a
+  category with notes in it asks what should happen to them: move them to General, or move them
+  to the Trash with the category — just the notes the question counted, restorable like any
+  other delete. A day of a
   repeating note filed there on its own moves to General either way; the series itself never
   goes to the Trash for one of its days. A name can be up to 80 characters, and you can have up
   to 200 categories. If the

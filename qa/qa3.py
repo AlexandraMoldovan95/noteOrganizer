@@ -6187,7 +6187,8 @@ app.save_notes()
 _hc_warned = []
 _hc_patched = ('show_warning', '_show_inline_rename', '_ask_category_deletion', 'ask_yes_no')
 _hc_was = {_hc_name: app.__dict__.get(_hc_name) for _hc_name in _hc_patched}
-app.show_warning = lambda title, *a, **k: _hc_warned.append(title)
+app.show_warning = lambda title, msg='', *a, **k: _hc_warned.append(
+    (title, 'held' if "couldn't be read" in msg else 'unsaved' if "couldn't be saved" in msg else msg))
 app._show_inline_rename = lambda _anchor, _default, on_name, **_limit: on_name('QaHeldCat2')
 # Asked nothing when refused; answered here should a broken guard ask (it would wait for a click).
 app._ask_category_deletion = lambda *a, **k: 'move'
@@ -6202,29 +6203,84 @@ def _hc_walk(widget):
         yield from _hc_walk(child)
 
 
-NO._core_paths.hold_writes(NO.SETTINGS_FILE)
+_sp_module = sys.modules['noteorganizer.ui.settings_page']
+_sp_persist_was = _sp_module.persist_categories
+_hc_seen = {}
+app._build_category_row(_hc_frame, 'QaHeldCat', lambda: None)
+app.update()
+_hc_pencil = next(w for w in _hc_walk(_hc_frame) if getattr(w, '_icon_kind', None) == 'pencil')
 try:
-    app._delete_category('QaHeldCat', lambda: None)
-    app._build_category_row(_hc_frame, 'QaHeldCat', lambda: None)
-    app.update()
-    _hc_pencil = next(w for w in _hc_walk(_hc_frame) if getattr(w, '_icon_kind', None) == 'pencil')
-    _hc_pencil.event_generate('<Button-1>')
-    app.update()
+    # Over held settings or a held notes file, then with the list's own write refused: the
+    # rename first, then the delete, each said, nothing moved (renamed or deleted, the row
+    # beneath a later rename would no longer exist).
+    for _hc_case in ('settings', 'notes', 'refused'):
+        _hc_warned.clear()
+        if _hc_case == 'refused':
+            _sp_module.persist_categories = lambda: False
+        else:
+            NO._core_paths.hold_writes(NO.SETTINGS_FILE if _hc_case == 'settings' else NO.DATA_FILE)
+        try:
+            _hc_pencil.event_generate('<Button-1>')
+            app.update()
+            app._delete_category('QaHeldCat', lambda: None)
+        finally:
+            _sp_module.persist_categories = _sp_persist_was
+            for _hc_path in (NO.SETTINGS_FILE, NO.DATA_FILE):
+                NO._core_paths.WRITES_HELD.discard(os.path.normcase(os.path.abspath(_hc_path)))
+        _hc_seen[_hc_case] = (list(_hc_warned), [n.get('category') for n in app.notes],
+                              list(NO.CATEGORY_COLORS).count('QaHeldCat'),
+                              'QaHeldCat2' in NO.CATEGORY_COLORS)
 finally:
-    NO._core_paths.WRITES_HELD.discard(os.path.normcase(os.path.abspath(NO.SETTINGS_FILE)))
     for _hc_name in _hc_patched:
         if _hc_was[_hc_name] is None:
             app.__dict__.pop(_hc_name, None)
         else:
             setattr(app, _hc_name, _hc_was[_hc_name])
     _hc_frame.destroy()
-check(f"over settings held this run a category is neither deleted nor renamed, and that is said "
-      f"({_hc_warned}, {[n.get('category') for n in app.notes]})",
-      _hc_warned == ["Can't delete it now", "Can't rename it now"]
-      and [n.get('category') for n in app.notes] == ['QaHeldCat']
-      and 'QaHeldCat' in NO.CATEGORY_COLORS and 'QaHeldCat2' not in NO.CATEGORY_COLORS)
+def _hc_still(why):
+    return ([("Can't rename it now", why), ("Can't delete it now", why)], ['QaHeldCat'], 1, False)
+
+
+check(f"over settings held this run a category is neither deleted nor renamed, and that is said; "
+      f"over held notes, or the list's write refused, too ({_hc_seen})",
+      _hc_seen == {'settings': _hc_still('held'), 'notes': _hc_still('held'),
+                   'refused': _hc_still('unsaved')})
 NO.CATEGORY_COLORS.pop('QaHeldCat', None); NO.persist_categories()
 app.notes = []; app.save_notes()
+
+# A backup's trashed notes under a name this computer's map lacks are signed after it is
+# adopted: signed first, under General, one under another name was taken for its twin, and
+# one already here under that name came in again.
+NO.CATEGORY_COLORS.pop('QaSigned', None); NO.persist_categories()
+app.trash = [{'id': 21, 'uid': 'sg-here', 'title': 'Here', 'body': 'h', 'category': 'QaSigned',
+              'deleted_at': _tr_days_ago(1)}]
+NO.save_trash(app.trash)
+_sg_backup = dict(_tw_backup, **{
+    'notes_data.json': json.dumps([{'title': 'Any', 'body': 'a'}]).encode(),
+    'trash.json': json.dumps([
+        {'id': 22, 'uid': 'sg-g', 'title': 'Pea', 'body': 'p', 'deleted_at': _tr_days_ago(2)},
+        {'id': 23, 'uid': 'sg-s', 'title': 'Pea', 'body': 'p', 'category': 'QaSigned',
+         'deleted_at': _tr_days_ago(2)},
+        {'id': 24, 'uid': 'sg-h', 'title': 'Here', 'body': 'h', 'category': 'QaSigned',
+         'deleted_at': _tr_days_ago(1)}]).encode(),
+    'settings.json': json.dumps({'app_version': '0.97.405'}).encode()})
+_sg_ask_was, _sg_info_was = app.__dict__.get('ask_yes_no'), app.__dict__.get('show_info')
+app.ask_yes_no = lambda *a, **k: True
+app.show_info = lambda *a, **k: None
+try:
+    _dz_import(_sg_backup)
+finally:
+    for _sg_name, _sg_was in (('ask_yes_no', _sg_ask_was), ('show_info', _sg_info_was)):
+        if _sg_was is None:
+            app.__dict__.pop(_sg_name, None)
+        else:
+            setattr(app, _sg_name, _sg_was)
+_sg_trash = sorted((e.get('title'), e.get('category')) for e in app.trash)
+check(f"a backup's trashed notes are signed under the names they are kept by: a twin under "
+      f"another name comes in, one already here does not come again ({_sg_trash})",
+      _sg_trash == [('Here', 'QaSigned'), ('Pea', 'General'), ('Pea', 'QaSigned')])
+NO.CATEGORY_COLORS.pop('QaSigned', None); NO.persist_categories()
+app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
 
 # A Trash entry is kept as the file held it, and four readers still read its
 # fields raw: a title of 7 kept Recently deleted from opening, comments or

@@ -4689,6 +4689,22 @@ and nothing is lost); and a name refused by a ceiling on a note that is then ski
 is still counted among those that could not be added (true of the backup; it needs a name over 80
 characters).
 
+**The twenty-sixth round**, one agent, found nothing of high severity in the code; its mediums
+were two sentences of USER_GUIDE: that a rename reaches every template and Trash entry (not one
+in a file that could not be read this time, which keeps the old name), and that re-importing a
+backup never doubles the Trash (an entry here under a name this computer's map lacked, signed
+under General, was not known again once the backup's twin had adopted the name). Both are true
+now: the guide names the held files, and the backup's trashed notes have their categories
+adopted before anything here or there is signed (SN139, SN144). The lows: the twenty-fifth's
+refusal looked at the settings alone, and a rename over a notes file held this run wrote the new
+name while the notes kept the old one (the notes' hold refuses it too now, SN146 to SN148); the
+list's own write went unchecked, so a moment's refusal by a sync tool moved the notes under a name
+the list never kept (the list is written first now, and a refusal puts it back and says so,
+SN149, SN150); and SN146 could not fail cleanly, its check breaking on the row the mutant had
+deleted (the rename now runs before the delete). Left, with its reason: the phone refuses an
+added or recoloured category over held settings, where this computer keeps it for the session
+and the start already said no setting is saved; nothing is lost either way.
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.
 
