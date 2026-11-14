@@ -31,6 +31,7 @@ from ..core.recurrence import describe_recurrence, is_recurring, show_date
 from ..core.model import (MAX_ATTACHMENTS, MAX_CHECKLIST_ITEM_CHARS, MAX_CHECKLIST_ITEMS,
                           _truncate, checklist_shown, normalize_note)
 from ..core.storage import (
+    CATEGORIES_HELD_WORDS,
     MAX_TEMPLATES,
     TEMPLATES_HELD_WORDS,
     TRASH_RETENTION_DAYS,
@@ -3201,6 +3202,9 @@ class SettingsPageMixin:
                 if refusal:
                     self.show_warning("Can't rename it to that", refusal)
                     return False
+                if paths.writes_held(paths.SETTINGS_FILE):
+                    self.show_warning("Can't rename it now", CATEGORIES_HELD_WORDS)
+                    return False
                 # Renamed where it stands: pop-and-insert moved the
                 # category to the end of the list's groups.
                 in_order = [(new if key == name else key, colour)
@@ -3231,6 +3235,9 @@ class SettingsPageMixin:
 
     def _delete_category(self, name, redraw):
         """Delete a category, asking what to do with any notes it holds."""
+        if paths.writes_held(paths.SETTINGS_FILE):
+            self.show_warning("Can't delete it now", CATEGORIES_HELD_WORDS)
+            return
         count = self.count_notes_in_category(name)
 
         if count == 0:

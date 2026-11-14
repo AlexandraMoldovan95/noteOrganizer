@@ -2542,7 +2542,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         if self._corrupt_notes_report else
                         "Your notes file is left as it was, unreadable, as Note "
                         "Organizer's message said when it started: opening the "
-                        "app again will not bring those notes back.") + left_said)
+                        "app again will not bring those notes back. This backup "
+                        "is where the notes written since are kept; Settings → "
+                        "Backup → Import brings them in.") + left_said)
             else:
                 self._remember_finished_export()
                 self.show_info(
@@ -12415,15 +12417,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                                  and trash_entries_past_window([entry], keep_days)):
                 trash_left_out += 1
                 continue
-            # Only one brought in is the duplicate's original: an older twin left out
-            # took its newer one, unsaid, with it.
-            existing_trash_keys.add(key)
             # Its category believed as the notes' are above, not filed under General.
             trash_cats = adopt_categories_of([raw_entry], refused_names)
             if trash_cats:
                 added_names.extend(trash_cats)
                 entry = normalize_note(raw_entry)
                 entry["deleted_at"] = raw_deleted if isinstance(raw_deleted, str) else ""
+            # Only one brought in is the duplicate's original (an older twin left out took
+            # its newer one, unsaid), signed as kept: signed under General, its twin came too.
+            existing_trash_keys.add(content_signature(entry))
             # Same claimed-file discipline as the notes above: a trashed
             # entry pointing at a file an ACTIVE note owns would, on its
             # later purge, delete that file out from under the note.
@@ -12448,7 +12450,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             unwritten.append("the trashed notes")
         if len(added_names) > added_categories:
             added_categories = len(added_names)
-            if not persist_categories() and "the categories" not in unwritten:
+            # The whole map, written: landed, the first write's refusal is no longer true.
+            if persist_categories():
+                if "the categories" in unwritten:
+                    unwritten.remove("the categories")
+            elif "the categories" not in unwritten:
                 unwritten.append("the categories")
             self.refresh_category_widgets()
 
