@@ -3512,11 +3512,12 @@ with _fx_no_import():
     app._settle_backups_at_session_end()
 _fx_cut = NO.get_setting('backup_cut_short') or {}
 _fx_words = _next_start_says()
-check(f'an export that failed just before the session ended is said at the next start '
-      f'({_fx_session_ready}, {_fx_cut!r}, {_fx_words[:120]!r})',
+check(f'an export that failed just before the session ended is said at the next start, and why '
+      f'({_fx_session_ready}, {_fx_cut!r}, {_fx_words[:160]!r})',
       _fx_session_ready and _fx_cut.get('kind') == 'export_failed'
       and 'qa3_failed_export.zip failed as Windows began to sign out or shut down' in _fx_words
-      and 'cut short' not in _fx_words)
+      and 'cut short' not in _fx_words
+      and bool(_fx_cut.get('error')) and str(_fx_cut.get('error'))[:20] in _fx_words)
 try:
     app.after_cancel(app._export_poll_job)
 except (tk.TclError, ValueError, AttributeError):
@@ -5096,7 +5097,9 @@ try:
     _xf_asked = []
     fd.asksaveasfilename = lambda **k: (_xf_asked.append(1), _xf_zip)[1]
     _xf_real_warn = app.show_warning
-    app.show_warning = lambda *a, **k: _xf_said.append(a[0] if a else '')
+    _xf_why = []
+    app.show_warning = lambda *a, **k: (_xf_said.append(a[0] if a else ''),
+                                        _xf_why.append(str(a[1]) if len(a) > 1 else ''))
     app._corrupt_notes_report = ''
     _xf_had = app.notes
     app.notes = []
@@ -5107,9 +5110,11 @@ try:
         app._corrupt_notes_report = None
         app.show_warning = _xf_real_warn
     check(f'a start that could not read the notes file refuses to export an empty '
-          f'backup ({_xf_said})',
+          f'backup, and says why ({_xf_said}; {[w[:60] for w in _xf_why]})',
           'Nothing to back up yet' in _xf_said and not _xf_asked
-          and app._export_state is None)
+          and app._export_state is None
+          and any('could not be opened when Note Organizer started' in w
+                  and 'a backup made now would hold none either' in w for w in _xf_why))
     # ...but notes written since are another matter: on a run that saves
     # nothing the backup is their only way out, and it says what it holds.
     _xf_said.clear()
@@ -6604,7 +6609,7 @@ try:
                 _rt_w.event_generate('<Leave>'); app.update()
     _rt_left = [w for w in app.winfo_children()
                 if isinstance(w, tk.Toplevel) and w not in _rt_top and w.winfo_exists()]
-    check(f'...and hovering each row shows and takes away its preview '
+    check(f'...and hovering each row raises nothing and leaves no preview behind '
           f'(errors {_rt_errors}; left behind {len(_rt_left)})',
           not _rt_errors and not _rt_left)
 finally:

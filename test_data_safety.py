@@ -684,8 +684,11 @@ try:
             NO_paths.time.sleep = _pf_sleep
         _pn_notes = os.path.join(_pn_home, 'notes_data.json')
         check(f'a notes file held at the first start says the notebook could not '
-              f'come, and nothing is written in its place ({_pn_msg[:60]!r})',
-              'could not be brought in' in _pn_msg and not os.path.exists(_pn_notes)
+              f'come, asks to close the app and open it again, and nothing is '
+              f'written in its place ({_pn_msg[-90:]!r})',
+              'could not be brought in' in _pn_msg
+              and 'close Note Organizer and open it again' in _pn_msg
+              and not os.path.exists(_pn_notes)
               and NO_paths.writes_held(_pn_notes)
               # The settings too: written at once, they made the run a first
               # one, with a welcome note and an "Export complete" over nothing.
@@ -2286,9 +2289,10 @@ check(f"a cleanup run again with nothing to change leaves no copy behind "
       f"({sorted(set(glob.glob(_backupsW)) - _beforeR)!r})",
       set(glob.glob(_backupsW)) == _beforeR and [n["id"] for n in _notesR] == [1]
       and (_reportR.get("cleanup_report") or (None, "kept"))[1] is None)
-# ...but a file it rewrites only by dropping what the read does not know
-# (another program's field, a body written as a list) keeps its copy:
-# compared with the notes as read, it went, the one place those were left.
+# ...but a file it rewrites only by reshaping what the read takes in
+# another shape (a body written as a list) keeps its copy: compared with
+# the notes as read, it went, the one place that shape was left. A field
+# the read does not know rides along in the copy (and stays in the notes).
 _setU = _storage.load_settings()
 _setU.pop("cleanup_done", None)
 _storage.save_settings(_setU)

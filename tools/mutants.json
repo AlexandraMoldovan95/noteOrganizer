@@ -6710,7 +6710,7 @@
       }
     ],
     "must_fail": [
-      "...and hovering each row shows and takes away its preview"
+      "...and hovering each row raises nothing and leaves no preview behind"
     ],
     "suites": [
       "qa3"
@@ -19626,6 +19626,98 @@
                "replace": "                pill.pack(fill=\"both\", expand=True, padx=1, pady=1)\n                pill.bind(\"<Button-1>\", lambda e, c=cat: self.filter_var.set(c))\n"}],
     "must_fail": ["clicking a statistics chip does not change the filter"],
     "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SC02",
+    "about": "A click on a statistics chip's name filters the list again, the name covering most of the pill",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                cat_lbl.pack(side=\"left\", fill=\"x\", expand=True)\n",
+        "replace": "                cat_lbl.pack(side=\"left\", fill=\"x\", expand=True)\n                cat_lbl.bind(\"<Button-1>\", lambda e, c=cat: self.filter_var.set(c))\n"
+      }
+    ],
+    "must_fail": [
+      "clicking a statistics chip does not change the filter"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "SC03",
+    "about": "A statistics chip's name shows the hand cursor, looking clickable where it is not",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                cat_lbl = tk.Label(pill, bg=self._surface(),\n",
+        "replace": "                cat_lbl = tk.Label(pill, bg=self._surface(), cursor=\"hand2\",\n"
+      }
+    ],
+    "must_fail": [
+      "statistics chip has no hand cursor (not clickable-looking)"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "SN176",
+    "about": "An export that failed just before Windows ended the session is said at the next start without why",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                \"error\": str(export.get(\"error\") or \"\")[:300], \"when\": \"session\"})\n",
+        "replace": "                \"error\": \"\", \"when\": \"session\"})\n"
+      }
+    ],
+    "must_fail": [
+      "an export that failed just before the session ended is said at the next start, and why"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR228",
+    "about": "An older notebook held at the first start is said, but not what to do: close and open again",
+    "edits": [
+      {
+        "file": "noteorganizer/core/paths.py",
+        "find": "                \"saved here until it can be: close Note Organizer and open it \"\n                \"again.\")\n",
+        "replace": "                \"saved here until it can be.\")\n"
+      }
+    ],
+    "must_fail": [
+      "asks to close the app and open it again"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed",
+    "only_on": "win32",
+    "note": "Killed on Windows, where the profile-folder migration checks run."
+  },
+  {
+    "id": "DR229",
+    "about": "A backup refused after an unreadable start says Nothing to back up yet, and not why",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                \"Nothing to back up yet\",\n                \"Your notes could not be opened when Note Organizer started, \"\n",
+        "replace": "                \"Nothing to back up yet\", \"\" and\n                \"Your notes could not be opened when Note Organizer started, \"\n"
+      }
+    ],
+    "must_fail": [
+      "refuses to export an empty backup, and says why"
+    ],
+    "suites": [
+      "qa3"
+    ],
     "expect": "killed"
   }
 ]

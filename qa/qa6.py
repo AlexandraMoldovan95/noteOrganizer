@@ -478,11 +478,14 @@ check('the statistics panel has a chip grid to inspect', bool(_stat_frames))
 chip = next((f for f in _stat_frames
              if any(isinstance(c, tk.Label) and c.cget('text') == 'Work' for c in f.winfo_children())), None)
 check('the statistics panel draws a pill for the category Work', chip is not None)
-check('statistics chip has no hand cursor (not clickable-looking)',
-      chip is not None and str(chip.cget('cursor')) != 'hand2')
-if chip is not None:
-    _qa_click(chip)
-    _qa_fire(chip, '<ButtonRelease-1>')
+# Every part a click can land on, each its own: the edge, the pill, its dot,
+# its name and its count. A click on the name goes to the name alone.
+_chip_parts = [chip.master, chip] + list(chip.winfo_children()) if chip is not None else []
+check(f'statistics chip has no hand cursor (not clickable-looking), on any of its {len(_chip_parts)} parts',
+      len(_chip_parts) >= 5 and all(str(w.cget('cursor')) != 'hand2' for w in _chip_parts))
+for _part in _chip_parts:
+    _qa_click(_part)
+    _qa_fire(_part, '<ButtonRelease-1>')
 app.update()
 check('clicking a statistics chip does not change tabs',
       app.notebook.index(app.notebook.select())==app.TAB_CALENDAR)

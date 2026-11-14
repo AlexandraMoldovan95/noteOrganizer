@@ -5004,6 +5004,22 @@ rather than pasted) and say "Automated in part" now; 1066's expected result no l
 drops a field the app does not know, which it keeps since 14 November. The lows: 4 and 2 name +
 New Note's own function, and 339, 534, 722 and 866 what their checks leave.
 
+**The fiftieth round** read the 69 cases still called whole and found ten short (mediums). Four
+checks fell short themselves: the statistics check clicked the pill's frame, which a click on the
+name or the count never reaches, and read the frame's cursor alone; the session-end
+export, the start that could not bring an older notebook in, and the backup refused after an
+unreadable start read their message's first words and never the reason or the ask it promises.
+Each check reads all of it now: every part of the chip is clicked and its cursor read (mutants
+SC02 and SC03, a click and a hand cursor put on the name), and the three read the reason, "close
+Note Organizer and open it again" and the why (SN176, DR228, DR229). 806's steps clicked Use
+template and pressed End, which a picker opened by a click never receives, so a person following
+them would have recorded a Fail: its steps and 854's open the picker from the keyboard now, and
+806 says "in part", as do 813 (the day scrolled in code), 747 and 765 (nothing typed before the
+click) and 876 (the dates put in by code). The lows: 1015 says "in part" (Settings already
+closed when the check runs the button's command); 722 says its
+preview is walked by no one, and qa3's check name says what it reads; 759 names qa5's check of the
+start notice; a comment in test_data_safety no longer says the read drops a field it keeps.
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays
 open behind the block: at the thirty-ninth round the plan's automation claims were read all at
