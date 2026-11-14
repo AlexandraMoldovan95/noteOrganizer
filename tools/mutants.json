@@ -19617,5 +19617,15 @@
     "must_fail": ["a backup's trashed note keeps a category only the Trash uses, the newer of two twins comes in, and a name a ceiling refuses is said"],
     "suites": ["qa3"],
     "expect": "killed"
+  },
+  {
+    "id": "SC01",
+    "about": "A click on a category's pill in Statistics filters the list again, as it did before it was made read-only",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "                pill.pack(fill=\"both\", expand=True, padx=1, pady=1)\n",
+               "replace": "                pill.pack(fill=\"both\", expand=True, padx=1, pady=1)\n                pill.bind(\"<Button-1>\", lambda e, c=cat: self.filter_var.set(c))\n"}],
+    "must_fail": ["clicking a statistics chip does not change the filter"],
+    "suites": ["qa6"],
+    "expect": "killed"
   }
 ]

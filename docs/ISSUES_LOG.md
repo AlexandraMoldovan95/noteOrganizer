@@ -4988,9 +4988,21 @@ roads to deleting or replacing for good (9, 13, 281, 426, 268, 371, 421). Sevent
 "Automated in part" now and name what the checks are known not to reach; among them a stub that
 would answer silently the very question 425 promises is never asked, an Undo called past the
 banner that 301, 311 and 1028 promise is pressed, and + New Note's own function, which 3's check
-does not call. The How to use tab says that every qa file answers the app's messages in code.
-The lows: five rows no person can set up say their stand-ins are walked by no one; 649 and 930
-say what is true.
+does not call. The How to use tab says that every qa file answers the app's messages in code
+(qa8 its information messages; its warnings and errors only on its other app instances, as the
+round after found). The lows: five rows no person can set up say their stand-ins are walked by
+no one; 649 and 930 say what is true.
+
+**The forty-ninth round** read the 88 cases still called whole and found sixteen short of the
+rule (mediums), one of them a check's own fault: qa6's "clicking a statistics chip does not change
+the filter" clicked the first frame it found, the Total notes tile built before the category
+pills, so a click put back on a pill would have passed. It aims at the category's own pill now,
+and mutant SC01, a pill's click put back, fails it. The other fifteen stub, seed, skip or leave a
+part unread (a merge's carried bold, a row inserted above an ordinary row, the cells beside those
+cleared, a template's delete question, a start's notice for a held settings file, a code inserted
+rather than pasted) and say "Automated in part" now; 1066's expected result no longer says a start
+drops a field the app does not know, which it keeps since 14 November. The lows: 4 and 2 name +
+New Note's own function, and 339, 534, 722 and 866 what their checks leave.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays

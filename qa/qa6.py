@@ -474,8 +474,10 @@ _stat_frames = find_all(app.stats_frame, tk.Frame)
 # script dies instead of failing, and a dead script reports no failures
 # at all. Same family as the chips held across a rebuild below.
 check('the statistics panel has a chip grid to inspect', bool(_stat_frames))
-grid_frame = _stat_frames[0] if _stat_frames else None
-chip = (grid_frame.winfo_children() or [None])[0] if grid_frame else None
+# The category's own pill, the frame holding its name: [0] was the Total notes tile, built first.
+chip = next((f for f in _stat_frames
+             if any(isinstance(c, tk.Label) and c.cget('text') == 'Work' for c in f.winfo_children())), None)
+check('the statistics panel draws a pill for the category Work', chip is not None)
 check('statistics chip has no hand cursor (not clickable-looking)',
       chip is not None and str(chip.cget('cursor')) != 'hand2')
 if chip is not None:
