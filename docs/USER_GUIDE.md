@@ -1064,7 +1064,8 @@ Settings → Backup → **Import** brings a previously exported `.zip` back in �
 templates and the Trash together, and from its settings your categories and the calendar's day
 colours and marks. The theme, your name, the text size, the list's order and the rest stay as this
 computer has them; so does how long the Trash keeps notes, unless you never chose it here and the
-backup's is longer. Just like importing a code, you'll be asked
+backup's is longer (when that length cannot be saved here this time, the backup's trashed notes
+stay in the backup, and the import says so). Just like importing a code, you'll be asked
 about any notes that look identical to what you already have before anything is added. Skipped,
 such a note's attached files still come in, onto the note it looks like, as an update's do. A
 template only comes in if you don't already have one by that name, and re-importing the same
@@ -1116,7 +1117,8 @@ nothing over that file until it is opened again. While the Trash file is held th
 deleted notes are kept cannot be changed either.
 
 Failed *saves* speak up too: if a data file can't be written (a full disk, a file another program
-holds), an error message names the file instead of pretending the save worked, and a technical
+holds), an error message names the file instead of pretending the save worked (over a file held
+since the start, that message comes once a session), and a technical
 trace lands in `crash_log.txt` beside your data ([what it holds](#feedback-and-the-privacy-policy)
 before you share any of it).
 While your latest changes are still unsaved, closing the app tries once more and then asks

@@ -4593,7 +4593,8 @@ settings file, merging look-alikes: choosing it now records the cleanup as done 
 lows: the settings kept for a refused read were the dict handed out, so a refused change lived
 on in it and the next write that landed kept it (kept as text now, SN114); a format span whose
 style is a list stopped every start (SN115); a template saved or deleted over a refused write
-closed as if done (the list goes back, the editor stays, SN116); a day moved, moved back or
+closed as if done (the list goes back, the editor stays, SN116; the delete's own check came with
+the twenty-second round); a day moved, moved back or
 sent home said so over its helper's refused write, and opening any note wrote "Last updated"
 over notes not saved (the opening says "Not saved" while any are, and the source check now
 reads one helper deep, SN117, SN118); "Not saved" stayed up after a later write landed, until
@@ -4604,6 +4605,28 @@ page's subtitle advised a choice its dropdown refuses (SN121); and a backup impo
 longer Trash length over a held Trash. Left: a version's first start whose notes file is held
 throughout makes no pre-update copy and records the new version; that run writes nothing over
 the notes, and Settings → Backup → Export makes a copy.
+
+**The twenty-second round** walked the writers of the Trash, the templates and the settings, as
+the two before had walked the notes', and found one of high severity on a very rare road: a
+backup import brought the backup's Trash in without the backup's longer Trash length when the
+settings were held at the start or that length's write was refused, and the next start's 30
+days removed what the backup had kept, with its files. Those entries now stay in the backup,
+said in "Import complete" (SN122, SN123); and none go into a held Trash, where in memory alone
+they showed under the page saying it could not be read (SN124). Its mediums: Save as template
+over a refused write kept the template on screen alone, hiding a held file's words (put back,
+SN125); a template written as Windows signed out, refused, went unsaid and its editor closed
+unasked once the sign-out was cancelled (the list goes back, the next start says why, SN126);
+Statistics said 0 templates and 0 in the Trash over held files (a dash, SN127); and Remove
+attachment gave the notes file as the reason a copy stays where the Trash was the one unread.
+The lows: "Not saved" taken back by a write that landed even when it was the editor's own "Not
+saved yet" (only the notes write's words go now, SN128); an interrupted import's files deleted in
+a run that did not read the Trash (SN129); a day's colour or markers said put back over a
+refused write (SN130); and the template delete's put-back had no check (SN131). Left, each with
+its reason: the theme and the editor font show a refused choice until the next start, which the
+banner names; a category renamed or deleted over a refused Trash or templates write restores
+those entries under General; Restore over a refused Trash write leaves the entry in both files,
+the designed duplicate at worst; and a refused write of the cleanup's own mark runs it again
+at the next start, with its copy made and said.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.

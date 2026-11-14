@@ -6309,8 +6309,8 @@
     "id": "TW18",
     "about": "a restored Trash is left under the default window its owner never had",
     "edits": [{"file": "note_organizer.py",
-               "find": "            choose_trash_window(window)\n",
-               "replace": "            pass\n"}],
+               "find": "                trash_window_lost = not choose_trash_window(window)[0]\n",
+               "replace": "                trash_window_lost = False\n"}],
     "must_fail": ["a restored Trash keeps the window it came with, where none was chosen"],
     "suites": ["qa3"],
     "expect": "killed"
@@ -6319,8 +6319,8 @@
     "id": "TW19",
     "about": "a backup's window replaces the one this notebook chose",
     "edits": [{"file": "note_organizer.py",
-               "find": "                and \"trash_retention_days\" not in load_settings()\n",
-               "replace": ""}],
+               "find": "            elif (\"trash_retention_days\" not in load_settings()\n",
+               "replace": "            elif (True\n"}],
     "must_fail": ["...and a window chosen here stays"],
     "suites": ["qa3"],
     "expect": "killed"
@@ -17949,8 +17949,8 @@
     "id": "SN31",
     "about": "A template not kept is said as written when Windows signed out, untrue of a sign-out the person cancelled",
     "edits": [{"file": "note_organizer.py",
-               "find": "                f\"Windows began to sign out or shut down, was not kept: you already \"\n",
-               "replace": "                f\"Windows signed out or shut down, was not kept: you already \"\n"}],
+               "find": "                f\"Windows began to sign out or shut down, was not kept: \" + (\n",
+               "replace": "                f\"Windows signed out or shut down, was not kept: \" + (\n"}],
     "must_fail": ["a template not kept is said as written when Windows began to sign out"],
     "suites": ["qa3"],
     "expect": "killed"
@@ -19056,7 +19056,7 @@
     "id": "SN120",
     "about": "Not saved stays up after a later write lands, over a file holding every note",
     "edits": [{"file": "note_organizer.py",
-               "find": "            if lbl is not None and str(lbl.cget(\"text\")).startswith(\"Not saved\"):\n",
+               "find": "            if lbl is not None and str(lbl.cget(\"text\")) == getattr(self, \"_not_saved_said\", None):\n",
                "replace": "            if False:\n"}],
     "must_fail": ["opening a note over notes not saved says Not saved, and a write that lands takes it back"],
     "suites": ["qa6"],
@@ -19069,6 +19069,106 @@
                "find": "        if paths.writes_held(paths.TRASH_FILE):\n            # The dropdown refuses then (set_retention)",
                "replace": "        if False:\n            # The dropdown refuses then (set_retention)"}],
     "must_fail": ["over a held Trash file its page says it couldn't be read"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN122",
+    "about": "Over held settings a backup's Trash comes in without its window, and the next start empties it",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                trash_window_lost = True   # its defaults stand in: none known, none kept\n",
+               "replace": "                pass\n"}],
+    "must_fail": ["a backup's Trash is not brought in without the window it needs"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN123",
+    "about": "A backup's Trash window whose write is refused leaves its entries to the next start's 30 days",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                trash_window_lost = not choose_trash_window(window)[0]\n",
+               "replace": "                choose_trash_window(window)\n"}],
+    "must_fail": ["a backup's Trash is not brought in without the window it needs"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN124",
+    "about": "A backup's Trash goes into a held Trash in memory alone, shown under its couldn't-be-read",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if incoming_trash and _core_paths.writes_held(TRASH_FILE):\n",
+               "replace": "        if False:\n"}],
+    "must_fail": ["a backup's Trash is not brought in without the window it needs"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN125",
+    "about": "Save as template over a refused write keeps the template listed on screen alone",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                self.templates = kept\n                self.set_status(f\"Template",
+               "replace": "                self.set_status(f\"Template"}],
+    "must_fail": ["a template the disk refuses is said not saved, and not listed"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN126",
+    "about": "A template the file refuses at a sign-out goes unsaid, listed on screen alone",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "            if not save_templates(self.templates)[0]:\n                self.templates = kept\n                save_setting(\"template_not_kept\", name)\n",
+               "replace": "            if not save_templates(self.templates):\n                self.templates = kept\n                save_setting(\"template_not_kept\", name)\n"}],
+    "must_fail": ["a template the file refuses at a sign-out is not listed"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN127",
+    "about": "Over held templates and Trash files Statistics says 0 of files that hold them",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "        templates_count = (\"—\" if paths.writes_held(paths.TEMPLATES_FILE)\n",
+               "replace": "        templates_count = (\"—\" if False\n"}],
+    "must_fail": ["over held templates and Trash files Statistics shows a dash"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN128",
+    "about": "A write that lands takes back the editor's own Not saved yet, about an edit it does not carry",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            if lbl is not None and str(lbl.cget(\"text\")) == getattr(self, \"_not_saved_said\", None):\n",
+               "replace": "            if lbl is not None and str(lbl.cget(\"text\")).startswith(\"Not saved\"):\n"}],
+    "must_fail": ["a write that lands takes back only its own Not saved"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN129",
+    "about": "An import's copied file is deleted in a run that did not read the Trash, one a trashed note may name",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if attached_files_kept():\n            return\n        in_use = ",
+               "replace": "        in_use = "}],
+    "must_fail": ["an import's copied file is kept in a run that did not read the Trash"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN130",
+    "about": "A day colour the settings file refuses is said put back, on screen alone",
+    "edits": [{"file": "noteorganizer/ui/calendar_view.py",
+               "find": "        if persist() is False:\n",
+               "replace": "        if False:\n"}],
+    "must_fail": ["a day colour the settings file refuses is not said put back"],
+    "suites": ["qa7"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN131",
+    "about": "A template delete the file refuses takes it off the list, back at the next start",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "                if not save_templates(self.templates)[0]:\n                    self.templates = kept\n                    self._say_by_the_box(self, \"Not deleted",
+               "replace": "                if False:\n                    self.templates = kept\n                    self._say_by_the_box(self, \"Not deleted"}],
+    "must_fail": ["a template delete the file refuses keeps it listed"],
     "suites": ["qa6"],
     "expect": "killed"
   }
