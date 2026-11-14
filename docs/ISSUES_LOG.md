@@ -4926,6 +4926,16 @@ whose own words left a part to the hand or whose check stands in for the route (
 mutants is judged in; 207 names the check that reads its step 3; 721 and 739 say "Automated", as
 the tab has rows no person can set up say it.
 
+**The forty-third round** read cases 560 to 829 (192) against their checks' code and found
+fourteen mediums of the kind (562, 592, 613, 619, 633, 634, 640, 660, 706, 708, 723, 792, 810, 825):
+a summary, a window widened again, a fill or a banner no check reads; a rename re-made inside the
+check rather than pressed in Settings; a note seeded already changed rather than changed in the
+editor; a page of 1,000 rows where the case presses Show more; an export's end put in place by
+hand. Four of them said more than their checks do in so many words (619 named mutants that guard
+other buttons; 633 "walks this end to end"; 640 "a restart" that is a file read back; 560 "each
+form", where qa5 types six). Each says "Automated in part" now and names what is left to the
+hand, as do twenty lows; 239 names the check that round-trips its code at the core.
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays
 open behind the block: at the thirty-ninth round the plan's automation claims were read all at
