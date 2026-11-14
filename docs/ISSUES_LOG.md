@@ -4738,6 +4738,20 @@ saved over in another program, or read refused for a moment, makes the next impo
 Trash entry again on another copy (the bytes no longer match; nothing is lost); and the bytes are
 compared on the window's own thread after the progress bar, slow only for very large files.
 
+**The twenty-ninth round**, one agent, found nothing of medium or high severity: the first round
+since the twentieth to come back clean. Its lows were fixed all the same: the check for a note on
+a copy imported twice answered "add" to every question and never walked the Update it was about
+(it answers "Update it" now); the question whether a backup of look-alikes brings anything more
+counted its trashed notes over a held Trash or held settings, where the merge brings none
+(SN157); and, the phone's round showed, this Trash's entries were matched loosely in their raw
+shape, so an older writer's label ("photo.jpg" over a .png) never met the backup's shaped one
+(shaped now, SN158). Left, each with its reason: that question still counts a trashed note past
+this computer's Trash length, and one under a name only adoption would bring, as more (the
+result says what stayed in the backup; both rare); a read refused between the question and the
+Update can make them disagree about a file (nothing is lost); and the count of notes that "took
+attached files" is made from the files to adopt, not from the copies made, so a copy refused on
+a full disk is counted (as the phone counts it).
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.
 

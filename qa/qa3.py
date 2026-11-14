@@ -4859,9 +4859,10 @@ _dz_damage = {'not UTF-8': b'[{"id": 1, "title": "caf\xe9"}]',
 _dz_sound = json.dumps([{'title': 'Sound note', 'body': 'kept'}]).encode()
 
 
-def _dz_import(members):
+def _dz_import(members, answer=None):
     """Import a backup holding *members* (name -> bytes), saying yes to
-    every question; return what the import said, as (title, text) pairs."""
+    every question, or what *answer* (the dialog's own arguments) gives;
+    return what the import said, as (title, text) pairs."""
     zpath = os.path.join(tempfile.gettempdir(), 'qa3_damaged_member.zip')
     if os.path.exists(zpath):
         os.remove(zpath)
@@ -4870,7 +4871,8 @@ def _dz_import(members):
             zf.writestr(name, data)
     said = []
     real = app._themed_dialog
-    app._themed_dialog = lambda *a, **k: (said.append((a[0], a[1])), True)[1]
+    app._themed_dialog = lambda *a, **k: (said.append((a[0], a[1])),
+                                          answer(*a, **k) if answer else True)[1]
     fd.askopenfilename = lambda **k: zpath
     try:
         app.import_data()
@@ -6340,6 +6342,29 @@ _rf_entry = json.loads(_rf_backup['trash.json'].decode())[0]
 check(f"a backup whose only trashed note is here on a copy of its file brings nothing more "
       f"({app._backup_brings_more({'imported_trash': [_rf_entry]}, [])})",
       app._backup_brings_more({'imported_trash': [_rf_entry]}, []) is False)
+# ...and an older writer's label ("photo.jpg" over a .png) here, raw, beside the backup's shaped
+# one, never matched: the same note on a copy came in at every import.
+for _lb_n in (0, 1):
+    with open(os.path.join(NO.ATTACHMENTS_DIR, f'2026111414000000000{_lb_n}_photo.png'), 'wb') as _fh:
+        _fh.write(b'qa3 photo')
+_lb_here = {'id': 51, 'uid': 'lb-1', 'title': 'Pic', 'body': 'p', 'deleted_at': _tr_days_ago(1),
+            'attachments': [{'filename': 'photo.jpg', 'stored_as': '20261114140000000000_photo.png'}]}
+_lb_there = NO.normalize_note(dict(_lb_here, attachments=[
+    {'filename': 'photo.jpg', 'stored_as': '20261114140000000001_photo.png'}]))
+_lb_known = any(NO._same_files(_lb_there, h)
+                for h in NO._loosely_signed([_lb_here]).get(NO._loose_signature(_lb_there), ()))
+check(f"a trashed note here under an older writer's raw label is known beside the backup's "
+      f"shaped one ({_lb_known})", _lb_known)
+# ...nor one whose trashed note would come in, over a Trash held this run: the merge brings none.
+_rf_new = dict(_rf_entry, uid='rf-new', title='Not here', attachments=[])
+_rf_free = app._backup_brings_more({'imported_trash': [_rf_new]}, [])
+NO._core_paths.hold_writes(NO.TRASH_FILE)
+try:
+    _rf_held = app._backup_brings_more({'imported_trash': [_rf_new]}, [])
+finally:
+    NO._core_paths.WRITES_HELD.discard(os.path.normcase(os.path.abspath(NO.TRASH_FILE)))
+check(f"over a held Trash a backup's trashed notes are not said to bring more ({_rf_free}, {_rf_held})",
+      _rf_free is True and _rf_held is False)
 app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
 
 # A backup's note whose file is held by this Trash came in on a copy of it; matched by its
@@ -6362,7 +6387,9 @@ app.ask_yes_no = lambda *a, **k: True
 app.show_info = lambda *a, **k: None
 try:
     _dz_import(_nf_backup)
-    _nf_said = _dz_import(_nf_backup)
+    # Its last button for every question: "Update it" when it is asked as edited elsewhere,
+    # the road where each Update added one more copy.
+    _nf_said = _dz_import(_nf_backup, answer=lambda *a, **k: (k.get('buttons') or [(None, True)])[-1][1])
 finally:
     for _nf_name_was, _nf_was in (('ask_yes_no', _nf_ask_was), ('show_info', _nf_info_was)):
         if _nf_was is None:

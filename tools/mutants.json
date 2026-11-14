@@ -19427,5 +19427,25 @@
     "must_fail": ["a backup whose only trashed note is here on a copy of its file brings nothing more"],
     "suites": ["qa3"],
     "expect": "killed"
+  },
+  {
+    "id": "SN157",
+    "about": "Over a held Trash a backup's trashed notes are said to bring more, Skip promising a rest that is nothing",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        takes_trash = not (_core_paths.writes_held(TRASH_FILE) or _core_paths.writes_held(SETTINGS_FILE))\n",
+               "replace": "        takes_trash = True\n"}],
+    "must_fail": ["over a held Trash a backup's trashed notes are not said to bring more"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN158",
+    "about": "A trashed note here under an older writer's raw label is never known beside the backup's shaped one",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            signed.setdefault(_loose_signature(shaped), []).append(shaped)\n",
+               "replace": "            signed.setdefault(_loose_signature(shaped), []).append(e)\n"}],
+    "must_fail": ["a trashed note here under an older writer's raw label is known beside the backup's shaped one"],
+    "suites": ["qa3"],
+    "expect": "killed"
   }
 ]
