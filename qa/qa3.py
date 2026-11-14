@@ -4130,6 +4130,25 @@ try:
           and not os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _uw_name))
           and 'was cut short' not in _uw_second
           and NO.get_setting('backup_cut_short') is None)
+    # ...and so does one that read the notes but not the Trash: its files kept too.
+    with open(os.path.join(NO.ATTACHMENTS_DIR, _uw_name), 'wb') as _fh:
+        _fh.write(b'left')
+    NO.save_setting('backup_cut_short', {'kind': 'import', 'file': _hb_zip,
+                                         'when': 'session', 'copied': [_uw_name]})
+    NO._core_paths.hold_writes(NO.TRASH_FILE)
+    try:
+        _ut_first = _next_start_says()
+        _ut_kept = NO.get_setting('backup_cut_short') or {}
+        _ut_there = os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _uw_name))
+    finally:
+        NO._core_paths.WRITES_HELD.discard(os.path.normcase(os.path.abspath(NO.TRASH_FILE)))
+    _ut_second = _next_start_says()
+    check(f'a start that cannot read the Trash keeps the word for an import cut short, '
+          f'said once; the next start takes its files out ({sorted(_ut_kept)})',
+          'was cut short' in _ut_first and _ut_kept.get('copied') == [_uw_name] and _ut_there
+          and not os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _uw_name))
+          and 'was cut short' not in _ut_second
+          and NO.get_setting('backup_cut_short') is None)
     # "Import failed" on screen when a session ends: Windows ends the app with
     # the dialog up, and the unpacked folder, removed only after it, stayed in
     # the temp folder for good, the word lowered before it.
@@ -5024,6 +5043,34 @@ try:
           f'({_xf_said}, {len(_xf_packed)})',
           _xf_said == ['Backup of this session saved']
           and [n.get('id') for n in _xf_packed] == [n.get('id') for n in app.notes])
+    # ...its advice true of how the file was lost: reopening brings back a file
+    # held, never one damaged, whether its copy aside was made or not.
+    _xs_words, _xs_info = {}, app.show_info
+    _xs_refused_was = getattr(app, '_notes_file_refused', False)
+    for _xs_case, _xs_report, _xs_refused, _xs_held in (
+            ('held', '', True, True), ('copied', 'notes_data_corrupt_qa3.json', False, False),
+            ('not copied', '', False, True)):
+        _xs_got = []
+        app.show_info = lambda *a, **k: _xs_got.append(' '.join(map(str, a)))
+        app._corrupt_notes_report, app._notes_file_refused = _xs_report, _xs_refused
+        if _xs_held:
+            NO._core_paths.hold_writes(NO.DATA_FILE)
+        try:
+            app.export_data()
+            t0 = time.time()
+            while app._export_state is not None and time.time() - t0 < 120:
+                app.update()
+        finally:
+            NO._core_paths.WRITES_HELD.discard(os.path.normcase(os.path.abspath(NO.DATA_FILE)))
+            app._corrupt_notes_report, app._notes_file_refused = None, _xs_refused_was
+            app.show_info = _xs_info
+        _xs_got = ' '.join(_xs_got)
+        _xs_words[_xs_case] = ('open it again' in _xs_got, 'copy kept aside' in _xs_got,
+                               'will not bring those notes back' in _xs_got)
+    check(f"...and its advice is true of how the notes file was lost: reopen for one held, "
+          f"never for one damaged ({_xs_words})",
+          _xs_words == {'held': (True, False, False), 'copied': (False, True, False),
+                        'not copied': (False, False, True)})
 finally:
     os.rmdir(NO.DATA_FILE + '.tmp')
     app.show_error, app.show_info = _xf_real
@@ -5972,6 +6019,9 @@ _tw_said = {}
 # carry the mark, no length) brought old entries in under this computer's 30 days.
 _tw_unknown = dict(_tw_backup, **{'settings.json': json.dumps(
     {'desktop_trash_window_unknown': True, 'app_version': '0.97.405'}).encode()})
+# 'trash held': an entry every window keeps, or the window alone left it out unwatched.
+_tw_recent = dict(_tw_backup, **{'trash.json': json.dumps([{
+    'id': 7, 'uid': 'tw-7', 'title': 'Old', 'deleted_at': _tr_days_ago(2)}]).encode()})
 for _tw_case in ('held', 'refused', 'trash held', 'unknown'):
     app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
     _tw_choose_was = NO.choose_trash_window
@@ -5988,7 +6038,8 @@ for _tw_case in ('held', 'refused', 'trash held', 'unknown'):
     app.ask_yes_no = lambda *a, **k: True
     app.show_info = lambda title, msg='', *a, **k: _tw_infos.append((title, msg))
     try:
-        _tw_msgs = _dz_import(_tw_unknown if _tw_case == 'unknown' else _tw_backup) + _tw_infos
+        _tw_msgs = _dz_import({'unknown': _tw_unknown, 'trash held': _tw_recent}.get(
+            _tw_case, _tw_backup)) + _tw_infos
         # In memory alone, a held Trash's took showed under its "couldn't be read".
         _tw_shown = any(e.get('title') == 'Old' for e in app.trash)
     finally:
@@ -6002,8 +6053,8 @@ for _tw_case in ('held', 'refused', 'trash held', 'unknown'):
                 setattr(app, _tw_name, _tw_was)
     _tw_said[_tw_case] = (
         _tw_shown,
-        any("trashed note(s) were not brought in" in m
-            or "trashed notes could not be written to disk" in m for _t, m in _tw_msgs))
+        any(("trashed notes could not be written to disk" if _tw_case == 'trash held'
+             else "trashed note(s) were not brought in") in m for _t, m in _tw_msgs))
     _tw_heard = (_tw_heard if _tw_case != 'held' else []) + [
         _tw_case, [(t, m[-120:]) for t, m in _tw_msgs]]
 check(f"a backup's Trash is not brought in past the window this computer's next start "
@@ -6043,6 +6094,46 @@ check(f"a backup's templates into a held templates file stay in the backup, said
       and any('templates could not be written to disk' in m for _t, m in _tt_msgs)
       and _tt_seeds.get('category') == 'Garden' and 'Garden' in NO.CATEGORY_COLORS)
 NO.CATEGORY_COLORS.pop('Garden', None); NO.persist_categories()
+app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
+# A backup's trashed note keeps a category only the Trash uses (General, unsaid);
+# of two twins in its Trash the older left out took the newer, uncounted; and a
+# name its notes use that a ceiling refuses went to General unsaid.
+_tc_long = 'L' * (NO.MAX_CATEGORY_NAME + 1)
+_tc_backup = dict(_tw_backup, **{
+    'notes_data.json': json.dumps([{'title': 'Long', 'body': 'x', 'category': _tc_long}]).encode(),
+    'trash.json': json.dumps([
+        {'id': 8, 'uid': 'tc-8', 'title': 'Twin', 'body': 'same', 'deleted_at': _tr_days_ago(200)},
+        {'id': 9, 'uid': 'tc-9', 'title': 'Twin', 'body': 'same', 'deleted_at': _tr_days_ago(2)},
+        {'id': 10, 'uid': 'tc-10', 'title': 'Shed', 'body': 'y', 'category': 'OnlyInTrash',
+         'deleted_at': _tr_days_ago(3)}]).encode(),
+    'settings.json': json.dumps({'app_version': '0.97.405'}).encode()})
+NO.CATEGORY_COLORS.pop('OnlyInTrash', None); NO.persist_categories()
+_tc_settings = NO.load_settings()
+_tc_window_was = _tc_settings.pop('trash_retention_days', None)   # this computer's 30 days
+NO.save_settings(_tc_settings)
+_tc_ask_was, _tc_info_was = app.__dict__.get('ask_yes_no'), app.__dict__.get('show_info')
+_tc_infos = []
+app.ask_yes_no = lambda *a, **k: True
+app.show_info = lambda title, msg='', *a, **k: _tc_infos.append((title, msg))
+try:
+    _tc_msgs = ' '.join(m for _t, m in _dz_import(_tc_backup) + _tc_infos)
+finally:
+    for _tc_name, _tc_was in (('ask_yes_no', _tc_ask_was), ('show_info', _tc_info_was)):
+        if _tc_was is None:
+            app.__dict__.pop(_tc_name, None)
+        else:
+            setattr(app, _tc_name, _tc_was)
+_tc_trash = {e.get('title'): e for e in app.trash}
+_tc_saved = NO.load_settings().get('categories') or {}
+check(f"a backup's trashed note keeps a category only the Trash uses, the newer of two twins "
+      f"comes in, and a name a ceiling refuses is said ({sorted(_tc_trash)}, "
+      f"{_tc_trash.get('Shed', {}).get('category')!r}; {_tc_msgs[-260:]!r})",
+      _tc_trash.get('Shed', {}).get('category') == 'OnlyInTrash' and 'OnlyInTrash' in _tc_saved
+      and 'Twin' in _tc_trash and "1 of the backup's trashed note(s) were not brought in" in _tc_msgs
+      and "1 of the backup's categories could not be added" in _tc_msgs)
+NO.CATEGORY_COLORS.pop('OnlyInTrash', None); NO.persist_categories()
+if _tc_window_was is not None:
+    NO.choose_trash_window(_tc_window_was)
 app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
 
 # A Trash entry is kept as the file held it, and four readers still read its

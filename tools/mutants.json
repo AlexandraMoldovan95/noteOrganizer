@@ -19114,7 +19114,7 @@
   },
   {
     "id": "SN126",
-    "about": "A template the file refuses at a sign-out goes unsaid, listed on screen alone",
+    "about": "A template the file refuses at a sign-out goes unsaid at the next start",
     "edits": [{"file": "noteorganizer/ui/settings_page.py",
                "find": "                self._template_not_kept(name, \"unwritten\")\n",
                "replace": "                pass\n"}],
@@ -19206,9 +19206,72 @@
     "id": "SN135",
     "about": "A backup's note filed under a category its settings lack comes in under General, unsaid",
     "edits": [{"file": "note_organizer.py",
-               "find": "        added_names.extend(adopt_categories_of(valid_notes))\n",
+               "find": "        added_names.extend(adopt_categories_of(valid_notes, refused_names))\n",
                "replace": ""}],
     "must_fail": ["a backup's templates into a held templates file stay in the backup"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN136",
+    "about": "A start that read the notes but not the Trash clears an import's word, so no later start takes its copied files out",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                if (self._notes_file_unread() or attached_files_kept()) and cut.get(\"copied\"):\n",
+               "replace": "                if self._notes_file_unread() and cut.get(\"copied\"):\n"}],
+    "must_fail": ["a start that cannot read the Trash keeps the word for an import cut short"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN137",
+    "about": "A template the file refuses at a sign-out stays listed on screen alone",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "                self.templates = kept\n                self._template_not_kept(name, \"unwritten\")\n",
+               "replace": "                self._template_not_kept(name, \"unwritten\")\n"}],
+    "must_fail": ["a template the file refuses at a sign-out is not listed"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN138",
+    "about": "A backup of the session over a damaged notes file whose copy failed advises reopening, which brings nothing back",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                        if _core_paths.writes_held(DATA_FILE) and not damaged else\n",
+               "replace": "                        if _core_paths.writes_held(DATA_FILE) else\n"}],
+    "must_fail": ["...and its advice is true of how the notes file was lost"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN139",
+    "about": "A backup's trashed note under a category only the Trash uses comes in under General, unsaid",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            trash_cats = adopt_categories_of([raw_entry], refused_names)\n",
+               "replace": "            trash_cats = []\n"}],
+    "must_fail": ["a backup's trashed note keeps a category only the Trash uses"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN140",
+    "about": "Of two twins in a backup's Trash, the older left out takes the newer with it, uncounted",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            # Only one brought in is the duplicate's original: an older twin left out\n            # took its newer one, unsaid, with it.\n            existing_trash_keys.add(key)\n",
+               "replace": ""},
+              {"file": "note_organizer.py",
+               "find": "                continue\n            if settings_held or (keep_days is not None\n",
+               "replace": "                continue\n            existing_trash_keys.add(key)\n            if settings_held or (keep_days is not None\n"}],
+    "must_fail": ["a backup's trashed note keeps a category only the Trash uses"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN141",
+    "about": "A category a backup's notes use that a ceiling refuses goes to General unsaid",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        added_names.extend(adopt_categories_of(valid_notes, refused_names))\n",
+               "replace": "        added_names.extend(adopt_categories_of(valid_notes))\n"}],
+    "must_fail": ["a backup's trashed note keeps a category only the Trash uses"],
     "suites": ["qa3"],
     "expect": "killed"
   }

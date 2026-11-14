@@ -4650,6 +4650,24 @@ said); a run whose Trash is unread keeps every file it would delete, orphans tha
 does not take; and the close's words reach the next start only through a settings write, which
 a held settings file refuses (that start already said nothing is saved).
 
+**The twenty-fourth round**, one agent on the twenty-third's fixes, found nothing of high
+severity in the code. Its mediums were in the documents: test plan case 1076 named a check by
+its old name, and a mutant, SN124, that the twenty-third's own fix had left alive (the backup's one
+trashed note, deleted months before, was now left out by the length alone, so the held Trash's
+guard went unwatched; a recent entry watches it again); and USER_GUIDE said a backup brings "any
+category its notes are filed under", untrue of its trashed notes and of a name past the ceilings.
+The lows: a backup's trashed note under a category only the Trash uses came in under General
+(adopted now, SN139), and a name a ceiling refuses went to General unsaid (said with the
+backup's own refused names, SN141); of two identical entries in a backup's Trash, the older, left
+out, took the newer with it, uncounted (SN140); the twenty-third's fix to the session-only
+export's advice covered a damaged notes file copied aside, not one whose copy failed (SN138); the
+start keeping an interrupted import's word over an unread Trash, and a sign-out's template
+put-back, had no check (SN136, SN137); and that round's three mediums had no rows in the test
+plan (1077 to 1079). Left, each with its reason: "Also restored" names categories, day markings
+or trashed notes beside the line saying they could not be written to disk, true of this run, as
+the theme's refused choice is; and day markings taken over held settings show on the calendar
+this run, said not written.
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.
 
