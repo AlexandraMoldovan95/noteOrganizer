@@ -324,6 +324,7 @@ from noteorganizer.ui.spelling import SpellingMixin
 # Re-exported for callers and the qa suite ----
 from noteorganizer.core.categories import (
     CATEGORY_COLORS,
+    adopt_categories_of,
     load_categories,
     persist_categories,
     category_name_refusal,
@@ -1806,15 +1807,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Why, since the write itself could be refused (a full disk, a file held).
         unwritten = get_setting("template_not_kept_why", None, expect=str) == "unwritten"
         if not_kept:
-            save_setting("template_not_kept", None)
             lines.append(
                 f"The template “{one_line(not_kept, 80)}”, being written when "
                 f"Windows began to sign out or shut down, was not kept: " + (
                     "the templates file could not be written." if unwritten else
                     f"you already had {MAX_TEMPLATES:,} templates, which is the "
                     "most Note Organizer keeps."))
-        if unwritten:
-            save_setting("template_not_kept_why", None)
+        if not_kept or get_setting("template_not_kept_why", None) is not None:
+            self._template_not_kept(None)   # the word and its reason, together
 
         # Left by the close (before its wait and after) or a session's end; said once.
         cut = get_setting("backup_cut_short", None, expect=dict)
@@ -1832,7 +1832,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # or, on a run holding none of the notes, at the next start
                 # that does, the word kept for it and said once.
                 self._drop_left_import(cut)
-                if self._notes_file_unread() and cut.get("copied"):
+                # A run that keeps every file (the Trash unread too) dropped none.
+                if (self._notes_file_unread() or attached_files_kept()) and cut.get("copied"):
                     save_setting("backup_cut_short", dict(cut, temp_dir="", said=True))
                     kept_for_later = True
                 if not cut.get("said"):
@@ -2523,14 +2524,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         left_out=list(left)))
             if state.get("session_only") is not None:
                 # Not remembered as the notebook's backup: it holds none of it.
+                # Held, the file waits whole for the next start; damaged, it was
+                # copied aside, and reopening brings nothing back.
                 self.show_info(
                     "Backup of this session saved",
                     f"Saved to:\n{state['save_path']}\n\n"
                     f"It holds the {state['session_only']} note(s) written since "
                     "Note Organizer started, and not your notes file, which "
-                    "could not be opened then. Close Note Organizer and open it "
-                    "again; Settings → Backup → Import brings this backup's "
-                    "notes in beside yours." + left_said)
+                    "could not be opened then. " + (
+                        "Close Note Organizer and open it again; Settings → Backup "
+                        "→ Import brings this backup's notes in beside yours."
+                        if _core_paths.writes_held(DATA_FILE) else
+                        "Your earlier notes are in the copy kept aside when Note "
+                        "Organizer started, as its message said.") + left_said)
             else:
                 self._remember_finished_export()
                 self.show_info(
@@ -12196,6 +12202,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 continue
             CATEGORY_COLORS[name] = color
             added_names.append(name)
+        # ...and those its notes are filed under where its settings lack them (a
+        # settings.json left out, or a category made while settings were refused),
+        # believed over that file as the start believes them: General, unsaid.
+        added_names.extend(adopt_categories_of(valid_notes))
         added_categories = len(added_names)
 
         def _undo_category_merge():
@@ -12307,19 +12317,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # shorter than the default (ISSUES_LOG: "The Trash restored under a
         # window it never had"); a chosen one stays.
         window = state.get("imported_trash_window")
-        # Its entries wait on it: brought in without it (settings held, its write
-        # refused), the next start's 30 days removed them, files and all. A held
-        # Trash takes none, its length not chosen this run (set_retention).
-        trash_window_lost = False
+        # Not over a held Trash (its length not chosen this run, set_retention), nor
+        # held settings (their defaults stand in). Refused, the length below is this
+        # computer's own, and the entries past it stay in the backup.
         if (isinstance(window, int) and not isinstance(window, bool)
                 and TRASH_RETENTION_DAYS < window <= 365
                 and state.get("imported_trash")
-                and not _core_paths.writes_held(TRASH_FILE)):
-            if _core_paths.writes_held(SETTINGS_FILE):
-                trash_window_lost = True   # its defaults stand in: none known, none kept
-            elif ("trash_retention_days" not in load_settings()
-                    and not get_setting(TRASH_WINDOW_UNKNOWN)):
-                trash_window_lost = not choose_trash_window(window)[0]
+                and not _core_paths.writes_held(TRASH_FILE)
+                and not _core_paths.writes_held(SETTINGS_FILE)
+                and "trash_retention_days" not in load_settings()
+                and not get_setting(TRASH_WINDOW_UNKNOWN)):
+            choose_trash_window(window)
 
         # A file already claimed (note, Trash, this import) gets its own copy,
         # as in duplicate_note; read through attachments_of (a 7 stopped it).
@@ -12360,24 +12368,27 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 self.templates.append(tpl)
                 template_names.add(tpl["name"])
                 added_templates += 1
+        # Refused (a held file, a full disk), in memory alone they took the place
+        # of a held file's words and were gone at the next start: put back.
         if added_templates and not save_templates(self.templates)[0]:
             unwritten.append("the templates")
+            self.templates = self.templates[:len(self.templates) - added_templates]
+            added_templates = 0
         added_trash = 0
         # Skipped unasked, so the test is identity (content_signature), not
         # _dup_key's resemblance: a trashed note differing only in its date
         # or files was dropped, its only copy.
         existing_trash_keys = {content_signature(normalize_note(e))
                                for e in self.trash if isinstance(e, dict)}
-        # None into a held Trash, whose write is refused (in memory alone they
-        # showed where its page says it couldn't be read), nor without the
-        # window they need (above): the backup still holds them, and it is said.
+        # None into a held Trash (its write refused), and each entry only if the
+        # length this computer's next start purges by keeps it: past it, it was
+        # removed with its files. Over held settings that length is not known: none.
         trash_left_out = 0
+        settings_held = _core_paths.writes_held(SETTINGS_FILE)
+        keep_days = None if settings_held else trash_retention_days()
         incoming_trash = state.get("imported_trash") or []
         if incoming_trash and _core_paths.writes_held(TRASH_FILE):
             unwritten.append("the trashed notes")
-            incoming_trash = []
-        elif incoming_trash and trash_window_lost:
-            trash_left_out = sum(1 for e in incoming_trash if isinstance(e, dict))
             incoming_trash = []
         for entry in incoming_trash:
             if not isinstance(entry, dict):
@@ -12393,6 +12404,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # Re-importing your own backup must not double the trash.
                 continue
             existing_trash_keys.add(key)
+            if settings_held or (keep_days is not None
+                                 and trash_entries_past_window([entry], keep_days)):
+                trash_left_out += 1
+                continue
             # Same claimed-file discipline as the notes above: a trashed
             # entry pointing at a file an ACTIVE note owns would, on its
             # later purge, delete that file out from under the note.
@@ -12450,10 +12465,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             extras_note += (" " + " and ".join(unwritten).capitalize()
                             + " could not be written to disk; the backup still holds them.")
         if trash_left_out:
-            extras_note += (f" The backup's {trash_left_out} trashed note(s) were not brought "
-                            "in: how long the Trash keeps notes could not be saved here this "
-                            "time, so the next start would have removed the older ones. The "
-                            "backup still holds them.")
+            extras_note += (
+                f" {trash_left_out} of the backup's trashed note(s) were not brought in: " + (
+                    "how long the Trash keeps notes could not be read here this time, so "
+                    "the next start could have removed them." if settings_held else
+                    f"they are older than the {keep_days} days this computer's Trash keeps "
+                    "notes, so the next start would have removed them.")
+                + " The backup still holds them.")
         if earlier > 0:
             extras_note += (f" Earlier text of {earlier} day{'s' if earlier != 1 else ''} "
                             "of a repeating note kept as notes of their own.")

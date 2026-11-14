@@ -885,6 +885,7 @@
   "_target_mtime": "(path)",
   "_teardown_table_grids": "(self)",
   "_technical_details": "(self)",
+  "_template_not_kept": "(name, why=None)",
   "_templates_full": "(self, name, replacing=None)",
   "_text_button": "(self, parent, text, command, kind='normal')",
   "_text_class_redo": "(event)",

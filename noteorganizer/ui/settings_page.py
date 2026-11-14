@@ -47,6 +47,7 @@ from ..core.storage import (
     copy_attachment_file,
     get_setting,
     save_setting,
+    save_settings,
     load_settings,
     normalize_template,
     same_attached_file,
@@ -827,6 +828,20 @@ class SettingsPageMixin:
         canvas._preview_overflows_x = max_x > shown_w
         return blocks
 
+    @staticmethod
+    def _template_not_kept(name, why=None):
+        """The next start's word on a template a sign-out did not keep, and why
+        ("full", "unwritten"), in one write: in two, a refused second left the
+        first's reason wrong. None takes both back."""
+        settings = load_settings()
+        for key, value in (("template_not_kept", name),
+                           ("template_not_kept_why", why if name else None)):
+            if value is None:
+                settings.pop(key, None)
+            else:
+                settings[key] = value
+        return save_settings(settings)[0]
+
     def _edit_template(self, tpl, redraw, anchor_widget=None):
         """Open a small editor (inline window) to create or edit a template's
         name, title, body, comments and category. Returns False when it
@@ -1258,7 +1273,7 @@ class SettingsPageMixin:
             # Saved after all: a cancelled sign-out's word that it was not
             # kept is untrue now, and the next start must not say it.
             if get_setting("template_not_kept", None, expect=str):
-                save_setting("template_not_kept", None)
+                self._template_not_kept(None)
             self._dismiss_mini_popup()
             # The list as the page shows it NOW: rebuilt under the editor, the
             # rows handed over were gone, and a saved template said it failed.
@@ -1333,7 +1348,7 @@ class SettingsPageMixin:
             elif len(self.templates) >= MAX_TEMPLATES:
                 # Written, the next start keeps the first 1,000 and cut it
                 # unsaid; refused, the next start says so.
-                save_setting("template_not_kept", name)
+                self._template_not_kept(name, "full")
                 return
             else:
                 self.templates.append(new_tpl)
@@ -1342,9 +1357,11 @@ class SettingsPageMixin:
             # list goes back, the editor stays unsaved, the next start says so.
             if not save_templates(self.templates)[0]:
                 self.templates = kept
-                save_setting("template_not_kept", name)
-                save_setting("template_not_kept_why", "unwritten")
+                self._template_not_kept(name, "unwritten")
                 return
+            # Written at a later sign-out: an earlier one's word is untrue now.
+            if get_setting("template_not_kept", None, expect=str):
+                self._template_not_kept(None)
             # The sign-out can still be cancelled, and the editor then stays:
             # it edits what was just written, or a second sign-out added a
             # "Name (2)" and its own Save asked about a name it held itself.

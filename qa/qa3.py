@@ -1319,8 +1319,11 @@ if _st3.on_write_failure is not None:
 app.templates.append(NO.normalize_template(
     {'name': 'RoundTripTpl', 'title': 'T', 'body': 'tpl body'}))
 NO.save_templates(app.templates)
+# Deleted of late: one older than the 30 days the next start keeps stays in the backup.
 app.trash.append({'id': 900, 'title': 'TrashedRT', 'body': 'rt',
-                  'category': 'General', 'deleted_at': '2026-01-01 00:00:00',
+                  'category': 'General',
+                  'deleted_at': time.strftime('%Y-%m-%d %H:%M:%S',
+                                              time.localtime(time.time() - 2 * 86400)),
                   'attachments': []})
 NO.save_trash(app.trash)
 _rt_zip = os.path.join(tempfile.gettempdir(), 'qa3_fullrt.zip')
@@ -2763,9 +2766,10 @@ app.open_blank_tab()
 app.update()
 app.notes = []
 app.save_notes()
+_tr_days_ago = lambda n: time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time() - n * 86400))
 app.trash = [dict(NO.normalize_note({'id': 7, 'title': 'Old plan', 'body': 'x',
                                      'date': '2026-01-01'}),
-                  deleted_at='2026-09-01 10:00:00')]
+                  deleted_at=_tr_days_ago(3))]
 NO.save_trash(app.trash)
 _trzip = os.path.join(tempfile.gettempdir(), 'qa3_trash_strict.zip')
 if os.path.exists(_trzip):
@@ -2777,7 +2781,7 @@ while app._export_state is not None and time.time() - t0 < 120:
     app.update()
 app.trash = [dict(NO.normalize_note({'id': 7, 'title': 'Old plan', 'body': 'x',
                                      'date': '2026-02-02'}),
-                  deleted_at='2026-09-02 10:00:00')]
+                  deleted_at=_tr_days_ago(2))]
 NO.save_trash(app.trash)
 _real_dlg_tr = app._themed_dialog
 app._themed_dialog = lambda *a, **k: 'all'
@@ -5809,6 +5813,17 @@ try:
     _tu_listed = [t.get('name') for t in app.templates]
     _tu_page.save_templates = _tu_save_was
     _tu_said = _next_start_says()
+    # ...and a later sign-out whose write lands takes that word back: kept, the
+    # next start said a template the file holds was not kept.
+    _tu_page.save_templates = lambda _t: (False, OSError(28, 'No space left on device'))
+    app._ending_session = False
+    app.on_session_end(); app.update()
+    _tu_page.save_templates = _tu_save_was
+    _tu_word = NO.get_setting('template_not_kept')
+    app._ending_session = False
+    app.on_session_end(); app.update()
+    _tu_after = (NO.get_setting('template_not_kept'), NO.get_setting('template_not_kept_why'),
+                 [t.get('name') for t in NO.load_templates()])
 finally:
     _tu_page.save_templates = _tu_save_was
     app.ask_yes_no, app.ask_yes_no_cancel, app.show_warning = _tf_real
@@ -5819,6 +5834,10 @@ check(f"a template the file refuses at a sign-out is not listed, and the next st
       f"why it was not kept ({_tu_listed}, {_tu_said[:110]!r})",
       _tu_listed == ['Week plan'] and '“Packing”' in _tu_said
       and 'was not kept: the templates file could not be written' in _tu_said)
+check(f"...and a later sign-out whose write lands takes back that word and its reason "
+      f"({_tu_word!r} -> {_tu_after})",
+      _tu_word == 'Packing' and _tu_after[0] is None and _tu_after[1] is None
+      and 'Packing' in _tu_after[2])
 app.templates = []; NO.save_templates(app.templates)
 
 # ...and with the sign-out cancelled, room made and the editor's own Save
@@ -5949,14 +5968,18 @@ app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
 # (their defaults stand in) or the window's write refused, the entries came in
 # and the next start's 30 days removed them, files and all. Said, not done.
 _tw_said = {}
-for _tw_case in ('held', 'refused', 'trash held'):
+# 'unknown': a backup from a notebook whose Trash length was lost (its settings
+# carry the mark, no length) brought old entries in under this computer's 30 days.
+_tw_unknown = dict(_tw_backup, **{'settings.json': json.dumps(
+    {'desktop_trash_window_unknown': True, 'app_version': '0.97.405'}).encode()})
+for _tw_case in ('held', 'refused', 'trash held', 'unknown'):
     app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
     _tw_choose_was = NO.choose_trash_window
     if _tw_case == 'held':
         NO._core_paths.hold_writes(NO.SETTINGS_FILE)
     elif _tw_case == 'refused':
         NO.choose_trash_window = lambda _d: (False, OSError(28, 'No space left on device'))
-    else:
+    elif _tw_case == 'trash held':
         NO._core_paths.hold_writes(NO.TRASH_FILE)
     # Asked and told here, not through whatever an earlier check left in their
     # place: "Import complete" went to one of those, unheard.
@@ -5965,7 +5988,7 @@ for _tw_case in ('held', 'refused', 'trash held'):
     app.ask_yes_no = lambda *a, **k: True
     app.show_info = lambda title, msg='', *a, **k: _tw_infos.append((title, msg))
     try:
-        _tw_msgs = _dz_import(_tw_backup) + _tw_infos
+        _tw_msgs = _dz_import(_tw_unknown if _tw_case == 'unknown' else _tw_backup) + _tw_infos
         # In memory alone, a held Trash's took showed under its "couldn't be read".
         _tw_shown = any(e.get('title') == 'Old' for e in app.trash)
     finally:
@@ -5983,9 +6006,43 @@ for _tw_case in ('held', 'refused', 'trash held'):
             or "trashed notes could not be written to disk" in m for _t, m in _tw_msgs))
     _tw_heard = (_tw_heard if _tw_case != 'held' else []) + [
         _tw_case, [(t, m[-120:]) for t, m in _tw_msgs]]
-check(f"a backup's Trash is not brought in without the window it needs, nor into a held "
-      f"Trash, and that is said ({_tw_said}; last heard {_tw_heard})",
-      _tw_said == {'held': (False, True), 'refused': (False, True), 'trash held': (False, True)})
+check(f"a backup's Trash is not brought in past the window this computer's next start "
+      f"keeps, nor into a held Trash, and that is said ({_tw_said}; last heard {_tw_heard})",
+      _tw_said == {'held': (False, True), 'refused': (False, True), 'trash held': (False, True),
+                   'unknown': (False, True)})
+app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
+
+# A backup's templates into a templates file held this run stay in it: in memory
+# alone they took the place of the held file's words, gone at the next start.
+# And a note filed under a category its backup's settings lack keeps it: it
+# came in under General, unsaid, where the start believes the note.
+_tt_backup = dict(_tw_backup, **{
+    'notes_data.json': json.dumps([{'title': 'Seeds', 'body': 'x', 'category': 'Garden'}]).encode(),
+    'templates.json': json.dumps([{'name': 'From the backup', 'body': 'b'}]).encode()})
+app.notes = []; app.save_notes(); app.templates = []; NO.save_templates(app.templates)
+NO.CATEGORY_COLORS.pop('Garden', None); NO.persist_categories()
+_tt_ask_was, _tt_info_was = app.__dict__.get('ask_yes_no'), app.__dict__.get('show_info')
+_tt_infos = []
+app.ask_yes_no = lambda *a, **k: True
+app.show_info = lambda title, msg='', *a, **k: _tt_infos.append((title, msg))
+NO._core_paths.hold_writes(NO.TEMPLATES_FILE)
+try:
+    _tt_msgs = _dz_import(_tt_backup) + _tt_infos
+finally:
+    NO._core_paths.WRITES_HELD.discard(os.path.normcase(os.path.abspath(NO.TEMPLATES_FILE)))
+    for _tt_name, _tt_was in (('ask_yes_no', _tt_ask_was), ('show_info', _tt_info_was)):
+        if _tt_was is None:
+            app.__dict__.pop(_tt_name, None)
+        else:
+            setattr(app, _tt_name, _tt_was)
+_tt_seeds = next((n for n in app.notes if n.get('title') == 'Seeds'), {})
+check(f"a backup's templates into a held templates file stay in the backup, said; and its "
+      f"note keeps a category its settings lack ({[t.get('name') for t in app.templates]}, "
+      f"{_tt_seeds.get('category')!r})",
+      app.templates == []
+      and any('templates could not be written to disk' in m for _t, m in _tt_msgs)
+      and _tt_seeds.get('category') == 'Garden' and 'Garden' in NO.CATEGORY_COLORS)
+NO.CATEGORY_COLORS.pop('Garden', None); NO.persist_categories()
 app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
 
 # A Trash entry is kept as the file held it, and four readers still read its

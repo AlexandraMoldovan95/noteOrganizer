@@ -3442,6 +3442,10 @@ app.date_entry.insert(0, '31/09/2026')
 _rn_dialog_real = app._themed_dialog
 _rn_warned = []
 app._themed_dialog = lambda title, *a, **k: (_rn_warned.append(title), None)[1]
+# show_warning heard here too: the suite's stand-in for it, put in place above,
+# would hear "Part of this note isn't saved" where this check could not.
+_rn_warn_was = app.__dict__.get('show_warning')
+app.show_warning = lambda title, *a, **k: _rn_warned.append(title)
 try:
     app.save_current_note(); app.update()
     _rn_first = str(app.status_lbl.cget('text'))
@@ -3451,6 +3455,10 @@ try:
     _rn_second = str(app.status_lbl.cget('text'))
 finally:
     app._themed_dialog = _rn_dialog_real
+    if _rn_warn_was is None:
+        app.__dict__.pop('show_warning', None)
+    else:
+        app.show_warning = _rn_warn_was
 app._cancel_pending_autosave()
 check(f'a date the app cannot read, typed on a day, is put back rather than left '
       f'out, and each save of the day says so in its own words, asking nothing '
