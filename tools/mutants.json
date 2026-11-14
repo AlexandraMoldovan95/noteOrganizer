@@ -2566,8 +2566,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                     if uid and n.get(\"uid\") == uid), None)\n",
-        "replace": "                     if False), None)\n"
+        "find": "        note = next((n for n in self.notes if n.get(\"uid\") in uids), None)\n",
+        "replace": "        note = next((n for n in self.notes if False), None)\n"
       }
     ],
     "must_fail": ["Settings -> About's Show brings a deleted welcome note back"],
@@ -3834,7 +3834,7 @@
     "edits": [
       {
         "file": "noteorganizer/core/paths.py",
-        "find": "    for name in NOTEBOOK_COMPANIONS:\n",
+        "find": "    for name in names:\n",
         "replace": "    for name in ():\n"
       }
     ],
@@ -7692,8 +7692,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                    + (self._REPLACES_EARLIER_RESCUE\n                       if self._holds_unspent_rescue(mine) else \"\")\n",
-        "replace": "                    + \"\"\n"
+        "find": "                        + (self._REPLACES_EARLIER_RESCUE if rescue_said else \"\")\n",
+        "replace": "                        + \"\"\n"
       }
     ],
     "must_fail": [
@@ -18769,10 +18769,90 @@
     "id": "SN92",
     "about": "Words typed in a file-alone note before Update are updated on a promise of nothing else",
     "edits": [{"file": "note_organizer.py",
-               "find": "            if any(shared_update_changes(self.find_note(mine.get(\"id\")) or mine, theirs,\n",
-               "replace": "            if False and any(shared_update_changes(self.find_note(mine.get(\"id\")) or mine, theirs,\n"}],
+               "find": "            if (any(shared_update_changes(_now(mine), theirs, UPDATABLE_FROM_BACKUP)\n",
+               "replace": "            if (False and any(shared_update_changes(_now(mine), theirs, UPDATABLE_FROM_BACKUP)\n"}],
     "must_fail": ["words typed in a file-alone note before Update are asked about again"],
     "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN93",
+    "about": "A backup made OLDER by Update's own flush is updated without saying so",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                    or sum(1 for mine, theirs in texts if source == \"backup\"\n",
+               "replace": "                    or False and sum(1 for mine, theirs in texts if source == \"backup\"\n"}],
+    "must_fail": ["a backup made OLDER by Update's flush is asked about again"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN94",
+    "about": "A rescue copy made by Update's own flush is replaced unsaid",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                    or sum(1 for mine, _t in texts if self._holds_unspent_rescue(_now(mine))) > rescued):\n",
+               "replace": "                    or False):\n"}],
+    "must_fail": ["a rescue copy made by Update's flush is asked about again"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN95",
+    "about": "A share code's Update replaces unsaid the rescue copy its own flush made",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                    if self._holds_unspent_rescue(mine) and not rescue_said:\n                        continue\n",
+               "replace": ""}],
+    "must_fail": ["a share code's Update whose flush made a rescue copy is asked about again"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN96",
+    "about": "Remove attachment promises the stored copy gone in a run that keeps every file",
+    "edits": [{"file": "noteorganizer/ui/attachments.py",
+               "find": "                               if attached_files_kept() else\n",
+               "replace": "                               if False else\n"}],
+    "must_fail": ["over held settings the Trash dropdown puts the choice back at once"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN97",
+    "about": "Over held settings the Trash dropdown asks first and refuses after",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "            if paths.writes_held(paths.SETTINGS_FILE):\n                try:\n                    self.trash_retention_var.set(shown(current))\n",
+               "replace": "            if False:\n                try:\n                    self.trash_retention_var.set(shown(current))\n"}],
+    "must_fail": ["over held settings the Trash dropdown puts the choice back at once"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN98",
+    "about": "Over a settings file that refuses its uid, every Show adds another welcome note",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self._welcome_uid_run = note[\"uid\"]\n",
+               "replace": ""}],
+    "must_fail": ["over a settings file that refuses its uid, a second Show opens the same welcome note"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN99",
+    "about": "This folder's settings staying, the old notebook's templates stay behind with its Trash",
+    "edits": [{"file": "noteorganizer/core/paths.py",
+               "find": "        missing += _copy_companions(best_dir, app_dir,\n                                    tuple(n for n in NOTEBOOK_COMPANIONS if n != \"trash.json\"))\n",
+               "replace": "        missing += [n for n in NOTEBOOK_COMPANIONS if n != \"trash.json\" and os.path.exists(os.path.join(best_dir, n))]\n"}],
+    "must_fail": ["...its templates, which no window empties, still come in"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN100",
+    "about": "A notes file the system refuses at the start is copied aside, a good file taken for damage",
+    "edits": [{"file": "noteorganizer/core/storage.py",
+               "find": "            raw, refused = None, True\n",
+               "replace": "            raw = None\n"}],
+    "must_fail": ["a notes file held at the start is held, never copied aside"],
+    "suites": ["test_data_safety"],
     "expect": "killed"
   }
 ]

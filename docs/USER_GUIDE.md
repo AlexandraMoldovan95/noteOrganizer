@@ -719,8 +719,9 @@ them.
 If the settings file can't be read (a bad shutdown or a disk problem can do that), the app no
 longer knows how long you chose, so it removes nothing from the Trash until you choose again. It
 says so once when it starts, and the selector shows **Choose…** until you do. If the file can't
-be opened at all (another program holding it), nothing can be chosen until the app is opened
-again: it uses its own defaults all that time, saves no setting, and removes nothing.
+be used at all (another program holding it, or a full disk keeping a damaged one from being set
+aside), nothing can be chosen until the app is opened again: it uses its own defaults all that
+time, saves no setting, and removes nothing.
 
 Each row also carries a tick box, so getting a batch back is one gesture rather than forty: tick
 what you want — or **Select all** above the rows, which ticks the whole Trash, the rows not
@@ -1108,7 +1109,9 @@ over that: it preserves the unreadable file beside the original (named
 `notes_data_corrupt_<date>.json`, kept forever), starts with an empty list, and tells you at
 startup exactly what happened and where the preserved copy sits — so you can restore your most
 recent backup while the broken file stays available for repair. The same quiet preserve-aside
-protects the trash, templates and settings files.
+protects the trash, templates and settings files. A file another program holds open when the app
+starts is different: it is not broken, so no copy is made; the app says so, starts with what it
+has, and saves nothing over that file until it is opened again.
 
 Failed *saves* speak up too: if a data file can't be written (a full disk, a file another program
 holds), an error message names the file instead of pretending the save worked, and a technical
