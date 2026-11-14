@@ -222,6 +222,7 @@ from noteorganizer.core.formatting import (
 
 from noteorganizer.core.storage import (
     now_stamp,
+    attached_files_kept,
     TEMPLATES_HELD_WORDS,
     TRASH_RETENTION_DAYS,
     TRASH_WINDOW_UNKNOWN,
@@ -1802,13 +1803,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # A template written as Windows began to sign out, past the most
         # kept: "began to", true too of a sign-out the person cancelled.
         not_kept = get_setting("template_not_kept", None, expect=str)
+        # Why, since the write itself could be refused (a full disk, a file held).
+        unwritten = get_setting("template_not_kept_why", None, expect=str) == "unwritten"
         if not_kept:
             save_setting("template_not_kept", None)
             lines.append(
                 f"The template “{one_line(not_kept, 80)}”, being written when "
-                f"Windows began to sign out or shut down, was not kept: you already "
-                f"had {MAX_TEMPLATES:,} templates, which is the most Note "
-                "Organizer keeps.")
+                f"Windows began to sign out or shut down, was not kept: " + (
+                    "the templates file could not be written." if unwritten else
+                    f"you already had {MAX_TEMPLATES:,} templates, which is the "
+                    "most Note Organizer keeps."))
+        if unwritten:
+            save_setting("template_not_kept_why", None)
 
         # Left by the close (before its wait and after) or a session's end; said once.
         cut = get_setting("backup_cut_short", None, expect=dict)
@@ -2217,7 +2223,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # Every note written, an earlier "Not saved" is untrue: a drag or a
             # rename, which say nothing, left it up over a file holding all.
             lbl = getattr(self, "status_lbl", None)
-            if lbl is not None and str(lbl.cget("text")).startswith("Not saved"):
+            if lbl is not None and str(lbl.cget("text")) == getattr(self, "_not_saved_said", None):
                 self.set_status("Saved at " + show_stamp(now_stamp()))
             return True
         # Never a dialog inside a sign-out: Windows waits on it, then ends the
@@ -2264,6 +2270,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "Settings → Backup → Export keeps what you wrote"
             if _core_paths.writes_held(DATA_FILE)
             else "Not saved — your notes could not be written")
+        # Kept as said, so a write that lands takes back these words alone: not
+        # an editor's "Not saved yet", about an edit no notes write carries.
+        self._not_saved_said = str(self.status_lbl.cget("text"))
 
     def _say_if_saved(self, written, text):
         """A change's own words on the status line, only over a write that
@@ -2679,6 +2688,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         were left by every Cancel, error or skip. Nothing a note names, or
         the import did not copy itself, is touched.
         """
+        # Never in a run that did not read the notes or the Trash: a file their
+        # unread entries name would look free (attached_files_kept).
+        if attached_files_kept():
+            return
         in_use = {os.path.normcase(n) for n in attachment_names_in(self.notes + self.trash)}
         for named in state.get("copied") or []:
             # A bare name only; ":" would name a file's stream (N::$DATA).
@@ -12294,15 +12307,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # shorter than the default (ISSUES_LOG: "The Trash restored under a
         # window it never had"); a chosen one stays.
         window = state.get("imported_trash_window")
+        # Its entries wait on it: brought in without it (settings held, its write
+        # refused), the next start's 30 days removed them, files and all. A held
+        # Trash takes none, its length not chosen this run (set_retention).
+        trash_window_lost = False
         if (isinstance(window, int) and not isinstance(window, bool)
                 and TRASH_RETENTION_DAYS < window <= 365
                 and state.get("imported_trash")
-                and "trash_retention_days" not in load_settings()
-                and not get_setting(TRASH_WINDOW_UNKNOWN)
-                # Held, the Trash takes none of the backup's entries this window
-                # came for, and its length is not chosen this run (set_retention).
                 and not _core_paths.writes_held(TRASH_FILE)):
-            choose_trash_window(window)
+            if _core_paths.writes_held(SETTINGS_FILE):
+                trash_window_lost = True   # its defaults stand in: none known, none kept
+            elif ("trash_retention_days" not in load_settings()
+                    and not get_setting(TRASH_WINDOW_UNKNOWN)):
+                trash_window_lost = not choose_trash_window(window)[0]
 
         # A file already claimed (note, Trash, this import) gets its own copy,
         # as in duplicate_note; read through attachments_of (a 7 stopped it).
@@ -12351,7 +12368,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # or files was dropped, its only copy.
         existing_trash_keys = {content_signature(normalize_note(e))
                                for e in self.trash if isinstance(e, dict)}
-        for entry in (state.get("imported_trash") or []):
+        # None into a held Trash, whose write is refused (in memory alone they
+        # showed where its page says it couldn't be read), nor without the
+        # window they need (above): the backup still holds them, and it is said.
+        trash_left_out = 0
+        incoming_trash = state.get("imported_trash") or []
+        if incoming_trash and _core_paths.writes_held(TRASH_FILE):
+            unwritten.append("the trashed notes")
+            incoming_trash = []
+        elif incoming_trash and trash_window_lost:
+            trash_left_out = sum(1 for e in incoming_trash if isinstance(e, dict))
+            incoming_trash = []
+        for entry in incoming_trash:
             if not isinstance(entry, dict):
                 continue
             raw_deleted = entry.get("deleted_at")
@@ -12421,6 +12449,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # Not "yet": a file held is written by nothing this run.
             extras_note += (" " + " and ".join(unwritten).capitalize()
                             + " could not be written to disk; the backup still holds them.")
+        if trash_left_out:
+            extras_note += (f" The backup's {trash_left_out} trashed note(s) were not brought "
+                            "in: how long the Trash keeps notes could not be saved here this "
+                            "time, so the next start would have removed the older ones. The "
+                            "backup still holds them.")
         if earlier > 0:
             extras_note += (f" Earlier text of {earlier} day{'s' if earlier != 1 else ''} "
                             "of a repeating note kept as notes of their own.")
@@ -20044,6 +20077,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "checklist": st.get("checklist", []),
             })
             # If a template with this name exists, overwrite it.
+            kept = self.templates
             self.templates = [t for t in self.templates if t.get("name") != name]
             self.templates.append(tpl)
             # Said saved only when the file took it: a refused write showed
@@ -20051,6 +20085,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if save_templates(self.templates)[0]:
                 self.set_status(f"Saved template “{one_line(name, 200)}”")
             else:
+                # The list as the file has it: listed, it was gone at the next
+                # start, and over a held file it hid that the file couldn't be read.
+                self.templates = kept
                 self.set_status(f"Template “{one_line(name, 200)}” not saved: "
                                 "the templates file could not be written")
             refresh = getattr(self, "_refresh_templates_panel", None)

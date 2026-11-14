@@ -298,6 +298,20 @@ _dc_said = str(app.toast_lbl.cget('text'))
 check(f"a day colour put back from the Calendar is said on the banner ({_dc_said!r})",
       'Day colour put back' in _dc_said and app.day_colors.get('2026-07-16') == '#4cc9f0')
 app.day_colors.pop('2026-07-16', None); app._persist_day_colors()
+# ...and one the settings file refuses is not said put back: the colour, on
+# screen alone, was gone at the next start.
+_dc_view = sys.modules['noteorganizer.ui.calendar_view']
+_dc_save_was = _dc_view.save_setting
+_dc_view.save_setting = lambda *a, **k: False
+app._hide_toast(); app.update()
+try:
+    app._undo_day_clear('2026-07-16', 'color', '#4cc9f0'); app.update()
+    _dc_refused = str(app.toast_lbl.cget('text'))
+finally:
+    _dc_view.save_setting = _dc_save_was
+check(f"a day colour the settings file refuses is not said put back, nor kept on screen "
+      f"({_dc_refused!r}, {app.day_colors.get('2026-07-16')!r})",
+      'Not put back' in _dc_refused and '2026-07-16' not in app.day_colors)
 
 # recurring note asks for scope
 app.notes = [{'id': 3, 'title': 'RecurringCal', 'body': 'x', 'category': 'General', 'date': '2026-07-01',

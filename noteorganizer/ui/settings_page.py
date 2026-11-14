@@ -350,10 +350,12 @@ class SettingsPageMixin:
             cat = n.get("category") or PROTECTED_CATEGORY
             counts[cat] = counts.get(cat, 0) + 1
         # The things themselves, not the notes naming them; "In trash" is what
-        # is there now, not an all-time total.
-        templates_count = len(self.templates)
+        # is there now. A file held this run read as none: "0" said what was not
+        # so, as "Trash is empty" did; a dash says it is not known this time.
+        templates_count = ("—" if paths.writes_held(paths.TEMPLATES_FILE)
+                           else len(self.templates))
         checklists_count = sum(1 for n in notes if n.get("checklist"))
-        deleted_count = len(self.trash)
+        deleted_count = "—" if paths.writes_held(paths.TRASH_FILE) else len(self.trash)
         tile_values = (total, added_week, len(CATEGORY_COLORS), templates_count,
                        checklists_count, deleted_count)
         table_values = ((added_week, added_month, added_year, added_older),
@@ -1325,6 +1327,7 @@ class SettingsPageMixin:
             while name in taken:
                 name, n = f"{base} ({n})", n + 1
             new_tpl["name"] = name
+            kept = list(self.templates)
             if not is_new and tpl in self.templates:
                 self.templates[self.templates.index(tpl)] = new_tpl
             elif len(self.templates) >= MAX_TEMPLATES:
@@ -1334,7 +1337,14 @@ class SettingsPageMixin:
                 return
             else:
                 self.templates.append(new_tpl)
-            save_templates(self.templates)
+            # Refused (a full disk, a file held), it went unsaid and a cancelled
+            # sign-out's editor closed unasked over a list the file lacks: the
+            # list goes back, the editor stays unsaved, the next start says so.
+            if not save_templates(self.templates)[0]:
+                self.templates = kept
+                save_setting("template_not_kept", name)
+                save_setting("template_not_kept_why", "unwritten")
+                return
             # The sign-out can still be cancelled, and the editor then stays:
             # it edits what was just written, or a second sign-out added a
             # "Name (2)" and its own Save asked about a name it held itself.

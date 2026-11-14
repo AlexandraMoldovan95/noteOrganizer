@@ -685,6 +685,57 @@ app.update()
 check('template count updates live after deleting a template, no navigation away',
       stats_pairs().get('Templates') == 0)
 
+# ...and a delete the templates file refuses keeps the template listed, and
+# says so: gone from the list, it came back at the next start.
+app.templates = [NO.normalize_template({'name': 'Kept one'})]
+NO.save_templates(app.templates)
+app._refresh_templates_panel(); app.update()
+_td_page = sys.modules['noteorganizer.ui.settings_page']
+_td_save_was, _td_ask_was = _td_page.save_templates, app.ask_yes_no
+_td_page.save_templates = lambda _t: (False, OSError(28, 'No space left on device'))
+app.ask_yes_no = lambda *a, **k: True
+try:
+    _td_bin = next(c for c in find_all2(app.settings_templates_panel, tk.Canvas)
+                   if getattr(c, '_icon_kind', None) == 'trash')
+    _qa_click(_td_bin); app.update()
+    _td_status = str(app.status_lbl.cget('text'))
+    _td_listed = [t.get('name') for t in app.templates]
+finally:
+    _td_page.save_templates, app.ask_yes_no = _td_save_was, _td_ask_was
+check(f"a template delete the file refuses keeps it listed and says so ({_td_listed}, "
+      f"{_td_status!r})",
+      _td_listed == ['Kept one'] and _td_status.startswith('Not deleted'))
+app.templates = []
+NO.save_templates(app.templates)
+app._refresh_templates_panel(); app.update()
+
+# Over held templates and Trash files Statistics said 0 of files that hold
+# them, as "Trash is empty" did: a dash, not known this time.
+def _st_tile(caption):
+    found = []
+
+    def walk(w):
+        labels = [c for c in w.winfo_children() if isinstance(c, tk.Label)]
+        if len(labels) == 2 and str(labels[1].cget('text')) == caption:
+            found.append(str(labels[0].cget('text')))
+        for c in w.winfo_children():
+            walk(c)
+    walk(app.stats_frame)
+    return found[0] if found else None
+
+
+NO._core_paths.hold_writes(NO.TEMPLATES_FILE)
+NO._core_paths.hold_writes(NO.TRASH_FILE)
+try:
+    app._render_statistics(); app.update()
+    _st_held = (_st_tile('Templates'), _st_tile('In trash'))
+finally:
+    for _st_path in (NO.TEMPLATES_FILE, NO.TRASH_FILE):
+        NO._core_paths.WRITES_HELD.discard(os.path.normcase(os.path.abspath(_st_path)))
+    app._render_statistics(); app.update()
+check(f"over held templates and Trash files Statistics shows a dash, not 0 ({_st_held})",
+      _st_held == ('—', '—'))
+
 # The template editor kept a template's styles as offsets beside its text,
 # so any edit before a bold run moved the bold onto other words -- and every
 # note made from the template inherited it.
@@ -870,6 +921,29 @@ _ns_back = str(app.status_lbl.cget('text'))
 check(f"opening a note over notes not saved says Not saved, and a write that lands "
       f"takes it back ({_ns_open[:40]!r}, {_ns_back!r})",
       _ns_open.startswith('Not saved') and _ns_back.startswith('Saved at'))
+# ...its own words alone: the editor's "Not saved yet" is about an edit no
+# notes write carries, and a drag's write said "Saved at" over it.
+app.set_status("Not saved yet — fix what could not be saved to go back to the calendar")
+app.save_notes(); app.update()
+_ns_editor = str(app.status_lbl.cget('text'))
+check(f"a write that lands takes back only its own Not saved, not the editor's ({_ns_editor[:30]!r})",
+      _ns_editor.startswith('Not saved yet'))
+# A run that did not read the Trash leaves an import's copied files where they
+# are: one an unread trashed note names looked free and went.
+_du_path = os.path.join(NO.ATTACHMENTS_DIR, 'du_left.bin')
+os.makedirs(NO.ATTACHMENTS_DIR, exist_ok=True)
+with open(_du_path, 'w') as _du_f:
+    _du_f.write('x')
+NO._core_paths.hold_writes(NO.TRASH_FILE)
+try:
+    app._drop_unclaimed_import_files({'copied': ['du_left.bin']})
+finally:
+    NO._core_paths.WRITES_HELD.discard(os.path.normcase(os.path.abspath(NO.TRASH_FILE)))
+_du_kept = os.path.isfile(_du_path)
+app._drop_unclaimed_import_files({'copied': ['du_left.bin']})
+check(f"an import's copied file is kept in a run that did not read the Trash, and goes once "
+      f"it did ({_du_kept}, {os.path.isfile(_du_path)})",
+      _du_kept and not os.path.isfile(_du_path))
 app.toggle_pin(_ns_note); app.update()
 _ns_pin_ok = str(app.status_lbl.cget('text'))
 check(f"Restore previous and Pin over a refused write say Not saved, and Pin over "

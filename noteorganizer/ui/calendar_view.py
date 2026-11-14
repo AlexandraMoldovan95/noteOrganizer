@@ -2000,13 +2000,18 @@ class CalendarViewMixin:
             self._show_toast(occupied, kind="info")
             return
         store[date_str] = list(value) if isinstance(value, list) else value
-        persist()
+        # Refused, "put back" said over a file without it, gone at the next start.
+        if persist() is False:
+            # The live store: persisting the markers rebinds day_emoji.
+            (self.day_colors if kind == "color" else self.day_emoji).pop(date_str, None)
+            self._say_by_the_box(self, "Not put back: the settings file could not be written")
+            return
         self.render_calendar()
         # On the banner from the Calendar: the status line is the Notes tab's.
         self._say_by_the_box(self, done)
 
     def _persist_day_colors(self):
-        save_setting("day_colors", dict(self.day_colors))
+        return save_setting("day_colors", dict(self.day_colors))
 
     def _mark_day_emoji(self, date_str, event=None):
         """A small anchored popup marking a day with emoji, note or not:
@@ -2176,4 +2181,4 @@ class CalendarViewMixin:
     def _persist_day_emoji(self):
         # Drop any None/empty entries (from Clear) rather than persisting them.
         self.day_emoji = {d: e for d, e in self.day_emoji.items() if e}
-        save_setting("day_emoji", dict(self.day_emoji))
+        return save_setting("day_emoji", dict(self.day_emoji))

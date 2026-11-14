@@ -1588,12 +1588,15 @@ try:
     app.save_current_as_template()
     app.update()
     _ts_status = str(app.status_lbl.cget('text'))
+    # ...and not listed: kept on screen alone, it was gone at the next start.
+    _ts_listed = any(t.get('name') == 'Refused one' for t in app.templates)
 finally:
     NO.save_templates, app._show_inline_rename = _ts_real_save, _tp_real_rename
 app.templates = _tp_before
 NO.save_templates(app.templates)
-check(f"a template the disk refuses is said not saved ({_ts_status!r})",
-      'not saved' in _ts_status and 'Saved template' not in _ts_status)
+check(f"a template the disk refuses is said not saved, and not listed ({_ts_status!r}, "
+      f"listed {_ts_listed})",
+      'not saved' in _ts_status and 'Saved template' not in _ts_status and not _ts_listed)
 
 # ---- SHARE-CODE decode: every refusal branch (coverage-lift C16) ----
 # Each malformed-input class must raise ValueError with a HUMAN message
@@ -5779,6 +5782,45 @@ check(f'a sign-out at 1,000 templates writes no 1,001st, and the next start says
       and NO.get_setting('template_not_kept') is None)
 app.templates = []; NO.save_templates(app.templates)
 
+# ...and one the templates file refuses at the sign-out went unsaid, listed on
+# screen alone: the list as the file has it, and the next start says why.
+app.templates = [NO.normalize_template({'name': 'Week plan', 'body': 'Mon'})]
+NO.save_templates(app.templates)
+NO.save_setting('template_not_kept', None)
+app.show_settings_page(); app.update()
+app.toggle_settings_panel('templates'); app.update()
+_tu_page = sys.modules['noteorganizer.ui.settings_page']
+_tu_save_was = _tu_page.save_templates
+app.ask_yes_no = app.ask_yes_no_cancel = app.show_warning = lambda *a, **k: None
+try:
+    app._edit_template(None, lambda: None); app.update()
+    _tu_boxes = []
+
+    def _tu_walk(w):
+        for c in w.winfo_children():
+            if isinstance(c, tk.Entry):
+                _tu_boxes.append(c)
+            _tu_walk(c)
+    _tu_walk(app._mini_popup)
+    _tu_boxes[0].delete(0, 'end')
+    _tu_boxes[0].insert(0, 'Packing')
+    _tu_page.save_templates = lambda _t: (False, OSError(28, 'No space left on device'))
+    app.on_session_end(); app.update()
+    _tu_listed = [t.get('name') for t in app.templates]
+    _tu_page.save_templates = _tu_save_was
+    _tu_said = _next_start_says()
+finally:
+    _tu_page.save_templates = _tu_save_was
+    app.ask_yes_no, app.ask_yes_no_cancel, app.show_warning = _tf_real
+    app._ending_session = False
+    app._dismiss_mini_popup()
+    app.hide_settings_page(); app.update()
+check(f"a template the file refuses at a sign-out is not listed, and the next start says "
+      f"why it was not kept ({_tu_listed}, {_tu_said[:110]!r})",
+      _tu_listed == ['Week plan'] and '“Packing”' in _tu_said
+      and 'was not kept: the templates file could not be written' in _tu_said)
+app.templates = []; NO.save_templates(app.templates)
+
 # ...and with the sign-out cancelled, room made and the editor's own Save
 # pressed, that word stayed: the next start said a template on disk was not
 # kept.
@@ -5902,6 +5944,48 @@ check(f'a backup from a notebook that keeps its Trash for less does not shorten 
       f'saved: {"trash_retention_days" in NO.load_settings()})',
       NO.trash_retention_days() == NO.TRASH_RETENTION_DAYS
       and 'trash_retention_days' not in NO.load_settings())
+app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
+# ...and brings none of its Trash without that window: over settings held
+# (their defaults stand in) or the window's write refused, the entries came in
+# and the next start's 30 days removed them, files and all. Said, not done.
+_tw_said = {}
+for _tw_case in ('held', 'refused', 'trash held'):
+    app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
+    _tw_choose_was = NO.choose_trash_window
+    if _tw_case == 'held':
+        NO._core_paths.hold_writes(NO.SETTINGS_FILE)
+    elif _tw_case == 'refused':
+        NO.choose_trash_window = lambda _d: (False, OSError(28, 'No space left on device'))
+    else:
+        NO._core_paths.hold_writes(NO.TRASH_FILE)
+    # Asked and told here, not through whatever an earlier check left in their
+    # place: "Import complete" went to one of those, unheard.
+    _tw_ask_was, _tw_info_was = app.__dict__.get('ask_yes_no'), app.__dict__.get('show_info')
+    _tw_infos = []
+    app.ask_yes_no = lambda *a, **k: True
+    app.show_info = lambda title, msg='', *a, **k: _tw_infos.append((title, msg))
+    try:
+        _tw_msgs = _dz_import(_tw_backup) + _tw_infos
+        # In memory alone, a held Trash's took showed under its "couldn't be read".
+        _tw_shown = any(e.get('title') == 'Old' for e in app.trash)
+    finally:
+        for _tw_path in (NO.SETTINGS_FILE, NO.TRASH_FILE):
+            NO._core_paths.WRITES_HELD.discard(os.path.normcase(os.path.abspath(_tw_path)))
+        NO.choose_trash_window = _tw_choose_was
+        for _tw_name, _tw_was in (('ask_yes_no', _tw_ask_was), ('show_info', _tw_info_was)):
+            if _tw_was is None:
+                app.__dict__.pop(_tw_name, None)
+            else:
+                setattr(app, _tw_name, _tw_was)
+    _tw_said[_tw_case] = (
+        _tw_shown,
+        any("trashed note(s) were not brought in" in m
+            or "trashed notes could not be written to disk" in m for _t, m in _tw_msgs))
+    _tw_heard = (_tw_heard if _tw_case != 'held' else []) + [
+        _tw_case, [(t, m[-120:]) for t, m in _tw_msgs]]
+check(f"a backup's Trash is not brought in without the window it needs, nor into a held "
+      f"Trash, and that is said ({_tw_said}; last heard {_tw_heard})",
+      _tw_said == {'held': (False, True), 'refused': (False, True), 'trash held': (False, True)})
 app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
 
 # A Trash entry is kept as the file held it, and four readers still read its

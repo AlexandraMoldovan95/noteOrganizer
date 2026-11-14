@@ -118,8 +118,8 @@ class AttachmentsMixin:
         if not self.ask_yes_no(
                 "Remove attachment",
                 f"Remove “{_quoted(attachment_display_name(target.get('filename'), target.get('stored_as'))) or 'this file'}” from the "
-                "note?\n\n" + ("Its stored copy stays on the disk this time: the notes "
-                               "file could not be read when Note Organizer started."
+                "note?\n\n" + ("Its stored copy stays on the disk this time: your notes "
+                               "or the Trash could not be read when Note Organizer started."
                                if attached_files_kept() else
                                "The stored copy is deleted with it — this can't be undone."),
                 icon="warning", default="no"):
