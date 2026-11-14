@@ -4834,6 +4834,44 @@ check(f"a backup's Update agreed to, then look-alikes skipped: the Update still 
       any('Skip them' in labels for labels in _bk_asked)
       and (app.find_note(1) or {}).get('body', '').rstrip('\n') == 'second words'
       and sum(1 for n in app.notes if n.get('title') == 'Look alike') == 1)
+# ...and a skipped look-alike of the note as the Update leaves it gives that note its file: its
+# twin was looked for in the notebook before the Update, none was found, and the file was
+# dropped, where the phone gave it.
+app.notes = [NO.normalize_note({'id': 1, 'uid': 'bk-known', 'title': 'Trip', 'body': 'old plan'})]
+app.save_notes()
+_bk_asked = []
+_ic_import([{'uid': 'bk-known', 'title': 'Trip', 'body': 'new plan'},
+            {'title': 'Trip (copy)', 'body': 'new plan',
+             'attachments': [{'name': 'p.txt', 'stored_as': 'qa3_ic_skip.txt'}]}],
+           ['qa3_ic_skip.txt'], _bk_answer)
+_bk_files = [a.get('stored_as') for a in (app.find_note(1) or {}).get('attachments') or []]
+check(f"...and a skipped look-alike of the note as the Update leaves it gives that note its file "
+      f"({_bk_asked}, {_bk_files})",
+      any('Skip them' in labels for labels in _bk_asked)
+      and (app.find_note(1) or {}).get('body', '').rstrip('\n') == 'new plan'
+      and 'qa3_ic_skip.txt' in _bk_files and len(app.notes) == 1)
+# ...and of two notes here that look alike, the first in the file takes it, as on the phone:
+# the same backup put the file on another note on each app.
+for _ic_name in _ic_names:
+    if os.path.exists(_ic_path(_ic_name)):
+        os.remove(_ic_path(_ic_name))
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Trip', 'body': 'plan'}),
+             NO.normalize_note({'id': 2, 'title': 'Trip (copy)', 'body': 'plan'})]
+app.save_notes()
+_bk_asked = []
+_ic_import([{'title': 'Trip', 'body': 'plan',
+             'attachments': [{'name': 'p.txt', 'stored_as': 'qa3_ic_skip.txt'}]}],
+           ['qa3_ic_skip.txt'], _bk_answer)
+_bk_where = [n.get('id') for n in app.notes
+             if any(a.get('stored_as') == 'qa3_ic_skip.txt' for a in n.get('attachments') or [])]
+check(f"...and of two look-alikes here the first in the file takes the file ({_bk_asked}, {_bk_where})",
+      any('Skip them' in labels for labels in _bk_asked) and _bk_where == [1] and len(app.notes) == 2)
+for _ic_name in _ic_names:
+    if os.path.exists(_ic_path(_ic_name)):
+        os.remove(_ic_path(_ic_name))
+app.notes = [NO.normalize_note({'id': 1, 'uid': 'bk-known', 'title': 'Synced', 'body': 'second words'}),
+             NO.normalize_note({'id': 2, 'title': 'Look alike', 'body': 'same words'})]
+app.save_notes()
 # A backup of look-alikes alone that brings a template: Skip them goes on with
 # the template -- with only Cancel and Import anyway, the default Cancel dropped
 # it.

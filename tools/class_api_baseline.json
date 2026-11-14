@@ -922,6 +922,7 @@
   "_trash_written": "(self, kept)",
   "_trim_fmt_journal": "(self, journal)",
   "_turn_off_rescue_copy": "(self, note, takes_text=False)",
+  "_twins_after": "(self, updates)",
   "_typed_date": "(self)",
   "_unbind_window_for_popup": "(self, pop)",
   "_unchanged_copies": "(self, same, total, source)",

@@ -10952,6 +10952,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return ({_dup_key(n) for n in self.notes if id(n) not in replaced}
                 | {_dup_key(normalize_note(theirs)) for _, theirs in updates})
 
+    def _twins_after(self, updates):
+        """The note each duplicate-check key finds in the notebook as *updates*
+        will leave it, the first in the file winning, as the phone's. Looked for
+        before them, a look-alike of a note as updated found no twin and Skip
+        dropped its files, where the phone gave them."""
+        theirs_of = {id(mine): theirs for mine, theirs in updates}
+        twins = {}
+        for n in self.notes:
+            theirs = theirs_of.get(id(n))
+            twins.setdefault(_dup_key(normalize_note(theirs)) if theirs is not None else _dup_key(n), n)
+        return twins
+
     def _all_lookalike_choice(self, count, other, where, pending):
         """The question when every note left in a code or a backup (*where*)
         looks like one already here. With the rest of the import *pending* --
@@ -12282,6 +12294,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         fresh = [n for n in valid_notes if _dup_key(normalize_note(n)) not in existing_keys]
         dupe_count = len(valid_notes) - len(fresh)
         to_import = valid_notes
+        adopting = []
         if dupe_count > 0:
             if fresh:
                 choice = self._themed_dialog(
@@ -12297,7 +12310,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             else:
                 # A look-alike's files its twin lacks are what Skip goes on
                 # with too: offered no Skip, the default Cancel deleted them.
-                twins = {_dup_key(n): n for n in self.notes}
+                twins = self._twins_after(updates)
                 files_too = any(twin is not None and self._files_to_adopt(twin, n) for twin, n in
                                 ((twins.get(_dup_key(normalize_note(n))), n) for n in valid_notes))
                 choice = self._all_lookalike_choice(
@@ -12313,7 +12326,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 to_import = fresh
                 # A look-alike's files go to the note it looks like: skipped
                 # whole, they were deleted with it.
-                twins = {_dup_key(n): n for n in self.notes}
+                twins = self._twins_after(updates)
                 adopting = [(twins.get(_dup_key(normalize_note(n))), n) for n in valid_notes
                             if not any(n is f for f in fresh)]
                 # Only those that gain a file: read back for none, the open
@@ -12330,12 +12343,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     state["files_left"] = (sum(len(self._files_to_adopt(twin, n)) for twin, n in left),
                                            left[0][0].get("title") or "")
                     adopting = [(twin, n) for twin, n in adopting if twin.get("id") != self.selected_note_id]
-                files_given = 0
-                for twin, n in adopting:
-                    files_given += len(self._files_to_adopt(twin, n))
-                    self._adopt_backup_attachments(twin, n)
-                self._editor_follows_external_change({twin.get("id") for twin, _n in adopting})
-                state["files_given"] = files_given
+                # Given once the updates below are made, as the phone gives them.
+                state["files_given"] = 0
 
         # Agreed to: only now do the categories reach disk and the sidebar.
         # What the result says restored and the disk refused, said so: it was
@@ -12352,6 +12361,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if not shared_update_changes(mine, theirs, UPDATABLE_FROM_BACKUP)
             and self._files_to_adopt(mine, theirs))
         updated = self._apply_known_updates(updates, "backup") - files_only
+        # The skipped look-alikes' files, to their twins as updated: a file the update
+        # brought is not given twice, and the counts are the phone's.
+        if adopting:
+            files_given = 0
+            for twin, n in adopting:
+                files_given += len(self._files_to_adopt(twin, n))
+                self._adopt_backup_attachments(twin, n)
+            self._editor_follows_external_change({twin.get("id") for twin, _n in adopting})
+            state["files_given"] = files_given
 
         # Day colours and markers, additive (a day decorated here keeps its
         # own) and validated as the start's are (_take_day_decorations).
