@@ -4768,10 +4768,25 @@ updated (edit a note on the other computer, Duplicate it, attach a photo to the 
 dropped the photo. The question about look-alikes asks of the notebook the updates will leave,
 but the note each one looks like was found in the notebook before them, so there was none; the
 phone, finding it after, gave the photo to the updated note. The note each key finds is now
-worked out as the updates will leave it (`_twins_after`), the first in the file winning as on
-the phone (the desktop gave a file to the last of two look-alikes, the phone to the first;
+worked out as the updates will leave it (`_twins_after`, SN161), the first in the file winning
+as on the phone (the desktop gave a file to the last of two look-alikes, the phone to the first;
 SN162), and the files go after the updates, so a file an update brings is not given twice and
-the counts are the phone's (SN161). The backup still held the photo; nothing else was lost.
+the counts are the phone's (SN163, from the next round). The backup still held the photo;
+nothing else was lost.
+
+**The thirty-first round**, one agent, found nothing of medium or high severity in this app (its
+medium was the phone's: notes answered "Add it as a new note" put to the look-alike question
+again, fixed there). Its lows, and the phone round's parity reader's, were fixed. The twins are
+worked out with the keys, before the question: after it, a note typed into while it waited (its
+autosave runs) had another key and the file offered for it was dropped (SN169); and the giving
+after the updates has a check of its own, which nothing guarded (SN163). The question whether a
+backup brings more now asks each part as the merge takes it, as the phone's does: a template
+with no name counts (it comes in "Untitled template", SN164), none past the cap (SN165), no
+trashed note older than this computer keeps the Trash (SN166), a name only the backup's Trash
+uses does (the merge adopts it before it signs, SN167; `would_adopt`), and a day's mark only on
+a real day in a colour kept (SN168). Left, with its reason: over held settings a backup's
+category or day marks are counted as more here and not on the phone, as this app keeps them for
+the session and the phone stops the import at that write.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.

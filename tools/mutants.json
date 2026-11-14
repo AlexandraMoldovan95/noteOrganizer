@@ -16731,8 +16731,8 @@
     "id": "WS102",
     "about": "A backup of look-alikes that brings a template gets no Skip, and its default Cancel drops the template",
     "edits": [{"file": "note_organizer.py",
-               "find": "        if not _core_paths.writes_held(TEMPLATES_FILE) and any(\n",
-               "replace": "        if False and not _core_paths.writes_held(TEMPLATES_FILE) and any(\n"}],
+               "find": "        if not _core_paths.writes_held(TEMPLATES_FILE) and len(self.templates) < MAX_TEMPLATES:\n",
+               "replace": "        if False:\n"}],
     "must_fail": ["a backup of look-alikes that brings a template offers Skip them, and the template comes"],
     "suites": ["qa3"],
     "expect": "killed"
@@ -19279,8 +19279,8 @@
     "id": "SN142",
     "about": "A name a backup's settings and its notes both use, refused by a ceiling, is counted twice",
     "edits": [{"file": "noteorganizer/core/categories.py",
-               "find": "                if refused is not None and name not in refused:\n",
-               "replace": "                if refused is not None:\n"}],
+               "find": "            if refused is not None and name not in refused:\n",
+               "replace": "            if refused is not None:\n"}],
     "must_fail": ["a backup's trashed note keeps a category only the Trash uses"],
     "suites": ["qa3"],
     "expect": "killed"
@@ -19462,8 +19462,8 @@
     "id": "SN160",
     "about": "Over a held templates file a backup's template is said to bring more, though it is put back",
     "edits": [{"file": "note_organizer.py",
-               "find": "        if not _core_paths.writes_held(TEMPLATES_FILE) and any(\n",
-               "replace": "        if any(\n"}],
+               "find": "        if not _core_paths.writes_held(TEMPLATES_FILE) and len(self.templates) < MAX_TEMPLATES:\n",
+               "replace": "        if len(self.templates) < MAX_TEMPLATES:\n"}],
     "must_fail": ["over held settings or a held templates file a backup is not said to bring more"],
     "suites": ["qa3"],
     "expect": "killed"
@@ -19485,6 +19485,76 @@
                "find": "            twins.setdefault(_dup_key(normalize_note(theirs)) if theirs is not None else _dup_key(n), n)\n",
                "replace": "            twins.__setitem__(_dup_key(normalize_note(theirs)) if theirs is not None else _dup_key(n), n)\n"}],
     "must_fail": ["...and of two look-alikes here the first in the file takes the file"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN163",
+    "about": "A skipped look-alike's files given before the updates: a file the update brings is given by the look-alike, and the update said as Updated, with a rescue copy it has not",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        files_only = sum(\n",
+               "replace": "        [self._adopt_backup_attachments(twin, n) for twin, n in adopting]\n        files_only = sum(\n"}],
+    "must_fail": ["...and a file the update brings is given once, by the update, said as files alone"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN164",
+    "about": "A backup's template with no name is not counted as more, though the merge brings it as Untitled template",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                name = normalize_template(tpl).get(\"name\") if isinstance(tpl, dict) else None\n",
+               "replace": "                name = tpl.get(\"name\") if isinstance(tpl, dict) else None\n"}],
+    "must_fail": ["the question whether a backup brings more asks each part as the merge takes it"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN165",
+    "about": "A template counted as more at the cap, where the merge takes none",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if not _core_paths.writes_held(TEMPLATES_FILE) and len(self.templates) < MAX_TEMPLATES:\n",
+               "replace": "        if not _core_paths.writes_held(TEMPLATES_FILE):\n"}],
+    "must_fail": ["the question whether a backup brings more asks each part as the merge takes it"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN166",
+    "about": "A trashed note older than this computer keeps the Trash counted as more, though it stays in the backup",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                    and not (keep_days is not None and trash_entries_past_window([{\"deleted_at\": (\n                        e.get(\"deleted_at\") if isinstance(e.get(\"deleted_at\"), str) else \"\")}], keep_days))]\n",
+               "replace": "                    ]\n"}],
+    "must_fail": ["the question whether a backup brings more asks each part as the merge takes it"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN167",
+    "about": "A name only the backup's Trash uses is not counted, though the merge adopts it before it signs",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if would_adopt(incoming):\n",
+               "replace": "        if False:\n"}],
+    "must_fail": ["the question whether a backup brings more asks each part as the merge takes it"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN168",
+    "about": "A day's mark on no real day, or in a colour dropped, counted as more, though the merge takes none",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                    day not in store and is_calendar_day(day) and clean(value)\n",
+               "replace": "                    day not in store\n"}],
+    "must_fail": ["the question whether a backup brings more asks each part as the merge takes it"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN169",
+    "about": "The twins worked out after the question: a note typed into while it waited drops the file offered for it",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                adopting = [(self.find_note(twin.get(\"id\")), n) for twin, n in\n",
+               "replace": "                twins = self._twins_after(updates)\n                adopting = [(self.find_note(twin.get(\"id\")), n) for twin, n in\n"}],
+    "must_fail": ["...and a note typed into while the question waits still takes the file offered for it"],
     "suites": ["qa3"],
     "expect": "killed"
   }
