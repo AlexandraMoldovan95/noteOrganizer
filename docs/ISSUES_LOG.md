@@ -4910,10 +4910,21 @@ the checks read the open editor (516, 520, 525, 531, 532, 533), parts of an expe
 check reads (17, 22, 29, 33, 38, 40, 51, 82, 89, 186, 200), 258's import, whose check empties the
 notebook first, and 214, whose Pass names a build later than its date. Each says "Automated in
 part" now and names what is left to the hand; so do the lows where a check stands in for a start
-on the running app (170, 338, 663, 670, 721, 739, 750, 766, 820, 863, 896, 897) and the side
-messages no check reads (122, 129, 150, 163, 212, 219, 980, 1072). 7 and 133 name the checks
+on the running app (170, 338, 663, 670, 721, 739, 750, 766, 820, 863, 896, 897), the side
+messages no check reads (129, 163, 212, 219, 1072), and the start over an edited file, the
+double-click snap and the open note's edit that no check makes (122, 150, 980). 7 and 133 name the checks
 that do read what they said none reads, and the How to use tab says what the checks of a row no
 person can set up stand in for.
+
+**The forty-second round** read 199 more cases against their checks' code and found fourteen
+mediums of the same kind (27, 45, 66, 114, 134, 177, 178, 239, 241, 242, 248, 341, 348, 350): a
+colour set in the code rather than through the picker, a template changed in memory rather than
+through Settings, a copy's stored text edited rather than its cells, a .txt export standing for
+three. Each says "Automated in part" now and names what is left to the hand, as do sixteen lows
+whose own words left a part to the hand or whose check stands in for the route (118, 120, 216,
+237, 238, 324, 327, 352, 381, 384, 387, 399, 404, 410, 537, 540). 214 names the suite each of its
+mutants is judged in; 207 names the check that reads its step 3; 721 and 739 say "Automated", as
+the tab has rows no person can set up say it.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays
