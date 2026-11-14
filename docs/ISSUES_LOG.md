@@ -4856,8 +4856,21 @@ precondition asked for a trash.json a notebook where nothing was ever deleted do
 case 1067's label said "Automated" where its own sentence leaves the forced end to the owner; and
 the How to use tab and the excerpt did not say what "Automated in part" means.
 
+**The thirty-eighth round** found the fixes holding and, reading the automation column of cases
+800 to 1058, the same class as 1069's (a medium, in a document the release relies on):
+seventeen cases (816, 818, 841, 843, 846, 861, 939, 942, 943, 944, 946, 948, 949, 960, 973, 976,
+991) said "Automated" while naming only unit suites that ask the core's own functions, and some
+"Hand check optional", where their steps press the app's buttons. Each says "Automated in part"
+now, and that its hand check is the one that walks the steps in the app. The lows: fifteen labels
+said "Automated" over a sentence leaving a part to the hand, and five said "Automated in its
+core", a label the How to use tab does not define (all "Automated in part" now); 815 did not say
+its probe ran once and its story by hand; 985 named WS22, which guards another question's default
+(no kept mutant guards this one's, it says now); 865 and 891 still asked for the Sandbox runs of 9
+and 12 November, which were made; 1039 and 904 quoted what prints differently.
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
-was either fixed, with its class closed, or answered in writing.
+is fixed, with its class closed, or answered in writing; at the thirty-eighth round the class of
+the plan's automation claims was still being read, a block of cases at a time.
 
 ## Tk & platform gotchas
 
