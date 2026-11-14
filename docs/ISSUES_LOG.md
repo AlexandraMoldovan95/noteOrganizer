@@ -4571,12 +4571,39 @@ The lows: the editor's reload wrote "Last updated" over Restore previous's "Not 
 every other change that writes the notes and then says what it did (Pin, Duplicate, Move, Put
 back, the code and backup imports among them) said it over a refused write; each says "Not
 saved" there now, and a check reads the source so that no method can throw the save's answer
-away and then speak (SN102, SN103, SN104). A welcome note uid that is not text stopped Show
+away and then speak (SN102, SN103, SN104; one level of helper was out of its sight, found by
+the twenty-first round). A welcome note uid that is not text stopped Show
 (SN108); a number of more than 4,300 digits in the notes, Trash or templates file stopped the
 start instead of being copied aside as damage (SN105); and the Trash and the templates held
 after a refused read had no check (SN106, SN107). Left: a toast with an Undo ("Day moved", "Note
 moved to Trash") still shows over a refused write; a toast does not take the status line's
 place, and that line says "Not saved" beside it.
+
+**The twenty-first round** found one of high severity on a very rare road, and two of medium.
+With the Trash held at the start, a backup import of an older backup, in which a note now in
+the Trash was still live, gave the imported copy the same attached file, since the Trash it
+could not read named none; Remove attachment on that copy then deleted the file the trashed
+note still names. A run that did not read the Trash, held or set aside damaged, now deletes no
+attached file at all, as one that did not read the notes (SN109, SN110). Over a held Trash or
+templates file, Settings said "Trash is empty", "No templates yet" and "You don't have any
+templates" of files that hold them: each says the file could not be read this time now, and
+nothing is lost (SN111, SN112). And the one-time cleanup, kept waiting by the mark that the
+Trash's length is unknown, ran again on months of notes once a length was chosen over a damaged
+settings file, merging look-alikes: choosing it now records the cleanup as done (SN113). The
+lows: the settings kept for a refused read were the dict handed out, so a refused change lived
+on in it and the next write that landed kept it (kept as text now, SN114); a format span whose
+style is a list stopped every start (SN115); a template saved or deleted over a refused write
+closed as if done (the list goes back, the editor stays, SN116); a day moved, moved back or
+sent home said so over its helper's refused write, and opening any note wrote "Last updated"
+over notes not saved (the opening says "Not saved" while any are, and the source check now
+reads one helper deep, SN117, SN118); "Not saved" stayed up after a later write landed, until
+another change spoke (a write that lands takes it back, SN120); the start called a refused notes read
+a broken file, and a damaged one whose copy failed a held one, and lowered "Recently deleted"
+(SN119); the pre-update copy tried once while the read after it tries three times; the Trash
+page's subtitle advised a choice its dropdown refuses (SN121); and a backup import still adopted its
+longer Trash length over a held Trash. Left: a version's first start whose notes file is held
+throughout makes no pre-update copy and records the new version; that run writes nothing over
+the notes, and Settings → Backup → Export makes a copy.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.

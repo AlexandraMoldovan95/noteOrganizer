@@ -3485,8 +3485,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/storage.py",
-        "find": "    settings.pop(TRASH_WINDOW_UNKNOWN, None)\n",
-        "replace": ""
+        "find": "    if settings.pop(TRASH_WINDOW_UNKNOWN, None) is not None:\n",
+        "replace": "    if settings.get(TRASH_WINDOW_UNKNOWN) is not None:\n"
       }
     ],
     "must_fail": ["choosing a window forgets that the last one was not known"],
@@ -6929,8 +6929,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/storage.py",
-        "find": "        try:\n            os.remove(part)\n        except OSError:\n            pass\n        return None\n",
-        "replace": "        return None\n"
+        "find": "        except (IOError, OSError):\n            try:\n                os.remove(part)\n            except OSError:\n                pass\n    return None\n",
+        "replace": "        except (IOError, OSError):\n            pass\n    return None\n"
       }
     ],
     "must_fail": [
@@ -8429,7 +8429,7 @@
     "edits": [
       {
         "file": "noteorganizer/core/storage.py",
-        "find": "        except OSError:\n            if known is not None:\n                return copy.deepcopy(known)\n            paths.hold_writes(paths.SETTINGS_FILE)\n            return {TRASH_WINDOW_UNKNOWN: True}\n",
+        "find": "        except OSError:\n            if known is not None:\n                return json_from_text(known)\n            paths.hold_writes(paths.SETTINGS_FILE)\n            return {TRASH_WINDOW_UNKNOWN: True}\n",
         "replace": "        except OSError:\n            pass\n"
       }
     ],
@@ -10071,8 +10071,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/storage.py",
-        "find": "    return paths.writes_held(paths.DATA_FILE) or paths.DATA_FILE in _UNREAD_AT_LOAD\n",
-        "replace": "    return paths.DATA_FILE in _UNREAD_AT_LOAD\n"
+        "find": "    return any(paths.writes_held(path) or path in _UNREAD_AT_LOAD\n",
+        "replace": "    return any(path in _UNREAD_AT_LOAD\n"
       }
     ],
     "must_fail": [
@@ -12200,8 +12200,8 @@
     "edits": [
       {
         "file": "noteorganizer/core/storage.py",
-        "find": "    return paths.writes_held(paths.DATA_FILE) or paths.DATA_FILE in _UNREAD_AT_LOAD\n",
-        "replace": "    return paths.writes_held(paths.DATA_FILE)\n"
+        "find": "    return any(paths.writes_held(path) or path in _UNREAD_AT_LOAD\n",
+        "replace": "    return any(paths.writes_held(path)\n"
       }
     ],
     "must_fail": [
@@ -12708,8 +12708,8 @@
     "edits": [
       {
         "file": "noteorganizer/ui/settings_page.py",
-        "find": "                    and get_setting(\"template_not_kept\", None, expect=str)):\n                save_setting(\"template_not_kept\", None)\n",
-        "replace": "                    and get_setting(\"template_not_kept\", None, expect=str)):\n                pass\n"
+        "find": "            if get_setting(\"template_not_kept\", None, expect=str):\n                save_setting(\"template_not_kept\", None)\n            self._dismiss_mini_popup()\n",
+        "replace": "            if get_setting(\"template_not_kept\", None, expect=str):\n                pass\n            self._dismiss_mini_popup()\n"
       }
     ],
     "must_fail": [
@@ -18679,8 +18679,8 @@
     "id": "SN83",
     "about": "A template Save the disk refused takes back the word that it was not kept",
     "edits": [{"file": "noteorganizer/ui/settings_page.py",
-               "find": "            if (save_templates(self.templates)[0]\n",
-               "replace": "            if (save_templates(self.templates)\n"}],
+               "find": "            if not save_templates(self.templates)[0]:\n                self.templates = kept\n                self._say_by_the_box(pop,",
+               "replace": "            if not save_templates(self.templates):\n                self.templates = kept\n                self._say_by_the_box(pop,"}],
     "must_fail": ["...and a Save the disk refuses leaves that word, still true"],
     "suites": ["qa3"],
     "expect": "killed"
@@ -18869,7 +18869,7 @@
     "id": "SN102",
     "about": "A change's own words go on the status line over a refused notes write",
     "edits": [{"file": "note_organizer.py",
-               "find": "        if written:\n            self.set_status(text)\n        else:\n            self._say_not_saved()\n",
+               "find": "        if written or not getattr(self, \"_notes_unsaved\", False):\n            self.set_status(text)\n        else:\n            self._say_not_saved()\n",
                "replace": "        self.set_status(text)\n"}],
     "must_fail": ["Restore previous and Pin over a refused write say Not saved"],
     "suites": ["qa6"],
@@ -18933,6 +18933,142 @@
                "find": "        uids = {get_setting(\"welcome_note_uid\", None, expect=str),\n",
                "replace": "        uids = {load_settings().get(\"welcome_note_uid\"),\n"}],
     "must_fail": ["a welcome uid that is not text is no uid"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN109",
+    "about": "A run whose Trash was held deletes attached files a trashed note it never read still names",
+    "edits": [{"file": "noteorganizer/core/storage.py",
+               "find": "               for path in (paths.DATA_FILE, paths.TRASH_FILE))\n",
+               "replace": "               for path in (paths.DATA_FILE,))\n"}],
+    "must_fail": ["a run whose Trash was held or set aside damaged keeps every attached file"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN110",
+    "about": "A Trash set aside damaged is not marked unread, and its entries' files can be deleted",
+    "edits": [{"file": "noteorganizer/core/storage.py",
+               "find": "        _UNREAD_AT_LOAD.add(paths.TRASH_FILE)\n",
+               "replace": ""}],
+    "must_fail": ["a run whose Trash was held or set aside damaged keeps every attached file"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN111",
+    "about": "Over a held Trash the page says Trash is empty of a file that holds notes",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "                    \"shown. Nothing is lost.\" if paths.writes_held(paths.TRASH_FILE)\n",
+               "replace": "                    \"shown. Nothing is lost.\" if False\n"}],
+    "must_fail": ["over a held Trash file its page says it couldn't be read"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN112",
+    "about": "Over a held templates file Use template says you don't have any templates",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            if _core_paths.writes_held(TEMPLATES_FILE):\n                self.show_info(\"Templates couldn't be read\", TEMPLATES_HELD_WORDS)\n",
+               "replace": "            if False:\n                self.show_info(\"Templates couldn't be read\", TEMPLATES_HELD_WORDS)\n"}],
+    "must_fail": ["over a held templates file Use template and Settings"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN113",
+    "about": "A Trash length chosen over lost settings lets the one-time cleanup run again on months of notes",
+    "edits": [{"file": "noteorganizer/core/storage.py",
+               "find": "        settings.setdefault(\"cleanup_done\", True)\n",
+               "replace": "        pass\n"}],
+    "must_fail": ["a window chosen over settings that were lost marks the one-time cleanup done"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN114",
+    "about": "The settings kept for a refused read are the dict handed out, a refused change living on in them",
+    "edits": [{"file": "noteorganizer/core/storage.py",
+               "find": "                _settings_read = (paths.SETTINGS_FILE, text)\n",
+               "replace": "                _settings_read = (paths.SETTINGS_FILE, data)\n"},
+              {"file": "noteorganizer/core/storage.py",
+               "find": "                return json_from_text(known)\n",
+               "replace": "                return copy.deepcopy(known)\n"},
+              {"file": "noteorganizer/core/storage.py",
+               "find": "        _settings_read = (paths.SETTINGS_FILE, json_text(settings))\n",
+               "replace": "        _settings_read = (paths.SETTINGS_FILE, settings)\n"}],
+    "must_fail": ["a refused settings change is not what a later refused read gives back"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN115",
+    "about": "A format style that is a list or an object stops every start",
+    "edits": [{"file": "noteorganizer/core/formatting.py",
+               "find": "        if not isinstance(style, str):\n            continue\n",
+               "replace": ""}],
+    "must_fail": ["a format style that is a list or an object is dropped"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN116",
+    "about": "A template saved over a refused write closes as if kept, gone at the next start",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "            if not save_templates(self.templates)[0]:\n                self.templates = kept\n                self._say_by_the_box(pop,",
+               "replace": "            if False:\n                self.templates = kept\n                self._say_by_the_box(pop,"}],
+    "must_fail": ["...keeps the editor open, the list as the file has it, and says it was not saved"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN117",
+    "about": "Opening a note over notes not saved writes Last updated over Not saved",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        if getattr(self, \"_notes_unsaved\", False):\n            # Over notes a write refused, \"Last updated\" read as saved: Restore\n",
+               "replace": "        if False:\n            # Over notes a write refused, \"Last updated\" read as saved: Restore\n"}],
+    "must_fail": ["opening a note over notes not saved says Not saved"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN118",
+    "about": "A day moved says so over its helper's refused write",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        self._say_if_saved(None, f\"Moved to {show_day(parse_date(to))}\")\n",
+               "replace": "        self.set_status(f\"Moved to {show_day(parse_date(to))}\")\n"}],
+    "must_fail": ["no method sets the status line after a notes write whose answer it, or a helper it calls, threw away"],
+    "suites": ["test_data_safety"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN119",
+    "about": "The start calls a notes file another program holds broken, sending a person to repair a good file",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                    \"because another program is holding it.\" if refused else\n",
+               "replace": "                    \"because another program is holding it.\" if False else\n"}],
+    "must_fail": ["a refused read is said as another program holding the file, not as damage"],
+    "suites": ["qa5"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN120",
+    "about": "Not saved stays up after a later write lands, over a file holding every note",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            if lbl is not None and str(lbl.cget(\"text\")).startswith(\"Not saved\"):\n",
+               "replace": "            if False:\n"}],
+    "must_fail": ["opening a note over notes not saved says Not saved, and a write that lands takes it back"],
+    "suites": ["qa6"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN121",
+    "about": "Over a held Trash the page's subtitle advises a length its dropdown refuses",
+    "edits": [{"file": "noteorganizer/ui/settings_page.py",
+               "find": "        if paths.writes_held(paths.TRASH_FILE):\n            # The dropdown refuses then (set_retention)",
+               "replace": "        if False:\n            # The dropdown refuses then (set_retention)"}],
+    "must_fail": ["over a held Trash file its page says it couldn't be read"],
     "suites": ["qa6"],
     "expect": "killed"
   }

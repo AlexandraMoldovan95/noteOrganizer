@@ -216,7 +216,8 @@ RULES = [
         # follows raises RecursionError -- and every reader that named it
         # alone let the other two escape: the app would not start while its
         # notes, settings, Trash or templates file held one (0.83.338).
-        # noteorganizer.core.paths.JSON_UNREADABLE names all three.
+        # noteorganizer.core.paths.JSON_UNREADABLE names them all, and a
+        # ValueError (a number of over 4,300 digits) since.
         pattern=re.compile(r"\bexcept\b[^:\n]*\bJSONDecodeError\b"),
         allowed={},
         window=1,
