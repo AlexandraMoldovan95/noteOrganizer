@@ -4970,6 +4970,16 @@ more say "Automated in part" now and name what the checks are known not to reach
 title, 995's delete and typing, 571's "pixels", 690's "types a search" and 536's "real Ctrl+X"
 say what is true.
 
+**The forty-seventh round** read the last 181 cases still called whole a second time, by the same
+rule, and found 138 short of it: a question answered in code, a selection, a style or a file laid
+in code, a search or a find set rather than typed, a bare label standing for the dialog it
+belongs to, a note dropped from the list where the case moves it to the Trash. 137 say "Automated
+in part" now (one was already), and name what the checks are known not to reach. Under every row
+that is "in part", the merged lines that still said "Automated" (43) say "in part" too, since
+their checks share the row's fixture; 377, 462, 470 and 676 name the steps their checks lay in
+code. With this round every desktop case still called whole has been read twice against its
+checks' code.
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays
 open behind the block: at the thirty-ninth round the plan's automation claims were read all at
