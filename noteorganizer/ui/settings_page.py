@@ -32,6 +32,7 @@ from ..core.model import (MAX_ATTACHMENTS, MAX_CHECKLIST_ITEM_CHARS, MAX_CHECKLI
                           _truncate, checklist_shown, normalize_note)
 from ..core.storage import (
     MAX_TEMPLATES,
+    TEMPLATES_HELD_WORDS,
     TRASH_RETENTION_DAYS,
     trash_retention_days,
     trash_window_words,
@@ -614,8 +615,10 @@ class SettingsPageMixin:
                 return
             rows.clear()
             if not self.templates:
-                tk.Label(rows.add(), text="No templates yet. Create one below, or use "
-                                          "“Save as template” on a note.",
+                tk.Label(rows.add(), text=(
+                    TEMPLATES_HELD_WORDS if paths.writes_held(paths.TEMPLATES_FILE)
+                    else "No templates yet. Create one below, or use "
+                         "“Save as template” on a note."),
                          bg=self.colors["card"], fg=self.colors["subtext"],
                          font=("Segoe UI", 9), wraplength=self.px(460), justify="left"
                          ).pack(pady=10, padx=6, anchor="w")
@@ -676,8 +679,14 @@ class SettingsPageMixin:
                     icon="warning", default="no"):
                 if own:
                     self._dismiss_mini_popup()
+                kept = self.templates
                 self.templates = [t for t in self.templates if t is not tpl]
-                save_templates(self.templates)
+                # Refused, it went from the list and came back at the next start.
+                if not save_templates(self.templates)[0]:
+                    self.templates = kept
+                    self._say_by_the_box(self, "Not deleted: the templates file "
+                                               "could not be written")
+                    return "break"
                 redraw()
                 self._render_statistics()
             return "break"
@@ -1215,6 +1224,7 @@ class SettingsPageMixin:
             if self._templates_full(taken_name,
                                     replacing=None if is_new else tpl):
                 return
+            kept = list(self.templates)
             others = [t for t in self.templates
                       if t is not tpl and t.get("name") == taken_name]
             if others:
@@ -1235,11 +1245,17 @@ class SettingsPageMixin:
                     self.templates[idx] = new_tpl
                 else:
                     self.templates.append(new_tpl)
+            # Refused (a full disk, or a file held this run, whose banner speaks
+            # once), it closed as if kept and was gone at the next start: the
+            # list goes back, and the editor stays with its words, said.
+            if not save_templates(self.templates)[0]:
+                self.templates = kept
+                self._say_by_the_box(pop, "Not saved: the templates file could "
+                                          "not be written")
+                return
             # Saved after all: a cancelled sign-out's word that it was not
-            # kept is untrue now, and the next start must not say it. Over a
-            # refused write it is still true, and stays.
-            if (save_templates(self.templates)[0]
-                    and get_setting("template_not_kept", None, expect=str)):
+            # kept is untrue now, and the next start must not say it.
+            if get_setting("template_not_kept", None, expect=str):
                 save_setting("template_not_kept", None)
             self._dismiss_mini_popup()
             # The list as the page shows it NOW: rebuilt under the editor, the
@@ -1546,6 +1562,12 @@ class SettingsPageMixin:
             return ("The settings file couldn't be used this time, so nothing is "
                     "removed automatically. A length can be chosen once Note "
                     "Organizer is opened again.")
+        if paths.writes_held(paths.TRASH_FILE):
+            # The dropdown refuses then (set_retention): "choose one below" was
+            # advice it would refuse, "Kept for N days" a choice it could not make.
+            return ("The Trash couldn't be read this time, so nothing is removed "
+                    "from it. A length can be chosen once Note Organizer is "
+                    "opened again.")
         if days is None:
             return ("The length chosen before couldn't be read, so nothing "
                     "is removed automatically until you choose one below.")
@@ -1584,7 +1606,7 @@ class SettingsPageMixin:
                 except tk.TclError:
                     pass
                 self._show_toast(
-                    ("Not saved: the Trash couldn't be opened this time, so a "
+                    ("Not saved: the Trash couldn't be read this time, so a "
                      "length can be chosen once Note Organizer is opened again")
                     if trash_held and not paths.writes_held(paths.SETTINGS_FILE)
                     else ("Not saved: a length can be chosen once Note "
@@ -1821,7 +1843,11 @@ class SettingsPageMixin:
         def redraw():
             rows.clear()
             if not self.trash:
-                tk.Label(rows.add(), text="Trash is empty.", bg=self.colors["card"],
+                # Held, it read as empty: "Trash is empty" over notes it holds.
+                tk.Label(rows.add(), text=(
+                    "The Trash couldn't be read this time, so nothing in it is "
+                    "shown. Nothing is lost." if paths.writes_held(paths.TRASH_FILE)
+                    else "Trash is empty."), bg=self.colors["card"],
                          fg=self.colors["subtext"], font=("Segoe UI", 10)).pack(pady=20)
                 wheel_on_rows()
                 # Emptied with notes ticked, "Restore 3 selected" stayed up

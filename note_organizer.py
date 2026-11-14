@@ -222,6 +222,7 @@ from noteorganizer.core.formatting import (
 
 from noteorganizer.core.storage import (
     now_stamp,
+    TEMPLATES_HELD_WORDS,
     TRASH_RETENTION_DAYS,
     TRASH_WINDOW_UNKNOWN,
     trash_retention_days,
@@ -1726,12 +1727,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         lines = []
 
         if self._corrupt_notes_report is not None:
+            refused = getattr(self, "_notes_file_refused", False)
             msg = (
                 "⚠ Your notes file could not be read this time, so the app "
                 "started with an empty list. Your notes did NOT delete "
-                "themselves — the file on disk was unreadable (a bad "
-                "shutdown, a disk problem, or saving it from another "
-                "program can do this)."
+                "themselves — " + (
+                    # Refused, not broken: "unreadable" sent a person to
+                    # repair a good file.
+                    "Windows would not let the app read the file, most often "
+                    "because another program is holding it." if refused else
+                    "the file on disk was unreadable (a bad shutdown, a disk "
+                    "problem, or saving it from another program can do this).")
             )
             if self._corrupt_notes_report:
                 msg += (
@@ -1746,8 +1752,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # said so, with the likeliest cause, a file another program
                 # holds, which opening the app again usually cures.
                 msg += (
-                    "\n\nAnother program may be holding the file, so no copy "
-                    "of it was kept, and Note Organizer will not save "
+                    ("\n\nAnother program may be holding the file, so no copy "
+                     "of it was kept" if refused else
+                     "\n\nNo copy of it could be kept (the disk may be full)")
+                    + ", and Note Organizer will not save "
                     "anything over it in this session: anything you write "
                     "now is kept only by Settings → Backup → Export. Close "
                     "Note Organizer and open it again; if this comes back, "
@@ -1780,12 +1788,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 if _core_paths.writes_held(path)]
         if held:
             them = len(held) > 1
+            # Held after a refusal (empty) or damaged and not copied (what read):
+            # "shows empty" was untrue of the second; capitalize() lowered
+            # "Recently deleted".
+            said = " and ".join(held)
             lines.append(
-                f"{' and '.join(held).capitalize()} couldn't be opened — another "
-                f"program may be holding {'them' if them else 'the file'} — so "
-                f"this time {'they show' if them else 'it shows'} empty, and "
-                "nothing is saved there until Note Organizer is opened again. "
-                "Nothing is lost.")
+                f"{said[:1].upper() + said[1:]} couldn't be read in full — another "
+                f"program may be holding {'them' if them else 'the file'}, or the "
+                f"disk may be full — so this time {'they show' if them else 'it shows'} "
+                "only what could be read, and nothing is saved there until Note "
+                "Organizer is opened again. Nothing is lost.")
 
         # A template written as Windows began to sign out, past the most
         # kept: "began to", true too of a sign-out the person cancelled.
@@ -1990,6 +2002,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # Notes made of days a series' copy set aside, said with the start's
         # other news (written by the load itself).
         self._set_aside_at_start = report.get("set_aside_made", 0)
+        self._notes_file_refused = bool(report.get("notes_file_refused"))
         if report.get("notes_file_corrupt"):
             self._corrupt_notes_report = report.get("corrupt_backup_path")
             # Sentinel distinct from "nothing happened": the file WAS
@@ -2201,6 +2214,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if ok:
             # What Remove took off a note goes now the file agrees.
             self._drop_detached_files()
+            # Every note written, an earlier "Not saved" is untrue: a drag or a
+            # rename, which say nothing, left it up over a file holding all.
+            lbl = getattr(self, "status_lbl", None)
+            if lbl is not None and str(lbl.cget("text")).startswith("Not saved"):
+                self.set_status("Saved at " + show_stamp(now_stamp()))
             return True
         # Never a dialog inside a sign-out: Windows waits on it, then ends the
         # process anyway. The crash log has the failure (_report_write_failure).
@@ -2249,8 +2267,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
 
     def _say_if_saved(self, written, text):
         """A change's own words on the status line, only over a write that
-        landed: "Pinned to top" over a refused one read as saved."""
-        if written:
+        landed: "Pinned to top" over a refused one read as saved. Refused, a
+        later write that landed (an autosave under the error's dialog) counts;
+        *written* None asks the last write alone (a helper's, _relocate_day)."""
+        if written or not getattr(self, "_notes_unsaved", False):
             self.set_status(text)
         else:
             self._say_not_saved()
@@ -12278,7 +12298,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 and TRASH_RETENTION_DAYS < window <= 365
                 and state.get("imported_trash")
                 and "trash_retention_days" not in load_settings()
-                and not get_setting(TRASH_WINDOW_UNKNOWN)):
+                and not get_setting(TRASH_WINDOW_UNKNOWN)
+                # Held, the Trash takes none of the backup's entries this window
+                # came for, and its length is not chosen this run (set_retention).
+                and not _core_paths.writes_held(TRASH_FILE)):
             choose_trash_window(window)
 
         # A file already claimed (note, Trash, this import) gets its own copy,
@@ -15955,7 +15978,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 or self.current_occurrence_date != day):
             return
         origin = self._relocate_day(note, day, to)
-        self.set_status(f"Moved to {show_day(parse_date(to))}")
+        self._say_if_saved(None, f"Moved to {show_day(parse_date(to))}")
         self._show_toast("Day moved", action=(
             lambda nid=note["id"], uid=note.get("uid"):
             self._undo_day_move(nid, uid, origin, to, day)))
@@ -16012,7 +16035,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if note is None:
             return
         self._relocate_day(note, now_on, back_to)
-        self.set_status(f"Moved back to {show_day(parse_date(back_to))}")
+        self._say_if_saved(None, f"Moved back to {show_day(parse_date(back_to))}")
 
     def _show_off_schedule_days(self, note=None):
         """Walk a series' edited days off its schedule (off_schedule_days),
@@ -19231,7 +19254,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._sync_calculator_open_state()
         self.write_recurrence_to_ui(note.get("recurrence"))
 
-        if self.current_occurrence_date:
+        if getattr(self, "_notes_unsaved", False):
+            # Over notes a write refused, "Last updated" read as saved: Restore
+            # previous, a share code's Update and the welcome note reloaded here.
+            self._say_not_saved()
+        elif self.current_occurrence_date:
             has_override = self.current_occurrence_date in (note.get("overrides") or {})
             suffix = " — it keeps edits of its own" if has_override else ""
             self.set_status(
@@ -19688,7 +19715,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if note is None or moved_from(note, occurrence_date) != origin:
                 return
             self._relocate_day(note, occurrence_date, origin)
-            self.set_status(f"This day is back on {back}")
+            self._say_if_saved(None, f"This day is back on {back}")
             return
         showing = (self.selected_note_id == note["id"]
                    and self.current_occurrence_date == occurrence_date)
@@ -19756,6 +19783,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Inline picker listing saved templates. Clicking one fills the current
         editor with its contents. Warns before overwriting a note in progress."""
         if not self.templates:
+            # Held, the file read as none: "You don't have any" over templates kept.
+            if _core_paths.writes_held(TEMPLATES_FILE):
+                self.show_info("Templates couldn't be read", TEMPLATES_HELD_WORDS)
+                return
             self.show_info(
                 "No templates yet",
                 "You don't have any templates. Write a note and use "

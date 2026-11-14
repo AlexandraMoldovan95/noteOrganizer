@@ -118,6 +118,10 @@ def normalize_formatting(value):
         if not isinstance(span, dict):
             continue
         style = span.get("style")
+        # A name only: a list or object here is unhashable, and the set test
+        # below stopped every start (hand-edited, or a newer version's).
+        if not isinstance(style, str):
+            continue
         start, end = span.get("start"), span.get("end")
         if not (isinstance(start, int) and not isinstance(start, bool)
                 and isinstance(end, int) and not isinstance(end, bool)

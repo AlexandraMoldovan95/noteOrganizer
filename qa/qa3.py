@@ -5838,6 +5838,11 @@ try:
     _tr_page.save_templates = lambda _t: (False, OSError(28, 'No space left on device'))
     app._mini_popup._save_from_keyboard(); app.update()
     _tr_word = NO.get_setting('template_not_kept')
+    # It closed as if kept, the template gone at the next start: the editor
+    # stays now with its words, the list as the file has it, and it is said.
+    _tr_open = app._mini_popup is not None and app._mini_popup.winfo_exists()
+    _tr_listed = any(t.get('name') == 'Packing' for t in app.templates)
+    _tr_status = str(app.status_lbl.cget('text'))
 finally:
     _tr_page.save_templates = _tr_save_was
     app.ask_yes_no, app.ask_yes_no_cancel, app.show_warning = _tf_real
@@ -5846,6 +5851,10 @@ finally:
     app.hide_settings_page(); app.update()
 check(f"...and a Save the disk refuses leaves that word, still true ({_tr_word!r})",
       _tr_word == 'Packing')
+check(f"...keeps the editor open, the list as the file has it, and says it was not saved "
+      f"(open {_tr_open}, listed {_tr_listed}, {_tr_status!r})",
+      _tr_open and not _tr_listed
+      and _tr_status.startswith('Not saved: the templates file could not be written'))
 app.templates = []; NO.save_templates(app.templates)
 NO.save_setting('template_not_kept', None)
 # Said with "began to": true too of a sign-out the person cancelled.

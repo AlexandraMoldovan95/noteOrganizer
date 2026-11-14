@@ -77,7 +77,10 @@ def choose_trash_window(days):
     alone. Returns what save_settings returns."""
     settings = load_settings()
     settings["trash_retention_days"] = days
-    settings.pop(TRASH_WINDOW_UNKNOWN, None)
+    # The mark also kept the one-time cleanup waiting (load_notes): its "done",
+    # lost with the file, is no "never", or it ran again on months of notes.
+    if settings.pop(TRASH_WINDOW_UNKNOWN, None) is not None:
+        settings.setdefault("cleanup_done", True)
     return save_settings(settings)
 
 
@@ -97,8 +100,9 @@ def json_from_text(text):
 
 # ---- Settings file (read/modify/write, so keys never clobber each other) ----
 
-#: The settings as last read or written whole this run, with the file they
-#: are of, for a read the system refuses later on (see load_settings).
+#: The settings' text as last read or written whole this run, and its file,
+#: for a read refused later (load_settings). Text, not the dict handed out: a
+#: refused change stood in that, and the next write that landed kept it.
 _settings_read = (None, None)
 #: The settings file whose first read this run was made, with its retries.
 _settings_tried = None
@@ -127,13 +131,13 @@ def load_settings():
                     text = f.read()
             data = json_from_text(text)
             if isinstance(data, dict):
-                _settings_read = (paths.SETTINGS_FILE, data)
+                _settings_read = (paths.SETTINGS_FILE, text)
                 return data
         except (*paths.JSON_UNREADABLE, ValueError):
             pass
         except OSError:
             if known is not None:
-                return copy.deepcopy(known)
+                return json_from_text(known)
             paths.hold_writes(paths.SETTINGS_FILE)
             return {TRASH_WINDOW_UNKNOWN: True}
         # Reached only when the file exists but held nothing usable —
@@ -155,7 +159,7 @@ def save_settings(settings):
     global _settings_read
     ok, exc = _write_json_atomic(paths.SETTINGS_FILE, settings)
     if ok:
-        _settings_read = (paths.SETTINGS_FILE, settings)
+        _settings_read = (paths.SETTINGS_FILE, json_text(settings))
     return ok, exc
 
 
@@ -210,6 +214,13 @@ def normalize_template(tpl):
             if isinstance(it, dict)
         ],
     }
+
+
+#: What Settings → Templates and Use template say over a templates file held
+#: this run, read as none: "You don't have any" over templates the file keeps.
+TEMPLATES_HELD_WORDS = (
+    "Your templates couldn't be read this time, so none are shown. Nothing is "
+    "lost: close Note Organizer and open it again.")
 
 
 def load_templates():
@@ -267,6 +278,7 @@ def load_trash():
     file is preserved aside. Only dict entries come in, kept as the file held
     them: a string or null beside them kept Recently deleted from opening,
     and the real notes could not be restored."""
+    _UNREAD_AT_LOAD.discard(paths.TRASH_FILE)
     if os.path.exists(paths.TRASH_FILE):
         try:
             data = json_from_text(_read_data_file(paths.TRASH_FILE))
@@ -282,8 +294,10 @@ def load_trash():
         except paths.JSON_UNREADABLE:
             pass
         # Reached only when the file exists but held nothing usable —
-        # keep its bytes before the next save replaces them.
+        # keep its bytes before the next save replaces them; its entries'
+        # files kept all run (attached_files_kept), as an unread notes file's.
         _preserve_corrupt(paths.TRASH_FILE)
+        _UNREAD_AT_LOAD.add(paths.TRASH_FILE)
     return []
 
 
@@ -402,10 +416,11 @@ def attachment_names_in(notes_or_entries):
 
 def attached_files_kept():
     """Whether deleting for good keeps every attached file this run: a run
-    that could not read the notes file -- held, or set aside unreadable --
-    holds notes it never saw, and a file may be theirs, until a run that has
-    read them. The questions that name the files go with it."""
-    return paths.writes_held(paths.DATA_FILE) or paths.DATA_FILE in _UNREAD_AT_LOAD
+    that could not read the notes file or the Trash -- held, or set aside
+    unreadable -- holds notes it never saw, and a file may be theirs, until a
+    run that has read them. The questions that name the files go with it."""
+    return any(paths.writes_held(path) or path in _UNREAD_AT_LOAD
+               for path in (paths.DATA_FILE, paths.TRASH_FILE))
 
 
 def _delete_attachment_files(notes_or_entries, spare=()):
@@ -576,18 +591,23 @@ def backup_notes_file():
     # Whole or not at all: on a full disk copy2 left a cut-off copy, unreadable,
     # under the name the update's notice was about to give as the safety net.
     part = backup_path + ".part"
-    try:
-        shutil.copy2(paths.DATA_FILE, part)
-        with open(part, "ab") as f:
-            os.fsync(f.fileno())
-        os.replace(part, backup_path)
-        return backup_path
-    except (IOError, OSError):
+    # Tried three times, as the read after it (_read_data_file): a scanner
+    # holding the file a moment left an update with no copy, said as a full disk.
+    for attempt in range(3):
+        if attempt:
+            time.sleep(0.5)
         try:
-            os.remove(part)
-        except OSError:
-            pass
-        return None
+            shutil.copy2(paths.DATA_FILE, part)
+            with open(part, "ab") as f:
+                os.fsync(f.fileno())
+            os.replace(part, backup_path)
+            return backup_path
+        except (IOError, OSError):
+            try:
+                os.remove(part)
+            except OSError:
+                pass
+    return None
 
 
 # ---- Notes file ----
@@ -661,6 +681,8 @@ def load_notes(version_change=None):
             paths.hold_writes(paths.DATA_FILE)
             report["notes_file_corrupt"] = True
             report["corrupt_backup_path"] = None
+            # The start says another program may hold it, not that it is broken.
+            report["notes_file_refused"] = True
             raw = []
         elif not isinstance(raw, list):
             # There, but nothing usable: its bytes are kept before an empty
@@ -774,8 +796,8 @@ def load_notes(version_change=None):
     return notes, report
 
 
-# The notes files whose last load_notes held none of their notes: set aside
-# unreadable, a run's notes are only what it writes.
+# The notes and Trash files whose last load held none of their notes: set
+# aside unreadable, a run's notes are only what it writes.
 _UNREAD_AT_LOAD = set()
 
 

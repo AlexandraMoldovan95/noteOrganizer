@@ -843,6 +843,8 @@ check(f"a save the disk refuses says Not saved on the status line ({_sv_status!r
 _ns_note = NO.normalize_note({'id': 9311, 'title': 'Restore me', 'body': 'new words'})
 _ns_note['_prev'] = {'body': 'old words', 'title': 'Restore me'}
 app.notes.append(_ns_note)
+_ns_other = NO.normalize_note({'id': 9312, 'title': 'Another', 'body': 'other words'})
+app.notes.append(_ns_other)
 app.refresh_note_list(); app.update()
 app.open_note_in_tab(_ns_note); app.update()
 _ns_ask_was = app.ask_yes_no
@@ -854,11 +856,20 @@ try:
     _ns_restore = str(app.status_lbl.cget('text'))
     app.toggle_pin(_ns_note); app.update()
     _ns_pin = str(app.status_lbl.cget('text'))
+    # Opening any note wrote "Created · Last updated" over notes not saved.
+    app.open_note_in_tab(_ns_other); app.update()
+    _ns_open = str(app.status_lbl.cget('text'))
 finally:
     NO.core_save_notes, app.show_error = _rf_real_save, _rf_real_err
     app.ask_yes_no = _ns_ask_was
 _ns_restored = 'old words' in (app.find_note(9311) or {}).get('body', '')
 app.save_notes(); app.update()
+# A write that lands takes "Not saved" back: it wrote every note, and a road
+# that says nothing (a drag, a rename) left it up over a file holding all.
+_ns_back = str(app.status_lbl.cget('text'))
+check(f"opening a note over notes not saved says Not saved, and a write that lands "
+      f"takes it back ({_ns_open[:40]!r}, {_ns_back!r})",
+      _ns_open.startswith('Not saved') and _ns_back.startswith('Saved at'))
 app.toggle_pin(_ns_note); app.update()
 _ns_pin_ok = str(app.status_lbl.cget('text'))
 check(f"Restore previous and Pin over a refused write say Not saved, and Pin over "
@@ -1999,6 +2010,17 @@ app._show_toast = lambda text, *a, **k: _rt_toasts.append(text)
 app.trash = []
 _rt_asked.clear()
 NO._core_paths.hold_writes(NO.TRASH_FILE)
+
+
+def _rt_label_texts(widget):
+    out = []
+    for child in widget.winfo_children():
+        if isinstance(child, tk.Label):
+            out.append(str(child.cget('text')))
+        out += _rt_label_texts(child)
+    return out
+
+
 try:
     _rt_pick('30 days')
 finally:
@@ -2010,7 +2032,7 @@ check(f"over a held Trash file the dropdown keeps no new length, asks nothing an
       f"asked {bool(_rt_asked)})",
       str(app.trash_retention_var.get()) == '7 days' and NO.trash_retention_days() == 7
       and not _rt_asked
-      and any("the Trash couldn't be opened this time" in t for t in _rt_toasts))
+      and any("the Trash couldn't be read this time" in t for t in _rt_toasts))
 
 
 def _rt_row_lines():
@@ -2037,6 +2059,48 @@ check("retention: ...and a row's days left follow the new window at once",
       and any('%d day(s) left' % _rt_left in t for t in _rt_row_lines())
       and not any('%d day(s) left' % (_rt_left + 23) in t
                   for t in _rt_row_lines()))
+
+# Over a held Trash its page says why it shows nothing: "Trash is empty" over
+# notes the file holds, and "Kept for N days" over a choice the dropdown
+# refuses. (After the rows' check above: rebuilt, the page read the rows anew.)
+_rt_trash_was = list(app.trash)
+app.trash = []
+NO._core_paths.hold_writes(NO.TRASH_FILE)
+try:
+    app.toggle_settings_panel('trash'); app.update()
+    _rt_held_page = _rt_label_texts(app.settings_trash_panel)
+finally:
+    NO._core_paths.WRITES_HELD.discard(os.path.normcase(os.path.abspath(NO.TRASH_FILE)))
+    app.trash = _rt_trash_was
+check(f"over a held Trash file its page says it couldn't be read, not that it is empty "
+      f"or kept for some days ({[t[:50] for t in _rt_held_page if 'Trash' in t or 'Kept' in t]})",
+      any("The Trash couldn't be read this time, so nothing in it is shown" in t
+          for t in _rt_held_page)
+      and any("The Trash couldn't be read this time, so nothing is removed" in t
+              for t in _rt_held_page)
+      and not any(t == "Trash is empty." or t.startswith("Kept for") for t in _rt_held_page))
+
+# ...and over a held templates file, Use template and Settings → Templates said
+# "You don't have any templates" and "No templates yet" of a file that has them.
+_rt_tpl_was, _rt_info_was, _rt_infos = list(app.templates), app.show_info, []
+app.templates = []
+app.show_info = lambda title, msg='', *a, **k: _rt_infos.append((title, msg))
+NO._core_paths.hold_writes(NO.TEMPLATES_FILE)
+try:
+    app.show_template_picker(); app.update()
+    app.toggle_settings_panel('templates'); app.update()
+    _rt_tpl_page = _rt_label_texts(app.settings_templates_panel)
+finally:
+    NO._core_paths.WRITES_HELD.discard(os.path.normcase(os.path.abspath(NO.TEMPLATES_FILE)))
+    app.show_info = _rt_info_was
+    app.templates = _rt_tpl_was
+check(f"over a held templates file Use template and Settings → Templates say it couldn't "
+      f"be read, not that there are none ({_rt_infos}, "
+      f"{[t[:40] for t in _rt_tpl_page if 'templates' in t.lower()]})",
+      bool(_rt_infos) and _rt_infos[-1][0] == "Templates couldn't be read"
+      and "couldn't be read this time" in _rt_infos[-1][1]
+      and any(t.startswith("Your templates couldn't be read this time") for t in _rt_tpl_page)
+      and not any(t.startswith("No templates yet") for t in _rt_tpl_page))
 
 # The preview and the purge must be the same judgement. A dialog that
 # counts with one rule while the purge deletes by another is a dialog

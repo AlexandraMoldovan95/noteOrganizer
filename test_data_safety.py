@@ -5639,6 +5639,94 @@ for _hx_name, _hx_load in (("trash", _storage.load_trash),
           _hx_aside == [] and _hx_held and _hx_got == []
           and _hx_disk == [{"id": 1, "title": "kept"}])
 
+# A run that did not read the Trash -- held, or set aside damaged -- deletes no
+# attached file: a backup's copy of a trashed note shared its file, and Remove
+# attachment on it took the file the trashed note still names.
+_ak_dir = tempfile.mkdtemp(prefix="nd_trashfiles_")
+_ak_prev = _paths.APP_DIR
+_ak_said = {}
+try:
+    _paths.configure(_ak_dir)
+    os.makedirs(_paths.ATTACHMENTS_DIR, exist_ok=True)
+    _ak_file = os.path.join(_paths.ATTACHMENTS_DIR, "abc.png")
+    _ak_gone = [{"attachments": [{"filename": "abc.png", "stored_as": "abc.png"}]}]
+    for _ak_case in ("held", "damaged", "read"):
+        with _hs_real_open(_ak_file, "w") as f:
+            f.write("x")
+        with _hs_real_open(_paths.TRASH_FILE, "w", encoding="utf-8") as f:
+            f.write("{ not json" if _ak_case == "damaged"
+                    else json.dumps([{"id": 1, "attachments": _ak_gone[0]["attachments"]}]))
+        if _ak_case == "held":
+            _paths.hold_writes(_paths.TRASH_FILE)
+        else:
+            _storage.load_trash()
+        _ak_kept = _storage.attached_files_kept()
+        _storage._delete_attachment_files(_ak_gone)
+        _ak_said[_ak_case] = (_ak_kept, os.path.isfile(_ak_file))
+        _paths.WRITES_HELD.clear()
+finally:
+    _paths.WRITES_HELD.clear()
+    _storage._UNREAD_AT_LOAD.clear()
+    _paths.configure(_ak_prev)
+    shutil.rmtree(_ak_dir, ignore_errors=True)
+check("a run whose Trash was held or set aside damaged keeps every attached file; one "
+      "that read it does not (%s)" % _ak_said,
+      _ak_said == {"held": (True, True), "damaged": (True, True), "read": (False, False)})
+
+# The unknown window's mark kept the one-time cleanup waiting too: a window
+# chosen, its "done" lost with the damaged file read as never, and the cleanup
+# ran again on months of notes, merging look-alikes.
+_cw_dir = tempfile.mkdtemp(prefix="nd_cleanupagain_")
+_cw_prev = _paths.APP_DIR
+try:
+    _paths.configure(_cw_dir)
+    with _hs_real_open(_paths.SETTINGS_FILE, "w", encoding="utf-8") as f:
+        f.write("{ damaged")
+    _storage.load_settings()
+    _cw_mark = _storage.load_settings().get(_storage.TRASH_WINDOW_UNKNOWN)
+    _storage.choose_trash_window(14)
+    _cw_after = _storage.load_settings()
+finally:
+    _paths.WRITES_HELD.clear()
+    _paths.configure(_cw_prev)
+    shutil.rmtree(_cw_dir, ignore_errors=True)
+check("a window chosen over settings that were lost marks the one-time cleanup done, "
+      "not never (%s)" % _cw_after,
+      _cw_mark is True and _cw_after.get("trash_retention_days") == 14
+      and _cw_after.get("cleanup_done") is True
+      and _storage.TRASH_WINDOW_UNKNOWN not in _cw_after)
+
+# A change whose write was refused does not live on in the settings kept for a
+# later refused read: the dict handed out was the one kept, and the next write
+# that landed put the refused Trash length on disk.
+_sc_dir = tempfile.mkdtemp(prefix="nd_settingscache_")
+_sc_prev = _paths.APP_DIR
+_sc_write = _storage._write_json_atomic
+try:
+    _paths.configure(_sc_dir)
+    _storage.save_settings({"trash_retention_days": 30, "cleanup_done": True})
+    _storage._write_json_atomic = lambda path, value: (False, OSError(28, "No space left"))
+    _sc_refused = _storage.choose_trash_window(7)[0]
+    _storage._write_json_atomic = _sc_write
+
+    def _sc_open(path, *a, **k):
+        if os.path.abspath(str(path)) == os.path.abspath(_paths.SETTINGS_FILE):
+            raise PermissionError(13, "held for a moment")
+        return _hs_real_open(path, *a, **k)
+    _storage.open = _sc_open
+    try:
+        _sc_seen = _storage.load_settings().get("trash_retention_days")
+    finally:
+        del _storage.open
+finally:
+    _storage._write_json_atomic = _sc_write
+    _paths.WRITES_HELD.clear()
+    _paths.configure(_sc_prev)
+    shutil.rmtree(_sc_dir, ignore_errors=True)
+check("a refused settings change is not what a later refused read gives back "
+      "(refused %s, then %s)" % (not _sc_refused, _sc_seen),
+      _sc_refused is False and _sc_seen == 30)
+
 # A number of more than 4,300 digits is a plain ValueError from the parser:
 # the notes, Trash and templates files holding one stopped the start; read
 # as damaged, they are copied aside, as settings.json was.
@@ -5666,6 +5754,19 @@ check("a number of 5,000 digits reads as a damaged file, copied aside, never a "
       "stopped start (%s, aside %s)" % (_bi_said, _bi_aside),
       _bi_said == {"notes": [], "trash": [], "templates": []}
       and _bi_aside == ["notes_data", "templates", "trash"])
+
+# A format span whose style is a list or an object is unhashable: the set test
+# raised TypeError past every catch, and the app did not start at any launch.
+_fz_odd = [{"start": 0, "end": 1, "style": ["bold"]}, {"start": 0, "end": 1, "style": {"b": 1}},
+           {"start": 0, "end": 2, "style": "bold"}]
+try:
+    _fz_note = _normalize_note({"id": 1, "title": "x", "body": "ab", "formatting": _fz_odd})
+    _fz_tpl = _storage.normalize_template({"name": "t", "body": "ab", "formatting": _fz_odd})
+    _fz_said = (_fz_note.get("formatting"), _fz_tpl.get("formatting"))
+except TypeError as _fz_exc:
+    _fz_said = "RAISED %s" % _fz_exc
+check("a format style that is a list or an object is dropped, the rest kept (%s)" % (_fz_said,),
+      _fz_said == ([{"start": 0, "end": 2, "style": "bold"}],) * 2)
 
 # A held file's refused write is reported once a run: a setting is written at
 # every note opened, and its banner took the place of a delete's Undo.
@@ -5719,27 +5820,35 @@ check("every file renamed into place is written to the disk first (%s)"
 # refused write, in place of its "Not saved". Read in the source, so another
 # cannot be added: a method that throws away save_notes' answer sets no status.
 import ast as _sv_ast
-_sv_bare = []
+_sv_methods = []
 for _sv_file in ["note_organizer.py"] + sorted(
         os.path.join("noteorganizer", "ui", _n)
         for _n in os.listdir(os.path.join("noteorganizer", "ui")) if _n.endswith(".py")):
     with open(_sv_file, encoding="utf-8") as _f:
         _sv_tree = _sv_ast.parse(_f.read())
-    for _sv_fn in _sv_ast.walk(_sv_tree):
-        if not isinstance(_sv_fn, _sv_ast.FunctionDef) or _sv_fn.name == "save_notes":
-            continue
-        _sv_inner = list(_sv_ast.walk(_sv_fn))
-        _sv_thrown = any(
-            isinstance(_s, _sv_ast.Expr) and isinstance(_s.value, _sv_ast.Call)
-            and isinstance(_s.value.func, _sv_ast.Attribute)
-            and _s.value.func.attr == "save_notes" for _s in _sv_inner)
-        _sv_says = any(
-            isinstance(_c, _sv_ast.Call) and isinstance(_c.func, _sv_ast.Attribute)
-            and _c.func.attr == "set_status" for _c in _sv_inner)
-        if _sv_thrown and _sv_says:
-            _sv_bare.append("%s:%s" % (_sv_file, _sv_fn.name))
-check("no method sets the status line after a notes write whose answer it "
-      "threw away (%s)" % (_sv_bare or "none"), not _sv_bare)
+    _sv_methods += [(_sv_file, _fn) for _fn in _sv_ast.walk(_sv_tree)
+                    if isinstance(_fn, _sv_ast.FunctionDef) and _fn.name != "save_notes"]
+
+
+def _sv_calls(fn, name):
+    """Whether *fn* calls self.<name>(...) anywhere in it."""
+    return any(isinstance(_c, _sv_ast.Call) and isinstance(_c.func, _sv_ast.Attribute)
+               and _c.func.attr == name and isinstance(_c.func.value, _sv_ast.Name)
+               and _c.func.value.id == "self" for _c in _sv_ast.walk(fn))
+
+
+# The throwers, then any method that calls one (a helper's write, one level
+# up: _relocate_day's callers said "Moved to" over its refusal) and speaks.
+_sv_throwers = {_fn.name for _file, _fn in _sv_methods if any(
+    isinstance(_s, _sv_ast.Expr) and isinstance(_s.value, _sv_ast.Call)
+    and isinstance(_s.value.func, _sv_ast.Attribute)
+    and _s.value.func.attr == "save_notes" for _s in _sv_ast.walk(_fn))}
+_sv_bare = ["%s:%s" % (_file, _fn.name) for _file, _fn in _sv_methods
+            if _sv_calls(_fn, "set_status")
+            and (_fn.name in _sv_throwers
+                 or any(_sv_calls(_fn, _t) for _t in _sv_throwers))]
+check("no method sets the status line after a notes write whose answer it, or "
+      "a helper it calls, threw away (%s)" % (_sv_bare or "none"), not _sv_bare)
 
 # ============================================================
 # A FIELD THIS VERSION DOES NOT KNOW IS KEPT (the owner's D2, 2026-11-13)

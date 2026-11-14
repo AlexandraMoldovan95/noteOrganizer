@@ -352,11 +352,45 @@ _t05b = _time5.time()
 while not _msgs5b and _time5.time() - _t05b < 3:
     app5d.update(); _time5.sleep(0.05)
 _st5._preserve_corrupt = _real_pres5
-check('a failed preserve is announced with the do-not-save warning',
+check('a failed preserve is announced with the do-not-save warning, its cause '
+      'not put on another program',
       bool(_msgs5b)
-      and 'no copy of it was kept' in _msgs5b[0][1]
-      and 'will not save anything over it' in _msgs5b[0][1])
+      and 'No copy of it could be kept' in _msgs5b[0][1]
+      and 'will not save anything over it' in _msgs5b[0][1]
+      and 'Another program' not in _msgs5b[0][1])
 app5d.destroy()
+
+# ...and a read Windows refuses (another program holding the file) is said as
+# that, not as a broken file to repair: it is held, never copied aside.
+_real_read5 = _st5._read_data_file
+
+
+def _refuse5(path):
+    if os.path.basename(str(path)) == 'notes_data.json':
+        raise PermissionError(13, 'held by another program')
+    return _real_read5(path)
+
+
+_st5._read_data_file = _refuse5
+_msgs5r = []
+try:
+    app5r = NO.NoteOrganizer(); app5r._poll_active_dirty = lambda: None
+    app5r.show_info = lambda t, m: _msgs5r.append((t, m))
+    _t05r = _time5.time()
+    while not _msgs5r and _time5.time() - _t05r < 3:
+        app5r.update(); _time5.sleep(0.05)
+finally:
+    _st5._read_data_file = _real_read5
+    NO._core_paths.WRITES_HELD.discard(os.path.normcase(os.path.abspath(NO.DATA_FILE)))
+check(f'a refused read is said as another program holding the file, not as damage '
+      f'({(_msgs5r or [("", "")])[0][1][:160]!r})',
+      bool(_msgs5r)
+      and 'Windows would not let the app read the file' in _msgs5r[0][1]
+      and 'Another program may be holding the file, so no copy of it was kept' in _msgs5r[0][1]
+      and 'unreadable' not in _msgs5r[0][1])
+app5r.destroy()
+with open('notes_data.json', 'w', encoding='utf-8') as _f5:
+    _f5.write('[]')
 
 # ============================================================
 # A POISONED RECURRENCE INTERVAL CANNOT MAKE THE APP UNLAUNCHABLE
