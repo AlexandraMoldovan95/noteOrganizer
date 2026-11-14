@@ -4788,6 +4788,18 @@ a real day in a colour kept (SN168). Left, with its reason: over held settings a
 category or day marks are counted as more here and not on the phone, as this app keeps them for
 the session and the phone stops the import at that write.
 
+**The thirty-second round** found that last fix short on one road, made by it: the question
+asked the backup's trashed notes by this computer's Trash length, while the merge first takes
+the backup's longer window (where none was chosen here) and keeps them by that. A backup whose
+new notes all looked alike and which brought only such entries was offered no Skip, and the
+default Cancel left them behind (the backup kept them). The round's agent graded it low; the
+phone round's parity reader graded it medium, as the twenty-eighth round graded the same
+mechanism on the phone, and the stricter grade is the one counted, so the loop goes on. The
+window the merge takes is worked out in one place now (`_backup_trash_window`), by the merge and
+by the question (SN170; TW18, TW19 and DR10 re-aimed at it). Left, with its reason: a twin
+already holding 200 files is offered Skip and said to take files it cannot (the phone the same,
+very rare, nothing lost).
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.
 

@@ -6309,8 +6309,8 @@
     "id": "TW18",
     "about": "a restored Trash is left under the default window its owner never had",
     "edits": [{"file": "note_organizer.py",
-               "find": "                and not get_setting(TRASH_WINDOW_UNKNOWN)):\n            choose_trash_window(window)\n",
-               "replace": "                and not get_setting(TRASH_WINDOW_UNKNOWN)):\n            pass\n"}],
+               "find": "        if window is not None:\n            choose_trash_window(window)\n",
+               "replace": "        if window is not None:\n            pass\n"}],
     "must_fail": ["a restored Trash keeps the window it came with, where none was chosen"],
     "suites": ["qa3"],
     "expect": "killed"
@@ -6319,7 +6319,7 @@
     "id": "TW19",
     "about": "a backup's window replaces the one this notebook chose",
     "edits": [{"file": "note_organizer.py",
-               "find": "                and \"trash_retention_days\" not in load_settings()\n",
+               "find": "            and \"trash_retention_days\" not in load_settings()\n",
                "replace": ""}],
     "must_fail": ["...and a window chosen here stays"],
     "suites": ["qa3"],
@@ -6651,8 +6651,8 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                and TRASH_RETENTION_DAYS < window <= 365\n",
-        "replace": "                and 1 <= window <= 365\n"
+        "find": "            and TRASH_RETENTION_DAYS < window <= 365\n",
+        "replace": "            and 1 <= window <= 365\n"
       }
     ],
     "must_fail": [
@@ -19555,6 +19555,16 @@
                "find": "                adopting = [(self.find_note(twin.get(\"id\")), n) for twin, n in\n",
                "replace": "                twins = self._twins_after(updates)\n                adopting = [(self.find_note(twin.get(\"id\")), n) for twin, n in\n"}],
     "must_fail": ["...and a note typed into while the question waits still takes the file offered for it"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN170",
+    "about": "A backup's trashed notes asked by this computer's Trash length, not the backup's longer one the merge takes: Skip withheld for entries the merge brings",
+    "edits": [{"file": "note_organizer.py",
+               "find": "        keep_days = _backup_trash_window(state) or trash_retention_days()\n",
+               "replace": "        keep_days = trash_retention_days()\n"}],
+    "must_fail": ["a backup's longer Trash window, taken where none was chosen here, is the length its trashed notes are asked by"],
     "suites": ["qa3"],
     "expect": "killed"
   }

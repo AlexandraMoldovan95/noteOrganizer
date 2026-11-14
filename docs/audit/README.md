@@ -275,8 +275,9 @@ before it counted.
 ### Wave 6: the lows, before the stores
 
 The full reading's findings of low severity, fixed from 12 November, then attacked by two
-agents for each app in each round: one going after each fix by name, one taking an ordinary
-person's side and reading the wave's documents against the code. No sceptic ran: the agent
+agents for each app in each round (the desktop's later rounds by one, below): one going after
+each fix by name, one taking an ordinary person's side and reading the wave's documents against
+the code. No sceptic ran: the agent
 leading the audit checked each finding of medium severity in the code before it counted. The
 totals above are waves 1 to 5's.
 
@@ -346,6 +347,8 @@ totals above are waves 1 to 5's.
 | [r28-phone.txt](wave6/r28-phone.txt) | Phone | 2026-11-14 08:53 | 2 | 0.49 |
 | [r31-desktop.txt](wave6/r31-desktop.txt) | Desktop | 2026-11-14 09:52 | 1 | 0.24 |
 | [r29-phone.txt](wave6/r29-phone.txt) | Phone | 2026-11-14 09:52 | 2 | 0.48 |
+| [r32-desktop.txt](wave6/r32-desktop.txt) | Desktop | 2026-11-14 10:37 | 1 | 0.21 |
+| [r30-phone.txt](wave6/r30-phone.txt) | Phone | 2026-11-14 10:37 | 2 | 0.47 |
 
 From the third round, both agents of an app read one file; the line that started each named
 where to begin, one at each fix by name, the other at the person's roads and the documents.
@@ -355,5 +358,6 @@ sentences in it. Once the plan had been read whole (the desktop's twelfth round,
 tenth), it was given the texts a person reads instead: the user guide, the privacy policy and
 the READMEs, the welcome notes, the screen texts, and the steps of a release. The desktop's
 twentieth round was one agent, attacking the fixes of a round that had found nothing of medium
-severity; the phone's eighteenth gave its second agent a file of its own, on the rules for a
+severity, and so was every desktop round from the twenty-fourth, by the owner's rule of 1
+November; the phone's eighteenth gave its second agent a file of its own, on the rules for a
 file the phone cannot read.
