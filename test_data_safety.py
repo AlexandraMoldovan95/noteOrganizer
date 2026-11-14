@@ -5603,6 +5603,70 @@ check("a notes file held at the start is held, never copied aside (%s, held %s)"
       _hn_aside == [] and _hn_held and _hn_report.get("notes_file_corrupt") is True
       and _hn_notes == [] and _hn_disk == [{"id": 1, "title": "kept"}])
 
+# ...and so are the Trash and the templates (only the notes had a check, and
+# a copy aside of a refused Trash file would have gone unnoticed).
+for _hx_name, _hx_load in (("trash", _storage.load_trash),
+                           ("templates", _storage.load_templates)):
+    _hx_dir = tempfile.mkdtemp(prefix="nd_held_%s_" % _hx_name)
+    _hx_prev = _paths.APP_DIR
+    try:
+        _paths.configure(_hx_dir)
+        _hx_path = _paths.TRASH_FILE if _hx_name == "trash" else _paths.TEMPLATES_FILE
+        with _hs_real_open(_hx_path, "w", encoding="utf-8") as f:
+            json.dump([{"id": 1, "title": "kept"}], f)
+
+        def _hx_open(path, *a, _p=_hx_path, **k):
+            if os.path.abspath(str(path)) == os.path.abspath(_p):
+                raise PermissionError(13, "held by another program")
+            return _hs_real_open(path, *a, **k)
+        _storage.open = _hx_open
+        _storage.time.sleep = lambda _s: None
+        try:
+            _hx_got = _hx_load()
+        finally:
+            del _storage.open
+            _storage.time.sleep = _hs_sleep
+        _hx_aside = [p for p in os.listdir(_hx_dir) if "_corrupt_" in p]
+        _hx_held = _paths.writes_held(_hx_path)
+        with _hs_real_open(_hx_path, encoding="utf-8") as f:
+            _hx_disk = json.load(f)
+    finally:
+        _paths.WRITES_HELD.clear()
+        _paths.configure(_hx_prev)
+        shutil.rmtree(_hx_dir, ignore_errors=True)
+    check("a %s file refused at the start is held, never copied aside (%s, held %s)"
+          % (_hx_name, _hx_aside, _hx_held),
+          _hx_aside == [] and _hx_held and _hx_got == []
+          and _hx_disk == [{"id": 1, "title": "kept"}])
+
+# A number of more than 4,300 digits is a plain ValueError from the parser:
+# the notes, Trash and templates files holding one stopped the start; read
+# as damaged, they are copied aside, as settings.json was.
+_bi_dir = tempfile.mkdtemp(prefix="nd_bigint_")
+_bi_prev = _paths.APP_DIR
+_bi_said = {}
+try:
+    _paths.configure(_bi_dir)
+    for _bi_path in (_paths.DATA_FILE, _paths.TRASH_FILE, _paths.TEMPLATES_FILE):
+        with _hs_real_open(_bi_path, "w", encoding="utf-8") as f:
+            f.write('[{"id": %s, "title": "big"}]' % ("9" * 5000))
+    for _bi_name, _bi_load in (("notes", lambda: _storage.load_notes(None)[0]),
+                               ("trash", _storage.load_trash),
+                               ("templates", _storage.load_templates)):
+        try:
+            _bi_said[_bi_name] = _bi_load()
+        except Exception as _bi_exc:
+            _bi_said[_bi_name] = "RAISED %s" % type(_bi_exc).__name__
+    _bi_aside = sorted(p.split("_corrupt_")[0] for p in os.listdir(_bi_dir) if "_corrupt_" in p)
+finally:
+    _paths.WRITES_HELD.clear()
+    _paths.configure(_bi_prev)
+    shutil.rmtree(_bi_dir, ignore_errors=True)
+check("a number of 5,000 digits reads as a damaged file, copied aside, never a "
+      "stopped start (%s, aside %s)" % (_bi_said, _bi_aside),
+      _bi_said == {"notes": [], "trash": [], "templates": []}
+      and _bi_aside == ["notes_data", "templates", "trash"])
+
 # A held file's refused write is reported once a run: a setting is written at
 # every note opened, and its banner took the place of a delete's Undo.
 _hr_dir = tempfile.mkdtemp(prefix="nd_heldrep_")
@@ -5649,6 +5713,33 @@ with open(os.path.join("noteorganizer", "core", "sharing.py"), encoding="utf-8")
 check("every file renamed into place is written to the disk first (%s)"
       % (_fs_bare or "all"),
       not _fs_bare and "os.fsync(" in _fs_copier)
+
+# ---- No change says what it did over a notes write it never checked ----
+# "Pinned to top", "Duplicated as" and "Moved" went on the status line over a
+# refused write, in place of its "Not saved". Read in the source, so another
+# cannot be added: a method that throws away save_notes' answer sets no status.
+import ast as _sv_ast
+_sv_bare = []
+for _sv_file in ["note_organizer.py"] + sorted(
+        os.path.join("noteorganizer", "ui", _n)
+        for _n in os.listdir(os.path.join("noteorganizer", "ui")) if _n.endswith(".py")):
+    with open(_sv_file, encoding="utf-8") as _f:
+        _sv_tree = _sv_ast.parse(_f.read())
+    for _sv_fn in _sv_ast.walk(_sv_tree):
+        if not isinstance(_sv_fn, _sv_ast.FunctionDef) or _sv_fn.name == "save_notes":
+            continue
+        _sv_inner = list(_sv_ast.walk(_sv_fn))
+        _sv_thrown = any(
+            isinstance(_s, _sv_ast.Expr) and isinstance(_s.value, _sv_ast.Call)
+            and isinstance(_s.value.func, _sv_ast.Attribute)
+            and _s.value.func.attr == "save_notes" for _s in _sv_inner)
+        _sv_says = any(
+            isinstance(_c, _sv_ast.Call) and isinstance(_c.func, _sv_ast.Attribute)
+            and _c.func.attr == "set_status" for _c in _sv_inner)
+        if _sv_thrown and _sv_says:
+            _sv_bare.append("%s:%s" % (_sv_file, _sv_fn.name))
+check("no method sets the status line after a notes write whose answer it "
+      "threw away (%s)" % (_sv_bare or "none"), not _sv_bare)
 
 # ============================================================
 # A FIELD THIS VERSION DOES NOT KNOW IS KEPT (the owner's D2, 2026-11-13)

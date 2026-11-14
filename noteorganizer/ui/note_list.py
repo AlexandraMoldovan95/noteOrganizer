@@ -910,8 +910,7 @@ class NoteListMixin:
                         f"stays as it is now, and this is not asked again.",
                         icon="question")):
                 self._put_back_custom_order(marks)
-                self.save_notes()
-                self.set_status("Put back your Custom order")
+                self._say_if_saved(self.save_notes(), "Put back your Custom order")
         if (value == self.SORT_CUSTOM
                 and not any("order" in n for n in self.notes)):
             before = getattr(self, "_sort_shown", None)
@@ -1059,11 +1058,11 @@ class NoteListMixin:
         self._custom_order_left = [
             self._order_identity(n)
             for n in sorted(placed, key=lambda n: n["order"])]
-        self.save_notes()
+        written = self.save_notes()
         self.sort_var.set(sort_before)
         self.refresh_note_list()
-        self.set_status(f"Put back your Custom order; the list is sorted by "
-                        f"{sort_before} again")
+        self._say_if_saved(written, f"Put back your Custom order; the list is sorted by "
+                                    f"{sort_before} again")
 
     def _put_back_custom_order(self, marks, dry_run=False):
         """Give every note in `marks` -- (note, had a place, the place), as

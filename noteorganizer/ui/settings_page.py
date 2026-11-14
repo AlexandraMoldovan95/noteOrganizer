@@ -1574,15 +1574,21 @@ class SettingsPageMixin:
             except (ValueError, IndexError):
                 return
             current = trash_retention_days()
-            # Over a held settings file no choice is kept: put back and said at
-            # once, not after a question whose Yes it would refuse.
-            if paths.writes_held(paths.SETTINGS_FILE):
+            # Held settings keep no choice, and a held Trash shows empty, so no
+            # question could say what a shorter time removes: put back and said
+            # at once, not after a question whose Yes it would refuse.
+            trash_held = paths.writes_held(paths.TRASH_FILE)
+            if paths.writes_held(paths.SETTINGS_FILE) or trash_held:
                 try:
                     self.trash_retention_var.set(shown(current))
                 except tk.TclError:
                     pass
-                self._show_toast("Not saved: a length can be chosen once Note "
-                                 "Organizer is opened again", kind="info")
+                self._show_toast(
+                    ("Not saved: the Trash couldn't be opened this time, so a "
+                     "length can be chosen once Note Organizer is opened again")
+                    if trash_held and not paths.writes_held(paths.SETTINGS_FILE)
+                    else ("Not saved: a length can be chosen once Note "
+                          "Organizer is opened again"), kind="info")
                 return
             # Only a SHORTER window with something old enough to lose asks: a
             # needless question teaches dismissing them. One not known is
@@ -3359,7 +3365,7 @@ class SettingsPageMixin:
                 kept["attachments"] = merged_attach
                 grew.add(kept.get("id"))
         self.notes = [n for n in self.notes if id(n) not in trash_ids]
-        self.save_notes()
+        written = self.save_notes()
         # The editor is told: its copy went (it starts fresh), or its kept copy
         # gained files (it moves onto that version, or saved the old list back).
         if (self.selected_note_id is not None
@@ -3376,7 +3382,8 @@ class SettingsPageMixin:
             self._put_back_schedule(carried)
         self.refresh_note_list()
         self.render_calendar()
-        if announce:
+        # Not "Cleaned up" after the refused write's own words.
+        if announce and written:
             self.show_info("Cleaned up",
                                 f"Moved {len(to_trash)} duplicate(s) to the trash.")
         refresh()

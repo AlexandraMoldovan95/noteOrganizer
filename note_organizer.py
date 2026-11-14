@@ -2039,7 +2039,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         """Settings -> About's Show, beside the welcome note: the one in the
         notebook if it is still there, a new one if it was deleted, opened
         in the editor either way."""
-        uids = {load_settings().get("welcome_note_uid"),
+        # As a string only: a list there (hand-edited, a newer version) is
+        # unhashable, and Show only said "Something went wrong".
+        uids = {get_setting("welcome_note_uid", None, expect=str),
                 getattr(self, "_welcome_uid_run", None)} - {None, ""}
         note = next((n for n in self.notes if n.get("uid") in uids), None)
         if not self._leave_settings_for_the_editor():
@@ -2204,11 +2206,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # process anyway. The crash log has the failure (_report_write_failure).
         if getattr(self, "_ending_session", False):
             return False
+        # Every refused write says so on the status line, over a save's
+        # "Auto-saved" and beside a change's toast; its own words wait on it.
+        self._say_not_saved()
         if _core_paths.writes_held(DATA_FILE):
-            # A held run saves nothing, so "make a change" is false there: said
-            # once, on the status line too, over the save's "Auto-saved".
-            self.set_status("Not saved — nothing is saved in this session; "
-                            "Settings → Backup → Export keeps what you wrote")
+            # A held run saves nothing, so "make a change" is false there: the
+            # message once, the status line every time.
             if getattr(self, "_held_save_said", False):
                 return False
             self._held_save_said = True
@@ -2234,6 +2237,23 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             "Settings → Backup can also export a copy somewhere else."
         )
         return False
+
+    def _say_not_saved(self):
+        """The status line over a refused notes write, said by save_notes and
+        again where a reload wrote "Last updated" over it."""
+        self.set_status(
+            "Not saved — nothing is saved in this session; "
+            "Settings → Backup → Export keeps what you wrote"
+            if _core_paths.writes_held(DATA_FILE)
+            else "Not saved — your notes could not be written")
+
+    def _say_if_saved(self, written, text):
+        """A change's own words on the status line, only over a write that
+        landed: "Pinned to top" over a refused one read as saved."""
+        if written:
+            self.set_status(text)
+        else:
+            self._say_not_saved()
 
     # ---------- Export / Import (moving your notebook between devices) ----------
     def _start_io_worker(self, target):
@@ -11044,10 +11064,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         self._editor_follows_external_change({mine.get("id")})
                     else:
                         self.open_note_in_tab(mine, flush=False)
-                    # Not over a refused write: "Not saved" stood there.
-                    if written:
-                        self.set_status("Note updated from the code "
-                                        "— ↩ Restore previous undoes it")
+                    # After the editor's reload, whose "Last updated" read as
+                    # saved over a refused write.
+                    self._say_if_saved(written, "Note updated from the code "
+                                                "— ↩ Restore previous undoes it")
                     return
                 # "add" falls through to the import below, as a new note; its
                 # uid dropped here, where the intent is (the review editor
@@ -11094,15 +11114,14 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return
         if not valid and not copies:
             updated = self._apply_known_updates(updates, "code")
-            if updated:
-                self.save_notes()
+            written = self.save_notes() if updated else True
             self.import_box.delete("1.0", "end")
             self.toggle_import_panel()
             self.refresh_note_list()
             self.render_calendar()
-            self.set_status("Notes updated from the code "
-                            "— ↩ Restore previous undoes each one" if updated
-                            else "Everything in this code is already here, unchanged")
+            self._say_if_saved(written, "Notes updated from the code "
+                               "— ↩ Restore previous undoes each one" if updated
+                               else "Everything in this code is already here, unchanged")
             return
         # Each note checked against what is here, by Find duplicates' rule: a
         # code imported twice made duplicates in silence.
@@ -11143,7 +11162,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.notes.append(note)
             arrived.append(note)
             added += 1
-        self.save_notes()
+        written = self.save_notes()
         self.refresh_note_list()
         self.render_calendar()
         notes_word = "note" if added == 1 else "notes"
@@ -11154,9 +11173,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                          if oversized else "")
         known_note = ((f", updated {updated}" if updated else "")
                       + (f", {unchanged} already here" if unchanged else ""))
+        # Not a green tick over a refused write: the notes are on screen only.
         self.import_status.config(
-            text=f"Added {added} {notes_word}{known_note} ✓{skipped_note}{oversize_note}",
-            fg=self.colors["success_text"])
+            text=(f"Added {added} {notes_word}{known_note} ✓{skipped_note}{oversize_note}"
+                  if written else
+                  f"Added {added} {notes_word}{known_note}, not saved — your notes "
+                  "could not be written"),
+            fg=self.colors["success_text" if written else "danger_text"])
 
     def toggle_share_panel(self):
         if self._is_placed(self.share_panel):
@@ -12346,7 +12369,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # (_set_aside_days); its banner goes under this dialog, so the
         # dialog says them too.
         before = len(self.notes)
-        self.save_notes()
+        # Refused, "Import complete" says so: first of the files the backup
+        # still holds.
+        if not self.save_notes():
+            unwritten.insert(0, "the notes")
         earlier = len(self.notes) - before
         self.refresh_note_list()
         self.render_calendar()
@@ -16037,7 +16063,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 trashed += choice == "trash"
         if made or trashed:
             note["updated"] = now_stamp()
-            self.save_notes()
+            written = self.save_notes()
             self._editor_follows_external_change({note.get("id")})
             self.refresh_note_list()
             self.render_calendar()
@@ -16047,7 +16073,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                             else f"{made} made notes of their own")
             if trashed:
                 said.append(f"{trashed} moved to the Trash")
-            self.set_status("Days off the schedule: " + ", ".join(said))
+            self._say_if_saved(written, "Days off the schedule: " + ", ".join(said))
         self._update_occurrence_banner()
 
     def _day_as_shown(self, note, day):
@@ -17615,7 +17641,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             return   # trash.json refused them: they stay, and that was said
         marks = [(e.get("id"), e.get("deleted_at")) for e in moved]
         self.notes = [n for n in self.notes if n["id"] not in named]
-        self.save_notes()
+        written = self.save_notes()
         # An open note trashed leaves the editor and tabs pointing at nothing
         # ("Note missing" at the next save): cleaned as delete_current_note.
         self.open_tabs = [t for t in self.open_tabs
@@ -17629,7 +17655,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._sync_editor_snapshot()
         self._exit_selection_mode_after_bulk_action()
         self.render_calendar()
-        self.set_status(f"Moved {count} note(s) to trash")
+        self._say_if_saved(written, f"Moved {count} note(s) to trash")
         # The bulk route is the easiest one to regret: a tick box, a
         # confirm, and a list that was filtered by whatever was typed in
         # the search box at the time.
@@ -17692,13 +17718,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             for n in to_move:
                 n["category"] = cat
                 n["updated"] = stamp
-            self.save_notes()
+            written = self.save_notes()
             self._editor_follows_external_change(touched)
             self._exit_selection_mode_after_bulk_action()
             # The calendar draws a note with no colour of its own in its
             # category's -- its dots, and an open day's stripes.
             self.render_calendar()
-            self.set_status(f"Moved {count} note(s) to \u201c{cat}\u201d")
+            self._say_if_saved(written, f"Moved {count} note(s) to \u201c{cat}\u201d")
             # A way back: it had neither question nor Undo.
             self._offer_category_undo({"marks": marks, "applied": cat})
 
@@ -19259,10 +19285,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             new_atts.append(dict(att, stored_as=fresh) if fresh else att)
         clone["attachments"] = new_atts
         self.notes.append(clone)
-        self.save_notes()
+        written = self.save_notes()
         self.refresh_note_list()
         self.render_calendar()
-        self.set_status(f"Duplicated as “{clone['title']}”")
+        self._say_if_saved(written, f"Duplicated as “{clone['title']}”")
         return clone
 
 
@@ -19497,9 +19523,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if real is None:
             return
         real["pinned"] = not real.get("pinned", False)
-        self.save_notes()
+        written = self.save_notes()
         self._show_note_moved(real["id"])
-        self.set_status("Pinned to top" if real["pinned"] else "Unpinned")
+        self._say_if_saved(written, "Pinned to top" if real["pinned"] else "Unpinned")
 
     def _ctx_move_to_category(self, note, category):
         """Change one note's category from its own menu, unasked, as the
@@ -19524,15 +19550,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if real is None:
             return
         real["category"] = category
-        self.save_notes()
+        written = self.save_notes()
         self._editor_follows_external_change({real["id"]})
         self._show_note_moved(real["id"])
         # A note with no colour of its own is drawn in its category's, as
         # a dot on its days and a stripe in an open day's list.
         self.render_calendar()
         title = (real.get("title") or "").strip() or "Untitled note"
-        self.set_status("Moved “%s” to “%s”"
-                        % (_truncate(title, 30), category))
+        self._say_if_saved(written, "Moved “%s” to “%s”"
+                           % (_truncate(title, 30), category))
 
     def _bulk_toggle_pin(self):
         """Pin every ticked note, or unpin them if all are pinned: one button
@@ -19547,12 +19573,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         pinning = not all(n.get("pinned", False) for n in chosen)
         for note in chosen:
             note["pinned"] = pinning
-        self.save_notes()
+        written = self.save_notes()
         self.refresh_note_list()
         self._refresh_bulk_pin_label()
         word = "Pinned" if pinning else "Unpinned"
-        self.set_status("%s %d note%s"
-                        % (word, len(chosen), "" if len(chosen) == 1 else "s"))
+        self._say_if_saved(written, "%s %d note%s"
+                           % (word, len(chosen), "" if len(chosen) == 1 else "s"))
 
     def _refresh_bulk_pin_label(self):
         """Say what pressing it will do, given what is ticked right now."""
@@ -19687,7 +19713,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 del note["moved"][dead]
         home = origin or occurrence_date
         note["updated"] = now_stamp()
-        self.save_notes()
+        written = self.save_notes()
         # If the editor is showing exactly this day, reload it so the
         # series content replaces the dropped override on screen too --
         # where the day is now, the way back to the calendar following it.
@@ -19707,9 +19733,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.refresh_note_list()
         self.render_calendar()
         self.refresh_day_panel()
-        self.set_status(f"This day is back on {back} and follows the series again"
-                        if origin is not None else
-                        "This day follows the series again")
+        self._say_if_saved(written, f"This day is back on {back} and follows the series again"
+                           if origin is not None else
+                           "This day follows the series again")
 
     def _context_delete_note(self, note, occurrence_date=None):
         """Delete triggered from the right-click menu. Routes through the normal
@@ -20371,11 +20397,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # category and a series' days -- all of them drawn on the calendar,
         # which this was the one note-writing route never to redraw.
         self.render_calendar()
-        # Not over a refused write, whose "Not saved" stands.
-        if written:
-            self.set_status(
-                "Restored the previous version of the whole note"
-                if viewing_occurrence else "Restored the previous version")
+        # After the reload, whose "Last updated" read as saved over a
+        # refused write.
+        self._say_if_saved(written,
+                           "Restored the previous version of the whole note"
+                           if viewing_occurrence else "Restored the previous version")
         self.update_word_count()
         self._update_restore_button()
 
@@ -21085,10 +21111,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._update_occurrence_banner()
 
         # The branches said "Saved at" / "Auto-saved" before this write: a
-        # refused one says so in their place (a hold says it itself).
+        # refused one says so in their place (save_notes).
         written = self.save_notes()
-        if not written and not _core_paths.writes_held(DATA_FILE):
-            self.set_status("Not saved — your notes could not be written")
         # An autosave under a popup skips the list and calendar (delays
         # still tore the sidebar): saved anyway, they catch up later.
         if auto and getattr(self, "_mini_popup", None) is not None:
@@ -21306,18 +21330,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 if homeless else "Nothing left to put back", kind="info")
             return
 
-        self.save_notes()
+        written = self.save_notes()
         self._editor_follows_external_change({n["id"] for n in restored})
         self.refresh_note_list()
         # The calendar draws an uncoloured note in its category's colour
         # (get_note_color), so it is redrawn.
         self.render_calendar()
-        if homeless:
-            self.set_status(
-                f"Put back {len(restored)} note(s); {homeless} could not go "
-                "back to a category that no longer exists")
-        else:
-            self.set_status(f"Put back {len(restored)} note(s)")
+        self._say_if_saved(written, (
+            f"Put back {len(restored)} note(s); {homeless} could not go "
+            "back to a category that no longer exists") if homeless
+            else f"Put back {len(restored)} note(s)")
 
     def _undo_checklist_delete(self, items, index, item, where=None):
         """Put a removed checklist item back where it was. `items`, the list
@@ -21470,7 +21492,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if own_edit and date_str not in (note.get("overrides") or {}):
             note.setdefault("overrides", {})[date_str] = dict(own_edit)
         note["updated"] = now_stamp()
-        self.save_notes()
+        written = self.save_notes()
         self.refresh_note_list()
         self.render_calendar()
         # Not opened over a waiting turn-off: leaving made it, and the Undo
@@ -21481,7 +21503,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         else:
             # The series stays on screen, its days changed under it.
             self._update_occurrence_banner()
-        self.set_status("Put that day back")
+        self._say_if_saved(written, "Put that day back")
 
     def _attach_dup_preview(self, widget, note):
         """Show a small floating preview of a note's contents while the mouse
@@ -21649,7 +21671,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # showing the series' text instead -- the edit gone for good.
                 own_edit = note["overrides"].pop(occurrence_date, None)
                 note["updated"] = now_stamp()
-                self.save_notes()
+                written = self.save_notes()
                 if (self.selected_note_id == note["id"]
                         and self.current_occurrence_date == occurrence_date):
                     # The editor was showing the occurrence that just
@@ -21658,7 +21680,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     self.new_note()
                 self.refresh_note_list()
                 self.render_calendar()
-                self.set_status("Removed that one day")
+                self._say_if_saved(written, "Removed that one day")
                 # The toast is this delete's only way back; with the uid, as
                 # a freed id goes to the next new note.
                 undo = (lambda nid=note["id"], day=occurrence_date,
@@ -21691,7 +21713,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 return   # trash.json refused it: the note stays, and that was said
             marks = [(e.get("id"), e.get("deleted_at")) for e in moved]
             self.notes = [n for n in self.notes if n["id"] != deleted_id]
-            self.save_notes()
+            written = self.save_notes()
             # Close any open tab that pointed at the deleted note (force: its
             # underlying note is gone, so there's nothing to save).
             self.open_tabs = [t for t in self.open_tabs
@@ -21709,8 +21731,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # The window is a setting (Settings -> Recently deleted), so the
             # number is read, never written: this line promised thirty days
             # to someone who had chosen seven.
-            self.set_status("Note moved to Trash (recoverable"
-                            f"{trash_window_words('for')})")
+            self._say_if_saved(written, "Note moved to Trash (recoverable"
+                               f"{trash_window_words('for')})")
             # The status line says where it went; the toast is the way
             # back. Settings -> Recently deleted was the only route home
             # until now, and it asks you to know the trash exists.

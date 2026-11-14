@@ -19,10 +19,11 @@ import time
 from datetime import datetime
 
 
-#: Every way a file or a text can turn out unreadable: not JSON, not UTF-8 (a
-#: file saved in a Windows code page), nested past the parser. Readers that
-#: caught the first alone let the others stop the app from starting.
-JSON_UNREADABLE = (json.JSONDecodeError, UnicodeDecodeError, RecursionError)
+#: Every way a file or a text can turn out unreadable: not JSON, not UTF-8, nested
+#: past the parser, a number of over 4,300 digits (a plain ValueError). Readers
+#: that caught the first alone let the others stop the app from starting.
+JSON_UNREADABLE = (json.JSONDecodeError, UnicodeDecodeError, ValueError,
+                   RecursionError)
 
 #: Data files this run must not write: one it could neither read nor copy.
 #: Read as empty while another program held it, a notes file's first autosave

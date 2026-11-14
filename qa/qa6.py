@@ -837,6 +837,34 @@ finally:
 app.save_notes(); app.update()
 check(f"a save the disk refuses says Not saved on the status line ({_sv_status!r})",
       _sv_status.startswith('Not saved'))
+# ...and so does every change that writes the notes and then says what it did:
+# Restore previous reloaded the editor over its "Not saved" ("Last updated"
+# read as saved), and Pin said "Pinned to top" over a refused write.
+_ns_note = NO.normalize_note({'id': 9311, 'title': 'Restore me', 'body': 'new words'})
+_ns_note['_prev'] = {'body': 'old words', 'title': 'Restore me'}
+app.notes.append(_ns_note)
+app.refresh_note_list(); app.update()
+app.open_note_in_tab(_ns_note); app.update()
+_ns_ask_was = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: True
+NO.core_save_notes = lambda notes: (False, OSError(28, 'No space left on device'))
+app.show_error = lambda *a, **k: None
+try:
+    app.restore_previous_version(); app.update()
+    _ns_restore = str(app.status_lbl.cget('text'))
+    app.toggle_pin(_ns_note); app.update()
+    _ns_pin = str(app.status_lbl.cget('text'))
+finally:
+    NO.core_save_notes, app.show_error = _rf_real_save, _rf_real_err
+    app.ask_yes_no = _ns_ask_was
+_ns_restored = 'old words' in (app.find_note(9311) or {}).get('body', '')
+app.save_notes(); app.update()
+app.toggle_pin(_ns_note); app.update()
+_ns_pin_ok = str(app.status_lbl.cget('text'))
+check(f"Restore previous and Pin over a refused write say Not saved, and Pin over "
+      f"one that lands says so ({_ns_restore!r}, {_ns_pin!r}, {_ns_pin_ok!r})",
+      _ns_restored and _ns_restore.startswith('Not saved')
+      and _ns_pin.startswith('Not saved') and _ns_pin_ok == 'Unpinned')
 # A category move's Undo whose notes' category was deleted since says that,
 # not "Nothing left to put back" with the notes still there.
 _cu_note = NO.normalize_note({'id': 9301, 'title': 'Homeless', 'body': 'x', 'category': 'Work'})
@@ -1962,6 +1990,28 @@ check(f"over held settings the Trash dropdown puts the choice back at once, and 
       and bool(_rt_said) and 'stays on the disk' in _rt_said[-1]
       and "can't be undone" not in _rt_said[-1])
 
+# Over a held Trash file (its read refused at the start) the Trash shows
+# empty, so no question could say what a shorter time removes at the next
+# start: the dropdown puts the choice back at once, said, and keeps nothing
+# (the next start purged old notes and their files unasked).
+_rt_toasts, _rt_trash_was = [], list(app.trash)
+app._show_toast = lambda text, *a, **k: _rt_toasts.append(text)
+app.trash = []
+_rt_asked.clear()
+NO._core_paths.hold_writes(NO.TRASH_FILE)
+try:
+    _rt_pick('30 days')
+finally:
+    NO._core_paths.WRITES_HELD.discard(os.path.normcase(os.path.abspath(NO.TRASH_FILE)))
+    app._show_toast = _rt_toast_was
+    app.trash = _rt_trash_was
+check(f"over a held Trash file the dropdown keeps no new length, asks nothing and says why "
+      f"({app.trash_retention_var.get()!r}, {NO.trash_retention_days()}, {_rt_toasts}, "
+      f"asked {bool(_rt_asked)})",
+      str(app.trash_retention_var.get()) == '7 days' and NO.trash_retention_days() == 7
+      and not _rt_asked
+      and any("the Trash couldn't be opened this time" in t for t in _rt_toasts))
+
 
 def _rt_row_lines():
     out, stack = [], [app.settings_trash_panel]
@@ -3027,6 +3077,21 @@ finally:
     NO.save_setting = _wn_save_was
 check(f"over a settings file that refuses its uid, a second Show opens the same welcome note ({_wn_count})",
       _wn_count == 1)
+app.notes = _wn_notes; app.save_notes(); app.new_note(); app.update()
+# ...and a uid that is not text (hand-edited, a newer version) is no uid: Show
+# opened nothing, only "Something went wrong" (a list cannot go in a set).
+NO.save_setting('welcome_note_uid', ['not', 'a', 'uid'])
+app.__dict__.pop('_welcome_uid_run', None)
+_wn_before = len(app.notes)
+try:
+    app.show_welcome_note(); app.update()
+    _wn_said = 'opened'
+except TypeError as _wn_exc:
+    _wn_said = 'RAISED %s' % _wn_exc
+_wn_open = app.find_note(app.selected_note_id) if app.selected_note_id else None
+check(f"a welcome uid that is not text is no uid: Show brings a welcome note back "
+      f"({_wn_said}, {len(app.notes) - _wn_before} added)",
+      _wn_said == 'opened' and _wn_open is not None and len(app.notes) == _wn_before + 1)
 app.notes = _wn_notes; app.save_notes(); app.new_note(); app.update()
 
 # A long category name is cut with "…" in the note's category list and on
