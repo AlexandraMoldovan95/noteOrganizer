@@ -83,13 +83,13 @@ def category_name_refusal(name, adding=True):
     return None
 
 
-def adopt_categories_of(raw_notes):
+def adopt_categories_of(raw_notes, refused=None):
     """Give every category a note (or one day of a series) is filed under a
     place in the live map: the notes are believed over settings.json, which
     a reset, a notes file copied alone or a crash mid-rename leaves without
-    them, normalize_note then filing those notes under General for good.
-    Back with a palette colour, under every door's ceilings. Called on the
-    raw notes, before normalize_note; returns the names added, unsaved."""
+    them. Back with a palette colour, under every door's ceilings (one refused
+    goes into the list *refused*, if given). Called on the raw notes, before
+    normalize_note; returns the names added, unsaved."""
     palette = list(DEFAULT_CATEGORY_COLORS.values())
     added = []
     for note in raw_notes:
@@ -108,6 +108,8 @@ def adopt_categories_of(raw_notes):
                     or name != name.strip() or name in CATEGORY_COLORS):
                 continue
             if category_name_refusal(name) is not None:
+                if refused is not None and name not in refused:
+                    refused.append(name)
                 continue
             CATEGORY_COLORS[name] = palette[len(CATEGORY_COLORS) % len(palette)]
             added.append(name)

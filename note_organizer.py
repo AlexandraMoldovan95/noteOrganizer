@@ -2524,8 +2524,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         left_out=list(left)))
             if state.get("session_only") is not None:
                 # Not remembered as the notebook's backup: it holds none of it.
-                # Held, the file waits whole for the next start; damaged, it was
-                # copied aside, and reopening brings nothing back.
+                # Held, the file waits whole for the next start; damaged, reopening
+                # brings nothing back, whether its copy aside was made or not.
+                damaged = (self._corrupt_notes_report is not None
+                           and not getattr(self, "_notes_file_refused", False))
                 self.show_info(
                     "Backup of this session saved",
                     f"Saved to:\n{state['save_path']}\n\n"
@@ -2534,9 +2536,13 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                     "could not be opened then. " + (
                         "Close Note Organizer and open it again; Settings → Backup "
                         "→ Import brings this backup's notes in beside yours."
-                        if _core_paths.writes_held(DATA_FILE) else
+                        if _core_paths.writes_held(DATA_FILE) and not damaged else
                         "Your earlier notes are in the copy kept aside when Note "
-                        "Organizer started, as its message said.") + left_said)
+                        "Organizer started, as its message said."
+                        if self._corrupt_notes_report else
+                        "Your notes file is left as it was, unreadable, as Note "
+                        "Organizer's message said when it started: opening the "
+                        "app again will not bring those notes back.") + left_said)
             else:
                 self._remember_finished_export()
                 self.show_info(
@@ -12187,7 +12193,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # read as a duplicate), additive, sanitized, in MEMORY until the
         # dialog's answer: this list is rolled back on Cancel.
         added_names = []
-        refused_categories = 0
+        refused_names = []
         for name, color in list(
                 (state.get("imported_categories") or {}).items())[:MAX_CATEGORIES]:
             color = sanitize_color(color)
@@ -12198,14 +12204,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # as load_categories records): the door refuses what the loader
             # will not keep, and the dialog says so.
             if category_name_refusal(name) is not None:
-                refused_categories += 1
+                if name not in refused_names:
+                    refused_names.append(name)
                 continue
             CATEGORY_COLORS[name] = color
             added_names.append(name)
         # ...and those its notes are filed under where its settings lack them (a
         # settings.json left out, or a category made while settings were refused),
         # believed over that file as the start believes them: General, unsaid.
-        added_names.extend(adopt_categories_of(valid_notes))
+        added_names.extend(adopt_categories_of(valid_notes, refused_names))
         added_categories = len(added_names)
 
         def _undo_category_merge():
@@ -12394,6 +12401,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if not isinstance(entry, dict):
                 continue
             raw_deleted = entry.get("deleted_at")
+            raw_entry = entry
             # Through normalize_note (a deleted_at=5 crashed the Trash's
             # sort); deleted_at, which it drops, comes back as a str only.
             entry = normalize_note(entry)
@@ -12403,11 +12411,19 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if key in existing_trash_keys:
                 # Re-importing your own backup must not double the trash.
                 continue
-            existing_trash_keys.add(key)
             if settings_held or (keep_days is not None
                                  and trash_entries_past_window([entry], keep_days)):
                 trash_left_out += 1
                 continue
+            # Only one brought in is the duplicate's original: an older twin left out
+            # took its newer one, unsaid, with it.
+            existing_trash_keys.add(key)
+            # Its category believed as the notes' are above, not filed under General.
+            trash_cats = adopt_categories_of([raw_entry], refused_names)
+            if trash_cats:
+                added_names.extend(trash_cats)
+                entry = normalize_note(raw_entry)
+                entry["deleted_at"] = raw_deleted if isinstance(raw_deleted, str) else ""
             # Same claimed-file discipline as the notes above: a trashed
             # entry pointing at a file an ACTIVE note owns would, on its
             # later purge, delete that file out from under the note.
@@ -12430,6 +12446,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             added_trash += 1
         if added_trash and not save_trash(self.trash)[0]:
             unwritten.append("the trashed notes")
+        if len(added_names) > added_categories:
+            added_categories = len(added_names)
+            if not persist_categories() and "the categories" not in unwritten:
+                unwritten.append("the categories")
+            self.refresh_category_widgets()
 
         # The save makes notes '(earlier text)' of what a series' copy kept
         # (_set_aside_days); its banner goes under this dialog, so the
@@ -12475,9 +12496,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if earlier > 0:
             extras_note += (f" Earlier text of {earlier} day{'s' if earlier != 1 else ''} "
                             "of a repeating note kept as notes of their own.")
-        if refused_categories:
+        if refused_names:
             extras_note += (
-                f"\n\n{refused_categories} of the backup's categories could "
+                f"\n\n{len(refused_names)} of the backup's categories could "
                 f"not be added (a name over {MAX_CATEGORY_NAME} characters, "
                 f"or more than {MAX_CATEGORIES} categories in all), so the "
                 "notes filed under them are in General.")
