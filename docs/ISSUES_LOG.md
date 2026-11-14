@@ -4604,7 +4604,8 @@ a broken file, and a damaged one whose copy failed a held one, and lowered "Rece
 page's subtitle advised a choice its dropdown refuses (SN121); and a backup import still adopted its
 longer Trash length over a held Trash. Left: a version's first start whose notes file is held
 throughout makes no pre-update copy and records the new version; that run writes nothing over
-the notes, and Settings → Backup → Export makes a copy.
+the notes, which wait whole for the next start (an export then holds only the session's notes,
+and says so).
 
 **The twenty-second round** walked the writers of the Trash, the templates and the settings, as
 the two before had walked the notes', and found one of high severity on a very rare road: a
@@ -4627,6 +4628,27 @@ banner names; a category renamed or deleted over a refused Trash or templates wr
 those entries under General; Restore over a refused Trash write leaves the entry in both files,
 the designed duplicate at worst; and a refused write of the cleanup's own mark runs it again
 at the next start, with its copy made and said.
+
+**The twenty-third round** found the twenty-second's high again on a road its fix did not
+cover: a backup from a notebook whose Trash length was unknown (its settings once unreadable)
+carried no length, so its old trashed notes came in under this computer's 30 days and the next
+start removed them with their files. The class is closed now rather than the road: each of a
+backup's trashed notes comes in only if the length this computer's next start purges by keeps it
+(the backup's where it is taken, this computer's own otherwise, none known over held settings),
+and the rest stay in the backup, said with the length in "Import complete" (SN132, SN122, SN123).
+Its mediums: a sign-out's word that a template was not kept outlived a later sign-out whose write
+landed (taken back now, and the word and its reason written in one write, SN133); a backup's
+templates refused by a held templates file stayed listed in memory alone (put back, SN134); and
+a backup's note filed under a category its settings lack, left out of the export or made while
+settings were refused, came in under General unsaid (its category adopted as the start adopts
+it, SN135). The lows: an interrupted import's word cleared on a start that kept every file only
+because the Trash was unread; the session-only export's advice to reopen, untrue of a notes file
+set aside damaged; and a qa5 check that listened for a warning through a stand-in that could not
+hear it. Left, each with its reason: a Trash or templates file set aside damaged travels in a
+backup as its damaged bytes, which the import skips (the copy aside stays here, as the start
+said); a run whose Trash is unread keeps every file it would delete, orphans that a later run
+does not take; and the close's words reach the next start only through a settings write, which
+a held settings file refuses (that start already said nothing is saved).
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.

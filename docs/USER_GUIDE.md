@@ -1045,7 +1045,9 @@ for, and the app reminds you when the note has attachments.
 
 Settings → Backup → **Export** creates a single `.zip` containing every note, your settings, every
 attachment, your templates and the Trash — the one file that moves your notebook to another
-device (what it brings back of your settings is under Import, below). A line under the button
+device (what it brings back of your settings is under Import, below). A file another program
+holds at that moment is left out, and the export names it; over a notes file the app could not
+open when it started, the backup holds the notes written since, and says so. A line under the button
 remembers when you last did this — worth a glance now and then, because that `.zip` is the only
 copy of your notes outside the app's data folder (see Getting started for where that lives). With a lot of attachments this can take a moment;
 a progress bar stays visible at the bottom of the window the whole time, and the app remains fully
@@ -1061,11 +1063,12 @@ backup was made, so you know to export again — even if Windows ended the app w
 ### Full backup: import
 
 Settings → Backup → **Import** brings a previously exported `.zip` back in — notes, attachments,
-templates and the Trash together, and from its settings your categories and the calendar's day
-colours and marks. The theme, your name, the text size, the list's order and the rest stay as this
-computer has them; so does how long the Trash keeps notes, unless you never chose it here and the
-backup's is longer (when that length cannot be saved here this time, the backup's trashed notes
-stay in the backup, and the import says so). Just like importing a code, you'll be asked
+templates and the Trash together, and from its settings your categories (and any category its
+notes are filed under) and the calendar's day colours and marks. The theme, your name, the text
+size, the list's order and the rest stay as this computer has them; so does how long the Trash
+keeps notes, unless you never chose it here and the backup's is longer. A trashed note older
+than this computer's Trash will keep stays in the backup, and the import says so. Just like
+importing a code, you'll be asked
 about any notes that look identical to what you already have before anything is added. Skipped,
 such a note's attached files still come in, onto the note it looks like, as an update's do. A
 template only comes in if you don't already have one by that name, and re-importing the same
