@@ -4697,13 +4697,32 @@ under General, was not known again once the backup's twin had adopted the name).
 now: the guide names the held files, and the backup's trashed notes have their categories
 adopted before anything here or there is signed (SN139, SN144). The lows: the twenty-fifth's
 refusal looked at the settings alone, and a rename over a notes file held this run wrote the new
-name while the notes kept the old one (the notes' hold refuses it too now, SN146 to SN148); the
+name while the notes kept the old one (the notes' hold refuses it too now, SN146, SN147, SN151); the
 list's own write went unchecked, so a moment's refusal by a sync tool moved the notes under a name
 the list never kept (the list is written first now, and a refusal puts it back and says so,
 SN149, SN150); and SN146 could not fail cleanly, its check breaking on the row the mutant had
 deleted (the rename now runs before the delete). Left, with its reason: the phone refuses an
 added or recoloured category over held settings, where this computer keeps it for the session
 and the start already said no setting is saved; nothing is lost either way.
+
+**The twenty-seventh round**, one agent, found one medium in the code, older than the wave: a
+backup's trashed note whose attached file a note here uses comes in on a copy of that file, so
+it is signed under the copy's name, and every later import of the same backup brought it in
+again with another copy; USER_GUIDE's "never doubles the Trash" was untrue of it. An entry that
+matches one here in all but its files' stored names is now matched by those files' names and
+bytes, and stays out (SN154); the phone had the same road and the same fix. The lows: USER_GUIDE
+said a category cannot be renamed when the settings or notes "couldn't be read", true only of a
+file Windows would not let the app open (a damaged one set aside is not held); the held-category
+check left the notes' own save question unanswered, and no mutant took away the notes half of
+the refusal alone (SN151); and a delete whose notes the Trash refuses, putting the list back, and
+the length's filter on a backup's trashed notes' categories had no check (SN152, SN153). Left,
+each with its reason: after the list lands, a refused write of the notes, the Trash or the
+templates leaves that file with the old name until its next save lands, said by the save's own
+words (the phone puts every holder back instead; nothing is lost either way); at a start, a name
+past the ceilings goes to General as it always has, only a newer version raising them would
+meet it; and a day's own category, put back by "Day removed"'s Undo after that category was
+deleted meanwhile, brings the name back, as it does on the phone (seconds-wide, and no note is
+lost).
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.

@@ -643,8 +643,9 @@ remembered.
   Categories. Renaming one keeps its place in the list and its folded group, and reaches every
   note, repeating day, template and Trash entry filed under it (a Trash or templates file that
   couldn't be read this time keeps the old name, and what it holds comes back under General).
-  When your settings or your notes couldn't be read this time, a category can't be renamed or
-  deleted until Note Organizer is opened again; it says so, and nothing changes. Deleting a
+  When Windows would not let Note Organizer open your settings or your notes this time, a
+  category can't be renamed or deleted until Note Organizer is opened again; it says so, and
+  nothing changes. Deleting a
   category with notes in it asks what should happen to them: move them to General, or move them
   to the Trash with the category — just the notes the question counted, restorable like any
   other delete. A day of a

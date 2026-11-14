@@ -6185,7 +6185,8 @@ NO.CATEGORY_COLORS['QaHeldCat'] = '#3a7d44'; NO.persist_categories()
 app.notes = [NO.normalize_note({'id': 9301, 'title': 'Held cat', 'body': 'x', 'category': 'QaHeldCat'})]
 app.save_notes()
 _hc_warned = []
-_hc_patched = ('show_warning', '_show_inline_rename', '_ask_category_deletion', 'ask_yes_no')
+_hc_patched = ('show_warning', '_show_inline_rename', '_ask_category_deletion', 'ask_yes_no',
+               'show_error', '_move_notes_to_trash')
 _hc_was = {_hc_name: app.__dict__.get(_hc_name) for _hc_name in _hc_patched}
 app.show_warning = lambda title, msg='', *a, **k: _hc_warned.append(
     (title, 'held' if "couldn't be read" in msg else 'unsaved' if "couldn't be saved" in msg else msg))
@@ -6193,6 +6194,7 @@ app._show_inline_rename = lambda _anchor, _default, on_name, **_limit: on_name('
 # Asked nothing when refused; answered here should a broken guard ask (it would wait for a click).
 app._ask_category_deletion = lambda *a, **k: 'move'
 app.ask_yes_no = lambda *a, **k: True
+app.show_error = lambda *a, **k: None
 _hc_frame = tk.Frame(app)
 _hc_frame.pack()
 
@@ -6230,6 +6232,13 @@ try:
         _hc_seen[_hc_case] = (list(_hc_warned), [n.get('category') for n in app.notes],
                               list(NO.CATEGORY_COLORS).count('QaHeldCat'),
                               'QaHeldCat2' in NO.CATEGORY_COLORS)
+    # ...and a delete whose notes the Trash refuses puts the list it wrote first back.
+    app._ask_category_deletion = lambda *a, **k: 'delete_notes'
+    app._move_notes_to_trash = lambda *a, **k: None
+    app._delete_category('QaHeldCat', lambda: None)
+    _hc_trash_refused = ('QaHeldCat' in NO.CATEGORY_COLORS,
+                         'QaHeldCat' in (NO.load_settings().get('categories') or {}),
+                         [n.get('category') for n in app.notes])
 finally:
     for _hc_name in _hc_patched:
         if _hc_was[_hc_name] is None:
@@ -6245,6 +6254,9 @@ check(f"over settings held this run a category is neither deleted nor renamed, a
       f"over held notes, or the list's write refused, too ({_hc_seen})",
       _hc_seen == {'settings': _hc_still('held'), 'notes': _hc_still('held'),
                    'refused': _hc_still('unsaved')})
+check(f"a category delete whose notes the Trash refuses keeps the category, in the list and "
+      f"on disk ({_hc_trash_refused})",
+      _hc_trash_refused == (True, True, ['QaHeldCat']))
 NO.CATEGORY_COLORS.pop('QaHeldCat', None); NO.persist_categories()
 app.notes = []; app.save_notes()
 
@@ -6262,7 +6274,10 @@ _sg_backup = dict(_tw_backup, **{
         {'id': 23, 'uid': 'sg-s', 'title': 'Pea', 'body': 'p', 'category': 'QaSigned',
          'deleted_at': _tr_days_ago(2)},
         {'id': 24, 'uid': 'sg-h', 'title': 'Here', 'body': 'h', 'category': 'QaSigned',
-         'deleted_at': _tr_days_ago(1)}]).encode(),
+         'deleted_at': _tr_days_ago(1)},
+        # Left in the backup by the length: its category is not adopted, an empty one said restored.
+        {'id': 25, 'uid': 'sg-o', 'title': 'Long gone', 'body': 'g', 'category': 'QaOldCat',
+         'deleted_at': _tr_days_ago(400)}]).encode(),
     'settings.json': json.dumps({'app_version': '0.97.405'}).encode()})
 _sg_ask_was, _sg_info_was = app.__dict__.get('ask_yes_no'), app.__dict__.get('show_info')
 app.ask_yes_no = lambda *a, **k: True
@@ -6277,9 +6292,46 @@ finally:
             setattr(app, _sg_name, _sg_was)
 _sg_trash = sorted((e.get('title'), e.get('category')) for e in app.trash)
 check(f"a backup's trashed notes are signed under the names they are kept by: a twin under "
-      f"another name comes in, one already here does not come again ({_sg_trash})",
-      _sg_trash == [('Here', 'QaSigned'), ('Pea', 'General'), ('Pea', 'QaSigned')])
-NO.CATEGORY_COLORS.pop('QaSigned', None); NO.persist_categories()
+      f"another name comes in, one already here does not come again, and one left out adopts "
+      f"nothing ({_sg_trash}, {'QaOldCat' in NO.CATEGORY_COLORS})",
+      _sg_trash == [('Here', 'QaSigned'), ('Pea', 'General'), ('Pea', 'QaSigned')]
+      and 'QaOldCat' not in NO.CATEGORY_COLORS)
+NO.CATEGORY_COLORS.pop('QaSigned', None); NO.CATEGORY_COLORS.pop('QaOldCat', None)
+NO.persist_categories()
+app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
+
+# A backup's trashed note whose file a note here uses comes in on a copy of that file, signed
+# under the copy's name: every import of that backup brought it in again, with another copy.
+_rf_name = '20261114120000000000_r.png'
+with open(os.path.join(NO.ATTACHMENTS_DIR, _rf_name), 'wb') as _fh:
+    _fh.write(b'qa3 recipe picture')
+app.notes = [NO.normalize_note({'id': 31, 'uid': 'rf-n', 'title': 'Recipe', 'body': 'r',
+                                'attachments': [{'stored_as': _rf_name, 'filename': 'r.png'}]})]
+app.save_notes()
+_rf_backup = dict(_tw_backup, **{
+    'notes_data.json': json.dumps([{'title': 'Other', 'body': 'o'}]).encode(),
+    'trash.json': json.dumps([{'id': 32, 'uid': 'rf-t', 'title': 'Recipe', 'body': 'r',
+                               'deleted_at': _tr_days_ago(2),
+                               'attachments': [{'stored_as': _rf_name, 'filename': 'r.png'}]}]).encode(),
+    'attachments/' + _rf_name: b'qa3 recipe picture',
+    'settings.json': json.dumps({'app_version': '0.97.405'}).encode()})
+_rf_ask_was, _rf_info_was = app.__dict__.get('ask_yes_no'), app.__dict__.get('show_info')
+app.ask_yes_no = lambda *a, **k: True
+app.show_info = lambda *a, **k: None
+try:
+    _dz_import(_rf_backup)
+    _rf_first = sum(1 for e in app.trash if e.get('title') == 'Recipe')
+    _dz_import(_rf_backup)
+finally:
+    for _rf_name_was, _rf_was in (('ask_yes_no', _rf_ask_was), ('show_info', _rf_info_was)):
+        if _rf_was is None:
+            app.__dict__.pop(_rf_name_was, None)
+        else:
+            setattr(app, _rf_name_was, _rf_was)
+_rf_again = sum(1 for e in app.trash if e.get('title') == 'Recipe')
+check(f"a backup's trashed note on a copy of a file a note here uses is not brought in again by "
+      f"a second import ({_rf_first}, {_rf_again})",
+      _rf_first == 1 and _rf_again == 1)
 app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
 
 # A Trash entry is kept as the file held it, and four readers still read its
