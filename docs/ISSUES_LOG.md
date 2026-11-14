@@ -4980,6 +4980,18 @@ their checks share the row's fixture; 377, 462, 470 and 676 name the steps their
 code. With this round every desktop case still called whole has been read twice against its
 checks' code.
 
+**The forty-eighth round** read the 160 cases still called whole a third time and found the
+reason so many fall short: every qa file answers the app's messages in code (show_info,
+show_warning), and qa3 and qa7 answer every Yes/No question in code, so a case whose steps read a
+message or answer a question is walked only in part by the owner's rule, and several of them are
+roads to deleting or replacing for good (9, 13, 281, 426, 268, 371, 421). Seventy-two more say
+"Automated in part" now and name what the checks are known not to reach; among them a stub that
+would answer silently the very question 425 promises is never asked, an Undo called past the
+banner that 301, 311 and 1028 promise is pressed, and + New Note's own function, which 3's check
+does not call. The How to use tab says that every qa file answers the app's messages in code.
+The lows: five rows no person can set up say their stand-ins are walked by no one; 649 and 930
+say what is true.
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays
 open behind the block: at the thirty-ninth round the plan's automation claims were read all at
