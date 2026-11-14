@@ -4809,6 +4809,18 @@ at that moment, the question has offered Skip by the backup's length and the mer
 computer's, so Skip may bring nothing (the harmless way only; the result says what stayed in
 the backup).
 
+**The thirty-fourth round** found that sentence still short on two rare roads, graded low by its
+agent and counted medium here, as an untrue sentence in a document the release relies on: a
+length an earlier backup's import set counts as set, so a second backup's longer one does not
+come; and the backup's length comes when its Trash is not empty even if none of its notes is
+kept. The guide says both now. Test case 1076 asked for a 365-day Trash the app does not offer
+(90 now, the longest it does) and did not say what to answer when the two notebooks' welcome
+notes are asked about. Left, with their reasons: a file the person deletes for good while an
+import is read or waits on a question may still be named by a note the import brings (the file
+just deleted on purpose; the backup keeps it, and a second import puts it back); and a template a
+newer version wrote loses the fields this one does not know, on both apps, which is the owner's
+question about fields a newer version wrote, put to her.
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.
 
