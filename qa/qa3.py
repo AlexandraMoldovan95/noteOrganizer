@@ -6484,6 +6484,21 @@ finally:
 check(f"the question whether a backup brings more asks each part as the merge takes it ({_rf_said})",
       _rf_said == {'unnamed template': True, 'trashed long ago': False, 'no real day': False,
                    'a template past the cap': False, 'a name only its Trash uses': True})
+# ...by the length the merge keeps them by: a backup's longer window, taken where none was chosen
+# here, keeps a note deleted 45 days ago, which this computer's own 30 would not.
+_rf_settings = NO.load_settings()
+_rf_chosen = _rf_settings.pop('trash_retention_days', None)
+NO.save_settings(_rf_settings)
+_rf_45 = {'imported_trash': [dict(_rf_new, deleted_at=_tr_days_ago(45))]}
+try:
+    _rf_window = (app._backup_brings_more(dict(_rf_45, imported_trash_window=90), []),
+                  app._backup_brings_more(_rf_45, []))
+finally:
+    if _rf_chosen is not None:
+        _rf_settings['trash_retention_days'] = _rf_chosen
+        NO.save_settings(_rf_settings)
+check(f"a backup's longer Trash window, taken where none was chosen here, is the length its trashed "
+      f"notes are asked by ({_rf_window})", _rf_window == (True, False))
 app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
 
 # A backup's note whose file is held by this Trash came in on a copy of it; matched by its

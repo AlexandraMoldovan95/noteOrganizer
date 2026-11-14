@@ -294,6 +294,24 @@ def _loosely_signed(trash):
     return signed
 
 
+def _backup_trash_window(state):
+    """The backup's Trash window an import takes, or None: only where none was chosen
+    here, longer than the default, with Trash to keep by it, and not over a held Trash
+    or held settings. Asked by the merge and by the question whether a backup brings
+    more: asked by this computer's length alone, the question said entries the merge
+    then took would stay behind, and withheld Skip."""
+    window = state.get("imported_trash_window")
+    if (isinstance(window, int) and not isinstance(window, bool)
+            and TRASH_RETENTION_DAYS < window <= 365
+            and state.get("imported_trash")
+            and not _core_paths.writes_held(TRASH_FILE)
+            and not _core_paths.writes_held(SETTINGS_FILE)
+            and "trash_retention_days" not in load_settings()
+            and not get_setting(TRASH_WINDOW_UNKNOWN)):
+        return window
+    return None
+
+
 def detect_version_change():
     """Compare the version in settings with the running app's, and record
     the running one. ('up', old, new) after an update; None otherwise -- the
@@ -11005,7 +11023,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # and over a held Trash or held settings the merge brings none; nor one past the length
         # this computer keeps the Trash, which stays in the backup.
         takes_trash = not (_core_paths.writes_held(TRASH_FILE) or _core_paths.writes_held(SETTINGS_FILE))
-        keep_days = trash_retention_days()
+        # The length the merge keeps them by: the backup's longer one where it takes it.
+        keep_days = _backup_trash_window(state) or trash_retention_days()
         incoming = [e for e in (state.get("imported_trash") or []) if takes_trash and isinstance(e, dict)
                     and not (keep_days is not None and trash_entries_past_window([{"deleted_at": (
                         e.get("deleted_at") if isinstance(e.get("deleted_at"), str) else "")}], keep_days))]
@@ -12401,20 +12420,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             if not all(wrote):
                 unwritten.append("the calendar day markings")
 
-        # The Trash's window comes along where none was chosen here, never
-        # shorter than the default (ISSUES_LOG: "The Trash restored under a
-        # window it never had"); a chosen one stays.
-        window = state.get("imported_trash_window")
-        # Not over a held Trash (its length not chosen this run, set_retention), nor
-        # held settings (their defaults stand in). Refused, the length below is this
+        # The Trash's window comes along where none was chosen here (ISSUES_LOG: "The Trash
+        # restored under a window it never had"). Refused, the length below is this
         # computer's own, and the entries past it stay in the backup.
-        if (isinstance(window, int) and not isinstance(window, bool)
-                and TRASH_RETENTION_DAYS < window <= 365
-                and state.get("imported_trash")
-                and not _core_paths.writes_held(TRASH_FILE)
-                and not _core_paths.writes_held(SETTINGS_FILE)
-                and "trash_retention_days" not in load_settings()
-                and not get_setting(TRASH_WINDOW_UNKNOWN)):
+        window = _backup_trash_window(state)
+        if window is not None:
             choose_trash_window(window)
 
         # A file already claimed (note, Trash, this import) gets its own copy,
