@@ -4896,11 +4896,24 @@ hand. The lows: lines saying "Automated" over a part their own words left to the
 "the manual half", "is yours", a real mouse, clipboard, wheel or keyboard) in 128 to 539 say "in
 part"; "no qa script restarts the process" (305, 306, 312) was untrue, as round 39 found of 590;
 three lines below a first line the scan skipped; "Already automated" in 186 and 250; old
-instructions to field-check the 0.71 and 0.73 builds on rows passed on 0.84.341; and 258, 260,
-667 and 276 understated what is walked (qa3's backup import, qa7's emptied note, qa6's details
-line, the travel story's restart), as they say now. Left, with its reason: the cases whose steps
+instructions to field-check the 0.71 and 0.73 builds on rows passed on 0.84.341; and 260, 667 and
+276 understated what is walked (qa7's emptied note, qa6's details line, the travel story's
+restart), as they say now (258 was set to say qa3's import walks it, which the round after found
+untrue: its check empties the notebook first). Left, with its reason: the cases whose steps
 restart the app and whose checks were not read for a restart, and the plain "Automated (qaN)"
 rows of cases 1 to 231, were not read against their code; the next round reads each.
+
+**The forty-first round** read those 129 cases against their checks' code, one line each, and found
+about thirty claiming more than their checks walk (mediums): restarts no check makes (159, 160,
+206, 207, 211, 312, 313, 336, 420, 439, 451, 466, 527, 857, 899), notes "closed and reopened" while
+the checks read the open editor (516, 520, 525, 531, 532, 533), parts of an expected result no
+check reads (17, 22, 29, 33, 38, 40, 51, 82, 89, 186, 200), 258's import, whose check empties the
+notebook first, and 214, whose Pass names a build later than its date. Each says "Automated in
+part" now and names what is left to the hand; so do the lows where a check stands in for a start
+on the running app (170, 338, 663, 670, 721, 739, 750, 766, 820, 863, 896, 897) and the side
+messages no check reads (122, 129, 150, 163, 212, 219, 980, 1072). 7 and 133 name the checks
+that do read what they said none reads, and the How to use tab says what the checks of a row no
+person can set up stand in for.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays
