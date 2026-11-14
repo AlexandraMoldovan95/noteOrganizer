@@ -4845,6 +4845,17 @@ settings write stay for the session (round 24 left it); and a template replaced 
 person's Replace, takes its newer fields with it on both apps, as "Replace the old template with
 this one" says.
 
+**The thirty-seventh round** found the fixes holding and, reading every case's automation column
+from 1059 on against the checks it names, two claiming more than they check (mediums, in a
+document the release relies on): case 1069 named only checks that ask the core's functions,
+while its steps save from the editor and carry the note through an export and an import, which
+no check walks (it says "Automated in part" now, and names those steps as the hand's); and case
+1079 promised "also restored 2 categories", a count no check read (qa3 reads it now, SN175). The
+lows: SN104 kept a check's old name, so the runner would have called it survived; case 1085's
+precondition asked for a trash.json a notebook where nothing was ever deleted does not have;
+case 1067's label said "Automated" where its own sentence leaves the forced end to the owner; and
+the How to use tab and the excerpt did not say what "Automated in part" means.
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 was either fixed, with its class closed, or answered in writing.
 

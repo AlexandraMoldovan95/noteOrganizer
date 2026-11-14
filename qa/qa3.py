@@ -6225,6 +6225,8 @@ check(f"a backup's trashed note keeps a category only the Trash uses, the newer 
       _tc_trash.get('Shed', {}).get('category') == 'OnlyInTrash' and 'OnlyInTrash' in _tc_saved
       and 'Twin' in _tc_trash and "1 of the backup's trashed note(s) were not brought in" in _tc_msgs
       and "1 of the backup's categories could not be added" in _tc_msgs
+      # ...and the two names only its Trash uses counted in the words, as case 1079 reads them.
+      and "Also restored 2 category/categories" in _tc_msgs
       and [e.get('category') for e in app.trash if e.get('title') == 'Pair'] == ['QaPairCat'])
 NO.CATEGORY_COLORS.pop('OnlyInTrash', None); NO.CATEGORY_COLORS.pop('QaPairCat', None)
 NO.persist_categories()
