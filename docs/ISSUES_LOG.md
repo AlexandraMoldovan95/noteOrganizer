@@ -5217,6 +5217,18 @@ the sentence now calls them "in part", as round 63 had made their twelve sibling
 ordinary road after all, a GIF whose frames say 10 ms, which many GIFs carry. 785 claimed Ctrl+N and
 a sign-out walked, where its check runs + New Note's command and calls the session's end.
 
+**The whole plan, read again (its first half).** At the owner's word the plan was read once more
+case by case, ten reviewers on ten ranges. The first five (cases 1 to 593) found some forty rows
+still untrue, each of a kind met before: steps a person cannot take as written (a Cancel that is
+No, a group to open that is drawn open, half a table selected as text where its rows are hidden, a
+skipped day restored where its toast's Undo is the only road, a question the autosave answers
+before a menu is reached); expected results the app does not show (the calculator's Insert typing
+the whole formula, a damaged code's own words, the drag's wait, three markers drawn where they fit,
+Ctrl+T swapping across the caret, a reminder bar shown once a day); preconditions that do not make
+what the steps need (a category of one's own, an edited day, a short note's copy, an earlier
+version made by a delete rather than an Update); and rows called whole or walked whole on checks
+that stub, seed or read a proxy (70, 489, 588, 277, 278, 364). Each says what is true now.
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays
 open behind the block: at the thirty-ninth round the plan's automation claims were read all at
