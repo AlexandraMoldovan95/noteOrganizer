@@ -5126,18 +5126,35 @@ clipboard is filled in code. Each says what is true. docs/TEST_PLAN_EXCERPT.md c
 visual check now automated, and titles case 38 as the plan does.
 
 **The fifty-eighth round** found five of the fifty-seventh's fixes short, and four mediums more.
-A nearly full system drive fails no save either: the save fails only where writing its temporary
-file or replacing the old one does (core/storage.py), so 706's steps make notes_data.json
-read-only, which fails the replace, and say what to type and answer. 276's merged 273 was still
+A nearly full system drive fails a save only once its free space is less than notes_data.json
+(the round after corrected "fails no save"): the save fails only where writing its temporary file
+or replacing the old one does (core/storage.py), so 706's steps make notes_data.json read-only,
+which fails the replace, and say what to type and answer. 276's merged 273 was still
 called whole on the story's edit typed in code. The skip wording's last forms ("the rest is worth
 eyes", "Hand check recommended", "NEEDS YOUR EYE once") are gone. 792 and 769 can be set up by a
 person, a 400-row table pasted (the most the app draws as a grid) and a name of several lines
-pasted into Save as template's box: their steps are a person's now. 806 to 814 left to the hand
-steps on lists no kept backup or code makes: those are walked by no one, while 803's and 807's
+pasted into Save as template's box: their steps are a person's now. 806 to 814 (but 811, which
+the round after reached) left to the hand steps on lists no kept backup or code makes: those are
+walked by no one, while 803's and 807's
 long-item variants, which a person can paste, say so. 294 said qa4 proves every tick box's well,
 where the note card's box, drawn on a canvas, is read by no check; 43 (and the excerpt) said the
 same of the Group by category box, where its mark is what is judged; 118 said the autosave around
 an export is covered, where no export is started. Each says what is true.
+
+**The fifty-ninth round** found a bug in the app. A table grown past the size drawn as a grid says
+"A table this large is shown as its text, so the note stays quick to open", and the "Auto-saved"
+its own edit sets off wrote over those words half a second later, unread. They are held against
+it now, as a cut paste's words are, and a qa6 check reads them after the autosave (mutant RV11);
+708, 766, 792 and 835, which left the line to the hand, name the check. The plan had more wrong:
+after Tab adds a row the caret is in its first cell (792 said the end of the cell being edited);
+a short name of several lines is drawn on one line with no '…' (769 said every one is cut); the
+limit an Enter inside a cell crosses is the grid's height, 30,000 px, not its 400 rows (835),
+whose steps press it one line at a time now; 792's 400 rows hold at most seven columns, under the
+3,000 cells drawn. 718 can be set up by a person, with
+notes_data.json made read-only, and gives the steps. 811 was still called whole, and it and 821,
+822, 827, 839 and 845 left to the hand parts of lists no kept backup or code makes: those are
+walked by no one. A read-only folder fails neither 212's export nor 246's saves, each written
+beside its file and replaced: 212 makes the backup file read-only, 246 the notebook's files.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays
