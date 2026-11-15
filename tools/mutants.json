@@ -19847,5 +19847,23 @@
       "qa3"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "RV11",
+    "about": "The words saying why a table is shown as its text are written over by the \"Auto-saved\" its own edit sets off, half a second later, unread",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            # Held against the \"Auto-saved\" the same edit sets off, as a cut\n            # paste's words are: written over half a second later, unread.\n            self._box_words_until = time.monotonic() + 8\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "the words saying a table is shown as its text stand through the autosave after it"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
   }
 ]

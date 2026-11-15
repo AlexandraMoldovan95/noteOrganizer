@@ -7124,6 +7124,24 @@ check(f"Enter, and Tab at the last cell, that take a table past what is drawn pu
       f"note, the row typed into): {_tt_flip})",
       _tt_flip == {'<Return>': (True, True, ['Eggs', '12<br>x']),
                    '<Tab>': (True, True, ['x', ''])})
+# The words saying why such a table shows as its text stand through the
+# autosave its edit sets off: "Auto-saved" wrote over them, unread.
+_tt_said = None
+_tt_grid = _tt_open(998, '| Name | Qty |\n| Milk | 2 |\n| Eggs | 12 |\nafter')
+try:
+    if _tt_grid is not None and _tt_grid['nrows'] == 3:
+        app.MAX_DRAWN_TABLE_PX = app._grid_row_height() * 3
+        _tt_press(_tt_grid, 2, 1, '<Tab>')
+        app._autosave_now()
+        _kv_settle(2)
+        _tt_said = app.status_lbl.cget('text')
+finally:
+    app.__dict__.pop('MAX_DRAWN_TABLE_PX', None)
+    app._close_cell_editor()
+    app.update()
+check(f"the words saying a table is shown as its text stand through the autosave after it "
+      f"({_tt_said!r})",
+      bool(_tt_said) and _tt_said.startswith('A table this large is shown as its text'))
 
 # Escape in a cell, and Ctrl+V of copied cells, closed the editor
 # holding the keyboard and left it on nothing -- what was typed next went

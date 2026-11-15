@@ -3247,6 +3247,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if too_big:
             self.set_status("A table this large is shown as its text, so the note "
                             "stays quick to open")
+            # Held against the "Auto-saved" the same edit sets off, as a cut
+            # paste's words are: written over half a second later, unread.
+            self._box_words_until = time.monotonic() + 8
         # There is always a line under the last table, or the caret guard
         # would have nowhere to put the caret and writing could never
         # continue past it (_add_line_under_last_table).
