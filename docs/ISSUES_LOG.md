@@ -5176,7 +5176,8 @@ file still held.)
 **The sixty-first round** found the sixtieth's app fix holding and the plan short again. 1057 and
 1061 hold notes_data.json with a share of 'Read' now, which lets the start read the file and
 refuses its replace, so the cleanup makes its copy, fails its write and takes the copy out, as the
-rows say; 800 and 847 let templates.json go before the export that should read it. Every hold is
+rows say; 800 and 847 let templates.json go before the export that should read it (yet the
+template their steps saved is refused for the whole run, as the round after found). Every hold is
 kept in a variable ($f), so PowerShell does not close it when it tidies up. Lists the plan called
 beyond the hand (810 to 814) a person makes by doubling a test notebook with its own backup ("Add
 copies anyway", twelve rounds for 4,096 notes); 721's backup with a Trash of 7 days is two clicks in
@@ -5184,6 +5185,18 @@ another notebook; 722's damaged Trash is trash.json edited in Notepad; 374, 741 
 whole, said "not by hand" of what the plan sets up elsewhere. 794 was called whole on counts of
 walks, with nothing timed. 298's check posts a note's menu, not the calendar day's; 369 and 636
 read the note in memory, not the file; 607 expected the dark red Delete that 613 made quiet.
+
+**The sixty-second round** found the sixty-first's holds right by a probe (a share of 'Read' lets
+the read through and refuses the replace) and 800 and 847 still wrong: a templates file held at
+the start refuses every template's save for the whole run, so the template their steps made is
+"Not saved", and the backup holds the file's templates once it is let go, none while it is held.
+They say so now, and that their checks set in memory a template no road can make. Four rows
+called whole were not: 862's checks seed the import's word and stub the held file, 374's clean a
+pair built in memory, 741's load the file with no window, and 1055's and 1068's call the close's
+settling on a seeded state. 885's step needs another program holding the sign-out, which Windows
+needs before it shows "apps are preventing sign-out". A probe found every share mode refusing a
+replace onto a held file, so 786's read refused mid-session with a save that lands is beyond a
+hand's hold, and says why.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays
