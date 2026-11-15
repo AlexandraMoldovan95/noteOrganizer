@@ -99,7 +99,10 @@ coding agent. She decided what the app should do and how it should behave,
 chose between the options the agent put forward, went through the
 [test cases](qa/NoteOrganizer_TestPlan.xlsx) by hand on the packaged app,
 and approved every push and every merge; the final audit reaches `main` as
-one pull request per app. The agent wrote most of the code and the
+one pull request per app. The latest weeks of the history are that audit,
+before the Microsoft Store: rounds of reviewers that read the app, its
+documents and its test plan against the code, each finding fixed and its
+fix read again ([the audit's record](docs/audit/README.md)). The agent wrote most of the code and the
 documentation, working under the rules in
 [CLAUDE.md](CLAUDE.md); what she turned down is kept with its reasons
 ([not planned](docs/ROADMAP.md#explicitly-not-planned-right-now)). Commits
@@ -123,13 +126,12 @@ drives the real app — clicking, typing, closing it and opening it again —
 and checks what a person would notice: a note that must survive a restart,
 a share code or a backup; formatting and tables that must come back exactly;
 a question that must not lose what was typed. A fix lands with a check that
-fails when the fix is taken away, and the mutation runner proves it again,
-a piece of the catalogue at a time; the whole of it last ran on 10 November
-2026, and the 11 of its 1,161 verdicts that came out wrong, each the fault
-of a check or of the catalogue and none of the app, were put right that
-day. The suite ran 91% of the app's lines on Windows ([measured](qa/README.md)), and CI holds
+fails when the fix is taken away. To prove the checks catch what they
+guard, a tool breaks the app on purpose, one small change at a time, and a
+check must fail on each ([the last full run](docs/AI_WORKFLOW.md#how-the-agents-work-is-checked)).
+The suite ran 91% of the app's lines on Windows ([measured](qa/README.md)), and CI holds
 a floor of 80% on Linux; a line run is not a line checked, which is what
-the mutants are for
+the breaking on purpose is for
 ([how we test, in one page](qa/README.md#how-we-test-in-one-page)).
 
 ## Speed
@@ -185,7 +187,9 @@ feature added so far, the last every fix
   ([why](docs/ARCHITECTURE.md#sharp-on-a-scaled-screen-every-size-is-given-at-100)).
 - Not for screen readers: Tk 8.6 draws its controls itself and describes
   almost none of them to Windows' accessibility interface, so a screen
-  reader cannot read most of the window.
+  reader cannot read most of the window. What it does have: keyboard
+  shortcuts for the common actions, a note list walked with the arrow
+  keys, and words measured readable in every theme.
 
 ## License
 
