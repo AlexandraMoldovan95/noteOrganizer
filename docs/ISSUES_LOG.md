@@ -5190,13 +5190,23 @@ read the note in memory, not the file; 607 expected the dark red Delete that 613
 the read through and refuses the replace) and 800 and 847 still wrong: a templates file held at
 the start refuses every template's save for the whole run, so the template their steps made is
 "Not saved", and the backup holds the file's templates once it is let go, none while it is held.
-They say so now, and that their checks set in memory a template no road can make. Four rows
+They say so now, and that their checks set in memory a template no road can make. Five rows
 called whole were not: 862's checks seed the import's word and stub the held file, 374's clean a
 pair built in memory, 741's load the file with no window, and 1055's and 1068's call the close's
 settling on a seeded state. 885's step needs another program holding the sign-out, which Windows
 needs before it shows "apps are preventing sign-out". A probe found every share mode refusing a
 replace onto a held file, so 786's read refused mid-session with a save that lands is beyond a
 hand's hold, and says why.
+
+**The sixty-third round** swept the rows called whole on files held, writes refused, sign-outs,
+starts and imports, and found nineteen whose checks stub the hold, set it in memory, seed the
+state or call a handler where the case presses a button: by the owner's rule of 14 November each
+is "in part" now. Where a person makes the case with the plan's own PowerShell hold (759, 761,
+787, 788, 802), the steps are the hand's; where only a crafted file, a hand-edited one or a moment
+no hand can time makes it (730, 738, 742, 760, 849, 880, 1056, 1060, 1063, 1065, 1066, 1077), what
+is left is walked by no one, by the owner's second rule of 15 November. 763 and 875 had ordinary
+roads, a sign-out cancelled at Windows' screen and a notebook made on 0.97.405: they give them. 9
+read the note list in memory, and says so.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays
