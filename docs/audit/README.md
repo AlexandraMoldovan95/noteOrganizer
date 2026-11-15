@@ -448,6 +448,7 @@ totals above are waves 1 to 5's.
 | [r81-phone.txt](wave6/r81-phone.txt), on Sonnet | Phone | 2026-11-15 15:39 | 1 | 0.12 |
 | [r75-desktop.txt](wave6/r75-desktop.txt), on Sonnet | Desktop | 2026-11-15 15:47 | 1 | 0.18 |
 | [r82-phone.txt](wave6/r82-phone.txt), on Sonnet | Phone | 2026-11-15 15:47 | 2 | 0.48 |
+| [r83-phone.txt](wave6/r83-phone.txt), on Sonnet | Phone | 2026-11-15 16:03 | 1 | 0.16 |
 
 From the third round, both agents of an app read one file; the line that started each named
 where to begin, one at each fix by name, the other at the person's roads and the documents.
