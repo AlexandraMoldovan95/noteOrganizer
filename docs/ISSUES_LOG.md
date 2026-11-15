@@ -5236,8 +5236,17 @@ coloured button's words named by theme where the app picks them by the fill (606
 quiet Delete judged as the Trash's red one (611), a limit named without its number (623, 827's
 1,000, 933's 2,000), a table's separator line counted with its rows (737, 792), a box's words said
 under the template editor's heading (749), the checklist drawn in chunks of 32 (804, 805), a road
-the template editor's question or a hidden Calendar closes (863, 1004, 1021, 1022), and setups no
-hand makes that now say so (743, 771, 1049).
+the template editor's question or a hidden Calendar closes (863, and 1004, 1021, 1022, where the
+rounds after found an import started first an ordinary road), and setups no hand makes that now
+say so (743, 771, 1049).
+
+**Rounds 65 and 66** attacked those rewrites. 452 had an ordinary road after all, a repeat turned
+off on an edited series waiting unsaved until the note is left; 289 and 439 used the note list
+and its cards under Settings, which hides the whole notebook, the list inside its Notes tab; 1004,
+1021 and 1022 are reached by an import of a large backup started first, the template editor
+opened while it unpacks, and give that road, untried by any check; 957's Ctrl+Z is pressed in
+Settings. A reviewer's claim that the sidebar's Import code stays on screen under Settings was
+checked in the code and found untrue.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays
