@@ -426,6 +426,8 @@ totals above are waves 1 to 5's.
 | [full-p1.txt](wave6/full-p1.txt), [full-p2.txt](wave6/full-p2.txt) | Phone | 2026-11-15 11:54 | 2 | 0.79 |
 | [full-d06.txt](wave6/full-d06.txt) to [full-d10.txt](wave6/full-d10.txt), on Sonnet | Desktop | 2026-11-15 12:34 | 5 | 1.13 |
 | [full-p3.txt](wave6/full-p3.txt) to [full-p5.txt](wave6/full-p5.txt), on Sonnet | Phone | 2026-11-15 12:34 | 3 | 0.78 |
+| [r65-desktop.txt](wave6/r65-desktop.txt), on Sonnet | Desktop | 2026-11-15 14:11 | 1 | 0.16 |
+| [r72-phone.txt](wave6/r72-phone.txt), on Sonnet | Phone | 2026-11-15 14:11 | 2 | 0.27 |
 
 From the third round, both agents of an app read one file; the line that started each named
 where to begin, one at each fix by name, the other at the person's roads and the documents.
