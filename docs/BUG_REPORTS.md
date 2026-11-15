@@ -7,29 +7,30 @@ of **978 test cases** (on 14 November 2026). Each case has its steps and the res
 what actually happened, the build, the date and who tested it. 306 of them also point to the
 GitHub issue or pull request they check. Every pass and every retest is recorded there.
 
-My first full manual pass over it - more than 500 cases, on the packaged app - and the two
-re-tests after it found **20 bugs**, all now fixed. My notes from the same passes also led to
-four new features: a table that moves with its caption, the "With files" filter, arrows to reorder
-a checklist, and a search in the Share panel.
+My manual testing found many bugs along the way, and every one of them is recorded there. My
+notes from my first full pass over it - more than 500 cases, on the packaged app - and the
+re-tests after it also led to four new features: a table that moves with its caption, the "With
+files" filter, arrows to reorder a checklist, and a search in the Share panel.
 
-This page lists those twenty bugs, one line each. Three of them are written out in full, as
-examples of the format we use for a bug report; the rest are recorded in the test plan, in the
-cases that found them. The bugs, the steps and what I saw are mine; the agent helped me put them
+This page gives some of those bugs, one line each, as examples. Three are written out in full,
+as examples of the format we use for a bug report; the others are recorded in the test plan, in
+the cases that found them. The bugs, the steps and what I saw are mine; the agent helped me put them
 into this format. How I test, and one bug followed from the screen to its cause, are in
 [In my words](IN_MY_WORDS.md#how-i-test).
 
 ## Contents
 
-- [All twenty](#all-twenty)
+- [Some examples](#some-examples)
 - [Three examples, in full](#three-examples-in-full)
 - [BR-1: "Note updated" appears when only the theme changes](#br-1-note-updated-appears-when-only-the-theme-changes)
 - [BR-2: The app stops responding after pasting 50,000+ words](#br-2-the-app-stops-responding-after-pasting-50000-words)
 - [BR-3: Importing a backup with notes I already have offers no "import anyway"](#br-3-importing-a-backup-with-notes-i-already-have-offers-no-import-anyway)
+- [On the phone](#on-the-phone)
 
-## All twenty
+## Some examples
 
-The first sixteen came from the full pass on version 0.84.341, the last four from the re-tests of
-the version that fixed them.
+These came from my first full pass, on version 0.84.341, and from the re-tests of the version
+that fixed what it found.
 
 | # | What I found | Fixed in |
 |---|---|---|
@@ -59,10 +60,10 @@ What each fix changed is in the [changelog](../CHANGELOG.md), under
 
 ## Three examples, in full
 
-Three of the twenty, written out as examples of how we report a bug: where it was found, the steps
-to see it, what should happen and what did, how bad it is and how soon it should be fixed. The
-other seventeen are recorded in the test plan, against the cases that found them, with the number
-of their issue on GitHub.
+Three of them, written out as examples of how we report a bug: where it was found, the steps to
+see it, what should happen and what did, how bad it is and how soon it should be fixed. The
+others are recorded in the test plan, against the cases that found them, with the number of
+their issue on GitHub.
 
 | Report | Severity | Priority |
 |---|---|---|
@@ -116,3 +117,39 @@ should be fixed. They are not the same thing: BR-2 hurts a lot, but only with a 
 | **Priority** | Medium |
 | **Frequency** | Seen once; reported, then retested after the fix. |
 | **Fixed in** | [0.84.357](../CHANGELOG.md#084357--2026-10-07): the import now asks once: **Skip it** or **Skip the N** (the default), or **Add a copy anyway** or **Add copies anyway**. |
+
+## On the phone
+
+Using the Android app on my own phone, I found more. Three of them, the first written out in full.
+
+### BR-P1: Text typed at the end of a long note is hidden under the keyboard
+
+I was testing the app with long texts, editing the end of one to add more to it, and I realised I
+couldn't see what I was writing: the new words appeared under the phone's keyboard. To see them I
+had to put the keyboard down, and then I could no longer type. That would not help anyone manage
+what is in a note; the text had to stay above the keyboard, so it can be edited with ease.
+
+| Field | Detail |
+|---|---|
+| **Build** | The build on my phone on 23 October 2026, after release 0.10.1. Samsung S24 Ultra, Android 16, Samsung's keyboard. |
+| **Precondition** | A note whose text is longer than one screen, so its end is reached only by scrolling. |
+| **Steps** | 1. Open the app and open that note. 2. Scroll to the end of the text. 3. Tap after the last word, so the keyboard opens. 4. Press Enter and type a few words. |
+| **Expected** | What I am typing stays in sight, above the keyboard. |
+| **Actual** | The new words appear under the keyboard, and the screen does not scroll up. I can only see them by closing the keyboard, and then I can no longer type. |
+| **Severity** | Major: nothing is lost, but I cannot see what I write. |
+| **Priority** | High: adding to the end of a note is an everyday action. |
+| **Frequency** | Every time, on any note long enough. |
+| **Fixed in** | 0.11.0 on the phone: the note now follows the cursor as you write. The comments, a table's cell and a template's text had the same fault, and were fixed with it. |
+
+### Two more
+
+- **A note with a table had a broken preview in the list.** I noticed it while scrolling through
+  my test notes: their cards showed lines of bars where the table was. To fix it, and to keep
+  things consistent, I decided that a note with a table says in its preview only that it has one.
+  It is easy to build and to show, and it takes away the risk of other bugs. Previews like this
+  were already used in the calendar and in parts of Settings, so we made it the same everywhere
+  the app needed it.
+- **The table was hard to use on a phone.** A tap on a cell opened a list of options, and its
+  words were typed in a box of their own, away from the table. There is no mouse on a phone, so I
+  wanted the table to be as easy to edit as possible: its cells are written in place now, its rows
+  dragged taller or shorter by their edge, and its columns made wider or narrower.
