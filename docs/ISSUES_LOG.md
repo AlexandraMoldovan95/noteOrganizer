@@ -5229,6 +5229,16 @@ what the steps need (a category of one's own, an edited day, a short note's copy
 version made by a delete rather than an Update); and rows called whole or walked whole on checks
 that stub, seed or read a proxy (70, 489, 588, 277, 278, 364). Each says what is true now.
 
+**The whole plan, read again (its second half).** The other five ranges (cases 594 to 1085) were
+read on a cheaper model, at the owner's word after the week's usage ran high, each finding checked
+in the code before it was written. They found some twenty rows more, of the same kinds: a
+coloured button's words named by theme where the app picks them by the fill (606), the editor's
+quiet Delete judged as the Trash's red one (611), a limit named without its number (623, 827's
+1,000, 933's 2,000), a table's separator line counted with its rows (737, 792), a box's words said
+under the template editor's heading (749), the checklist drawn in chunks of 32 (804, 805), a road
+the template editor's question or a hidden Calendar closes (863, 1004, 1021, 1022), and setups no
+hand makes that now say so (743, 771, 1049).
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays
 open behind the block: at the thirty-ninth round the plan's automation claims were read all at
