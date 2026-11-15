@@ -21,19 +21,20 @@ came of each of its rounds.
 The early waves found the apps wrong; the late rounds, mostly their documents.
 
 - **Waves 1 and 2, and their lows,** found the code wrong most of all: notes lost or damaged,
-  input that froze or broke the app, an ordinary person's week going wrong. 1,246 findings in
-  all, most of them shown by a probe ([the counts](../AI_WORKFLOW.md#the-final-audit)).
+  input that froze or broke the app, an ordinary person's week going wrong: 1,015 findings, most
+  of them shown by a probe (1,246 with wave 3's; [the counts](../AI_WORKFLOW.md#the-final-audit)).
 - **Wave 3** found text that read as generated rather than written, in code and documents;
   **wave 4**, the review panel, scored the apps.
 - **Wave 5**, a full reading before the release: 26 findings confirmed in the code, fixed in the
-  desktop's 0.100.524 and the phone's 0.14.1 and 0.14.2.
+  desktop's 0.100.524 and the phone's 0.14.1.
 - **Wave 6** began with the code again: files Windows or a full phone holds or refuses, writes
   that fail, a note's fields a version does not know. The desktop's last fix to the code came at
   its round 60, the phone's at its round 64. The rounds after found only sentences of the
   documents and the test plan the code did not bear out; from 15 November the plan was read once
   more, case by case.
 
-**When a wave stopped:** after two rounds in a row with nothing of medium severity or worse. The
+**When a wave stopped:** after two rounds in a row with nothing of medium severity or worse,
+save waves 3 and 4, whose last round the owner chose ([why](../AI_WORKFLOW.md#the-final-audit)). The
 severity rule is the owner's (1 November): only what an ordinary person meets keeps a round
 open, and a loss of notes is always serious. For the test plan her rules of 15 November add that
 a recipe no person takes by hand, or a gap in what a row leaves to the hand, is low. No wave had
@@ -476,6 +477,8 @@ totals above are waves 1 to 5's.
 | [r84-phone.txt](wave6/r84-phone.txt), on Sonnet | Phone | 2026-11-15 16:11 | 2 | 0.49 |
 | [panel-desktop-1.txt](wave6/panel-desktop-1.txt) to [panel-desktop-4.txt](wave6/panel-desktop-4.txt), the panel's fourth meeting, on Sonnet | Desktop | 2026-11-15 16:30 | 4 | 0.59 |
 | [panel-phone-1.txt](wave6/panel-phone-1.txt) to [panel-phone-4.txt](wave6/panel-phone-4.txt), the panel's fourth meeting, on Sonnet | Phone | 2026-11-15 16:55 | 4 | 0.51 |
+| [panel-fixes-desktop.txt](wave6/panel-fixes-desktop.txt), the documents changed after the panel, on Sonnet | Desktop | 2026-11-15 17:06 | 1 | 0.15 |
+| [panel-fixes-phone.txt](wave6/panel-fixes-phone.txt), the documents changed after the panel, on Sonnet | Phone | 2026-11-15 17:06 | 1 | 0.07 |
 
 From the third round, both agents of an app read one file; the line that started each named
 where to begin, one at each fix by name, the other at the person's roads and the documents.

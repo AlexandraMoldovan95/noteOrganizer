@@ -123,10 +123,9 @@ run is safe is the thing that failed.
 ## Where the agent was wrong
 
 The agent writes most of the code and the documents, so its own mistakes are the ones to know.
-Ten from the issues logs, one or two of each kind, with how each came to light and what it
+Ten from the issues logs, each of a different kind, with how each came to light and what it
 changed; where a story does not say who noticed, neither does this table. The phone's are in
-[its issues log](https://github.com/AlexandraMoldovan95/noteOrganizerForAndroid/blob/main/docs/ISSUES_LOG.md),
-under the title given.
+its own repository's issues log, under the title given.
 
 | Kind | What the agent did | How it came to light | What it changed |
 |---|---|---|---|
@@ -138,7 +137,7 @@ under the title given.
 | A look at a screen it never read | The phone's walk read a stale copy of the screen as the screen after a tap ("Two looks that judged what they never read") | Steps that failed, then passed walked again; the emulator's own log | A look trusts a file only when its own dump says it wrote it |
 | A Pass the evidence did not bear out | Test-plan cases marked Pass from runs that walked only part of them ("The lows and the second copy, fixed before the stores") | Later rounds reading each row against the tests | Each row says "Automated in part" or "Not walked" and names the hand's part |
 | A rule skipped, a notebook lost | It ran the unit suite from the project root, and one test rewrote my real notebook ([the story](ISSUES_LOG.md#the-safety-test-that-needed-its-own-safety)) | The app opening on an empty notebook; restored from its own backup, less that day's work | Every test runs only in a copy outside the project, and refuses beside real notes |
-| A test that took the computer down | Checks it wrote sized their data from a number a mutant had made huge: 43 GB, and the desktop crashed ([the story](ISSUES_LOG.md#the-test-that-took-the-computer-down)) | I saw the graphics error; Windows' memory log named the process | Every run takes a memory ceiling and the machine's one turn, held by a gate |
+| A test that took the computer down | Checks it wrote sized their data from a number a mutant had made huge: 43 GB, and Windows' desktop crashed ([the story](ISSUES_LOG.md#the-test-that-took-the-computer-down)) | I saw the graphics error; Windows' memory log named the process | Every run takes a memory ceiling and the machine's one turn, held by a gate |
 | A tool that left the code broken | The phone's mutant runner exited with a mutated file still on disk ("A mutant runner that left the code broken") | The next build failed for no reason in the code | The restore sits in a `finally`, and reads and writes the file as bytes |
 
 In the final audit's last rounds the same held for the test plan: recipes the agent had written
@@ -227,7 +226,8 @@ the desktop's package in Windows Sandbox and by the certification kit
 ([Windows release](RELEASE_WINDOWS.md#packing-it-and-proving-it-in-windows-sandbox)), the
 phone's release build on the emulator.
 
-Wave 6 fixed the low findings before the stores, each with a check and a mutant, and kept a
+Wave 6 fixed the low findings before the stores, each with a check and, where a check could
+reach it, a mutant, or with the reason it was left written down, and kept a
 note's fields this version does not know ([how](ARCHITECTURE.md#defensive-normalization)). Then I asked for
 the whole test plan to be read again, case by case, on both apps: fifteen readers on ranges of
 it, every finding checked in the code before it counted, then rounds attacking the rewritten
@@ -277,9 +277,9 @@ findings and 120 of the phone's 268.
 
 The agents of waves 1 to 5 used about 107 million tokens, as their runs recorded them: wave 1, 49.2 million;
 its lows, 8.2; wave 3, 8.7; wave 2, 22.9; its lows, 11.2; the panel's first two rounds, 2.1, and
-its fourth, 1.0; wave 5, 3.85 (the reading 2.63, the mini-audits 1.22). Wave 6 took 76.1
-million more, 6.9 of them on Sonnet from 15 November, and the panel's fourth meeting 1.1: about
-184 million in all, as [the audit's record](audit/README.md) adds them up. The whole audit had been
+its fourth, 1.0; wave 5, 3.85 (the reading 2.63, the mini-audits 1.22). Wave 6 took 76.4
+million more to 15 November, 7.1 of them on Sonnet from that day, and the panel's fourth meeting
+1.1: about 185 million in all, as [the audit's record](audit/README.md) adds them up. The whole audit had been
 estimated at 8 to 13 million before it began. The count leaves out the main
 session's own work between rounds, and the panel's third round, given to two agents by hand.
 
@@ -305,14 +305,14 @@ four or five reviewers with separate territories, and a full wave only with my s
 stated reason. CI minutes are billed too - Windows minutes count double, so the mutant job runs
 on Linux, and the workflow skips work a change cannot affect.
 
-The final audit was such a sign-off, and it ran far past its estimate: about 184 million agent
+The final audit was such a sign-off, and it ran far past its estimate: about 185 million agent
 tokens against 8 to 13 million ([the numbers](#the-final-audit)). The rounds made the difference.
 A wave closed only after two clean rounds in a row, and waves 1 and 2 took 14 to 25, most of
 them attacking the last round's fixes. A finding cost about 85,000 tokens in wave 1, 92,000 in
 wave 2, over 100,000 in the waves of low findings, and 38,000 in wave 3, where I chose the last
 round. On 31 October, with half a week's allowance spent, each round was cut to two agents per
 app; no wave had a ceiling of its own, and each stopped by the severity rule alone. On 15
-November, with most of the week's allowance gone to agents on the most capable model, every
+November, with most of the week's allowance gone to agents on Opus, the most capable model, every
 agent moved to Sonnet, a cheaper one; a round then cost a fraction of what it had, and was
 checked less hard, which [the final audit](#the-final-audit) says where it showed.
 
