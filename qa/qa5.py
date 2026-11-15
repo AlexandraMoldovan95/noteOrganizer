@@ -382,11 +382,14 @@ try:
 finally:
     _st5._read_data_file = _real_read5
     NO._core_paths.WRITES_HELD.discard(os.path.normcase(os.path.abspath(NO.DATA_FILE)))
-check(f'a refused read is said as another program holding the file, not as damage '
-      f'({(_msgs5r or [("", "")])[0][1][:160]!r})',
+check(f'a refused read is said as another program holding the file, not as damage, '
+      f'with nothing saved over it and the ask to open the app again '
+      f'({(_msgs5r or [("", "")])[0][1][-160:]!r})',
       bool(_msgs5r)
       and 'Windows would not let the app read the file' in _msgs5r[0][1]
       and 'Another program may be holding the file, so no copy of it was kept' in _msgs5r[0][1]
+      and 'will not save anything over it in this session' in _msgs5r[0][1]
+      and 'Close Note Organizer and open it again' in _msgs5r[0][1]
       and 'unreadable' not in _msgs5r[0][1])
 app5r.destroy()
 with open('notes_data.json', 'w', encoding='utf-8') as _f5:

@@ -19793,5 +19793,59 @@
       "qa6"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "DR231",
+    "about": "A notes file another program holds is said at the start without that nothing is saved over it, nor the ask to open the app again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                    (\"\\n\\nAnother program may be holding the file, so no copy \"\n                     \"of it was kept\" if refused else\n                     \"\\n\\nNo copy of it could be kept (the disk may be full)\")\n                    + \", and Note Organizer will not save \"\n",
+        "replace": "                    \"\\n\\nAnother program may be holding the file, so no copy \"\n                     \"of it was kept\" if refused else\n                     \"\\n\\nNo copy of it could be kept (the disk may be full)\"\n                    + \", and Note Organizer will not save \"\n"
+      }
+    ],
+    "must_fail": [
+      "a refused read is said as another program holding the file, not as damage, with nothing saved over it"
+    ],
+    "suites": [
+      "qa5"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "SN178",
+    "about": "A start that cannot read the notes leaves an import's unpacked folder in the temporary folder, its name blanked from the word, for good",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        temp_dir = cut.get(\"temp_dir\")\n        if not (isinstance(temp_dir, str) and temp_dir):\n",
+        "replace": "        temp_dir = cut.get(\"temp_dir\")\n        if self._notes_file_unread() or not (isinstance(temp_dir, str) and temp_dir):\n"
+      }
+    ],
+    "must_fail": [
+      "a start that cannot read the notes takes an import's unpacked folder out at once"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "SN179",
+    "about": "An export failing after Windows' question writes a fresh word, which no longer says the session ended",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                    save_setting(\"backup_cut_short\", dict(\n                        cut, kind=\"export_failed\", error=str(state[\"error\"])[:300]))\n",
+        "replace": "                    save_setting(\"backup_cut_short\", {\n                        \"kind\": \"export_failed\", \"error\": str(state[\"error\"])[:300]})\n"
+      }
+    ],
+    "must_fail": [
+      "an export that fails after the session's question is a failure in the word while its message is up, with its reason and the session's end"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
   }
 ]

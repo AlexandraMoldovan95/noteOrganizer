@@ -3542,11 +3542,13 @@ def _fx_session_then_poll(fail_after):
     if fail_after:
         app._export_state['done'] = True
     said, err_was = [], app.show_error
-    # The word as it stands while the message is up: its kind, and whether
-    # it carries the reason the next start would give.
+    # The word as it stands while the message is up: its kind, whether it
+    # carries the reason the next start would give, and that it still says
+    # the session's end (a word written afresh would say the window closed).
     app.show_error = lambda *a, **k: said.append(
         (a[0] if a else '', (NO.get_setting('backup_cut_short') or {}).get('kind'),
-         bool((NO.get_setting('backup_cut_short') or {}).get('error'))))
+         bool((NO.get_setting('backup_cut_short') or {}).get('error')),
+         (NO.get_setting('backup_cut_short') or {}).get('when')))
     try:
         app._poll_export_progress()
     finally:
@@ -3564,7 +3566,7 @@ def _fx_session_then_poll(fail_after):
 _fx_said = _fx_session_then_poll(fail_after=False)
 check(f'a session that goes on after a failed export still says it, hides the bar and leaves '
       f'no word for the next start ({_fx_said!r}, {NO.get_setting("backup_cut_short")!r})',
-      _fx_said == [('Export failed', 'export_failed', True)]
+      _fx_said == [('Export failed', 'export_failed', True, 'session')]
       and not app._is_placed(app.export_progress_frame)
       and NO.get_setting('backup_cut_short') is None)
 # Still writing at the question, failed after it: the poll took the word back
@@ -3572,8 +3574,9 @@ check(f'a session that goes on after a failed export still says it, hides the ba
 # out, was said by nobody at the next start.
 _fx_said = _fx_session_then_poll(fail_after=True)
 check(f'an export that fails after the session\'s question is a failure in the word while its '
-      f'message is up, with its reason, and the word goes once it is read ({_fx_said!r})',
-      _fx_said == [('Export failed', 'export_failed', True)]
+      f'message is up, with its reason and the session\'s end, and the word goes once it is read '
+      f'({_fx_said!r})',
+      _fx_said == [('Export failed', 'export_failed', True, 'session')]
       and NO.get_setting('backup_cut_short') is None)
 app._export_state = None
 # Finished just before the question, its poll not yet run, a file left out:
@@ -4117,16 +4120,25 @@ try:
     _uw_name = '20261030010000000002_left.bin'
     with open(os.path.join(NO.ATTACHMENTS_DIR, _uw_name), 'wb') as _fh:
         _fh.write(b'left')
+    # Its unpacked folder too, which holds no file a note uses: that one goes
+    # at once, readable or not.
+    _uw_dir = os.path.join(tempfile.gettempdir(), 'notes_import_qa3_unread')
+    os.makedirs(_uw_dir, exist_ok=True)
     NO.save_setting('backup_cut_short', {'kind': 'import', 'file': _hb_zip,
-                                         'when': 'session', 'copied': [_uw_name]})
+                                         'when': 'session', 'copied': [_uw_name],
+                                         'temp_dir': _uw_dir})
     _uw_real = app._notes_file_unread
     app._notes_file_unread = lambda: True
     try:
         _uw_first = _next_start_says()
         _uw_kept = NO.get_setting('backup_cut_short') or {}
         _uw_there = os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _uw_name))
+        _uw_dir_gone = not os.path.exists(_uw_dir)
     finally:
         app._notes_file_unread = _uw_real
+        _ri_shutil.rmtree(_uw_dir, ignore_errors=True)
+    check(f'a start that cannot read the notes takes an import\'s unpacked folder out at once '
+          f'({_uw_dir_gone})', _uw_dir_gone)
     _uw_second = _next_start_says()
     check(f'a start that cannot read the notes keeps the word for an import cut short, '
           f'said once; the next start takes its files out ({sorted(_uw_kept)})',
