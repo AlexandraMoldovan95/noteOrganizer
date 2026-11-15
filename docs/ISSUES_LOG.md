@@ -5039,13 +5039,25 @@ called whole for words the app shows that no check reads: three mediums. A notes
 program holds for the whole start is said with its cause, but the tail every such notice carries,
 "will not save anything over it in this session" and the ask to open the app again, was read only
 on the other branch, and a pair of parentheses is all that gives it to this one: qa5 reads it on
-both now (mutant DR231, the parentheses gone). An import cut short and then a start that cannot
+this one now, the ask with it (mutant DR231, the parentheses gone). An import cut short and then a start that cannot
 read the notes: the unpacked folder goes at that start already, which no check read and 862's
 expected result put at a later start; qa3 reads it now (SN178, the removal held back with the
 files) and the result says so. 1061 promises a notice no check reads and says "in part". The
 lows: 1065's word keeps the session's end while its message is up (SN179, a word written afresh);
 1066 quotes its check's new name; 1068 names the checks that read what its next start says and
 takes out.
+
+**The fifty-third round** found the fifty-second's fixes holding, and read a tenth of the 816
+cases called "Automated in part" (82): six said what is not true (mediums). Their "Left to the
+hand" named one part and left out others no check reaches: 230's view after a cell's edit, a drop
+and a column's drag; 244's second Export refused; 384's wheel, the check moving the list in code;
+597's Align left, the menu's Table right on page and the toolbar's Centre, each stood in by
+another; 766's Excel paste and its status line, where it also claimed a stored file read; 1054's
+note never opened, its earlier version seeded. Each names what its checks do and every step left
+now. Fifteen lows named a state set in code, a question answered in code or a step skipped, each on
+the way to a step their rows did name (102, 127, 154, 187, 257, 269, 291, 304, 399, 412, 448, 471,
+557, 613, 706, 740, 814, 857, 982, 1002, 1044, 1083), and 862's expected result counts the Trash
+among what the start must read.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays
