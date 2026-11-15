@@ -5075,14 +5075,15 @@ popups, where on Export the check reads only that Cancel is there and closes it 
 said its check proves the latest of several removals is the one offered, where no check removes
 more than one and reads which. And thirty-seven "in part" rows told the owner she may skip the hand
 check ("Hand check optional", "only if something looks off", "a race: optional"), where the How to
-use tab says the hand walks such a case whole: each of those labels is gone (forty-two more, said
-in other words, went in the round after). About thirty lows, omissions of this kind, wait for the
+use tab says the hand walks such a case whole: each of those labels is gone (thirty-six more, said
+in other words, went in the round after, and the last in the round after that). About thirty lows, omissions of this kind, wait for the
 lows pass.
 
 **The fifty-fifth round** found the fifty-fourth's three fixes holding, and the label class open:
 forty-two "in part" lines still told the owner she may skip, in other words ("A hand check is a
 choice", "Worth one try on the .exe", "By hand only if wanted"), and three preconditions too
-("Optional", "Only if you want to try it by hand"). Each is gone; where the words said why a hand
+("Optional", "Only if you want to try it by hand"). Thirty-six of those lines went (six were left,
+and went in the round after); where the words said why a hand
 check is hard, the reason stays ("Tight by hand", "Holding the file needs PowerShell"). Its tenth of
 the "in part" cases (82) found six more mediums: 246 said its read-only folder is set up in code,
 where the checks point the Trash into a missing folder and call the failure's callback; three
@@ -5091,6 +5092,21 @@ right-clicked; 426's 14, its question answered in code; 240's 32, the same); 19 
 reopened whole, where the check reads 50,000 of 52,000 characters; 560 said qa5 types six forms,
 where it puts them in the field in code. Each says what is true. About thirty-five lows wait for
 the lows pass.
+
+**The fifty-sixth round** read everything still called whole (59 cases and 15 merged ones) and
+the fifty-fifth's fixes. The label class closed: six "in part" lines left ("a choice, not a duty",
+"A hand check on the exe is a choice"), a NEEDS YOUR EYE "only if you write in Turkish", two
+preconditions and five steps marked "Optional" or "If you can" each say what to do now, and 602's
+precondition no longer offers the Sandbox, which never plays that first start. 264's and 266's
+steps said the case cannot be built by hand while their cells left its import to the hand: they
+import a code a script makes. 414's 355 and 356 read the day's menu by a "day" entry a repeating
+note's own menu also carries, and say so; 459's and 566's kept reasons named one stand-in where
+the checks have three. And nineteen called whole are not: eleven merged lines (74's 109, 215's
+360, 268's 94, 289's 86 and 88, 357's 401, 362's 20, 415's 50, 421's 427, 422's 23, 436's 53) and
+eight cases (46 a second app beside the first, 727 the warning's words, 836, 853, 868 and 883 the
+clipboard filled in code, 879 and 1058 the read asked in code), each "in part" now with what it
+leaves. docs/TEST_PLAN_EXCERPT.md quoted cases 9, 38 and 15 as "Automated", which the plan has
+said "in part" for some rounds: it quotes them as the plan does.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays

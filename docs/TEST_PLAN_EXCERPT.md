@@ -68,8 +68,9 @@ of that full list** - not the only ones, just quick to picture without seeing th
 
 **Expected Result:** The note is NOT deleted and remains in the list.
 
-**Automation:** Automated (`qa1`) - answers No to the confirmation, then checks both the note
-list and the Trash. A mutant that ignored the confirmation was caught by this check.
+**Automation:** Automated in part (`qa1`) - answers No to the confirmation in code, then checks
+both the note list and the Trash. A mutant that ignored the confirmation was caught by this check.
+Left to the hand: the question answered by a person.
 
 ### Case 38 - Mark a checklist item done
 
@@ -85,7 +86,8 @@ list and the Trash. A mutant that ignored the confirmation was caught by this ch
 
 **Expected Result:** The item text gets a strikethrough and dims; the progress count updates.
 
-**Automation:** Automated (`qa1`).
+**Automation:** Automated in part (`qa1` reads the item kept done in the store). Left to the hand:
+the strikethrough, the dimming and the progress count.
 
 ### Case 15 - Trash panel opens quickly with 100+ deleted notes
 
@@ -103,7 +105,7 @@ list and the Trash. A mutant that ignored the confirmation was caught by this ch
 **Expected Result:** Step 1: the panel opens promptly with a first batch, not a long freeze.
 Step 2: the next batch appears, added to what's already shown.
 
-**Automation:** Automated (`qa3`).
+**Automation:** Automated in part (`qa3`). Left to the hand: the words "Show N more (M not shown)".
 
 ### Case 43 - 'Group by category' checkbox in Light mode
 
