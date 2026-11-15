@@ -174,6 +174,7 @@ How a round worked:
 | 2's lows | The low findings of wave 2 | closed at verification round 8 | closed at verification round 10 |
 | 4 | [The review panel](audit/wave4/README.md): eight roles, two to an agent | closed at round 4 † | closed at round 4 † |
 | 5 | The release: a full reading of both apps, its fixes attacked by name, the builds proved | closed at round 2 | closed at round 8 ‡ |
+| 6 | The low findings before the stores, then the whole test plan read against the code | closed at round 75 | closed at round 84 |
 
 \* Not by the two-clean-rounds rule. After round 5 I narrowed what kept a round of wave 3 open
 to what a person using the app would meet and be misled by, and chose round 8 as the last.
@@ -199,6 +200,24 @@ release build's photograph showed it, and it is 0.14.2. Then both apps were buil
 the desktop's package in Windows Sandbox and by the certification kit
 ([Windows release](RELEASE_WINDOWS.md#packing-it-and-proving-it-in-windows-sandbox)), the
 phone's release build on the emulator.
+
+Wave 6 fixed the low findings before the stores, each with a check and a mutant, and kept a
+note's fields this version does not know ([how](ARCHITECTURE.md#defensive-normalization)). Then I asked for
+the whole test plan to be read again, case by case, on both apps: fifteen readers on ranges of
+it, every finding checked in the code before it counted, then rounds attacking the rewritten
+rows until two in a row found nothing of medium severity. Most of what they found were
+sentences of the plan the code did not bear out: a precondition that did not make what the
+steps needed, a question said to come that never did, a recipe whose numbers were wrong. Some
+were recipes the agent leading the audit had written the round before. On 15 November the
+agents moved to a cheaper model, Sonnet. A cheaper reviewer is a weaker one: once, the agent
+leading the audit found what the round's reviewer had passed (the desktop's round 73), and that
+round did not count as clean.
+
+The review panel met a fourth time on 15 November, after waves 5 and 6, with the same roles and
+questions, every agent on Sonnet. It scored the desktop 5.88 and 6.88 and the phone 6.25 and
+7.00, below 8 November's. Its readers said why: the history's last weeks read as audit rounds
+rather than changes to the apps, the documents had not kept pace, and what is mine is still
+hard to tell from what is the agent's ([its prompts](audit/README.md#wave-6-the-lows-before-the-stores)).
 
 The phone needed more rounds than the desktop in waves 1 and 2, and its issues log says why: most
 of the extra rounds found the round before's own fixes wrong. Custom order's drag took twelve
@@ -230,9 +249,11 @@ sceptic seldom refuted - 6 of the 756 it re-graded - and earned its place anothe
 fixes by name and the code beside them; in wave 1 those agents found 175 of the desktop's 309
 findings and 120 of the phone's 268.
 
-The agents used about 107 million tokens, as their runs recorded them: wave 1, 49.2 million;
+The agents of waves 1 to 5 used about 107 million tokens, as their runs recorded them: wave 1, 49.2 million;
 its lows, 8.2; wave 3, 8.7; wave 2, 22.9; its lows, 11.2; the panel's first two rounds, 2.1, and
-its fourth, 1.0; wave 5, 3.85 (the reading 2.63, the mini-audits 1.22). The whole audit had been
+its fourth, 1.0; wave 5, 3.85 (the reading 2.63, the mini-audits 1.22). Wave 6 took 76.1
+million more, 6.9 of them on Sonnet from 15 November, and the panel's fourth meeting 1.1: about
+184 million in all, as [the audit's record](audit/README.md) adds them up. The whole audit had been
 estimated at 8 to 13 million before it began. The count leaves out the main
 session's own work between rounds, and the panel's third round, given to two agents by hand.
 
@@ -258,21 +279,26 @@ four or five reviewers with separate territories, and a full wave only with my s
 stated reason. CI minutes are billed too - Windows minutes count double, so the mutant job runs
 on Linux, and the workflow skips work a change cannot affect.
 
-The final audit was such a sign-off, and it ran far past its estimate: about 107 million agent
+The final audit was such a sign-off, and it ran far past its estimate: about 184 million agent
 tokens against 8 to 13 million ([the numbers](#the-final-audit)). The rounds made the difference.
 A wave closed only after two clean rounds in a row, and waves 1 and 2 took 14 to 25, most of
 them attacking the last round's fixes. A finding cost about 85,000 tokens in wave 1, 92,000 in
 wave 2, over 100,000 in the waves of low findings, and 38,000 in wave 3, where I chose the last
 round. On 31 October, with half a week's allowance spent, each round was cut to two agents per
-app; no wave had a ceiling of its own, and each stopped by the severity rule alone.
+app; no wave had a ceiling of its own, and each stopped by the severity rule alone. On 15
+November, with most of the week's allowance gone to agents on the most capable model, every
+agent moved to Sonnet, a cheaper one; a round then cost a fraction of what it had, and was
+checked less hard, which [the final audit](#the-final-audit) says where it showed.
 
 ## Models
 
-Commits the agent made carry a `Co-Authored-By` line naming the model. Of the 1,280 commits that
-are not merges, 1,194 carry one (counted on 7 November 2026, on the final audit's branch at
-`dd891e9`): Claude Opus 5.5 (810), Claude Fable 5 (187), Claude Opus 5 (167), Claude Sonnet 5
+Commits the agent made carry a `Co-Authored-By` line naming the model. Of the 1,532 commits that
+are not merges, 1,446 carry one (counted on 15 November 2026, on the final audit's branch at
+`04436ea4`): Claude Opus 5.5 (1,062), Claude Fable 5 (187), Claude Opus 5 (167), Claude Sonnet 5
 (16) and Claude Opus 4.8 (14). The project's first week, and a few dozen commits soon after,
-were made without the convention.
+were made without the convention. The line names the model of the session that made the
+commit, not the model of the agents a round sent out: that is in
+[the audit's record](audit/README.md).
 
 ## How to read the other documents
 
