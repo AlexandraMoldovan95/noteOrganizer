@@ -17872,7 +17872,7 @@
     "edits": [{"file": "noteorganizer/core/storage.py",
                "find": "        unchanged = cleaned == raw\n",
                "replace": "        unchanged = cleaned == notes\n"}],
-    "must_fail": ["...but one whose file held what the read drops keeps its copy"],
+    "must_fail": ["...but one whose file the read reshapes keeps its copy"],
     "suites": ["test_data_safety"],
     "expect": "killed"
   },
@@ -19717,6 +19717,80 @@
     ],
     "suites": [
       "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "DR230",
+    "about": "An older notebook whose settings file is held at the first start brings its notes in without it",
+    "edits": [
+      {
+        "file": "noteorganizer/core/paths.py",
+        "find": "    if not (settings_came\n",
+        "replace": "    if not (True\n"
+      }
+    ],
+    "must_fail": [
+      "a settings file held at the first start keeps the notes from coming without it"
+    ],
+    "suites": [
+      "test_data_safety"
+    ],
+    "expect": "killed",
+    "only_on": "win32",
+    "note": "Killed on Windows, where the profile-folder migration checks run."
+  },
+  {
+    "id": "SN177",
+    "about": "An export that fails after Windows' question keeps no reason in the word the next start reads",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                        cut, kind=\"export_failed\", error=str(state[\"error\"])[:300]))\n",
+        "replace": "                        cut, kind=\"export_failed\"))\n"
+      }
+    ],
+    "must_fail": [
+      "an export that fails after the session's question is a failure in the word while its message is up, with its reason"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "SC04",
+    "about": "A click on a statistics chip leaves Settings for the notes",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "                pill.pack(fill=\"both\", expand=True, padx=1, pady=1)\n",
+        "replace": "                pill.pack(fill=\"both\", expand=True, padx=1, pady=1)\n                pill.bind(\"<Button-1>\", lambda e: self.hide_settings_page())\n"
+      }
+    ],
+    "must_fail": [
+      "clicking a statistics chip leaves Settings open"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "SC05",
+    "about": "The statistics chips' grid wears the hand cursor, and every part of a chip with it",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "            grid = tk.Frame(self.stats_frame, bg=self.colors[\"bg\"])\n",
+        "replace": "            grid = tk.Frame(self.stats_frame, bg=self.colors[\"bg\"], cursor=\"hand2\")\n"
+      }
+    ],
+    "must_fail": [
+      "statistics chip has no hand cursor (not clickable-looking)"
+    ],
+    "suites": [
+      "qa6"
     ],
     "expect": "killed"
   }

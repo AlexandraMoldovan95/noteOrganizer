@@ -3542,8 +3542,11 @@ def _fx_session_then_poll(fail_after):
     if fail_after:
         app._export_state['done'] = True
     said, err_was = [], app.show_error
+    # The word as it stands while the message is up: its kind, and whether
+    # it carries the reason the next start would give.
     app.show_error = lambda *a, **k: said.append(
-        (a[0] if a else '', (NO.get_setting('backup_cut_short') or {}).get('kind')))
+        (a[0] if a else '', (NO.get_setting('backup_cut_short') or {}).get('kind'),
+         bool((NO.get_setting('backup_cut_short') or {}).get('error'))))
     try:
         app._poll_export_progress()
     finally:
@@ -3561,7 +3564,7 @@ def _fx_session_then_poll(fail_after):
 _fx_said = _fx_session_then_poll(fail_after=False)
 check(f'a session that goes on after a failed export still says it, hides the bar and leaves '
       f'no word for the next start ({_fx_said!r}, {NO.get_setting("backup_cut_short")!r})',
-      _fx_said == [('Export failed', 'export_failed')]
+      _fx_said == [('Export failed', 'export_failed', True)]
       and not app._is_placed(app.export_progress_frame)
       and NO.get_setting('backup_cut_short') is None)
 # Still writing at the question, failed after it: the poll took the word back
@@ -3569,8 +3572,8 @@ check(f'a session that goes on after a failed export still says it, hides the ba
 # out, was said by nobody at the next start.
 _fx_said = _fx_session_then_poll(fail_after=True)
 check(f'an export that fails after the session\'s question is a failure in the word while its '
-      f'message is up, and the word goes once it is read ({_fx_said!r})',
-      _fx_said == [('Export failed', 'export_failed')]
+      f'message is up, with its reason, and the word goes once it is read ({_fx_said!r})',
+      _fx_said == [('Export failed', 'export_failed', True)]
       and NO.get_setting('backup_cut_short') is None)
 app._export_state = None
 # Finished just before the question, its poll not yet run, a file left out:

@@ -5020,6 +5020,20 @@ closed when the check runs the button's command); 722 says its
 preview is walked by no one, and qa3's check name says what it reads; 759 names qa5's check of the
 start notice; a comment in test_data_safety no longer says the read drops a field it keeps.
 
+**The fifty-first round** found the four strengthened checks holding, and six mediums. 806's and
+854's new steps Tabbed from the note into the comments box, where Tab types a tab (the user guide
+says so): a person following them would have typed tabs into the note's comments, saved. They
+Ctrl+Tab out of the comments box too now. 760's steps promise a held settings file too, which no
+check held: a first start whose settings could not be copied could have brought the notes in
+without them, the old Trash then under the default window. test_data_safety holds it now
+(mutant DR230, the notes let in without their settings). 1065's reason was read for one order
+only: the failure after Windows' question keeps its reason in the word now, read while the
+message is up (SN177). 483, 563 and 754 say "in part", 754 with steps a person can take (case 717
+twice). The lows: the statistics check reads that a chip's click leaves Settings open and the
+grid's cursor too (SC04, SC05); test_data_safety reads that a field the read does not know stays
+in the notes, as its comment says; 760's, 849's and 1065's expected results and 880's steps say
+what is true.
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays
 open behind the block: at the thirty-ninth round the plan's automation claims were read all at

@@ -697,6 +697,41 @@ try:
         _pn_msg = NO_paths.run_migrations(_pn_home) or ''
         check('...and the next start brings it in',
               NO_paths.count_notes_in(_pn_notes) == 1 and 'Imported 1' in _pn_msg)
+        # The settings file held instead: the notes must not come without it,
+        # or the old Trash falls under the default window and is emptied.
+        _ps_user = os.path.join(_pr_root, 'user_settings_held')
+        os.environ['USERPROFILE'] = _ps_user
+        os.environ['APPDATA'] = os.path.join(_ps_user, 'AppData', 'Roaming')
+        _ps_old, _ps_home = NO_paths.get_appdata_dir(), NO_paths.get_user_notebook_dir()
+        os.makedirs(_ps_old)
+        os.makedirs(_ps_home)
+        for _ps_name, _ps_text in (('notes_data.json', '[{"id": 1, "title": "A"}]'),
+                                   ('settings.json', '{"app_version": "0.97.405"}')):
+            with open(os.path.join(_ps_old, _ps_name), 'w', encoding='utf-8') as f:
+                f.write(_ps_text)
+
+        def _ps_held(src, dst, *a, **k):
+            if os.path.basename(src) == 'settings.json':
+                raise PermissionError('held by another program')
+            return _pf_copy2(src, dst, *a, **k)
+        NO_paths.shutil.copy2 = _ps_held
+        NO_paths.time.sleep = lambda s: None
+        try:
+            _ps_msg = NO_paths.run_migrations(_ps_home) or ''
+        finally:
+            NO_paths.shutil.copy2 = _pf_copy2
+            NO_paths.time.sleep = _pf_sleep
+        _ps_notes = os.path.join(_ps_home, 'notes_data.json')
+        check(f'a settings file held at the first start keeps the notes from coming '
+              f'without it, and asks to close the app and open it again ({_ps_msg[-90:]!r})',
+              'could not be brought in' in _ps_msg
+              and 'close Note Organizer and open it again' in _ps_msg
+              and not os.path.exists(_ps_notes) and NO_paths.writes_held(_ps_notes))
+        NO_paths.WRITES_HELD.clear()
+        _ps_msg = NO_paths.run_migrations(_ps_home) or ''
+        check('...and the next start brings the notes and the settings in',
+              NO_paths.count_notes_in(_ps_notes) == 1
+              and os.path.exists(os.path.join(_ps_home, 'settings.json')))
         os.environ['USERPROFILE'] = _pr_user
         os.environ['APPDATA'] = os.path.join(_pr_user, 'AppData', 'Roaming')
     # The second barrier: even listed as a leftover, the profile's notebook
@@ -2300,11 +2335,14 @@ with open(_paths.DATA_FILE, "w", encoding="utf-8") as _f:
     json.dump([{"id": 1, "uid": "u1", "title": "Kept", "body": ["words", "in a list"],
                 "extra": "theirs"}], _f)
 _beforeU = set(glob.glob(_backupsW))
-_storage.load_notes(None)
+_notesU, _ = _storage.load_notes(None)
 _newU = sorted(set(glob.glob(_backupsW)) - _beforeU)
 _heldU = open(_newU[0], encoding="utf-8").read() if len(_newU) == 1 else ""
-check(f"...but one whose file held what the read drops keeps its copy, with it in ({_newU!r})",
+check(f"...but one whose file the read reshapes keeps its copy, with what it held in ({_newU!r})",
       len(_newU) == 1 and '"extra"' in _heldU and "in a list" in _heldU)
+check(f"...and the field the read does not know stays in the notes too "
+      f"({[n.get('extra') for n in _notesU]!r})",
+      [n.get("extra") for n in _notesU] == ["theirs"])
 
 # The two loaders without a corrupt fixture yet: settings (unparsable)
 # and trash (wrong shape). Content-matched rather than counted, so a

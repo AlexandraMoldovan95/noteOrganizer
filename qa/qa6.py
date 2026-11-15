@@ -481,12 +481,18 @@ check('the statistics panel draws a pill for the category Work', chip is not Non
 # Every part a click can land on, each its own: the edge, the pill, its dot,
 # its name and its count. A click on the name goes to the name alone.
 _chip_parts = [chip.master, chip] + list(chip.winfo_children()) if chip is not None else []
+# The grid holding the chips too: a cursor set there is worn by every part
+# that sets none of its own.
 check(f'statistics chip has no hand cursor (not clickable-looking), on any of its {len(_chip_parts)} parts',
-      len(_chip_parts) >= 5 and all(str(w.cget('cursor')) != 'hand2' for w in _chip_parts))
+      len(_chip_parts) >= 5
+      and all(str(w.cget('cursor')) != 'hand2' for w in _chip_parts + [chip.master.master]))
+_st_open = getattr(app, '_settings_open', False)
 for _part in _chip_parts:
     _qa_click(_part)
     _qa_fire(_part, '<ButtonRelease-1>')
 app.update()
+check(f'clicking a statistics chip leaves Settings open (open before: {_st_open})',
+      _st_open and getattr(app, '_settings_open', False))
 check('clicking a statistics chip does not change tabs',
       app.notebook.index(app.notebook.select())==app.TAB_CALENDAR)
 check('clicking a statistics chip does not change the filter',
