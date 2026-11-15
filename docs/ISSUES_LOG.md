@@ -5069,14 +5069,28 @@ the menu's road and the window's directions read). The How to use tab and
 docs/TEST_PLAN_EXCERPT.md say that what an "in part" row names is a guide rather than a full list.
 
 **The fifty-fourth round**, graded so, read another tenth of the "in part" cases (81) and found
-four mediums and a class. 597's corrected cell said its check centres the cells, where it
+three mediums and a class. 597's corrected cell said its check centres the cells, where it
 right-aligns them in a check named for centring; 324's merged case said Cancel closes both bulk
 popups, where on Export the check reads only that Cancel is there and closes it with Escape; 309
 said its check proves the latest of several removals is the one offered, where no check removes
-more than one and reads which. And forty-three "in part" rows told the owner she may skip the hand
+more than one and reads which. And thirty-seven "in part" rows told the owner she may skip the hand
 check ("Hand check optional", "only if something looks off", "a race: optional"), where the How to
-use tab says the hand walks such a case whole: each label is gone. About thirty lows, omissions
-of this kind, wait for the lows pass.
+use tab says the hand walks such a case whole: each of those labels is gone (forty-two more, said
+in other words, went in the round after). About thirty lows, omissions of this kind, wait for the
+lows pass.
+
+**The fifty-fifth round** found the fifty-fourth's three fixes holding, and the label class open:
+forty-two "in part" lines still told the owner she may skip, in other words ("A hand check is a
+choice", "Worth one try on the .exe", "By hand only if wanted"), and three preconditions too
+("Optional", "Only if you want to try it by hand"). Each is gone; where the words said why a hand
+check is hard, the reason stays ("Tight by hand", "Holding the file needs PowerShell"). Its tenth of
+the "in part" cases (82) found six more mediums: 246 said its read-only folder is set up in code,
+where the checks point the Trash into a missing folder and call the failure's callback; three
+merged cases were called whole that are not (414's 355 and 356, a day of one note and one point
+right-clicked; 426's 14, its question answered in code; 240's 32, the same); 19 said its note
+reopened whole, where the check reads 50,000 of 52,000 characters; 560 said qa5 types six forms,
+where it puts them in the field in code. Each says what is true. About thirty-five lows wait for
+the lows pass.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays
