@@ -5257,6 +5257,15 @@ code made after its edit and so found the note unchanged. Round 70 found the sam
 and 277: an import of a note left as the code or backup holds it asks "Already here, unchanged",
 never Update.
 
+**Rounds 71 to 75.** Round 71 found the same in 952 and 960, and two results the app does not
+show (421's Cancel, 587's Skip). The rewritten recipes then had their own words tested: the
+first import of a backup asks "Import notes" before anything, a series made with no text has no
+word to change, and the welcome note's text changed after 0.97.405, so a backup's welcome note
+looks like nothing here and asks no "Possible duplicates". A sweep for the phone's last finding
+found four rows naming the day's bar on a day with no note (563, 774, 782, 724). Rounds 74 and
+75 found nothing of medium severity, the second reading together all 22 rows the rounds after
+the whole plan had rewritten: the desktop's loop ended there.
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays
 open behind the block: at the thirty-ninth round the plan's automation claims were read all at
