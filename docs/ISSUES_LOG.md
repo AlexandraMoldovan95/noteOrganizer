@@ -5152,9 +5152,24 @@ limit an Enter inside a cell crosses is the grid's height, 30,000 px, not its 40
 whose steps press it one line at a time now; 792's 400 rows hold at most seven columns, under the
 3,000 cells drawn. 718 can be set up by a person, with
 notes_data.json made read-only, and gives the steps. 811 was still called whole, and it and 821,
-822, 827, 839 and 845 left to the hand parts of lists no kept backup or code makes: those are
-walked by no one. A read-only folder fails neither 212's export nor 246's saves, each written
-beside its file and replaced: 212 makes the backup file read-only, 246 the notebook's files.
+822, 827, 839 and 845 left to the hand parts of lists no kept backup or code makes: those were
+called walked by no one (the round after found 821's to 845's lists can be typed, a letter and
+Enter each, and gave their parts back to the hand). A read-only folder fails neither 212's export
+nor 246's saves, each written beside its file and replaced: 212 made the backup file read-only
+(which Windows' own Save dialog refuses, as the round after found), 246 the notebook's files.
+
+**The sixtieth round** found the fifty-ninth's app fix short on one road: on one day of a
+repeating note the save says "Auto-saved <day> only", which wrote over the table's words just as
+the plain "Auto-saved" had, and over a cut paste's. That line is the day's own reassurance and is
+held back like the other now; "follows the series again" and the date and repeat kept the
+series' still write (a qa6 check on a day, mutant RV12). The plan: 212 holds the first backup open
+from PowerShell, which fails the export's replace where Windows' Save dialog took no read-only
+file; 766's 250 rows of two- or three-line addresses are still drawn as a grid at 100%, so its
+cells hold four lines; lists of 1,000 checklist items (803, 821, 822, 827, 839, 845) can be typed,
+a letter and Enter each, and leave their parts to the hand; and the rows on a file another
+program holds (759, 761, 786-788, 796, 800-802, 820, 847, 1057, 1061) said such a file is beyond
+the hand, where case 1075 already holds one from PowerShell: each gives that recipe now, and 1047
+makes its save fail with 706's read-only file.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays
