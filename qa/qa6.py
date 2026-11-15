@@ -7142,6 +7142,33 @@ finally:
 check(f"the words saying a table is shown as its text stand through the autosave after it "
       f"({_tt_said!r})",
       bool(_tt_said) and _tt_said.startswith('A table this large is shown as its text'))
+# ...and on one day of a repeating note, whose save says "Auto-saved <day> only".
+_tt_said = None
+app.notes = [NO.normalize_note({'id': 997, 'title': 'TtDay', 'date': '2026-11-02',
+                                'recurrence': {'freq': 'weekly'},
+                                'body': '| Name | Qty |\n| Milk | 2 |\n| Eggs | 12 |\nafter'})]
+app.save_notes()
+app.refresh_note_list()
+app.open_note_in_tab(app.notes[0], occurrence_date='2026-11-09')
+_kv_settle(8)
+_tt_grid = app._grid_at_line(1)
+try:
+    if (_tt_grid is not None and _tt_grid['nrows'] == 3
+            and app.current_occurrence_date == '2026-11-09'):
+        app.MAX_DRAWN_TABLE_PX = app._grid_row_height() * 3
+        _tt_press(_tt_grid, 2, 1, '<Tab>')
+        app._autosave_now()
+        _kv_settle(2)
+        _tt_said = (app.status_lbl.cget('text'),
+                    '2026-11-09' in (app.find_note(997).get('overrides') or {}))
+finally:
+    app.__dict__.pop('MAX_DRAWN_TABLE_PX', None)
+    app._close_cell_editor()
+    app.update()
+check(f"on one day of a repeating note, the words saying a table is shown as its text stand "
+      f"through the day's autosave ({_tt_said!r})",
+      bool(_tt_said) and _tt_said[1]
+      and _tt_said[0].startswith('A table this large is shown as its text'))
 
 # Escape in a cell, and Ctrl+V of copied cells, closed the editor
 # holding the keyboard and left it on nothing -- what was typed next went

@@ -19865,5 +19865,23 @@
       "qa6"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "RV12",
+    "about": "On one day of a repeating note, the day's \"Auto-saved <day> only\" writes over the words saying why a table is shown as its text, half a second later, unread",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                       if schedule_changed else \"\"),\n                    reassurance=auto and not (follows_again or schedule_changed))\n",
+        "replace": "                       if schedule_changed else \"\"))\n"
+      }
+    ],
+    "must_fail": [
+      "on one day of a repeating note, the words saying a table is shown as its text stand through the day's autosave"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
   }
 ]

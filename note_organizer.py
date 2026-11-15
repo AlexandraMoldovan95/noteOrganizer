@@ -21198,12 +21198,15 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # Nothing of the schedule is stored, so nothing left out: kept
                 # on screen "to fix", the next save moved the series.
                 left_out = []
+                # The plain "Auto-saved <day> only" is the day's own
+                # reassurance: it wrote over a big table's words unread.
                 self.set_status(
                     ("Auto-saved" if auto else "Saved")
                     + (f" — {show_date(occurrence_date)} follows the series again"
                        if follows_again else f" {show_date(occurrence_date)} only")
                     + (" — the date and the repeat stay the whole series'"
-                       if schedule_changed else ""))
+                       if schedule_changed else ""),
+                    reassurance=auto and not (follows_again or schedule_changed))
                 announce = auto
             elif on_a_day:
                 # Only a series field changed (a tick, a file): only that is
