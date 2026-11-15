@@ -5110,19 +5110,34 @@ leaves. docs/TEST_PLAN_EXCERPT.md quoted cases 9, 38 and 15 as "Automated", whic
 said "in part" for some rounds: it quotes them as the plan does.
 
 **The fifty-seventh round** found the fifty-sixth's fixes holding but for three, and eight
-mediums. A sweep of every column for the skip wording found its last forms: "worth doing once",
+mediums. A sweep of every column for the skip wording found more of its forms (the round after found the last): "worth doing once",
 "worth a look", "worth a glance", "Worth a hand check", "Optionally", "only if you run a tool", "if
 you have one", 276's "hand-check only if something looks off" (on a story that types its edit in
 code and never reads "Add as a new note"), and ten lines' "the rest is worth a manual pass"; each
 says what is left to the hand now. Rows no person can set up had left parts "to the hand" (264 and
-266, whose code no kept script makes; 727, 750, 769, 780, 792, 1061): by the How to use tab's own
-words for such rows, those parts are walked by no one. 706's step sent the owner to a nearly full
-USB stick, which never fails a save (the built app keeps its notebook in the profile wherever it
-runs), and 657's to a small disk, where a backup imports fine: both name the system drive. 362's
+266, whose code no kept script makes; 727, 750, 780, 1061; and 769 and 792, which the round after
+found a person can set up): by the How to use tab's own words for such rows, those parts are walked
+by no one. 706's step sent the owner to a nearly full USB stick, which never fails a save (the
+built app keeps its notebook in the profile wherever it runs), and 657's to a small disk, where a
+backup imports fine: both named the system drive (706's wrongly, as the round after found). 362's
 merged 208 was called whole on a table laid in code; 362's step asked for a title the editor stops
 at 200; 28 named qa9, which never opens this list; 768 said qa6 pastes for real, where the
 clipboard is filled in code. Each says what is true. docs/TEST_PLAN_EXCERPT.md calls case 43 a
 visual check now automated, and titles case 38 as the plan does.
+
+**The fifty-eighth round** found five of the fifty-seventh's fixes short, and four mediums more.
+A nearly full system drive fails no save either: the save fails only where writing its temporary
+file or replacing the old one does (core/storage.py), so 706's steps make notes_data.json
+read-only, which fails the replace, and say what to type and answer. 276's merged 273 was still
+called whole on the story's edit typed in code. The skip wording's last forms ("the rest is worth
+eyes", "Hand check recommended", "NEEDS YOUR EYE once") are gone. 792 and 769 can be set up by a
+person, a 400-row table pasted (the most the app draws as a grid) and a name of several lines
+pasted into Save as template's box: their steps are a person's now. 806 to 814 left to the hand
+steps on lists no kept backup or code makes: those are walked by no one, while 803's and 807's
+long-item variants, which a person can paste, say so. 294 said qa4 proves every tick box's well,
+where the note card's box, drawn on a canvas, is read by no check; 43 (and the excerpt) said the
+same of the Group by category box, where its mark is what is judged; 118 said the autosave around
+an export is covered, where no export is started. Each says what is true.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays

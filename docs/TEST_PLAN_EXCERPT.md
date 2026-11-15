@@ -123,8 +123,8 @@ Step 2: the next batch appears, added to what's already shown.
 **Expected Result:** The checkbox background is white with a black check mark, not
 black-on-black.
 
-**Automation:** Automated (`qa4`) - every tick box on screen, this one included, is judged on
-every theme: its well is not the surface it sits on, and its mark reads on the well. The case was
+**Automation:** Automated (`qa4`) - on every theme this box's mark is judged against its well
+by its pixels, and every palette's well is checked light. The case was
 written as manual first, when nothing crashed, nothing threw, and a checkbox was just invisible -
 a bug no script noticed until one was written for it.
 
