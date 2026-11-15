@@ -5076,7 +5076,7 @@ said its check proves the latest of several removals is the one offered, where n
 more than one and reads which. And thirty-seven "in part" rows told the owner she may skip the hand
 check ("Hand check optional", "only if something looks off", "a race: optional"), where the How to
 use tab says the hand walks such a case whole: each of those labels is gone (thirty-six more, said
-in other words, went in the round after, and the last in the round after that). About thirty lows, omissions of this kind, wait for the
+in other words, went in the round after, and the rest in the two rounds after that). About thirty lows, omissions of this kind, wait for the
 lows pass.
 
 **The fifty-fifth round** found the fifty-fourth's three fixes holding, and the label class open:
@@ -5094,12 +5094,13 @@ where it puts them in the field in code. Each says what is true. About thirty-fi
 the lows pass.
 
 **The fifty-sixth round** read everything still called whole (59 cases and 15 merged ones) and
-the fifty-fifth's fixes. The label class closed: six "in part" lines left ("a choice, not a duty",
+the fifty-fifth's fixes. The label class narrowed (its last forms went in the round after): six "in part" lines left ("a choice, not a duty",
 "A hand check on the exe is a choice"), a NEEDS YOUR EYE "only if you write in Turkish", two
-preconditions and five steps marked "Optional" or "If you can" each say what to do now, and 602's
+preconditions and six steps marked "Optional" or "If you can" each say what to do now, and 602's
 precondition no longer offers the Sandbox, which never plays that first start. 264's and 266's
 steps said the case cannot be built by hand while their cells left its import to the hand: they
-import a code a script makes. 414's 355 and 356 read the day's menu by a "day" entry a repeating
+imported a code a script makes (the round after found no such script kept, and returned them to
+"Not a hand check"). 414's 355 and 356 read the day's menu by a "day" entry a repeating
 note's own menu also carries, and say so; 459's and 566's kept reasons named one stand-in where
 the checks have three. And nineteen called whole are not: eleven merged lines (74's 109, 215's
 360, 268's 94, 289's 86 and 88, 357's 401, 362's 20, 415's 50, 421's 427, 422's 23, 436's 53) and
@@ -5107,6 +5108,21 @@ eight cases (46 a second app beside the first, 727 the warning's words, 836, 853
 clipboard filled in code, 879 and 1058 the read asked in code), each "in part" now with what it
 leaves. docs/TEST_PLAN_EXCERPT.md quoted cases 9, 38 and 15 as "Automated", which the plan has
 said "in part" for some rounds: it quotes them as the plan does.
+
+**The fifty-seventh round** found the fifty-sixth's fixes holding but for three, and eight
+mediums. A sweep of every column for the skip wording found its last forms: "worth doing once",
+"worth a look", "worth a glance", "Worth a hand check", "Optionally", "only if you run a tool", "if
+you have one", 276's "hand-check only if something looks off" (on a story that types its edit in
+code and never reads "Add as a new note"), and ten lines' "the rest is worth a manual pass"; each
+says what is left to the hand now. Rows no person can set up had left parts "to the hand" (264 and
+266, whose code no kept script makes; 727, 750, 769, 780, 792, 1061): by the How to use tab's own
+words for such rows, those parts are walked by no one. 706's step sent the owner to a nearly full
+USB stick, which never fails a save (the built app keeps its notebook in the profile wherever it
+runs), and 657's to a small disk, where a backup imports fine: both name the system drive. 362's
+merged 208 was called whole on a table laid in code; 362's step asked for a title the editor stops
+at 200; 28 named qa9, which never opens this list; 768 said qa6 pastes for real, where the
+clipboard is filled in code. Each says what is true. docs/TEST_PLAN_EXCERPT.md calls case 43 a
+visual check now automated, and titles case 38 as the plan does.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays

@@ -50,7 +50,7 @@ of that full list** - not the only ones, just quick to picture without seeing th
 - **A safety check** - Case 9, cancelling a delete.
 - **An everyday action** - Case 38, marking a checklist item done.
 - **A performance check at scale** - Case 15, the Trash panel with 100+ deleted notes.
-- **A manual visual check** - Case 43, a checkbox's contrast in Light mode.
+- **A visual check, since automated** - Case 43, a checkbox's contrast in Light mode.
 
 ### Case 9 - Cancel a delete
 
@@ -72,7 +72,7 @@ of that full list** - not the only ones, just quick to picture without seeing th
 both the note list and the Trash. A mutant that ignored the confirmation was caught by this check.
 Left to the hand: the question answered by a person.
 
-### Case 38 - Mark a checklist item done
+### Case 38 - Mark an item done
 
 - **Area / Sub-feature:** Checklist · Check item
 - **Priority:** Medium
