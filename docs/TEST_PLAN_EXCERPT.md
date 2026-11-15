@@ -9,8 +9,8 @@ by hand on the packaged `.exe` before a release - a case passes only when I've s
 
 - **Every case says what automation already covers.** Where the *Automation status* column names
   the script that walks the case end to end, a hand check is a choice, not a duty; where it says
-  "Automated in part", it names what the checks are known not to reach, and I walk the case
-  whole; or it says plainly that nothing can judge it.
+  "Automated in part", it names what the checks are known not to reach, as a guide rather than a
+  full list, and I walk the case whole; or it says plainly that nothing can judge it.
 - **What only a person can judge is marked.** Some cases ask whether something reads well or
   looks right, the questions a script never asks.
 - **Field checks become cases.** Anything left to check on the `.exe` after a change is added to

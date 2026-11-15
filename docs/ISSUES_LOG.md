@@ -5059,6 +5059,14 @@ the way to a step their rows did name (102, 127, 154, 187, 257, 269, 291, 304, 3
 557, 613, 706, 740, 814, 857, 982, 1002, 1044, 1083), and 862's expected result counts the Trash
 among what the start must read.
 
+The loop was not converging: a tenth of the "in part" cases held six omissions, so the 816 held
+about sixty, with no change in the app. The owner's rule of 15 November grades an omission in a row
+already "in part" low, since the row already sends the hand to walk the case whole; a case called
+whole that is not, a claim that something is read when it is not, a step or result untrue of the
+app, and a label that tells her she may skip a check stay medium. Graded so, the fifty-third round's
+six were five lows and one medium (766, which claimed a stored file read). The How to use tab and
+docs/TEST_PLAN_EXCERPT.md say that what an "in part" row names is a guide rather than a full list.
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays
 open behind the block: at the thirty-ninth round the plan's automation claims were read all at
