@@ -5248,6 +5248,15 @@ opened while it unpacks, and give that road, untried by any check; 957's Ctrl+Z 
 Settings. A reviewer's claim that the sidebar's Import code stays on screen under Settings was
 checked in the code and found untrue.
 
+**Rounds 67 to 70.** 880's label was untrue: any folder zipped in Explorer is unpacked, then
+refused, an ordinary road. Round 68 found nothing of medium severity. Round 69 swept the plan for
+two classes no round had read whole: the words an expected result quotes as the app's (each was
+found shown at its step), and steps needing what the precondition does not make. It found 261,
+which replaced a short body and so kept no copy for Restore previous, and 272, which imported a
+code made after its edit and so found the note unchanged. Round 70 found the same in 960, 280
+and 277: an import of a note left as the code or backup holds it asks "Already here, unchanged",
+never Update.
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays
 open behind the block: at the thirty-ninth round the plan's automation claims were read all at
