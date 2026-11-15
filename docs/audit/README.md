@@ -2,7 +2,7 @@
 
 Note Organizer is a personal project: a notes app for Windows and its Android companion, made
 to be used. Before the two went to the stores, AI agents checked them in waves of rounds, from
-27 October to 14 November 2026. This folder holds what those agents were told: every script
+27 October to 15 November 2026. This folder holds what those agents were told: every script
 that started them, as it ran, and the prompts of the agents started by hand.
 
 How a round worked, what each wave was for, when it closed and what it found are told in
@@ -10,10 +10,34 @@ How a round worked, what each wave was for, when it closed and what it found are
 the index of the prompts. [The review panel](wave4/README.md) has a page of its own, with what
 came of each of its rounds.
 
-**Contents:** [Reading a script](#reading-a-script) ·
+**Contents:** [What the rounds found, in short](#what-the-rounds-found-in-short) ·
+[Reading a script](#reading-a-script) ·
 [What was changed for publication](#what-was-changed-for-publication) ·
 [What is not here](#what-is-not-here) ·
 [The scripts, wave by wave](#the-scripts-wave-by-wave)
+
+## What the rounds found, in short
+
+The early waves found the apps wrong; the late rounds, mostly their documents.
+
+- **Waves 1 and 2, and their lows,** found the code wrong most of all: notes lost or damaged,
+  input that froze or broke the app, an ordinary person's week going wrong. 1,246 findings in
+  all, most of them shown by a probe ([the counts](../AI_WORKFLOW.md#the-final-audit)).
+- **Wave 3** found text that read as generated rather than written, in code and documents;
+  **wave 4**, the review panel, scored the apps.
+- **Wave 5**, a full reading before the release: 26 findings confirmed in the code, fixed in the
+  desktop's 0.100.524 and the phone's 0.14.1 and 0.14.2.
+- **Wave 6** began with the code again: files Windows or a full phone holds or refuses, writes
+  that fail, a note's fields a version does not know. The desktop's last fix to the code came at
+  its round 60, the phone's at its round 64. The rounds after found only sentences of the
+  documents and the test plan the code did not bear out; from 15 November the plan was read once
+  more, case by case.
+
+**When a wave stopped:** after two rounds in a row with nothing of medium severity or worse. The
+severity rule is the owner's (1 November): only what an ordinary person meets keeps a round
+open, and a loss of notes is always serious. For the test plan her rules of 15 November add that
+a recipe no person takes by hand, or a gap in what a row leaves to the hand, is low. No wave had
+a ceiling of tokens; what they cost is in [the cost](../AI_WORKFLOW.md#cost).
 
 ## Reading a script
 
