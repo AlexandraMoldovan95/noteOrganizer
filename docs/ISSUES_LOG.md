@@ -5054,7 +5054,7 @@ and a column's drag; 244's second Export refused; 384's wheel, the check moving 
 597's Align left, the menu's Table right on page and the toolbar's Centre, each stood in by
 another; 766's Excel paste and its status line, where it also claimed a stored file read; 1054's
 note never opened, its earlier version seeded. Each names what its checks do and every step left
-now. Fifteen lows named a state set in code, a question answered in code or a step skipped, each on
+now. Twenty-two lows named a state set in code, a question answered in code or a step skipped, each on
 the way to a step their rows did name (102, 127, 154, 187, 257, 269, 291, 304, 399, 412, 448, 471,
 557, 613, 706, 740, 814, 857, 982, 1002, 1044, 1083), and 862's expected result counts the Trash
 among what the start must read.
@@ -5064,8 +5064,19 @@ about sixty, with no change in the app. The owner's rule of 15 November grades a
 already "in part" low, since the row already sends the hand to walk the case whole; a case called
 whole that is not, a claim that something is read when it is not, a step or result untrue of the
 app, and a label that tells her she may skip a check stay medium. Graded so, the fifty-third round's
-six were five lows and one medium (766, which claimed a stored file read). The How to use tab and
+six were four lows and two mediums (766, which claimed a stored file read, and 597, which claimed
+the menu's road and the window's directions read). The How to use tab and
 docs/TEST_PLAN_EXCERPT.md say that what an "in part" row names is a guide rather than a full list.
+
+**The fifty-fourth round**, graded so, read another tenth of the "in part" cases (81) and found
+four mediums and a class. 597's corrected cell said its check centres the cells, where it
+right-aligns them in a check named for centring; 324's merged case said Cancel closes both bulk
+popups, where on Export the check reads only that Cancel is there and closes it with Escape; 309
+said its check proves the latest of several removals is the one offered, where no check removes
+more than one and reads which. And forty-three "in part" rows told the owner she may skip the hand
+check ("Hand check optional", "only if something looks off", "a race: optional"), where the How to
+use tab says the hand walks such a case whole: each label is gone. About thirty lows, omissions
+of this kind, wait for the lows pass.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays
