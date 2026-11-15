@@ -17,6 +17,7 @@ in [In my words](IN_MY_WORDS.md).
 - [How the agent's work is checked](#how-the-agents-work-is-checked)
 - [What is enforced, and what is only asked](#what-is-enforced-and-what-is-only-asked)
 - [Guardrails that came from real incidents](#guardrails-that-came-from-real-incidents)
+- [Where the agent was wrong](#where-the-agent-was-wrong)
 - [Agent reviews, in numbers](#agent-reviews-in-numbers)
 - [The final audit](#the-final-audit)
 - [AI reviewers and simulations: what they are, and are not](#ai-reviewers-and-simulations-what-they-are-and-are-not)
@@ -118,6 +119,31 @@ by name in every spelling that could start them, my own notebook lives outside t
 and any test that could delete a notebook checks for real notes first and refuses. The rule in
 CLAUDE.md sums it up: the deny list exists because an agent's judgement about whether *this*
 run is safe is the thing that failed.
+
+## Where the agent was wrong
+
+The agent writes most of the code and the documents, so its own mistakes are the ones to know.
+Ten from the issues logs, one or two of each kind, with how each came to light and what it
+changed; where a story does not say who noticed, neither does this table. The phone's are in
+[its issues log](https://github.com/AlexandraMoldovan95/noteOrganizerForAndroid/blob/main/docs/ISSUES_LOG.md),
+under the title given.
+
+| Kind | What the agent did | How it came to light | What it changed |
+|---|---|---|---|
+| A finding that was not true | Described a Delete question it had never opened, from reading the code ([the story](ISSUES_LOG.md#the-finding-that-described-a-dialog-nobody-had-opened)) | Each claim checked on the real route | A finding is confirmed on the real route; a refuted one is struck through, the measurement beside it |
+| A check that could not fail | Four of ten checks for one fix passed with the fix broken, and the runner read a list cut at eight failures ([the story](ISSUES_LOG.md#the-eight-failures-that-hid-two-live-mutants)) | The mutants | A check asserts which entry, not how many; the runner refuses a cut list |
+| A gate blind to its own class | A static gate reported clean while a live case of the class it guarded stood in the code ([the story](ISSUES_LOG.md#the-safety-net-that-could-not-see-the-gap)) | A review wave running at the same time | The gate's threshold lowered, with the reason above it |
+| A picture of the wrong screen | The phone's screenshot script missed its tap, said so, and filed the plain list as the search picture ("A photograph of the wrong screen, filed as proof") | The story does not say | Each picture names the words that must be on screen, read from the live screen |
+| Its own fixes, wrong | Six of its fixes in thirteen rounds were wrong, among them a kept line lost when a day moved ("A fix the next round found wrong") | The next round, a probe, the walk's photographs | Each fix is attacked by name in the next round |
+| A look at a screen it never read | The phone's walk read a stale copy of the screen as the screen after a tap ("Two looks that judged what they never read") | Steps that failed, then passed walked again; the emulator's own log | A look trusts a file only when its own dump says it wrote it |
+| A Pass the evidence did not bear out | Test-plan cases marked Pass from runs that walked only part of them ("The lows and the second copy, fixed before the stores") | Later rounds reading each row against the tests | Each row says "Automated in part" or "Not walked" and names the hand's part |
+| A rule skipped, a notebook lost | It ran the unit suite from the project root, and one test rewrote my real notebook ([the story](ISSUES_LOG.md#the-safety-test-that-needed-its-own-safety)) | The app opening on an empty notebook; restored from its own backup, less that day's work | Every test runs only in a copy outside the project, and refuses beside real notes |
+| A test that took the computer down | Checks it wrote sized their data from a number a mutant had made huge: 43 GB, and the desktop crashed ([the story](ISSUES_LOG.md#the-test-that-took-the-computer-down)) | I saw the graphics error; Windows' memory log named the process | Every run takes a memory ceiling and the machine's one turn, held by a gate |
+| A tool that left the code broken | The phone's mutant runner exited with a mutated file still on disk ("A mutant runner that left the code broken") | The next build failed for no reason in the code | The restore sits in a `finally`, and reads and writes the file as bytes |
+
+In the final audit's last rounds the same held for the test plan: recipes the agent had written
+into it the round before were found wrong in turn, each by the next round
+([the final audit](#the-final-audit)).
 
 ## Agent reviews, in numbers
 
