@@ -5169,7 +5169,21 @@ cells hold four lines; lists of 1,000 checklist items (803, 821, 822, 827, 839, 
 a letter and Enter each, and leave their parts to the hand; and the rows on a file another
 program holds (759, 761, 786-788, 796, 800-802, 820, 847, 1057, 1061) said such a file is beyond
 the hand, where case 1075 already holds one from PowerShell: each gives that recipe now, and 1047
-makes its save fail with 706's read-only file.
+makes its save fail with 706's read-only file. (The round after found the recipe wrong for four:
+1057's and 1061's hold refused the read their cleanup needs, and 800's and 847's export read a
+file still held.)
+
+**The sixty-first round** found the sixtieth's app fix holding and the plan short again. 1057 and
+1061 hold notes_data.json with a share of 'Read' now, which lets the start read the file and
+refuses its replace, so the cleanup makes its copy, fails its write and takes the copy out, as the
+rows say; 800 and 847 let templates.json go before the export that should read it. Every hold is
+kept in a variable ($f), so PowerShell does not close it when it tidies up. Lists the plan called
+beyond the hand (810 to 814) a person makes by doubling a test notebook with its own backup ("Add
+copies anyway", twelve rounds for 4,096 notes); 721's backup with a Trash of 7 days is two clicks in
+another notebook; 722's damaged Trash is trash.json edited in Notepad; 374, 741 and 862, called
+whole, said "not by hand" of what the plan sets up elsewhere. 794 was called whole on counts of
+walks, with nothing timed. 298's check posts a note's menu, not the calendar day's; 369 and 636
+read the note in memory, not the file; 607 expected the dark red Delete that 613 made quiet.
 
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays
