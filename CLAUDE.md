@@ -575,6 +575,12 @@ summary.
   Settings'" unreadable there. The body tells the story; the house words
   below belong in the body and the issues log, not in a subject. Earlier
   history stays as it is.
+- **A commit that changes the app's code names its mutant** (from
+  2026-11-20): a line `Mutant: <id>` for each mutant that guards it,
+  an id in `tools/mutants.json`, or `No mutant: <why>` (words only, a
+  pure move, a write no check can reach). `tools/check_fix_mutants.py`
+  holds it, in CI and before every push; the review panel found the rule
+  only asked.
 - Always inspect `git diff` and `git status` before committing.
 - Never commit files or changes that weren't part of the requested task
   without asking first.

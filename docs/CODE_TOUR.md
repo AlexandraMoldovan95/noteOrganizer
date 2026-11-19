@@ -116,7 +116,7 @@ docs/                     these documents
 qa/                       headless GUI tests, the stories and the test plan
 test_*.py                 eight unit suites; seven need no window
 tools/                    what CI runs, and the tools behind the docs' numbers
-├── check_*.py            thirteen static gates, all in CI: three of them on the documents (docs.yml)
+├── check_*.py            fourteen static gates, all in CI: three of them on the documents (docs.yml)
 ├── guest.py              a run's turn on the machine, its memory ceiling, the sweep of dead runs' folders
 ├── pre_push_check.py     CI's gates, locally, in seconds
 ├── run_tests.py          the whole suite, safely, from a scratch copy

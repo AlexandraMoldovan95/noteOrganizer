@@ -176,6 +176,7 @@ jobs:
           python tools/check_shipped.py
           python tools/check_guest.py
           python tools/check_workflows.py
+          python tools/check_fix_mutants.py
 
       - name: Recurrence engine tests
         run: python test_recurrence.py

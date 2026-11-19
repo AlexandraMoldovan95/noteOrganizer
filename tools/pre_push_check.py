@@ -48,7 +48,9 @@ WHAT IT RUNS
 11. ``check_workflows`` -- every workflow's token may only read, every
    action is pinned to a commit, and no trigger hands a fork the
    repository's rights.
-12. ``compile()`` over every tracked ``.py`` in the repo -- tests and qa
+12. ``check_fix_mutants`` -- every commit that changes the app's code
+   names its mutant, or why it has none.
+13. ``compile()`` over every tracked ``.py`` in the repo -- tests and qa
    scripts included, because a syntax error in a TEST file is exactly
    what the remote runner would otherwise find first (a locally-valid
    PEP 701 f-string once died only on CI's older Python; the interpreter
@@ -150,6 +152,9 @@ def main():
     # What CI may do: a token that only reads, actions pinned to a commit.
     _run_gate("CI may only read",
               [os.path.join("tools", "check_workflows.py")])
+    # A change to the app's code names its mutant, or why it has none.
+    _run_gate("every fix names its mutant",
+              [os.path.join("tools", "check_fix_mutants.py")])
 
     print("== every tracked .py compiles", flush=True)
     listed = subprocess.run(["git", "ls-files", "*.py"], cwd=ROOT,

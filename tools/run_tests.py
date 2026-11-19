@@ -143,6 +143,10 @@ STATIC = [
     # commit, and no trigger hands a fork the repository's rights.
     ("CI may only read",
      [sys.executable, os.path.join("tools", "check_workflows.py")]),
+    # The fourteenth, added 2026-11-19: a change to the app's code names
+    # its mutant, or why it has none.
+    ("every fix names its mutant",
+     [sys.executable, os.path.join("tools", "check_fix_mutants.py")]),
 ]
 
 
