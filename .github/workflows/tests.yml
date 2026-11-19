@@ -1,6 +1,8 @@
 name: QA Tests
 
-# Runs automatically on every push and on every Pull Request, against main.
+# Runs automatically on every push to main and on every pull request, unless the
+# change is only to the documents, the test plan or the site (docs.yml checks
+# the documents and the plan; the site has checks of its own, in site/tools).
 # GitHub's own machines (not your computer) check out the code fresh and run
 # the whole test suite. If anything fails, the commit/PR gets a clear red X
 # instead of finding out later by hand.
