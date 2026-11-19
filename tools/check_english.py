@@ -69,14 +69,14 @@ WORDS = [
     "greseala", "gresit", "inchide", "inchis", "inca", "insa", "intai",
     "lunga", "mereu", "nesalvat", "netrimis", "nicio", "niciun",
     "nimeni", "nimic", "niste", "numai", "oprit", "orice", "pastrat",
-    "porneste", "prea", "ramas", "ramane", "randul", "ruleaza",
+    "porneste", "prea", "ramas", "randul", "ruleaza",
     "salut", "salvat", "salvata", "salveaza", "scris", "scrie",
-    "sedinta", "simplu", "sterge", "titlul", "titluri", "vechi",
+    "sedinta", "simplu", "titlul", "titluri", "vechi",
     "vorbe", "acelasi", "aiurea", "editata", "inexistenta", "notitei",
     "sablon", "scurta", "versiunea",
     # A third pass the same day: seven more lines the list had missed.
     "coada", "facut", "deja", "necunoscut", "ramasa", "dinainte",
-    "laterala", "panou", "bara", "continut", "acelasi", "baza",
+    "laterala", "panou", "bara", "continut", "baza",
     "scurt", "originala", "versiune",
     # The fourth pass (2026-10-03) read the whole repository, not a sample.
     # Still invisible: two-letter words and words English shares ("da",
@@ -97,6 +97,10 @@ WORDS = [
     "unu", "valoare", "varianta", "veche", "vecina", "vezi", "vizibil",
     "vopsit", "ziua",
 ]
+# A word listed twice hides that the list grew by hand, pass after pass.
+_TWICE = sorted({w for w in WORDS if WORDS.count(w) > 1})
+if _TWICE:
+    sys.exit("check_english: listed twice in WORDS: " + ", ".join(_TWICE))
 ROMANIAN = re.compile(r"\b(%s)\b" % "|".join(WORDS), re.I)
 
 # Endings Romanian gives its words and English almost never does (the
