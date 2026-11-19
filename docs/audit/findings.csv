@@ -1,0 +1,1247 @@
+wave,app,round,key,severity,shown_by_probe,verdict,verdict_severity
+1,Phone,final-audit-wave1-round13-small-android,a13d1-round12-data-and-seams-cleanoverride-no-caret-line,high,yes,confirmed,high
+1,Phone,final-audit-wave1-round13-small-android,a13d1-round12-data-and-seams-wordsadded-json-roundtrip-quadratic,high,yes,confirmed,high
+1,Phone,final-audit-wave1-round13-small-android,a13d1-round12-data-and-seams-empty-copy-word-adds-blank-line,low,yes,,
+1,Phone,final-audit-wave1-round13-small-android,a13d2-round12-editor-and-tools-separator-smear,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round13-small-android,a13d2-round12-editor-and-tools-cell-remap,medium,yes,confirmed,low
+1,Phone,final-audit-wave1-round13-small-android,a13d2-round12-editor-and-tools-caption-source-break,low,yes,,
+1,Phone,final-audit-wave1-round13-small-android,a13d2-round12-editor-and-tools-edit-before-cursor,low,yes,,
+1,Desktop,final-audit-wave1-round14-small-desktop,r14d1-round13-fixes-and-seams-lines-lacked-readds-tail,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round14-small-desktop,r14d1-round13-fixes-and-seams-table-cut-mid-block,low,yes,,
+1,Desktop,final-audit-wave1-round14-small-desktop,r14d1-round13-fixes-and-seams-nel-blank-parity,low,no,,
+1,Desktop,final-audit-wave1-round14-small-desktop,r14d2-gaps-and-tools-turn-shared-through-dead-ancestor-pid,low,yes,,
+1,Desktop,final-audit-wave1-round14-small-desktop,r14d2-gaps-and-tools-unmarked-run-folders-never-swept,low,yes,,
+2,Phone,final-audit-wave2-round25,w2a25-steps-back-swipe-on-handle-opens-menu,low,no,,
+2's lows,Desktop,final-audit-wave2-lows-round6,wl6-d-round5-ctrl-s-tab-change-still-destroys-kept-template-editor,high,yes,confirmed,high
+2's lows,Desktop,final-audit-wave2-lows-round6,wl6-d-round5-cell-style-then-ctrlz-takes-banner-undo,medium,yes,confirmed,medium
+2's lows,Desktop,final-audit-wave2-lows-round6,wl6-d-round5-show-all-cancel-asks-twice-and-spends-the-offer,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round6,wl6-d-lows-checklist-undo-after-leaving-and-coming-back,medium,yes,confirmed,low
+2's lows,Desktop,final-audit-wave2-lows-round6,wl6-d-lows-arrivals-banner-not-held-behind-undo,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round6,wl6-a-round5-trash-undo-loses-new-note-word,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round6,wl6-a-round5-undo-drops-shared-text-leave-bar,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round6,wl6-a-round5-again-overwrites-pending-list-word,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round6,wl6-a-round5-reasked-saved-in-bar-names-no-note,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round6,wl6-a-data-rearmed-new-note-word-overwritten-by-next-note,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round6,wl6-a-data-new-note-bar-unnamed-said-after-another-note,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round6,wl6-a-data-shown-leave-anyway-shared-text-dropped-by-undo-again,low,yes,,
+1,Phone,final-audit-wave1-round9-android,a9r1-editor-fixes-calc-mark-carried-as-one-span,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round9-android,a9r1-editor-fixes-message-covers-the-bar-above-the-keys,low,no,plausible,low
+1,Phone,final-audit-wave1-round9-android,a9r1-editor-fixes-pyint-ascii-separators,low,yes,confirmed,low
+1,Phone,final-audit-wave1-round9-android,a9r2-data-fixes-spend-erases-days-note-never-took,medium,yes,confirmed,high
+1,Phone,final-audit-wave1-round9-android,a9r2-data-fixes-repeat-sheet-spends-half-saved-series,low,yes,confirmed,low
+1,Phone,final-audit-wave1-round9-android,a9r2-data-fixes-every-update-copy-normalized-at-load,low,no,plausible,low
+1,Phone,final-audit-wave1-round9-android,a9r3-checks-and-tools-look-gives-up-reads-stale-tree,low,no,plausible,low
+1,Phone,final-audit-wave1-round9-android,a9r3-checks-and-tools-drawn-in-missed-by-frame-sweep,low,no,confirmed,low
+1,Phone,final-audit-wave1-round9-android,a9r3-checks-and-tools-premises-held-before-the-act,low,no,already-decided,low
+1,Phone,final-audit-wave1-round9-android,a9r3-checks-and-tools-title-paste-old-desktop-rule,low,yes,confirmed,low
+1,Phone,final-audit-wave1-round9-android,a9r3-checks-and-tools-one-part-road-takes-no-turn,low,no,confirmed,low
+1,Phone,final-audit-wave1-round9-android,a9r3-checks-and-tools-pyint-c0-separators,low,yes,duplicate,low
+1,Phone,final-audit-wave1-round9-android,a9r4-round8-gaps-spend-erases-unmoved-days,high,yes,duplicate,high
+1,Phone,final-audit-wave1-round9-android,a9r4-round8-gaps-crlf-kept-in-note-text,low,no,plausible,low
+1,Phone,final-audit-wave1-round9-android,a9r4-round8-gaps-letteredge-thai-am-indic-conjuncts,low,yes,already-decided,low
+1,Phone,final-audit-wave1-round9-android,a9r5-seams-and-parity-restore-part-styles-not-weighed,medium,yes,confirmed,low
+1,Phone,final-audit-wave1-round9-android,a9r5-seams-and-parity-turnoff-replaces-series-copy-holding-comments,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round9-android,a9r5-seams-and-parity-title-paste-break-drops-edge-spaces,low,yes,duplicate,low
+1,Phone,final-audit-wave1-round9-android,a9r5-seams-and-parity-sheet-message-two-live-regions,low,no,plausible,low
+1,Desktop,final-audit-wave1-round12-small-desktop,r12d1-round11-fixes-and-seams-kept-words-rejudged-by-date,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round12-small-desktop,r12d1-round11-fixes-and-seams-restore-kept-copy-parks-day-edits,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round12-small-desktop,r12d1-round11-fixes-and-seams-refusal-words-colour-and-deleted,low,yes,,
+1,Desktop,final-audit-wave1-round12-small-desktop,r12d2-gaps-and-tools-cell-editor-ctrlz-empties-cell,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round12-small-desktop,r12d2-gaps-and-tools-find-bar-quadratic-pause,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round12-small-desktop,r12d2-gaps-and-tools-tracked-copy-name-aliases,low,yes,,
+1,Phone,final-audit-wave1-round12-small-android,a12d1-round11-fixes-and-seams-undo-delete-over-moved-day,high,yes,confirmed,high
+1,Phone,final-audit-wave1-round12-small-android,a12d1-round11-fixes-and-seams-kept-copy-words-return-over-reset,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round12-small-android,a12d1-round11-fixes-and-seams-keptthere-unreachable-deleted-day-words,low,yes,,
+1,Phone,final-audit-wave1-round12-small-android,a12d2-gaps-and-editor-insert-swallowed-by-next-style,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round12-small-android,a12d2-gaps-and-editor-deletion-styles-read-off-texts,low,yes,,
+1,Phone,final-audit-wave1-round12-small-android,a12d2-gaps-and-editor-gate-counts-skips-as-passes,low,yes,,
+1's lows,Desktop,final-audit-lows-verify6-desktop,lv6-d1-copy-lines-cut-paste-drops-own-looks,medium,yes,confirmed,medium
+1's lows,Desktop,final-audit-lows-verify6-desktop,lv6-d1-copy-lines-html-road-glues-whole-line,low,yes,,
+1's lows,Desktop,final-audit-lows-verify6-desktop,lv6-d1-copy-lines-word-from-centred-line-centres-target,low,yes,,
+1's lows,Desktop,final-audit-lows-verify6-desktop,lv6-d1-copy-lines-select-all-copies-final-newline,low,yes,,
+1's lows,Desktop,final-audit-lows-verify3-desktop,lv3-d1-day-keeps-its-lists-old-coloured-day-by-line,low,yes,,
+1's lows,Desktop,final-audit-lows-verify3-desktop,lv3-d1-day-keeps-its-lists-earlier-text-note-no-lists,low,yes,,
+1's lows,Desktop,final-audit-lows-verify3-desktop,lv3-d1-day-keeps-its-lists-kindless-series-entry-saves-at-open,low,yes,,
+2,Desktop,final-audit-wave2-round5,w2d5-fixes-update-copy-guard-outlives-update,high,yes,confirmed,high
+2,Desktop,final-audit-wave2-round5,w2d5-fixes-turnoff-same-save-drops-update-copy,high,yes,confirmed,high
+2,Desktop,final-audit-wave2-round5,w2d5-fixes-comments-clear-swaps-update-copy-comments,high,yes,confirmed,high
+2,Desktop,final-audit-wave2-round5,w2d5-fixes-history-sentence-series-text-under-show,low,yes,,
+2,Desktop,final-audit-wave2-round5,w2d5-roads-category-dot-stale-after-recolour,low,yes,,
+2,Desktop,final-audit-wave2-round5,w2d5-roads-unpin-after-any-move-lands-top,low,yes,,
+2,Phone,final-audit-wave2-round5,w2a5-fixes-reminder-category-off-says-app-off,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round5,w2a5-fixes-second-template-loses-day,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round5,w2a5-fixes-lows,low,yes,,
+2,Phone,final-audit-wave2-round5,w2a5-roads-list-under-keyboard,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round5,w2a5-roads-custom-order-scroll-moves-note,medium,yes,confirmed,low
+2,Phone,final-audit-wave2-round5,w2a5-roads-new-note-attach-lost,low,yes,,
+2,Phone,final-audit-wave2-round5,w2a5-roads-attachment-lows,low,yes,,
+3,Desktop,final-audit-wave3-slop-round8,w3d8-fixes-open-it-anyway,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round8,w3d8-fixes-comments-ctrl-tab-by-hand,medium,yes,refuted,low
+3,Desktop,final-audit-wave3-slop-round8,w3d8-fixes-dup-merge-doubles-app-copies,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round8,w3d8-fixes-checks-that-cannot-fail,low,yes,,
+3,Desktop,final-audit-wave3-slop-round8,w3d8-fixes-merge-docstrings-nothing-lost,low,yes,,
+1,Desktop,final-audit-wave1-round10-desktop,r10d1-data-fixes-same-day-touched-text-erased,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round10-desktop,r10d1-data-fixes-second-turnoff-reverts-words,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round10-desktop,r10d1-data-fixes-update-copy-status-promise-popped,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round10-desktop,r10d2-ui-fixes-format-buttons-walk-selection-per-character,medium,no,confirmed,medium
+1,Desktop,final-audit-wave1-round10-desktop,r10d2-ui-fixes-find-model-stale-after-edits-without-a-key,medium,no,confirmed,medium
+1,Desktop,final-audit-wave1-round10-desktop,r10d2-ui-fixes-emoji-query-after-dotted-i-lands-off,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round10-desktop,r10d2-ui-fixes-title-middle-click-paste-skips-one-line-rule,low,no,confirmed,low
+1,Desktop,final-audit-wave1-round10-desktop,r10d3-machine-safety-location-file-defeats-suite-guards,critical,yes,confirmed,critical
+1,Desktop,final-audit-wave1-round10-desktop,r10d3-machine-safety-gate-reads-powershell-otherwise,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round10-desktop,r10d3-machine-safety-tracked-copy-follows-links,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round10-desktop,r10d4-round9-gaps-find-bar-open-autosave-still-freezes,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round10-desktop,r10d4-round9-gaps-spelling-underlines-make-autosave-quadratic,high,yes,duplicate,high
+1,Desktop,final-audit-wave1-round10-desktop,r10d4-round9-gaps-many-lines-at-span-clamp-escape-cap,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round10-desktop,r10d4-round9-gaps-linebreak-query-segfaults-linux-tk,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round10-desktop,r10d4-round9-gaps-downgrade-erases-kept-day,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round10-desktop,r10d5-round9-seams-take-back-erases-text-on-dates-held-without-text,high,yes,duplicate,high
+1,Desktop,final-audit-wave1-round10-desktop,r10d5-round9-seams-overlong-title-refuses-backspace,low,yes,confirmed,low
+2,Desktop,final-audit-wave2-round13,w2d13-fixes-popups-outlive-reload,low,yes,,
+2,Desktop,final-audit-wave2-round13,w2d13-fixes-rollback-after-inner-save,low,yes,,
+2,Desktop,final-audit-wave2-round13,w2d13-waits-reload-keeps-palette-open,low,yes,,
+2,Desktop,final-audit-wave2-round13,w2d13-waits-remove-attachment-new-note-noop,low,yes,,
+2,Desktop,final-audit-wave2-round13,w2d13-waits-history-off-schedule-flush-leaving,low,yes,,
+2,Phone,final-audit-wave2-round13,w2a13-days-stale-leave-anyway-sets-day-on-another-note,low,yes,,
+2,Phone,final-audit-wave2-round13,w2a13-days-carried-box-message-drawn-over-it,low,yes,,
+2,Phone,final-audit-wave2-round13,w2a13-list-two-pinned-under-sliver-vanish,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round13,w2a13-list-first-taken-before-action-reorders,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round16-small-android,a16d1-round15-rule-by-name-home-off-schedule,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round16-small-android,a16d1-round15-rule-by-name-raw-never-home,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round16-small-android,a16d1-round15-rule-by-name-raw-hostile-moves,low,yes,,
+1,Phone,final-audit-wave1-round16-small-android,a16d1-round15-rule-by-name-made-note-category,low,no,,
+1,Phone,final-audit-wave1-round16-small-android,a16d1-round15-rule-by-name-daymatches-nel,low,yes,,
+1,Phone,final-audit-wave1-round16-small-android,a16d2-gaps-and-tools-on-the-phone-moves-home-never-at-the-phones-read,medium,yes,duplicate,medium
+1,Phone,final-audit-wave1-round16-small-android,a16d2-gaps-and-tools-on-the-phone-made-notes-compared-from-memory-not-file,low,no,,
+2,Phone,final-audit-wave2-round17,w2a17-steps-handle-keeps-first-touch-list,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round17,w2a17-steps-up-from-top-card-goes-above,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round17,w2a17-steps-down-from-bottom-card-goes-below,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round17,w2a17-steps-press-at-edge-moves-note,low,yes,,
+2,Phone,final-audit-wave2-round17,w2a17-drag-taller-neighbour-drops-drag,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round17,w2a17-drag-step-up-top-card-hidden,medium,yes,duplicate,medium
+2,Phone,final-audit-wave2-round17,w2a17-drag-held-press-moves-note,medium,yes,confirmed,low
+2,Phone,final-audit-wave2-round17,w2a17-drag-high-finger-drift,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round17,w2a17-drag-block-edge-scroll-drops,low,yes,,
+2,Phone,final-audit-wave2-round17,w2a17-drag-cancel-writes-move,low,no,,
+1,Desktop,final-audit-wave1-round18-small-desktop,r18d1-round17-fixes-and-seams-rule-spelling-copy-never-spent,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round18-small-desktop,r18d1-round17-fixes-and-seams-show-banner-on-settings,low,yes,,
+1,Desktop,final-audit-wave1-round18-small-desktop,r18d1-round17-fixes-and-seams-drop-breaks-held-link-double,low,yes,,
+1,Desktop,final-audit-wave1-round18-small-desktop,r18d1-round17-fixes-and-seams-copy-words-resurface-after-drop,low,yes,,
+1,Desktop,final-audit-wave1-round18-small-desktop,r18d1-round17-fixes-and-seams-show-action-identity-and-ctrlz,low,yes,,
+1,Desktop,final-audit-wave1-round18-small-desktop,r18d2-gaps-and-tools-restore-mixed-kinds-hides-day-words,medium,yes,confirmed,low
+1,Desktop,final-audit-wave1-round18-small-desktop,r18d2-gaps-and-tools-fuzz-blind-to-its-own-classes,low,yes,,
+1,Desktop,final-audit-wave1-round18-small-desktop,r18d2-gaps-and-tools-fixture-fingerprints-miss-three,low,yes,,
+2,Phone,final-audit-wave2-round19,w2a19-steps-top-card-down-hides-shorter-passed,medium,yes,,
+2,Phone,final-audit-wave2-round19,w2a19-steps-failed-step-still-scrolls,low,yes,,
+2,Phone,final-audit-wave2-round19,w2a19-steps-handle-tap-no-slop,low,no,,
+2,Phone,final-audit-wave2-round19,w2a19-drag-heading-flips-on-a-hair,medium,yes,,
+2,Phone,final-audit-wave2-round19,w2a19-drag-zone-reads-uncorrected-top,low,yes,,
+2,Phone,final-audit-wave2-round19,w2a19-drag-bottom-edge-under-keyboard,low,yes,,
+1,Desktop,final-audit-wave1-round15-small-desktop,r15d1-round14-fixes-and-seams-lcs-readds-held-lines,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round15-small-desktop,r15d1-round14-fixes-and-seams-added-tables-glued,low,yes,,
+1,Desktop,final-audit-wave1-round15-small-desktop,r15d1-round14-fixes-and-seams-series-alignment-on-day-lines,low,yes,,
+1,Desktop,final-audit-wave1-round15-small-desktop,r15d1-round14-fixes-and-seams-blocks-loop-quadratic,low,no,,
+1,Desktop,final-audit-wave1-round15-small-desktop,r15d2-take-back-and-days-whole-other-series-copy-days-erased,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round15-small-desktop,r15d2-take-back-and-days-whole-move-collides-with-new-rule,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round15-small-desktop,r15d2-take-back-and-days-whole-reorder-shows-line-twice,medium,yes,duplicate,medium
+1,Desktop,final-audit-wave1-round15-small-desktop,r15d2-take-back-and-days-whole-crafted-backup-lcs-freeze,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round15-small-desktop,r15d2-take-back-and-days-whole-wordless-days-dropped-at-turn-off,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round2,wl2-d-round1-skip-reads-back-twins-without-files,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round2,wl2-d-round1-skip-flush-go-back-ignored,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round2,wl2-d-round1-skip-files-given-unsaid,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round2,wl2-d-round1-deferred-banner-not-rechecked,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round2,wl2-d-round1-deferred-new-note-banner-unnamed,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round2,wl2-d-round1-comments-capslock-redo-still-blocks,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round2,wl2-d-lows-cell-redo-blocks-banner-undo,medium,yes,confirmed,medium
+2's lows,Desktop,final-audit-wave2-lows-round2,wl2-d-lows-skip-ignores-go-back,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round2,wl2-d-lows-deferred-banner-covers-undo-result,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round2,wl2-d-lows-skip-files-given-unsaid,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round2,wl2-d-lows-add-as-new-twice-unasked,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round2,wl2-a-round1-take-back-dismisses-another-actions-undo,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round2,wl2-a-round1-two-pane-kept-aside-arrival-outlives-note,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round2,wl2-a-data-spent-aside-dismisses-wrong-bar,medium,yes,confirmed,low
+2's lows,Phone,final-audit-wave2-lows-round2,wl2-a-data-gone-note-guard-after-flush-finishes-new-item,low,yes,,
+2,Desktop,final-audit-wave2-round12,w2d12-merge-wait-bar-says-0-of-1,low,yes,,
+2,Desktop,final-audit-wave2-round12,w2d12-merge-wait-file-deleted-before-merge,low,yes,,
+2,Desktop,final-audit-wave2-round12,w2d12-merge-runs-under-file-chooser,low,no,,
+2,Desktop,final-audit-wave2-round12,w2d12-merge-question-under-second-click,low,no,,
+2,Desktop,final-audit-wave2-round12,w2d12-merge-show-all-on-settings,low,yes,,
+2,Desktop,final-audit-wave2-round12,w2d12-waits-template-cancel-reverts-backup-update,high,yes,confirmed,high
+2,Desktop,final-audit-wave2-round12,w2d12-waits-restore-rollback-drops-new-note,high,yes,confirmed,high
+2,Desktop,final-audit-wave2-round12,w2d12-waits-merge-runs-under-menus-and-choosers,low,no,,
+2,Phone,final-audit-wave2-round12,w2a12-days-calendar-edit-whole-series-finishes-new-item,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round12,w2a12-days-delete-day-pair-defeats-refusal-check,low,yes,,
+2,Phone,final-audit-wave2-round12,w2a12-days-calendar-does-not-follow-moved-day,low,yes,,
+2,Phone,final-audit-wave2-round12,w2a12-list-pin-top-card-under-sliver-vanishes,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round4,w3d4-fixes-tools-ninth-theme-recipe,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round4,w3d4-fixes-tools-checks-on-names-app-never-had,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round4,w3d4-fixes-tools-qa1-opening-tautologies,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round4,w3d4-fixes-tools-combobox-leftovers,low,yes,,
+3,Desktop,final-audit-wave3-slop-round4,w3d4-fixes-tools-invented-names-dead-branches,low,yes,,
+3,Desktop,final-audit-wave3-slop-round4,w3d4-fixes-tools-make-icon-docstring,low,yes,,
+3,Desktop,final-audit-wave3-slop-round4,w3d4-fixes-tools-platform-half-checks,low,yes,,
+3,Desktop,final-audit-wave3-slop-round4,w3d4-fixes-tools-share-verify-self-compare,low,yes,,
+3,Desktop,final-audit-wave3-slop-round4,w3d4-fixes-tools-small-stale-tool-text,low,yes,,
+3,Desktop,final-audit-wave3-slop-round4,w3d4-history-site-commit-counts,medium,yes,confirmed,low
+3,Desktop,final-audit-wave3-slop-round4,w3d4-history-site-demo-enter-in-title,low,yes,,
+3,Desktop,final-audit-wave3-slop-round4,w3d4-history-site-smaller-lessons-orphans,low,yes,,
+3,Phone,final-audit-wave3-slop-round4,w3a4-fixes-tests-interop-half-never-run,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round4,w3a4-fixes-tests-paste-fixture-tool-stops,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round4,w3a4-fixes-tests-type-code-stale-dump,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round4,w3a4-fixes-tests-tools-write-only-claim,medium,yes,confirmed,low
+3,Phone,final-audit-wave3-slop-round4,w3a4-fixes-tests-pasting-private-table-row,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round4,w3a4-fixes-tests-walk-premise-not-read,medium,yes,confirmed,low
+3,Phone,final-audit-wave3-slop-round4,w3a4-fixes-tests-backup-off-nothing-siblings,low,yes,,
+3,Phone,final-audit-wave3-slop-round4,w3a4-fixes-tests-cell-trims-kotlin,low,yes,,
+3,Phone,final-audit-wave3-slop-round4,w3a4-fixes-tests-screenshot-calendar-look,low,yes,,
+3,Phone,final-audit-wave3-slop-round4,w3a4-fixes-tests-styling-test-own-normalizer,low,yes,,
+3,Phone,final-audit-wave3-slop-round4,w3a4-history-status-stale-differences,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round4,w3a4-history-walk-parts-not-listed,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round4,w3a4-history-still-open-holds-closed,low,yes,,
+3,Phone,final-audit-wave3-slop-round4,w3a4-history-changelog-no-index,low,yes,,
+3,Phone,final-audit-wave3-slop-round4,w3a4-history-status-cell-styling,low,yes,,
+3,Phone,final-audit-wave3-slop-round4,w3a4-history-pasting-row-twin,low,yes,,
+1,Desktop,final-audit-wave1-round19-small-desktop,r19d1-round18-fixes-and-seams-policy-not-same-series,low,yes,,
+1,Desktop,final-audit-wave1-round19-small-desktop,r19d1-round18-fixes-and-seams-twin-read-keeps-dead-move,low,yes,,
+1,Desktop,final-audit-wave1-round19-small-desktop,r19d1-round18-fixes-and-seams-older-bucket-holds-next-year,low,yes,,
+1,Desktop,final-audit-wave1-round19-small-desktop,r19d1-round18-fixes-and-seams-fuzz-roads-not-taken,low,no,,
+1,Desktop,final-audit-wave1-round19-small-desktop,r19d2-series-days-whole-again-reset-text-leaves-dead-move,low,yes,,
+1,Desktop,final-audit-wave1-round19-small-desktop,r19d2-series-days-whole-again-405-two-moves-upgrade,low,yes,,
+2,Desktop,final-audit-wave2-round8,w2d8-fixes-find-flash-cell-see-first-jumps,low,yes,,
+2,Desktop,final-audit-wave2-round8,w2d8-fixes-restored-aside-spent-again,low,yes,,
+2,Desktop,final-audit-wave2-round8,w2d8-roads-own-card-click-reloads-note,medium,yes,confirmed,medium
+2,Desktop,final-audit-wave2-round8,w2d8-roads-lows,low,yes,,
+2,Phone,final-audit-wave2-round8,w2a8-fixes-move-day-drops-new-item,high,yes,confirmed,high
+2,Phone,final-audit-wave2-round8,w2a8-fixes-lows,low,yes,,
+2,Phone,final-audit-wave2-round8,w2a8-roads-list-keeps-old-top-card,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round8,w2a8-roads-small-lows,low,yes,,
+1,Phone,final-audit-wave1-round19-small-android,a19d1-round18-fixes-and-seams-history-duplicate-key-crash,low,yes,,
+1,Phone,final-audit-wave1-round19-small-android,a19d1-round18-fixes-and-seams-update-compares-rule-as-stored,low,yes,,
+1,Phone,final-audit-wave1-round19-small-android,a19d1-round18-fixes-and-seams-future-year-bucket-older,low,yes,,
+1,Phone,final-audit-wave1-round19-small-android,a19d2-series-days-whole-on-the-phone-settled-day-comes-back-from-copy,low,yes,,
+1,Phone,final-audit-wave1-round2-android,a2r1-fixes-data-shorter-trash-window-adopted,high,yes,confirmed,high
+1,Phone,final-audit-wave1-round2-android,a2r1-fixes-data-google-backup-off-forgotten-after-unreadable-settings,high,yes,confirmed,high
+1,Phone,final-audit-wave1-round2-android,a2r1-fixes-data-google-backup-restore-turns-switch-on,medium,no,plausible,medium
+1,Phone,final-audit-wave1-round2-android,a2r1-fixes-data-export-deletes-old-backup-when-open-fails,medium,no,confirmed,medium
+1,Phone,final-audit-wave1-round2-android,a2r1-fixes-data-own-backup-refused-by-memory-ceiling,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round2-android,a2r2-fixes-ui-ragged-table-bypasses-cell-limit,high,yes,confirmed,high
+1,Phone,final-audit-wave1-round2-android,a2r2-fixes-ui-template-editor-ignores-drawn,high,no,confirmed,high
+1,Phone,final-audit-wave1-round2-android,a2r2-fixes-ui-find-steps-into-undrawn-table,medium,no,confirmed,medium
+1,Phone,final-audit-wave1-round2-android,a2r2-fixes-ui-attach-copy-lands-on-reused-id,medium,no,confirmed,medium
+1,Phone,final-audit-wave1-round2-android,a2r2-fixes-ui-checklist-undo-drops-pending-rename,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round2-android,a2r2-fixes-ui-undo-timer-starts-before-shown,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round2-android,a2r2-fixes-ui-undo-and-cancel-labels-contrast,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round2-android,a2r2-fixes-ui-move-menu-empty,low,no,confirmed,low
+1,Phone,final-audit-wave1-round2-android,a2r2-fixes-ui-glyph-buttons-still-unlabelled,low,no,confirmed,low
+1,Phone,final-audit-wave1-round2-android,a2r3-desktop-twins-import-shortens-own-trash-window,high,yes,duplicate,high
+1,Phone,final-audit-wave1-round2-android,a2r3-desktop-twins-repeat-save-erases-hidden-days,high,yes,confirmed,high
+1,Phone,final-audit-wave1-round2-android,a2r3-desktop-twins-moved-days-quadratic-anr,high,yes,confirmed,high
+1,Phone,final-audit-wave1-round2-android,a2r3-desktop-twins-paste-table-padding-oom,high,yes,confirmed,high
+1,Phone,final-audit-wave1-round2-android,a2r3-desktop-twins-template-editor-styles-shift,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round2-android,a2r3-desktop-twins-soonest-sort-rescans-per-comparison,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round2-android,a2r3-desktop-twins-backup-side-lists-uncapped,medium,no,confirmed,medium
+1,Phone,final-audit-wave1-round2-android,a2r3-desktop-twins-attachment-label-picks-mime,low,no,confirmed,low
+1,Phone,final-audit-wave1-round2-android,a2r4-hostile-short-code-huge-body,high,no,confirmed,high
+1,Phone,final-audit-wave1-round2-android,a2r4-hostile-code-decode-main-thread,medium,no,confirmed,medium
+1,Phone,final-audit-wave1-round2-android,a2r4-hostile-share-spanned-text-dropped,low,no,confirmed,low
+1,Phone,final-audit-wave1-round2-android,a2r5-round1-gaps-nan-in-array-crashes-import,high,no,confirmed,high
+1,Phone,final-audit-wave1-round2-android,a2r5-round1-gaps-import-copies-attachments-on-main-thread,high,no,confirmed,high
+1,Phone,final-audit-wave1-round2-android,a2r5-round1-gaps-undo-window-counts-from-request,medium,yes,duplicate,medium
+1,Phone,final-audit-wave1-round2-android,a2r5-round1-gaps-stored-unbroken-word-siblings,medium,no,duplicate,high
+1,Phone,final-audit-wave1-round2-android,a2r5-round1-gaps-long-attachment-name-refuses-backup,medium,no,confirmed,medium
+1,Phone,final-audit-wave1-round2-android,a2r5-round1-gaps-no-templates-ceiling,medium,no,duplicate,medium
+2,Desktop,final-audit-wave2-round2,w2d2-fixes-calc-enter-release-disables-insert,medium,yes,confirmed,medium
+2,Desktop,final-audit-wave2-round2,w2d2-fixes-import-stray-key-silent-cancel,medium,yes,confirmed,medium
+2,Desktop,final-audit-wave2-round2,w2d2-fixes-hidden-banner-only-typed-notes,medium,yes,confirmed,medium
+2,Desktop,final-audit-wave2-round2,w2d2-fixes-cell-editor-double-undo,low,yes,,
+2,Desktop,final-audit-wave2-round2,w2d2-fixes-hidden-banner-replaces-undo,low,yes,,
+2,Desktop,final-audit-wave2-round2,w2d2-fixes-entry-ctrlz-takes-any-undo,low,yes,,
+2,Desktop,final-audit-wave2-round2,w2d2-fixes-code-in-two-codes-and-equals,low,yes,,
+2,Desktop,final-audit-wave2-round2,w2d2-fixes-searches-not-one-rule,low,yes,,
+2,Desktop,final-audit-wave2-round2,w2d2-roads-ctrl-z-in-typed-title-undeletes,medium,yes,confirmed,medium
+2,Desktop,final-audit-wave2-round2,w2d2-roads-restored-note-hidden-unsaid,medium,yes,duplicate,medium
+2,Desktop,final-audit-wave2-round2,w2d2-roads-list-search-misses-day-text,medium,yes,confirmed,medium
+2,Desktop,final-audit-wave2-round2,w2d2-roads-empty-list-show-all-mouse-only,low,yes,,
+2,Desktop,final-audit-wave2-round2,w2d2-roads-lows,low,yes,,
+2,Phone,final-audit-wave2-round2,w2a2-fixes-shared-text-long-first-line-cut,high,yes,confirmed,high
+2,Phone,final-audit-wave2-round2,w2a2-fixes-away-row-removed-after-share,high,yes,confirmed,high
+2,Phone,final-audit-wave2-round2,w2a2-fixes-find-query-not-stripped,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round2,w2a2-fixes-codein-drops-missing-padding-tolerance,low,yes,,
+2,Phone,final-audit-wave2-round2,w2a2-fixes-codein-second-code-silent,low,yes,,
+2,Phone,final-audit-wave2-round2,w2a2-roads-day-share-sends-series,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round2,w2a2-roads-top-bar-status-squeezes-menu,medium,no,confirmed,medium
+2,Phone,final-audit-wave2-round2,w2a2-roads-sunday-week-mixed,low,yes,,
+2,Phone,final-audit-wave2-round2,w2a2-roads-older-backup-update-bold,low,yes,,
+2,Phone,final-audit-wave2-round2,w2a2-roads-small-lows,low,yes,,
+1's lows,Desktop,final-audit-lows-verify11-desktop,lv11-d1-looks-travel-with-start-html-first-item-not-a-list,low,yes,,
+1's lows,Desktop,final-audit-lows-verify11-desktop,lv11-d1-looks-travel-with-start-first-word-still-carries,low,yes,,
+3,Phone,final-audit-wave3-slop-round2,w3a2-fixes-tests-restore-dead-copy,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round2,w3a2-fixes-tests-deletedat-not-strict,medium,yes,confirmed,low
+3,Phone,final-audit-wave3-slop-round2,w3a2-fixes-tests-dup-explain,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round2,w3a2-fixes-tests-walk-parts-never-walked,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round2,w3a2-fixes-tests-stale-dump-siblings,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round2,w3a2-fixes-tests-release-gates-pass-on-nothing,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round2,w3a2-fixes-tests-shares-gone-test,medium,yes,confirmed,low
+3,Phone,final-audit-wave3-slop-round2,w3a2-fixes-tests-test-only-helpers,low,yes,,
+3,Phone,final-audit-wave3-slop-round2,w3a2-fixes-tests-quiet-checks,low,yes,,
+3,Phone,final-audit-wave3-slop-round2,w3a2-fixes-tests-duplicated-helpers,low,yes,,
+3,Phone,final-audit-wave3-slop-round2,w3a2-fixes-tests-history-comments-tools,low,yes,,
+3,Phone,final-audit-wave3-slop-round2,w3a2-fixes-tests-status-last-full-run,low,yes,,
+3,Phone,final-audit-wave3-slop-round2,w3a2-history-restore-twin,medium,yes,duplicate,medium
+3,Phone,final-audit-wave3-slop-round2,w3a2-history-still-open-stale,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round2,w3a2-history-status-walk-not-run,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round2,w3a2-history-changelog-stops-at-round-five,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round2,w3a2-history-index-count,low,yes,,
+3,Phone,final-audit-wave3-slop-round2,w3a2-history-status-copies,low,yes,,
+1,Phone,final-audit-wave1-round23-small-android,a23d1-series-days-whole-on-the-phone-day-editor-saves-to-undrawn-day,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round23-small-android,a23d1-series-days-whole-on-the-phone-restore-question-on-a-day-omits-whole-note,low,no,,
+1,Phone,final-audit-wave1-round23-small-android,a23d2-upgrade-road-0130-to-this-build-import-road-makes-earlier-text-notes-unsaid,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round10,wl10-a-round9-counted-one-note-words-merged-again,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round10,wl10-a-round9-merged-restores-show-all-one-group-again,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round10,wl10-a-round9-import-asides-now-never-said,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round10,wl10-a-round9-undo-tapped-on-notes-tab-keeps-trimmed-word,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round10,wl10-a-round9-restore-word-counts-asides,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round10,wl10-a-data-takeword-merges-counted-added-1-note,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round10,wl10-a-data-takeword-merge-one-show-all-for-two-folded-groups,low,yes,,
+1,Phone,final-audit-wave1-round18-small-android,a18d1-round17-fixes-and-seams-history-deleted-date-move,medium,yes,confirmed,low
+1,Phone,final-audit-wave1-round18-small-android,a18d1-round17-fixes-and-seams-history-bounded-window,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round18-small-android,a18d1-round17-fixes-and-seams-legacy-two-moves-dead-kept,low,yes,,
+1,Phone,final-audit-wave1-round18-small-android,a18d2-gaps-and-tools-on-the-phone-fuzz-sees-presence-not-the-calendar,low,yes,,
+1,Phone,final-audit-wave1-round18-small-android,a18d2-gaps-and-tools-on-the-phone-fuzz-roads-not-taken,low,yes,,
+1,Phone,final-audit-wave1-round18-small-android,a18d2-gaps-and-tools-on-the-phone-undo-delete-move-put-by-hand,low,yes,,
+1,Phone,final-audit-wave1-round18-small-android,a18d2-gaps-and-tools-on-the-phone-mutant-verdicts-unrecorded,low,yes,,
+1's lows,Phone,final-audit-lows-verify2-android,lv2-a1-round1-fixes-day-paste-flattens-nested-numbers,medium,yes,confirmed,medium
+1's lows,Phone,final-audit-lows-verify2-android,lv2-a1-round1-fixes-day-depth-by-line-index-shifts,medium,yes,confirmed,low
+1's lows,Phone,final-audit-lows-verify2-android,lv2-a1-round1-fixes-make-note-keeps-series-looks-phone,low,yes,,
+1's lows,Phone,final-audit-lows-verify2-android,lv2-a1-round1-fixes-aside-held-ignores-comments,low,yes,,
+1,Phone,final-audit-wave1-round6-android,a6r1-fixes-data-restart-days-come-back-on-restore,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round6-android,a6r1-fixes-data-template-waiting-item-at-cap,low,yes,confirmed,low
+1,Phone,final-audit-wave1-round6-android,a6r2-fixes-limits-ui-checklist-move-across-hidden-rows,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round6-android,a6r2-fixes-limits-ui-find-in-tail-draws-whole-list,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round6-android,a6r2-fixes-limits-ui-redo-leaves-caret-above-table,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round6-android,a6r2-fixes-limits-ui-row-paste-cuts-existing-words,medium,yes,duplicate,high
+1,Phone,final-audit-wave1-round6-android,a6r2-fixes-limits-ui-insert-table-into-read-only-rest,low,no,confirmed,low
+1,Phone,final-audit-wave1-round6-android,a6r3-seams-and-parity-days-in-copy-lost-on-desktop,high,yes,confirmed,high
+1,Phone,final-audit-wave1-round6-android,a6r3-seams-and-parity-checklist-shown-short-unreadable-find-invisible,medium,yes,confirmed,low
+1,Phone,final-audit-wave1-round6-android,a6r3-seams-and-parity-template-editor-draws-every-row,medium,no,plausible,medium
+1,Phone,final-audit-wave1-round6-android,a6r3-seams-and-parity-hidden-middle-move-vanishes,low,yes,duplicate,medium
+1,Phone,final-audit-wave1-round6-android,a6r3-seams-and-parity-template-box-uncapped,low,yes,confirmed,low
+1,Phone,final-audit-wave1-round6-android,a6r4-round5-gaps-row-field-cuts-row-end,high,yes,confirmed,high
+1,Phone,final-audit-wave1-round6-android,a6r4-round5-gaps-long-row-clipped-unreadable,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round6-android,a6r4-round5-gaps-template-checklist-not-windowed,medium,no,duplicate,medium
+1,Phone,final-audit-wave1-round6-android,a6r4-round5-gaps-template-cap-drops-added-row,low,yes,duplicate,low
+1's lows,Desktop,final-audit-lows-verify7-desktop,lv7-d1-cut-and-paste-html-paste-glues-next-item,medium,yes,confirmed,medium
+1's lows,Desktop,final-audit-lows-verify7-desktop,lv7-d1-cut-and-paste-empty-clipboard-deletes-list-selection,medium,yes,confirmed,medium
+1's lows,Phone,final-audit-lows-verify6-android,lv6-a1-paste-rules-field-paste-never-renumbers,medium,yes,confirmed,medium
+1's lows,Phone,final-audit-lows-verify6-android,lv6-a1-paste-rules-field-paste-drops-nested-depth,medium,yes,confirmed,medium
+1's lows,Phone,final-audit-lows-verify6-android,lv6-a1-paste-rules-copy-starting-with-break-carries-line-above,medium,yes,confirmed,medium
+1's lows,Phone,final-audit-lows-verify6-android,lv6-a1-paste-rules-paste-over-whole-item-doubles-marker,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round6,w3d6-behaviour-ctrl-tab-in-table-cell,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round6,w3d6-behaviour-backup-import-settings,medium,yes,duplicate,medium
+3,Desktop,final-audit-wave3-slop-round6,w3d6-behaviour-trash-guide-misses-bulk-delete,medium,yes,duplicate,medium
+3,Desktop,final-audit-wave3-slop-round6,w3d6-behaviour-duplicates-ignore-formatting,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round6,w3d6-behaviour-flush-blank-fails-open,low,yes,,
+3,Desktop,final-audit-wave3-slop-round6,w3d6-behaviour-small-lows,low,yes,,
+3,Desktop,final-audit-wave3-slop-round6,w3d6-reader-ctrltab-in-open-cell,medium,yes,duplicate,medium
+3,Desktop,final-audit-wave3-slop-round6,w3d6-reader-format-keys-outside-body,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round6,w3d6-reader-trash-paragraph-stale,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round6,w3d6-reader-backup-import-settings,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round6,w3d6-reader-category-delete-enter,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round6,w3d6-reader-privacy-update-snapshots,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round6,w3d6-reader-lows,low,yes,,
+1,Desktop,final-audit-wave1-round22-small-desktop,r22d1-round21-change-on-the-desktop-deleted-shown-day-comes-back,low,yes,,
+1,Desktop,final-audit-wave1-round22-small-desktop,r22d1-round21-change-on-the-desktop-undo-race-duplicate,low,yes,,
+1,Desktop,final-audit-wave1-round22-small-desktop,r22d1-round21-change-on-the-desktop-start-news-says-days-hold-text,low,yes,,
+1,Desktop,final-audit-wave1-round22-small-desktop,r22d1-round21-change-on-the-desktop-backup-update-drops-incoming-aside,low,yes,,
+1,Desktop,final-audit-wave1-round22-small-desktop,r22d1-round21-change-on-the-desktop-fuzz-never-reaches-placement,low,yes,,
+3,Desktop,final-audit-wave3-slop-round2,w3d2-fixes-tools-scratch-marker-claims,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round2,w3d2-fixes-tools-seam-map-stale,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round2,w3d2-fixes-tools-coverage-misses-spelling,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round2,w3d2-fixes-tools-prepush-not-ci-gates,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round2,w3d2-fixes-tools-skipped-counts-as-pass,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round2,w3d2-fixes-tools-doc-links-gate,low,yes,,
+3,Desktop,final-audit-wave3-slop-round2,w3d2-fixes-tools-one-def-stale,low,yes,,
+3,Desktop,final-audit-wave3-slop-round2,w3d2-fixes-tools-regen-seam-tool,low,yes,,
+3,Desktop,final-audit-wave3-slop-round2,w3d2-fixes-tools-stale-tool-docstrings,low,yes,,
+3,Desktop,final-audit-wave3-slop-round2,w3d2-fixes-tools-dup-qa-helpers,low,yes,,
+3,Desktop,final-audit-wave3-slop-round2,w3d2-fixes-tools-guest-swallows,low,yes,,
+3,Desktop,final-audit-wave3-slop-round2,w3d2-fixes-tools-same-as-test-count-only,low,yes,,
+3,Desktop,final-audit-wave3-slop-round2,w3d2-fixes-tools-crash-log-first-line,low,yes,,
+3,Desktop,final-audit-wave3-slop-round2,w3d2-history-site-android-counts-break-build,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round2,w3d2-history-site-android-no-server-vs-google-backup,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round2,w3d2-history-site-roadmap-residuals-already-fixed,medium,yes,confirmed,low
+3,Desktop,final-audit-wave3-slop-round2,w3d2-history-site-roadmap-present-drift,low,yes,,
+3,Desktop,final-audit-wave3-slop-round2,w3d2-history-site-test-cases-walked-claim,low,yes,,
+3,Desktop,final-audit-wave3-slop-round2,w3d2-history-site-archive-reads-live,low,yes,,
+2,Phone,final-audit-wave2-round16,w2a16-list-move-reveal-to-unmoved-card,low,yes,,
+2,Phone,final-audit-wave2-round16,w2a16-list-r15-branch-target-unchecked,low,yes,,
+2,Phone,final-audit-wave2-round16,w2a16-long-custom-step-follows-top-card,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round16,w2a16-long-handle-tap-scrolls-list,low,yes,,
+1,Desktop,final-audit-wave1-round3-desktop,r3d1-data-fixes-days-moved-into-single-rescue-slot,critical,yes,confirmed,critical
+1,Desktop,final-audit-wave1-round3-desktop,r3d1-data-fixes-migration-notes-settings-one-try,high,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round3-desktop,r3d1-data-fixes-import-cut-short-never-taken-back,medium,yes,confirmed,low
+1,Desktop,final-audit-wave1-round3-desktop,r3d1-data-fixes-session-end-drops-template-edits,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round3-desktop,r3d1-data-fixes-turnoff-copy-replaces-delete-rescue,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round3-desktop,r3d1-data-fixes-session-end-at-import-question,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round3-desktop,r3d2-attachment-fixes-stream-name-strips-zone-mark,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round3-desktop,r3d2-attachment-fixes-animation-canvas-cost-unbounded,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round3-desktop,r3d2-attachment-fixes-keyboard-cannot-open-attachment,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round3-desktop,r3d2-attachment-fixes-backup-roundtrip-drops-zone-mark,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round3-desktop,r3d2-attachment-fixes-preview-dead-end-other-format,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round3-desktop,r3d2-attachment-fixes-long-label-hides-type,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round3-desktop,r3d3-keyboard-fixes-toast-landing-hidden-list,medium,yes,confirmed,low
+1,Desktop,final-audit-wave1-round3-desktop,r3d3-keyboard-fixes-tk-button-hides-itself,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round3-desktop,r3d3-keyboard-fixes-checkbutton-100ms-blind-window,low,yes,plausible,low
+1,Desktop,final-audit-wave1-round3-desktop,r3d4-input-fixes-checklist-no-ceiling,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round3-desktop,r3d4-input-fixes-html-markup-only-read-whole,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round3-desktop,r3d4-input-fixes-astral-ceiling-counts-chars,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round3-desktop,r3d5-round2-gaps-data-table-cell-edit-replaces-rescue-copy,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round3-desktop,r3d5-round2-gaps-data-unreadable-start-overwritten-by-first-save,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round3-desktop,r3d5-round2-gaps-data-update-replaces-rescue-copy,medium,yes,duplicate,medium
+1,Desktop,final-audit-wave1-round3-desktop,r3d5-round2-gaps-data-time-zone-frozen-at-start,low,no,plausible,low
+1,Desktop,final-audit-wave1-round3-desktop,r3d6-round2-gaps-seams-settings-keys-reach-hidden-note,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round3-desktop,r3d6-round2-gaps-seams-template-preview-quadratic-ellipsis,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round3-desktop,r3d6-round2-gaps-seams-session-end-drops-template-editor,medium,yes,duplicate,medium
+1,Desktop,final-audit-wave1-round3-desktop,r3d6-round2-gaps-seams-export-on-unreadable-launch-packs-empty,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round7,w3d7-behaviour-bulk-import-one-uid-twice,high,yes,confirmed,high
+3,Desktop,final-audit-wave3-slop-round7,w3d7-behaviour-entry-emacs-keys,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round7,w3d7-behaviour-import-review-then-save,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round7,w3d7-behaviour-duplicates-ignore-series-days,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round7,w3d7-behaviour-nested-list-enter-backspace,medium,yes,already-decided,low
+3,Desktop,final-audit-wave3-slop-round7,w3d7-behaviour-lows,low,yes,,
+3,Desktop,final-audit-wave3-slop-round7,w3d7-reader-dup-ignores-day-edits,medium,yes,duplicate,medium
+3,Desktop,final-audit-wave3-slop-round7,w3d7-reader-imported-code-save-to-keep,medium,yes,duplicate,medium
+3,Desktop,final-audit-wave3-slop-round7,w3d7-reader-welcome-only-when-desktop,low,yes,,
+3,Desktop,final-audit-wave3-slop-round7,w3d7-reader-startup-notice-wording,low,yes,,
+3,Desktop,final-audit-wave3-slop-round7,w3d7-reader-privacy-had-to-replace,low,yes,,
+1,Desktop,final-audit-wave1-round5-desktop,r5d1-data-fixes-settings-held-retry-every-call,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round5-desktop,r5d1-data-fixes-turnoff-held-copy-ignores-takes-text,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round5-desktop,r5d1-data-fixes-words-lost-vs-padded-length,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round5-desktop,r5d1-data-fixes-blank-editor-pending-checklist-item,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round5-desktop,r5d1-data-fixes-held-settings-toast-wipes-undo,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round5-desktop,r5d1-data-fixes-kept-days-hit-moved-restart,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round5-desktop,r5d2-attachment-fixes-ctrl-n-leaves-preview-over-new-note,low,yes,duplicate,medium
+1,Desktop,final-audit-wave1-round5-desktop,r5d2-attachment-fixes-frame-delay-keeps-1ms-ticks,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round5-desktop,r5d3-keyboard-fixes-toolbar-reflow-moves-keyboard-into-body,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round5-desktop,r5d3-keyboard-fixes-shortcuts-put-keyboard-under-preview,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round5-desktop,r5d4-limit-fixes-scroll-viewport-16bit-clamp,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round5-desktop,r5d4-limit-fixes-table-flip-keyboard-lost,medium,yes,confirmed,low
+1,Desktop,final-audit-wave1-round5-desktop,r5d4-limit-fixes-tab-new-row-separator-keyboard-lost,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round5-desktop,r5d5-round4-gaps-scrolled-lists-clamp-at-32767,medium,yes,duplicate,medium
+1,Desktop,final-audit-wave1-round5-desktop,r5d5-round4-gaps-settings-refused-all-run-1s-per-read,low,yes,duplicate,high
+1,Desktop,final-audit-wave1-round5-desktop,r5d5-round4-gaps-lock-fails-open-on-a-held-lock-file,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round5-desktop,r5d6-round4-seams-held-settings-every-read-waits-a-second,high,yes,duplicate,high
+1,Desktop,final-audit-wave1-round5-desktop,r5d6-round4-seams-held-templates-export-complete-without-them,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round5-desktop,r5d6-round4-seams-held-run-status-and-toasts-contradict,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round5-desktop,r5d6-round4-seams-held-settings-notice-says-categories-missing,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round5-desktop,r5d6-round4-seams-insert-row-past-drawn-limit-keyboard-to-note-end,low,yes,duplicate,low
+3,Phone,final-audit-wave3-slop-round1,w3a-code-trash-age-two-parsers,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round1,w3a-code-misattached-kdoc,medium,yes,confirmed,low
+3,Phone,final-audit-wave3-slop-round1,w3a-code-test-only-twins,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round1,w3a-code-uid-minting-claim,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round1,w3a-code-limits-written-thrice,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round1,w3a-code-dead-code,low,yes,,
+3,Phone,final-audit-wave3-slop-round1,w3a-code-stale-kdocs,low,yes,,
+3,Phone,final-audit-wave3-slop-round1,w3a-code-unused-options,low,yes,,
+3,Phone,final-audit-wave3-slop-round1,w3a-code-history-in-comments,low,yes,,
+3,Phone,final-audit-wave3-slop-round1,w3a-code-same-rule-spelled-out,low,yes,,
+3,Phone,final-audit-wave3-slop-round1,w3a-code-names-and-size,low,yes,,
+3,Phone,final-audit-wave3-slop-round1,w3a-docs-appdata-location,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round1,w3a-docs-permissions,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round1,w3a-docs-icon-66-percent,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round1,w3a-docs-note-shape-gate-claim,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round1,w3a-docs-unit-test-count,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round1,w3a-docs-walk-count,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round1,w3a-docs-architecture-map,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round1,w3a-docs-fixtures-told-twice,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round1,w3a-docs-test-plan-size,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round1,w3a-docs-claude-desktop-numbers,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round1,w3a-docs-low-long-sentences,low,yes,,
+3,Phone,final-audit-wave3-slop-round1,w3a-docs-low-told-twice,low,yes,,
+3,Phone,final-audit-wave3-slop-round1,w3a-docs-low-small-untruths,low,yes,,
+3,Desktop,final-audit-wave3-slop-round5,w3d5-fixes-code-story-audit-save-templates-ghost,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round5,w3d5-fixes-code-ninth-theme-recipe-misses-phone-gate,medium,yes,confirmed,low
+3,Desktop,final-audit-wave3-slop-round5,w3d5-fixes-code-apply-template-swallow-fails-open,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round5,w3d5-fixes-code-paths-storage-docstrings-stale-home,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round5,w3d5-fixes-code-style-ttk-docstring-progressbar,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round5,w3d5-fixes-code-always-true-construction-guards,low,yes,,
+3,Desktop,final-audit-wave3-slop-round5,w3d5-fixes-code-calendar-thirty-one,low,yes,,
+3,Desktop,final-audit-wave3-slop-round5,w3d5-fixes-code-qa1-search-finds-it-weak,low,yes,,
+3,Desktop,final-audit-wave3-slop-round5,w3d5-fixes-code-categories-docstring-two-functions,low,yes,,
+3,Desktop,final-audit-wave3-slop-round5,w3d5-fixes-code-wcag-formula-twice,low,yes,,
+3,Desktop,final-audit-wave3-slop-round5,w3d5-docs-ctrl-shift-tab,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round5,w3d5-docs-coverage-89-undated,medium,yes,plausible,low
+3,Desktop,final-audit-wave3-slop-round5,w3d5-docs-template-swallow,medium,yes,duplicate,medium
+3,Desktop,final-audit-wave3-slop-round5,w3d5-docs-guide-wrong-controls,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round5,w3d5-docs-guide-incomplete-behaviour,low,yes,,
+3,Desktop,final-audit-wave3-slop-round5,w3d5-docs-repeat-off-told-twice,low,yes,,
+3,Desktop,final-audit-wave3-slop-round5,w3d5-docs-codetour-recurrence-speed,low,yes,,
+3,Desktop,final-audit-wave3-slop-round5,w3d5-docs-codetour-small-untruths,low,yes,,
+3,Desktop,final-audit-wave3-slop-round5,w3d5-docs-ninth-theme-counts,low,yes,,
+3,Desktop,final-audit-wave3-slop-round5,w3d5-docs-small-style,low,yes,,
+1's lows,Phone,final-audit-lows-verify11-android,lv11-a1-looks-travel-with-start-landing-side,medium,yes,confirmed,low
+1's lows,Phone,final-audit-lows-verify11-android,lv11-a1-looks-travel-with-start-html-list-elsewhere,low,yes,,
+1,Phone,final-audit-wave1-round17-small-android,a17d1-round16-fixes-and-seams-load-settles-hostile-raw,low,yes,,
+1,Phone,final-audit-wave1-round17-small-android,a17d1-round16-fixes-and-seams-start-write-blocked-by-trash,low,no,,
+1,Phone,final-audit-wave1-round17-small-android,a17d2-series-days-whole-on-the-phone-moved-onto-deleted-hidden,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round17-small-android,a17d2-series-days-whole-on-the-phone-restore-copy-shape-loses-days,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round13-small-desktop,r13d1-round12-data-and-seams-words-added-doubles-held-text,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round13-small-desktop,r13d1-round12-data-and-seams-words-added-unshaped-pieces,low,yes,,
+1,Desktop,final-audit-wave1-round13-small-desktop,r13d1-round12-data-and-seams-phone-fuses-tables-on-append,low,no,,
+1,Desktop,final-audit-wave1-round13-small-desktop,r13d2-round12-editor-and-seams-find-paint-window-not-at-current,low,yes,,
+1,Desktop,final-audit-wave1-round13-small-desktop,r13d2-round12-editor-and-seams-cell-undo-reset-on-reopen,low,yes,,
+1's lows,Phone,final-audit-lows-verify3-android,lv3-a1-day-keeps-its-lists-enter-backspace-flattens-and-stores,medium,yes,confirmed,medium
+1's lows,Phone,final-audit-lows-verify3-android,lv3-a1-day-keeps-its-lists-aside-note-drops-own-list-lines,low,no,,
+1's lows,Phone,final-audit-lows-verify3-android,lv3-a1-day-keeps-its-lists-glyph-depth-follows-again-asymmetry,low,no,,
+2,Desktop,final-audit-wave2-round4,w2d4-fixes-history-link-lands-on-month-grid,medium,yes,confirmed,medium
+2,Desktop,final-audit-wave2-round4,w2d4-fixes-history-link-false-sentence-under-show,medium,yes,confirmed,medium
+2,Desktop,final-audit-wave2-round4,w2d4-fixes-history-link-keeps-year-chip,medium,yes,confirmed,low
+2,Desktop,final-audit-wave2-round4,w2d4-fixes-calc-error-then-minus-still-error,medium,yes,confirmed,low
+2,Desktop,final-audit-wave2-round4,w2d4-fixes-lows,low,yes,,
+2,Desktop,final-audit-wave2-round4,w2d4-roads-big-delete-replaces-update-copy,high,yes,confirmed,high
+2,Desktop,final-audit-wave2-round4,w2d4-roads-day-export-sends-series,medium,yes,confirmed,medium
+2,Desktop,final-audit-wave2-round4,w2d4-roads-stats-trash-count-stale,low,yes,,
+2,Desktop,final-audit-wave2-round4,w2d4-roads-spell-lows,low,yes,,
+2,Desktop,final-audit-wave2-round4,w2d4-roads-popup-raised-over-question,low,no,,
+2,Phone,final-audit-wave2-round4,w2a4-fixes-history-link-false-under-show,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round4,w2a4-fixes-template-day-lost-when-typed-first,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round4,w2a4-fixes-history-link-keeps-year-chip,medium,yes,confirmed,low
+2,Phone,final-audit-wave2-round4,w2a4-fixes-shared-txt-file-lows,low,yes,,
+2,Phone,final-audit-wave2-round4,w2a4-fixes-history-link-and-arrivals-lows,low,yes,,
+2,Phone,final-audit-wave2-round4,w2a4-roads-reminder-category-off-unsaid,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round4,w2a4-roads-history-link-false-under-show,medium,yes,duplicate,medium
+2,Phone,final-audit-wave2-round4,w2a4-roads-talkback-unnamed-editor-controls,low,yes,,
+2,Phone,final-audit-wave2-round4,w2a4-roads-small-lows,low,no,,
+2,Desktop,final-audit-wave2-round3,w2d3-fixes-calc-keyboard-input-after-result-appends,medium,yes,confirmed,medium
+2,Desktop,final-audit-wave2-round3,w2d3-fixes-import-cancelled-line-overwritten-by-autosave,medium,yes,confirmed,medium
+2,Desktop,final-audit-wave2-round3,w2d3-fixes-calc-second-enter-replaces-formula,low,yes,,
+2,Desktop,final-audit-wave2-round3,w2d3-fixes-code-import-cancel-silent-stale-added,low,yes,,
+2,Desktop,final-audit-wave2-round3,w2d3-fixes-round2-lows,low,yes,,
+2,Desktop,final-audit-wave2-round3,w2d3-roads-template-drops-calendar-day,medium,yes,confirmed,medium
+2,Desktop,final-audit-wave2-round3,w2d3-roads-lows,low,yes,,
+2,Phone,final-audit-wave2-round3,w2a3-fixes-day-share-carries-series-styles,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round3,w2a3-fixes-shared-text-file-silently-ignored,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round3,w2a3-fixes-share-sheet-copies-note-on-main-thread,low,yes,,
+2,Phone,final-audit-wave2-round3,w2a3-roads-calc-insert-into-checkbox-cell,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round3,w2a3-roads-template-drops-calendar-day,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round3,w2a3-roads-template-add-box-tick-does-not-add,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round3,w2a3-roads-phone-hidden-arrivals-unsaid,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round3,w2a3-roads-small-lows,low,yes,,
+1,Desktop,final-audit-wave1-round7-desktop,r7d1-data-fixes-reimport-same-backup-wipes-series-copy,medium,yes,duplicate,high
+1,Desktop,final-audit-wave1-round7-desktop,r7d1-data-fixes-short-comment-cleared-replaces-body-rescue,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round7-desktop,r7d1-data-fixes-unread-notes-run-empty-trash-deletes-file,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round7-desktop,r7d1-data-fixes-phone-off-then-on-days-only-in-copy,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round7-desktop,r7d1-data-fixes-full-checklist-leave-drops-words-after-advice,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round7-desktop,r7d2-ui-fixes-chunk-measured-at-starting-wrap-passes-16-bits,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round7-desktop,r7d2-ui-fixes-note-page-limit-said-out-of-sight,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round7-desktop,r7d2-ui-fixes-picker-left-right-jump-to-parked-chunk,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round7-desktop,r7d2-ui-fixes-held-enter-toggles-preview,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round7-desktop,r7d2-ui-fixes-scroll-step-still-grows-with-list,low,yes,plausible,low
+1,Desktop,final-audit-wave1-round7-desktop,r7d3-machine-safety-gate-misses-runners,high,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round7-desktop,r7d3-machine-safety-docker-cli-killed-container-runs-on,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round7-desktop,r7d3-machine-safety-linux-ceiling-above-the-vm,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round7-desktop,r7d3-machine-safety-android-outside-the-guest,high,no,confirmed,medium
+1,Desktop,final-audit-wave1-round7-desktop,r7d3-machine-safety-ceiling-is-per-run,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round7-desktop,r7d3-machine-safety-photographs-unguarded,medium,no,confirmed,medium
+1,Desktop,final-audit-wave1-round7-desktop,r7d3-machine-safety-hangs-without-a-bound,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round7-desktop,r7d3-machine-safety-temp-leftovers,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round7-desktop,r7d4-round6-gaps-import-question-at-session-end-leaves-files,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round7-desktop,r7d4-round6-gaps-lock-retry-dead-on-windows,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round7-desktop,r7d4-round6-gaps-paste-ceiling-weighs-crlf,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round7-desktop,r7d4-round6-gaps-quiet-save-past-template-cap,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round7-desktop,r7d4-round6-gaps-held-templates-export-drops-session-version,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round7-desktop,r7d5-round6-seams-same-backup-twice-spends-the-copy,critical,yes,confirmed,high
+1,Desktop,final-audit-wave1-round7-desktop,r7d5-round6-seams-full-list-leaving-drops-the-words,low,yes,duplicate,low
+2,Desktop,final-audit-wave2-round11,w2d11-open-single-code-update-drops-day-and-way-back,medium,yes,confirmed,low
+2,Desktop,final-audit-wave2-round11,w2d11-import-backup-merge-inside-code-question-duplicate-ids,high,yes,confirmed,high
+2,Phone,final-audit-wave2-round11,w2a11-days-same-date-move-still-empties-undo,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round11,w2a11-days-whole-series-link-finishes-new-item,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round11,w2a11-list-calendar-undo-reveal-moves-notes-list-later,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round11,w2a11-list-undo-hidden-restore-silent-and-lingers,low,yes,,
+1,Desktop,final-audit-wave1-round11-small-desktop,r11d1-data-and-parity-stale-series-words-read-as-own,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round11-small-desktop,r11d1-data-and-parity-move-onto-off-schedule-edit,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round11-small-desktop,r11d2-editor-and-machine-your-name-paste-refused-silently,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round9,wl9-d-round8-comments-table-notice-wiped-by-own-autosave,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round9,wl9-d-round8-set-aside-banner-still-covers-undo,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round9,wl9-a-round8-one-at-a-time-restores-identical-bars-again,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round9,wl9-a-round8-import-word-counted-by-ids-not-its-own-notes,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round9,wl9-a-data-undo-off-notes-tab-says-several-notes-twice,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round1,wl1-d-waits-skip-twin-files-undone-by-open-editor,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round1,wl1-d-waits-files-only-lookalikes-get-no-skip,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round1,wl1-d-waits-import-double-click-one-note-opens-settings,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round1,wl1-d-waits-aside-spent-banner-covers-undo,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round1,wl1-d-waits-export-complete-under-chooser,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round1,wl1-d-waits-show-all-ignores-settings-refusal,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round1,wl1-d-small-ctrlz-redo-blocks-banner-undo,medium,yes,confirmed,medium
+2's lows,Desktop,final-audit-wave2-lows-round1,wl1-d-small-hidden-new-note-said-for-a-second,medium,yes,confirmed,medium
+2's lows,Desktop,final-audit-wave2-lows-round1,wl1-d-small-stats-row-delete-stale,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round1,wl1-d-small-import-dblclick-one-note-settings,low,no,,
+2's lows,Desktop,final-audit-wave2-lows-round1,wl1-d-small-category-picker-wide-names-cut-bare,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round1,wl1-a-update-copy-show-opens-blank-after-take-back,medium,yes,confirmed,medium
+2's lows,Phone,final-audit-wave2-lows-round1,wl1-a-update-copy-fixture-misses-touch-and-one-save-turnoff,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round1,wl1-a-lows-fling-stop-read-at-last-lift,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round1,wl1-a-lows-edge-clock-kept-through-turn,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round1,wl1-a-lows-undo-move-day-reads-other-day-back,low,yes,,
+2,Phone,final-audit-wave2-round15,w2a15-list-far-moved-top-card-not-followed,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round15,w2a15-days-fold-kept-by-reused-id,low,yes,,
+2,Phone,final-audit-wave2-round15,w2a15-days-whole-series-closes-calc-and-find,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round3,wl3-d-round2-ctrl-shift-z-in-cell-takes-banner-undo,medium,yes,confirmed,medium
+2's lows,Desktop,final-audit-wave2-lows-round3,wl3-d-round2-stale-undo-record-swallows-comments-ctrlz,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round3,wl3-d-round2-class-undo-drops-tk-separators,low,no,,
+2's lows,Desktop,final-audit-wave2-lows-round3,wl3-d-round2-skip-go-back-drops-open-twins-files-unsaid,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round3,wl3-d-lows-cell-undo-separators-dropped,medium,yes,refuted,low
+2's lows,Desktop,final-audit-wave2-lows-round3,wl3-d-lows-undo-record-not-tied-to-press,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round3,wl3-d-lows-skip-go-back-drops-files,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round3,wl3-a-round2-pending-kept-aside-arrival-names-next-note,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round3,wl3-a-round2-undo-bar-waits-behind-queued-arrival,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round3,wl3-a-data-kept-aside-arrival-outlives-spend-names-next-note,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round3,wl3-a-data-show-all-several-refuses-when-first-gone,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round3,wl3-a-data-undo-bar-waits-behind-queued-aside-bar,low,yes,,
+1,Phone,final-audit-wave1-round4-android,a4r1-fixes-data-rescue-copy-twins-of-1a949bc-not-ported,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round4-android,a4r1-fixes-data-two-arrivals-one-uid-collapse,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round4-android,a4r1-fixes-data-attach-uid-first-wrong-note,medium,yes,confirmed,low
+1,Phone,final-audit-wave1-round4-android,a4r1-fixes-data-restore-during-plan-duplicates-identity,low,yes,confirmed,low
+1,Phone,final-audit-wave1-round4-android,a4r2-fixes-limits-ui-unbounded-segments-per-body,high,yes,confirmed,high
+1,Phone,final-audit-wave1-round4-android,a4r2-fixes-limits-ui-pdf-notice-bar-under-share-sheet,medium,no,confirmed,medium
+1,Phone,final-audit-wave1-round4-android,a4r2-fixes-limits-ui-share-ceiling-counts-units-not-bytes,low,no,plausible,low
+1,Phone,final-audit-wave1-round4-android,a4r2-fixes-limits-ui-greyed-text-says-number-under-limit,low,yes,confirmed,low
+1,Phone,final-audit-wave1-round4-android,a4r4-round3-gaps-many-short-lines-bypass-layout-budget,high,no,confirmed,high
+1,Phone,final-audit-wave1-round4-android,a4r4-round3-gaps-restore-previous-from-a-day-leaves-unsaveable-editor,low,no,confirmed,low
+1,Phone,final-audit-wave1-round4-android,a4r4-round3-gaps-duplicate-uid-import-misroutes-attach,low,yes,duplicate,low
+1,Phone,final-audit-wave1-round5-android,a5r1-fixes-data-list-markers-read-as-loss,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round5-android,a5r1-fixes-data-turnoff-refuses-copy-with-carried-days,low,yes,confirmed,low
+1,Phone,final-audit-wave1-round5-android,a5r1-fixes-data-share-sheet-encodes-code-on-main-thread,low,yes,confirmed,low
+1,Phone,final-audit-wave1-round5-android,a5r1-fixes-data-every-save-splits-body-thrice,low,yes,confirmed,low
+1,Phone,final-audit-wave1-round5-android,a5r1-fixes-data-update-sentence-files-only,low,no,confirmed,low
+1,Phone,final-audit-wave1-round5-android,a5r2-fixes-limits-ui-piece-cap-reached-by-ordinary-notes,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round5-android,a5r2-fixes-limits-ui-caret-line-leaves-every-field,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round5-android,a5r3-desktop-r5-twins-checklist-outside-draw-budget,high,yes,plausible,high
+1,Phone,final-audit-wave1-round5-android,a5r3-desktop-r5-twins-template-editor-pending-item,medium,no,confirmed,medium
+1,Phone,final-audit-wave1-round5-android,a5r3-desktop-r5-twins-ragged-merge-phantom-anchor,low,yes,confirmed,low
+1,Phone,final-audit-wave1-round5-android,a5r3-desktop-r5-twins-rename-failure-said-per-letter,low,no,plausible,low
+1,Phone,final-audit-wave1-round5-android,a5r4-round4-gaps-typing-at-the-rest-splices-lines,medium,yes,duplicate,medium
+1,Phone,final-audit-wave1-round5-android,a5r4-round4-gaps-small-notes-read-only-tail-find-says-none,medium,yes,duplicate,medium
+1,Phone,final-audit-wave1-round5-android,a5r4-round4-gaps-undo-history-full-body-copies-oom,high,no,plausible,high
+1,Phone,final-audit-wave1-round5-android,a5r4-round4-gaps-decorations-quadratic-per-draw,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round6-desktop,r6d1-data-fixes-use-template-drops-pending-item,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round6-desktop,r6d1-data-fixes-checklist-1001st-item-dropped-at-next-start,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round6-desktop,r6d1-data-fixes-comments-wipe-no-rescue-copy,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round6-desktop,r6d1-data-fixes-kept-days-fit-reads-replaced-slot,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round6-desktop,r6d2-ui-fixes-cell-escape-and-block-paste-drop-keyboard,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round6-desktop,r6d2-ui-fixes-template-editor-paste-told-nowhere,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round6-desktop,r6d2-ui-fixes-limited-paste-crlf,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round6-desktop,r6d2-ui-fixes-kept-table-caret-at-cell-end,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round6-desktop,r6d3-chunked-lists-chunk-taller-than-park-hangs-over-list,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round6-desktop,r6d3-chunked-lists-scroll-step-3x-dearer,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round6-desktop,r6d4-round5-gaps-held-run-restore-then-trash-write-loses-note,critical,yes,confirmed,critical
+1,Desktop,final-audit-wave1-round6-desktop,r6d4-round5-gaps-close-mid-export-recorded-as-whole,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round6-desktop,r6d4-round5-gaps-held-run-empty-trash-deletes-unread-notes-file,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round6-desktop,r6d4-round5-gaps-preview-return-does-nothing,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round6-desktop,r6d5-round5-seams-use-template-drops-pending-item,medium,yes,duplicate,medium
+1,Desktop,final-audit-wave1-round6-desktop,r6d5-round5-seams-keyboard-after-last-row-alone-in-chunk,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round6-desktop,r6d5-round5-seams-parked-chunk-covers-view-tall-items,low,yes,duplicate,low
+1,Desktop,final-audit-wave1-round6-desktop,r6d5-round5-seams-restart-order-keeps-old-deleted-days,low,yes,duplicate,low
+1,Desktop,final-audit-wave1-round6-desktop,r6d5-round5-seams-pending-take-redraws-every-row,low,yes,confirmed,low
+1's lows,Phone,final-audit-lows-verify10-android,lv10-a1-item-keeps-marker-middle-lines-leave-the-sublist,low,yes,,
+1's lows,Phone,final-audit-lows-verify10-android,lv10-a1-item-keeps-marker-desktop-two-align-tags,low,yes,,
+1,Phone,final-audit-wave1-round14-small-android,a14d1-round13-fixes-and-seams-day-caret-vs-raw-series-body,high,yes,confirmed,high
+1,Phone,final-audit-wave1-round14-small-android,a14d1-round13-fixes-and-seams-lineslacked-isblank-vs-python-strip,low,yes,,
+1,Phone,final-audit-wave1-round14-small-android,a14d2-gaps-and-tools-cell-styles-lost-in-padded-or-aligned-cells,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round14-small-android,a14d2-gaps-and-tools-lines-look-dropped-by-keyboard-multiline-commit,low,yes,,
+1,Phone,final-audit-wave1-round14-small-android,a14d2-gaps-and-tools-test-results-floor-200-of-903,low,yes,,
+1,Phone,final-audit-wave1-round14-small-android,a14d2-gaps-and-tools-deleted-day-kept-edit-counted-in-banner,low,no,,
+1,Desktop,final-audit-wave1-round4-desktop,r4d1-data-fixes-kept-days-steer-one-off,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round4-desktop,r4d1-data-fixes-turnoff-merge-drops-newest,high,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round4-desktop,r4d1-data-fixes-settings-no-retry,medium,yes,duplicate,medium
+1,Desktop,final-audit-wave1-round4-desktop,r4d1-data-fixes-held-session-false-advice,medium,yes,duplicate,medium
+1,Desktop,final-audit-wave1-round4-desktop,r4d1-data-fixes-held-migration-not-a-held-start,medium,yes,duplicate,medium
+1,Desktop,final-audit-wave1-round4-desktop,r4d2-attachment-fixes-apng-preview-crashes,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round4-desktop,r4d2-attachment-fixes-keys-under-preview,high,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round4-desktop,r4d2-attachment-fixes-dotted-i-moves-the-cut,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round4-desktop,r4d2-attachment-fixes-colon-legacy-names,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round4-desktop,r4d2-attachment-fixes-locked-attachment-blocks-backup,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round4-desktop,r4d3-keyboard-fixes-folded-checklist-keeps-keyboard,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round4-desktop,r4d3-keyboard-fixes-table-menu-unreachable-by-keyboard,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round4-desktop,r4d3-keyboard-fixes-settings-return-misses-cell-and-find,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round4-desktop,r4d4-limit-fixes-table-cell-line-breaks-pass-canvas-limit,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round4-desktop,r4d4-limit-fixes-template-name-unbounded-crash,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round4-desktop,r4d4-limit-fixes-template-row-icons-squeezed-by-name,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round4-desktop,r4d4-limit-fixes-template-editor-runs-off-screen,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round4-desktop,r4d4-limit-fixes-windows-paste-over-selection-empties-box,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round4-desktop,r4d4-limit-fixes-template-preview-cost-per-line,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round4-desktop,r4d5-round3-gaps-data-column-and-list-edits-replace-rescue-copy,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round4-desktop,r4d5-round3-gaps-data-settings-hold-no-retry-reruns-cleanup,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round4-desktop,r4d5-round3-gaps-data-templates-trash-held-start-silent,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round4-desktop,r4d6-round3-seams-blank-editor-flush-drops-typing,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round4-desktop,r4d6-round3-seams-held-run-dead-ends,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round4-desktop,r4d6-round3-seams-quiet-template-save-repeats,medium,yes,confirmed,low
+1,Desktop,final-audit-wave1-round4-desktop,r4d6-round3-seams-handback-then-tab-switch,medium,yes,confirmed,low
+1,Desktop,final-audit-wave1-round4-desktop,r4d6-round3-seams-save-as-template-name-unlimited,medium,yes,duplicate,high
+1,Phone,final-audit-wave1-round15-small-android,a15d1-round14-fixes-and-seams-copy-raw-series-body-desktop-reads-words,medium,yes,duplicate,medium
+1,Phone,final-audit-wave1-round15-small-android,a15d1-round14-fixes-and-seams-cell-typed-style-differs-from-desktop,low,yes,,
+1,Phone,final-audit-wave1-round15-small-android,a15d1-round14-fixes-and-seams-cell-leading-nbsp-drops-styles,low,yes,,
+1,Phone,final-audit-wave1-round15-small-android,a15d1-round14-fixes-and-seams-linekey-nel-trim,low,yes,,
+1,Phone,final-audit-wave1-round15-small-android,a15d2-days-whole-on-the-phone-raw-copy-body-desktop-adds-old-table,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round15-small-android,a15d2-days-whole-on-the-phone-title-space-colour-day-reads-as-words,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round15-small-android,a15d2-days-whole-on-the-phone-kept-days-fit-raw-vs-shaped,low,yes,,
+1's lows,Phone,final-audit-lows-verify4-android,lv4-a1-day-list-rules-day-paste-into-item-drops-depth,medium,yes,confirmed,medium
+1's lows,Phone,final-audit-lows-verify4-android,lv4-a1-day-list-rules-undo-restores-series-looks,low,no,,
+3,Phone,final-audit-wave3-slop-round7,w3a7-behaviour-cell-token-draft-dropped,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round7,w3a7-behaviour-dup-merge-past-cap,high,yes,confirmed,high
+3,Phone,final-audit-wave3-slop-round7,w3a7-behaviour-dup-ignores-series-days,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round7,w3a7-behaviour-walk-backup-off-must-say,low,yes,,
+3,Phone,final-audit-wave3-slop-round7,w3a7-behaviour-small-text-drift,low,yes,,
+3,Phone,final-audit-wave3-slop-round7,w3a7-reader-backup-off-silent-on-new-phone,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round7,w3a7-reader-duplicates-ignore-days,medium,yes,duplicate,medium
+3,Phone,final-audit-wave3-slop-round7,w3a7-reader-history-empty-under-filter,low,yes,,
+3,Phone,final-audit-wave3-slop-round7,w3a7-reader-off-line-siblings-stale,low,yes,,
+3,Phone,final-audit-wave3-slop-round7,w3a7-reader-phone-spelling-two-ways,low,yes,,
+3,Phone,final-audit-wave3-slop-round7,w3a7-reader-history-jump-hint-unreachable,low,yes,,
+1,Desktop,final-audit-wave1-round2-desktop,r2d1-fixes-data-f8-import-shortens-own-trash-window,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round2-desktop,r2d1-fixes-data-f10-session-end-diverges-from-close,medium,yes,confirmed,high
+1,Desktop,final-audit-wave1-round2-desktop,r2d1-fixes-data-f10-cancelled-signout-tears-down,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round2-desktop,r2d1-fixes-data-f3-raw-trash-fields-unswept,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round2-desktop,r2d1-fixes-data-f5-failed-copy-marks-done,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round2-desktop,r2d1-fixes-data-f12-trash-copied-without-unknown-window,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round2-desktop,r2d1-fixes-data-f1-case-and-dotdot-spellings,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round2-desktop,r2d1-fixes-data-f9-other-replaces-unsynced,medium,no,plausible,medium
+1,Desktop,final-audit-wave1-round2-desktop,r2d1-fixes-data-f4-templates-lost-on-close,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round2-desktop,r2d3-keyboard-popup-lands-on-close,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round2-desktop,r2d3-keyboard-show-more-drops-keyboard,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round2-desktop,r2d3-keyboard-shortcuts-page-unscrollable,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round2-desktop,r2d3-keyboard-click-counter-never-counts-left-clicks,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round2-desktop,r2d3-keyboard-reminder-ring-stale-after-theme,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round2-desktop,r2d3-keyboard-toast-leaves-keyboard-on-hidden-undo,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round2-desktop,r2d4-uncovered-data-share-update-repeat-off-drops-own-days,critical,yes,confirmed,critical
+1,Desktop,final-audit-wave1-round2-desktop,r2d4-uncovered-data-export-after-failed-save-packs-stale-file,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round2-desktop,r2d4-uncovered-data-template-editor-formatting-shifts,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round2-desktop,r2d5-uncovered-security-display-name-hides-real-type,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round2-desktop,r2d5-uncovered-security-deny-list-gaps,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round2-desktop,r2d5-uncovered-security-motw-stripped-on-import,high,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round2-desktop,r2d5-uncovered-security-bulk-export-control-char-title,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round2-desktop,r2d6-uncovered-time-imported-window-purges-own-trash,high,yes,duplicate,high
+1,Desktop,final-audit-wave1-round2-desktop,r2d6-uncovered-time-signout-skips-failed-save-retry,high,yes,duplicate,high
+1,Desktop,final-audit-wave1-round2-desktop,r2d6-uncovered-time-day-turns-on-settings-kills-watcher,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round2-desktop,r2d6-uncovered-time-cancelled-signout-strands-backup-work,medium,yes,duplicate,medium
+1,Desktop,final-audit-wave1-round2-desktop,r2d6-uncovered-time-clock-back-stalls-tcl-timers,low,yes,plausible,low
+1,Desktop,final-audit-wave1-round2-desktop,r2d6-uncovered-time-update-backup-fails-silently,low,yes,confirmed,low
+1,Phone,final-audit-wave1-round25-small-android,a25d1-day-editor-and-seams-day-view-drops-series-line-looks,low,no,,
+1,Phone,final-audit-wave1-round25-small-android,a25d2-gaps-and-tools-on-the-phone-backup-date-forms-desktop-reads-phone-drops,low,yes,,
+2,Desktop,final-audit-wave2-round6,w2d6-fixes-aside-outlives-undo,medium,yes,confirmed,medium
+2,Desktop,final-audit-wave2-round6,w2d6-fixes-comment-clear-copies-whole-note,medium,yes,confirmed,medium
+2,Desktop,final-audit-wave2-round6,w2d6-fixes-aside-hidden-by-show-unsaid,low,yes,,
+2,Desktop,final-audit-wave2-round6,w2d6-roads-table-cell-out-of-sight,medium,yes,confirmed,medium
+2,Desktop,final-audit-wave2-round6,w2d6-roads-category-picker-cuts-long-names,low,yes,,
+2,Desktop,final-audit-wave2-round6,w2d6-roads-text-boxes-keep-tk-ctrl-k,low,yes,,
+2,Desktop,final-audit-wave2-round6,w2d6-roads-lows,low,yes,,
+2,Phone,final-audit-wave2-round6,w2a6-fixes-keyboard-foot-doubled-on-wide,low,yes,,
+2,Phone,final-audit-wave2-round6,w2a6-fixes-lows,low,no,,
+2,Phone,final-audit-wave2-round6,w2a6-roads-font-size-points-drawn-as-sp,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round6,w2a6-roads-small-lows,low,yes,,
+1's lows,Phone,final-audit-lows-verify5-android,lv5-a1-follow-rule-paste-ending-break-adds-marker,medium,yes,confirmed,medium
+1's lows,Phone,final-audit-lows-verify5-android,lv5-a1-follow-rule-copy-carries-next-line-looks,medium,yes,confirmed,medium
+1's lows,Phone,final-audit-lows-verify5-android,lv5-a1-follow-rule-overapplies-start-line-looks,low,yes,,
+1's lows,Phone,final-audit-lows-verify5-android,lv5-a1-follow-rule-column0-replacement-drops-looks,low,yes,,
+3,Phone,final-audit-wave3-slop-round3,w3a3-fixes-code-still-open-two-restores,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round3,w3a3-fixes-code-table-row-grammar-twice,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round3,w3a3-fixes-code-deletedat-not-strptime,low,no,,
+3,Phone,final-audit-wave3-slop-round3,w3a3-fixes-code-comments-contradict-code,low,yes,,
+3,Phone,final-audit-wave3-slop-round3,w3a3-fixes-code-architecture-notebook-lines,low,yes,,
+3,Phone,final-audit-wave3-slop-round3,w3a3-fixes-code-tool-docstrings-after-fix,low,yes,,
+3,Phone,final-audit-wave3-slop-round3,w3a3-fixes-code-copied-blocks-six-files,low,yes,,
+3,Phone,final-audit-wave3-slop-round3,w3a3-fixes-code-paste-guard-catches-all,low,yes,,
+3,Phone,final-audit-wave3-slop-round3,w3a3-fixes-code-unused-string,low,yes,,
+3,Phone,final-audit-wave3-slop-round3,w3a3-docs-still-open-restore-route,medium,yes,duplicate,medium
+3,Phone,final-audit-wave3-slop-round3,w3a3-docs-architecture-683-tests,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round3,w3a3-docs-note-shape-four-things,medium,yes,confirmed,low
+3,Phone,final-audit-wave3-slop-round3,w3a3-docs-architecture-doors-out-backup,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round3,w3a3-docs-highlight-blend-inverted,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round3,w3a3-docs-lows-startup-and-small-drift,low,yes,,
+3,Desktop,final-audit-wave3-slop-round3,w3d3-fixes-code-ninth-theme,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round3,w3d3-fixes-code-combobox-theming,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round3,w3d3-fixes-code-format-tag-lists,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round3,w3d3-fixes-code-override-plain-text,low,yes,,
+3,Desktop,final-audit-wave3-slop-round3,w3d3-fixes-code-moved-field-counts,low,yes,,
+3,Desktop,final-audit-wave3-slop-round3,w3d3-fixes-code-test-pin-claim,low,yes,,
+3,Desktop,final-audit-wave3-slop-round3,w3d3-fixes-code-bulk-bar-comment,low,yes,,
+3,Desktop,final-audit-wave3-slop-round3,w3d3-fixes-code-guards,low,yes,,
+3,Desktop,final-audit-wave3-slop-round3,w3d3-fixes-code-docstring-displaced,low,yes,,
+3,Desktop,final-audit-wave3-slop-round3,w3d3-fixes-code-value-format-styles,low,yes,,
+3,Desktop,final-audit-wave3-slop-round3,w3d3-fixes-code-skip-siblings,low,yes,,
+3,Desktop,final-audit-wave3-slop-round3,w3d3-fixes-code-tool-docstrings,low,yes,,
+3,Desktop,final-audit-wave3-slop-round3,w3d3-docs-reset-day-enter-destroys,high,yes,confirmed,high
+3,Desktop,final-audit-wave3-slop-round3,w3d3-docs-arch-theming-stale,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round3,w3d3-docs-codetour-clean-notes,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round3,w3d3-docs-qa-readme-26-screens,medium,yes,confirmed,low
+3,Desktop,final-audit-wave3-slop-round3,w3d3-docs-qa-ownership-and-skip,low,yes,,
+3,Desktop,final-audit-wave3-slop-round3,w3d3-docs-shortcuts-everything,low,yes,,
+3,Desktop,final-audit-wave3-slop-round3,w3d3-docs-table-height-cap,low,yes,,
+3,Desktop,final-audit-wave3-slop-round3,w3d3-docs-stale-docstrings-cluster,low,yes,,
+3,Desktop,final-audit-wave3-slop-round3,w3d3-docs-site-android-offline,low,yes,,
+1's lows,Phone,final-audit-lows-verify-android,lv-a1-fixes-and-seams-hidden-rule-fields-still-another-series,low,yes,,
+1's lows,Phone,final-audit-lows-verify-android,lv-a2-tools-fuzz-reaches-one-medium-of-five,low,yes,,
+1's lows,Phone,final-audit-lows-verify-android,lv-a2-tools-fuzz-oracle-blind-spots,low,no,,
+1's lows,Phone,final-audit-lows-verify-android,lv-a2-tools-lows-mutant-proof-gaps,low,yes,,
+1's lows,Phone,final-audit-lows-verify-android,lv-a2-tools-fixture-twin-order-and-unwatched-callee,low,yes,,
+1's lows,Phone,final-audit-lows-verify7-android,lv7-a1-one-paste-route-own-marker-only-before-an-item,medium,yes,confirmed,medium
+1's lows,Phone,final-audit-lows-verify7-android,lv7-a1-one-paste-route-day-paste-reads-no-html,low,yes,,
+1's lows,Phone,final-audit-lows-verify7-android,lv7-a1-one-paste-route-plain-paste-not-followed,low,no,,
+1's lows,Phone,final-audit-lows-verify7-android,lv7-a1-one-paste-route-plain-paste-no-ceiling,low,no,,
+1's lows,Desktop,final-audit-lows-verify10-desktop,lv10-d1-one-margin-word-copy-moves-host-item,medium,yes,confirmed,medium
+1's lows,Desktop,final-audit-lows-verify10-desktop,lv10-d1-one-margin-pushed-line-glyph-level,low,yes,,
+1's lows,Desktop,final-audit-lows-verify10-desktop,lv10-d1-one-margin-mid-line-second-margin,low,yes,,
+1's lows,Desktop,final-audit-lows-verify10-desktop,lv10-d1-one-margin-list-table-undo-stray-line,low,yes,,
+1,Phone,final-audit-wave1-round21-small-android,a21d1-round20-fix-and-seams-notification-reads-unsettled-file,low,yes,,
+1,Phone,final-audit-wave1-round21-small-android,a21d1-round20-fix-and-seams-raw-date-unread-twin-choice,low,yes,,
+1,Phone,final-audit-wave1-round21-small-android,a21d1-round20-fix-and-seams-fixture-has-no-twins,low,yes,,
+1,Phone,final-audit-wave1-round21-small-android,a21d2-series-days-whole-on-the-phone-raw-copy-twins-spent-in-session,low,yes,,
+1,Phone,final-audit-wave1-round21-small-android,a21d2-series-days-whole-on-the-phone-notification-reads-unsettled-file,low,yes,,
+1,Phone,final-audit-wave1-round21-small-android,a21d2-series-days-whole-on-the-phone-0130-deleted-day-copy-words-erased,low,yes,,
+2,Desktop,final-audit-wave2-round1,w2d1-user-new-note-hidden-by-show-filter,medium,yes,confirmed,medium
+2,Desktop,final-audit-wave2-round1,w2d1-user-day-code-shares-whole-series,medium,yes,confirmed,medium
+2,Desktop,final-audit-wave2-round1,w2d1-user-stale-share-code-after-edit,medium,yes,confirmed,medium
+2,Desktop,final-audit-wave2-round1,w2d1-user-search-skips-checklist,medium,yes,confirmed,medium
+2,Desktop,final-audit-wave2-round1,w2d1-user-search-no-diacritic-folding,medium,yes,confirmed,medium
+2,Desktop,final-audit-wave2-round1,w2d1-user-calculator-keyboard-ops-comma,medium,yes,confirmed,medium
+2,Desktop,final-audit-wave2-round1,w2d1-user-lows-cluster,low,yes,,
+2,Desktop,final-audit-wave2-round1,w2d1-careless-import-question-takes-stray-key,high,yes,confirmed,high
+2,Desktop,final-audit-wave2-round1,w2d1-careless-new-note-hidden-by-filter,medium,yes,duplicate,medium
+2,Desktop,final-audit-wave2-round1,w2d1-careless-calculator-keyboard-operators,medium,yes,duplicate,medium
+2,Desktop,final-audit-wave2-round1,w2d1-careless-ctrl-z-after-delete-in-title,medium,yes,confirmed,medium
+2,Desktop,final-audit-wave2-round1,w2d1-careless-az-sort-accented-after-z,medium,yes,confirmed,medium
+2,Desktop,final-audit-wave2-round1,w2d1-careless-search-no-diacritic-fold,medium,yes,duplicate,medium
+2,Desktop,final-audit-wave2-round1,w2d1-careless-category-named-all,low,yes,,
+2,Desktop,final-audit-wave2-round1,w2d1-careless-small-lows,low,yes,,
+2,Phone,final-audit-wave2-round1,w2a1-user-show-filter-hides-new-note,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round1,w2a1-user-find-and-history-ignore-diacritics,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round1,w2a1-user-search-trailing-space,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round1,w2a1-user-share-target-refuses-plain-text,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round1,w2a1-user-date-picker-preselects-utc-day,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round1,w2a1-user-name-not-saved-on-back,medium,yes,confirmed,low
+2,Phone,final-audit-wave2-round1,w2a1-user-title-sort-romanian-and-untitled,low,yes,,
+2,Phone,final-audit-wave2-round1,w2a1-user-repeat-on-date-dismissed-saves-endless,low,yes,,
+2,Phone,final-audit-wave2-round1,w2a1-user-paperclip-two-meanings,low,yes,,
+2,Phone,final-audit-wave2-round1,w2a1-careless-date-picker-utc-day,medium,yes,duplicate,medium
+2,Phone,final-audit-wave2-round1,w2a1-careless-new-item-split-on-background,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round1,w2a1-careless-undo-bar-belongs-to-first-delete,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round1,w2a1-careless-second-shared-code-ignored,medium,yes,confirmed,low
+2,Phone,final-audit-wave2-round1,w2a1-careless-shared-text-not-a-code,medium,yes,duplicate,medium
+2,Phone,final-audit-wave2-round1,w2a1-careless-code-with-words-around,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round1,w2a1-careless-reminders-blocked-line-stale,low,no,,
+2,Phone,final-audit-wave2-round1,w2a1-careless-category-colour-saved-rename-refused,low,yes,,
+2,Phone,final-audit-wave2-round1,w2a1-careless-reminder-hour-24h-only,low,yes,,
+1,Phone,final-audit-wave1-round3-android,a3r1-fixes-data-off-mark-erased-before-first-start,high,yes,confirmed,high
+1,Phone,final-audit-wave1-round3-android,a3r1-fixes-data-backup-plan-applied-by-position,high,yes,confirmed,high
+1,Phone,final-audit-wave1-round3-android,a3r1-fixes-data-attach-refused-after-undo,low,yes,confirmed,low
+1,Phone,final-audit-wave1-round3-android,a3r1-fixes-data-fitted-name-roundtrip-duplicates-desktop-attachment,low,no,confirmed,low
+1,Phone,final-audit-wave1-round3-android,a3r2-fixes-ui-long-run-in-table-cell-bypasses-guard,high,yes,confirmed,high
+1,Phone,final-audit-wave1-round3-android,a3r2-fixes-ui-nbsp-joined-run-bypasses-guard,high,yes,duplicate,high
+1,Phone,final-audit-wave1-round3-android,a3r2-fixes-ui-snackbar-quotes-whole-long-text,high,no,duplicate,high
+1,Phone,final-audit-wave1-round3-android,a3r2-fixes-ui-template-editor-rows-not-guarded,high,no,confirmed,high
+1,Phone,final-audit-wave1-round3-android,a3r2-fixes-ui-paste-makes-line-readonly-caret-jumps-up,medium,no,plausible,low
+1,Phone,final-audit-wave1-round3-android,a3r4-round2-gaps-nbsp-bypasses-max-unbroken,high,yes,confirmed,high
+1,Phone,final-audit-wave1-round3-android,a3r4-round2-gaps-template-editor-checklist-row-unguarded,high,no,duplicate,high
+1,Phone,final-audit-wave1-round3-android,a3r4-round2-gaps-export-quadratic-on-undrawn-table,high,yes,confirmed,high
+1,Phone,final-audit-wave1-round3-android,a3r4-round2-gaps-share-words-no-size-ceiling-crash,high,no,confirmed,high
+1,Phone,final-audit-wave1-round3-android,a3r4-round2-gaps-full-text-in-bars-and-dialogs,high,no,confirmed,high
+1,Phone,final-audit-wave1-round3-android,a3r4-round2-gaps-pdf-silently-drops-text,medium,no,confirmed,medium
+1's lows,Desktop,final-audit-lows-verify9-desktop,lv9-d1-paste-marker-matrix-level-by-tag-order,medium,yes,confirmed,medium
+1's lows,Desktop,final-audit-lows-verify9-desktop,lv9-d1-paste-marker-matrix-phone-first-line-flattened,low,no,,
+1's lows,Desktop,final-audit-lows-verify9-desktop,lv9-d1-paste-marker-matrix-phone-rows-trim-drops-item-marker,low,no,,
+1's lows,Desktop,final-audit-lows-verify9-desktop,lv9-d1-paste-marker-matrix-stale-number-doubles-marker,low,yes,,
+1's lows,Desktop,final-audit-lows-verify9-desktop,lv9-d1-paste-marker-matrix-plain-glyph-kind-at-marker,low,yes,,
+1's lows,Desktop,final-audit-lows-verify9-desktop,lv9-d1-paste-marker-matrix-plain-list-splits-levels,low,yes,,
+1's lows,Desktop,final-audit-lows-verify9-desktop,lv9-d1-paste-marker-matrix-word-list-padding,low,yes,,
+1's lows,Desktop,final-audit-lows-verify9-desktop,lv9-d1-paste-marker-matrix-linux-ci-help-runs-suite,low,yes,,
+2,Phone,final-audit-wave2-round21,w2a21-steps-short-list-kept-on-top-handle-under-plus,medium,yes,confirmed,low
+2,Phone,final-audit-wave2-round21,w2a21-steps-pair-test-counts-moved-gap,low,yes,,
+2,Phone,final-audit-wave2-round21,w2a21-drag-put-back-after-trade-lands-past,medium,yes,confirmed,low
+2,Phone,final-audit-wave2-round21,w2a21-drag-second-handle-hijacks-drag,low,yes,,
+2,Phone,final-audit-wave2-round21,w2a21-drag-held-just-past-press-stutters,low,yes,,
+3,Phone,final-audit-wave3-slop-round8,w3a8-fixes-held-cell-caption-line-above,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round8,w3a8-fixes-held-cell-tests-prove-less,low,yes,,
+3,Phone,final-audit-wave3-slop-round8,w3a8-fixes-dup-panel-text-drift,low,yes,,
+1,Phone,final-audit-wave1-round24-small-android,a24d1-round23-fix-and-seams-open-undrawn-day-trap,low,yes,,
+2,Desktop,final-audit-wave2-round10,w2d10-open-stale-panel-button-opens-one-day,medium,yes,confirmed,low
+2,Desktop,final-audit-wave2-round10,w2d10-open-history-menu-way-back-wrong-month,low,yes,,
+2,Desktop,final-audit-wave2-round10,w2d10-import-phone-twin-all-lookalike-cancel-drops-update,medium,yes,confirmed,medium
+2,Desktop,final-audit-wave2-round10,w2d10-import-add-as-new-reasked-default-cancel,medium,yes,confirmed,low
+2,Desktop,final-audit-wave2-round10,w2d10-import-backup-pending-ignores-templates-and-day-colours,low,yes,,
+2,Desktop,final-audit-wave2-round10,w2d10-import-skip-path-wording-lows,low,yes,,
+2,Phone,final-audit-wave2-round10,w2a10-days-move-refused-or-same-date-makes-row,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round10,w2a10-days-editor-own-day-controls-make-row,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round10,w2a10-days-staying-change-reads-editor-back,low,yes,,
+2,Phone,final-audit-wave2-round10,w2a10-list-unpin-top-card-list-follows,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round10,w2a10-list-delete-undo-restores-above-screen,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round10,w2a10-list-lows,low,no,,
+1,Desktop,final-audit-wave1-round20-small-desktop,r20d1-round19-fixes-and-seams-undo-after-restore-drops-live-move,low,yes,,
+1,Desktop,final-audit-wave1-round20-small-desktop,r20d2-gaps-and-tools-fuzz-doubles-beyond-its-seeds,low,yes,,
+1,Desktop,final-audit-wave1-round20-small-desktop,r20d2-gaps-and-tools-twin-check-order-lucky,low,yes,,
+1,Phone,final-audit-wave1-round20-small-android,a20d1-round19-fixes-and-seams-read-keeps-dead-move-moves-meeting-home,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round20-small-android,a20d1-round19-fixes-and-seams-twin-readers-latent,low,yes,,
+1,Phone,final-audit-wave1-round20-small-android,a20d2-gaps-and-tools-on-the-phone-install-keeps-dead-move,medium,yes,duplicate,medium
+1,Phone,final-audit-wave1-round20-small-android,a20d2-gaps-and-tools-on-the-phone-undo-after-off-on-loses-words,medium,yes,confirmed,low
+1,Phone,final-audit-wave1-round20-small-android,a20d2-gaps-and-tools-on-the-phone-mutant-verdicts-and-reasons,low,yes,,
+1,Phone,final-audit-wave1-round20-small-android,a20d2-gaps-and-tools-on-the-phone-test-floor-slack,low,no,,
+1's lows,Desktop,final-audit-lows-verify2-desktop,lv2-d1-round1-fixes-day-list-depth-by-line-index,medium,yes,confirmed,medium
+1's lows,Desktop,final-audit-lows-verify2-desktop,lv2-d1-round1-fixes-aside-held-key-ignores-comments,low,yes,,
+1's lows,Desktop,final-audit-lows-verify2-desktop,lv2-d1-round1-fixes-fuzz-box-never-reaches-dedupe,low,no,,
+2,Desktop,final-audit-wave2-round14,w2d14-earlier-backup-skip-drops-lookalike-files-and-date,low,yes,,
+2,Phone,final-audit-wave2-round14,w2a14-list-list-follows-acted-on-top-card,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round14,w2a14-list-pin-target-unmoved-pinned-card,low,yes,,
+2,Phone,final-audit-wave2-round14,w2a14-days-new-note-checklist-vanishes-at-first-save,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round14,w2a14-days-code-import-reads-back-untouched-note,low,yes,,
+1,Desktop,final-audit-wave1-round9-desktop,r9d1-data-fixes-spend-erases-unmoved-day-text,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round9-desktop,r9d1-data-fixes-double-turn-off-drops-rescued-text,high,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round9-desktop,r9d1-data-fixes-old-backup-turned-off-reads-edited,medium,yes,confirmed,low
+1,Desktop,final-audit-wave1-round9-desktop,r9d1-data-fixes-import-failed-session-end-leaves-unpacked,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round9-desktop,r9d1-data-fixes-update-copy-turnoff-status-promise,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round9-desktop,r9d2-ui-fixes-title-paste-regex-freezes-on-a-run-of-spaces,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round9-desktop,r9d2-ui-fixes-title-cap-says-shortened-for-a-trailing-space,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round9-desktop,r9d2-ui-fixes-waiting-said-outlives-the-words,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round9-desktop,r9d3-machine-safety-sandbox-guard-or-path,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round9-desktop,r9d3-machine-safety-gitignore-misses-app-data,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round9-desktop,r9d3-machine-safety-container-root-unbounded,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round9-desktop,r9d3-machine-safety-by-hand-suites-unguarded,low,no,confirmed,low
+1,Desktop,final-audit-wave1-round9-desktop,r9d4-round8-gaps-spend-erases-days-of-released-shape,high,yes,duplicate,high
+1,Desktop,final-audit-wave1-round9-desktop,r9d4-round8-gaps-held-turn-off-drops-update-copy,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round9-desktop,r9d5-round8-seams-spend-erases-skipped-days-two-saves,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round9-desktop,r9d5-round8-seams-reimport-older-turnoff-reads-edited,low,yes,duplicate,low
+1,Desktop,final-audit-wave1-round9-desktop,r9d5-round8-seams-turnoff-line-false-over-update-copy,low,yes,duplicate,low
+1,Desktop,final-audit-wave1-round9-desktop,r9d5-round8-seams-phone-title-paste-old-rule,low,no,confirmed,low
+1,Desktop,final-audit-wave1-round9-desktop,r9d5-round8-seams-phone-restore-styles-unmirrored,low,no,confirmed,low
+1,Desktop,final-audit-wave1-round9-desktop,r9d5-round8-seams-ignore-list-misses-data-siblings,low,no,duplicate,low
+2,Phone,final-audit-wave2-round18,w2a18-steps-down-past-screen-jumps-to-top,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round18,w2a18-steps-keyboard-hides-stepped-card,low,yes,,
+2,Phone,final-audit-wave2-round18,w2a18-steps-failed-up-step-shifts-list,low,yes,,
+2,Phone,final-audit-wave2-round18,w2a18-drag-top-card-dragged-down-scrolls-against-finger,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round18,w2a18-drag-slot-correction-waits-for-next-move,low,yes,,
+1,Desktop,final-audit-wave1-round24-small-desktop,r24d1-round23-fix-on-the-desktop-follow-drops-way-back-to-calendar,low,yes,,
+1,Desktop,final-audit-wave1-round24-small-desktop,r24d1-round23-fix-on-the-desktop-leaves-rather-than-follows-moved-day,low,yes,,
+1,Phone,final-audit-wave1-round7-android,a7r1-days-model-trash-restore-skips-move,high,yes,confirmed,high
+1,Phone,final-audit-wave1-round7-android,a7r1-days-model-back-on-shape-not-read,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round7-android,a7r1-days-model-raw-read-parity,low,yes,confirmed,low
+1,Phone,final-audit-wave1-round7-android,a7r2-draft-and-ui-editor-closed-by-app-loses-template,medium,no,confirmed,medium
+1,Phone,final-audit-wave1-round7-android,a7r2-draft-and-ui-styles-undo-drops-insert-mark,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round7-android,a7r2-draft-and-ui-stale-draft-after-revert,low,no,confirmed,low
+1,Phone,final-audit-wave1-round7-android,a7r3-data-and-limits-restore-drops-new-comments,high,yes,confirmed,high
+1,Phone,final-audit-wave1-round7-android,a7r3-data-and-limits-comments-copy-replaces-body-copy,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round7-android,a7r3-data-and-limits-textlost-utf16-vs-codepoints,medium,yes,confirmed,low
+1,Phone,final-audit-wave1-round7-android,a7r3-data-and-limits-rowcap-silent-second-cut,medium,yes,confirmed,low
+1,Phone,final-audit-wave1-round7-android,a7r4-round6-gaps-row-parts-quadratic-anr,high,yes,confirmed,high
+1,Phone,final-audit-wave1-round7-android,a7r4-round6-gaps-trash-restore-skips-days-back,medium,yes,duplicate,high
+1,Phone,final-audit-wave1-round7-android,a7r4-round6-gaps-notification-drops-template-editor,low,no,duplicate,medium
+1,Phone,final-audit-wave1-round7-android,a7r4-round6-gaps-note-box-full-list-lost-behind-home,low,no,confirmed,low
+1,Phone,final-audit-wave1-round7-android,a7r5-seams-and-parity-trash-restore-skips-days-back,high,yes,duplicate,high
+1,Phone,final-audit-wave1-round7-android,a7r5-seams-and-parity-restore-drops-comments-typed-since,medium,yes,duplicate,high
+1,Phone,final-audit-wave1-round7-android,a7r5-seams-and-parity-template-title-take-cuts-own-end,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round7-android,a7r5-seams-and-parity-rescue-rule-utf16-units,low,yes,duplicate,low
+2,Phone,final-audit-wave2-round23,w2a23-edge-slow-start-lengthens-leads-burst,medium,no,plausible,medium
+2,Phone,final-audit-wave2-round23,w2a23-edge-landscape-dwell-over-a-second-overshoots,low,yes,,
+2,Phone,final-audit-wave2-round23,w2a23-edge-turn-restarts-the-crawl,low,yes,,
+2,Phone,final-audit-wave2-round23,w2a23-trades-edge-trade-hold-lost-on-touch,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round23,w2a23-trades-slow-start-stretches-refused-trade,low,yes,,
+1,Desktop,final-audit-wave1-round8-desktop,r8d1-data-fixes-reset-day-comes-back,medium,yes,confirmed,high
+1,Desktop,final-audit-wave1-round8-desktop,r8d1-data-fixes-comments-alone-overwrites-copy-comments,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round8-desktop,r8d1-data-fixes-turn-off-replaces-update-copy,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round8-desktop,r8d1-data-fixes-restore-substring-styles-lost,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round8-desktop,r8d1-data-fixes-unread-start-consumes-import-word,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round8-desktop,r8d1-data-fixes-waiting-words-nag-and-trash,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round8-desktop,r8d1-data-fixes-0120-days-in-later-copy,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round8-desktop,r8d2-ui-fixes-title-paste-drops-edge-spaces,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round8-desktop,r8d2-ui-fixes-title-paste-banner-overwritten-by-autosave,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round8-desktop,r8d2-ui-fixes-shortened-paste-silent-while-undo-offered,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round8-desktop,r8d3-machine-safety-test-data-safety-reclaims-real-appdata,critical,yes,confirmed,critical
+1,Desktop,final-audit-wave1-round8-desktop,r8d3-machine-safety-site-walk-outside-the-guest,high,yes,plausible,high
+1,Desktop,final-audit-wave1-round8-desktop,r8d3-machine-safety-gate-blind-shapes,medium,yes,confirmed,low
+1,Desktop,final-audit-wave1-round8-desktop,r8d3-machine-safety-walk-takes-turn-mid-walk,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round8-desktop,r8d3-machine-safety-door-mounts-root-data,low,no,confirmed,low
+1,Desktop,final-audit-wave1-round8-desktop,r8d3-machine-safety-no-disk-bound,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round8-desktop,r8d4-round7-gaps-import-complete-session-end-says-nothing-kept,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round8-desktop,r8d4-round7-gaps-held-enter-on-list-header-toggles,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round8-desktop,r8d4-round7-gaps-import-worker-held-past-join-leaves-files,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round8-desktop,r8d4-round7-gaps-template-not-kept-word-never-taken-back,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round8-desktop,r8d4-round7-gaps-checklist-full-nags-on-every-leave,low,yes,duplicate,low
+1,Desktop,final-audit-wave1-round8-desktop,r8d5-round7-seams-reset-day-resurrected-from-series-copy,high,yes,duplicate,high
+1,Desktop,final-audit-wave1-round8-desktop,r8d5-round7-seams-cut-paste-said-nowhere-under-undo,low,yes,duplicate,low
+1,Desktop,final-audit-wave1-round8-desktop,r8d5-round7-seams-unread-start-import-word-says-no-files,low,yes,duplicate,low
+1,Desktop,final-audit-wave1-round8-desktop,r8d5-round7-seams-phone-title-paste-weighs-line-break,low,no,plausible,low
+2,Phone,final-audit-wave2-round24,w2a24-hold-leads-ask-at-once-short-list-cancels,low,no,,
+2,Phone,final-audit-wave2-round24,w2a24-lead-wiring-unpinned,low,no,,
+1's lows,Desktop,final-audit-lows-verify4-desktop,lv4-d1-lows-wave-fresh-import-earlier-text-line-no-title-hint,low,no,,
+1's lows,Desktop,final-audit-lows-verify4-desktop,lv4-d1-lows-wave-fresh-update-dialog-all-1-note,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round11,wl11-a-round10-named-word-keeps-old-title,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round11,wl11-a-round10-two-pane-undo-put-back-said-twice,low,no,,
+1's lows,Desktop,final-audit-lows-verify-desktop,lv-d1-fixes-and-seams-day-nested-numbers-flattened,medium,yes,confirmed,medium
+1's lows,Desktop,final-audit-lows-verify-desktop,lv-d1-fixes-and-seams-make-note-carries-series-looks,low,yes,,
+1's lows,Desktop,final-audit-lows-verify-desktop,lv-d1-fixes-and-seams-update-aside-repeats,low,yes,,
+1's lows,Desktop,final-audit-lows-verify-desktop,lv-d2-tools-qa5-show-check-next-no-default,low,yes,,
+1's lows,Desktop,final-audit-lows-verify-desktop,lv-d2-tools-fuzz-slot-excuse-covers-update-copy,low,yes,,
+1's lows,Desktop,final-audit-lows-verify-desktop,lv-d2-tools-fuzz-reach-gaps,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round8,wl8-d-round7-undo-four-seconds-only-if-question-spans-timer,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round8,wl8-d-round7-import-cancelled-banner-covers-held-undo,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round8,wl8-d-round7-duplicate-yes-save-turns-to-calendar,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round8,wl8-d-lows-arrivals-recheck-quadratic-freeze,medium,yes,confirmed,low
+2's lows,Desktop,final-audit-wave2-lows-round8,wl8-d-lows-comments-table-paste-banner-covers-undo,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round8,wl8-a-round7-counted-word-said-all-hidden,medium,yes,confirmed,medium
+2's lows,Phone,final-audit-wave2-lows-round8,wl8-a-round7-bar-worded-before-its-turn-on-screen,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round8,wl8-a-round7-merged-restores-show-all-one-group,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round8,wl8-a-data-list-word-says-all-hidden-when-one-of-several,medium,yes,duplicate,medium
+2's lows,Phone,final-audit-wave2-lows-round8,wl8-a-data-merged-list-words-double-the-count,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round8,wl8-a-data-next-list-word-not-held-behind-undo,low,yes,,
+1,Phone,final-audit-wave1-round11-small-android,a11d1-data-and-parity-move-day-overwrites-off-schedule-words,high,yes,confirmed,high
+1,Phone,final-audit-wave1-round11-small-android,a11d1-data-and-parity-takeback-tie-drops-copy-stray-words,low,yes,,
+1,Phone,final-audit-wave1-round11-small-android,a11d2-editor-and-walk-opening-cut-not-anchored-at-tap,low,yes,,
+1,Desktop,final-audit-wave1-round1,d1-data-loss-trash-write-failure-ignored,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round1,d1-data-loss-migration-interrupted-attachments,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round1,d1-data-loss-close-after-failed-save,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round1,d1-data-loss-trash-attachments-scalar-crash,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round1,d1-data-loss-migration-skips-empty-or-unreadable,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round1,d1-data-loss-no-fsync-before-replace,medium,no,plausible,medium
+1,Desktop,final-audit-wave1-round1,d2-hostile-input-table-grid-eager-draw,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round1,d2-hostile-input-tall-table-x-error-kill,high,yes,plausible,high
+1,Desktop,final-audit-wave1-round1,d2-hostile-input-gif-preview-holds-every-frame,high,yes,duplicate,high
+1,Desktop,final-audit-wave1-round1,d2-hostile-input-plain-paste-see-quadratic,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round1,d2-hostile-input-html-close-quadratic,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round1,d2-hostile-input-preview-full-size-convert,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round1,d2-hostile-input-backup-notes-not-a-list,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round1,d2-hostile-input-calc-recursion,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round1,d3-security-shortname-alias-purge-deletes-own-files,critical,yes,confirmed,critical
+1,Desktop,final-audit-wave1-round1,d3-security-stream-suffix-skips-unsafe-warning,critical,yes,confirmed,critical
+1,Desktop,final-audit-wave1-round1,d3-security-crashlog-writes-profile-path,low,no,confirmed,low
+1,Desktop,final-audit-wave1-round1,d4-lifecycle-time-gif-preview-memory,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round1,d4-lifecycle-time-session-end-skips-close,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round1,d4-lifecycle-time-reminder-midnight,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round1,d4-lifecycle-time-trash-clock-jump,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round1,d4-lifecycle-time-share-panel-leak,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round1,d5-accessibility-dropdowns-and-pickers-mouse-only,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round1,d5-accessibility-drawn-buttons-mouse-only,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round1,d5-accessibility-focus-leaves-view,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round1,d5-accessibility-text-size-editor-only,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round1,d5-accessibility-body-tab-exit-undocumented,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round1,d6-first-start-install-purge-deletes-unchecked-backups,high,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round1,d6-first-start-install-parent-file-crashes-every-start,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round1,d6-first-start-install-adopts-strangers-file-from-unpack-folder,medium,yes,confirmed,low
+1,Desktop,final-audit-wave1-round1,d6-first-start-install-file-named-note-organizer-misleading-fallback,low,yes,confirmed,low
+1,Desktop,final-audit-wave1-round1,d6-first-start-install-no-userprofile-relative-notebook,low,yes,confirmed,low
+1,Phone,final-audit-wave1-round1,a1-data-loss-update-no-rollback-false-autosaved,critical,no,confirmed,critical
+1,Phone,final-audit-wave1-round1,a1-data-loss-leave-ignores-failed-save,high,no,confirmed,high
+1,Phone,final-audit-wave1-round1,a1-data-loss-restored-trash-purged-by-default-window,high,no,confirmed,high
+1,Phone,final-audit-wave1-round1,a1-data-loss-checklist-draft-not-flushed,high,no,confirmed,high
+1,Phone,final-audit-wave1-round1,a1-data-loss-auto-backup-25mb-claim,medium,no,confirmed,medium
+1,Phone,final-audit-wave1-round1,a1-data-loss-corrupt-copy-unreachable,medium,no,confirmed,medium
+1,Phone,final-audit-wave1-round1,a1-data-loss-export-truncates-chosen-backup-first,medium,no,plausible,medium
+1,Phone,final-audit-wave1-round1,a2-hostile-input-deep-json-stackoverflow,high,no,confirmed,high
+1,Phone,final-audit-wave1-round1,a2-hostile-input-bomb-under-50mb-oom,high,no,confirmed,high
+1,Phone,final-audit-wave1-round1,a2-hostile-input-table-300-eager-grid,high,no,plausible,high
+1,Phone,final-audit-wave1-round1,a2-hostile-input-json-error-whole-file-snackbar,medium,no,confirmed,high
+1,Phone,final-audit-wave1-round1,a2-hostile-input-lookalikes-thrice-in-composition,medium,no,plausible,medium
+1,Phone,final-audit-wave1-round1,a3-security-privacy-backup-error-echoes-whole-notes-file,medium,no,duplicate,high
+1,Phone,final-audit-wave1-round1,a3-security-privacy-autobackup-quota-silently-drops-notes,medium,no,duplicate,medium
+1,Phone,final-audit-wave1-round1,a3-security-privacy-autobackup-not-e2e-without-screen-lock,low,no,confirmed,low
+1,Phone,final-audit-wave1-round1,a3-security-privacy-release-adopts-notebook-from-shared-storage,low,no,plausible,low
+1,Phone,final-audit-wave1-round1,a4-lifecycle-state-checklist-rename-not-flushed,high,no,duplicate,high
+1,Phone,final-audit-wave1-round1,a4-lifecycle-state-launch-intent-redelivered,medium,no,confirmed,medium
+1,Phone,final-audit-wave1-round1,a4-lifecycle-state-configchanges-incomplete,medium,no,confirmed,medium
+1,Phone,final-audit-wave1-round1,a4-lifecycle-state-editor-owned-results-dropped,medium,no,plausible,medium
+1,Phone,final-audit-wave1-round1,a4-lifecycle-state-saved-state-too-large,medium,no,plausible,medium
+1,Phone,final-audit-wave1-round1,a4-lifecycle-state-reminder-timezone,low,yes,confirmed,low
+1,Phone,final-audit-wave1-round1,a4-lifecycle-state-midnight-stale-today,low,no,confirmed,low
+1,Phone,final-audit-wave1-round1,a5-accessibility-drag-only-reorder,medium,no,confirmed,medium
+1,Phone,final-audit-wave1-round1,a5-accessibility-checklist-remove-unlabelled,high,no,confirmed,medium
+1,Phone,final-audit-wave1-round1,a5-accessibility-toggle-state-colour-only,medium,no,confirmed,medium
+1,Phone,final-audit-wave1-round1,a5-accessibility-unlabelled-glyph-buttons,medium,no,confirmed,medium
+1,Phone,final-audit-wave1-round1,a5-accessibility-not-saved-silent,medium,no,confirmed,medium
+1,Phone,final-audit-wave1-round1,a5-accessibility-switch-and-field-outline-contrast,low,yes,confirmed,low
+1,Phone,final-audit-wave1-round1,a5-accessibility-calendar-cell-large-text,low,no,plausible,low
+1,Phone,final-audit-wave1-round1,a6-desktop-interop-prev-contains-freeze,high,no,confirmed,high
+1,Phone,final-audit-wave1-round1,a6-desktop-interop-prev-restore-bypasses-ceilings,high,no,confirmed,high
+1,Phone,final-audit-wave1-round1,a6-desktop-interop-sharecode-tolerance-asymmetry,medium,yes,confirmed,medium
+2's lows,Desktop,final-audit-wave2-lows-round4,wl4-d-round3-cell-capslock-ctrl-shift-z-undoes,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round4,wl4-d-round3-files-left-sentence-names-no-note,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round4,wl4-d-lows-show-all-off-the-notes-tab-changes-an-unseen-list,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round4,wl4-a-round3-undo-drops-waiting-offers-desktop-defers,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round4,wl4-a-round3-arrival-outlives-trashed-aside-names-next-note,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round4,wl4-a-data-reset-home-calendar-stays,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round4,wl4-a-data-undo-cancels-unseen-hidden-words,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round4,wl4-a-data-shared-text-held-in-leave-bar,low,yes,,
+2,Desktop,final-audit-wave2-round9,w2d9-fixes-calendar-open-still-reloads-open-note,medium,yes,confirmed,medium
+2,Desktop,final-audit-wave2-round9,w2d9-fixes-own-card-drag-cancelled-by-autosave,low,yes,,
+2,Desktop,final-audit-wave2-round9,w2d9-fixes-find-skips-hidden-columns,low,yes,,
+2,Desktop,final-audit-wave2-round9,w2d9-fixes-own-card-lows,low,yes,,
+2,Desktop,final-audit-wave2-round9,w2d9-roads-all-lookalike-cancel-drops-agreed-update,medium,yes,confirmed,medium
+2,Desktop,final-audit-wave2-round9,w2d9-roads-added-category-lands-out-of-sight,medium,yes,confirmed,low
+2,Desktop,final-audit-wave2-round9,w2d9-roads-import-double-click-false-error,low,yes,,
+2,Desktop,final-audit-wave2-round9,w2d9-roads-lows,low,yes,,
+2,Phone,final-audit-wave2-round9,w2a9-fixes-day-change-staying-makes-row,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round9,w2a9-fixes-grouped-pin-jumps-to-first-group,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round9,w2a9-fixes-lows,low,yes,,
+2,Phone,final-audit-wave2-round9,w2a9-roads-reminder-hour-late-promised-minutes,medium,no,plausible,medium
+2,Phone,final-audit-wave2-round9,w2a9-roads-app-offers-itself-in-own-share-sheet,low,no,,
+2,Phone,final-audit-wave2-round9,w2a9-roads-calendar-no-visible-today,low,yes,,
+2,Phone,final-audit-wave2-round9,w2a9-roads-calendar-new-note-hidden-unsaid,low,yes,,
+2,Phone,final-audit-wave2-round9,w2a9-roads-small-lows,low,no,,
+2's lows,Desktop,final-audit-wave2-lows-round7,wl7-d-round6-banner-click-break-keeps-unasked-popups-open,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round7,wl7-d-round6-ctrl-s-from-settings-still-turns-tab-and-saves-hidden-note,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round7,wl7-d-round6-held-arrivals-banner-keeps-stale-words,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round7,wl7-d-lows-undo-runs-out-under-unbidden-import-dialog,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round7,wl7-d-lows-held-arrivals-banner-words-frozen,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round7,wl7-a-round6-queued-list-words-stale-after-show-all,medium,yes,confirmed,medium
+2's lows,Phone,final-audit-wave2-lows-round7,wl7-a-round6-trash-undo-word-lost-when-queued,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round7,wl7-a-round6-arrivals-effect-clears-word-appended-before-it-ran,low,no,,
+2's lows,Phone,final-audit-wave2-lows-round7,wl7-a-round6-saved-word-unstripped-title,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round7,wl7-a-data-queued-new-note-word-lost-to-its-own-undo,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round7,wl7-a-data-queued-bars-say-hidden-by-after-show-all,low,yes,,
+2,Phone,final-audit-wave2-round20,w2a20-steps-landscape-step-down-buries-moved-card,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round20,w2a20-drag-put-back-top-card-moves-up,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round20,w2a20-drag-flash-half-marked-fixed,low,yes,,
+2,Phone,final-audit-wave2-round20,w2a20-drag-zone-correction-unpinned,low,yes,,
+3,Phone,final-audit-wave3-slop-round6,w3a6-behaviour-backup-off-now,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round6,w3a6-behaviour-interop-stale-guard,low,yes,,
+3,Phone,final-audit-wave3-slop-round6,w3a6-behaviour-interop-desktop-half,low,yes,,
+3,Phone,final-audit-wave3-slop-round6,w3a6-behaviour-dup-explain-omits-styling,low,yes,,
+3,Phone,final-audit-wave3-slop-round6,w3a6-behaviour-welcome-leaves-phone,low,yes,,
+3,Phone,final-audit-wave3-slop-round6,w3a6-reader-arch-both-gates,low,yes,,
+3,Phone,final-audit-wave3-slop-round6,w3a6-reader-interop-writes-desktop,low,yes,,
+3,Phone,final-audit-wave3-slop-round6,w3a6-reader-category-days-plural,low,yes,,
+3,Phone,final-audit-wave3-slop-round6,w3a6-reader-welcome-only-when,low,yes,,
+3,Phone,final-audit-wave3-slop-round6,w3a6-reader-about-stays-on-phone,low,yes,,
+3,Phone,final-audit-wave3-slop-round6,w3a6-reader-demo-import-updates,low,yes,,
+1,Desktop,final-audit-wave1-round17-small-desktop,r17d1-round16-fixes-and-seams-moves-home-chain-overwrite-loses-day-words,critical,yes,confirmed,critical
+1,Desktop,final-audit-wave1-round17-small-desktop,r17d1-round16-fixes-and-seams-restore-mixed-day-kinds-misplaces-words,low,yes,,
+1,Desktop,final-audit-wave1-round17-small-desktop,r17d1-round16-fixes-and-seams-combined-status-line-cut,low,yes,,
+1,Desktop,final-audit-wave1-round17-small-desktop,r17d2-series-days-whole-again-dead-move-target-shared,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round17-small-desktop,r17d2-series-days-whole-again-weekday-spelling-not-as-it-was,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round17-small-desktop,r17d2-series-days-whole-again-backup-update-sets-aside-held-words,medium,yes,confirmed,low
+1,Desktop,final-audit-wave1-round17-small-desktop,r17d2-series-days-whole-again-dead-move-onto-deleted-rule-date-hidden,low,yes,,
+1,Desktop,final-audit-wave1-round17-small-desktop,r17d2-series-days-whole-again-set-aside-news-glued-to-unrelated-line,low,yes,,
+2,Desktop,final-audit-wave2-round7,w2d7-fixes-aside-ghost-after-flush,high,yes,confirmed,high
+2,Desktop,final-audit-wave2-round7,w2d7-fixes-aside-move-and-second-delete-stay,medium,yes,confirmed,medium
+2,Desktop,final-audit-wave2-round7,w2d7-fixes-see-cell-repin-hides-tab-target,medium,yes,confirmed,medium
+2,Desktop,final-audit-wave2-round7,w2d7-fixes-see-cell-see-first-jumps,low,no,,
+2,Desktop,final-audit-wave2-round7,w2d7-fixes-aside-gone-said-out-of-sight,low,yes,,
+2,Desktop,final-audit-wave2-round7,w2d7-fixes-lows,low,yes,,
+2,Desktop,final-audit-wave2-round7,w2d7-roads-template-editor-x-discards-unasked,medium,yes,confirmed,medium
+2,Desktop,final-audit-wave2-round7,w2d7-roads-restore-selected-double-click-empty-trash,low,yes,,
+2,Desktop,final-audit-wave2-round7,w2d7-roads-numbered-list-enter-undo-split,low,yes,,
+2,Desktop,final-audit-wave2-round7,w2d7-roads-day-move-to-category-moves-series,low,yes,,
+2,Desktop,final-audit-wave2-round7,w2d7-roads-checklist-lows,low,no,,
+2,Phone,final-audit-wave2-round7,w2a7-fixes-grown-line-shrinks-at-large-font,low,no,,
+2,Phone,final-audit-wave2-round7,w2a7-fixes-one-word-grows-whole-paragraph,low,yes,,
+2,Phone,final-audit-wave2-round7,w2a7-fixes-overlapping-sizes-multiply,low,no,,
+2,Phone,final-audit-wave2-round7,w2a7-roads-bulk-move-no-undo,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round7,w2a7-roads-row-undo-finishes-new-item,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round7,w2a7-roads-ctrl-z-in-row-undoes-body,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round7,w2a7-roads-small-lows,low,yes,,
+1's lows,Phone,final-audit-lows-verify9-android,lv9-a1-paste-marker-matrix-start-moved-to-line-start,medium,yes,confirmed,low
+1's lows,Phone,final-audit-lows-verify9-android,lv9-a1-paste-marker-matrix-marker-place-apps-differ,medium,yes,confirmed,low
+1's lows,Phone,final-audit-lows-verify9-android,lv9-a1-paste-marker-matrix-pipe-rows-hide-break,low,yes,,
+1's lows,Phone,final-audit-lows-verify9-android,lv9-a1-paste-marker-matrix-lows,low,yes,,
+1,Phone,final-audit-wave1-round8-android,a8r1-editor-fixes-undo-drops-calc-mark,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round8-android,a8r1-editor-fixes-category-refusal-under-sheet,medium,no,confirmed,medium
+1,Phone,final-audit-wave1-round8-android,a8r1-editor-fixes-search-query-saved-twice,medium,no,plausible,low
+1,Phone,final-audit-wave1-round8-android,a8r1-editor-fixes-cap-words-not-announced,low,no,confirmed,low
+1,Phone,final-audit-wave1-round8-android,a8r1-editor-fixes-row-parts-split-graphemes,low,yes,confirmed,low
+1,Phone,final-audit-wave1-round8-android,a8r2-data-fixes-reset-day-returns-every-start,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round8-android,a8r2-data-fixes-rule-shape-parity,low,yes,confirmed,low
+1,Phone,final-audit-wave1-round8-android,a8r3-checks-and-tools-frame-checks-read-before-the-frame-ends,medium,no,plausible,low
+1,Phone,final-audit-wave1-round8-android,a8r3-checks-and-tools-walk-takes-the-machine-turn-mid-run,medium,yes,confirmed,low
+1,Phone,final-audit-wave1-round8-android,a8r3-checks-and-tools-calcmark-undo-untested,low,yes,confirmed,low
+1,Phone,final-audit-wave1-round8-android,a8r3-checks-and-tools-ui-promises-without-a-check,low,no,confirmed,low
+1,Phone,final-audit-wave1-round8-android,a8r3-checks-and-tools-textlost-end-edge-untested,low,yes,confirmed,low
+1,Phone,final-audit-wave1-round8-android,a8r3-checks-and-tools-walk-premises-not-read-back,low,yes,confirmed,low
+1,Phone,final-audit-wave1-round8-android,a8r4-round7-gaps-cap-words-under-box-not-announced,low,no,duplicate,low
+1,Phone,final-audit-wave1-round8-android,a8r4-round7-gaps-details-sheet-landscape-no-room,low,no,plausible,low
+1,Phone,final-audit-wave1-round8-android,a8r5-seams-and-parity-title-with-one-break-eats-keys,high,yes,confirmed,medium
+1,Phone,final-audit-wave1-round8-android,a8r5-seams-and-parity-paste-weighed-as-copied,medium,yes,confirmed,low
+3,Desktop,final-audit-wave3-slop-round1,w3d-code-dead-grid-read-rows,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round1,w3d-code-return-to-calendar-swallow,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round1,w3d-code-migration-case1-promise,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round1,w3d-code-entry-file-line-count,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round1,w3d-code-dead-code-cluster,low,yes,,
+3,Desktop,final-audit-wave3-slop-round1,w3d-code-comment-volume,low,yes,,
+3,Desktop,final-audit-wave3-slop-round1,w3d-code-stamp-literal,low,yes,,
+3,Desktop,final-audit-wave3-slop-round1,w3d-code-paths-stale-appdata-comments,low,yes,,
+3,Desktop,final-audit-wave3-slop-round1,w3d-code-huge-builders,low,yes,,
+3,Desktop,final-audit-wave3-slop-round1,w3d-code-small-nits,low,yes,,
+3,Desktop,final-audit-wave3-slop-round1,w3d-docs-crashlog-promise,high,yes,confirmed,high
+3,Desktop,final-audit-wave3-slop-round1,w3d-docs-duplicate-rule-told-five-ways,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round1,w3d-docs-testplan-597,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round1,w3d-docs-suite-gate-mutant-counts,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round1,w3d-docs-single-instance-undocumented,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round1,w3d-docs-manual-run-missing-marker,medium,yes,confirmed,medium
+3,Desktop,final-audit-wave3-slop-round1,w3d-docs-claude-native-dialogs,medium,yes,confirmed,low
+3,Desktop,final-audit-wave3-slop-round1,w3d-docs-entry-file-linecount,low,yes,,
+3,Desktop,final-audit-wave3-slop-round1,w3d-docs-style-cluster,low,yes,,
+1,Desktop,final-audit-wave1-round16-small-desktop,r16d1-round15-rule-by-name-moves-home-off-rule-origin,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round16-small-desktop,r16d1-round15-rule-by-name-set-aside-ignores-moves,medium,yes,confirmed,low
+1,Desktop,final-audit-wave1-round16-small-desktop,r16d1-round15-rule-by-name-restore-previous-no-moves-home,medium,yes,confirmed,medium
+1,Desktop,final-audit-wave1-round16-small-desktop,r16d1-round15-rule-by-name-said-line-overwritten,low,yes,,
+1,Desktop,final-audit-wave1-round16-small-desktop,r16d1-round15-rule-by-name-start-notes-new-uid-each-launch,low,yes,,
+1,Desktop,final-audit-wave1-round16-small-desktop,r16d2-gaps-and-tools-moves-home-chain-quadratic-import-freeze,high,yes,confirmed,high
+1,Desktop,final-audit-wave1-round16-small-desktop,r16d2-gaps-and-tools-moves-home-origin-off-schedule,medium,yes,duplicate,medium
+1,Desktop,final-audit-wave1-round16-small-desktop,r16d2-gaps-and-tools-days-fixture-regions-miss-replayed-code,low,yes,,
+1,Desktop,final-audit-wave1-round16-small-desktop,r16d2-gaps-and-tools-set-aside-roads-without-checks,low,yes,,
+2,Phone,final-audit-wave2-round22,w2a22-steps-talkback-step-silent-drag-label,low,yes,,
+2,Phone,final-audit-wave2-round22,w2a22-steps-menu-reopens-after-turn,low,no,,
+2,Phone,final-audit-wave2-round22,w2a22-drag-landscape-every-drag-scrolls,medium,yes,confirmed,medium
+2,Phone,final-audit-wave2-round22,w2a22-drag-edge-speed-fixed-px-long-carry,low,yes,,
+2,Phone,final-audit-wave2-round22,w2a22-drag-fling-stop-tap-opens-menu,low,no,,
+1,Phone,final-audit-wave1-round10-android,a10r1-editor-fixes-enter-at-mark-read-past-it,low,yes,confirmed,low
+1,Phone,final-audit-wave1-round10-android,a10r1-editor-fixes-cap-rereads-change-off-texts,low,yes,confirmed,low
+1,Phone,final-audit-wave1-round10-android,a10r1-editor-fixes-id-edge-overflows-to-shared-negative-id,low,yes,confirmed,low
+1,Phone,final-audit-wave1-round10-android,a10r2-data-fixes-second-turnoff-other-series-loses-big-delete,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round10-android,a10r2-data-fixes-held-date-spends-copy-day-text,high,yes,confirmed,high
+1,Phone,final-audit-wave1-round10-android,a10r2-data-fixes-turnoff-word-promises-dropped-copy,medium,yes,confirmed,low
+1,Phone,final-audit-wave1-round10-android,a10r2-data-fixes-reset-in-restart-comes-back,low,yes,confirmed,low
+1,Phone,final-audit-wave1-round10-android,a10r3-checks-and-tools-drawn-in-decided-by-the-look,low,yes,confirmed,low
+1,Phone,final-audit-wave1-round10-android,a10r3-checks-and-tools-enter-message-raced,low,no,plausible,low
+1,Phone,final-audit-wave1-round10-android,a10r4-round9-gaps-upgrade-0120-moved-or-coloured-day-words-spent,critical,yes,duplicate,high
+1,Phone,final-audit-wave1-round10-android,a10r4-round9-gaps-id-at-int-edge-new-notes-share-min-id,low,yes,duplicate,low
+1,Phone,final-audit-wave1-round10-android,a10r4-round9-gaps-message-over-checklist-row-being-renamed,low,no,plausible,low
+1,Phone,final-audit-wave1-round10-android,a10r4-round9-gaps-two-stacked-sheets-two-live-regions,low,no,plausible,low
+1,Phone,final-audit-wave1-round10-android,a10r4-round9-gaps-editor-typing-assume-skips-cases-d-and-p,low,no,confirmed,low
+1,Phone,final-audit-wave1-round10-android,a10r5-seams-and-parity-take-back-by-date-loses-day-words,high,yes,duplicate,high
+1,Phone,final-audit-wave1-round10-android,a10r5-seams-and-parity-second-turnoff-gives-older-words,medium,yes,confirmed,medium
+1,Phone,final-audit-wave1-round10-android,a10r5-seams-and-parity-calc-mark-enter-before-a-line,medium,yes,duplicate,low
+1,Phone,final-audit-wave1-round10-android,a10r5-seams-and-parity-repeat-off-promises-dropped-copy,low,yes,duplicate,low
+1,Phone,final-audit-wave1-round10-android,a10r5-seams-and-parity-find-fold-a-stroke,low,yes,confirmed,low
+1,Phone,final-audit-wave1-round22-small-android,a22d1-round21-fix-and-seams-start-line-says-day-holds-text-when-deleted,medium,yes,duplicate,low
+1,Phone,final-audit-wave1-round22-small-android,a22d1-round21-fix-and-seams-deleted-while-shown-comes-back-in-session,low,yes,,
+1,Phone,final-audit-wave1-round22-small-android,a22d1-round21-fix-and-seams-backup-update-drops-incoming-set-aside,low,yes,,
+1,Phone,final-audit-wave1-round22-small-android,a22d2-gaps-and-tools-on-the-phone-fuzz-lucky-seeds-held-misses-moved-key,low,yes,,
+1,Phone,final-audit-wave1-round22-small-android,a22d2-gaps-and-tools-on-the-phone-gate-staleness-ignores-fixtures,low,yes,,
+1's lows,Desktop,final-audit-lows-verify8-desktop,lv8-d1-paste-over-list-rows-exclusion-doubles-marker,medium,yes,confirmed,medium
+1's lows,Desktop,final-audit-lows-verify8-desktop,lv8-d1-paste-over-list-number-start-swallowed,medium,yes,already-decided,low
+1's lows,Desktop,final-audit-lows-verify8-desktop,lv8-d1-paste-over-list-line-end-selection-glues-item,low,yes,,
+1's lows,Desktop,final-audit-lows-verify8-desktop,lv8-d1-paste-over-list-double-read,low,yes,,
+1's lows,Desktop,final-audit-lows-verify8-desktop,lv8-d1-paste-over-list-older-lows,low,yes,,
+1's lows,Phone,final-audit-lows-verify8-android,lv8-a1-marker-rule-collapsed-paste-keeps-marker,medium,yes,confirmed,medium
+1's lows,Phone,final-audit-lows-verify8-android,lv8-a1-marker-rule-desktop-nested-item-jumps-out,medium,no,confirmed,low
+1's lows,Phone,final-audit-lows-verify8-android,lv8-a1-marker-rule-pushed-paste-loses-line-looks,low,yes,,
+1's lows,Phone,final-audit-lows-verify8-android,lv8-a1-marker-rule-ordinal-takes-marker-place,low,yes,,
+1's lows,Phone,final-audit-lows-verify8-android,lv8-a1-marker-rule-rows-paste-apps-differ,low,yes,,
+3,Phone,final-audit-wave3-slop-round5,w3a5-fixes-code-interop-gate-reads-raw-json,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round5,w3a5-fixes-code-data-format-emoji-both-ways,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round5,w3a5-fixes-code-pasting-table-twin-rest,low,yes,,
+3,Phone,final-audit-wave3-slop-round5,w3a5-fixes-code-shiftspans-pre-bisect,low,no,,
+3,Phone,final-audit-wave3-slop-round5,w3a5-fixes-code-round4-doc-drift,low,yes,,
+3,Phone,final-audit-wave3-slop-round5,w3a5-fixes-code-hand-spelled-small-rules,low,yes,,
+3,Phone,final-audit-wave3-slop-round5,w3a5-docs-spent-days-rule-stale,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round5,w3a5-docs-claude-ci-first-six,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round5,w3a5-docs-qa-readme-no-interop,medium,yes,confirmed,medium
+3,Phone,final-audit-wave3-slop-round5,w3a5-docs-walk-seeded-no-docstring,low,yes,,
+3,Phone,final-audit-wave3-slop-round5,w3a5-docs-emulator-readme-scratch,low,yes,,
+3,Phone,final-audit-wave3-slop-round5,w3a5-docs-dataformat-history-in-spec,low,yes,,
+3,Phone,final-audit-wave3-slop-round5,w3a5-docs-status-small-drift,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round5,wl5-d-round4-show-all-tab-change-destroys-kept-template-editor,high,yes,confirmed,high
+2's lows,Desktop,final-audit-wave2-lows-round5,wl5-d-round4-files-left-sentence-still-contradicts-the-question,low,yes,,
+2's lows,Desktop,final-audit-wave2-lows-round5,wl5-d-lows-cell-reopened-ctrlz-takes-banner-undo,medium,yes,confirmed,medium
+2's lows,Desktop,final-audit-wave2-lows-round5,wl5-d-lows-inapp-ctrlz-shortcut-says-outside-text-box,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round5,wl5-a-round4-reoffered-show-all-acts-on-gone-list,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round5,wl5-a-round4-shown-leave-anyway-returns-and-leaves-the-wrong-note,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round5,wl5-a-round4-reoffers-not-asked-again,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round5,wl5-a-round4-undo-own-words-wait-behind-reoffers,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round5,wl5-a-round4-new-note-word-keyed-by-reused-id,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round5,wl5-a-data-undo-words-wait-behind-reoffered-bars,low,yes,,
+2's lows,Phone,final-audit-wave2-lows-round5,wl5-a-data-reoffered-show-all-runs-on-disposed-list,low,yes,,

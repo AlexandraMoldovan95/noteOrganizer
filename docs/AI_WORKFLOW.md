@@ -82,8 +82,9 @@ can be reviewed; the memory is just the agent's working notebook.
 - **Real numbers only.** Failed rounds and raw scores are reported as they are, never smoothed.
   When a document states a figure, a tool can usually reproduce it (`tools/bench.py` for speed,
   `tools/call_graph.py` for the module split, `tools/verify_findings.py` for the register).
-  The final audit's figures cannot be: they were counted from the rounds' own records, which
-  are kept outside the repository; the prompts that ran them are [published in it](audit/README.md).
+  The final audit's table of findings is rebuilt by `tools/audit_numbers.py` from the rounds'
+  records, published anonymised as [findings.csv](audit/findings.csv); the prompts that ran them
+  are [published too](audit/README.md).
 - **The screen, not only the code.** Some bugs exist only in a photograph - a colour, a cut-off
   label. The story scripts and `tools/doc_screenshots.py` photograph the running app, and a fix
   to anything visible is looked at before it is called done.
@@ -239,6 +240,17 @@ agents moved to a cheaper model, Sonnet. A cheaper reviewer is a weaker one: onc
 leading the audit found what the round's reviewer had passed (the desktop's round 73), and that
 round did not count as clean.
 
+How much a reviewer on Sonnet catches was then measured, on 19 November. In a copy of the
+desktop, eight defects were put back among six true rewrites, as one ordinary round of fixes:
+six untrue rows of the test plan that the rounds of 15 November had fixed, and two of the
+catalogue's mutants in the app's code. Two reviewers on Sonnet, told only that it was a round,
+attacked it ([the prompt](audit/wave6/r99-desktop.txt)): each found all eight, and called none of
+the six true rewrites wrong. The test has its limits. Every defect was a known one put back, the
+diff showing it against the text that was right, and the code's two were mutants the catalogue
+names, so it measures what the late rounds did, attacking a round's own changes. It does not show
+that a defect described nowhere would be found: the one round 73's reviewer passed was of that
+kind.
+
 The review panel met a fourth time on 15 November, after waves 5 and 6, with the same roles and
 questions, every agent on Sonnet. It scored the desktop 5.88 and 6.88 and the phone 6.25 and
 7.00, below 8 November's. Its readers said why: the history's last weeks read as audit rounds
@@ -253,8 +265,10 @@ did what the desktop already did.
 What each round found is in the [issues log](ISSUES_LOG.md), from
 [A file with two names](ISSUES_LOG.md#a-file-with-two-names) on. The rounds' own records give
 the numbers (counted 8 November 2026): each agent's findings with the severity it gave them, and
-each verdict of the sceptic. The records stay outside the repository, with the probes; the
-prompts are published, as they ran, in [the audit's folder](audit/README.md).
+each verdict of the sceptic. They are published anonymised, a line per finding with no word of
+it, as [findings.csv](audit/findings.csv): `py tools/audit_numbers.py` rebuilds the table below
+from that file and compares it with this one, row by row. The probes stay outside the
+repository; the prompts are published, as they ran, in [the audit's folder](audit/README.md).
 
 | Wave | App | Findings: all (high or worse / medium / low) | Shown by a probe | Re-graded by a sceptic: kept / told twice / refuted / lowered |
 |---|---|---|---|---|
@@ -277,9 +291,9 @@ findings and 120 of the phone's 268.
 
 The agents of waves 1 to 5 used about 107 million tokens, as their runs recorded them: wave 1, 49.2 million;
 its lows, 8.2; wave 3, 8.7; wave 2, 22.9; its lows, 11.2; the panel's first two rounds, 2.1, and
-its fourth, 1.0; wave 5, 3.85 (the reading 2.63, the mini-audits 1.22). Wave 6 took 76.4
-million more to 15 November, 7.1 of them on Sonnet from that day, and the panel's fourth meeting
-1.1: about 185 million in all, as [the audit's record](audit/README.md) adds them up. The whole audit had been
+its fourth, 1.0; wave 5, 3.85 (the reading 2.63, the mini-audits 1.22). Wave 6 took 76.7
+million more to 19 November, 7.5 of them on Sonnet from 15 November, and the panel's fourth
+meeting 1.1: about 185 million in all, as [the audit's record](audit/README.md) adds them up. The whole audit had been
 estimated at 8 to 13 million before it began. The count leaves out the main
 session's own work between rounds, and the panel's third round, given to two agents by hand.
 

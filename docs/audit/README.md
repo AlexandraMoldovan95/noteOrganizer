@@ -76,10 +76,13 @@ agents were pointed at), with the paths replaced the same way.
 
 - **Wave 0** (licences, history, packaging) was mechanical, done in the main session without
   agents.
-- **The agents' answers.** Their findings and the sceptic's verdicts stay in the runs' records,
+- **The agents' words.** Their findings and the sceptic's verdicts stay in the runs' records,
   outside the repository. What they found is told in the
   [issues log](../ISSUES_LOG.md#a-file-with-two-names) and counted in
-  [the final audit](../AI_WORKFLOW.md#the-final-audit).
+  [the final audit](../AI_WORKFLOW.md#the-final-audit); waves 1 to 3's findings are here as
+  [findings.csv](findings.csv), a line each with its wave, app, round, key, severity, whether a
+  probe showed it and the sceptic's verdict, but no word of it, so
+  `py tools/audit_numbers.py` can rebuild that count.
 - **The files the scripts point at in `<scratchpad>`**: the last round's findings, the
   mechanical scans wave 3 started from, the agents' probes. They stayed on the machine.
 - **The prompts of the 30 agents** that wrote or measured fixes in wave 1's first ten rounds.
@@ -479,6 +482,8 @@ totals above are waves 1 to 5's.
 | [panel-phone-1.txt](wave6/panel-phone-1.txt) to [panel-phone-4.txt](wave6/panel-phone-4.txt), the panel's fourth meeting, on Sonnet | Phone | 2026-11-15 16:55 | 4 | 0.51 |
 | [panel-fixes-desktop.txt](wave6/panel-fixes-desktop.txt), the documents changed after the panel, on Sonnet | Desktop | 2026-11-15 17:06 | 1 | 0.15 |
 | [panel-fixes-phone.txt](wave6/panel-fixes-phone.txt), the documents changed after the panel, on Sonnet | Phone | 2026-11-15 17:06 | 1 | 0.07 |
+| [pages-check-desktop.txt](wave6/pages-check-desktop.txt), the corrections and the owner's two pages, on Sonnet | Desktop | 2026-11-19 19:10 | 1 | 0.13 |
+| [r99-desktop.txt](wave6/r99-desktop.txt), a test of the reviewers' recall: an ordinary round on a copy with eight defects put back, on Sonnet | Desktop | 2026-11-19 19:38 | 2 | 0.25 |
 
 From the third round, both agents of an app read one file; the line that started each named
 where to begin, one at each fix by name, the other at the person's roads and the documents.
