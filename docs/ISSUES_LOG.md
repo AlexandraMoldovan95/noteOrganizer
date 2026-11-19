@@ -5266,6 +5266,17 @@ found four rows naming the day's bar on a day with no note (563, 774, 782, 724).
 75 found nothing of medium severity, the second reading together all 22 rows the rounds after
 the whole plan had rewritten: the desktop's loop ended there.
 
+**The release's Linux run** (19 November, on 0.101.540) failed one check of qa5: after a day's
+autosave the line still said "Only this day: 12.10.2026", where "Auto-saved 12.10.2026 only"
+was due. The status line's hold (`_box_words_until`, a cut paste's words, a cancelled import, a
+big table's) was kept by the clock alone. Words written over the held ones left it nothing to
+keep, yet the next "Auto-saved" was still withheld until the clock ran out, and the day's own
+"Auto-saved" had become such a reassurance on 15 November. A hold an earlier section left had
+run out on Windows, which runs qa5 slower, and not under Linux. Any words but a reassurance now
+end the hold, as they already ended the claim of the words on what a save left out; the banner
+had it right from the start, its reassurance yielding to what the banner shows. qa6 checks the
+hold with its clock set ten minutes ahead, so only the rule can end it in time (mutant RV13).
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays
 open behind the block: at the thirty-ninth round the plan's automation claims were read all at

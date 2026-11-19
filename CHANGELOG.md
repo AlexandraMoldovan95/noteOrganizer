@@ -537,7 +537,7 @@ of the app adds to it.*
 ### Testing
 
 - Every fix landed with a check that fails without it and a mutant that proves the check: the
-  catalogue grew from 422 mutants to 1,389.
+  catalogue grew from 422 mutants to 1,390.
 - `test_data_safety` ends with a fuzz of a series' days: 1,500 roads of edit, move, delete, rule,
   share, backup and restore, after which no day's words are lost or doubled but those deleted or
   typed over.

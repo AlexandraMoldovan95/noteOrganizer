@@ -6385,6 +6385,27 @@ check(f"the autosave a title's paste sets off writes over neither the banner nor
       and _wa_seen['in sight'].get('saved') == 200
       and _wa_seen['in sight'].get('line') == _wa_words)
 
+# ...and the hold ends once other words take the line. Kept by the clock alone,
+# it held "Auto-saved" back under words that had replaced the held ones (a day
+# opened within eight seconds of a cancelled import said nothing of its save).
+# Held long here, so only the hold's own rule can end it in time.
+_bh = {}
+try:
+    app._say_by_the_box(app.title_entry, 'Held words')
+    app._box_words_until = time.monotonic() + 600
+    app.set_status('Auto-saved', reassurance=True)
+    _bh['held'] = str(app.status_lbl.cget('text'))
+    app.set_status('Only this day: 12.10.2026')
+    app.set_status('Auto-saved 12.10.2026 only', reassurance=True)
+    _bh['after'] = str(app.status_lbl.cget('text'))
+finally:
+    app._box_words_until = 0
+    app._hide_toast()
+    app._hide_words_beneath()
+check(f'a hold keeps its own words from the autosave, and ends once other words take '
+      f'the line ({_bh})',
+      _bh == {'held': 'Held words', 'after': 'Auto-saved 12.10.2026 only'})
+
 # ...and a title is weighed as it goes in, on one line: a line copied with its
 # line break, or Windows' CR LF, was "shortened" by the space it lost.
 _tw_told, _tw_kept = [], {}

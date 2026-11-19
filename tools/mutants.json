@@ -19883,5 +19883,23 @@
       "qa6"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "RV13",
+    "about": "A hold on the status line, kept by the clock alone, keeps \"Auto-saved\" back under words that have already replaced the held ones",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if not reassurance:\n            self._box_words_until = 0\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "a hold keeps its own words from the autosave, and ends once other words take the line"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
   }
 ]

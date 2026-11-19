@@ -22163,6 +22163,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # New words end _say_nothing_is_left_out's claim on the line, or an
         # older save's words came back over a later one's.
         self._status_names_left_out = None
+        # And the box's hold: kept by the clock alone, it withheld the next
+        # "Auto-saved" under words that had already replaced the held ones.
+        if not reassurance:
+            self._box_words_until = 0
         # One line: it quotes names kept whole, and a title of 3,000 lines
         # stood the status bar taller than X can draw.
         self.status_lbl.config(text=one_line(text, 1000))
