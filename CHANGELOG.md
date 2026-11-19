@@ -12,7 +12,7 @@ How the numbers themselves are counted is the
 
 | Version | Date | In one line |
 |---|---|---|
-| [0.100.524](#0100524--2026-11-12) | 2026-11-12 | The final audit before the stores: what agents found in two weeks of trying to break the app, fixed; the notebook in the profile's own folder; the keyboard everywhere; nothing a file, a paste or a code holds stops the app or freezes it. |
+| [0.101.540](#0101540--2026-11-19) | 2026-11-19 | The final audit before the stores: what agents found in three weeks of trying to break the app, fixed, its findings of low severity too; the notebook in the profile's own folder; the keyboard everywhere; nothing a file, a paste or a code holds stops the app or freezes it; a note keeps what a newer version adds. |
 | [0.97.405](#097405--2026-10-27) | 2026-10-27 | The Trash selects all its notes, and deletes the ticked ones for good; its rows follow a new window at once and count real time; the editor's toolbar holds still as a note empties. |
 | [0.96.401](#096401--2026-10-26) | 2026-10-26 | "↩ Restore previous" keeps a note's words when they are replaced, not only shrunk; a table copied from Excel, or its cells copied here and pasted with Ctrl+Shift+V, comes in as a table; words pasted from a web page are found by search. |
 | [0.96.396](#096396--2026-10-24) | 2026-10-24 | A table pasted as markdown text, from a chat or a `.md` file, fits its words instead of arriving with its columns cut short. |
@@ -110,14 +110,16 @@ How the numbers themselves are counted is the
 
 ---
 
-## [0.100.524] — 2026-11-12
+## [0.101.540] — 2026-11-19
 
-*Highlights: the final audit before the stores. For two weeks agents tried to break the app —
-lost notes, hostile and huge input, the keyboard alone, an ordinary person's week, a careless
-hand — and what they found that was already in 0.97.405 is fixed below, one entry for each
-defect, however many rounds its fix took. The notebook moves to the profile's own folder, where
-an uninstall leaves it; the keyboard reaches every part of the app; and nothing a file, a paste
-or a share code can hold stops the app starting or freezes it.*
+*Highlights: the final audit before the stores. For nearly three weeks agents tried to break the
+app — lost notes, hostile and huge input, the keyboard alone, an ordinary person's week, a
+careless hand — and what they found that was already in 0.97.405 is fixed below, one entry for
+each defect, however many rounds its fix took; the findings of low severity were fixed too,
+before the stores rather than after. The notebook moves to the profile's own folder, where an
+uninstall leaves it; the keyboard reaches every part of the app; nothing a file, a paste or a
+share code can hold stops the app starting or freezes it; and a note keeps what a newer version
+of the app adds to it.*
 
 ### Added
 
@@ -127,6 +129,10 @@ or a share code can hold stops the app starting or freezes it.*
 - **An empty search that one day of a repeating note would answer says so.** The list does not
   read a day's own words; when such a day holds them, the empty list offers **Search the
   Calendar's History**, which opens it searching for them.
+- **A note or a template keeps the fields a newer version of the app wrote.** Once the app is
+  in the Store, a newer version may add something to a note, and this one erased it at its next
+  load, from a backup or at a start. It keeps up to 32 such fields now, 65,536 characters in
+  all, and a backup's Update keeps the note's own for Restore previous. The owner's choice.
 
 ### Changed
 
@@ -186,7 +192,8 @@ or a share code can hold stops the app starting or freezes it.*
   notes with one; a held `settings.json` had a place-holder written over your categories, theme
   and Trash window. The start reads each file three times; one it still cannot read is left
   alone for the run, the start says so, and an export packs only what was written since,
-  saying so.
+  saying so. Nothing is decided over such a file either: a shorter Trash window, an attached
+  file's removal and a category's rename or delete are refused for the run, with the reason.
 - **Typing in the empty editor a delete leaves is saved by any way out.** Ctrl+N, another note,
   the close or a sign-out dropped it.
 - **An item typed in a checklist's Add box and not yet added is kept.** The template editor's
@@ -224,6 +231,25 @@ or a share code can hold stops the app starting or freezes it.*
   line number: an item added on the day put the rest on the wrong level, and the next Enter
   renumbered and stored them so.
 - **Export as file from one day of a series writes that day,** not the series' text.
+- **A title or a search that reads like its grey hint is kept as typed.** A title typed as "Note
+  title..." was saved empty and wiped at the next click into it, and a search for "Search
+  notes..." searched for nothing: the field told its hint by its words. It knows now whether
+  the hint shows.
+- **A copy of a note no longer offers the original's older words.** Duplicate, and a backup's
+  **Add a copy anyway** and **Add them as new notes**, carried the original's rescue copy, so
+  "↩ Restore previous" on the copy offered to put the original's older words over a note just
+  made. The rescue copy stays with the original, as on the phone.
+- **A safety copy of the notes never writes over another.** Copies are named by the second they
+  are made, and two in the same second (the copy before an update, an unreadable file set
+  aside) left only the second. Each takes a name of its own now.
+- **A write the disk refuses says "Not saved".** Your name said "Saved automatically" while the
+  sidebar kept the old one, Sharp text said "Saved", and "Saved template", an import's "Also
+  restored" and the editor's "Saved at" stood over writes that never happened. Each says what
+  was not written now, and Sharp text's and Spelling's lists show the choice that stays.
+- **A category renamed or deleted while its list cannot be written moves no note.** A sync tool
+  holding `settings.json` for a moment let the notes move under a name the list never kept: the
+  old name came back empty at the next start, and a deleted category came back. The list is
+  written first now; refused, nothing moves, and the app says so.
 
 #### Starting the app
 
@@ -240,6 +266,11 @@ or a share code can hold stops the app starting or freezes it.*
   yesterday's date.
 - **A backup whose notebook is not a list is refused as not a backup,** where it raised and left
   the import's files behind.
+- **The one-time cleanup of an older notebook is done only once it is saved.** When the notes
+  file could not be written it was marked done anyway, its new note ids alive only in the
+  running app; the next start tries again now.
+- **A pin or a tick written as "false" or "no" is neither,** as on the phone. A notes file
+  edited by hand made such a note pinned and such an item ticked.
 
 #### Attachments and pictures
 
@@ -296,7 +327,8 @@ or a share code can hold stops the app starting or freezes it.*
 - **A long name leaves its row's buttons in the row.** An attachment's ✕, a template's pencil and
   bin, a category's buttons and a picture's Close were pushed out: a file could not be removed,
   a template neither edited nor deleted.
-- **A table too large to draw stays as its text,** with the status line saying why. A 300 × 300
+- **A table too large to draw stays as its text,** with the status line saying why, and the
+  autosave's "Auto-saved" no longer writes over that line before it can be read. A 300 × 300
   table froze the app 40 s at every opening, and a tall one, of many rows or of cells of many
   lines, ended it on Linux.
 - **Long lists scroll to their end.** A checklist of 1,000 items ended at item 785, the template
@@ -381,6 +413,32 @@ or a share code can hold stops the app starting or freezes it.*
   the next new note takes; Generate code carried the new note unchosen.
 - **A bulk export that fails partway leaves no half-written file, and keeps the notes that failed
   selected** to try again.
+- **A backup that fails as the window closes is said as failed, with its reason.** A folder gone
+  or a full disk, its message never shown, was told at the next start as a backup the close had
+  cut short. The start says now that it failed, why, that no new backup was made and that a file
+  already there is as it was.
+- **A backup that fails without words is a failure.** An error with no message, running out of
+  memory, read as none: the app said "Export complete" and stamped "Last exported" with no file
+  put in place.
+- **A window that closes during a big backup still tells the next start what happened.** The
+  close waits up to half a minute for a backup to finish, and Windows may end a window that
+  stops answering; the word for the next start was written only after that wait, so a window
+  ended inside it said nothing and left a half-written file for good. It is written before the
+  wait now, and a backup that finished after all is said finished.
+- **An import cut short by the close leaves none of its files behind.** The next start said
+  "nothing from it was kept: no notes and no files", while the files it had copied into the
+  attachments folder and its unpacked backup stayed for good. The close names them now, and the
+  next start takes out those no note uses.
+- **An import that cannot go ahead says why.** A sound backup on a nearly full disk was called a
+  file that "couldn't be read as a backup" before the true reason, and a disk that filled up
+  during the unpacking the same; a damaged stream, an encrypted entry or an unknown compression
+  said "Import failed unexpectedly: Error -3 while decompressing data". Each is said as what it
+  is now.
+- **A backup imported again brings in nothing it already brought.** A note, or a trashed note,
+  whose attached file a note here used came in on a copy of that file; every later import of the
+  same backup asked about the note as edited elsewhere, lacking a file it had, each Update added
+  one more copy, and the trashed note came in again. A file is matched by its name and its bytes
+  now.
 - **Every search ignores case and accents the same way:** the list, Find in note, the Calendar's
   History and Share. A Korean syllable no longer finds every syllable that starts with its first
   letter, and Title A–Z sorts "Élan" beside E.
@@ -420,6 +478,13 @@ or a share code can hold stops the app starting or freezes it.*
 - **Opening the note already on screen leaves it as it is.** Its own card, the Calendar's Open in
   editor or Edit this day, and the card menu's Open loaded it again: it jumped to the top, and
   Ctrl+Z could no longer take back a slip.
+- **A day taken off a series' schedule goes to the Trash once.** With the app stopped between the
+  Trash's save and the notes', the day came back on the series with its copy in the Trash, and
+  taking it off again put a second copy there.
+- **History, filtered by a search or a year, counts every day of a series it leaves out.** A
+  series with three edited days said "1 edited day" when the search listed one, and its note
+  said every other day shows the series' text. It says "1 of 3 edited days" now, and the same of
+  days off the schedule and moved days.
 
 #### Smaller things
 
@@ -437,7 +502,12 @@ or a share code can hold stops the app starting or freezes it.*
   Duplicates did not say it compares the checklist and the repeat; a one-note import said
   "review, then Save" though it is saved at once ("Add it anyway" now); a weekly note said its
   edits apply "to every day"; the single Delete and Empty trash did not name the attached files
-  they delete; a Cancel in Import code left the last import's "Added …" standing.
+  they delete; a Cancel in Import code left the last import's "Added …" standing; a day's quick
+  look called a note holding only a checklist or a table "(empty note)", and a series of one
+  said "1 times".
+- **The light and dark switch goes back to the last theme of each kind after a restart,** as it
+  says. It remembered them only while the app was open, then gave Midnight Purple or Soft
+  Lavender.
 - **The template editor keeps your typing.** Its own close button, and a tab turned behind
   Settings, threw a half-written template away without a word.
 - **The template editor and the picker scroll once taller than the window,** Save always in
@@ -467,7 +537,7 @@ or a share code can hold stops the app starting or freezes it.*
 ### Testing
 
 - Every fix landed with a check that fails without it and a mutant that proves the check: the
-  catalogue grew from 422 mutants to 1,179.
+  catalogue grew from 422 mutants to 1,389.
 - `test_data_safety` ends with a fuzz of a series' days: 1,500 roads of edit, move, delete, rule,
   share, backup and restore, after which no day's words are lost or doubled but those deleted or
   typed over.
