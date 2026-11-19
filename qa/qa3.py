@@ -4140,11 +4140,16 @@ try:
     check(f'a start that cannot read the notes takes an import\'s unpacked folder out at once '
           f'({_uw_dir_gone})', _uw_dir_gone)
     _uw_second = _next_start_says()
-    check(f'a start that cannot read the notes keeps the word for an import cut short, '
-          f'said once; the next start takes its files out ({sorted(_uw_kept)})',
-          'was cut short' in _uw_first and _uw_kept.get('copied') == [_uw_name] and _uw_there
-          and not os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _uw_name))
-          and 'was cut short' not in _uw_second
+    # Three checks, not one: a failure names the promise that broke.
+    check(f'a start that cannot read the notes keeps the word for an import cut short, and its files '
+          f'({sorted(_uw_kept)}, file kept: {_uw_there})',
+          'was cut short' in _uw_first and _uw_kept.get('copied') == [_uw_name] and _uw_there)
+    check(f'a start that cannot read the notes says an import cut short once '
+          f'(said again at the next start: {"was cut short" in _uw_second})',
+          'was cut short' not in _uw_second)
+    check('after a start that cannot read the notes, the next start takes the cut-short import\'s '
+          'files out and lowers its word',
+          not os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _uw_name))
           and NO.get_setting('backup_cut_short') is None)
     # ...and so does one that read the notes but not the Trash: its files kept too.
     with open(os.path.join(NO.ATTACHMENTS_DIR, _uw_name), 'wb') as _fh:
@@ -4159,11 +4164,15 @@ try:
     finally:
         NO._core_paths.WRITES_HELD.discard(os.path.normcase(os.path.abspath(NO.TRASH_FILE)))
     _ut_second = _next_start_says()
-    check(f'a start that cannot read the Trash keeps the word for an import cut short, '
-          f'said once; the next start takes its files out ({sorted(_ut_kept)})',
-          'was cut short' in _ut_first and _ut_kept.get('copied') == [_uw_name] and _ut_there
-          and not os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _uw_name))
-          and 'was cut short' not in _ut_second
+    check(f'a start that cannot read the Trash keeps the word for an import cut short, and its files '
+          f'({sorted(_ut_kept)}, file kept: {_ut_there})',
+          'was cut short' in _ut_first and _ut_kept.get('copied') == [_uw_name] and _ut_there)
+    check(f'a start that cannot read the Trash says an import cut short once '
+          f'(said again at the next start: {"was cut short" in _ut_second})',
+          'was cut short' not in _ut_second)
+    check('after a start that cannot read the Trash, the next start takes the cut-short import\'s '
+          'files out and lowers its word',
+          not os.path.exists(os.path.join(NO.ATTACHMENTS_DIR, _uw_name))
           and NO.get_setting('backup_cut_short') is None)
     # "Import failed" on screen when a session ends: Windows ends the app with
     # the dialog up, and the unpacked folder, removed only after it, stayed in
