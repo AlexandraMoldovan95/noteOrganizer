@@ -32,28 +32,28 @@ into this format. How I test, and one bug followed from the screen to its cause,
 These came from my first full pass, on version 0.84.341, and from the re-tests of the version
 that fixed what it found.
 
-| # | What I found | Fixed in |
-|---|---|---|
-| 1 | On the dark themes, ticks in Share notes and Settings → Duplicates didn't show, though they were taken ([the story](IN_MY_WORDS.md#how-i-test)) | 0.84.357 |
-| 2 | Changing the theme said "Note updated", though no note had changed ([BR-1](#br-1-note-updated-appears-when-only-the-theme-changes)) | 0.84.357 |
-| 3 | A highlight given inside a table cell appeared only after the cell was opened again | 0.84.357 |
-| 4 | Previews in Duplicates and Recently deleted showed a table as rows of vertical lines | 0.84.357 |
-| 5 | Table cells copied and pasted as a second table lost their colours and styles | 0.84.357 |
-| 6 | Table cells copied into Word lost every colour | 0.84.357 |
-| 7 | A word's size and font were lost when copied into Word or into another note | 0.84.357 |
-| 8 | An emoji or text put into a checkbox cell left the box behind as "[ ]" | 0.84.357 |
-| 9 | Enter in a numbered list threw the note's scroll back to the top | 0.84.357 |
-| 10 | An emoji in an empty title landed after the grey hint, and the note was saved as "Note title...😀" | 0.84.357 |
-| 11 | The cursor kept blinking in the calendar History search after a click elsewhere in the app | 0.84.357 |
-| 12 | Pasting a text of 50,000+ words froze the app ([BR-2](#br-2-the-app-stops-responding-after-pasting-50000-words)) | 0.84.357 |
-| 13 | "Show more" in Recently deleted made the list flicker | 0.84.357 |
-| 14 | Importing a backup with notes I already had offered no "import anyway" ([BR-3](#br-3-importing-a-backup-with-notes-i-already-have-offers-no-import-anyway)) | 0.84.357 |
-| 15 | Bold and italic from a web page lost their formatting when pasted | 0.84.357 |
-| 16 | The share-code warning about attached files didn't say clearly what to do | 0.84.357 |
-| 17 | An open checkbox cell still showed its "[ ]" brackets | 0.88.361 |
-| 18 | In a narrow window, a long checklist item's bin was squeezed out, so the item couldn't be removed | 0.88.361 |
-| 19 | The find bar's border turned grey while typing in it | 0.88.361 |
-| 20 | On a light theme, the find box couldn't be read when nothing was found | 0.88.361 |
+| What I found | Fixed in |
+|---|---|
+| On the dark themes, ticks in Share notes and Settings → Duplicates didn't show, though they were taken ([the story](IN_MY_WORDS.md#how-i-test)) | 0.84.357 |
+| Changing the theme said "Note updated", though no note had changed ([BR-1](#br-1-note-updated-appears-when-only-the-theme-changes)) | 0.84.357 |
+| A highlight given inside a table cell appeared only after the cell was opened again | 0.84.357 |
+| Previews in Duplicates and Recently deleted showed a table as rows of vertical lines | 0.84.357 |
+| Table cells copied and pasted as a second table lost their colours and styles | 0.84.357 |
+| Table cells copied into Word lost every colour | 0.84.357 |
+| A word's size and font were lost when copied into Word or into another note | 0.84.357 |
+| An emoji or text put into a checkbox cell left the box behind as "[ ]" | 0.84.357 |
+| Enter in a numbered list threw the note's scroll back to the top | 0.84.357 |
+| An emoji in an empty title landed after the grey hint, and the note was saved as "Note title...😀" | 0.84.357 |
+| The cursor kept blinking in the calendar History search after a click elsewhere in the app | 0.84.357 |
+| Pasting a text of 50,000+ words froze the app ([BR-2](#br-2-the-app-stops-responding-after-pasting-50000-words)) | 0.84.357 |
+| "Show more" in Recently deleted made the list flicker | 0.84.357 |
+| Importing a backup with notes I already had offered no "import anyway" ([BR-3](#br-3-importing-a-backup-with-notes-i-already-have-offers-no-import-anyway)) | 0.84.357 |
+| Bold and italic from a web page lost their formatting when pasted | 0.84.357 |
+| The share-code warning about attached files didn't say clearly what to do | 0.84.357 |
+| An open checkbox cell still showed its "[ ]" brackets | 0.88.361 |
+| In a narrow window, a long checklist item's bin was squeezed out, so the item couldn't be removed | 0.88.361 |
+| The find bar's border turned grey while typing in it | 0.88.361 |
+| On a light theme, the find box couldn't be read when nothing was found | 0.88.361 |
 
 What each fix changed is in the [changelog](../CHANGELOG.md), under
 [0.84.357](../CHANGELOG.md#084357--2026-10-07) and [0.88.361](../CHANGELOG.md#088361--2026-10-08).
@@ -145,10 +145,10 @@ what is in a note; the text had to stay above the keyboard, so it can be edited 
 
 - **A note with a table had a broken preview in the list.** I noticed it while scrolling through
   my test notes: their cards showed lines of bars where the table was. To fix it, and to keep
-  things consistent, I decided that a note with a table says in its preview only that it has one.
-  It is easy to build and to show, and it takes away the risk of other bugs. Previews like this
-  were already used in the calendar and in parts of Settings, so we made it the same everywhere
-  the app needed it.
+  things consistent, I decided that where a note has a table, its preview says only that it has
+  one, beside the note's words. It is easy to build and to show, and it takes away the risk of
+  other bugs. Previews like this were already used in the calendar and, on the desktop, in
+  Settings → Duplicates and Recently deleted, so we made it the same everywhere the app needed it.
 - **The table was hard to use on a phone.** A tap on a cell opened a list of options, and its
   words were typed in a box of their own, away from the table. There is no mouse on a phone, so I
   wanted the table to be as easy to edit as possible: its cells are written in place now, its rows
