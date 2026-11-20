@@ -5277,6 +5277,23 @@ end the hold, as they already ended the claim of the words on what a save left o
 had it right from the start, its reassurance yielding to what the banner shows. qa6 checks the
 hold with its clock set ten minutes ahead, so only the rule can end it in time (mutant RV13).
 
+**The release's whole catalogue** (19 to 21 November, on 0.101.540, about 25 hours) gave 1,382
+of 1,389 verdicts as expected; RT02 runs only on Linux. Each of the seven had been killed when
+written; a later fix of the audit had quietened it, and no app behaviour was wrong. Four checks
+no longer reached their guard, because a newer road answered the same case first. A notes file
+refused at the start is held on its way in (14 November), so the hold for a damaged file that
+cannot be copied aside went untested (DR35). A held settings file returns at once at every
+later read, so the run's "first read only" flag decided nothing the check could see (DR57). A
+held Trash's entries are put back by the Trash's own write, so only their categories still
+showed the guard missing (SN124). A long category name sat in the backup's settings as well as
+on its note, so the notes' own refusal was never counted (SN141, and its Trash sibling, which had
+no mutant: SN180). Two promises gained a second road. The close writes the export's word before
+it waits (CN01), and an import names the `.part` it is copying so the close's cleanup takes it
+away (ST06). Each of those mutants now takes both roads away. And SA04 had been written as
+`True or ask(...)`; once the delete moved into the condition, it read `True or (ask and delete)`
+and deleted nothing. Each was proved on its own mutant (qa/README, "A check aims where its
+guard alone stands").
+
 **Takeaway:** a low is written down to be fixed, not to be lived with. Before the stores, each one
 is fixed, with its class closed, or answered in writing. A class swept a block at a time stays
 open behind the block: at the thirty-ninth round the plan's automation claims were read all at

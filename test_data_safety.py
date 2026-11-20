@@ -5496,6 +5496,30 @@ try:
           f"({_hw_ok}, {_hw_disk})",
           _hw_report.get("notes_file_corrupt") and _hw_report.get("corrupt_backup_path") is None
           and not _hw_ok and _hw_disk == ["Important"])
+    # Read but damaged, and its copy aside refused (a full disk): held by the
+    # other road, the copy's own. A refused read is held on its way in since
+    # 14 November, and no check reached this one after.
+    _paths.WRITES_HELD.clear()
+    _hw_damaged = '[{"id": 1, "title": "Important"'
+    with open(_paths.DATA_FILE, "w", encoding="utf-8") as f:
+        f.write(_hw_damaged)
+    _hw_copy2 = shutil.copy2
+
+    def _hw_disk_full(*a, **k):
+        raise OSError(28, "No space left on device")
+
+    shutil.copy2 = _hw_disk_full
+    try:
+        _hw_notes, _hw_report = _storage.load_notes()
+    finally:
+        shutil.copy2 = _hw_copy2
+    _hw_ok, _hw_exc = _storage.save_notes([{"id": 1, "title": "Shopping"}])
+    with open(_paths.DATA_FILE, encoding="utf-8") as f:
+        _hw_text = f.read()
+    check(f"a damaged notes file that could not be copied aside is never written over "
+          f"this run ({_hw_ok}, {_hw_text[:40]!r})",
+          _hw_report.get("notes_file_corrupt") and _hw_report.get("corrupt_backup_path") is None
+          and not _hw_ok and _hw_text == _hw_damaged)
 finally:
     _paths.WRITES_HELD.clear()
     _paths.configure(_hw_prev)
@@ -5605,6 +5629,26 @@ try:
     check("a settings file held at the start keeps the run on its defaults once "
           "the hold ends (%s, window %s)" % (sorted(_hs_after), _hs_window),
           _hs_after == {_storage.TRASH_WINDOW_UNKNOWN: True} and _hs_window is None)
+    # ...and with no good read to stand in (damaged at the start, copied aside),
+    # a read refused later is still one try: held after it, every read after
+    # returns at once, so only this one could wait.
+    _hs_dirs.append(tempfile.mkdtemp(prefix="nd_heldset_"))
+    _paths.configure(_hs_dirs[-1])
+    with _hs_real_open(_paths.SETTINGS_FILE, "w", encoding="utf-8") as f:
+        f.write('{"theme": "dark_slate"')
+    _hs_first = _storage.load_settings()
+    _hs_waits = len(_hs_slept)
+    _storage.open = _hs_refusing(-1)
+    try:
+        _hs_later = _storage.load_settings()
+    finally:
+        del _storage.open
+    _hs_waits = len(_hs_slept) - _hs_waits
+    _paths.WRITES_HELD.clear()
+    check("...and one refused after a damaged start, with no good read to stand in, "
+          "is one try too (%d waits, %s)" % (_hs_waits, sorted(_hs_later)),
+          _hs_first == {_storage.TRASH_WINDOW_UNKNOWN: True} and _hs_waits == 0
+          and _hs_later == {_storage.TRASH_WINDOW_UNKNOWN: True})
 finally:
     _storage.time.sleep = _hs_sleep
     NO.CATEGORY_COLORS.pop("Held-start client", None)

@@ -3729,9 +3729,10 @@
       {
         "file": "noteorganizer/ui/settings_page.py",
         "find": "            if self.ask_yes_no(\n                \"Delete permanently\",\n                f\"Permanently delete {count} selected \"\n",
-        "replace": "            if True or self.ask_yes_no(\n                \"Delete permanently\",\n                f\"Permanently delete {count} selected \"\n"
+        "replace": "            if (lambda *a, **k: True)(\n                \"Delete permanently\",\n                f\"Permanently delete {count} selected \"\n"
       }
     ],
+    "note": "Unasked, not unanswered: the question's call is replaced, its answer Yes. Written as `True or self.ask_yes_no(...)`, it read `True or (ask and destroy)` once the delete moved into the condition, so the mutant deleted nothing and survived the check it was written for (the release's full run, 0.101.540).",
     "must_fail": ["...and answering No deletes nothing"],
     "suites": ["qa6"],
     "expect": "killed"
@@ -5263,7 +5264,17 @@
     "about": "an attachment copy that is stopped leaves its half-written file behind",
     "edits": [{"file": "noteorganizer/core/sharing.py",
                "find": "    except BaseException:\n        try:\n            os.remove(dst)\n        except OSError:\n            pass\n        raise\n",
-               "replace": "    except BaseException:\n        raise\n"}],
+               "replace": "    except BaseException:\n        raise\n"},
+              {"file": "note_organizer.py",
+               "find": "                            state[\"copied\"].append(filename + \".part\")\n",
+               "replace": ""},
+              {"file": "note_organizer.py",
+               "find": "                                state[\"copied\"][-1] = filename\n",
+               "replace": "                                state[\"copied\"].append(filename)\n"},
+              {"file": "note_organizer.py",
+               "find": "                                state[\"copied\"].pop()\n",
+               "replace": "                                pass\n"}],
+    "note": "Two roads take a stopped import's .part away: the copy's own, and the import's list of what it is copying, which the close's cleanup reads (SN29, from 13 November). Taken away alone, the copy's survives qa3 (the release's full run, 0.101.540), as the cleanup removes the named .part; both are taken away.",
     "must_fail": ["...and one asked to stop midway leaves nothing behind",
                   "...and nothing of it among the attachments (copying)"],
     "suites": ["test_data_safety", "qa3"],
@@ -5394,7 +5405,11 @@
     "about": "an export cut short by the close leaves no word, and the person believes a backup was made",
     "edits": [{"file": "note_organizer.py",
                "find": "        elif state is not None:\n            # Stopped past the wait, or still running: no new backup. A\n",
-               "replace": "        elif False:\n            # Stopped past the wait, or still running: no new backup. A\n"}],
+               "replace": "        elif False:\n            # Stopped past the wait, or still running: no new backup. A\n"},
+              {"file": "note_organizer.py",
+               "find": "        if export is not None and not export.get(\"done\"):\n            # Written before the wait",
+               "replace": "        if False:\n            # Written before the wait"}],
+    "note": "Two roads leave the word for an export the close cuts short: the wait's, written before it waits (SN25, from 13 November), and the close's settle after it. Taken away alone, the settle's survives (the release's full run, 0.101.540), as the wait's has written the same word; both are taken away.",
     "must_fail": ["...and the export cut short leaves word for the next start"],
     "suites": ["qa3"],
     "expect": "killed"
@@ -7732,8 +7747,9 @@
         "replace": ""
       }
     ],
+    "note": "Reached now by a damaged file whose copy aside fails: a refused read is held on its way in since 14 November, and the check this mutant first named no longer reached it (the release's full run, 0.101.540).",
     "must_fail": [
-      "a notes file neither read nor copied is never written over this run"
+      "a damaged notes file that could not be copied aside is never written over this run"
     ],
     "suites": [
       "test_data_safety"
@@ -9189,8 +9205,9 @@
         "replace": "            if known is None:\n"
       }
     ],
+    "note": "A file held for the run returns at once at every later read since 14 November, so the check this mutant first named passes without it (the release's full run, 0.101.540). What is left to it: a read refused after a damaged start, with no good read to stand in, still one try.",
     "must_fail": [
-      "...and only the run's first read waits for it"
+      "...and one refused after a damaged start, with no good read to stand in, is one try too"
     ],
     "suites": [
       "test_data_safety"
@@ -19098,7 +19115,8 @@
     "edits": [{"file": "note_organizer.py",
                "find": "        if incoming_trash and _core_paths.writes_held(TRASH_FILE):\n",
                "replace": "        if False:\n"}],
-    "must_fail": ["a backup's Trash is not brought in past the window this computer's next start keeps"],
+    "note": "The Trash's write after the merge also puts a refused entry back, so the entries never show (the release's full run, 0.101.540, found this check passing without the guard). What only the guard keeps out: their categories, adopted before that write.",
+    "must_fail": ["...nor, into a held Trash, a category only its entries use"],
     "suites": ["qa3"],
     "expect": "killed"
   },
@@ -19271,6 +19289,18 @@
     "edits": [{"file": "note_organizer.py",
                "find": "        added_names.extend(adopt_categories_of(valid_notes, refused_names))\n",
                "replace": "        added_names.extend(adopt_categories_of(valid_notes))\n"}],
+    "note": "The check's long name was in the backup's settings too, whose refusal counted it, so the notes' own went unseen (the release's full run, 0.101.540); a second name only a note uses is in it now.",
+    "must_fail": ["a backup's trashed note keeps a category only the Trash uses"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN180",
+    "about": "A category only a backup's Trash uses that a ceiling refuses goes to General unsaid",
+    "edits": [{"file": "note_organizer.py",
+               "find": "                        keep_days))], refused_names))\n",
+               "replace": "                        keep_days))]))\n"}],
+    "note": "SN141's sibling, the Trash's adoption: no mutant took its refused list away until the release's full run (0.101.540) found SN141's check blind to the notes' own.",
     "must_fail": ["a backup's trashed note keeps a category only the Trash uses"],
     "suites": ["qa3"],
     "expect": "killed"

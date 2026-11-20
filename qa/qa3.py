@@ -6134,9 +6134,13 @@ _tw_said = {}
 # carry the mark, no length) brought old entries in under this computer's 30 days.
 _tw_unknown = dict(_tw_backup, **{'settings.json': json.dumps(
     {'desktop_trash_window_unknown': True, 'app_version': '0.97.405'}).encode()})
-# 'trash held': an entry every window keeps, or the window alone left it out unwatched.
+# 'trash held': an entry every window keeps, or the window alone left it out unwatched;
+# filed under a category only it uses, which must not come in without it.
 _tw_recent = dict(_tw_backup, **{'trash.json': json.dumps([{
-    'id': 7, 'uid': 'tw-7', 'title': 'Old', 'deleted_at': _tr_days_ago(2)}]).encode()})
+    'id': 7, 'uid': 'tw-7', 'title': 'Old', 'deleted_at': _tr_days_ago(2),
+    'category': 'QaHeldTrashCat'}]).encode()})
+NO.CATEGORY_COLORS.pop('QaHeldTrashCat', None); NO.persist_categories()
+_tw_cat_in = None
 for _tw_case in ('held', 'refused', 'trash held', 'unknown'):
     app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
     _tw_choose_was = NO.choose_trash_window
@@ -6157,6 +6161,8 @@ for _tw_case in ('held', 'refused', 'trash held', 'unknown'):
             _tw_case, _tw_backup)) + _tw_infos
         # In memory alone, a held Trash's took showed under its "couldn't be read".
         _tw_shown = any(e.get('title') == 'Old' for e in app.trash)
+        if _tw_case == 'trash held':
+            _tw_cat_in = 'QaHeldTrashCat' in NO.CATEGORY_COLORS
     finally:
         for _tw_path in (NO.SETTINGS_FILE, NO.TRASH_FILE):
             NO._core_paths.WRITES_HELD.discard(os.path.normcase(os.path.abspath(_tw_path)))
@@ -6176,6 +6182,11 @@ check(f"a backup's Trash is not brought in past the window this computer's next 
       f"keeps, nor into a held Trash, and that is said ({_tw_said}; last heard {_tw_heard})",
       _tw_said == {'held': (False, True), 'refused': (False, True), 'trash held': (False, True),
                    'unknown': (False, True)})
+# Kept out, but adopted before the Trash's write put them back, its entries'
+# categories stood in the list with no note under them.
+check(f"...nor, into a held Trash, a category only its entries use ({_tw_cat_in})",
+      _tw_cat_in is False)
+NO.CATEGORY_COLORS.pop('QaHeldTrashCat', None); NO.persist_categories()
 app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
 
 # A backup's templates into a templates file held this run stay in it: in memory
@@ -6214,9 +6225,17 @@ app.notes = []; app.save_notes(); app.trash = []; NO.save_trash(app.trash)
 # of two twins in its Trash the older left out took the newer, uncounted; and a
 # name its notes use that a ceiling refuses went to General unsaid.
 _tc_long = 'L' * (NO.MAX_CATEGORY_NAME + 1)
+# Two more refused names, one only a note uses and one only the Trash: the
+# settings' refusal of the first hid whether the notes' own was counted.
+_tc_note_long = 'M' * (NO.MAX_CATEGORY_NAME + 1)
+_tc_trash_long = 'T' * (NO.MAX_CATEGORY_NAME + 1)
 _tc_backup = dict(_tw_backup, **{
-    'notes_data.json': json.dumps([{'title': 'Long', 'body': 'x', 'category': _tc_long}]).encode(),
+    'notes_data.json': json.dumps([{'title': 'Long', 'body': 'x', 'category': _tc_long},
+                                   {'title': 'Longer', 'body': 'z',
+                                    'category': _tc_note_long}]).encode(),
     'trash.json': json.dumps([
+        {'id': 13, 'uid': 'tc-13', 'title': 'Long shed', 'body': 'w',
+         'category': _tc_trash_long, 'deleted_at': _tr_days_ago(6)},
         {'id': 8, 'uid': 'tc-8', 'title': 'Twin', 'body': 'same', 'deleted_at': _tr_days_ago(200)},
         {'id': 9, 'uid': 'tc-9', 'title': 'Twin', 'body': 'same', 'deleted_at': _tr_days_ago(2)},
         {'id': 10, 'uid': 'tc-10', 'title': 'Shed', 'body': 'y', 'category': 'OnlyInTrash',
@@ -6253,7 +6272,9 @@ check(f"a backup's trashed note keeps a category only the Trash uses, the newer 
       f"{_tc_trash.get('Shed', {}).get('category')!r}; {_tc_msgs[-260:]!r})",
       _tc_trash.get('Shed', {}).get('category') == 'OnlyInTrash' and 'OnlyInTrash' in _tc_saved
       and 'Twin' in _tc_trash and "1 of the backup's trashed note(s) were not brought in" in _tc_msgs
-      and "1 of the backup's categories could not be added" in _tc_msgs
+      # The settings' and a note's long name counted once, a note's own and the
+      # Trash's own once each.
+      and "3 of the backup's categories could not be added" in _tc_msgs
       # ...and the two names only its Trash uses counted in the words, as case 1079 reads them.
       and "Also restored 2 category/categories" in _tc_msgs
       and [e.get('category') for e in app.trash if e.get('title') == 'Pair'] == ['QaPairCat'])

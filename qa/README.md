@@ -428,7 +428,14 @@ A new surface joins this list the moment it ships.
   guard the check was written for went untested. A road one system always
   takes first hides another the same way: on Windows the formatted Cut
   takes every Cut, so the list's own Cut runs only when another program
-  holds the clipboard, and qa1 now makes that happen.
+  holds the clipboard, and qa1 now makes that happen. When the later fix
+  is a second road to the same promise, not a wider one, the mutant takes
+  both roads away and its note says so: the release's whole catalogue
+  (2026-11-21) found seven mutants a later fix had quietened: four whose
+  checks a new road answered first, two whose promise it now kept as
+  well, and the one below. And a mutant replaces the call it means to skip, never puts
+  `True or` before it: once the code grew `ask(...) and delete(...)`,
+  `True or ask(...) and delete(...)` skipped the delete too (SA04).
 - **A fixture never sizes itself from a value a mutant can change.** A
   mutant made a long list's chunk a billion rows, and checks that built
   "two chunks' worth" began building two billion: 43 GB, and the owner's
