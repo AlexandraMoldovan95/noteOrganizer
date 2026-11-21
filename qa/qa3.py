@@ -6316,6 +6316,11 @@ check(f"a backup's categories written by the map's second write are not said unw
       f"({len(_mw_calls)} writes; {_mw_msgs[-160:]!r})",
       len(_mw_calls) == 2 and 'categories could not be written' not in _mw_msgs
       and 'QaFirstCat' in _mw_saved and 'QaSecondCat' in _mw_saved)
+# ...and its one trashed note is said as one: the check above it brings several,
+# so "1 trashed notes" passed every check.
+check(f"Import complete says the one trashed note it restored in the singular "
+      f"({_mw_msgs[-160:]!r})",
+      'Also restored 2 categories and 1 trashed note.' in _mw_msgs)
 for _mw_cat in ('QaFirstCat', 'QaSecondCat'):
     NO.CATEGORY_COLORS.pop(_mw_cat, None)
 NO.persist_categories()
