@@ -440,11 +440,13 @@ class Renderer:
         items = []
         while i < len(lines):
             m = self.LIST_RE.match(lines[i])
-            if not m or len(m.group(1)) != indent:
+            # A list of the other kind is a list of its own, as on GitHub.
+            if not m or len(m.group(1)) != indent or m.group(2)[0].isdigit() != ordered:
                 break
             text = [m.group(3)]
             children = []
             i += 1
+            blank = False
             while i < len(lines):
                 nxt = lines[i]
                 if not nxt.strip():
@@ -455,6 +457,7 @@ class Renderer:
                              and len(self.LIST_RE.match(lines[i + 1]).group(1)) >= indent)
                             or (lines[i + 1].startswith(" " * (indent + 2)) and lines[i + 1].strip())):
                         i += 1
+                        blank = True
                         continue
                     break
                 sub = self.LIST_RE.match(nxt)
@@ -464,10 +467,13 @@ class Renderer:
                         break                   # the outer list's
                     if depth == indent and sub.group(2)[0].isdigit() == ordered:
                         break                   # this list's next item
-                    if self.may_interrupt(sub):
+                    # After a blank line nothing runs on to be interrupted:
+                    # any number starts a list there, as on GitHub.
+                    if blank or self.may_interrupt(sub):
                         if depth > indent:
                             child, i = self.list_block(lines, i, depth)
                             children.append(child)
+                            blank = False
                             continue
                         break                   # a list of another kind
                     # A numbered line that may not start a list here: the
@@ -478,6 +484,7 @@ class Renderer:
                 if len(nxt) - len(nxt.lstrip()) > indent:
                     text.append(nxt.strip())
                     i += 1
+                    blank = False
                     continue
                 break
             items.append("<li>%s%s</li>" % (self.inline(" ".join(text)), "".join(children)))
@@ -497,6 +504,10 @@ RENDER_CASES = [
     ("Text\n- a bullet under it", "<p>Text</p>\n<ul><li>a bullet under it</li></ul>"),
     ("1. a\n   - x\n2. b", "<ol><li>a<ul><li>x</li></ul></li><li>b</li></ol>"),
     ("2026. A list counted from a year", '<ol start="2026"><li>A list counted from a year</li></ol>'),
+    # After a blank line nothing runs on to be interrupted: a number starts a
+    # list, of its own when the list before was of the other kind.
+    ("- a bullet\n\n2026. a year", '<ul><li>a bullet</li></ul>\n<ol start="2026"><li>a year</li></ol>'),
+    ("- a bullet\n\n  2. a nested list", '<ul><li>a bullet<ol start="2"><li>a nested list</li></ol></li></ul>'),
 ]
 
 
