@@ -19947,7 +19947,26 @@
       }
     ],
     "must_fail": [
-      "a hold keeps its own words from the autosave, and ends once other words take the line"
+      "a hold keeps its own words from the autosave, and ends once other words take the line",
+      "a hold on the status line ends when another note is opened"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "RV14",
+    "about": "A note opened with a table too big to draw has its dates written over the words saying why the table is its text",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        elif not self._said_table_as_text:\n",
+        "replace": "        else:\n"
+      }
+    ],
+    "must_fail": [
+      "a note opened with a table too big to draw says why it is shown as its text"
     ],
     "suites": [
       "qa6"

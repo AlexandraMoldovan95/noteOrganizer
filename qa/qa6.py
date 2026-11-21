@@ -6406,6 +6406,40 @@ check(f'a hold keeps its own words from the autosave, and ends once other words 
       f'the line ({_bh})',
       _bh == {'held': 'Held words', 'after': 'Auto-saved 12.10.2026 only'})
 
+# ...and once another note is opened under it: words about one note, a big
+# table's, were read as keeping the next note's own "Auto-saved" back until
+# their clock ran out. The note's opening words end the hold. Held long, as above.
+_bn = {}
+_bn_notes_was = app.notes
+try:
+    app.notes = [NO.normalize_note({'id': 981, 'uid': 'bn-hold-a', 'title': 'BnHoldA', 'body': 'a'}),
+                 NO.normalize_note({'id': 982, 'uid': 'bn-hold-b', 'title': 'BnHoldB', 'body': 'b'})]
+    app.save_notes()
+    app.open_note_in_tab(app.notes[0]); app.update()
+    app.set_status('Held words')
+    app._box_words_until = time.monotonic() + 600
+    app.open_note_in_tab(app.notes[1]); app.update()
+    app.set_status('Auto-saved', reassurance=True)
+    _bn['another note'] = str(app.status_lbl.cget('text'))
+    # A note whose table is too big to draw, opened: the words saying why it is
+    # its text are what the line says, not the note's dates written over them.
+    app.notes.append(NO.normalize_note({'id': 983, 'uid': 'bn-big', 'title': 'BnBig',
+                                        'body': '| A | B |\n| 1 | 2 |\n| 3 | 4 |\n| 5 | 6 |\nafter'}))
+    app.save_notes()
+    app.MAX_DRAWN_TABLE_PX = app._grid_row_height() * 3
+    app.open_note_in_tab(app.notes[2]); app.update()
+    _bn['big table opened'] = str(app.status_lbl.cget('text'))
+finally:
+    app._box_words_until = 0
+    app.__dict__.pop('MAX_DRAWN_TABLE_PX', None)
+    app.new_note(); app.update()
+    app.notes = _bn_notes_was
+    app.save_notes()
+check(f'a hold on the status line ends when another note is opened ({_bn})',
+      _bn.get('another note') == 'Auto-saved')
+check(f'a note opened with a table too big to draw says why it is shown as its text ({_bn})',
+      str(_bn.get('big table opened')).startswith('A table this large is shown as its text'))
+
 # ...and a title is weighed as it goes in, on one line: a line copied with its
 # line break, or Windows' CR LF, was "shortened" by the space it lost.
 _tw_told, _tw_kept = [], {}

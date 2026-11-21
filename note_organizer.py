@@ -3250,6 +3250,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # Held against the "Auto-saved" the same edit sets off, as a cut
             # paste's words are: written over half a second later, unread.
             self._box_words_until = time.monotonic() + 8
+            # And told to load_note, whose dates wrote over them at once.
+            self._said_table_as_text = True
         # There is always a line under the last table, or the caret guard
         # would have nowhere to put the caret and writing could never
         # continue past it (_add_line_under_last_table).
@@ -19408,6 +19410,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # on its own text (day_paragraphs_shown, the phone's the same).
         self._apply_paragraphs(self.body_text, day_paragraphs_shown(note, day)
                                if day else note.get("paragraphs", []))
+        self._said_table_as_text = False
         self._render_table_grids()
         self.comments_text.delete("1.0", "end")
         self.comments_text.insert("1.0", shown.get("comments", ""))
@@ -19450,7 +19453,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             suffix = " — it keeps edits of its own" if has_override else ""
             self.set_status(
                 f"Only this day: {show_date(self.current_occurrence_date)}{suffix}")
-        else:
+        elif not self._said_table_as_text:
+            # A table too big to draw keeps its words over the note's dates,
+            # which wrote over them before they could be read. A note not
+            # saved, and a day of a series, say what is edited first.
             created = note.get("created", "")
             if created:
                 self.set_status(f"Created: {show_stamp(created)}   ·   "
