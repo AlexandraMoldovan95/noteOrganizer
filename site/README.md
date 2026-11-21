@@ -75,7 +75,9 @@ It builds in `public.building/` first and only swaps that into `public/`
 once every check has passed, so it stops, and leaves the old site alone, if
 a link is broken, a value is missing, a page would contain something
 private such as a home-folder path or a private account or folder name (`FORBIDDEN`, and
-`PRIVATE_WORDS`, kept as hashes so the guard does not spell them out) — or if Windows
+`PRIVATE_WORDS`, kept as hashes so the guard does not spell them out), if its Markdown renderer
+draws one of the cases in `RENDER_CASES` otherwise than GitHub does
+([why](../docs/ISSUES_LOG.md#a-year-read-as-a-list-number)) — or if Windows
 will not let go of `public/` because an Explorer window or a browser tab
 has it open (close it and run the build again).
 

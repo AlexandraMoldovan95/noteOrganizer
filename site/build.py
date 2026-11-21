@@ -369,8 +369,17 @@ class Renderer:
 
     def starts_block(self, lines, i):
         s = lines[i].strip()
-        return (s.startswith(("#", "```", ">", "|")) or bool(self.LIST_RE.match(lines[i]))
+        m = self.LIST_RE.match(lines[i])
+        return (s.startswith(("#", "```", ">", "|")) or bool(m and self.may_interrupt(m))
                 or bool(re.match(r"^(-{3,}|\*{3,})\s*$", s)))
+
+    @staticmethod
+    def may_interrupt(m):
+        """Whether a line LIST_RE matched may start a list right under a line
+        of running text: GitHub's rule, CommonMark's, is that a numbered line
+        may only when its number is 1. A sentence wrapped before "2026. I
+        walk it" was drawn as a list counted from 2026 (2026-11-21)."""
+        return not m.group(2)[0].isdigit() or m.group(2) == "1."
 
     def table(self, lines, i, out):
         def cells(row):
@@ -449,12 +458,23 @@ class Renderer:
                         continue
                     break
                 sub = self.LIST_RE.match(nxt)
-                if sub and len(sub.group(1)) > indent:
-                    child, i = self.list_block(lines, i, len(sub.group(1)))
-                    children.append(child)
-                    continue
                 if sub:
-                    break
+                    depth = len(sub.group(1))
+                    if depth < indent:
+                        break                   # the outer list's
+                    if depth == indent and sub.group(2)[0].isdigit() == ordered:
+                        break                   # this list's next item
+                    if self.may_interrupt(sub):
+                        if depth > indent:
+                            child, i = self.list_block(lines, i, depth)
+                            children.append(child)
+                            continue
+                        break                   # a list of another kind
+                    # A numbered line that may not start a list here: the
+                    # item's words go on, as they do on GitHub.
+                    text.append(nxt.strip())
+                    i += 1
+                    continue
                 if len(nxt) - len(nxt.lstrip()) > indent:
                     text.append(nxt.strip())
                     i += 1
@@ -462,6 +482,29 @@ class Renderer:
                 break
             items.append("<li>%s%s</li>" % (self.inline(" ".join(text)), "".join(children)))
         return "<%s%s>%s</%s>" % (tag, start, "".join(items), tag), i
+
+
+# Markdown the documents write, and what GitHub draws of it, which the
+# pages must draw too. Held at every build: two sentences wrapped before a
+# year ("27 October / 2026. Ready", "14 November / 2026. I walk it") were
+# drawn on the site as lists counted from 2026, while GitHub drew them
+# whole (2026-11-21).
+RENDER_CASES = [
+    ("on 14 November\n2026. I walk it", "<p>on 14 November 2026. I walk it</p>"),
+    ("- a bullet that wraps\n  2026. on", "<ul><li>a bullet that wraps 2026. on</li></ul>"),
+    ("- a bullet that wraps\n2026. on", "<ul><li>a bullet that wraps 2026. on</li></ul>"),
+    ("Steps:\n1. one\n2. two", "<p>Steps:</p>\n<ol><li>one</li><li>two</li></ol>"),
+    ("Text\n- a bullet under it", "<p>Text</p>\n<ul><li>a bullet under it</li></ul>"),
+    ("1. a\n   - x\n2. b", "<ol><li>a<ul><li>x</li></ul></li><li>b</li></ol>"),
+    ("2026. A list counted from a year", '<ol start="2026"><li>A list counted from a year</li></ol>'),
+]
+
+
+def check_renderer():
+    for markdown, wanted in RENDER_CASES:
+        drawn = Renderer(lambda href, image=False: href).render(markdown)
+        if drawn != wanted:
+            fail("the Markdown %r is drawn %r, where GitHub draws %r" % (markdown, drawn, wanted))
 
 
 # ---------------------------------------------------------------------
@@ -941,6 +984,7 @@ def main():
     if not os.path.isfile(os.path.join(android, "app", "build.gradle.kts")):
         fail("no Android app in %s; pass --android-repo" % android)
 
+    check_renderer()
     version, themes, ui = app_facts(repo)
     numbers = project_numbers(repo)
     droid = android_facts(android)

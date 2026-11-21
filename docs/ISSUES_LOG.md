@@ -183,6 +183,7 @@ is in the table below as well.
 | [The Trash that counted on the wall clock](#the-trash-that-counted-on-the-wall-clock) | An age is the distance between two moments, not between two clock readings; a rule that deletes must count the moments. | 0.97.405 |
 | [The flicker that was a word count](#the-flicker-that-was-a-word-count) | A label whose text can come and go sizes its row by what it says; give it the height of its tallest state. | 0.97.405 |
 | [Photographs of the site's pages, blank below the first screen](#photographs-of-the-sites-pages-blank-below-the-first-screen) | A photograph proves only what was on the screen when it was taken: photograph a page as a reader meets it, and give what changes it checks of its own. | the website |
+| [A year read as a list number](#a-year-read-as-a-list-number) | A renderer of one's own agrees with the reader's other one until a line begins with something the two read differently: hold it to the cases where they can part. | the website |
 | [A file with two names](#a-file-with-two-names) | When a check and the action after it each name a file, they must name it the same way: resolve once, compare what was resolved. | 0.101.540 |
 | [A delete that trusted the Trash](#a-delete-that-trusted-the-trash) | An order that is safe only if the first step worked needs the first step's answer. | 0.101.540 |
 | [The number too big to start](#the-number-too-big-to-start) | Code that runs before the window exists takes the safe answer for whatever it cannot read. | 0.101.540 |
@@ -8659,6 +8660,30 @@ later", with one that a block is still on its way in just after a scroll.
 **Takeaway:** a photograph proves only what was on the screen when it was taken. A page that
 changes with scrolling or time has to be photographed in the state a reader meets it — and the
 behaviour that changes it needs checks of its own, not the photograph's silence.
+
+### A year read as a list number
+
+*(2026-11-21 · found in the site's photographs, before an upload)*
+
+**Symptom:** on the website's "How it's tested" page the first paragraph broke in three: "978
+cases on 14 November", then "2026. I walk it" set apart, then the rest. "How it's built" broke the
+same way at "27 October / 2026. Ready". On GitHub both read whole. The second was in no photograph;
+comparing every page before and after the fix found it.
+
+**Root cause:** the site draws the documents with a Markdown renderer of its own
+(`site/build.py`). A source line wrapped just before a year began with "2026. ", and the renderer
+started a numbered list wherever a line began with a number and a full stop: here, a list counted
+from 2026. GitHub follows CommonMark, where a numbered line may break into running text only if its
+number is 1. The two wraps had been in the documents since 2 November.
+
+**Fix:** the renderer keeps that rule, under a paragraph and inside a list item's wrapped words; a
+list after a blank line still starts where its number says. Seven cases of what GitHub draws are
+held at every build (`RENDER_CASES`), and the build stops on any it draws otherwise; taking out
+either half of the fix fails it. The two pages were the only ones that changed.
+
+**Takeaway:** a renderer of one's own agrees with the reader's other renderer until a line begins
+with something the two read differently. Hold it to the cases where they can part, not to the
+documents that happen to agree.
 
 ### The test that took the computer down
 
