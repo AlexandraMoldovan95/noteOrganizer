@@ -563,6 +563,43 @@ def _fmt_journal_tag(name):
             or name in ("align_center", "align_right"))
 
 
+def _transpose_keeping_styles(text, pos):
+    """Tk's own Ctrl+T (tk::TextTranspose: the two characters before *pos*
+    swapped, the caret after them, one undo step), but each character
+    keeps its own character formatting. Tk put the pair back with only the
+    tags both neighbours share, so a bold letter swapped with a plain one
+    came back plain (case 480). Every other tag -- a line's indent or
+    alignment -- is given as Tk gives it. Returns "break"."""
+    try:
+        end = text.index(pos)
+        if text.compare(f"{end}-1c", "==", "1.0"):
+            return "break"
+        first, second = text.index(f"{end}-2c"), text.index(f"{end}-1c")
+        before = set(text.tag_names(f"{first}-1c")) if text.compare(first, ">", "1.0") else set()
+        shared = {t for t in before & set(text.tag_names(end))
+                  if t != "sel" and not is_format_tag(t)}
+
+        def worn(index):
+            return tuple(shared | {t for t in text.tag_names(index) if is_format_tag(t)})
+        pair = (text.get(second), worn(second), text.get(first), worn(first))
+        auto = bool(text.cget("autoseparators"))
+        if auto:
+            text.configure(autoseparators=False)
+            text.edit_separator()
+        try:
+            text.delete(first, end)
+            text.insert(first, *pair)
+        finally:
+            if auto:
+                text.edit_separator()
+                text.configure(autoseparators=True)
+        text.mark_set("insert", f"{first}+2c")
+        text.see("insert")
+    except tk.TclError:
+        pass
+    return "break"
+
+
 def _stored_signature(note):
     """What a note stores, its "updated" stamp aside, as one string -- to
     tell a save that changed something from one that changed nothing."""
@@ -5543,6 +5580,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         return "break"
                 except tk.TclError:
                     pass
+                # Made here, each letter keeping its own style; "break" stops
+                # Tk's, which gave the pair only the style both sides share.
+                # Not with Alt: Ctrl+Alt is AltGr, which types.
+                if not getattr(_event, "state", 0) & 0x20000:
+                    return _transpose_keeping_styles(b, at)
         return None
 
     def _deletion_joins_table(self, forward, selection_wins=True):

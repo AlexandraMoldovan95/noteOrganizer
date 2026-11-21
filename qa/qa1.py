@@ -8617,6 +8617,21 @@ app.title_entry.delete(0, 'end')
 check(f'Ctrl+T and the Insert key spread no style ({_tyCT}; {_tyIns})',
       _tyCT == (True, 'Pricesba here', ['1.0', '1.6'])
       and _tyIns == (True, 'PricesFresh words: here', ['1.0', '1.6']))
+# ...and the swapped letters keep their own styles: Tk put the pair back with
+# only the tags both sides share, so a bold word's last letter swapped with
+# the plain one after it came back plain (case 480). The line's alignment,
+# no letter's own, stays on both.
+set_body('Pricesab here' + chr(10) + 'second line')
+_b.tag_add('bold', '1.0', '1.6')
+_b.tag_add('align_center', '1.0', '2.0')
+_b.mark_set('insert', '1.6')
+_tyCB = _own_key('<Control-KeyPress-t>', '<Control-KeyRelease-t>',
+                 ('Control_L',))
+_tyCB = (_tyCB, _b.get('1.0', '1.end'), [str(i) for i in _b.tag_ranges('bold')],
+         [str(i) for i in _b.tag_ranges('align_center')], _b.index('insert'))
+_b.tag_remove('align_center', '1.0', 'end')
+check(f"Ctrl+T at a bold word's end keeps each letter's own style ({_tyCB})",
+      _tyCB == (True, 'Priceasb here', ['1.0', '1.5', '1.6', '1.7'], ['1.0', '2.0'], '1.7'))
 set_body('')
 
 # ---- FIELD TEST: THE VIEW STAYS PUT AFTER A GRID REBUILD ----

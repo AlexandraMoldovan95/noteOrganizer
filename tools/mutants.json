@@ -19972,5 +19972,23 @@
       "qa6"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "TX01",
+    "about": "Ctrl+T is left to Tk, whose swap gives the pair only the style both sides share: a bold word's last letter swapped with a plain one comes back plain",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                    return _transpose_keeping_styles(b, at)\n",
+        "replace": "                    pass\n"
+      }
+    ],
+    "must_fail": [
+      "Ctrl+T at a bold word's end keeps each letter's own style"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
   }
 ]
