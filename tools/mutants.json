@@ -20002,5 +20002,23 @@
       "qa1"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "TX02",
+    "about": "Ctrl+T gives the swapped pair every shared tag but the selection: inside a selection the two letters leave it",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        shared = {t for t in before & set(text.tag_names(end)) if not is_format_tag(t)}\n",
+        "replace": "        shared = {t for t in before & set(text.tag_names(end)) if t != \"sel\" and not is_format_tag(t)}\n"
+      }
+    ],
+    "must_fail": [
+      "...and Ctrl+T inside a selection keeps the selection whole"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
   }
 ]

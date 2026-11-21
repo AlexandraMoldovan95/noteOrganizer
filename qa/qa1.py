@@ -8642,6 +8642,19 @@ _tyCE = _own_key('<Control-KeyPress-t>', '<Control-KeyRelease-t>',
 _tyCE = (_tyCE, _b.get('1.0', '1.end'), [str(i) for i in _b.tag_ranges('bold')])
 check(f"...and Ctrl+T at a bold line's end keeps both letters bold ({_tyCE})",
       _tyCE == (True, 'Pricse', ['1.0', '1.6']))
+# ...and a selection over the pair and both its neighbours stays whole, as
+# Tk's own swap keeps it: given only the letters' formatting, the two letters
+# left it, and it broke in three.
+set_body('Pricesab here' + chr(10) + 'second line')
+_b.tag_add('bold', '1.0', '1.6')
+_b.tag_add('sel', '1.4', '1.8')
+_b.mark_set('insert', '1.6')
+_tyCS = _own_key('<Control-KeyPress-t>', '<Control-KeyRelease-t>',
+                 ('Control_L',))
+_tyCS = (_tyCS, _b.get('1.0', '1.end'), [str(i) for i in _b.tag_ranges('sel')])
+_b.tag_remove('sel', '1.0', 'end')
+check(f"...and Ctrl+T inside a selection keeps the selection whole ({_tyCS})",
+      _tyCS == (True, 'Priceasb here', ['1.4', '1.8']))
 set_body('')
 
 # ---- FIELD TEST: THE VIEW STAYS PUT AFTER A GRID REBUILD ----
