@@ -115,8 +115,10 @@ ANDROID_SECTIONS = ["What it does", "What it is not"]
 # one row of them, then three on its side, each a row of its own (the
 # owner's choice, 2026-10-24; four and then two upright looked unplaced).
 # The calendar and Settings are shown on its side instead, the calendar
-# with a note open beside it, Settings with Categories open.
-ANDROID_GALLERY = ["01-note-list", "02-a-note", "03-a-table", "04-search",
+# with a note open beside it, Settings with Categories open. The note is
+# shown being written in, its format bar on the keyboard, in place of the
+# same note at rest (2026-11-21, the review panel's ask; the row stays four).
+ANDROID_GALLERY = ["01-note-list", "12-writing", "03-a-table", "04-search",
                    "08-wide", "09-wide-calendar", "10-wide-settings"]
 
 
