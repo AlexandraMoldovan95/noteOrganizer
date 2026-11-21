@@ -2138,7 +2138,7 @@ try:
     _cp_rec = app._note_cards.get(902)
     _cp_y = (int(_cp_rec['y0'] - app.canvas.canvasy(0) + 12)
              if _cp_rec is not None else None)
-    check('fixture: the note\'s card is drawn beside the Settings page',
+    check('fixture: the note\'s card is drawn on the list the Settings page hides',
           _cp_y is not None)
     for _cp_name, _cp_times, _cp_want in (('a press on a note card', (None,), 1),
                                           ('a double-click on it',

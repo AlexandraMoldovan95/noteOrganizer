@@ -5048,8 +5048,8 @@ lows: 1065's word keeps the session's end while its message is up (SN179, a word
 1066 quotes its check's new name; 1068 names the checks that read what its next start says and
 takes out.
 
-**The fifty-third round** found the fifty-second's fixes holding, and read a tenth of the 816
-cases called "Automated in part" (82): six said what is not true (mediums). Their "Left to the
+**The fifty-third round** found the fifty-second's fixes holding, and read a tenth of the 814
+cases called "Automated in part" (82; first written 816 here, as the round after counted): six said what is not true (mediums). Their "Left to the
 hand" named one part and left out others no check reaches: 230's view after a cell's edit, a drop
 and a column's drag; 244's second Export refused; 384's wheel, the check moving the list in code;
 597's Align left, the menu's Table right on page and the toolbar's Centre, each stood in by
@@ -5060,7 +5060,7 @@ the way to a step their rows did name (102, 127, 154, 187, 257, 269, 291, 304, 3
 557, 613, 706, 740, 814, 857, 982, 1002, 1044, 1083), and 862's expected result counts the Trash
 among what the start must read.
 
-The loop was not converging: a tenth of the "in part" cases held six omissions, so the 816 held
+The loop was not converging: a tenth of the "in part" cases held six omissions, so the 814 held
 about sixty, with no change in the app. The owner's rule of 15 November grades an omission in a row
 already "in part" low, since the row already sends the hand to walk the case whole; a case called
 whole that is not, a claim that something is read when it is not, a step or result untrue of the
