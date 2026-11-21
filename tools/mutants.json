@@ -20020,5 +20020,41 @@
       "qa1"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "TX03",
+    "about": "Ctrl+T in a table cell is left to Tk, whose swap gives a bold letter swapped with a plain one back plain",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        entry.bind(\"<Control-t>\", swap_keeping_styles)\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "Ctrl+T in a table cell keeps each letter's own style"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "TX04",
+    "about": "Ctrl+T beside an emoji swaps anyway, deleting half of the emoji's two places",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        if len(one) != 1 or len(two) != 1 or max(ord(one), ord(two)) > 0xFFFF:\n            return \"break\"\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "...and Ctrl+T beside an emoji leaves the words as they were"
+    ],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "killed"
   }
 ]

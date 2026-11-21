@@ -3835,6 +3835,24 @@ check(f'typing through the editor lands in the text ({lines_now()[0]!r})',
       [core_tables.split_row(r) for r in lines_now()[:3]]
       == [['Name', 'Qty'], ['Milk', '2'], ['Eggs', '12']])
 
+# Ctrl+T in a cell swaps two letters each keeping its own style, as in the
+# note: Tk's own swap gave a bold letter swapped with a plain one back plain.
+app._open_cell_editor(app._grid_at_line(1), 1, 0)
+app.update()
+_ct_e = app._cell_editor['entry']
+_ct_e.tag_remove('sel', '1.0', 'end')
+_ct_e.tag_add('bold', '1.0', '1.3')
+_ct_e.mark_set('insert', '1.3')
+_ct_said = None
+if take_focus(_ct_e):
+    _ct_e.event_generate('<Control-KeyPress-t>')
+    app.update()
+    _ct_said = (_ct_e.get('1.0', 'end-1c'), [str(i) for i in _ct_e.tag_ranges('bold')])
+app._close_cell_editor()
+app.update()
+check(f"Ctrl+T in a table cell keeps each letter's own style ({_ct_said})",
+      _ct_said == ('Mikl', ['1.0', '1.2', '1.3', '1.4']))
+
 # A cell's words are where its editor starts, not an edit: Ctrl+Z there took
 # them out, and leaving the cell saved it empty.
 app._open_cell_editor(app._grid_at_line(1), 1, 0)
@@ -8655,6 +8673,15 @@ _tyCS = (_tyCS, _b.get('1.0', '1.end'), [str(i) for i in _b.tag_ranges('sel')])
 _b.tag_remove('sel', '1.0', 'end')
 check(f"...and Ctrl+T inside a selection keeps the selection whole ({_tyCS})",
       _tyCS == (True, 'Priceasb here', ['1.4', '1.8']))
+# ...and beside an emoji it leaves the text alone: an emoji is two of Tk's
+# places, the second reading as nothing, and a swap beside one deleted half.
+set_body('ab\U0001F600 here' + chr(10) + 'second line')
+_b.mark_set('insert', '1.2')
+_tyCM = _own_key('<Control-KeyPress-t>', '<Control-KeyRelease-t>',
+                 ('Control_L',))
+_tyCM = (_tyCM, _b.get('1.0', '1.end'))
+check(f"...and Ctrl+T beside an emoji leaves the words as they were ({_tyCM!r})",
+      _tyCM == (True, 'ab\U0001F600 here'))
 set_body('')
 
 # ---- FIELD TEST: THE VIEW STAYS PUT AFTER A GRID REBUILD ----

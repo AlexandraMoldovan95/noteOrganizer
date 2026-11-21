@@ -581,7 +581,12 @@ def _transpose_keeping_styles(text, pos):
 
         def worn(index):
             return tuple(shared | {t for t in text.tag_names(index) if is_format_tag(t)})
-        pair = (text.get(second), worn(second), text.get(first), worn(first))
+        one, two = text.get(first), text.get(second)
+        # An emoji is two of Tk's places, the second reading as nothing: a
+        # swap beside one deleted half of it. Left as it is.
+        if len(one) != 1 or len(two) != 1 or max(ord(one), ord(two)) > 0xFFFF:
+            return "break"
+        pair = (two, worn(second), one, worn(first))
         auto = text.tk.getboolean(text.cget("autoseparators"))
         if auto:
             text.configure(autoseparators=False)
@@ -4121,6 +4126,17 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             entry.bind(key, lambda _e, s=style: (self._toggle_body_style(s), "break")[1])
         entry.bind("<Return>", lambda _e: self._editor_newline())
         entry.bind("<Shift-Return>", lambda _e: self._editor_newline())
+
+        # Ctrl+T swaps two letters each keeping its own style, as in the note
+        # (_transpose_keeping_styles): Tk's own gave a bold letter swapped with
+        # a plain one back plain here too. Not with Alt: Ctrl+Alt is AltGr.
+        def swap_keeping_styles(event, t=entry):
+            if getattr(event, "state", 0) & 0x20000:
+                return None
+            self._editor_flush_type_paint()
+            at = "insert" if t.compare("insert", "==", "insert lineend") else "insert+1c"
+            return _transpose_keeping_styles(t, at)
+        entry.bind("<Control-t>", swap_keeping_styles)
         # The cell's menu from the keyboard, as a drawn control's opens: every
         # row, column and merge command lived in a right-click alone. "App"
         # is Windows' menu key, "Menu" X11's; Tk raises on the one it lacks.
