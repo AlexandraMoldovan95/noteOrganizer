@@ -8632,6 +8632,16 @@ _tyCB = (_tyCB, _b.get('1.0', '1.end'), [str(i) for i in _b.tag_ranges('bold')],
 _b.tag_remove('align_center', '1.0', 'end')
 check(f"Ctrl+T at a bold word's end keeps each letter's own style ({_tyCB})",
       _tyCB == (True, 'Priceasb here', ['1.0', '1.5', '1.6', '1.7'], ['1.0', '2.0'], '1.7'))
+# ...and at a line's end, where the two before the caret swap: the line break
+# after them wears no bold, so Tk's swap gave both bold letters back plain.
+set_body('Prices' + chr(10) + 'second line')
+_b.tag_add('bold', '1.0', '1.6')
+_b.mark_set('insert', '1.6')
+_tyCE = _own_key('<Control-KeyPress-t>', '<Control-KeyRelease-t>',
+                 ('Control_L',))
+_tyCE = (_tyCE, _b.get('1.0', '1.end'), [str(i) for i in _b.tag_ranges('bold')])
+check(f"...and Ctrl+T at a bold line's end keeps both letters bold ({_tyCE})",
+      _tyCE == (True, 'Pricse', ['1.0', '1.6']))
 set_body('')
 
 # ---- FIELD TEST: THE VIEW STAYS PUT AFTER A GRID REBUILD ----

@@ -19995,7 +19995,8 @@
       }
     ],
     "must_fail": [
-      "Ctrl+T at a bold word's end keeps each letter's own style"
+      "Ctrl+T at a bold word's end keeps each letter's own style",
+      "...and Ctrl+T at a bold line's end keeps both letters bold"
     ],
     "suites": [
       "qa1"

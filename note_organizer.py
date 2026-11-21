@@ -576,13 +576,13 @@ def _transpose_keeping_styles(text, pos):
             return "break"
         first, second = text.index(f"{end}-2c"), text.index(f"{end}-1c")
         before = set(text.tag_names(f"{first}-1c")) if text.compare(first, ">", "1.0") else set()
-        shared = {t for t in before & set(text.tag_names(end))
-                  if t != "sel" and not is_format_tag(t)}
+        # The selection too, as Tk gives it: kept when both sides are in it.
+        shared = {t for t in before & set(text.tag_names(end)) if not is_format_tag(t)}
 
         def worn(index):
             return tuple(shared | {t for t in text.tag_names(index) if is_format_tag(t)})
         pair = (text.get(second), worn(second), text.get(first), worn(first))
-        auto = bool(text.cget("autoseparators"))
+        auto = text.tk.getboolean(text.cget("autoseparators"))
         if auto:
             text.configure(autoseparators=False)
             text.edit_separator()
