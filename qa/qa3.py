@@ -4696,7 +4696,7 @@ finally:
 NO.CATEGORY_COLORS.pop('Garden qa3', None)
 check(f"a backup's categories the settings file refused are said not written "
       f"({(_cw_said or [''])[-1][-140:]!r})",
-      bool(_cw_said) and 'Also restored 1 category' in _cw_said[-1]
+      bool(_cw_said) and 'Also restored 1 category.' in _cw_said[-1]
       and 'The categories could not be written to disk; the backup still holds them' in _cw_said[-1])
 
 app.open_blank_tab(); app.update()
@@ -6267,6 +6267,10 @@ finally:
             setattr(app, _tc_name, _tc_was)
 _tc_trash = {e.get('title'): e for e in app.trash}
 _tc_saved = NO.load_settings().get('categories') or {}
+# The restored parts as Import complete says them, each in the form its number
+# takes: as many trashed notes as came in, "note" for one.
+import re as _tc_re
+_tc_restored = _tc_re.search(r"Also restored 2 categories and (\d+) trashed (notes?)\.", _tc_msgs)
 check(f"a backup's trashed note keeps a category only the Trash uses, the newer of two twins "
       f"comes in, and a name a ceiling refuses is said ({sorted(_tc_trash)}, "
       f"{_tc_trash.get('Shed', {}).get('category')!r}; {_tc_msgs[-260:]!r})",
@@ -6276,7 +6280,8 @@ check(f"a backup's trashed note keeps a category only the Trash uses, the newer 
       # Trash's own once each.
       and "3 of the backup's categories could not be added" in _tc_msgs
       # ...and the two names only its Trash uses counted in the words, as case 1079 reads them.
-      and "Also restored 2 category/categories" in _tc_msgs
+      and bool(_tc_restored) and int(_tc_restored.group(1)) == len(app.trash)
+      and (_tc_restored.group(2) == 'note') == (len(app.trash) == 1)
       and [e.get('category') for e in app.trash if e.get('title') == 'Pair'] == ['QaPairCat'])
 NO.CATEGORY_COLORS.pop('OnlyInTrash', None); NO.CATEGORY_COLORS.pop('QaPairCat', None)
 NO.persist_categories()

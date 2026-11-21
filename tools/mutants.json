@@ -19306,6 +19306,28 @@
     "expect": "killed"
   },
   {
+    "id": "SN181",
+    "about": "Import complete says its categories in both forms, \"2 category/categories\", not in the one its number takes",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            parts.append(f\"{added_categories} categor{'y' if added_categories == 1 else 'ies'}\")\n",
+               "replace": "            parts.append(f\"{added_categories} category/categories\")\n"}],
+    "must_fail": ["a backup's categories the settings file refused are said not written",
+                  "a backup's trashed note keeps a category only the Trash uses"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
+    "id": "SN182",
+    "about": "Import complete says the trashed notes it restored in both forms, \"1 trashed note(s)\"",
+    "edits": [{"file": "note_organizer.py",
+               "find": "            parts.append(f\"{added_trash} trashed note{'' if added_trash == 1 else 's'}\")\n",
+               "replace": "            parts.append(f\"{added_trash} trashed note(s)\")\n"}],
+    "note": "SN181's sibling in the same sentence. The day markings' and the templates' words, the same expression, are read by no check.",
+    "must_fail": ["a backup's trashed note keeps a category only the Trash uses"],
+    "suites": ["qa3"],
+    "expect": "killed"
+  },
+  {
     "id": "SN142",
     "about": "A name a backup's settings and its notes both use, refused by a ceiling, is counted twice",
     "edits": [{"file": "noteorganizer/core/categories.py",

@@ -12584,14 +12584,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         skipped_note = f" ({dupe_count} duplicate(s) skipped)" if dupe_count and to_import is not valid_notes else ""
         extras_note = ""
         parts = []
+        # Each count in the form its number takes: "2 category/categories"
+        # was read as the app's own words (case 1079).
         if added_categories:
-            parts.append(f"{added_categories} category/categories")
+            parts.append(f"{added_categories} categor{'y' if added_categories == 1 else 'ies'}")
         if restored_decor:
-            parts.append(f"{restored_decor} calendar day marking(s)")
+            parts.append(f"{restored_decor} calendar day marking{'' if restored_decor == 1 else 's'}")
         if added_templates:
-            parts.append(f"{added_templates} template(s)")
+            parts.append(f"{added_templates} template{'' if added_templates == 1 else 's'}")
         if added_trash:
-            parts.append(f"{added_trash} trashed note(s)")
+            parts.append(f"{added_trash} trashed note{'' if added_trash == 1 else 's'}")
         if parts:
             extras_note = " Also restored " + " and ".join(parts) + "."
         if unwritten:
