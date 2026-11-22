@@ -20843,7 +20843,7 @@
     "edits": [
       {
         "file": "note_organizer.py",
-        "find": "                    broken = isinstance(e, (zipfile.BadZipFile, zlib.error,\n                                            RuntimeError, NotImplementedError))\n",
+        "find": "                    broken = isinstance(e, (zipfile.BadZipFile, zlib.error,\n                                            NotImplementedError))\n",
         "replace": "                    broken = False\n"
       }
     ],
@@ -20924,6 +20924,24 @@
     ],
     "suites": [
       "qa1"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW45",
+    "about": "an encrypted backup is said to be damaged, and another copy suggested, where its own words say why",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                    broken = isinstance(e, (zipfile.BadZipFile, zlib.error,\n                                            NotImplementedError))\n",
+        "replace": "                    broken = isinstance(e, (zipfile.BadZipFile, zlib.error,\n                                            RuntimeError, NotImplementedError))\n"
+      }
+    ],
+    "must_fail": [
+      "...while an encrypted one keeps its own words"
+    ],
+    "suites": [
+      "qa3"
     ],
     "expect": "killed"
   }

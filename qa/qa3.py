@@ -1458,7 +1458,9 @@ check(f"a sound backup with no room for it is said as that alone, not as a file 
 # stream (zlib.error) as a file that could not be read, not "unexpectedly".
 _nr_seen = {}
 for _nr_name, _nr_raise in (('full', OSError(errno.ENOSPC, 'No space left on device')),
-                            ('stream', zlib.error('Error -3 while decompressing data'))):
+                            ('stream', zlib.error('Error -3 while decompressing data')),
+                            ('encrypted', RuntimeError('File notes_data.json is encrypted, '
+                                                       'password required for extraction'))):
     with zipfile.ZipFile(_nr_zip, 'w') as zf:
         zf.writestr('notes_data.json', '[]')
     _nr_said.clear()
@@ -1501,6 +1503,10 @@ finally:
     app.show_error = _nr_err_was
 os.remove(_nz_zip)
 _nz_said = ' '.join(_nr_said)
+check(f"...while an encrypted one keeps its own words, which say why another copy "
+      f"would not help ({_nr_seen.get('encrypted', '')[:160]!r})",
+      'encrypted, password required' in _nr_seen.get('encrypted', '')
+      and NO.NoteOrganizer.BACKUP_NOT_WHOLE not in _nr_seen.get('encrypted', ''))
 check(f"a file that is not a backup at all is said in words, not zipfile's ({_nz_said[:160]!r})",
       NO.NoteOrganizer.BACKUP_NOT_WHOLE in _nz_said and 'zip file' not in _nz_said
       and 'Error -3' not in _nr_seen.get('stream', ''))

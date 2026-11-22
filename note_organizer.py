@@ -12271,9 +12271,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                         RuntimeError, NotImplementedError) as e:
                     full = self._disk_was_full(e)
                     # Not a whole zip, or not one this reads: the person's
-                    # words, not zipfile's ("File is not a zip file").
+                    # words, not zipfile's ("File is not a zip file"). An
+                    # encrypted one (RuntimeError) keeps its own: it says why.
                     broken = isinstance(e, (zipfile.BadZipFile, zlib.error,
-                                            RuntimeError, NotImplementedError))
+                                            NotImplementedError))
                     state["error"] = (
                         "The disk filled up while the backup was unpacked, so "
                         "nothing from it was kept. Free up some space and try "
