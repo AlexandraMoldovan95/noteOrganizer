@@ -18011,6 +18011,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if moved is None:
             return   # trash.json refused them: they stay, and that was said
         marks = [(e.get("id"), e.get("deleted_at")) for e in moved]
+        # One note, the one open here: its Undo opens it again.
+        reopen = count == 1 and self.selected_note_id in named
         self.notes = [n for n in self.notes if n["id"] not in named]
         written = self.save_notes()
         # An open note trashed leaves the editor and tabs pointing at nothing
@@ -18030,7 +18032,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # The bulk route is the easiest one to regret: a tick box, a
         # confirm, and a list that was filtered by whatever was typed in
         # the search box at the time.
-        self._offer_trash_undo(f"Moved {count_noun(count, 'note')} to Trash", marks)
+        self._offer_trash_undo(f"Moved {count_noun(count, 'note')} to Trash", marks,
+                               reopen=reopen)
 
     def _bulk_change_category(self):
         if not self.selected_note_ids:
@@ -21678,10 +21681,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # The panel was rebuilt or torn down since this was recorded.
             self._trash_panel_redraw = None
 
-    def _offer_trash_undo(self, words, marks):
+    def _offer_trash_undo(self, words, marks, reopen=False):
         """The banner offering to put back the notes just sent to the Trash,
-        remembered with the entries it names (_withdraw_gone_trash_offer)."""
-        action = lambda: self._undo_trash(marks)  # noqa: E731
+        remembered with the entries it names (_withdraw_gone_trash_offer).
+        *reopen*: the one note was open when it went, and comes back open."""
+        action = lambda: self._undo_trash(marks, reopen)  # noqa: E731
         self._show_toast(words, action=action)
         self._trash_undo_offer = {"marks": set(marks), "action": action}
 
@@ -21701,11 +21705,12 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self._trash_undo_offer = None
             self._hide_toast()
 
-    def _undo_trash(self, marks):
+    def _undo_trash(self, marks, reopen=False):
         """Put back the notes the toast's Undo was offered for. `marks` are
         (id, deleted_at) pairs, as the trash list is rebuilt under any held
         object. Through Settings' own core function, which gives a NEW id,
-        so what returns is known by where it lands, appended.
+        so what returns is known by where it lands, appended. *reopen*: one
+        note, open when it went, is opened again.
         """
         # A set of the marks, looked up in one pass over the trash: finding
         # each one with its own scan made a bulk Undo quadratic as well.
@@ -21728,8 +21733,10 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self._refresh_open_trash_panel()
 
         if len(restored) == 1:
-            # Opened again, as the click meant; a bulk undo opens nothing.
-            self.open_note_in_tab(restored[0])
+            # Opened again only if it was open when it went: one deleted
+            # from the list took the editor from the note being written.
+            if reopen:
+                self.open_note_in_tab(restored[0])
             title = (restored[0].get("title") or "").strip() or "Untitled note"
             self.set_status(f"Put back: {title}")
         else:
@@ -22166,6 +22173,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         )
         if confirm:
             deleted_id = note["id"]
+            # Its Undo opens it again only if it was the note open here.
+            was_open = self.selected_note_id == deleted_id
             # Move to trash (30-day recovery) rather than destroying it.
             doomed = [n for n in self.notes if n["id"] == deleted_id]
             moved = self._move_notes_to_trash(doomed)
@@ -22196,7 +22205,7 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # The status line says where it went; the toast is the way
             # back. Settings -> Recently deleted was the only route home
             # until now, and it asks you to know the trash exists.
-            self._offer_trash_undo("Note moved to Trash", marks)
+            self._offer_trash_undo("Note moved to Trash", marks, reopen=was_open)
 
     def report_callback_exception(self, exc_type, exc_value, exc_tb):
         """Tk's handler for errors in a callback, which printed to a stderr

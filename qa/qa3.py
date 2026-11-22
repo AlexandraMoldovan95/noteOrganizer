@@ -2179,6 +2179,9 @@ _u_keep = _undo_seed('UndoKeepMe')
 _u_gone = _undo_seed('UndoDeleteMe')
 app.refresh_note_list(); app.update()
 
+# Open when it goes: its Undo opens it again (one deleted from the list
+# while another is open does not take the editor -- qa6).
+app.open_note_in_tab(_u_gone); app.update()
 app._delete_note(_u_gone, None); app.update()
 check('a single delete puts the note in the trash',
       'UndoDeleteMe' in _trash_titles() and 'UndoDeleteMe' not in _titles())
@@ -2194,7 +2197,7 @@ check('...without disturbing the note beside it',
 check('...and the toast goes away with the offer it carried',
       not app.toast_frame.winfo_ismapped())
 _u_back = next((n for n in app.notes if n.get('title') == 'UndoDeleteMe'), None)
-check('...and the restored note is opened, not merely re-listed',
+check('...and the restored note, open when it went, is opened again',
       _u_back is not None and app.selected_note_id == _u_back['id'])
 
 # Clicking Undo twice must not leave two copies of one note. What stops

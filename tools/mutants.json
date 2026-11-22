@@ -20727,5 +20727,78 @@
       "qa6"
     ],
     "expect": "killed"
+  },
+  {
+    "id": "PW34",
+    "about": "the Trash banner's Undo opens the note it puts back though another was open: the editor leaves the note being written",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if reopen:\n                self.open_note_in_tab(restored[0])\n",
+        "replace": "            if True:\n                self.open_note_in_tab(restored[0])\n"
+      }
+    ],
+    "must_fail": [
+      "the Undo of a note deleted from the list puts it back and leaves the editor on the note being written",
+      "...as does the Undo of one ticked note sent to the Trash"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW35",
+    "about": "the Trash banner's Undo never opens the note it puts back, though it was the one open",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            if reopen:\n                self.open_note_in_tab(restored[0])\n",
+        "replace": "            if False:\n                self.open_note_in_tab(restored[0])\n"
+      }
+    ],
+    "must_fail": [
+      "...while the note open when it went comes back open"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW36",
+    "about": "a note deleted from the list counts as the open one: its Undo takes the editor from the note being written",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            was_open = self.selected_note_id == deleted_id\n",
+        "replace": "            was_open = True\n"
+      }
+    ],
+    "must_fail": [
+      "the Undo of a note deleted from the list puts it back and leaves the editor on the note being written"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW37",
+    "about": "one ticked note sent to the Trash counts as the open one: its Undo takes the editor from the note being written",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        reopen = count == 1 and self.selected_note_id in named\n",
+        "replace": "        reopen = count == 1\n"
+      }
+    ],
+    "must_fail": [
+      "...as does the Undo of one ticked note sent to the Trash"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
   }
 ]

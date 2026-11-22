@@ -8011,6 +8011,45 @@ finally:
     app.ask_yes_no = _wt_ask
 app.notes = []; app.trash = []; app.save_notes(); NO.save_trash(app.trash)
 
+# ---- THE TRASH BANNER'S UNDO OPENS ONLY THE NOTE THAT WAS OPEN ----
+# A note deleted from the list, and put back by the banner's Undo, was
+# opened in the editor, over the note being written (the review panel, on
+# the phone; the desktop did the same). Only the note open when it went
+# comes back open.
+_uo_ask = app.ask_yes_no
+app.ask_yes_no = lambda *a, **k: True
+try:
+    app.notes = [NO.normalize_note({'id': 1, 'title': 'Writing this', 'body': 'a'}),
+                 NO.normalize_note({'id': 2, 'title': 'From the list', 'body': 'b'}),
+                 NO.normalize_note({'id': 3, 'title': 'Ticked', 'body': 'c'})]
+    app.trash = []
+    app.save_notes(); NO.save_trash(app.trash); app.refresh_note_list(); app.update()
+    app.open_note_in_tab(app.find_note(1)); app.update()
+    app._context_delete_note(app.find_note(2)); app.update()
+    app._run_toast_action(); app.update()
+    _uo_list = (app.title_entry.get(), [n.get('title') for n in app.notes])
+    app.selected_note_ids = {3}
+    app._bulk_move_to_trash(); app.update()
+    app._run_toast_action(); app.update()
+    _uo_bulk = (app.title_entry.get(), [n.get('title') for n in app.notes])
+    app.open_note_in_tab(next(n for n in app.notes if n.get('title') == 'Writing this'))
+    app.update()
+    app.delete_current_note(); app.update()
+    app._run_toast_action(); app.update()
+    _uo_open = (app.title_entry.get(),
+                (app.find_note(app.selected_note_id) or {}).get('title'))
+finally:
+    app.ask_yes_no = _uo_ask
+check(f"the Undo of a note deleted from the list puts it back and leaves the "
+      f"editor on the note being written ({_uo_list})",
+      _uo_list[0] == 'Writing this' and 'From the list' in _uo_list[1])
+check(f'...as does the Undo of one ticked note sent to the Trash ({_uo_bulk})',
+      _uo_bulk[0] == 'Writing this' and 'Ticked' in _uo_bulk[1])
+check(f"...while the note open when it went comes back open ({_uo_open})",
+      _uo_open == ('Writing this', 'Writing this'))
+app.notes = []; app.trash = []; app.save_notes(); NO.save_trash(app.trash)
+app.refresh_note_list(); app.update()
+
 # ---- THE FIND BAR'S OWN ROOM AT THE TOP OF THE PAGE ----
 # Ctrl+F's bar floats in the editor's top-right corner, where the header
 # keeps its controls: it covered half the category button (the review panel,
