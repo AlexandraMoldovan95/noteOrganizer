@@ -20040,6 +20040,23 @@
     "expect": "killed"
   },
   {
+    "id": "TX04",
+    "about": "Ctrl+T reckons its two places by Tk's indices instead of characters (an emoji takes two indices)",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        first, second = text.index(f\"{end}-2c\"), text.index(f\"{end}-1c\")\n",
+        "replace": "        first, second = text.index(f\"{end}-2 indices\"), text.index(f\"{end}-1 indices\")\n"
+      }
+    ],
+    "note": "Kept for 04af5cd5, which named TX04 for an emoji guard since gone (it refused a swap that was right). Re-aimed, it is equivalent, measured on Tk 8.6.15: -N indices steps over an emoji whole, as -Nc does, so no index the swap reckons lands inside one. qa1's two emoji checks hold the swap made whole.",
+    "must_fail": [],
+    "suites": [
+      "qa1"
+    ],
+    "expect": "survives"
+  },
+  {
     "id": "TX05",
     "about": "Ctrl+T on a cell's first two letters leaves them without the cell's alignment, and a centred cell's words jump left",
     "edits": [
