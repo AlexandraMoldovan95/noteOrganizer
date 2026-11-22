@@ -1443,7 +1443,8 @@ _ll_long = ('plan the garden beds, ' * 30)[:600]
 _ll_tall_t = 600
 try:
     _ll_grp.rebuild = _ll_rebuild_seen
-    app.geometry('640x600'); _ll_settle(10)
+    # The editor's narrowest: beside the sidebar, at the window's floor.
+    app.geometry('900x600'); _ll_settle(10)
     _ll_grow['a long row, narrow'] = _ll_one_row('L0 ' + _ll_long)
     app.geometry('1400x900'); _ll_settle(10)
     _ll_grow['a long row, wide'] = _ll_one_row('L0 ' + _ll_long)
@@ -1465,7 +1466,7 @@ try:
     _ll_grow['keyboard on L3'] = _ll_focus(_ll_hb)
     app._bring_into_sight(_ll_hb); _ll_settle(4)
     del _ll_rebuilds[:]
-    app.geometry('640x600'); _ll_settle(30)
+    app.geometry('900x600'); _ll_settle(30)
     app._checklist_rows.stack.size(); _ll_settle(4)
     _ll_grow['rebuilds'] = _ll_rebuilds[:]
     _ll_grow['tallest of many rows'] = max(

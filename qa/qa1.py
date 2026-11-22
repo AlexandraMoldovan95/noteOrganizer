@@ -17392,7 +17392,7 @@ app.update()
 # a fixed 380 px, so at 1024 px and below the bin was squeezed to nothing --
 # the item could not be removed -- and the text's last words were cut off.
 _mv_geom = app.geometry()
-app.geometry('800x600')
+app.geometry('900x600')   # the editor's narrowest: beside the sidebar, at its floor
 app.update()
 check('fixture: a long item in a narrow window',
       _cu_setup(['milk', 'a long item that keeps going and going so that it '

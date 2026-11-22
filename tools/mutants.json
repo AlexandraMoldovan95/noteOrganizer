@@ -4734,10 +4734,10 @@
   },
   {
     "id": "DPI15",
-    "about": "the smallest window stays 640x600 pixels whatever the screen's scale",
+    "about": "the smallest window stays the same pixels whatever the screen's scale",
     "edits": [{"file": "note_organizer.py",
-               "find": "        self.minsize(*self._fit_to_screen(640, 600))\n",
-               "replace": "        self.minsize(640, 600)\n"}],
+               "find": "        self.minsize(*floor)\n",
+               "replace": "        self.minsize(max(self.WINDOW_FLOOR[0], side + EDITOR_MIN_WIDTH), self.WINDOW_FLOOR[1])\n"}],
     "must_fail": ["...its window opens at 900x600 grown to"],
     "suites": ["qa6"],
     "expect": "killed"
@@ -17426,8 +17426,8 @@
     "id": "WA02",
     "about": "The window is pulled inside at every show, not once",
     "edits": [{"file": "note_organizer.py",
-               "find": "        self._placed_in_work_area = True\n        try:\n",
-               "replace": "        try:\n"}],
+               "find": "        self._placed_in_work_area = True\n        self._pull_window_into_work_area()\n",
+               "replace": "        self._pull_window_into_work_area()\n"}],
     "must_fail": ["when the window first shows it is moved inside, once"],
     "suites": ["qa6"],
     "expect": "killed"
@@ -20524,6 +20524,132 @@
     ],
     "must_fail": [
       "...and two of them, counted"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW23",
+    "about": "hiding or showing the sidebar leaves the window's floor and the page's narrowest as they were: at 640 with the sidebar hidden the editor is still cut off under a bar",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        # The window and its page as narrow as what now shows.\n        self._fit_window_floor()\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "...and at 640x600 with the sidebar hidden"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW24",
+    "about": "with the sidebar hidden the Calendar and Settings are laid out as narrow as the Notes page, and Settings cuts its words",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "            (side if on_notes else SIDEBAR_WIDTH) + EDITOR_MIN_WIDTH)\n",
+        "replace": "            side + EDITOR_MIN_WIDTH)\n"
+      }
+    ],
+    "must_fail": [
+      "...with the sidebar hidden the Calendar and Settings are laid out as wide as they always were"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW25",
+    "about": "the page's narrowest does not follow a change of tab: the Calendar is laid out as narrow as the Notes page",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        self.notebook.bind(\"<<NotebookTabChanged>>\",\n                           lambda e: self._fit_window_floor(), add=\"+\")\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "...with the sidebar hidden the Calendar and Settings are laid out as wide as they always were"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW26",
+    "about": "Settings opened from the Notes page with the sidebar hidden is laid out as narrow as that page",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "        # Settings is laid out no narrower than it ever was.\n        self._fit_window_floor()\n",
+        "replace": ""
+      }
+    ],
+    "must_fail": [
+      "...with the sidebar hidden the Calendar and Settings are laid out as wide as they always were"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW27",
+    "about": "back from Settings, the Notes page keeps Settings' width: at 640 with the sidebar hidden, a bar to scroll sideways again",
+    "edits": [
+      {
+        "file": "noteorganizer/ui/settings_page.py",
+        "find": "        self._settings_open = False\n        self._fit_window_floor()\n",
+        "replace": "        self._settings_open = False\n"
+      }
+    ],
+    "must_fail": [
+      "...and at 640x600 with the sidebar hidden"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW28",
+    "about": "the window's floor is 640 wide with the sidebar shown: the editor is cut off under a bar again",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "        floor = self._fit_to_screen(max(self.WINDOW_FLOOR[0], side + EDITOR_MIN_WIDTH),\n",
+        "replace": "        floor = self._fit_to_screen(self.WINDOW_FLOOR[0],\n"
+      }
+    ],
+    "must_fail": [
+      "the sidebar shown again makes the window as wide as the sidebar and the editor side by side"
+    ],
+    "suites": [
+      "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW29",
+    "about": "grown to hold the sidebar beside the screen's right edge, the window is left partly off the screen",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                self.update_idletasks()\n                self._pull_window_into_work_area()\n",
+        "replace": "                self.update_idletasks()\n"
+      }
+    ],
+    "must_fail": [
+      "...and grown beside the right edge of the screen it stays on it"
     ],
     "suites": [
       "qa6"

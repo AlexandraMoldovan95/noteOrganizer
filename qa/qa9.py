@@ -1699,10 +1699,12 @@ for _ in range(10):
     app.update(); time.sleep(0.02)
 
 
-# The window's horizontal scrollbar is for a window narrower than the
-# sidebar and the editor side by side. It used to be packed for good, and
-# sat under every window wide enough not to need it -- in every screenshot.
-# Asked of the layout itself, wide and narrow, twice each.
+# The window's horizontal scrollbar is for a window narrower than its page
+# is laid out: the Calendar and Settings keep the width of the sidebar and
+# the editor side by side, while a window that narrow has the sidebar hidden
+# (its floor; the Notes page alone then fits). It used to be packed for
+# good, and sat under every window wide enough not to need it -- in every
+# screenshot. Asked of the layout itself, wide and narrow, twice each.
 def _sb_packed():
     return app._main_hscroll.winfo_manager() == 'pack'
 
@@ -1714,6 +1716,8 @@ def _sb_at(width):
     return _sb_packed()
 
 
+app.toggle_sidebar()
+app.notebook.select(app.TAB_CALENDAR)
 _sb_seen = [(_sb_w, _sb_at(_sb_w)) for _sb_w in (1100, 760, 1100, 760)]
 check("the window's horizontal scrollbar is there only while the window is "
       "narrower than the app needs (%s)" % _sb_seen,
@@ -1721,9 +1725,19 @@ check("the window's horizontal scrollbar is there only while the window is "
 check('...and while it is there it scrolls: the content is wider than the '
       'view (%s)' % (app.main_canvas.xview(),),
       app.main_canvas.xview()[1] < 1.0)
+app.notebook.select(app.TAB_NOTES)
+for _ in range(10):
+    app.update(); time.sleep(0.02)
+check('...while the Notes page, its sidebar hidden, needs none at that width '
+      '(%d px)' % app.winfo_width(), not _sb_packed())
+app.notebook.select(app.TAB_CALENDAR)
+for _ in range(10):
+    app.update(); time.sleep(0.02)
 check('...and a window exactly as wide as the app needs has none (%d px)'
       % app._main_min_width,
       not _sb_at(app._main_min_width))
+app.notebook.select(app.TAB_NOTES)
+app.toggle_sidebar()
 app.geometry('1100x850')
 for _ in range(10):
     app.update(); time.sleep(0.02)
@@ -2895,7 +2909,8 @@ def _pn_buttons(panel, labels):
 
 
 _pn_zone = [b for b, _kw in app._sidebar_zone_buttons]
-for _pn_size in ('640x600', '1366x690', '1150x860'):
+# The sidebar's own panels at its smallest window: beside the editor, 900x600.
+for _pn_size in ('900x600', '1366x690', '1150x860'):
     app.geometry(_pn_size); _pn_settle()
     app.toggle_import_panel(); _pn_settle()
     _pn_imp = _pn_buttons(app.import_panel, ('Import', 'Clear', 'Close'))
@@ -3315,6 +3330,9 @@ def _fq_inside(w):
             <= app.winfo_rootx() + app.winfo_width())
 
 
+# A question belongs to the whole window, whose narrowest is 640x600 with the
+# sidebar hidden: asked there, the window is that narrow indeed.
+app.toggle_sidebar(); _pn_settle()
 try:
     for _fq_size in ('640x600', '1366x690'):
         app.geometry(_fq_size); _pn_settle()
@@ -3399,6 +3417,8 @@ try:
     check('the window shrunk while the long notice waits: it still fits, OK on '
           'screen (%s)' % _fq_shrunk, _fq_shrunk.get('ok') and _fq_shrunk.get('card'))
 finally:
+    if app._sidebar_hidden:
+        app.toggle_sidebar(); _pn_settle()
     if _fq_info is not None:
         app.show_info = _fq_info
     (NO.VERSION_CHANGE, NO.STORAGE_WARNING, NO.MIGRATION_INFO, NO.PURGED_DIRS,

@@ -666,7 +666,10 @@ new search — which since `0.96.394` starts from the top), Tab
   operation that edits a table's text still turns Tk's grouping off and on, and pays one full
   layout for it.
 - *The smallest window* — at 640×600 with the selection bar AND a share code open, "Copy code" is
-  cut off by 41 px; the code itself can still be selected and copied.
+  cut off by 41 px; the code itself can still be selected and copied. **Gone 2026-11-22:** with the
+  sidebar shown the window is no narrower than the sidebar and the editor side by side (900×600 at
+  100%), where the bar and the code leave "Copy code" whole (seen on a photograph); 640 wide is
+  reached only with the sidebar, and so the selection bar, hidden.
 - *X11 only* — Meta+D, Meta+BackSpace and Meta+Delete (Tk's word deletes, which Windows does not
   have) are not held at a table's edge.
 - *A day's own text on a day the series no longer has* — **settled 2026-10-12, the owner's call:

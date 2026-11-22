@@ -4259,22 +4259,71 @@ _fit_geo = app.geometry()
 app.notes = [NO.normalize_note({'id': 61, 'title': 'Fit', 'body': 'b',
                                 'category': 'General', 'comments': 'c'})]
 app.save_notes(); app.refresh_note_list()
-for _fit_size in ('1100x850', '640x600'):
+# The smallest windows: the sidebar and the editor side by side at the
+# floor, and 640x600 with the sidebar hidden, where the Notes page alone is
+# laid out narrower (the review panel: at 640 it was cut off, under a bar).
+for _fit_size, _fit_hidden in (('1100x850', False), ('900x600', False),
+                               ('640x600', True)):
+    if _fit_hidden != app._sidebar_hidden:
+        app.toggle_sidebar()
     app.geometry(_fit_size)
     app.notebook.select(app.TAB_NOTES)
     app.open_note_in_tab(app.find_note(61))
     _fit_lost = _fit_wait(app)
+    _fit_bar = app._is_placed(app._main_hscroll)
+    _fit_width = app.winfo_width()
     app.notebook.select(app.TAB_CALENDAR)
     _fit_lost += [f'calendar: {l}' for l in _fit_wait(app)]
+    _fit_pages = {'calendar': app.main_inner.winfo_width()}
+    # Settings opened from the Notes page, the one laid out narrower.
+    app.notebook.select(app.TAB_NOTES); app.update()
     app.show_settings_page()
     for _fit_key, _fit_label, _fit_b, _fit_e in app.SETTINGS_SECTIONS:
         app.toggle_settings_panel(_fit_key)
         _fit_lost += [f'{_fit_key}: {l}' for l in _fit_wait(app)]
+    _fit_pages['settings'] = app.main_inner.winfo_width()
     app.hide_settings_page()
+    _fit_wait(app)
+    _fit_bar = (_fit_bar, app._is_placed(app._main_hscroll))
+    if _fit_hidden:
+        check(f'...with the sidebar hidden the Calendar and Settings are laid out as '
+              f'wide as they always were ({_fit_pages})',
+              all(w >= app.px(NO.SIDEBAR_WIDTH + NO.EDITOR_MIN_WIDTH)
+                  for w in _fit_pages.values()))
     app.notebook.select(app.TAB_NOTES); app.update()
-    check(f'at {_fit_size}, every button, label and tick box on the notes page, the '
+    _fit_where = f'{_fit_size}{" with the sidebar hidden" if _fit_hidden else ""}'
+    check(f'at {_fit_where}, every button, label and tick box on the notes page, the '
           f'calendar and every Settings section is wholly in sight ({_fit_lost})',
           _fit_lost == [])
+    check(f'...and at {_fit_where} (made {_fit_width} wide) the Notes page needs no '
+          f'bar to scroll sideways, before Settings and back from it ({_fit_bar})',
+          _fit_bar == (False, False)
+          and _fit_width == int(_fit_size.split('x')[0]))
+if app._sidebar_hidden:
+    app.toggle_sidebar()
+for _ in range(10):
+    app.update(); time.sleep(0.02)
+_fit_shown = (app.minsize(), app.winfo_width())
+check(f'the sidebar shown again makes the window as wide as the sidebar and the '
+      f'editor side by side, no narrower ({_fit_shown})',
+      _fit_shown[0][0] == app.px(NO.SIDEBAR_WIDTH + NO.EDITOR_MIN_WIDTH)
+      and _fit_shown[1] >= _fit_shown[0][0])
+# Grown from its left edge, a window beside the screen's right edge is pulled
+# back onto the screen (Windows: elsewhere there is no work area to ask).
+if sys.platform.startswith('win'):
+    app.toggle_sidebar(); app.update()
+    app.geometry('640x600+%d+40' % (app.winfo_screenwidth() - 660))
+    for _ in range(10):
+        app.update(); time.sleep(0.02)
+    app.toggle_sidebar()
+    for _ in range(10):
+        app.update(); time.sleep(0.02)
+    _fit_edge = app._window_rect_and_work_area()
+    check(f'...and grown beside the right edge of the screen it stays on it '
+          f'({_fit_edge})', _fit_edge is not None and _fit_edge[0][2] <= _fit_edge[1][2])
+else:
+    print('SKIP grown beside the right edge of the screen (no work area to ask off Windows)')
+app.geometry(_fit_geo); app.update()
 
 # A Settings row places its control before its words: built narrow, with a
 # description long enough to need wrapping, its button keeps its width and
@@ -4320,7 +4369,7 @@ _fit_wide = app._action_buttons[4]
 # As it was set, to put back: "3m" under Linux's Tk, a number here.
 _fit_padx = _fit_wide.cget('padx')
 _fit_wide.configure(padx=_fit_wide.winfo_pixels(_fit_padx) + 30)
-app.geometry('640x600')
+app.geometry('900x600')   # the editor's narrowest: beside the sidebar, at its floor
 _fit_lost = _fit_wait(_fit_row)
 _fit_bottom = max(b.winfo_y() + b.winfo_height() for b in app._action_buttons)
 check(f'a row with no room for three of its widest button deals them into fewer '
@@ -4431,17 +4480,22 @@ for _sc_scale in (1.5, 2.0):
           int(_sc.sidebar.cget('width')) == _sc_px(NO.SIDEBAR_WIDTH)
           and _sc._main_min_width == _sc_px(NO.SIDEBAR_WIDTH + NO.EDITOR_MIN_WIDTH))
 
-    # The window: 900x600 and its 640x600 floor at this scale -- but never
-    # bigger than the screen can show, which a 1920x1080 laptop at 175% is.
+    # The window: 900x600, and its floor -- the sidebar and the editor side by
+    # side, 640x600 with the sidebar hidden -- at this scale, but never bigger
+    # than the screen can show, which a 1920x1080 laptop at 175% is.
     _sc_opened = tuple(int(n) for n in _sc.geometry().split('+')[0].split('x'))
+    _sc_floor = _sc.minsize()
     _sc._screen_room = lambda: (1000, 700)
-    _sc_small = (_sc._fit_to_screen(900, 600), _sc._fit_to_screen(640, 600))
+    _sc_small = (_sc._fit_to_screen(900, 600), _sc._fit_to_screen(*_sc.WINDOW_FLOOR))
     del _sc._screen_room
     check(f'...its window opens at 900x600 grown to {_sc_opened}, with its smallest '
-          f'size grown the same way ({_sc.minsize()}), and never past the screen '
+          f'size grown the same way ({_sc_floor}), and never past the screen '
           f'({_sc_small} on a screen with room for 1000x700)',
           _sc_opened == (_sc_px(900), _sc_px(600))
-          and _sc.minsize() == (_sc_px(640), _sc_px(600))
+          # Set again once the window shows, where the screen can say how
+          # much room it has: grown, but held to it.
+          and _sc_floor == _sc._fit_to_screen(NO.SIDEBAR_WIDTH + NO.EDITOR_MIN_WIDTH, 600)
+          and _sc_floor[0] > NO.SIDEBAR_WIDTH + NO.EDITOR_MIN_WIDTH
           and _sc_small == ((1000, 700), (min(_sc_px(640), 1000), 700)))
 
     # Every control in sight, on the pages and popups that hold the sizes

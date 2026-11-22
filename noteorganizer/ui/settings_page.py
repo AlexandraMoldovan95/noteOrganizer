@@ -2289,6 +2289,8 @@ class SettingsPageMixin:
         # methods that swap the page and the notebook.
         self._settings_open = True
         self.settings_page.pack(fill="both", expand=True)
+        # Settings is laid out no narrower than it ever was.
+        self._fit_window_floor()
         # The section the page was left on is rebuilt on arrival, which is a
         # visit: Recently deleted lacked the notes deleted since (field report).
         showing = getattr(self, "_settings_selected_section", None)
@@ -2313,6 +2315,7 @@ class SettingsPageMixin:
         self.settings_page.pack_forget()
         self.notebook.pack(fill="both", expand=True)
         self._settings_open = False
+        self._fit_window_floor()
         # The one way back to the calendar that fires no tab change, so the
         # deferred rebuild catches up here -- synchronously, as the flag above
         # answers at once (after_idle still read "not showing").

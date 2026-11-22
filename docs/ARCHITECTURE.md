@@ -957,8 +957,10 @@ The scale is Tk's reading of the screen, snapped to Windows' quarter steps, and 
 CI's virtual display reports 100 dots per inch rather than 96, and unsnapped that moved every
 pixel the suite measures by 4%. At 100% the scale is exactly 1, so every check written before
 stands as proof that nothing moved there. Padding is left in pixels: a gap a little tighter on a
-scaled screen reads fine, a word cut in half does not. The window's 900×600 and its 640×600 floor
-grow too, but never past what the screen can show.
+scaled screen reads fine, a word cut in half does not. The window's 900×600 and its floor grow too,
+but never past what the screen can show. The floor is the sidebar and the editor side by side, or
+640×600 with the sidebar hidden, when the Notes page alone is laid out narrower; the Calendar and
+Settings keep their 900 and scroll sideways below it (`_fit_window_floor`).
 
 qa6 builds the app as a 150% and a 200% screen build it, by setting Tk's scaling before anything
 is built (which is what Windows does for a program that declares itself aware), and asks every

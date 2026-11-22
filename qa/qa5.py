@@ -4658,11 +4658,10 @@ check(f'the way in takes every colour of a new theme ({_os_colors})',
                      app.colors['accent_text']))
 app.set_theme('dark'); app.update()
 
-# At the smallest window the way in wraps within the line it has. (The window
-# then scrolls the whole editor sideways, as it always has; this asks only
-# that the line itself is not wider than the room it is given.)
+# At the smallest window -- the sidebar and the editor side by side, at the
+# window's floor -- the way in wraps within the line it has.
 _os_geo = app.geometry()
-app.geometry('640x600'); app.update()
+app.geometry('900x600'); app.update()
 check(f'at the smallest window the way in wraps within its line '
       f'({_os_btn.winfo_reqwidth()} of {_os_btn.winfo_width()})',
       _os_btn.winfo_reqwidth() <= _os_btn.winfo_width() + 1)
@@ -5026,11 +5025,11 @@ check(f"every colour of the day's strip and words follows a new theme ({_dm_got}
       _dm_got == _dm_want)
 app.set_theme('dark'); app.update()
 
-# The smallest window: the window scrolls the editor sideways as it always
-# has; the day's own lines wrap within the room they are given, and a day
-# asks the editor for no more width than its series does.
+# The smallest window, the sidebar beside the editor: the day's own lines
+# wrap within the room they are given, and a day asks the editor for no more
+# width than its series does.
 _dm_geo = app.geometry()
-app.geometry('640x600'); app.update(); app.update()
+app.geometry('900x600'); app.update(); app.update()
 _dm_req_day = app.editor.winfo_reqwidth()
 _dm_fits = (app.day_strip_lbl.winfo_reqwidth(), app.day_strip_lbl.winfo_width(),
             app.day_repeat_lbl.winfo_reqwidth(), app.day_repeat_lbl.winfo_width())
@@ -5405,7 +5404,7 @@ check(f'at an ordinary window Move and Reset sit beside the date, and a long tit
       _mv_lost == [] and app._day_btns_wrapped is False
       and app.day_btns.pack_info().get('side') == 'left'
       and app._is_placed(app.title_count_lbl))
-app.geometry('640x600')
+app.geometry('900x600')   # the smallest window, the sidebar beside the editor
 _mv_lost = _mv_in_sight()
 _mv_meta = app.day_btns.master
 check(f"at the smallest window every control of the day's title and date rows stays "
@@ -5442,7 +5441,7 @@ check(f'...a window made wider puts them back beside the date ({_mv_lost})',
 app._show_day_mode(); app.update()
 _mv_was = app._day_btns_wrapped
 app.day_date_lbl.pack_configure(padx=(6, 128))
-app.geometry('640x600')
+app.geometry('900x600')
 _mv_lost = _mv_in_sight()
 _mv_at = _mv_under_the_date()
 check(f'...and one made narrower puts them under it again ({_mv_was}; {_mv_lost}; '

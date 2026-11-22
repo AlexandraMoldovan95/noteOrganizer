@@ -70,7 +70,9 @@ The app opens one window at a time. Starting it again while it is open — a sec
 icon — says **Note Organizer is already open** and opens nothing: two windows would each keep
 their own copy of your notes, and whichever saved last would overwrite the other's work.
 
-The window can be made as small as 640 by 600 pixels. While you drag its edge, the page inside
+The window can be made as small as 900 by 600 pixels, the note list and the editor side by side —
+or 640 wide with the list hidden (the **‹** beside it), when the editor has the window to itself.
+Showing the list again widens the window to hold both. While you drag its edge, the page inside
 keeps its size — cut off at the edge, or with an empty strip beside it — and settles to fit the
 moment you pause or let go, so the edge keeps up with the mouse
 ([why](ARCHITECTURE.md#a-drag-of-the-windows-edge-waits-for-the-hand)). The Calendar's month is

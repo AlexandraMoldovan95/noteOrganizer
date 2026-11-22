@@ -865,10 +865,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         # how it draws here, how big the notebook is.
         _core_diagnostics.app_details = self._technical_details
         self.geometry("%dx%d" % self._fit_to_screen(900, 600))
-        # The smallest window that still looks like the app, measured: at
-        # 500x400 the sidebar's fixed parts left the list no room. As at 100%,
-        # grown with the scale but never past the screen.
-        self.minsize(*self._fit_to_screen(640, 600))
+        # The smallest window, and the page's narrowest (_fit_window_floor).
+        self._fit_window_floor()
         # On <Map>: before it, wm_frame() names a window Windows throws away,
         # and a fresh launch kept the system colours. On the window ITSELF
         # (_bind_window_only), not once per widget -- 1,939 paints a rebuild.
@@ -1074,6 +1072,45 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         return (max(1, min(self.px(width), room_w)),
                 max(1, min(self.px(height), room_h)))
 
+    # The smallest window that still looks like the app, measured: at 500x400
+    # the sidebar's fixed parts left the list no room. As at 100%.
+    WINDOW_FLOOR = (640, 600)
+
+    def _fit_window_floor(self):
+        """How narrow the window and its page go: the sidebar and the editor
+        side by side, or the editor alone while the sidebar is hidden; never
+        below WINDOW_FLOOR, nor past the screen. At 640 the editor was cut off
+        under a scrollbar, with the sidebar shown or not (the review panel)."""
+        side = 0 if getattr(self, "_sidebar_hidden", False) else SIDEBAR_WIDTH
+        # The page goes narrower on the Notes page alone: the Calendar and
+        # Settings keep the width they always had, narrower Settings cut words.
+        try:
+            on_notes = (not getattr(self, "_settings_open", False)
+                        and self.notebook.index("current") == self.TAB_NOTES)
+        except (AttributeError, tk.TclError):
+            on_notes = True
+        self._main_min_width = self.px(
+            (side if on_notes else SIDEBAR_WIDTH) + EDITOR_MIN_WIDTH)
+        floor = self._fit_to_screen(max(self.WINDOW_FLOOR[0], side + EDITOR_MIN_WIDTH),
+                                    self.WINDOW_FLOOR[1])
+        canvas = getattr(self, "main_canvas", None)
+        narrower = canvas is not None and self.winfo_width() < floor[0]
+        self.minsize(*floor)
+        if canvas is None:
+            return
+        try:
+            if narrower:
+                # Grown to hold the sidebar, from its left edge: kept on screen.
+                self.update_idletasks()
+                self._pull_window_into_work_area()
+            width, height = canvas.winfo_width(), canvas.winfo_height()
+        except tk.TclError:
+            return
+        if width > 1:
+            self._show_page_scrollbar(width < self._main_min_width)
+            self._main_size_wanted = (max(width, self._main_min_width), height)
+            self._lay_out_at_window_size()
+
     @staticmethod
     def _pull_inside(window, area):
         """How far to move a window, (left, top, right, bottom), so it lies
@@ -1142,6 +1179,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         if getattr(self, "_placed_in_work_area", False):
             return
         self._placed_in_work_area = True
+        self._pull_window_into_work_area()
+
+    def _pull_window_into_work_area(self):
+        """Move the window up or left just as far as it lies past the work
+        area; nowhere when it fits. A failed question changes nothing."""
         try:
             found = self._window_rect_and_work_area()
             if found is None:
@@ -14325,9 +14367,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             self.main_canvas.configure(scrollregion=self.main_canvas.bbox("all"))
 
         # Read by _on_main_canvas_configure, which gives the content the
-        # window's size -- at once, or when a drag of the edge settles.
+        # window's size -- at once, or when a drag of the edge settles; the
+        # page's narrowest is _fit_window_floor's, set before the build.
         self._main_window_item = main_window
-        self._main_min_width = self.px(SIDEBAR_WIDTH + EDITOR_MIN_WIDTH)
 
         self.main_inner.bind("<Configure>", _on_inner_configure)
         self.main_canvas.bind("<Configure>", self._on_main_canvas_configure)
@@ -14487,6 +14529,9 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
         self.notebook.bind("<<NotebookTabChanged>>",
                            lambda e: None if getattr(self, "_settings_open", False)
                            else self._dismiss_mini_popup(), add="+")
+        # The page's narrowest follows the page (_fit_window_floor).
+        self.notebook.bind("<<NotebookTabChanged>>",
+                           lambda e: self._fit_window_floor(), add="+")
 
 
 
@@ -14508,6 +14553,8 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             # (Alt+arrows move a note) still acted on a list out of sight.
             if self._keyboard_inside(self.sidebar) is not None:
                 self._keyboard_to(self.sidebar_toggle)
+        # The window and its page as narrow as what now shows.
+        self._fit_window_floor()
 
     def build_notes_tab(self, parent):
         """The Notes page: the list on the left, the editor on the right,

@@ -4187,7 +4187,8 @@ app.render_calendar(); app.update()
 
 _dr_w0, _dr_h0 = app.winfo_width(), app.winfo_height()
 try:
-    for _dr_geom in ('640x700', '1149x850', '1150x850', '1400x850'):
+    # 900 wide: the narrowest the Calendar is laid out, whatever the window.
+    for _dr_geom in ('900x700', '1149x850', '1150x850', '1400x850'):
         app.geometry(_dr_geom)
         for _ in range(6):
             app.update(); _t7.sleep(0.02)
