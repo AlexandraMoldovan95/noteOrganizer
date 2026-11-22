@@ -1483,6 +1483,54 @@ check(f"...and a damaged stream as a file that could not be read, not as unexpec
       f"({_nr_seen.get('stream', '')[:120]!r})",
       "couldn't be read as a backup" in _nr_seen.get('stream', '')
       and 'unexpectedly' not in _nr_seen.get('stream', ''))
+# A file that is no zip at all, or a damaged stream, is said in a person's
+# words: it showed zipfile's own, "File is not a zip file" (the review panel,
+# on the phone; the desktop said the same).
+_nz_zip = os.path.join(tempfile.gettempdir(), 'qa3_not_a_zip.zip')
+with open(_nz_zip, 'w', encoding='utf-8') as _nz_f:
+    _nz_f.write('these are my notes, not a backup')
+_nr_said.clear()
+app.show_error = lambda *a, **k: _nr_said.append(' '.join(map(str, a)))
+fd.askopenfilename = lambda **k: _nz_zip
+try:
+    app.import_data()
+    t0 = time.time()
+    while app._import_state is not None and time.time() - t0 < 30:
+        app.update()
+finally:
+    app.show_error = _nr_err_was
+os.remove(_nz_zip)
+_nz_said = ' '.join(_nr_said)
+check(f"a file that is not a backup at all is said in words, not zipfile's ({_nz_said[:160]!r})",
+      NO.NoteOrganizer.BACKUP_NOT_WHOLE in _nz_said and 'zip file' not in _nz_said
+      and 'Error -3' not in _nr_seen.get('stream', ''))
+# The export's sibling: a full disk, said in words, not "[Errno 28]".
+_nf_zip = os.path.join(tempfile.gettempdir(), 'qa3_full_disk.zip')
+_nf_said, _nf_check_was = [], NO.backup_entries_problem
+
+
+def _nf_full(*_a, **_k):
+    raise OSError(errno.ENOSPC, 'No space left on device')
+
+
+app.notes = [NO.normalize_note({'id': 1, 'title': 'Kept', 'body': 'k'})]
+app.save_notes()
+app.show_error = lambda *a, **k: _nf_said.append(' '.join(map(str, a)))
+NO.backup_entries_problem = _nf_full
+fd.asksaveasfilename = lambda **k: _nf_zip
+try:
+    app.export_data()
+    t0 = time.time()
+    while app._export_state is not None and time.time() - t0 < 120:
+        app.update()
+finally:
+    NO.backup_entries_problem = _nf_check_was
+    app.show_error = _nr_err_was
+if os.path.exists(_nf_zip):
+    os.remove(_nf_zip)
+check(f"...and an export onto a full disk says so in words ({' '.join(_nf_said)[:160]!r})",
+      any('The disk is full, so no backup was made' in s for s in _nf_said)
+      and not any('Errno' in s for s in _nf_said))
 
 # A CRAFTED backup's settings.json: a million day colours under keys that are
 # no dates, and markers 100,000 characters long. Adopted whole, every note

@@ -223,6 +223,7 @@
   "_delete_selection_reaching_list": "(self, pasted=None)",
   "_deletion_joins_table": "(self, forward, selection_wins=True)",
   "_dialog_focus_index": "(buttons, default)",
+  "_disk_was_full": "(error)",
   "_dismiss_mini_popup": "(self)",
   "_dismiss_mini_popup_asking": "(self, holding_work_only=False)",
   "_dissolve_orphan_markers": "(self, rows)",

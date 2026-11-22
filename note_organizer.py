@@ -2610,8 +2610,11 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
             except Exception as e:
                 # Broad on purpose: anything escaping kills the thread silently.
                 # Never empty: a MemoryError's "" read as no error, and "Export
-                # complete" was said with no file written.
-                state["error"] = str(e) or type(e).__name__
+                # complete" was said with no file written. A full disk, in words.
+                state["error"] = (
+                    "The disk is full, so no backup was made. Free up some space, "
+                    "or save it somewhere else, and try again."
+                    if self._disk_was_full(e) else str(e) or type(e).__name__)
                 try:
                     os.remove(tmp_path)
                 except OSError:
@@ -12182,6 +12185,18 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 "it if you do not want it.")
         return True
 
+    # A file that is not a whole backup, said as such.
+    BACKUP_NOT_WHOLE = ("That file couldn't be read as a backup: it isn't a whole Note "
+                        "Organizer backup, or it was damaged on its way here. Try "
+                        "another copy of it.")
+
+    @staticmethod
+    def _disk_was_full(error):
+        """Whether *error* is a disk with no room left: ENOSPC, or Windows'
+        own words for it (39, 112, 1295)."""
+        return (getattr(error, "errno", None) == errno.ENOSPC
+                or getattr(error, "winerror", None) in (39, 112, 1295))
+
     def import_data(self):
         """Import a previously exported .zip, MERGED into the notes here, never
         over them. The slow parts run on a background thread, as the export
@@ -12252,12 +12267,16 @@ class NoteOrganizer(AttachmentsMixin, CalculatorPanelMixin, CalendarViewMixin,
                 # that could not be read, not "Import failed unexpectedly".
                 except (zipfile.BadZipFile, IOError, OSError, ValueError, zlib.error,
                         RuntimeError, NotImplementedError) as e:
-                    full = (getattr(e, "errno", None) == errno.ENOSPC
-                            or getattr(e, "winerror", None) in (39, 112, 1295))
+                    full = self._disk_was_full(e)
+                    # Not a whole zip, or not one this reads: the person's
+                    # words, not zipfile's ("File is not a zip file").
+                    broken = isinstance(e, (zipfile.BadZipFile, zlib.error,
+                                            RuntimeError, NotImplementedError))
                     state["error"] = (
                         "The disk filled up while the backup was unpacked, so "
                         "nothing from it was kept. Free up some space and try "
                         "again." if full
+                        else self.BACKUP_NOT_WHOLE if broken
                         else f"That file couldn't be read as a backup:\n{e}")
                     state["done"] = True
                     return

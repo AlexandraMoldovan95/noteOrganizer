@@ -17786,8 +17786,8 @@
     "id": "SN14",
     "about": "An export whose error has no words (a MemoryError) is said complete",
     "edits": [{"file": "note_organizer.py",
-               "find": "                state[\"error\"] = str(e) or type(e).__name__\n",
-               "replace": "                state[\"error\"] = str(e)\n"}],
+               "find": "                    if self._disk_was_full(e) else str(e) or type(e).__name__)\n",
+               "replace": "                    if self._disk_was_full(e) else str(e))\n"}],
     "must_fail": ["an export whose error has no words is said failed, and no file is put in place"],
     "suites": ["qa3"],
     "expect": "killed"
@@ -18046,8 +18046,8 @@
     "id": "SN39",
     "about": "A disk that fills up while a backup unpacks is said as a file that could not be read",
     "edits": [{"file": "note_organizer.py",
-               "find": "                    full = (getattr(e, \"errno\", None) == errno.ENOSPC\n",
-               "replace": "                    full = (False\n"}],
+               "find": "                    full = self._disk_was_full(e)\n",
+               "replace": "                    full = False\n"}],
     "must_fail": ["a disk that fills up while a backup unpacks is said as that"],
     "suites": ["qa3"],
     "expect": "killed"
@@ -20798,6 +20798,42 @@
     ],
     "suites": [
       "qa6"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW40",
+    "about": "a file that is no backup at all is said in zipfile's words: \"File is not a zip file\"",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                    broken = isinstance(e, (zipfile.BadZipFile, zlib.error,\n                                            RuntimeError, NotImplementedError))\n",
+        "replace": "                    broken = False\n"
+      }
+    ],
+    "must_fail": [
+      "a file that is not a backup at all is said in words"
+    ],
+    "suites": [
+      "qa3"
+    ],
+    "expect": "killed"
+  },
+  {
+    "id": "PW41",
+    "about": "an export onto a full disk says \"[Errno 28] No space left on device\"",
+    "edits": [
+      {
+        "file": "note_organizer.py",
+        "find": "                    if self._disk_was_full(e) else str(e) or type(e).__name__)\n",
+        "replace": "                    if False else str(e) or type(e).__name__)\n"
+      }
+    ],
+    "must_fail": [
+      "...and an export onto a full disk says so in words"
+    ],
+    "suites": [
+      "qa3"
     ],
     "expect": "killed"
   },
